@@ -1726,11 +1726,44 @@ export type DeployVersion = {
    * has forgotten what it shipped has not shipped nothing.
    */
   commitCount: number | null;
-  /** Nothing a reader would notice. The common case, and not a fault. */
+  /**
+   * Nothing a reader would notice. The common case, and not a fault.
+   *
+   * **Only ever true when `changelogReadable` is** — a deploy whose changelog
+   * could not be read is not a quiet one, and saying so was the bug GPT Sol
+   * found on 2026-09-09.
+   */
   invisible: boolean;
+  /**
+   * **Whether "what changed" could be read at all**, as distinct from there
+   * being nothing.
+   *
+   * False when `entries` is absent, is not an array, or held nothing readable
+   * on a line that does not claim to be quiet. The panel must draw this as
+   * *we could not read what changed*, never as *nothing changed*: the two look
+   * identical and mean opposite things, and one of them is a headline feature
+   * rendered as an empty deploy.
+   */
+  changelogReadable: boolean;
+  /** Entries on this line that would not parse. Counted, never hidden. */
+  unreadableEntries: number;
   /** When the changelog job wrote this line — **not** when the deploy happened. */
   generatedAt: string | null;
   entries: DeployEntry[];
+};
+
+/**
+ * The three git readings, taken together as one snapshot.
+ *
+ * **One shape rather than three fields, because they must describe one tip.**
+ * `origin/main` is mutable between processes — a dozen agents fetch all night —
+ * so three independently-resolved calls can answer about three different
+ * commits, and the result is a reading of nothing. GPT Sol's P2 finding 6.
+ */
+export type GitSnapshot = {
+  main: MainRef;
+  ancestry: AncestryReading;
+  commitsSince: CountReading;
 };
 
 /**
@@ -1802,9 +1835,15 @@ export type DeploysPayload =
       lastGeneratedAt: string | null;
       /** The newest deploy the record knows about, or null for an empty record. */
       newestRecordedSha: string | null;
-      main: MainRef;
-      ancestry: AncestryReading;
-      commitsSince: CountReading;
+      /**
+       * The git readings, as **one snapshot of one tip**.
+       *
+       * Nested rather than spread across three sibling fields, so it is not
+       * possible to build a payload whose `ancestry` and `commitsSince` were
+       * measured against different commits. GitSnapshot says why that is a real
+       * risk here rather than a theoretical one.
+       */
+      git: GitSnapshot;
       /** The server's clock, so the page can age the record against it. */
       servedAtMs: number;
     }

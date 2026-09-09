@@ -118,6 +118,55 @@ function readEntry(raw: unknown): DeployEntry | null {
 }
 
 /**
+ * **What changed on this deploy — and whether that could be read at all.**
+ *
+ * THE HOLE GPT SOL FOUND, AND IT IS THE ONE THAT MATTERS ON THIS PANEL.
+ * `invisible` used to be derived as `entries.length === 0`, so a line whose
+ * `entries` was missing, not an array, or full of unreadable objects came out as
+ * a *quiet deploy* — and the panel says "Nothing a reader would notice", which
+ * is the exact opposite of "we could not read what changed". A deploy that
+ * shipped a headline feature would render as one that shipped nothing, with no
+ * error anywhere. P1 finding 3, 2026-09-09.
+ *
+ * So three outcomes, not two:
+ *
+ *  - `entries: []` on a line that claims to be quiet → genuinely quiet;
+ *  - some readable, some not → what was read, plus a count of what was not;
+ *  - `entries` absent, not an array, or wholly unreadable on a line that claims
+ *    to be loud → **changelog unreadable, never quiet**.
+ *
+ * Its own function rather than a block inside `readVersion`, which was over the
+ * complexity limit with it inline — and this is the half worth reading on its
+ * own anyway.
+ */
+function readChangelog(raw: Record<string, unknown>): {
+  entries: DeployEntry[];
+  readable: boolean;
+  unreadable: number;
+} {
+  const entries: DeployEntry[] = [];
+  let unreadable = 0;
+
+  if (!Array.isArray(raw.entries)) {
+    /* No `entries` key at all, or not an array. Says nothing about whether the
+       deploy was quiet — so this must not answer that question. */
+    return { entries, readable: false, unreadable };
+  }
+
+  for (const e of raw.entries) {
+    const entry = readEntry(e);
+    if (entry !== null) entries.push(entry);
+    else unreadable += 1;
+  }
+  if (entries.length > 0) return { entries, readable: true, unreadable };
+
+  /* Nothing readable came out. That is only "quiet" if the line agrees it is
+     quiet AND nothing was dropped getting here; a line marked loud with an
+     empty array has lost its entries somewhere upstream. */
+  return { entries, readable: unreadable === 0 && raw.invisible === true, unreadable };
+}
+
+/**
  * One line.
  *
  * Returns the version, or a sentence saying what was wrong with it. The three
@@ -154,19 +203,8 @@ function readVersion(raw: unknown, release: number, where: string): DeployVersio
     return `${where}: previous_sha is neither null nor a sha`;
   }
 
-  const entries: DeployEntry[] = [];
-  if (Array.isArray(raw.entries)) {
-    for (const e of raw.entries) {
-      const entry = readEntry(e);
-      if (entry !== null) entries.push(entry);
-    }
-  }
+  const changelog = readChangelog(raw);
 
-  /* **NULL RATHER THAN A SENTINEL.** A line that does not say how many commits
-     it shipped has not shipped zero, and it has not shipped minus one either;
-     both of those are numbers a panel would happily draw and a reader would
-     happily believe. The absence is the fact, so it is carried as one and the
-     panel says "not recorded". */
   const count = raw.commit_count;
   const commitCount =
     typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : null;
@@ -178,14 +216,15 @@ function readVersion(raw: unknown, release: number, where: string): DeployVersio
     sha,
     previousSha: typeof previous === "string" ? previous : null,
     commitCount,
-    /* **DERIVED, not read.** The file carries `invisible` and `src/changelog.ts`
-       checks the two against each other; here they cannot disagree, because a
-       version marked quiet that has entries would hide them and one marked loud
-       with none would draw an empty heading. What is on screen is what is in
-       `entries`. */
-    invisible: entries.length === 0,
+    /* **Quiet is a claim, and it is only made when it can be made.** Not
+       `entries.length === 0`: that reads an unreadable changelog as a deploy
+       with nothing in it. `changelogReadable` is false in exactly the cases
+       where this file cannot tell, and the panel draws that differently. */
+    invisible: changelog.readable && changelog.entries.length === 0,
+    changelogReadable: changelog.readable,
+    unreadableEntries: changelog.unreadable,
+    entries: changelog.entries,
     generatedAt: generatedAt !== null && STAMP.test(generatedAt) ? generatedAt : null,
-    entries,
   };
 }
 

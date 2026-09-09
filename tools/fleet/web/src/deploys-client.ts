@@ -72,16 +72,26 @@ function readPayload(body: unknown): DeploysView {
     return { kind: "no-answer", why: "the server's answer was not an object" };
   }
   const raw = body as Record<string, unknown>;
-  if (raw["kind"] === "unreadable") {
-    return {
-      kind: "unreadable",
-      why: typeof raw["why"] === "string" ? raw["why"] : "the server did not say why",
-    };
-  }
-  if (raw["kind"] !== "deploys" || !Array.isArray(raw["versions"])) {
+  /* **The schema first, before either arm is read.** A payload from a build
+     this page does not know looks exactly like a healthy one to `.json()`, and
+     the failure would be a panel drawing `undefined` where a count belongs —
+     the same call `health-history-client.ts` makes. GPT Sol's P2 finding 5. */
+  if (raw.schema !== 1) {
     return {
       kind: "no-answer",
-      why: `this build cannot read the server's answer (kind ${JSON.stringify(raw["kind"])})`,
+      why: `this page cannot read schema ${JSON.stringify(raw.schema)} from the box — one of the two is out of date`,
+    };
+  }
+  if (raw.kind === "unreadable") {
+    return {
+      kind: "unreadable",
+      why: typeof raw.why === "string" ? raw.why : "the server did not say why",
+    };
+  }
+  if (raw.kind !== "deploys" || !Array.isArray(raw.versions)) {
+    return {
+      kind: "no-answer",
+      why: `this build cannot read the server's answer (kind ${JSON.stringify(raw.kind)})`,
     };
   }
   return body as DeploysView;

@@ -59,9 +59,9 @@ const RECORD_TIP: Tip = {
 };
 
 const BEHIND_TIP: Tip = {
-  head: "Commits no recorded deploy accounts for",
-  what: "Non-merge commits between the newest deploy in the record and the current tip of main.",
-  how: "Not a count of undeployed work: main is only ever written by a deploy, so these are a mix of deploys not yet written up and a tip not yet deployed. Telling those apart needs Vercel.",
+  head: "Commits after the last recorded deploy",
+  what: "Non-merge commits between the newest deploy in the record and this checkout\u2019s cached tip of main.",
+  how: "Not a count of work awaiting release: main is advanced by a deploy attempt before its build is known to have succeeded, so some of these shipped and some did not. Telling them apart needs the live build stamp or Vercel.",
 };
 
 /** A sha, linked into the repository. */
@@ -87,7 +87,7 @@ function Sha({ sha }: { sha: string }): ReactNode {
  */
 function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploys" }>; nowMs: number }): ReactNode {
   const generatedAgo = ago(view.lastGeneratedAt, nowMs);
-  const mainRef = view.main;
+  const mainRef = view.git.main;
 
   return (
     <Card className="tw:px-3 tw:py-2.5 tw:text-[13px] tw:text-ink-soft">
@@ -112,12 +112,19 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
             {/* **The age of the VIEW, not of the commit.** The dashboard never
                 fetches, so a ref nobody has updated in a week looks exactly like
                 a week with no deploys unless this says which it is. */}
+            {/* **Labelled as exactly what it measures, after GPT Sol's P1
+                finding 2 and a measurement on this box.** `FETCH_HEAD`'s mtime
+                does advance on a no-op fetch — so it says when we last ASKED,
+                not when the ref last moved — but it names whatever was last
+                fetched, so it does not prove `origin/main` itself was
+                refreshed. It bounds the staleness; it does not measure it. */}
             {mainRef.lastFetchAtMs === null ? (
-              <span className="tw:text-ink-faint"> — this checkout's view of it, last refreshed at an unknown time</span>
+              <span className="tw:text-ink-faint"> — a cached view; this checkout has no record of fetching</span>
             ) : (
               <span className="tw:text-ink-faint">
                 {" "}
-                — as this checkout last heard it {ago(new Date(mainRef.lastFetchAtMs).toISOString(), nowMs) ?? ""}
+                — a cached view; this checkout last fetched something{" "}
+                {ago(new Date(mainRef.lastFetchAtMs).toISOString(), nowMs) ?? "at an unreadable time"}
               </span>
             )}
           </span>
@@ -132,34 +139,33 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
           says to check per version precisely because it breaks the ranges
           silently. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1">
-        {view.ancestry.kind === "ancestor" ? (
+        {view.git.ancestry.kind === "ancestor" ? (
           <span className="tw:text-ink-faint">The newest recorded deploy is on main.</span>
-        ) : view.ancestry.kind === "not-ancestor" ? (
+        ) : view.git.ancestry.kind === "not-ancestor" ? (
           <span className="tw:font-semibold tw:text-alarm-ink">
             The newest recorded deploy is not on main — a rollback, or a deploy from a working directory.
           </span>
         ) : (
           <span className="tw:text-unknown-ink">
-            Whether the newest recorded deploy is on main could not be checked: {view.ancestry.why}
+            Whether the newest recorded deploy is on main could not be checked: {view.git.ancestry.why}
           </span>
         )}
       </div>
 
       <div className="tw:mt-1.5">
-        {view.commitsSince.kind === "count" ? (
+        {view.git.commitsSince.kind === "count" ? (
           <Explain tip={BEHIND_TIP}>
             <span>
-              <span className="tw:font-semibold tw:text-ink">{view.commitsSince.commits}</span> commits on main that no
-              recorded deploy accounts for.{" "}
+              <span className="tw:font-semibold tw:text-ink">{view.git.commitsSince.commits}</span> later non-merge
+              commits in this checkout&rsquo;s cached <span className="tw:font-mono">origin/main</span>.{" "}
               <span className="tw:text-ink-faint">
-                Some shipped in deploys the changelog job has not written up yet; some may not be deployed. This page
-                cannot tell which apart without Vercel.
+                Some may already have deployed and not been written up yet. This view cannot tell which.
               </span>
             </span>
           </Explain>
         ) : (
           <span className="tw:text-unknown-ink">
-            How far the record is behind main could not be measured: {view.commitsSince.why}
+            How far the record is behind main could not be measured: {view.git.commitsSince.why}
           </span>
         )}
       </div>
@@ -215,7 +221,19 @@ function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number 
         ) : null}
       </div>
 
-      {groups.length === 0 ? (
+      {!version.changelogReadable ? (
+        /* **"We could not read what changed" is NOT "nothing changed".** The two
+           look identical on a card and mean opposite things: one is the common
+           quiet deploy, the other is a headline feature rendered as an empty
+           box. GPT Sol's P1 finding 3, 2026-09-09. */
+        <p className="tw:mt-2 tw:text-[13px] tw:text-unknown-ink">
+          What changed here could not be read from the record
+          {version.unreadableEntries > 0
+            ? ` — ${version.unreadableEntries} ${version.unreadableEntries === 1 ? "entry" : "entries"} would not parse`
+            : ""}
+          . This is not a quiet deploy; it is a gap in the changelog.
+        </p>
+      ) : groups.length === 0 ? (
         /* **NOT an empty card.** Most deploys are quiet — 19 of the 20 in one
            42-hour stretch — and that is expected rather than a fault, so it is
            said in words rather than left as a gap somebody has to interpret. */
@@ -227,8 +245,12 @@ function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number 
               {group.label}
             </h3>
             <ul className="tw:mt-1 tw:flex tw:flex-col tw:gap-2">
-              {group.entries.map((entry, i) => (
-                <li key={`${group.section}-${i}`} className="tw:text-[13px]">
+              {group.entries.map((entry) => (
+                /* Keyed by the title within its section rather than by index:
+                   these are drawn from a file that can gain a line above them,
+                   and an index key would then re-use one entry's DOM for
+                   another's text. */
+                <li key={`${group.section}-${entry.title}`} className="tw:text-[13px]">
                   <span className="tw:font-medium tw:text-ink">{entry.title}</span>
                   <p className="tw:mt-0.5 tw:text-ink-soft">{entry.body}</p>
                   <div className="tw:mt-0.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
@@ -243,6 +265,16 @@ function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number 
           </div>
         ))
       )}
+
+      {/* Some entries read, some not. The list above is real and short, and
+          saying by how much is the difference between a partial list and a
+          list. */}
+      {version.changelogReadable && version.unreadableEntries > 0 ? (
+        <p className="tw:mt-2 tw:text-[12px] tw:text-unknown-ink">
+          {version.unreadableEntries} further {version.unreadableEntries === 1 ? "entry" : "entries"} on this deploy
+          could not be read, so this list is short.
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -250,11 +282,22 @@ function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number 
 export function DeploysPanel({
   api = httpDeploysApi(),
   now,
+  refreshNonce = 0,
 }: {
   /** Injectable, so a test drives the panel through the seam rather than stubbing `fetch`. */
   api?: DeploysApi;
   /** The page's clock, so every age on screen is anchored to the same tick. */
   now: number;
+  /**
+   * Bumped when somebody presses Refresh.
+   *
+   * **This panel does not poll.** The record changes when a person runs the
+   * changelog job, which is hours apart, so a timer would be spending the box's
+   * time to re-read an unchanged file. What it must do instead is answer the
+   * Refresh button — which presents itself as the page's, and did nothing here
+   * until this existed. App.tsx § refreshEverything.
+   */
+  refreshNonce?: number;
 }): ReactNode {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [limit, setLimit] = useState<number>(FIRST_PAGE);
@@ -264,6 +307,12 @@ export function DeploysPanel({
   const nowRef = useRef(now);
   nowRef.current = now;
 
+  /* `refreshNonce` is in the dependency list for its effect on identity alone —
+     it is never read in the body. That IS the mechanism: pressing Refresh
+     changes it, which re-runs the effect, which re-fetches. Biome sees an
+     unnecessary dependency, which is exactly what it is and exactly what is
+     wanted. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
   useEffect(() => {
     const controller = new AbortController();
     let live = true;
@@ -274,7 +323,7 @@ export function DeploysPanel({
       live = false;
       controller.abort();
     };
-  }, [api, limit]);
+  }, [api, limit, refreshNonce]);
 
   const showMore = useCallback(() => setLimit(MORE_PAGE), []);
 

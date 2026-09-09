@@ -20,6 +20,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+/* **Test-only, and that is what makes it legal.** `tests/fleet-imports.test.ts`
+   walks the import graph rooted at `tools/`, so importing the product's own
+   parser here adds no runtime dependency for the dashboard — and it is the only
+   way to check that the fleet's second reader agrees with the first. */
+import { parseChangelog } from "../src/changelog.js";
 import {
   lastGeneratedAt,
   newestDeploy,
@@ -104,10 +109,74 @@ describe("readDeploys", () => {
   });
 
   it("reads a quiet deploy as quiet", () => {
-    const read = readDeploys(line({ invisible: false, entries: [] }));
+    const read = readDeploys(line({ invisible: true, entries: [] }));
 
     expect(read.versions[0]?.invisible).toBe(true);
+    expect(read.versions[0]?.changelogReadable).toBe(true);
     expect(read.unreadable).toEqual([]);
+  });
+});
+
+/**
+ * **"We could not read what changed" is not "nothing changed".**
+ *
+ * The hole GPT Sol found on 2026-09-09: `invisible` was `entries.length === 0`,
+ * so a line whose entries were missing or corrupt came out as a quiet deploy and
+ * the panel said *Nothing a reader would notice* — the exact opposite of the
+ * truth, with no error anywhere and a headline feature rendered as an empty
+ * deploy.
+ */
+describe("a changelog that cannot be read is not a quiet deploy", () => {
+  it.each([
+    ["entries missing altogether", { entries: undefined }],
+    ["entries not an array", { entries: "nope" }],
+    ["entries an object", { entries: { section: "fix" } }],
+    ["every entry unreadable", { entries: [{ section: "engineering", title: "t", body: "b" }] }],
+    ["an entry with no body", { entries: [{ section: "fix", title: "t" }] }],
+    ["loud with an empty array", { invisible: false, entries: [] }],
+  ])("%s reads as unreadable rather than quiet", (_name, over) => {
+    const read = readDeploys(line(over as Record<string, unknown>));
+    const version = read.versions[0];
+
+    expect(version, "the deploy itself must still be kept").toBeDefined();
+    expect(version?.changelogReadable, "changelogReadable").toBe(false);
+    expect(version?.invisible, "must NOT claim to be quiet").toBe(false);
+  });
+
+  it("keeps the readable entries and counts the rest", () => {
+    const read = readDeploys(
+      line({
+        entries: [
+          { section: "fix", title: "Kept", body: "This one parses." },
+          { section: "engineering", title: "Dropped", body: "Not a real section." },
+          { section: "headline", title: "", body: "No title." },
+        ],
+      }),
+    );
+    const version = read.versions[0];
+
+    expect(version?.entries.map((e) => e.title)).toEqual(["Kept"]);
+    expect(version?.unreadableEntries).toBe(2);
+    /* Something WAS read, so the changelog is readable — partially, and the
+       count says by how much. */
+    expect(version?.changelogReadable).toBe(true);
+    expect(version?.invisible).toBe(false);
+  });
+
+  it("a genuinely quiet deploy has nothing to count", () => {
+    const read = readDeploys(line({ invisible: true, entries: [] }));
+
+    expect(read.versions[0]?.unreadableEntries).toBe(0);
+    expect(read.versions[0]?.changelogReadable).toBe(true);
+    expect(read.versions[0]?.invisible).toBe(true);
+  });
+
+  it("ignores extra fields it does not know about", () => {
+    const read = readDeploys(line({ some_new_field: { a: 1 }, entries: [{ section: "fix", title: "t", body: "b", newField: 2 }] }));
+
+    expect(read.unreadable).toEqual([]);
+    expect(read.versions[0]?.changelogReadable).toBe(true);
+    expect(read.versions[0]?.entries).toHaveLength(1);
   });
 });
 
@@ -175,9 +244,13 @@ describe("entries", () => {
     const read = readDeploys(line({ entries: [{ section: "engineering", title: "t", body: "b" }] }));
 
     expect(read.versions[0]?.entries).toEqual([]);
-    /* And so the version reads as quiet, which is the true thing to say about a
-       version with nothing showable on it. */
-    expect(read.versions[0]?.invisible).toBe(true);
+    /* **And the version does NOT read as quiet.** This assertion said the
+       opposite until 2026-09-09, and it was wrong in the way that matters: a
+       deploy whose only entry we could not parse has not shipped nothing, and
+       drawing it as quiet is the silent failure GPT Sol found. */
+    expect(read.versions[0]?.invisible).toBe(false);
+    expect(read.versions[0]?.changelogReadable).toBe(false);
+    expect(read.versions[0]?.unreadableEntries).toBe(1);
   });
 
   it("drops a sha that is not 40 hex characters, and keeps the rest", () => {
@@ -276,5 +349,95 @@ describe("the real committed record", () => {
 
     expect(loud.length).toBeGreaterThan(10);
     expect(loud.flatMap((v) => v.entries).length).toBeGreaterThan(50);
+  });
+
+  it("could read what changed on every line", () => {
+    /* `changelogReadable: false` on the real file would mean the record itself
+       has lost a deploy's entries — worth failing over, and the opposite of the
+       silent "quiet deploy" this reader used to produce. */
+    const unreadable = read.versions.filter((v) => !v.changelogReadable);
+
+    expect(unreadable.map((v) => v.version)).toEqual([]);
+  });
+});
+
+/**
+ * **THE TWO PARSERS, MADE TO AGREE FIELD BY FIELD.**
+ *
+ * "One accepted version per non-blank line" was the whole of the drift
+ * mitigation, and GPT Sol was right that it is not enough: it passes while this
+ * reader defaults fields, drops entries, or derives a different meaning from the
+ * same bytes. So both readers are run over the real file and every field the
+ * fleet uses is compared.
+ *
+ * **The import of `src/changelog.ts` here is test-only and adds no runtime
+ * dependency** — `tests/fleet-imports.test.ts` walks the import graph rooted at
+ * `tools/`, not at `tests/`, which is what makes this legal as well as useful.
+ * Sol's P2 finding 7.
+ */
+describe("the fleet reader agrees with the canonical one", () => {
+  const text = readFileSync(REAL_FILE, "utf8");
+  const mine = readDeploys(text);
+  const canonical = parseChangelog(text);
+
+  it("the canonical parser is happy with the file, so disagreement means US", () => {
+    /* Without this, a file that is simply broken would look like a reader that
+       disagrees, and the next person would go looking in the wrong module. */
+    expect(canonical.problems).toEqual([]);
+  });
+
+  it("finds the same versions, in opposite orders", () => {
+    expect(mine.versions).toHaveLength(canonical.versions.length);
+    /* Ours is newest first; the file, and therefore the canonical parser, is
+       oldest first. */
+    expect(mine.versions.map((v) => v.version)).toEqual(
+      canonical.versions.map((v) => v.version).reverse(),
+    );
+  });
+
+  it("agrees on every field the panel draws", () => {
+    const theirs = new Map(canonical.versions.map((v) => [v.version, v]));
+
+    for (const v of mine.versions) {
+      const other = theirs.get(v.version);
+      expect(other, `${v.version} is missing from the canonical parse`).toBeDefined();
+      if (other === undefined) continue;
+
+      expect(v.release, `${v.version} release`).toBe(other.release);
+      expect(v.sha, `${v.version} sha`).toBe(other.sha);
+      expect(v.previousSha, `${v.version} previousSha`).toBe(other.previous_sha);
+      expect(v.deploymentId, `${v.version} deploymentId`).toBe(other.deployment_id);
+      expect(v.commitCount, `${v.version} commitCount`).toBe(other.commit_count);
+      expect(v.generatedAt, `${v.version} generatedAt`).toBe(other.generated_at);
+      expect(v.invisible, `${v.version} invisible`).toBe(other.invisible);
+
+      /* The entries, in order, on the fields this tab renders. A reader that
+         quietly dropped one would pass every count above. */
+      expect(v.entries.map((e) => e.section), `${v.version} sections`).toEqual(
+        other.entries.map((e) => e.section),
+      );
+      expect(v.entries.map((e) => e.title), `${v.version} titles`).toEqual(
+        other.entries.map((e) => e.title),
+      );
+      expect(v.entries.map((e) => e.body), `${v.version} bodies`).toEqual(
+        other.entries.map((e) => e.body),
+      );
+      expect(v.entries.map((e) => e.where), `${v.version} wheres`).toEqual(
+        other.entries.map((e) => e.where),
+      );
+      expect(v.entries.map((e) => e.commits), `${v.version} commits`).toEqual(
+        other.entries.map((e) => e.commits),
+      );
+    }
+  });
+
+  it("accepts nothing the canonical parser would reject", () => {
+    /* The asymmetry that matters: this reader is deliberately more tolerant
+       about product rules it does not own (the headline cap, the link scheme,
+       the chain) but must not be more tolerant about what a version IS. */
+    const canonicalVersions = new Set(canonical.versions.map((v) => v.version));
+    const extra = mine.versions.filter((v) => !canonicalVersions.has(v.version));
+
+    expect(extra.map((v) => v.version)).toEqual([]);
   });
 });

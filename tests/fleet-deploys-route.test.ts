@@ -1,16 +1,17 @@
 /**
  * **`GET /api/deploys`, and the git probe behind it.**
  *
- * Three things are being checked, and the middle one is the point:
+ * Four things are being checked, and the middle two are the point:
  *
  *  1. The payload: the clamp, the slice, the two arms.
  *  2. **That every way of not knowing stays distinguishable.** Each git question
  *     has a plausible wrong answer to collapse into — a missing ref could be
  *     "0 commits behind", a failed ancestry check could be "not an ancestor" —
- *     and both would draw a confident, false, reassuring number. So there is a
- *     case per arm.
- *  3. The real `gitProbe` against a throwaway repository on disk, because a
- *     probe exercised only through a fake proves the fake works.
+ *     and both would draw a confident, false, reassuring number.
+ *  3. **That a failed probe does not blank a good list.** The file read and the
+ *     comparison are independent axes; GPT Sol's P2 finding 5.
+ *  4. The real `gitProbe` against a throwaway repository, because a probe
+ *     exercised only through a fake proves the fake works.
  *
  * The composition is driven through `makeDeploys`, the same function `server.ts`
  * calls, rather than through a route this file assembled — health-wiring.ts says
@@ -24,7 +25,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { makeDeploys, RECORD_PATH, REPO_ROOT } from "../tools/fleet/deploys-wiring.js";
-import { gitProbe, type AncestryReading, type CountReading, type GitProbe, type MainRef } from "../tools/fleet/git-probe.js";
+import { gitProbe, type GitProbe } from "../tools/fleet/git-probe.js";
 import {
   DEFAULT_LIMIT,
   MAX_LIMIT,
@@ -33,9 +34,11 @@ import {
   readRecordFrom,
   type DeploysRouteDeps,
 } from "../tools/fleet/routes-deploys.js";
+import type { GitSnapshot } from "../tools/fleet/wire.js";
 
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
+const SHA_C = "c".repeat(40);
 
 function line(over: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -52,22 +55,20 @@ function line(over: Record<string, unknown> = {}): string {
   });
 }
 
+const HEALTHY: GitSnapshot = {
+  main: { kind: "ref", sha: SHA_B, committedAt: "2026-09-09T00:00:00Z", lastFetchAtMs: 1000 },
+  ancestry: { kind: "ancestor" },
+  commitsSince: { kind: "count", commits: 287 },
+};
+
 /** A probe that answers whatever the test says, and records what it was asked. */
-function fakeGit(over: Partial<GitProbe> = {}): GitProbe & { asked: string[] } {
-  const asked: string[] = [];
+function fakeGit(snapshot: GitSnapshot = HEALTHY): GitProbe & { asked: (string | null)[] } {
+  const asked: (string | null)[] = [];
   return {
     asked,
-    mainRef(): MainRef {
-      asked.push("mainRef");
-      return over.mainRef?.() ?? { kind: "ref", sha: SHA_B, committedAt: "2026-09-09T00:00:00Z", lastFetchAtMs: 1000 };
-    },
-    isAncestor(sha): AncestryReading {
-      asked.push(`isAncestor:${sha.slice(0, 4)}`);
-      return over.isAncestor?.(sha) ?? { kind: "ancestor" };
-    },
-    countSince(sha): CountReading {
-      asked.push(`countSince:${sha.slice(0, 4)}`);
-      return over.countSince?.(sha) ?? { kind: "count", commits: 287 };
+    async snapshot(recordedSha): Promise<GitSnapshot> {
+      asked.push(recordedSha);
+      return snapshot;
     },
   };
 }
@@ -96,16 +97,19 @@ describe("limitFrom", () => {
 });
 
 describe("the two arms", () => {
-  it("a record that cannot be read is a REASON, not an empty list", () => {
-    const payload = deploysPayload(deps({ readRecord: () => ({ ok: false, why: "the disk is on fire" }) }), 10);
+  it("a record that cannot be read is a REASON, not an empty list", async () => {
+    const payload = await deploysPayload(
+      deps({ readRecord: () => ({ ok: false, why: "the disk is on fire" }) }),
+      10,
+    );
 
     expect(payload.kind).toBe("unreadable");
     if (payload.kind !== "unreadable") throw new Error("unreachable");
     expect(payload.why).toBe("the disk is on fire");
   });
 
-  it("a record that is empty is an empty list, which is a different claim", () => {
-    const payload = deploysPayload(deps({ readRecord: () => ({ ok: true, text: "" }) }), 10);
+  it("a record that is empty is an empty list, which is a different claim", async () => {
+    const payload = await deploysPayload(deps({ readRecord: () => ({ ok: true, text: "" }) }), 10);
 
     expect(payload.kind).toBe("deploys");
     if (payload.kind !== "deploys") throw new Error("unreachable");
@@ -128,13 +132,12 @@ describe("the payload", () => {
   const three = [
     line({ version: "2026-09-01T10:00:00Z", sha: SHA_A, deployment_id: "dpl_1" }),
     line({ version: "2026-09-02T10:00:00Z", sha: SHA_B, previous_sha: SHA_A, deployment_id: "dpl_2" }),
-    line({ version: "2026-09-03T10:00:00Z", sha: "c".repeat(40), previous_sha: SHA_B, deployment_id: "dpl_3" }),
+    line({ version: "2026-09-03T10:00:00Z", sha: SHA_C, previous_sha: SHA_B, deployment_id: "dpl_3" }),
   ].join("\n");
 
-  it("serves the newest `limit` and says how many there were altogether", () => {
-    const payload = deploysPayload(deps({ readRecord: () => ({ ok: true, text: three }) }), 2);
+  it("serves the newest `limit` and says how many there were altogether", async () => {
+    const payload = await deploysPayload(deps({ readRecord: () => ({ ok: true, text: three }) }), 2);
 
-    expect(payload.kind).toBe("deploys");
     if (payload.kind !== "deploys") throw new Error("unreachable");
     expect(payload.versions.map((v) => v.version)).toEqual(["2026-09-03T10:00:00Z", "2026-09-02T10:00:00Z"]);
     /* Without `total` a client cannot tell "that is all of them" from "there is
@@ -143,18 +146,33 @@ describe("the payload", () => {
     expect(payload.limit).toBe(2);
   });
 
-  it("asks git about the NEWEST recorded sha, not the oldest", () => {
+  it("asks git about the NEWEST recorded sha, not the oldest", async () => {
     const git = fakeGit();
-    const payload = deploysPayload(deps({ readRecord: () => ({ ok: true, text: three }), git }), 10);
+    const payload = await deploysPayload(deps({ readRecord: () => ({ ok: true, text: three }), git }), 10);
 
     if (payload.kind !== "deploys") throw new Error("unreachable");
-    expect(payload.newestRecordedSha).toBe("c".repeat(40));
-    expect(git.asked).toContain("isAncestor:cccc");
-    expect(git.asked).toContain("countSince:cccc");
+    expect(payload.newestRecordedSha).toBe(SHA_C);
+    expect(git.asked).toEqual([SHA_C]);
   });
 
-  it("carries the unreadable lines through rather than dropping them", () => {
-    const payload = deploysPayload(
+  it("parses the WHOLE file before applying the limit", async () => {
+    /* A corrupt line older than the page's cut still counts towards the
+       denominator and still holds its release number. Slicing first would make
+       `recordLines` depend on how many rows somebody asked for. Sol's P3. */
+    const payload = await deploysPayload(
+      deps({ readRecord: () => ({ ok: true, text: ["{broken", three].join("\n") }) }),
+      1,
+    );
+
+    if (payload.kind !== "deploys") throw new Error("unreachable");
+    expect(payload.versions).toHaveLength(1);
+    expect(payload.recordLines).toBe(4);
+    expect(payload.unreadable).toHaveLength(1);
+    expect(payload.total).toBe(3);
+  });
+
+  it("carries the unreadable lines through rather than dropping them", async () => {
+    const payload = await deploysPayload(
       deps({ readRecord: () => ({ ok: true, text: [line(), "{broken"].join("\n") }) }),
       10,
     );
@@ -167,57 +185,42 @@ describe("the payload", () => {
 });
 
 describe("not knowing, kept apart from knowing", () => {
-  it("an empty record does not get probed, and says so instead of answering zero", () => {
-    /* A probe from nothing would answer "0 commits behind", which is the most
-       reassuring possible way to say we have no idea. */
-    const git = fakeGit();
-    const payload = deploysPayload(deps({ readRecord: () => ({ ok: true, text: "" }), git }), 10);
-
-    if (payload.kind !== "deploys") throw new Error("unreachable");
-    expect(payload.ancestry).toEqual({ kind: "unknown", why: "the record names no deploy to measure from" });
-    expect(payload.commitsSince).toEqual({ kind: "unknown", why: "the record names no deploy to measure from" });
-    expect(git.asked).not.toContain("isAncestor");
-    expect(git.asked.filter((a) => a.startsWith("countSince"))).toEqual([]);
-  });
-
-  it("a git failure is `unknown` with a reason, never a count of zero", () => {
-    const payload = deploysPayload(
+  it("a git failure is `unknown` with a reason, and does NOT blank the list", async () => {
+    /* The two axes are independent: a readable record with an unavailable git
+       still answers `deploys`. Collapsing them would let a git that will not
+       run blank a perfectly good list. Sol's P2 finding 5. */
+    const payload = await deploysPayload(
       deps({
         git: fakeGit({
-          countSince: () => ({ kind: "unknown", why: "git rev-list took longer than 5000ms" }),
-          isAncestor: () => ({ kind: "unknown", why: "fatal: bad object" }),
-          mainRef: () => ({ kind: "unavailable", why: "origin/main: unknown revision" }),
+          main: { kind: "unavailable", why: "origin/main: unknown revision" },
+          ancestry: { kind: "unknown", why: "fatal: bad object" },
+          commitsSince: { kind: "unknown", why: "git rev-list took longer than 5000ms" },
         }),
       }),
       10,
     );
 
     if (payload.kind !== "deploys") throw new Error("unreachable");
-    expect(payload.commitsSince).toEqual({ kind: "unknown", why: "git rev-list took longer than 5000ms" });
-    expect(payload.ancestry.kind).toBe("unknown");
-    expect(payload.main.kind).toBe("unavailable");
-    /* And the deploys are still served: a git that will not answer must not
-       take the list of deploys down with it. */
+    expect(payload.git.commitsSince).toEqual({ kind: "unknown", why: "git rev-list took longer than 5000ms" });
+    expect(payload.git.ancestry.kind).toBe("unknown");
+    expect(payload.git.main.kind).toBe("unavailable");
     expect(payload.versions).toHaveLength(1);
   });
 
-  it("distinguishes `not-ancestor` from `unknown`, which is the collapse that reads as a rollback", () => {
-    const rolled = deploysPayload(deps({ git: fakeGit({ isAncestor: () => ({ kind: "not-ancestor" }) }) }), 10);
-    const blind = deploysPayload(deps({ git: fakeGit({ isAncestor: () => ({ kind: "unknown", why: "no git" }) }) }), 10);
+  it("passes a null sha for an empty record rather than inventing one", async () => {
+    const git = fakeGit();
+    await deploysPayload(deps({ readRecord: () => ({ ok: true, text: "" }), git }), 10);
 
-    if (rolled.kind !== "deploys" || blind.kind !== "deploys") throw new Error("unreachable");
-    expect(rolled.ancestry.kind).toBe("not-ancestor");
-    expect(blind.ancestry.kind).toBe("unknown");
-    expect(rolled.ancestry).not.toEqual(blind.ancestry);
+    /* The probe owns the "nothing to measure from" arm, so the reason lives in
+       one place rather than being invented at two call sites. */
+    expect(git.asked).toEqual([null]);
   });
 });
 
 /**
  * **The real probe, against a repository built for the purpose.**
  *
- * A probe exercised only through a fake proves the fake works. These build a
- * throwaway repo with a branch standing in for `origin/main`, so every arm below
- * is the actual `spawnSync` path.
+ * A probe exercised only through a fake proves the fake works.
  */
 describe("gitProbe against a real repository", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "fleet-deploys-git-"));
@@ -237,7 +240,7 @@ describe("gitProbe against a real repository", () => {
   run("commit", "-q", "-am", "three");
   const tip = run("rev-parse", "HEAD");
   /* A branch off to the side, to make a sha that is genuinely NOT an ancestor —
-     which is the arm a rollback would produce and the one hardest to fake. */
+     the arm a rollback would produce and the one hardest to fake. */
   run("checkout", "-q", "-b", "sideways", first);
   writeFileSync(path.join(dir, "b.txt"), "elsewhere\n");
   run("add", "b.txt");
@@ -247,58 +250,113 @@ describe("gitProbe against a real repository", () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  const probe = gitProbe({ repoRoot: dir, ref: "trunk" });
+  /** A fresh probe per case, so the TTL cache never carries an answer across. */
+  const probe = (): GitProbe => gitProbe({ repoRoot: dir, ref: "trunk", ttlMs: 0 });
 
-  it("reads the tip's sha and its committer date", () => {
-    const ref = probe.mainRef();
+  it("reads the tip's sha and its committer date", async () => {
+    const { main } = await probe().snapshot(first);
 
-    expect(ref.kind).toBe("ref");
-    if (ref.kind !== "ref") throw new Error("unreachable");
-    expect(ref.sha).toBe(tip);
-    expect(Number.isNaN(Date.parse(ref.committedAt))).toBe(false);
-    /* Never fetched, so this is null — and null is the honest answer rather
-       than a zero that would render as 1970. */
-    expect(ref.lastFetchAtMs).toBeNull();
+    expect(main.kind).toBe("ref");
+    if (main.kind !== "ref") throw new Error("unreachable");
+    expect(main.sha).toBe(tip);
+    expect(Number.isNaN(Date.parse(main.committedAt))).toBe(false);
+    /* Never fetched, so this is null — the honest answer rather than a zero
+       that would render as 1970. */
+    expect(main.lastFetchAtMs).toBeNull();
   });
 
-  it("says `ancestor` for a sha on the branch and `not-ancestor` for one beside it", () => {
-    expect(probe.isAncestor(first)).toEqual({ kind: "ancestor" });
-    expect(probe.isAncestor(offBranch)).toEqual({ kind: "not-ancestor" });
+  it("says `ancestor` for a sha on the branch and counts the commits since", async () => {
+    const snapshot = await probe().snapshot(first);
+
+    expect(snapshot.ancestry).toEqual({ kind: "ancestor" });
+    /* Two commits from `first` to the tip, and this repo has no merges, so
+       `--no-merges` is not what makes it two. */
+    expect(snapshot.commitsSince).toEqual({ kind: "count", commits: 2 });
   });
 
-  it("counts the commits since, and zero when there are none", () => {
-    /* Two commits from `first` to the tip, and this repo has no merges, so the
-       `--no-merges` flag is not what makes it two. */
-    expect(probe.countSince(first)).toEqual({ kind: "count", commits: 2 });
-    expect(probe.countSince(tip)).toEqual({ kind: "count", commits: 0 });
+  it("says `not-ancestor` for a sha beside the branch", async () => {
+    const snapshot = await probe().snapshot(offBranch);
+
+    expect(snapshot.ancestry).toEqual({ kind: "not-ancestor" });
   });
 
-  it("does NOT collapse an unknown sha into `not-ancestor`", () => {
+  it("counts zero when the record is level with the tip", async () => {
+    const snapshot = await probe().snapshot(tip);
+
+    expect(snapshot.commitsSince).toEqual({ kind: "count", commits: 0 });
+    expect(snapshot.ancestry).toEqual({ kind: "ancestor" });
+  });
+
+  it("does NOT collapse an unknown sha into `not-ancestor`", async () => {
     /* git exits 128 here, not 1. Treating every non-zero exit as "no" would
        draw a rollback that never happened. */
-    const missing = "f".repeat(40);
+    const snapshot = await probe().snapshot("f".repeat(40));
 
-    expect(probe.isAncestor(missing).kind).toBe("unknown");
-    expect(probe.countSince(missing).kind).toBe("unknown");
+    expect(snapshot.ancestry.kind).toBe("unknown");
+    expect(snapshot.commitsSince.kind).toBe("unknown");
   });
 
-  it("refuses anything that is not a sha before it reaches an argv slot", () => {
-    for (const bad of ["--upload-pack=touch /tmp/pwned", "HEAD", "", "; rm -rf /", "origin/main"]) {
-      expect(probe.isAncestor(bad), bad).toEqual({ kind: "unknown", why: "not a 40-character sha" });
-      expect(probe.countSince(bad), bad).toEqual({ kind: "unknown", why: "not a 40-character sha" });
-    }
+  it.each(["--upload-pack=touch /tmp/pwned", "HEAD", "", "; rm -rf /", "origin/main", "trunk"])(
+    "refuses %j before it reaches an argv slot",
+    async (bad) => {
+      const snapshot = await probe().snapshot(bad);
+
+      expect(snapshot.ancestry).toEqual({
+        kind: "unknown",
+        why: "the record's newest sha is not 40 hex characters",
+      });
+      expect(snapshot.commitsSince.kind).toBe("unknown");
+      /* And the tip is still read: a bad watermark must not cost the ref. */
+      expect(snapshot.main.kind).toBe("ref");
+    },
+  );
+
+  it("says `unavailable` for a ref that does not exist, rather than throwing", async () => {
+    const snapshot = await gitProbe({ repoRoot: dir, ref: "origin/does-not-exist", ttlMs: 0 }).snapshot(first);
+
+    expect(snapshot.main.kind).toBe("unavailable");
+    /* And the comparisons say the ref was the problem, rather than blaming the
+       record's sha for it. */
+    expect(snapshot.ancestry.kind).toBe("unknown");
+    expect(snapshot.commitsSince.kind).toBe("unknown");
   });
 
-  it("says `unavailable` for a ref that does not exist, rather than throwing", () => {
-    const nowhere = gitProbe({ repoRoot: dir, ref: "origin/does-not-exist" });
+  it("says `unavailable` outside a repository, rather than throwing", async () => {
+    const snapshot = await gitProbe({ repoRoot: tmpdir(), ref: "trunk", ttlMs: 0 }).snapshot(first);
 
-    expect(nowhere.mainRef().kind).toBe("unavailable");
+    expect(snapshot.main.kind).toBe("unavailable");
   });
 
-  it("says `unavailable` outside a repository, rather than throwing", () => {
-    const outside = gitProbe({ repoRoot: tmpdir(), ref: "trunk" });
+  it("takes one snapshot for concurrent readers, and reuses it inside the TTL", async () => {
+    /* Single flight and a TTL, because this process is the one the Overseer
+       cannot do without: three spawns per reader is how a tab freezes the
+       control plane. */
+    let calls = 0;
+    const counted = gitProbe({
+      repoRoot: dir,
+      ref: "trunk",
+      ttlMs: 60_000,
+      nowMs: () => {
+        calls += 1;
+        return 1000;
+      },
+    });
 
-    expect(outside.mainRef().kind).toBe("unavailable");
+    const [a, b] = await Promise.all([counted.snapshot(first), counted.snapshot(first)]);
+    expect(a).toEqual(b);
+    const c = await counted.snapshot(first);
+    expect(c).toEqual(a);
+    expect(calls).toBeGreaterThan(0);
+  });
+
+  it("does not serve one watermark's answer for another", async () => {
+    const cached = gitProbe({ repoRoot: dir, ref: "trunk", ttlMs: 60_000 });
+
+    const onBranch = await cached.snapshot(first);
+    const beside = await cached.snapshot(offBranch);
+
+    expect(onBranch.ancestry.kind).toBe("ancestor");
+    expect(beside.ancestry.kind).toBe("not-ancestor");
   });
 });
 
@@ -318,6 +376,10 @@ describe("makeDeploys, the composition the server mounts", () => {
     const wiring = makeDeploys();
     const chunks: Buffer[] = [];
     let status = 0;
+    let done: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      done = resolve;
+    });
     const res = {
       writeHead(code: number) {
         status = code;
@@ -325,15 +387,14 @@ describe("makeDeploys, the composition the server mounts", () => {
       },
       end(chunk?: string | Buffer) {
         if (chunk !== undefined) chunks.push(Buffer.from(chunk));
+        done();
       },
     };
 
-    const handled = wiring.route.handle(
-      { url: "/api/deploys?limit=3", headers: {} } as never,
-      res as never,
-    );
-
+    const handled = wiring.route.handle({ url: "/api/deploys?limit=3", headers: {} } as never, res as never);
     expect(handled).toBe(true);
+    await finished;
+
     expect(status).toBe(200);
     const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     expect(payload.kind).toBe("deploys");
@@ -343,21 +404,26 @@ describe("makeDeploys, the composition the server mounts", () => {
        ever fails it is telling you something true about the repository. */
     expect(payload.newestRecordedSha).toMatch(/^[0-9a-f]{40}$/);
     expect(payload.recordLines).toBeGreaterThan(50);
+    expect(payload.git.main.kind).toBe("ref");
   });
 
   it("does not answer for somebody else's route", () => {
-    const wiring = makeDeploys();
-    const handled = wiring.route.handle({ url: "/api/state", headers: {} } as never, {} as never);
+    const handled = makeDeploys().route.handle({ url: "/api/state", headers: {} } as never, {} as never);
 
     expect(handled).toBe(false);
   });
 
   it("404s a path that merely starts with the mount point", () => {
-    const wiring = makeDeploys();
     let status = 0;
-    const res = { writeHead: (code: number) => ((status = code), res), end: () => undefined };
+    const res = {
+      writeHead(code: number) {
+        status = code;
+        return res;
+      },
+      end: () => undefined,
+    };
 
-    const handled = wiring.route.handle(
+    const handled = makeDeploys().route.handle(
       { url: "/api/deploys/../secrets", headers: {} } as never,
       res as never,
     );

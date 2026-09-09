@@ -31,12 +31,27 @@ how stale it is, and never asks for a token.
 ### The honest sentence this tab must not get wrong
 
 The last recorded version tonight is `2026-09-08T05:32:17Z` at `8cd2206a`, and `origin/main` is 287
-non-merge commits ahead of it. **That number is not "undeployed work".** Everything on `main` has
-either shipped or is shipping — `main` is written only by `npm run deploy`. What the number actually
-says is *no recorded version accounts for these commits*, which lumps together two different things:
-deploys that happened and have not been through the changelog job yet, and the tip that has not been
-deployed. This tab cannot tell them apart without Vercel, so it must say the weaker true thing rather
-than the stronger false one. The wording is fixed in stage 3 and the reason is here.
+non-merge commits ahead of it. **That number is not "undeployed work".**
+
+The first draft of this section then said *everything on `main` has either shipped or is shipping,
+since `main` is written only by `npm run deploy`* — and **that is false**, which GPT Sol caught and
+which I verified: [`scripts/deploy.ts`](../../scripts/deploy.ts) pushes to `main` and only *then*
+waits for Vercel, so a build that failed or timed out leaves `main` advanced with nothing serving
+from it. So the count mixes three things: deploys that happened and have not been written up, a tip
+that has not been deployed, and pushes whose build never succeeded.
+
+The tab therefore says the literal thing — *later non-merge commits in this checkout's cached
+`origin/main`* — and adds that some may already have deployed and this view cannot tell which.
+
+**A token-free way to do better exists, and it is the named next step rather than this pass.**
+Production publishes its own build stamps: `/build.json` carries the client bundle's commit
+(`vite.config.ts`) and `/api/health` carries the function's (`src/vercel-health.ts`), and
+`scripts/deploy.ts` already fetches and cross-checks both. They cannot enumerate deploys or recover
+their timestamps — the NDJSON stays the record — but they name **the sha currently serving**, which
+splits the vague count into *commits included in the serving build* and *commits that are not*. Left
+out here because it is an outbound network call from the dashboard and so needs its own
+unavailable/malformed/client-disagrees-with-API arms, its own cache, and a guarantee that it never
+delays or prevents rendering the recorded list.
 
 `--no-merges`, because `commit_count` in the file is a non-merge count (changelog.md § Enumerate:
 merge commits are dropped, and the doc was wrong about this until the file contradicted it). A count
