@@ -531,6 +531,25 @@ its quarantine silently disabled is not** — and the second is precisely the fa
 exists to prevent. Logging and carrying on would reproduce U6 as a runtime behaviour after removing
 it as a compile-time one.
 
+#### A hole a peer found by reading the header, before it was built
+
+**The coordinator's guarantee is process-local, and all three enforcements are too.** A child
+process — a spawned script, a worker, anything with its own module graph — calls
+`sharedSendCoordinator()` and gets a **fresh, empty book**, so `holding()` answers `null` for every
+session on the box and a send goes into a pane that may be holding half a sentence.
+
+The import walk cannot see it (the child legitimately holds a coordinator), the compile guard cannot
+(the types are right), and the composition test cannot (it asserts one book **within one process**,
+which is the failure it was written for). Written into `send-coordinator.ts` at the point of
+temptation rather than guarded, because the guard would have to be a durable store — which is this
+stage, below.
+
+**Found by `dashboard-titles-descriptions-detail`, which had been asked to build exactly that** and
+abandoned it after reading the header's insistence that the check and the call are adjacent with
+nothing between them. It reasoned from the header to the consequence without having been present for
+the bug — which is the argument for writing the reason down rather than only enforcing it, and the
+clearest evidence tonight that a comment can do work a test cannot.
+
 ### Stage 4b — a hold must survive the process that recorded it
 
 **U1, and it is the one finding that needs new machinery rather than a repair.** The quarantine book
