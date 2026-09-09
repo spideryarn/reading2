@@ -190,13 +190,16 @@ describe("reference resolution can only downgrade", () => {
     expect(inconsistent.questions).toMatchObject({ items: [{ itemId: "prose-1", excerpt: "different copied words" }] });
   });
 
-  it("recovers the completeness gap when an inbox dialog has no conversation row", () => {
+  /* The client half of the same correction: it had its own independent copy of
+     the removed gap, so the defect would have survived fixing only the server. */
+  it("discards an inbox dialog with no conversation row, in silence", () => {
     const source = {
       ...attentionItem("dialog-1", "$9"),
       evidence: { kind: "dialog", question: "Ship it?", options: ["Yes", "No"] },
     };
     const state = read({ attention: attention([source]) });
-    expect(gapKinds(state)).toContain("attention-dialog-not-in-rows");
+    expect(gapKinds(state)).not.toContain("attention-dialog-not-in-rows");
+    expect(state.questions).toMatchObject({ kind: "complete" });
   });
 
   it("never promotes server partial or not-observed views", () => {

@@ -3363,8 +3363,6 @@ export type QuestionGap =
   | { kind: "collection-failed"; why: string }
   /** Written by the server composer when a needs-you row carried no pane-question reading. */
   | { kind: "row-question-unreadable"; rowId: string }
-  /** Written by the server composer when an inbox conversation dialog had no conversation dialog on its member's row. */
-  | { kind: "attention-dialog-not-in-rows"; itemId: string; sessionId: string }
   /** Written by either freshness check when the fleet snapshot's clock was unreadable, ahead, or past its cadence deadline. */
   | { kind: "fleet-snapshot-stale"; collectedAt: string }
   /** Written by either freshness check when the checkpoint's clock was unreadable, ahead, or over five minutes old. */
@@ -3379,6 +3377,11 @@ export type QuestionGap =
   | { kind: "attention-unreadable"; why: string }
   /** Written only by the browser parser when one or more rows in the same payload could not be parsed. */
   | { kind: "rows-unreadable"; count: number }
+  /* THERE IS NO `attention-dialog-not-in-rows` ARM, and its absence is a
+     decision rather than an omission. The inbox and the collector observe on
+     different cadences, so an inbox dialog the pane no longer shows is ordinary
+     lag — `questions.ts` § composeAttentionItem has the whole argument, and the
+     reason the honest version of that arm cannot be written from these clocks. */
   /** Written only by the browser resolver when a dialog's row reference did not resolve to a parsed question. */
   | { kind: "dialog-reference-unresolved"; rowId: string; why: string }
   /** Written only by the browser resolver when a prose id did not resolve to the same parsed attention observation. */

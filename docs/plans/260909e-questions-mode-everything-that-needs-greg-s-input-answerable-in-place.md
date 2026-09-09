@@ -779,7 +779,34 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 - [ ] an absent `questions` field (an older server) and a present-but-unreadable one → two different
       gaps.
 
-**Delegated to Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`). Status: *not started.*
+**Delegated to Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`) from
+[the task](260909e-questions-mode-stage1-codex-task.md).
+
+**Status: built, reviewed, fixed, green.** Five suites and the
+four-project typecheck pass, run by this session rather than taken from the implementer's claim:
+Codex was killed by its 45-minute timeout *while waiting on a reviewer it had started itself*, so
+there is no implementer's report and nothing it said about its own work is evidence.
+
+Two things happened that the plan did not anticipate.
+
+**The task prompt introduced a defect.** It said not to edit anything already in `wire.ts`, so rather
+than adding a required `questions` key to `FleetState`, Codex added
+`FleetStateWithQuestions = FleetState & { questions }` and re-pointed four files at it. That leaves
+two names for one payload and a plain `FleetState` that does not require the field — and moves
+`tests/fleet-compile-guards.test.ts` onto the alias, so the guard would not have caught the drift
+either. Fixed by this session: the field is on `FleetState`, the alias is gone, and the comment
+records why it briefly existed. **The lesson is about the prompt, not the implementer** — "do not
+edit anything already there" is right for an append-only vocabulary and wrong for a payload type
+whose whole contract is that consumers cannot miss a field.
+
+**One suspected defect is with the reviewer rather than fixed.** `composeAttentionItem` raises an
+`attention-dialog-not-in-rows` gap whenever the inbox holds a dialog the rows do not show. The inbox
+scans every ~2 minutes and the collector every ~73 seconds, so a dialog answered in between is
+**ordinary operation** — which would put a permanent caveat on the page and downgrade `complete` to
+`partial` nearly always. That is A17, which § What the screen must never do forbids. It was not
+fixed on this session's own judgement because the obvious alternative is not obviously right:
+silence there discards the one case where the inbox genuinely knows something the rows do not, which
+§ What round three changed, 4 says is the accepted cost of discarding inbox dialog items.
 
 ### Stage 2 — the panel, the answering, and the registrations
 
@@ -806,7 +833,18 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 - [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
       things.
 
-**Delegated to Codex.** Status: *not started.*
+**Delegated to Codex.** Status: *not started.* **This is where the session that picks this up
+begins**; Stage 1's contract is on `dev` and its shape is settled.
+
+**One requirement carried forward from Stage 1's code review, and it is not optional.** GPT Sol's
+second P1: `questionsAtTime` in `web/src/types.ts` recomputes all three clocks against a supplied
+instant and is correct, but its only production caller is the parser. **So a view does not yet go
+stale while the page sits open** — the plan requires that, and Stage 1 could not deliver it because
+there was no render path to hang it on. When `QuestionsPanel` mounts, derive its prop with
+`questionsAtTime(feed.state, now)` on **every render**, off `App.tsx`'s existing ticking clock, and
+add a DOM test that **advances time without delivering another payload** and watches the panel leave
+`complete`. A selector that is only ever called at parse time is the shape of a check that cannot
+fail.
 
 ### Stage 3 — see it, and the queue pointer
 

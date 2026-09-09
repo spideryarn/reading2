@@ -2556,11 +2556,6 @@ function parseQuestionGap(raw: unknown, skew: ClockSkew): QuestionGap | null {
       const rowId = id("rowId");
       return rowId === null ? null : { kind, rowId };
     }
-    case "attention-dialog-not-in-rows": {
-      const itemId = id("itemId");
-      const sessionId = id("sessionId");
-      return itemId === null || sessionId === null ? null : { kind, itemId, sessionId };
-    }
     case "fleet-snapshot-stale": {
       const collectedAt = iso(raw["collectedAt"]);
       return collectedAt === null
@@ -2783,15 +2778,10 @@ export function questionsAtTime(state: FleetState, now: number): QuestionsView {
         if (state.attention.list.sessionsUnreadable > 0) {
           gaps.push({ kind: "attention-sessions-unreadable", count: state.attention.list.sessionsUnreadable });
         }
-        for (const item of state.attention.list.items) {
-          if (item.evidence.kind !== "dialog") continue;
-          for (const member of [item, ...item.duplicates]) {
-            const row = state.rows.find((candidate) => candidate.id === member.sessionId);
-            if (row?.question?.gate.kind !== "conversation") {
-              gaps.push({ kind: "attention-dialog-not-in-rows", itemId: item.id, sessionId: member.sessionId });
-            }
-          }
-        }
+        /* Inbox dialog items are discarded in silence here too, for the reason
+           `composeQuestions` gives at length: a dialog answered between the two
+           observers' passes disagrees as a matter of ordinary operation, and a
+           gap on that put the page in `partial` most of the time. */
       }
       break;
     default: {

@@ -172,9 +172,13 @@ describe("composeQuestions: the inbox owns prose", () => {
     });
     const item = items(compose({ rows: [replaced], attentionFeed: published([prose]) }))[0];
     expect(item).toMatchObject({ kind: "prose", itemId: "prose-1", target: { kind: "addressable", sessionId: "$1" } });
-    expect(item).not.toHaveProperty("paneId");
-    expect(item).not.toHaveProperty("claudeSessionId");
-    expect(item).not.toHaveProperty("answerHere");
+    /* NOT A LIST OF THREE BANNED NAMES, which is what this was and which a
+       future `send` or `canAnswer` would walk straight past. The prose arms are
+       read-only by a decision taken under gate 2, so the guard is an allow-list
+       of the keys those arms may carry: anything new has to be added here
+       deliberately, and a write-shaped field cannot arrive by accident. */
+    const ALLOWED = ["kind", "itemId", "target", "excerpt", "why", "waitingSince", "attentionKind", "duplicates"];
+    expect(Object.keys(item as object).sort()).toEqual([...ALLOWED].sort());
   });
 
   it("keeps a prose card with no row, and records addressability independently for every duplicate", () => {
@@ -190,11 +194,81 @@ describe("composeQuestions: the inbox owns prose", () => {
     ]);
   });
 
-  it("discards inbox dialog cards but reports one the pane observation missed", () => {
+  /* THE ASSERTION IS THE SILENCE, and it replaces one that pinned the opposite.
+     An inbox dialog the pane no longer shows is ordinary observer lag — the two
+     run at ~2 min and ~73 s — so raising a gap put the page in `partial` for
+     about two minutes per answered dialog, which across a fleet is most of the
+     time. GPT Sol's P1 on the built code. `questions.ts` § composeAttentionItem
+     has the argument and why the honest version cannot be written. */
+  it("records mixed addressability across a prose item's members, both ways round", () => {
+    const grouped = { ...prose, duplicates: [{ sessionId: "$2", sessionName: "duplicate", waitingSince: FRESH }] };
+
+    // Addressable primary, unaddressable duplicate.
+    const first = compose({
+      rows: [row("$1", { kind: "none" }), row("$2", { kind: "none" }, { name: "duplicate", paneId: null })],
+      attentionFeed: published([grouped]),
+    });
+    expect(items(first)).toMatchObject([
+      { kind: "prose", target: { kind: "addressable" }, duplicates: [{ kind: "unaddressable" }] },
+    ]);
+
+    // Unaddressable primary, addressable duplicate — the arm follows the
+    // PRIMARY, and the duplicate's own addressability is still recorded.
+    const second = compose({
+      rows: [row("$1", { kind: "none" }, { paneId: null }), row("$2", { kind: "none" }, { name: "duplicate" })],
+      attentionFeed: published([grouped]),
+    });
+    expect(items(second)).toMatchObject([
+      { kind: "prose-unaddressable", target: { kind: "unaddressable" }, duplicates: [{ kind: "addressable" }] },
+    ]);
+  });
+
+  it("discards an inbox dialog the pane no longer shows, in silence", () => {
     const dialog = attentionItem("dialog-1", "$9", { kind: "dialog", question: "Ship it?", options: ["Yes", "No"] });
-    const view = compose({ attentionFeed: published([dialog]) });
-    expect(items(view)).toEqual([]);
-    expect(gapKinds(view)).toContain("attention-dialog-not-in-rows");
+
+    // No row at all for that session.
+    const gone = compose({ attentionFeed: published([dialog]) });
+    expect(items(gone)).toEqual([]);
+    expect(gone).toMatchObject({ kind: "complete" });
+
+    // A row that positively saw no dialog — the pane is the authority.
+    const answered = compose({ rows: [row("$9", { kind: "none" })], attentionFeed: published([dialog]) });
+    expect(items(answered)).toEqual([]);
+    expect(answered).toMatchObject({ kind: "complete" });
+  });
+
+  /* The other half of the same rule: a row that IS parked and whose question
+     could not be read is genuinely missing data, and keeps its own gap — which
+     is the one `observeFleet` already had a better name for. */
+  it("still reports a needs-you row whose question could not be read, and stays silent when it positively saw none", () => {
+    const unreadable = compose({ rows: [row("$9", null, { status: { kind: "needs-you" } })] });
+    expect(gapKinds(unreadable)).toContain("row-question-unreadable");
+
+    const sawNone = compose({ rows: [row("$9", { kind: "none" }, { status: { kind: "needs-you" } })] });
+    expect(gapKinds(sawNone)).not.toContain("row-question-unreadable");
+    expect(sawNone).toMatchObject({ kind: "complete" });
+  });
+
+  /* Sol's P2: a list nobody could read is not an observation, so it must not
+     help the composer decide it saw enough to be `partial`. */
+  it("treats an all-unreadable or zero-scanned inbox as no observation at all", () => {
+    /* `published`'s override spreads over the FEED, not into the list, so the
+       list is given whole here rather than by naming its two counts. */
+    const list = (over: Record<string, unknown>) =>
+      published([], { list: { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: FRESH, ...over } });
+
+    const nothingRead = compose({ collectedAt: null, attentionFeed: list({ sessionsUnreadable: 3 }) });
+    expect(nothingRead.kind).toBe("not-observed");
+
+    const noneScanned = compose({ collectedAt: null, attentionFeed: list({ sessionsScanned: 0 }) });
+    expect(noneScanned.kind).toBe("not-observed");
+  });
+
+  /* Sol's P2: a deadline that is not a number makes every comparison false, so
+     an arbitrarily old snapshot would read as fresh and hold `complete` open. */
+  it("treats an unusable refresh cadence as stale rather than as no deadline", () => {
+    const view = compose({ refreshMs: Number.NaN });
+    expect(gapKinds(view)).toContain("fleet-snapshot-stale");
   });
 });
 

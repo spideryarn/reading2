@@ -123,13 +123,22 @@ function observeAttention(
         case "unknown":
           gaps.push({ kind: "attention-list-unknown", why: feed.list.why });
           return false;
-        case "list":
+        case "list": {
           if (feed.list.sessionsScanned === 0) gaps.push({ kind: "attention-no-sessions-scanned" });
           if (feed.list.sessionsUnreadable > 0) {
             gaps.push({ kind: "attention-sessions-unreadable", count: feed.list.sessionsUnreadable });
           }
-          for (const item of feed.list.items) composeAttentionItem(item, rowsById, items, gaps);
-          return true;
+          for (const item of feed.list.items) composeAttentionItem(item, rowsById, items);
+          /* A LIST IS NOT AN OBSERVATION UNTIL SOMETHING IN IT WAS READ. Zero
+             scanned is the broken probe `AttentionList` names in its own
+             comment, and all-unreadable is a walk that judged nothing — neither
+             is evidence about the fleet, so neither may help the caller decide
+             it observed enough to be `partial` rather than `not-observed`. The
+             real producer normally turns both into `unknown`, but both
+             checkpoint parsers accept such a list, so this is checked here
+             rather than assumed upstream. Sol's P2, 2026-09-09. */
+          return feed.list.sessionsScanned > feed.list.sessionsUnreadable;
+        }
         default: {
           const never: never = feed.list;
           void never;
@@ -145,24 +154,48 @@ function observeAttention(
   }
 }
 
+/**
+ * **NO `gaps` PARAMETER, and its absence is the fix rather than tidying.** This
+ * function raised exactly one gap and the review deleted it; keeping the
+ * parameter would leave the door open for the same mistake to be walked back in
+ * without anybody deciding to. A prose item is composed or it is drawn as
+ * unaddressable — neither is an incomplete observation.
+ */
 function composeAttentionItem(
   item: AttentionItem,
   rowsById: ReadonlyMap<string, FleetRow>,
   items: QuestionItem[],
-  gaps: QuestionGap[],
 ): void {
-  if (item.evidence.kind === "dialog") {
-    /* The inbox dialog is deliberately not a fallback card: doing that would
-       let a slower observer overrule the pane authority. Its only unique news
-       is a disagreement, which must prevent a false complete-empty answer. */
-    for (const member of [item, ...item.duplicates]) {
-      const row = rowsById.get(member.sessionId);
-      if (row?.question?.kind !== "question" || row.question.gate.kind !== "conversation") {
-        gaps.push({ kind: "attention-dialog-not-in-rows", itemId: item.id, sessionId: member.sessionId });
-      }
-    }
-    return;
-  }
+  /* AN INBOX DIALOG THE PANE NO LONGER SHOWS IS DISCARDED IN SILENCE, AND THAT
+     IS THE CORRECTION THAT MATTERS MOST IN THIS FILE.
+
+     It first raised an `attention-dialog-not-in-rows` gap, on the reasoning that
+     a disagreement between the two observers is news. It is not: the inbox
+     scans every ~2 minutes and the collector every ~73 seconds, so **a dialog
+     answered in between disagrees with the inbox as a matter of ordinary
+     operation**. Emitting a gap there put a caveat on the page and downgraded
+     `complete` to `partial` for about two minutes per answered dialog — across
+     a fleet, most of the time. That is A17, healthy operation spending its life
+     alarming, which is exactly what the gap vocabulary exists to avoid.
+
+     Every case is already covered, or is not a fact:
+
+      - the pane reading is readable and recent and shows no dialog → the pane
+        is the authority and it says the dialog is gone. Silence.
+      - collection was absent, failed or is stale, or this row's question could
+        not be read → `observeFleet` has already said so, with a better name.
+      - the session has no row at all → either it ended, or the rows are
+        incomplete, and the second is one of the gaps above.
+
+     The ONE thing that would be worth saying is *the inbox observed this dialog
+     AFTER the pane did*, which is genuine missing data rather than lag. **It
+     cannot be computed from the clocks we have**: `collectedAt` is stamped when
+     the whole collection finishes and `scannedAt` near the start of the
+     attention pass, so their order does not settle which observation of THIS
+     pane came first. Saying it would need a per-pane observation instant, which
+     nothing publishes. Naming the uncertainty is honest; inventing the gap was
+     not. GPT Sol's P1, 2026-09-09. */
+  if (item.evidence.kind === "dialog") return;
 
   const target = targetFor(item.sessionId, item.sessionName, rowsById.get(item.sessionId));
   const duplicates = item.duplicates.map((duplicate) =>
@@ -203,8 +236,15 @@ function targetFor(sessionId: string, sessionName: string, row: FleetRow | undef
 /**
  * A future or unreadable instant is not fresh. Treating it as age zero is the
  * quiet direction: a broken clock would preserve `complete` indefinitely.
+ *
+ * **An unusable DEADLINE fails the same way**, and it is not hypothetical: the
+ * fleet deadline is `refreshMs * FLEET_STALE_CADENCES`, and a `refreshMs` that
+ * is not a finite positive number makes it `NaN`, against which every
+ * comparison is false — so an arbitrarily old snapshot would read as fresh and
+ * hold `complete` open. Sol's P2, 2026-09-09.
  */
 function isStale(iso: string, now: number, deadlineMs: number): boolean {
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return true;
   const at = Date.parse(iso);
   return !Number.isFinite(at) || at > now || now - at > deadlineMs;
 }
