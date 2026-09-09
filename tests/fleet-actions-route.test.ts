@@ -139,13 +139,17 @@ type Invocation = { argv: readonly string[]; cwd: string };
 /** The box, as a recorder. Nothing it is asked to do actually happens. */
 function fakeIo(opts: {
   step?: (step: Step, index: number) => StepRun;
-  procs?: readonly ProcRecord[];
+  procs?: readonly ProcRecord[] | ((scanIndex: number) => readonly ProcRecord[]);
   scanFailure?: string;
   selfPid?: number;
+  start?: (pid: number, readIndex: number) => { read: true; ticks: number } | { read: false; why: string };
+  boot?: { read: true; id: string } | { read: false; cause: "platform-unsupported" | "boot-identity-unreadable"; why: string };
 }): { io: ActionIo; ran: Invocation[] } {
   const ran: Invocation[] = [];
-  const io: ActionIo = {
-    runStep: (step) => {
+  let startReads = 0;
+  let scans = 0;
+  const io = {
+    runStep: (step: Step) => {
       const index = ran.length;
       ran.push({ argv: step.argv, cwd: step.cwd });
       if (opts.step) return Promise.resolve(opts.step(step, index));
@@ -163,10 +167,16 @@ function fakeIo(opts: {
       Promise.resolve(
         opts.scanFailure !== undefined
           ? { ok: false as const, why: opts.scanFailure }
-          : { ok: true as const, procs: [...(opts.procs ?? [])], unreadable: 0 },
+          : {
+              ok: true as const,
+              procs: [...(typeof opts.procs === "function" ? opts.procs(scans++) : (opts.procs ?? []))],
+              unreadable: 0,
+            },
       ),
     selfPid: () => opts.selfPid ?? 999_999,
-  };
+    readProcessStart: (pid: number) => opts.start?.(pid, startReads++) ?? { read: true as const, ticks: pid * 100 },
+    readBootIdentity: () => opts.boot ?? { read: true as const, id: "fixture-boot" },
+  } as unknown as ActionIo;
   return { io, ran };
 }
 
@@ -211,6 +221,7 @@ function harness(
     });
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
+    serverInstanceId: instanceId,
     queue,
     send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
       sent.push({ target, text, declaredStatus });
@@ -1378,13 +1389,9 @@ describe("POST /api/actions/box — killing", () => {
     const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false, NO_ROWS_NEEDED);
 
     expect(outcome.ok).toBe(false);
-    // AND THE REMAINING GAP, NAMED RATHER THAN HIDDEN: the page does not yet
-    // carry the pids it showed into the confirmed request, so a real kill is
-    // refused by the both-lists rule. That is an honest refusal in the server's
-    // own words rather than a false success, which is why it is reported and
-    // not patched over here — the fix is for the panel to send
-    // `result.candidates`' pids back, and it is a separate change.
-    expect(outcome.ok === false && outcome.code).toBe("nothing-to-kill");
+    // Stage 2 now requires the server-minted receipt. Stage 3 replaces this old
+    // client call with boxPreview/boxConfirm and turns the join green.
+    expect(outcome.ok === false && outcome.code).toBe("preview-required");
     expect(ran).toEqual([]);
   });
 
@@ -1404,12 +1411,10 @@ describe("POST /api/actions/box — killing", () => {
   it("kills only what BOTH the fresh scan and the person's list agree on", async () => {
     // 5001 was shown and still matches. 5002 was shown and has since stopped
     // matching (it is not in the scan). 5005 matches now and was never shown.
-    const { io, ran } = fakeIo({ procs: [suites[0] as ProcRecord, proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })] });
+    const after = [suites[0] as ProcRecord, proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })];
+    const { io, ran } = fakeIo({ procs: (scan) => (scan === 0 ? suites : after) });
     const { routes } = harness({ io });
-    const r = await call(
-      routes,
-      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] } }),
-    );
+    const r = await previewAndConfirm(routes, { actionId: "kill-test-suites" });
     expect(r.status).toBe(200);
     // The intersection is what got a step; what the step ESTABLISHED is the
     // block below this describe.
@@ -1421,12 +1426,12 @@ describe("POST /api/actions/box — killing", () => {
   });
 
   it("kills nothing when nothing on the confirmed list still matches", async () => {
-    const { io, ran } = fakeIo({ procs: [proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })] });
+    const { io, ran } = fakeIo({
+      procs: (scan) =>
+        scan === 0 ? [suites[0] as ProcRecord] : [proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })],
+    });
     const { routes } = harness({ io });
-    const r = await call(
-      routes,
-      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001] } }),
-    );
+    const r = await previewAndConfirm(routes, { actionId: "kill-test-suites" });
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("nothing-to-kill");
     expect(ran).toEqual([]);
@@ -1455,7 +1460,7 @@ describe("POST /api/actions/box — killing", () => {
     const a = fakeIo({ procs: suites });
     const noConfirm = await call(
       harness({ io: a.io }).routes,
-      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", pids: [5001] } }),
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run" } }),
     );
     expect(noConfirm.status).toBe(400);
     expect(noConfirm.json.code).toBe("confirm-required");
@@ -1464,7 +1469,7 @@ describe("POST /api/actions/box — killing", () => {
     const b = fakeIo({ procs: suites });
     const disabled = await call(
       harness({ io: b.io, actEnabled: () => false }).routes,
-      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001] } }),
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true } }),
     );
     expect(disabled.status).toBe(503);
     expect(b.ran).toEqual([]);
@@ -1644,7 +1649,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
 
   it("staggers across the recipients it can actually speak to", async () => {
     const { routes, sent } = harness();
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     expect(r.status).toBe(200);
     // Three deliverable of five: the working one is held, the shell is blocked.
     expect(resultOf(r).total).toBe(3);
@@ -1664,7 +1669,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
 
   it("says what happened to every row, including the ones it did not speak to", async () => {
     const { routes } = harness();
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; minutes: number | null; why: string | null }[];
     expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
       "%1:keys-submitted",
@@ -1685,7 +1690,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       sent: [],
     };
     const { routes, sent } = harness({ result: (t) => (t.paneId === "%3" ? refusal : SENT_OK) });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%3", "%5"]);
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
     // `delivery: "none"` on the refusal, so this one is settled: no keystroke
@@ -1708,31 +1713,31 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
 
   it("attributes an unattributed broadcast to the Overseer, not to Greg", async () => {
     const { routes, sent } = harness();
-    await call(routes, fakeReq({ url: "/api/actions/box", body: body({ speaker: undefined }) }));
+    await previewAndConfirm(routes, body({ speaker: undefined }));
     expect(sent[0]?.text).toContain("The Overseer");
     expect(sent[0]?.text).toBe(renderBroadcast(BROADCAST, { index: 0, total: 3 }, "overseer"));
 
     const asGreg = harness();
-    await call(asGreg.routes, fakeReq({ url: "/api/actions/box", body: body({ speaker: "greg" }) }));
+    await previewAndConfirm(asGreg.routes, body({ speaker: "greg" }));
     expect(asGreg.sent[0]?.text).toContain("[Greg, via the fleet dashboard]");
   });
 
   it("speaks to a duplicated row once", async () => {
     const { routes, sent } = harness();
     const dup = [recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%2", sessionId: "$2" })];
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ recipients: dup }) }));
+    const r = await previewAndConfirm(routes, body({ recipients: dup }));
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%2"]);
     expect(resultOf(r).total).toBe(2);
   });
 
   it("will not tell the fleet twice in ten minutes", async () => {
     const h = harness();
-    const first = await call(h.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const first = await previewAndConfirm(h.routes, body());
     expect(first.status).toBe(200);
     expect(h.sent).toHaveLength(3);
 
     h.tick(60_000);
-    const second = await call(h.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const second = await previewAndConfirm(h.routes, body());
     expect(second.status).toBe(429);
     expect(second.json.code).toBe("cooldown");
     expect(second.headers["retry-after"]).toBeDefined();
@@ -1740,7 +1745,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     expect(h.sent).toHaveLength(3);
 
     h.tick(10 * 60_000);
-    const later = await call(h.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const later = await previewAndConfirm(h.routes, body());
     expect(later.status).toBe(200);
     expect(h.sent).toHaveLength(6);
   });
@@ -1759,14 +1764,14 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const c = harness();
     const nobody = await call(
       c.routes,
-      fakeReq({ url: "/api/actions/box", body: body({ recipients: [recipient({ status: { kind: "shell", busy: null } })] }) }),
+      fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run", recipients: [recipient({ status: { kind: "shell", busy: null } })] }) }),
     );
     expect(nobody.status).toBe(409);
     expect(nobody.json.code).toBe("not-steerable");
     expect(c.sent).toEqual([]);
 
     const d = harness();
-    const none = await call(d.routes, fakeReq({ url: "/api/actions/box", body: body({ recipients: [] }) }));
+    const none = await call(d.routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run", recipients: [] }) }));
     expect(none.status).toBe(400);
     expect(d.sent).toEqual([]);
   });
@@ -1774,7 +1779,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
   it("hands the event loop back between every send", async () => {
     let yields = 0;
     const { routes, sent } = harness({ yieldToLoop: () => { yields += 1; return Promise.resolve(); } });
-    await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    await previewAndConfirm(routes, body());
     // `sendMessage` is synchronous and blocks this whole server; without a turn
     // between sends, the page and the stream answer nothing for the length of
     // the fan-out.
@@ -1805,7 +1810,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       primaryDir: () => PRIMARY,
       io: fakeIo({}).io,
     });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     expect(r.status).toBe(200);
     // Two got through (at 0s and 60s); the third was past 90s.
     expect(sent).toEqual(["%1", "%3"]);
@@ -1817,7 +1822,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
   it("refuses a fan-out bigger than a fleet", async () => {
     const { routes, sent } = harness();
     const many = Array.from({ length: 81 }, (_, i) => recipient({ paneId: `%${i}`, sessionId: `$${i}` }));
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ recipients: many }) }));
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run", recipients: many }) }));
     expect(r.status).toBe(400);
     expect(String(r.json.why)).toContain("81");
     expect(sent).toEqual([]);
@@ -1826,7 +1831,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
   it("refuses a recipient that is not addressable, rather than speaking to the rest", async () => {
     const { routes, sent } = harness();
     const withBad = [recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%2", sessionId: "$2", claudeSessionId: undefined })];
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ recipients: withBad }) }));
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run", recipients: withBad }) }));
     expect(r.status).toBe(400);
     expect(String(r.json.why)).toContain("claudeSessionId");
     expect(sent).toEqual([]);
@@ -1979,8 +1984,8 @@ describe("a kill reports what it established, not what it intended", () => {
     proc({ pid: 5003, comm: "node-MainThread", args: VITEST_ARGS }),
   ];
 
-  function killBody(pids: number[]): Record<string, unknown> {
-    return { actionId: "kill-test-suites", mode: "run", confirm: true, pids };
+  function killBody(): Record<string, unknown> {
+    return { actionId: "kill-test-suites" };
   }
 
   it("separates the pids it meant to signal from the ones the signal reached", async () => {
@@ -1994,7 +1999,7 @@ describe("a kill reports what it established, not what it intended", () => {
       step: (step) => (step.argv[2] === "5002" ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" } : OK_STEP),
     });
     const { routes } = harness({ io });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const r = await previewAndConfirm(routes, killBody());
     expect(r.status).toBe(200);
 
     const kill = resultOf(r).kill as { targeted: number[]; observed: { pid: number; observation: string }[] };
@@ -2027,7 +2032,7 @@ describe("a kill reports what it established, not what it intended", () => {
             : OK_STEP,
     });
     const { routes } = harness({ io });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const r = await previewAndConfirm(routes, killBody());
     const kill = resultOf(r).kill as { observed: { pid: number; observation: string; why: string }[] };
     expect(kill.observed.map((o) => o.observation)).toEqual(["signal-accepted", "not-established", "not-established"]);
     // The step's own verdict, not a sentence written here.
@@ -2078,7 +2083,7 @@ describe("a kill reports what it established, not what it intended", () => {
        tense about the process itself. */
     const { io } = fakeIo({ procs: suites });
     const { routes } = harness({ io });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001]) }));
+    const r = await previewAndConfirm(routes, killBody());
     const words = JSON.stringify(resultOf(r).kill);
     expect(words).not.toContain("killed");
     expect(words).not.toContain("dead");
@@ -2107,7 +2112,7 @@ describe("a kill reports what it established, not what it intended", () => {
             : OK_STEP,
     });
     const { routes } = harness({ io });
-    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const recorded = await previewAndConfirm(routes, killBody());
     const outcome = await makeActionsApi(replay(recorded)).box("kill-test-suites", false, REQUEST_IGNORED);
     const effect = outcome.ok ? outcome.effect : null;
     if (effect === null) throw new Error("expected the answer to carry an effect reading");
@@ -2171,7 +2176,7 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
        reached them", and it was the same word this route used for a send that
        went nowhere at all. */
     const { routes } = harness({ result: (t) => (t.paneId === "%3" ? failing("partial") : SENT_OK) });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
     expect(rows.find((x) => x.paneId === "%3")?.outcome).toBe("partial");
     expect(rows.find((x) => x.paneId === "%3")?.code).toBe("send-failed");
@@ -2187,13 +2192,13 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
 
   it("keeps `none` and `unknown` apart, and neither of them is `partial`", async () => {
     const none = harness({ result: (t) => (t.paneId === "%3" ? failing("none") : SENT_OK) });
-    const a = await call(none.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const a = await previewAndConfirm(none.routes, body());
     expect((resultOf(a).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
       "refused-before-effect",
     );
 
     const unsure = harness({ result: (t) => (t.paneId === "%3" ? failing("unknown") : SENT_OK) });
-    const b = await call(unsure.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const b = await previewAndConfirm(unsure.routes, body());
     expect((resultOf(b).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
       "outcome-unknown",
     );
@@ -2214,7 +2219,7 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
         return SENT_OK;
       },
     });
-    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const r = await previewAndConfirm(routes, body());
     const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
     expect(row?.outcome).toBe("outcome-unknown");
     expect(row?.why).toContain("EAGAIN");
@@ -2361,8 +2366,8 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
           : SENT_OK,
     });
-    const a = await headingFor(await call(all.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
-    const b = await headingFor(await call(half.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
+    const a = await headingFor(await previewAndConfirm(all.routes, broadcastBody));
+    const b = await headingFor(await previewAndConfirm(half.routes, broadcastBody));
 
     expect(a).toBe("Keys submitted to 3 of 5 rows.");
     expect(b).toBe("Keys submitted to 2 of 5 rows.");
@@ -2377,7 +2382,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
           : SENT_OK,
     });
-    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: broadcastBody }));
+    const recorded = await previewAndConfirm(routes, broadcastBody);
     const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
     const effect = outcome.ok ? outcome.effect : null;
     expect(effect?.kind).toBe("broadcast");
@@ -2388,7 +2393,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
   });
 
   it("cannot head a kill that signalled nothing the way it heads one that signalled everything", async () => {
-    const body = { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] };
+    const body = { actionId: "kill-test-suites" };
     const procs = [
       proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
       proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
@@ -2396,12 +2401,12 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     const good = harness({ io: fakeIo({ procs }).io });
     const gone = harness({ io: fakeIo({ procs, step: () => ({ ...OK_STEP, code: 1, stderr: "No such process" }) }).io });
 
-    const a = await makeActionsApi(replay(await call(good.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+    const a = await makeActionsApi(replay(await previewAndConfirm(good.routes, body))).box(
       "kill-test-suites",
       false,
       REQUEST_IGNORED,
     );
-    const b = await makeActionsApi(replay(await call(gone.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+    const b = await makeActionsApi(replay(await previewAndConfirm(gone.routes, body))).box(
       "kill-test-suites",
       false,
       REQUEST_IGNORED,
@@ -2441,6 +2446,313 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     const { routes } = harness();
     const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: { ...broadcastBody, mode: "dry-run" } }));
     expect(await headingFor(recorded)).toBe("It would go to 3 of 5 rows.");
+  });
+});
+
+/* ================================================================== *
+ * The server-side preview receipt. The browser join immediately below stays
+ * red until Stage 3 teaches the client to carry this envelope.
+ * ================================================================== */
+
+type TestPreview = {
+  schema: "fleet-action-preview/1";
+  previewId: string;
+  serverInstanceId: string;
+  actionId: string;
+  expiresAt: number;
+  material: Record<string, unknown>;
+};
+
+function previewFrom(r: { json: Record<string, unknown> }): TestPreview {
+  const preview = r.json.preview;
+  if (typeof preview !== "object" || preview === null) throw new Error("the response carried no preview envelope");
+  return preview as TestPreview;
+}
+
+function confirmation(actionId: string, preview: TestPreview, material: unknown = preview.material): Record<string, unknown> {
+  return {
+    actionId,
+    mode: "run",
+    confirm: true,
+    preview: {
+      previewId: preview.previewId,
+      serverInstanceId: preview.serverInstanceId,
+      actionId: preview.actionId,
+    },
+    material,
+  };
+}
+
+async function previewAndConfirm(
+  routes: ReturnType<typeof harness>["routes"],
+  dryBody: Record<string, unknown>,
+  runOver: Record<string, unknown> = {},
+): Promise<FakeRes & { json: Record<string, unknown> }> {
+  const actionId = String(dryBody.actionId);
+  const shown = await call(routes, fakeReq({ url: "/api/actions/box", body: { ...dryBody, mode: "dry-run", confirm: false } }));
+  const preview = previewFrom(shown);
+  return call(routes, fakeReq({ url: "/api/actions/box", body: { ...confirmation(actionId, preview), ...runOver } }));
+}
+
+function copied<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+describe("POST /api/actions/box — server-minted preview receipts", () => {
+  const suites = [
+    proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+  ];
+  const twoRecipients = [recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%2", sessionId: "$2" })];
+
+  async function killPreview(h: ReturnType<typeof harness>, actionId = "kill-test-suites"): Promise<TestPreview> {
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: { actionId, mode: "dry-run" } }));
+    return previewFrom(r);
+  }
+
+  async function broadcastPreview(h: ReturnType<typeof harness>, over: Record<string, unknown> = {}): Promise<TestPreview> {
+    const r = await call(
+      h.routes,
+      fakeReq({
+        url: "/api/actions/box",
+        body: { actionId: "resource-broadcast", mode: "dry-run", speaker: "greg", recipients: twoRecipients, ...over },
+      }),
+    );
+    return previewFrom(r);
+  }
+
+  it("signals exactly the pids whose identities were previewed", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    expect((preview.material.confirmable as { pid: number }[]).map((x) => x.pid)).toEqual([5001, 5002]);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(r.status).toBe(200);
+    expect(box.ran.map((x) => x.argv)).toEqual([
+      ["kill", "-TERM", "5001"],
+      ["kill", "-TERM", "5002"],
+    ]);
+  });
+
+  it("speaks to exactly the previewed recipients, in order", async () => {
+    const h = harness();
+    const preview = await broadcastPreview(h);
+    expect(h.sent).toEqual([]);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", preview) }));
+    expect(r.status).toBe(200);
+    expect(h.sent.map((x) => x.target.paneId)).toEqual(["%1", "%2"]);
+  });
+
+  it("refuses a claim under the wrong action without an effect", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    const body = confirmation("kill-test-suites", preview);
+    (body.preview as Record<string, unknown>).actionId = "resource-broadcast";
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body }));
+    expect(r.json.code).toBe("preview-mismatch");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("refuses an expired preview and records no effect", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    h.tick(5 * 60_000 + 1);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(r.json.code).toBe("preview-expired");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("keeps a claimed preview as a tombstone, so a replay has one effect", async () => {
+    const h = harness();
+    const preview = await broadcastPreview(h);
+    const body = confirmation("resource-broadcast", preview);
+
+    const first = await call(h.routes, fakeReq({ url: "/api/actions/box", body }));
+    const second = await call(h.routes, fakeReq({ url: "/api/actions/box", body }));
+    expect(first.status).toBe(200);
+    expect(second.json.code).toBe("preview-already-used");
+    expect(h.sent.map((x) => x.target.paneId)).toEqual(["%1", "%2"]);
+  });
+
+  it("atomically admits one of two concurrent confirms", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    const body = confirmation("kill-test-suites", preview);
+
+    const [a, b] = await Promise.all([
+      call(h.routes, fakeReq({ url: "/api/actions/box", body })),
+      call(h.routes, fakeReq({ url: "/api/actions/box", body })),
+    ]);
+    expect([a.json.code, b.json.code].filter((x) => x === "preview-already-used")).toHaveLength(1);
+    expect(box.ran.map((x) => x.argv)).toEqual([
+      ["kill", "-TERM", "5001"],
+      ["kill", "-TERM", "5002"],
+    ]);
+  });
+
+  it("refuses a preview minted by a previous server run", async () => {
+    const deadBox = fakeIo({ procs: suites });
+    const liveBox = fakeIo({ procs: suites });
+    const dead = harness({ io: deadBox.io, instanceId: "deadbeef" });
+    const live = harness({ io: liveBox.io, instanceId: "0badcafe" });
+    const preview = await killPreview(dead);
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(r.json.code).toBe("other-instance");
+    expect(liveBox.ran).toEqual([]);
+  });
+
+  it("refuses a changed process token", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    const material = copied(preview.material);
+    ((material.confirmable as { startTicks: number }[])[0] as { startTicks: number }).startTicks += 1;
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview, material) }));
+    expect(r.json.code).toBe("preview-mismatch");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("does not spend rate-limit capacity on a mismatched envelope", async () => {
+    const box = fakeIo({ procs: suites });
+    const limiter = createRateLimiter({ minIntervalMs: 60_000, burstMax: 1, burstWindowMs: 60_000 });
+    const h = harness({ io: box.io, limiter });
+    const preview = await killPreview(h);
+    const changed = copied(preview.material);
+    ((changed.confirmable as { startTicks: number }[])[0] as { startTicks: number }).startTicks += 1;
+
+    const mismatch = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview, changed) }),
+    );
+    expect(mismatch.json.code).toBe("preview-mismatch");
+    expect(box.ran).toEqual([]);
+
+    const accepted = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(accepted.status).toBe(200);
+    expect(box.ran).toHaveLength(2);
+  });
+
+  it.each([
+    ["recipient status", (material: Record<string, unknown>) => (((material.recipients as { status: unknown }[])[0] as { status: unknown }).status = { kind: "working" })],
+    ["recipient order", (material: Record<string, unknown>) => ((material.recipients as unknown[]).reverse())],
+    ["speaker", (material: Record<string, unknown>) => (material.speaker = "overseer")],
+  ])("refuses a changed %s", async (_label, mutate) => {
+    const h = harness();
+    const preview = await broadcastPreview(h);
+    const material = copied(preview.material);
+    mutate(material);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", preview, material) }));
+    expect(r.json.code).toBe("preview-mismatch");
+    expect(h.sent).toEqual([]);
+  });
+
+  it("does not signal a pid whose start token changed while the preview was open", async () => {
+    const box = fakeIo({
+      procs: [suites[0] as ProcRecord],
+      start: (pid, readIndex) => ({ read: true, ticks: pid * 100 + readIndex }),
+    });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(r.json.code).toBe("nothing-to-kill");
+    expect(String(r.json.why)).toContain("different process");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("refuses the whole kill preview when boot identity is unreadable", async () => {
+    const box = fakeIo({
+      procs: suites,
+      boot: { read: false, cause: "boot-identity-unreadable", why: "/proc/sys/kernel/random/boot_id could not be read" },
+    });
+    const h = harness({ io: box.io });
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "dry-run" } }));
+
+    expect(r.json.code).toBe("box-unreadable");
+    expect(r.json).not.toHaveProperty("preview");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("does not mint a kill preview its own process cap would refuse on confirmation", async () => {
+    const procs = Array.from({ length: 65 }, (_, index) =>
+      proc({ pid: 5_001 + index, comm: "node-MainThread", args: VITEST_ARGS }),
+    );
+    const box = fakeIo({ procs });
+    const h = harness({ io: box.io });
+
+    const r = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "dry-run" } }),
+    );
+
+    expect(r.json.code).toBe("plan-refused");
+    expect(String(r.json.why)).toContain("more than the 64");
+    expect(r.json).not.toHaveProperty("preview");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("lists an unreadable candidate as excluded and will not accept it as confirmable", async () => {
+    const box = fakeIo({
+      procs: suites,
+      start: (pid) => (pid === 5002 ? { read: false, why: "the process exited" } : { read: true, ticks: pid * 100 }),
+    });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    expect((preview.material.confirmable as { pid: number }[]).map((x) => x.pid)).toEqual([5001]);
+    expect(preview.material.excluded).toEqual([{ pid: 5002, why: "the process exited" }]);
+
+    const forged = copied(preview.material);
+    (forged.confirmable as unknown[]).push({ pid: 5002, startTicks: 500_200, bootId: "fixture-boot" });
+    const refused = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview, forged) }));
+    expect(refused.json.code).toBe("preview-mismatch");
+    expect(box.ran).toEqual([]);
+
+    const accepted = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }));
+    expect(accepted.status).toBe(200);
+    expect(box.ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
+  });
+
+  it("evicts expired previews on a later touch and the oldest preview over the cap", async () => {
+    const box = fakeIo({ procs: [suites[0] as ProcRecord] });
+    const aged = harness({ io: box.io });
+    const expired = await killPreview(aged);
+    aged.tick(5 * 60_000 + 1);
+    await killPreview(aged);
+    const goneByAge = await call(aged.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", expired) }));
+    expect(goneByAge.json.code).toBe("preview-unknown");
+
+    const capped = harness({ io: box.io });
+    const previews: TestPreview[] = [];
+    for (let i = 0; i < 33; i++) {
+      previews.push(await killPreview(capped));
+      capped.tick(1);
+    }
+    const first = previews[0] as TestPreview;
+    const goneByCap = await call(capped.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", first) }));
+    expect(goneByCap.json.code).toBe("preview-unknown");
+    expect(box.ran).toEqual([]);
+  });
+
+  it("refuses the retired bare-pids request instead of ignoring it", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const r = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001] } }),
+    );
+    expect(r.json.code).toBe("bad-request");
+    expect(String(r.json.why)).toContain("identity");
+    expect(box.ran).toEqual([]);
   });
 });
 

@@ -20,12 +20,12 @@
  *
  * THE ONE EXCEPTION IS A KILL, AND IT IS AN EXCEPTION IN BOTH DIRECTIONS. No
  * browser can know what is running on this box, so the candidate list comes
- * from `ps` here. It is then INTERSECTED with the pids the person was shown:
- * a fresh scan authorises, and the stale list bounds. A pid that has stopped
- * matching a rule since the page rendered is not killed, and a pid that started
- * matching one after the person looked is not killed either. `killVerdict`
- * judges a snapshot (its own header says so), and the window between the `ps`
- * and the `kill` is narrowed by re-reading immediately before, never closed.
+ * from `ps` here. A preview binds each confirmable pid to its start tick and
+ * boot, and the run INTERSECTS those identities with a fresh rule scan: the
+ * scan authorises, and the shown identities bound. A process that stopped
+ * matching is not signalled, and one that started matching after the preview
+ * is not either. The final identity read narrows the remaining window; the
+ * pidfd-sized race it cannot close is named beside that read.
  *
  * WHAT ACTUALLY HAPPENS WHERE:
  *
@@ -53,6 +53,7 @@ import { readlinkSync } from "node:fs";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   actionById,
@@ -78,6 +79,12 @@ import {
 } from "./actions.js";
 import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
+import {
+  readBootIdentity,
+  readProcessStart,
+  type BootIdentity,
+  type ProcessStartTicks,
+} from "./execution-identity.js";
 import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
 import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
@@ -166,6 +173,11 @@ export const BROADCAST_DEADLINE_MS = 90_000;
  */
 export const MAX_KILL_PIDS = 64;
 
+/** A confirmation receipt is deliberately short-lived and process-local. */
+export const PREVIEW_TTL_MS = 5 * 60_000;
+/** Enough for every action visible on one page, bounded against forgotten receipts. */
+export const MAX_ACTION_PREVIEWS = 32;
+
 /** Per step. `worktree:sweep` does a fetch; `kill` returns instantly. */
 export const STEP_TIMEOUT_MS = 120_000;
 
@@ -212,6 +224,16 @@ export type ActionErrorCode =
   | "nothing-to-kill"
   /** The fleet was told to ease off very recently. */
   | "cooldown"
+  /** A run did not name the server-minted preview it is meant to confirm. */
+  | "preview-required"
+  /** The preview id was never minted here, or was evicted before confirmation. */
+  | "preview-unknown"
+  /** The preview existed, but its five-minute confirmation window ended. */
+  | "preview-expired"
+  /** This preview has already crossed the one-way fresh-to-claimed boundary. */
+  | "preview-already-used"
+  /** The action name or echoed material differs from the preview the person read. */
+  | "preview-mismatch"
   /**
    * The page asked to drop a set of items and the queue no longer holds exactly
    * that set — something arrived, went out, or was taken by somebody else
@@ -318,6 +340,11 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "box-unreadable": 409,
   "nothing-to-kill": 409,
   cooldown: 429,
+  "preview-required": 400,
+  "preview-unknown": 404,
+  "preview-expired": 409,
+  "preview-already-used": 409,
+  "preview-mismatch": 409,
   "stale-view": 409,
   "other-instance": 409,
   "no-such-hold": 404,
@@ -351,6 +378,11 @@ const RELEASE_CODE: Record<ReleaseRefusalRule, ActionErrorCode> = {
  */
 import type {
   BroadcastRecipientOutcome,
+  BroadcastRecipientClaim,
+  FleetActionMaterial,
+  FleetActionPreview,
+  FleetActionPreviewClaim,
+  FleetKillCandidateView,
   KillAttempt,
   KillObservation,
   KillReport,
@@ -385,16 +417,7 @@ export type StepOutcome = PlanStepView;
 export type PlanRun = PlanRunView<ActionId>;
 
 /** One candidate for a kill, with the named rule that licensed it. */
-export type KillCandidate = {
-  pid: number;
-  rule: KillRule;
-  why: string;
-  /** So the person can see what they are about to kill, not just a number. */
-  comm: string;
-  args: string;
-  rssKiB: number;
-  etimeSeconds: number;
-};
+export type KillCandidate = Omit<FleetKillCandidateView, "rule"> & { rule: KillRule };
 
 /**
  * What became of one recipient of a broadcast.
@@ -531,7 +554,14 @@ export type ActionResponse =
    * these arms each invented their own names and the confirmation in front of
    * `kill-test-suites` rendered the word "null" for it.
    */
-  | { ok: true; op: "dry-run"; action: ActionId; dryRun: true; result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number } }
+  | {
+      ok: true;
+      op: "dry-run";
+      action: ActionId;
+      dryRun: true;
+      preview?: FleetActionPreview;
+      result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number };
+    }
   /*
    * `kill` RATHER THAN `killed`, and the rename is the fix rather than a
    * tidy-up. `killed: number[]` was the list of pids the route INTENDED to
@@ -541,7 +571,14 @@ export type ActionResponse =
    * keeps the intent and the evidence as two fields; see wire.js.
    */
   | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; kill?: KillReport; skipped?: { pid: number; why: string }[] } }
-  | { ok: true; op: "broadcast-preview"; action: ActionId; dryRun: true; result: { total: number; recipients: BroadcastOutcome[]; sample: string | null } }
+  | {
+      ok: true;
+      op: "broadcast-preview";
+      action: ActionId;
+      dryRun: true;
+      preview: FleetActionPreview;
+      result: { total: number; recipients: BroadcastOutcome[]; sample: string | null };
+    }
   | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
   | {
       ok: false;
@@ -658,23 +695,104 @@ export function parseSessionBody(raw: unknown): Parsed<SessionActionRequest> {
   };
 }
 
-export type Recipient = { target: SteerTarget; declaredStatus: FleetStatus };
+export type Recipient = { target: SteerTarget; declaredStatus: FleetStatus; claimedStatus: unknown };
 
-export type BoxActionRequest = {
-  action: Action;
-  mode: ActionMode;
-  confirm: boolean;
-  speaker: Speaker;
-  /** For a kill: the pids the person was shown. Empty means "I was shown none". */
-  pids: number[];
-  /** For a broadcast: the rows the page was showing, verbatim. */
-  recipients: Recipient[];
-};
+export type BoxActionRequest =
+  | {
+      action: Action;
+      mode: "dry-run";
+      confirm: boolean;
+      speaker: "greg" | "overseer";
+      /** For a broadcast: the rows the page was showing, verbatim. */
+      recipients: Recipient[];
+    }
+  | {
+      action: Action;
+      mode: "run";
+      confirm: boolean;
+      preview: unknown;
+      material: unknown;
+    };
+
+function parsePreviewClaim(raw: unknown): Parsed<FleetActionPreviewClaim> {
+  const o = asRecord(raw);
+  if (!o) return bad("preview is not an object");
+  const previewId = asString(o.previewId);
+  const server = asString(o.serverInstanceId);
+  const actionId = asString(o.actionId);
+  if (previewId === null || previewId === "") return bad("preview.previewId is missing");
+  if (server === null || server === "") return bad("preview.serverInstanceId is missing");
+  if (actionId === null || actionId === "") return bad("preview.actionId is missing");
+  return { ok: true, value: { previewId, serverInstanceId: server, actionId } };
+}
+
+function parseActionMaterial(raw: unknown): Parsed<FleetActionMaterial> {
+  const o = asRecord(raw);
+  if (!o) return bad("material is not an object");
+  if (o.kind === "kill") {
+    if (!Array.isArray(o.confirmable)) return bad("kill material.confirmable is not an array");
+    if (!Array.isArray(o.excluded)) return bad("kill material.excluded is not an array");
+    if (o.confirmable.length > MAX_KILL_PIDS) {
+      return bad(`${o.confirmable.length} confirmable processes is more than the ${MAX_KILL_PIDS} this will act on at once`);
+    }
+    for (const value of o.confirmable) {
+      const identity = asRecord(value);
+      if (!identity) return bad("a confirmable process identity is not an object");
+      const { pid, startTicks, bootId } = identity;
+      if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 1) return bad(`${JSON.stringify(pid)} is not a pid`);
+      if (typeof startTicks !== "number" || !Number.isSafeInteger(startTicks) || startTicks < 0) {
+        return bad(`process ${pid}'s startTicks is not a tick count`);
+      }
+      if (typeof bootId !== "string" || bootId === "") return bad(`process ${pid}'s bootId is missing`);
+    }
+    for (const value of o.excluded) {
+      const item = asRecord(value);
+      if (!item) return bad("an excluded process is not an object");
+      const { pid, why } = item;
+      if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 1) return bad(`${JSON.stringify(pid)} is not a pid`);
+      if (typeof why !== "string" || why === "") return bad(`excluded process ${pid} has no reason`);
+    }
+    return { ok: true, value: o as unknown as Extract<FleetActionMaterial, { kind: "kill" }> };
+  }
+  if (o.kind === "broadcast") {
+    if (o.speaker !== "greg" && o.speaker !== "overseer") return bad("broadcast material.speaker must be 'greg' or 'overseer'");
+    if (!Array.isArray(o.recipients)) return bad("broadcast material.recipients is not an array");
+    if (o.recipients.length > MAX_RECIPIENTS) {
+      return bad(`${o.recipients.length} recipients is more than the ${MAX_RECIPIENTS} this will speak to at once`);
+    }
+    for (const value of o.recipients) {
+      const item = asRecord(value);
+      if (!item) return bad("a broadcast recipient claim is not an object");
+      const paneId = asString(item.paneId);
+      const sessionId = asString(item.sessionId);
+      const claudeSessionId = item.claudeSessionId === null ? null : asString(item.claudeSessionId);
+      const panePid = item.panePid;
+      const minutes = item.minutes;
+      if (paneId === null || paneId === "") return bad("a broadcast recipient has no paneId");
+      if (sessionId === null || sessionId === "") return bad(`broadcast recipient ${paneId} has no sessionId`);
+      if (claudeSessionId === null && item.claudeSessionId !== null) {
+        return bad(`broadcast recipient ${paneId} has an invalid claudeSessionId`);
+      }
+      if (panePid !== null && (typeof panePid !== "number" || !Number.isSafeInteger(panePid) || panePid <= 1)) {
+        return bad(`broadcast recipient ${paneId} has an invalid panePid`);
+      }
+      if (parseStatus(item.status) === null) return bad(`broadcast recipient ${paneId} has no valid status`);
+      if (minutes !== null && (typeof minutes !== "number" || !Number.isSafeInteger(minutes) || minutes < 0)) {
+        return bad(`broadcast recipient ${paneId} has an invalid stagger`);
+      }
+    }
+    return { ok: true, value: o as unknown as Extract<FleetActionMaterial, { kind: "broadcast" }> };
+  }
+  return bad("material.kind must be 'kill' or 'broadcast'");
+}
 
 /** `POST /api/actions/box`'s body. */
 export function parseBoxBody(raw: unknown): Parsed<BoxActionRequest> {
   const o = asRecord(raw);
   if (!o) return bad("the body is not a JSON object");
+  if (Object.hasOwn(o, "pids")) {
+    return bad("pids alone are no longer accepted; preview again so each process carries the start-time and boot identity you confirmed");
+  }
   const actionId = asString(o.actionId);
   if (actionId === null) return bad("actionId is missing");
   const action = actionById(actionId);
@@ -685,19 +803,14 @@ export function parseBoxBody(raw: unknown): Parsed<BoxActionRequest> {
   const mode = parseMode(o.mode, "dry-run");
   if (!mode.ok) return mode;
   if (mode.value === "enqueue") return bad("a box-wide action cannot be queued against one session; use 'dry-run' or 'run'");
-  const speaker = parseSpeaker(o.speaker);
-  if (!speaker.ok) return speaker;
   const confirm = o.confirm === true;
 
-  const pids: number[] = [];
-  if (o.pids !== undefined && o.pids !== null) {
-    if (!Array.isArray(o.pids)) return bad("pids is present and is not an array");
-    if (o.pids.length > MAX_KILL_PIDS) return bad(`${o.pids.length} pids is more than the ${MAX_KILL_PIDS} this will act on at once`);
-    for (const p of o.pids) {
-      if (typeof p !== "number" || !Number.isSafeInteger(p) || p <= 1) return bad(`${JSON.stringify(p)} is not a pid`);
-      pids.push(p);
-    }
+  if (mode.value === "run") {
+    return { ok: true, value: { action, mode: "run", confirm, preview: o.preview ?? null, material: o.material ?? null } };
   }
+
+  const speaker = parseSpeaker(o.speaker);
+  if (!speaker.ok) return speaker;
 
   const recipients: Recipient[] = [];
   if (o.recipients !== undefined && o.recipients !== null) {
@@ -719,11 +832,14 @@ export function parseBoxBody(raw: unknown): Parsed<BoxActionRequest> {
       // rendering bug would be worse than quietly speaking to each pane once.
       if (seen.has(target.value.paneId)) continue;
       seen.add(target.value.paneId);
-      recipients.push({ target: target.value, declaredStatus: status });
+      recipients.push({ target: target.value, declaredStatus: status, claimedStatus: r.status });
     }
   }
 
-  return { ok: true, value: { action, mode: mode.value, confirm, speaker: speaker.value, pids, recipients } };
+  return {
+    ok: true,
+    value: { action, mode: "dry-run", confirm, speaker: speaker.value === "greg" ? "greg" : "overseer", recipients },
+  };
 }
 
 export type CancelRequest = { sessionId: string; itemId: string };
@@ -1024,6 +1140,10 @@ export type ActionIo = {
   listProcesses(): Promise<ProcScan>;
   /** This process, so `killVerdict` can refuse to cut its own branch. */
   selfPid(): number;
+  /** The exact start token already defined by execution-identity.ts. */
+  readProcessStart(pid: number): ProcessStartTicks;
+  /** The boot half of that same identity, read once for a kill request. */
+  readBootIdentity(): BootIdentity;
 };
 
 /** The repo this file is in — `tools/fleet/` is two levels down from its root. */
@@ -1145,6 +1265,8 @@ export function realActionIo(): ActionIo {
       }),
 
     selfPid: () => process.pid,
+    readProcessStart,
+    readBootIdentity,
   };
 }
 
@@ -1153,6 +1275,8 @@ export function realActionIo(): ActionIo {
  * ------------------------------------------------------------------ */
 
 export type ActionDeps = {
+  /** The run which mints every preview id held by these routes. */
+  serverInstanceId: string;
   /** The one queue per server. Shared with whatever drains it. */
   queue: SteeringQueue;
   /**
@@ -1205,6 +1329,7 @@ export type ActionDeps = {
 };
 
 export function realActionDeps(): ActionDeps {
+  const instanceId = serverInstanceId();
   return {
     // ONE INSTANCE ID PER PROCESS, minted at the composition root and passed
     // down. Later stages reuse it for request ids and preview identity, which
@@ -1215,7 +1340,7 @@ export function realActionDeps(): ActionDeps {
     // mints would put two different run ids in one process's refusal messages.
     queue: new SteeringQueue({
       now: () => Date.now(),
-      serverInstanceId: serverInstanceId(),
+      serverInstanceId: instanceId,
       quarantine: sharedQuarantineBook(),
     }),
     // THE SAME BOOK, REACHED THE SAME WAY. `sharedSendCoordinator()` is built
@@ -1223,6 +1348,7 @@ export function realActionDeps(): ActionDeps {
     // are looking at one set of holds — which is what makes a hold opened by a
     // message typed from the phone stop the drain a minute later.
     send: sharedSendCoordinator(),
+    serverInstanceId: instanceId,
     io: realActionIo(),
     now: () => Date.now(),
     limiter: createRateLimiter({ minIntervalMs: MIN_INTERVAL_MS, burstMax: BURST_MAX, burstWindowMs: BURST_WINDOW_MS }),
@@ -1371,6 +1497,39 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   }
   /** When the fleet was last told to ease off. Server-lifetime, like the queue. */
   let lastBroadcastAt: number | null = null;
+  type PreviewEntry = { preview: FleetActionPreview; state: "fresh" | "claimed" };
+  const previews = new Map<string, PreviewEntry>();
+  let nextPreview = 1;
+
+  function purgeExpired(at: number, requestedId?: string): boolean {
+    let requestedExpired = false;
+    for (const [id, entry] of previews) {
+      if (entry.preview.expiresAt > at) continue;
+      if (id === requestedId) requestedExpired = true;
+      previews.delete(id);
+    }
+    return requestedExpired;
+  }
+
+  function mintPreview(actionId: string, material: FleetActionMaterial): FleetActionPreview {
+    const at = deps.now();
+    purgeExpired(at);
+    const preview: FleetActionPreview = {
+      schema: "fleet-action-preview/1",
+      previewId: `${deps.serverInstanceId}-p${nextPreview++}`,
+      serverInstanceId: deps.serverInstanceId,
+      actionId,
+      expiresAt: at + PREVIEW_TTL_MS,
+      material,
+    };
+    previews.set(preview.previewId, { preview, state: "fresh" });
+    while (previews.size > MAX_ACTION_PREVIEWS) {
+      const oldest = previews.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      previews.delete(oldest);
+    }
+    return preview;
+  }
   /**
    * WHERE THE NEXT DRAIN PASS STARTS. Server-lifetime state, built here rather
    * than inside `drainOnce` for the reason on `DrainCursor`: the drain is a
@@ -1919,10 +2078,73 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
   /* ---------------- POST /api/actions/box ---------------- */
 
+  function validatePreview(r: Extract<BoxActionRequest, { mode: "run" }>, res: ServerResponse): PreviewEntry | null {
+    if (r.preview === null) {
+      refuse(res, "preview-required", `preview '${r.action.id}' again, read the result, and confirm the receipt it returns`);
+      return null;
+    }
+    const parsedClaim = parsePreviewClaim(r.preview);
+    if (!parsedClaim.ok) {
+      refuse(res, "preview-mismatch", `the preview claim is malformed: ${parsedClaim.why}. Preview '${r.action.id}' again and confirm that receipt`);
+      return null;
+    }
+    const claim = parsedClaim.value;
+    if (claim.serverInstanceId !== deps.serverInstanceId) {
+      refuse(
+        res,
+        "other-instance",
+        `${claim.previewId} was minted by a different run of this dashboard; that run is gone, and nothing is being held on its account. ` +
+          "Reload the page, look at the current preview, and confirm that one if it is still right.",
+      );
+      return null;
+    }
+
+    // Purging is the first table operation. Its return preserves the difference
+    // between "expired just now" and "this run never had it" without retaining
+    // dead receipts.
+    const requestedExpired = purgeExpired(deps.now(), claim.previewId);
+    if (requestedExpired) {
+      refuse(res, "preview-expired", `${claim.previewId} expired; preview '${r.action.id}' again and read the current list before confirming`);
+      return null;
+    }
+    const entry = previews.get(claim.previewId);
+    if (entry === undefined) {
+      refuse(res, "preview-unknown", `${claim.previewId} is not a preview held by this server; preview '${r.action.id}' again and read it before confirming`);
+      return null;
+    }
+    if (entry.state === "claimed") {
+      refuse(
+        res,
+        "preview-already-used",
+        `${claim.previewId} was already submitted for '${entry.preview.actionId}'; look at what happened before acting again`,
+      );
+      return null;
+    }
+    const parsedMaterial = parseActionMaterial(r.material);
+    const materialKind = r.action.effect === "broadcast" ? "broadcast" : r.action.effect === "enacted" ? "kill" : null;
+    if (
+      claim.actionId !== r.action.id ||
+      claim.actionId !== entry.preview.actionId ||
+      entry.preview.actionId !== r.action.id ||
+      materialKind === null ||
+      !parsedMaterial.ok ||
+      parsedMaterial.value.kind !== materialKind ||
+      !isDeepStrictEqual(parsedMaterial.value, entry.preview.material)
+    ) {
+      refuse(
+        res,
+        "preview-mismatch",
+        `the action or material submitted for ${claim.previewId} is not the preview this server minted; preview '${r.action.id}' again and confirm without changing it`,
+      );
+      return null;
+    }
+    return entry;
+  }
+
   /**
    * ## What a box action answers, and why every arm answers it the same way
    *
-   * Two fields, on all four 200s:
+   * Two fields on all four 200s, plus the server receipt on both previews:
    *
    *  - **`dryRun`** — whether this REALLY happened. Read off the answer rather
    *    than remembered from the request by everything downstream, because a
@@ -1932,6 +2154,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
    *    candidate pids, the recipients, the sample sentence. Whatever this
    *    holds, `RawValue` in ActionButtons.tsx draws it, and it is the entire
    *    content of the confirmation a person reads before pressing *kill*.
+   *  - **`preview`** — the material the two dry-run arms minted and retained.
+   *    The run must echo it exactly; `result` remains beside it for the current
+   *    diagnostic rendering until Stage 3 gives the material its own view.
    *
    * **THE UNIFORMITY IS THE FIX, not tidiness.** Until 2026-09-08 each arm
    * invented its own top-level field names — `steps`, `candidates`, `killed`,
@@ -1956,7 +2181,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const r = body.value;
-    deps.log(`action box: action=${r.action.id} mode=${r.mode} confirm=${r.confirm} pids=${r.pids.length} recipients=${r.recipients.length}`);
+    deps.log(
+      `action box: action=${r.action.id} mode=${r.mode} confirm=${r.confirm}` +
+        (r.mode === "dry-run"
+          ? ` recipients=${r.recipients.length}`
+          : ` preview=${asString(asRecord(r.preview)?.previewId) ?? "none"}`),
+    );
 
     if (r.action.scope !== "box") {
       refuse(res, "wrong-scope", `'${r.action.id}' is a session action; post it to /api/actions/session`);
@@ -1972,12 +2202,48 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
 
+    let confirmed: PreviewEntry | null = null;
+    if (r.mode === "run") {
+      confirmed = validatePreview(r, res);
+      if (confirmed === null) return;
+
+      if (r.action.effect === "broadcast") {
+        const at = deps.now();
+        if (lastBroadcastAt !== null && at - lastBroadcastAt < BROADCAST_COOLDOWN_MS) {
+          const left = BROADCAST_COOLDOWN_MS - (at - lastBroadcastAt);
+          deps.log(`action box: refused code=cooldown action=${r.action.id} leftMs=${left}`);
+          refuse(
+            res,
+            "cooldown",
+            `the fleet was told to ease off ${Math.round((at - lastBroadcastAt) / 60_000)} minutes ago; a second one now would give every agent two different resume times`,
+            undefined,
+            { "retry-after": String(Math.max(1, Math.ceil(left / 1000))) },
+          );
+          return;
+        }
+        lastBroadcastAt = at;
+      } else {
+        const rate = deps.limiter.check("box", deps.now());
+        if (!rate.ok) {
+          refuse(res, "rate-limited", rate.why, undefined, { "retry-after": String(Math.max(1, Math.ceil(rate.retryAfterMs / 1000))) });
+          return;
+        }
+        deps.limiter.record("box", deps.now());
+      }
+
+      // One synchronous assignment is the one-way door. Nothing below this
+      // line runs before it and the first await is inside the action route, so
+      // a second confirmation observes the tombstone rather than another fresh
+      // receipt.
+      confirmed.state = "claimed";
+    }
+
     switch (r.action.effect) {
       case "enacted":
-        await killRoute(r, r.action, res);
+        await killRoute(r, r.action, res, confirmed?.preview.material);
         return;
       case "broadcast":
-        await broadcastRoute(r, r.action, res);
+        await broadcastRoute(r, r.action, res, confirmed?.preview.material);
         return;
       // No `spoken` arm, and that is the type system rather than an omission:
       // every spoken action is `scope: "session"` as a literal, so the check
@@ -2000,7 +2266,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
    * while the dialog was open — which is a different, larger action than the
    * one anybody agreed to.
    */
-  async function killRoute(r: BoxActionRequest, action: EnactedAction, res: ServerResponse): Promise<void> {
+  async function killRoute(
+    r: BoxActionRequest,
+    action: EnactedAction,
+    res: ServerResponse,
+    confirmed?: FleetActionMaterial,
+  ): Promise<void> {
     const policy: KillPolicy | null =
       action.id === "kill-test-suites" ? "test-suites" : action.id === "kill-safe-processes" ? "safe-to-kill" : null;
     if (policy === null) {
@@ -2033,7 +2304,33 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     });
 
     if (r.mode === "dry-run") {
-      const preview = planKillProcesses(action, { pids: candidates.map((c) => c.pid), cwd: deps.primaryDir() });
+      const boot = deps.io.readBootIdentity();
+      if (!boot.read) {
+        deps.log(`action box: refused code=box-unreadable action=${action.id} why=${boot.why}`);
+        refuse(res, "box-unreadable", `the box boot identity could not be read, so no process identity can be confirmed: ${boot.why}`);
+        return;
+      }
+      const confirmable: { pid: number; startTicks: number; bootId: string }[] = [];
+      const excluded: { pid: number; why: string }[] = [];
+      for (const candidate of candidates) {
+        const start = deps.io.readProcessStart(candidate.pid);
+        if (start.read) confirmable.push({ pid: candidate.pid, startTicks: start.ticks, bootId: boot.id });
+        else excluded.push({ pid: candidate.pid, why: start.why });
+      }
+      if (confirmable.length > MAX_KILL_PIDS) {
+        deps.log(
+          `action box: refused code=plan-refused action=${action.id} confirmable=${confirmable.length} max=${MAX_KILL_PIDS}`,
+        );
+        refuse(
+          res,
+          "plan-refused",
+          `the rule found ${confirmable.length} confirmable processes, more than the ${MAX_KILL_PIDS} this will signal at once; nothing was previewed`,
+        );
+        return;
+      }
+      const material: FleetActionMaterial = { kind: "kill", confirmable, excluded };
+      const envelope = mintPreview(action.id, material);
+      const planned = planKillProcesses(action, { pids: confirmable.map((c) => c.pid), cwd: deps.primaryDir() });
       deps.log(`action box: DRY-RUN action=${action.id} candidates=${candidates.length} scanned=${scan.procs.length}`);
       respond(res, 200, {
         ok: true,
@@ -2043,8 +2340,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         // named here rather than left for a reader to infer from `op`. See
         // § What a box action answers, above `boxRoute`.
         dryRun: true,
+        preview: envelope,
         result: {
-          steps: preview.ok ? preview.plan.steps : [],
+          steps: planned.ok ? planned.plan.steps : [],
           candidates,
           scanned: scan.procs.length,
           unreadable: scan.unreadable,
@@ -2053,21 +2351,66 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
 
-    const shown = new Set(r.pids);
-    const pids = candidates.map((c) => c.pid).filter((pid) => shown.has(pid));
+    if (confirmed?.kind !== "kill") {
+      refuse(res, "preview-mismatch", `the stored preview for '${action.id}' was not kill material; preview it again`);
+      return;
+    }
+    const shown = new Map(confirmed.confirmable.map((identity) => [identity.pid, identity]));
+    const current = new Map(candidates.map((candidate) => [candidate.pid, candidate]));
+    const stillLicensed = confirmed.confirmable.filter((identity) => current.has(identity.pid));
     const skipped: { pid: number; why: string }[] = [];
     for (const c of candidates) {
       if (!shown.has(c.pid)) skipped.push({ pid: c.pid, why: "it matches the rule now and was not on the list you confirmed" });
     }
-    for (const pid of r.pids) {
-      if (!candidates.some((c) => c.pid === pid)) skipped.push({ pid, why: "it was on the list you confirmed and no longer matches the rule" });
+    let ruleChanged = 0;
+    for (const identity of confirmed.confirmable) {
+      if (current.has(identity.pid)) continue;
+      ruleChanged += 1;
+      skipped.push({ pid: identity.pid, why: "it was on the list you confirmed and no longer matches the rule" });
+    }
+
+    // This closes the minutes-wide case where a preview stays open while the
+    // box turns over. It does not close the exit-and-pid-reuse gap between this
+    // read and `kill`; that durable fix is a pidfd, which Node cannot open
+    // without a native dependency or helper binary.
+    const boot = deps.io.readBootIdentity();
+    if (!boot.read) {
+      refuse(res, "box-unreadable", `the box boot identity could not be re-read, so none of the confirmed processes can be verified: ${boot.why}`);
+      return;
+    }
+    const pids: number[] = [];
+    let replaced = 0;
+    let unreadableIdentity = 0;
+    for (const identity of stillLicensed) {
+      if (boot.id !== identity.bootId) {
+        replaced += 1;
+        skipped.push({ pid: identity.pid, why: "the box boot changed, so that pid is now a different process" });
+        continue;
+      }
+      const start = deps.io.readProcessStart(identity.pid);
+      if (!start.read) {
+        unreadableIdentity += 1;
+        skipped.push({ pid: identity.pid, why: `its process identity could no longer be read, so it may have exited or been replaced: ${start.why}` });
+        continue;
+      }
+      if (start.ticks !== identity.startTicks) {
+        replaced += 1;
+        skipped.push({ pid: identity.pid, why: "that pid is now a different process; its start tick changed after the preview" });
+        continue;
+      }
+      pids.push(identity.pid);
     }
     if (pids.length === 0) {
-      deps.log(`action box: refused code=nothing-to-kill action=${action.id} shown=${r.pids.length} matched=${candidates.length}`);
+      const reasons = [
+        ruleChanged > 0 ? `${ruleChanged} no longer match the rule` : null,
+        replaced > 0 ? `${replaced} are now different processes` : null,
+        unreadableIdentity > 0 ? `${unreadableIdentity} could no longer be identified` : null,
+      ].filter((part): part is string => part !== null);
+      deps.log(`action box: refused code=nothing-to-kill action=${action.id} shown=${shown.size} matched=${candidates.length}`);
       refuse(
         res,
         "nothing-to-kill",
-        `nothing on the list you confirmed still matches the rule (${candidates.length} process(es) match it now) — look again and confirm the new list`,
+        `nothing on the list you confirmed can still be signalled${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""} — look again and confirm the new list`,
       );
       return;
     }
@@ -2077,13 +2420,6 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       refuse(res, PLAN_REFUSAL_CODE[built.rule], built.why);
       return;
     }
-    const rate = deps.limiter.check("box", deps.now());
-    if (!rate.ok) {
-      refuse(res, "rate-limited", rate.why, undefined, { "retry-after": String(Math.max(1, Math.ceil(rate.retryAfterMs / 1000))) });
-      return;
-    }
-    deps.limiter.record("box", deps.now());
-
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
     /* THE RUN FIRST, BEFORE THE REPORT IS BUILT, because `killReport` throws on
@@ -2104,19 +2440,56 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
    * Tell every steerable session the box is loaded, each with its own resume
    * time.
    *
-   * **THE STAGGER IS COMPUTED HERE, ONE SENTENCE AT A TIME, AT THE MOMENT OF
-   * THE SEND.** `renderBroadcast` takes the recipient's index and the total and
-   * produces the minutes; nothing is rendered in advance and nothing is stored.
-   * A pre-rendered list would decay the moment anything slowed down — thirty-six
-   * sentences written in one instant and delivered over four minutes are
-   * thirty-six agents resuming from a clock that stopped.
+   * **THE STAGGER IS BOUND, THEN RECOMPUTED AT THE SEND.** The preview stores
+   * each recipient's promised minutes; the run checks the same
+   * `staggerMinutes(index, total, action.stagger)` immediately before rendering
+   * the sentence. The words are still rendered at delivery rather than stored,
+   * but they cannot silently acquire a different pause from the one displayed.
    *
    * **THE DENOMINATOR IS WHO WE ARE ACTUALLY SPEAKING TO**, not how many rows
    * the page sent. Counting the sessions we skip would leave gaps at both ends
    * of the window and hand somebody the far end for no reason.
    */
-  async function broadcastRoute(r: BoxActionRequest, action: BroadcastAction, res: ServerResponse): Promise<void> {
-    if (r.recipients.length === 0) {
+  async function broadcastRoute(
+    r: BoxActionRequest,
+    action: BroadcastAction,
+    res: ServerResponse,
+    confirmed?: FleetActionMaterial,
+  ): Promise<void> {
+    let recipients: Recipient[];
+    let speaker: Speaker;
+    const promisedMinutes = new Map<string, number | null>();
+    if (r.mode === "dry-run") {
+      recipients = r.recipients;
+      speaker = r.speaker;
+    } else {
+      if (confirmed?.kind !== "broadcast") {
+        refuse(res, "preview-mismatch", `the stored preview for '${action.id}' was not broadcast material; preview it again`);
+        return;
+      }
+      speaker = confirmed.speaker;
+      recipients = [];
+      for (const claim of confirmed.recipients) {
+        const status = parseStatus(claim.status);
+        if (claim.claudeSessionId === null || status === null) {
+          refuse(res, "preview-mismatch", `${claim.paneId} in the stored preview is no longer a complete recipient claim; preview again`);
+          return;
+        }
+        recipients.push({
+          target: {
+            paneId: claim.paneId,
+            sessionId: claim.sessionId,
+            claudeSessionId: claim.claudeSessionId,
+            ...(claim.panePid === null ? {} : { panePid: claim.panePid }),
+          },
+          declaredStatus: status,
+          claimedStatus: claim.status,
+        });
+        promisedMinutes.set(claim.paneId, claim.minutes);
+      }
+    }
+
+    if (recipients.length === 0) {
       refuse(res, "bad-request", "a broadcast needs recipients: send the rows the page is showing, with the status each one had");
       return;
     }
@@ -2128,28 +2501,33 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     const deliverable: Recipient[] = [];
     const outcomes: BroadcastOutcome[] = [];
     const gates = new Map<string, DrainGate>();
-    for (const rec of r.recipients) {
+    for (const rec of recipients) {
       const gate = drainGate(rec.declaredStatus);
       gates.set(rec.target.paneId, gate);
-      if (gate.kind === "now") deliverable.push(rec);
+      if (r.mode === "run") {
+        if (promisedMinutes.get(rec.target.paneId) !== null) deliverable.push(rec);
+      } else if (gate.kind === "now") deliverable.push(rec);
     }
     const total = deliverable.length;
     if (total === 0) {
-      refuse(res, "not-steerable", `none of the ${r.recipients.length} rows you sent is at a prompt right now, so there is nobody to tell`);
+      refuse(res, "not-steerable", `none of the ${recipients.length} rows you sent is at a prompt right now, so there is nobody to tell`);
       return;
     }
 
     if (r.mode === "dry-run") {
       let index = 0;
-      for (const rec of r.recipients) {
+      const claims: BroadcastRecipientClaim[] = [];
+      for (const rec of recipients) {
         const gate = gates.get(rec.target.paneId);
+        let minutes: number | null = null;
         if (gate?.kind === "now") {
+          minutes = staggerMinutes(index, total, action.stagger);
           outcomes.push({
             paneId: rec.target.paneId,
             sessionId: rec.target.sessionId,
             // The SAME function the send will call, with the same arguments, so
             // the preview cannot promise a spread the delivery does not keep.
-            minutes: staggerMinutes(index, total, action.stagger),
+            minutes,
             /* `would-send` RATHER THAN `sent`. A preview and a delivery used
                the same word, so a row of a dry run was indistinguishable from
                a row of a real fan-out by anything but the envelope around it —
@@ -2163,48 +2541,41 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         } else {
           outcomes.push(skippedOutcome(rec, gate));
         }
+        claims.push({
+          paneId: rec.target.paneId,
+          sessionId: rec.target.sessionId,
+          claudeSessionId: rec.target.claudeSessionId,
+          panePid: rec.target.panePid ?? null,
+          status: rec.claimedStatus,
+          minutes,
+        });
       }
       const first = deliverable[0];
+      const envelope = mintPreview(action.id, { kind: "broadcast", speaker, recipients: claims });
       respond(res, 200, {
         ok: true,
         op: "broadcast-preview",
         action: action.id,
         dryRun: true,
+        preview: envelope,
         result: {
           total,
           recipients: outcomes,
           // One recipient's exact words, so the person can read what is about to
           // be said to thirty-six agents before it is said.
-          sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, r.speaker),
+          sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, speaker),
         },
       });
       return;
     }
 
     const at = deps.now();
-    if (lastBroadcastAt !== null && at - lastBroadcastAt < BROADCAST_COOLDOWN_MS) {
-      const left = BROADCAST_COOLDOWN_MS - (at - lastBroadcastAt);
-      deps.log(`action box: refused code=cooldown action=${action.id} leftMs=${left}`);
-      refuse(
-        res,
-        "cooldown",
-        `the fleet was told to ease off ${Math.round((at - lastBroadcastAt) / 60_000)} minutes ago; a second one now would give every agent two different resume times`,
-        undefined,
-        { "retry-after": String(Math.max(1, Math.ceil(left / 1000))) },
-      );
-      return;
-    }
-    // Taken BEFORE the sends, not after. A broadcast of thirty-six takes a
-    // while, and a second request arriving halfway through must find the
-    // cooldown already spent — otherwise the two interleave, which is the exact
-    // failure the cooldown exists to prevent.
-    lastBroadcastAt = at;
 
     let index = 0;
     /* `submitted`, NOT `sent`. It counts the rows whose tmux calls all
        completed, which is the strongest thing this route can count. */
     let submitted = 0;
-    for (const rec of r.recipients) {
+    for (const rec of recipients) {
       const gate = gates.get(rec.target.paneId);
       if (gate?.kind !== "now") {
         outcomes.push(skippedOutcome(rec, gate));
@@ -2244,10 +2615,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         onThrow: "hold",
         record: { kind: "book" },
       };
-      const minutes = staggerMinutes(index, total, action.stagger);
+      const computedMinutes = staggerMinutes(index, total, action.stagger);
+      const minutes = promisedMinutes.get(rec.target.paneId);
+      if (minutes === undefined || minutes === null || minutes !== computedMinutes) {
+        throw new Error(
+          `stored preview ${r.mode === "run" ? asString(asRecord(r.preview)?.previewId) ?? "unknown" : "unknown"} promised ${String(minutes)} minutes ` +
+            `for ${rec.target.paneId}, but the action now computes ${computedMinutes}`,
+        );
+      }
       // RENDERED HERE, ONE LINE ABOVE THE SEND. Not above the loop, not in the
       // parse, not in the queue.
-      const text = renderBroadcast(action, { index, total }, r.speaker);
+      const text = renderBroadcast(action, { index, total }, speaker);
       index += 1;
       const attempt = deps.send.message(rec.target, text, rec.declaredStatus, purpose);
       if (attempt.hold !== null) {
@@ -2348,7 +2726,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
        week later, and it must not be the only line. */
     const unsure = outcomes.filter((x) => x.outcome === "partial" || x.outcome === "outcome-unknown").length;
     deps.log(
-      `action box: BROADCAST action=${action.id} speaker=${r.speaker} keys-submitted=${submitted}/${total} of ${r.recipients.length} rows` +
+      `action box: BROADCAST action=${action.id} speaker=${speaker} keys-submitted=${submitted}/${total} of ${recipients.length} rows` +
         (unsure > 0 ? ` (${unsure} may or may not have landed)` : "") +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
