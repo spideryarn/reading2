@@ -5,7 +5,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -23,6 +23,7 @@ import {
   initialPreparationState,
   MAX_VOIDS_PER_WINDOW,
   preparationAfterChanges,
+  preparationTarget,
   TICK_INTERVAL_MS,
   VOID_RETRY_COOLDOWN_MS,
   type PreparationState,
@@ -44,6 +45,7 @@ import {
 } from "../tools/fleet/readiness.js";
 import {
   CHECK_TIMEOUT_MS,
+  ensureFleetClient,
   localDatabaseEnv,
   prepareRunner,
   readinessCheckEnv,
@@ -171,6 +173,18 @@ const healthy = {
   disk: { kind: "value", totalKiB: 1000, usedKiB: 400, availableKiB: 600, usePercent: 40 } as const,
   swapActivity: { kind: "skipped" } as const,
 };
+
+function knownDev(sha: string): Extract<TickInput["dev"], { kind: "known" }> {
+  return {
+    kind: "known",
+    devSha: sha,
+    primarySha: sha,
+    primaryBehind: 0,
+    trunkGap: 1,
+    observedAt: new Date(NOW_MS).toISOString(),
+    caveat: "cached origin/dev",
+  };
+}
 
 function input(over: Partial<TickInput> = {}): TickInput {
   return {
@@ -400,6 +414,22 @@ describe("decideTick", () => {
 });
 
 describe("runner preparation follows the checked-out state", () => {
+  it("does not prepare derived state from a dirty tree", () => {
+    expect(preparationTarget(
+      null,
+      { kind: "known", sha: SHA_B, branch: "readiness-checks", dirty: true },
+      knownDev(SHA_B),
+    )).toBeNull();
+  });
+
+  it("does not prepare a clean runner commit that is not origin/dev", () => {
+    expect(preparationTarget(
+      null,
+      { kind: "known", sha: SHA_C, branch: "readiness-checks", dirty: false },
+      knownDev(SHA_B),
+    )).toBeNull();
+  });
+
   it("starts unprepared so a restart repairs an interrupted install or migration", () => {
     expect(initialPreparationState()).toEqual({
       preparedFor: null,
@@ -412,6 +442,20 @@ describe("runner preparation follows the checked-out state", () => {
       { dependencies: false, migrations: false, fleetClient: false },
       ["drizzle/0053_new_table.sql", "drizzle/meta/_journal.json"],
     )).toEqual({ dependencies: false, migrations: true, fleetClient: false });
+  });
+
+  it("recognises every current fleet-client source root as a build input", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["tools/fleet/wire.ts", "src/web/useDictation.ts", "src/dictation-limits.ts"],
+    )).toEqual({ dependencies: false, migrations: false, fleetClient: true });
+  });
+
+  it("recognises npm's project configuration and preferred lockfile as install inputs", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      [".npmrc", "npm-shrinkwrap.json"],
+    )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
   });
 
   it("marks dependency preparation pending when the lockfile changes", () => {
@@ -432,7 +476,7 @@ describe("runner preparation follows the checked-out state", () => {
 
     prepareRunner("/runner", state, SHA_B, deps);
 
-    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline", "--dry-run=false"] });
     expect(calls).toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
     expect(state.preparedFor).toBe(SHA_B);
   });
@@ -509,24 +553,78 @@ describe("runner preparation follows the checked-out state", () => {
 
     prepareRunner("/runner", state, SHA_B, deps);
 
-    expect(calls).not.toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(calls.some((call) => call.command === "npm" && call.args[0] === "ci")).toBe(false);
     expect(calls).not.toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
     expect(builds).toHaveBeenCalledWith("/runner", true);
     expect(state.preparedFor).toBe(SHA_B);
   });
 
-  it("does not change the latch or pending work without a target, but still ensures the fleet client", () => {
-    const state = preparedAt(SHA_A, { dependencies: true });
+  it("does not change preparation without a validated target", () => {
+    const state = preparedAt(SHA_A, { dependencies: true, fleetClient: true });
     const { calls, builds, deps } = preparationFakes();
 
     prepareRunner("/runner", state, null, deps);
 
     expect(calls).toEqual([]);
-    expect(builds).toHaveBeenCalledWith("/runner", false);
+    expect(builds).not.toHaveBeenCalled();
     expect(state).toEqual({
       preparedFor: SHA_A,
-      needs: { dependencies: true, migrations: false, fleetClient: false },
+      needs: { dependencies: true, migrations: false, fleetClient: true },
     });
+  });
+
+  it("does not latch an npm dry run as dependency preparation", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-npm-dry-run-"));
+    scratchDirectories.push(runner);
+    writeFileSync(path.join(runner, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }));
+    writeFileSync(path.join(runner, "package-lock.json"), JSON.stringify({
+      name: "fixture",
+      version: "1.0.0",
+      lockfileVersion: 3,
+      requires: true,
+      packages: { "": { name: "fixture", version: "1.0.0" } },
+    }));
+    mkdirSync(path.join(runner, "node_modules"));
+    const sentinel = path.join(runner, "node_modules", "from-a");
+    writeFileSync(sentinel, "old dependency tree\n");
+    const state = preparedAt(SHA_A);
+    const { deps } = preparationFakes({
+      exec: (cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          return commandResult({ stdout: "package-lock.json\n" });
+        }
+        if (command === "npm" && args[0] === "ci") {
+          return runCommand(cwd, command, args, 30_000, { ...process.env, npm_config_dry_run: "true" });
+        }
+        return commandResult();
+      },
+      stamp: () => clean(SHA_B),
+    });
+
+    prepareRunner(runner, state, SHA_B, deps);
+
+    expect(existsSync(sentinel)).toBe(false);
+    expect(existsSync(path.join(runner, "node_modules", ".package-lock.json"))).toBe(true);
+  });
+
+  it("does not trust an index.html left by a failed fleet build on the next tick", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-fleet-partial-"));
+    scratchDirectories.push(runner);
+    const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
+    mkdirSync(path.dirname(entry), { recursive: true });
+    writeFileSync(entry, "stale\n");
+    let attempts = 0;
+    const exec = (): FakeCommandResult => {
+      attempts += 1;
+      writeFileSync(entry, attempts === 1 ? "partial\n" : "fresh\n");
+      return commandResult(attempts === 1 ? { status: 1, stderr: "vite failed" } : {});
+    };
+
+    expect(() => ensureFleetClient(runner, true, exec)).toThrow(/vite failed/);
+    expect(existsSync(entry)).toBe(false);
+    ensureFleetClient(runner, false, exec);
+    expect(attempts).toBe(2);
+    expect(readFileSync(entry, "utf8")).toBe("fresh\n");
   });
 
   it("skips classification when preparation is already latched to the target", () => {
@@ -563,7 +661,7 @@ describe("runner preparation follows the checked-out state", () => {
           : commandResult(),
     });
     prepareRunner("/runner", state, SHA_B, deps);
-    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline", "--dry-run=false"] });
     expect(builds).toHaveBeenCalledWith("/runner", true);
     const diff = calls.find((call) => call.command === "git" && call.args[0] === "diff");
     expect(diff?.args).toContain("package.json");
@@ -753,14 +851,81 @@ describe("the unattended process boundary", () => {
        those lines, which is the price of the only check available; the message
        says what to look at when it does. */
     const source = readFileSync(new URL("../scripts/readiness-loop.ts", import.meta.url), "utf8");
-    const guard = source.indexOf("runnerWorktreeProblem(runner)");
-    const fetches = source.indexOf('runCommand(runner, "git", ["fetch"');
-    const merges = source.indexOf('runCommand(runner, "git", ["merge"');
+    const tickStart = source.indexOf("async function tick(");
+    const tickEnd = source.indexOf("\n}\n\nconst HELP", tickStart);
+    const tickSource = source.slice(tickStart, tickEnd);
+    const guard = tickSource.indexOf("runnerWorktreeProblem(runner,");
+    const fetches = tickSource.indexOf('runCommand(runner, "git", ["fetch"');
+    const merges = tickSource.indexOf('runCommand(runner, "git", ["merge"');
     expect(
       guard !== -1 && fetches > guard && merges > guard,
       "tick() must call runnerWorktreeProblem(runner) before it fetches or fast-forwards — " +
-        `found guard at ${guard}, fetch at ${fetches}, merge at ${merges} in scripts/readiness-loop.ts`,
+        `found guard at ${guard}, fetch at ${fetches}, merge at ${merges} inside tick()`,
     ).toBe(true);
+  });
+
+  it("validates the primary before fetch and the created runner before merge or setup", () => {
+    const source = readFileSync(new URL("../scripts/readiness-loop.ts", import.meta.url), "utf8");
+    const start = source.indexOf("function ensureRunnerWorktree(");
+    const end = source.indexOf("\n}\n\n/**", start);
+    const body = source.slice(start, end);
+    const primaryGuard = body.indexOf("runnerWorktreeProblem(primary)");
+    const primaryFetch = body.indexOf('requireCommand(primary, "git", ["fetch"');
+    const runnerGuard = body.indexOf("runnerWorktreeProblem(runner,");
+    const runnerMerge = body.indexOf('requireCommand(runner, "git", ["merge"');
+    expect(primaryGuard).toBeGreaterThan(-1);
+    expect(primaryFetch).toBeGreaterThan(primaryGuard);
+    expect(runnerGuard).toBeGreaterThan(primaryFetch);
+    expect(runnerMerge).toBeGreaterThan(runnerGuard);
+  });
+
+  it("treats an empty successful show-toplevel as a problem", () => {
+    const result = runnerWorktreeProblem(process.cwd(), () => commandResult({ stdout: " \n" }));
+    expect(result).toContain("<empty>");
+  });
+
+  it("canonicalises a symlinked runner path before comparing it with Git", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "readiness-runner-link-"));
+    scratchDirectories.push(parent);
+    const linked = path.join(parent, "runner");
+    symlinkSync(process.cwd(), linked, "dir");
+    expect(runnerWorktreeProblem(linked, () => commandResult({ stdout: `${process.cwd()}\n` }))).toBeNull();
+  });
+
+  it("turns a missing runner directory into a reason", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "readiness-runner-missing-"));
+    scratchDirectories.push(parent);
+    expect(runnerWorktreeProblem(path.join(parent, "absent"))).toContain("could not be canonicalised");
+  });
+
+  it.each([
+    ["failure", commandResult({ status: 128, stderr: "fatal: not a repository" })],
+    ["timeout", commandResult({ status: null, signal: "SIGTERM", error: new Error("spawnSync git ETIMEDOUT") })],
+  ])("turns a Git %s into a reason", (_name, result) => {
+    expect(runnerWorktreeProblem(process.cwd(), () => result)).toContain("Git top-level unavailable");
+  });
+
+  it("refuses a linked-worktree pointer copied from another repository", () => {
+    const home = makeRepo("pointer-home", "home", "home\n");
+    const elsewhere = makeRepo("pointer-elsewhere", "elsewhere", "elsewhere\n");
+    const homeWorktree = path.join(home.root, "linked");
+    const elsewhereWorktree = path.join(elsewhere.root, "linked");
+    git(home.root, ["worktree", "add", "--quiet", "-b", "home-linked", homeWorktree]);
+    git(elsewhere.root, ["worktree", "add", "--quiet", "-b", "elsewhere-linked", elsewhereWorktree]);
+    writeFileSync(path.join(homeWorktree, ".git"), readFileSync(path.join(elsewhereWorktree, ".git")));
+
+    expect(git(homeWorktree, ["rev-parse", "--path-format=absolute", "--show-toplevel"]))
+      .toBe(homeWorktree);
+    expect(runnerWorktreeProblem(homeWorktree)).toContain("backlink");
+  });
+
+  it("refuses a valid worktree belonging to a different repository", () => {
+    const intended = makeRepo("intended-repository", "intended", "intended\n");
+    const foreign = makeRepo("foreign-repository", "foreign", "foreign\n");
+    const foreignWorktree = path.join(foreign.root, "linked");
+    git(foreign.root, ["worktree", "add", "--quiet", "-b", "foreign-linked", foreignWorktree]);
+
+    expect(runnerWorktreeProblem(foreignWorktree, undefined, intended.root)).toContain("common directory");
   });
 
   it("never resets the dedicated branch while recreating its worktree", () => {

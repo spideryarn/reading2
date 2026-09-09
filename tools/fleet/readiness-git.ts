@@ -66,7 +66,8 @@ export const GIT_LOCATION_ENV = [
  * A `refs/replace/<sha>` ref makes git serve a *different* object wherever that
  * sha is mentioned — and `refs/replace/` is shared by every linked worktree, so
  * one `git replace` anywhere on this box would reach the runner. Measured here,
- * 2026-09-09, on a consumer fast-forwarded to B with such a ref present:
+ * 2026-09-09, in two fresh scratch repositories, each with a consumer
+ * fast-forwarded to its own B:
  *
  *     [replace active] real-B=5a929f0d stamped=5a929f0d dirty=clean content=SUBSTITUTED CONTENT
  *     [NO_REPLACE=1  ] real-B=186562e3 stamped=186562e3 dirty=clean content=HONEST B CONTENT

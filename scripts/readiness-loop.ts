@@ -41,6 +41,7 @@ import {
   closeSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -61,6 +62,7 @@ import {
 import {
   decideTick,
   initialPreparationState,
+  preparationTarget,
   preparationAfterChanges,
   TICK_INTERVAL_MS,
   type PreparationState,
@@ -256,14 +258,34 @@ function usefulOutput(result: CommandResult): string {
 }
 
 /**
+ * **Is this directory the checkout it claims to be?** Three questions, because
+ * one is not enough.
+ *
  * A clean environment cannot overrule repository-local `core.worktree`, which
- * can send a merge into another directory despite the requested `cwd`. This is
- * deliberately the narrower filesystem guard: it does not validate a linked
- * worktree's `.git` `gitdir:` pointer. Redirected metadata with the correct
- * work tree can move a branch ref, but cannot write another checkout's files,
- * and nothing in this runner authors that pointer by hand.
+ * can send a merge into another directory despite the requested `cwd`. So the
+ * first check is that git's own `--show-toplevel` canonicalises to the path we
+ * asked about.
+ *
+ * That alone is not enough, and the plan for this work was wrong to say it was.
+ * Git derives `--show-toplevel` from the directory *containing* the `.git`
+ * pointer, so a pointer file copied here from another repository passes the
+ * top-level check while every ref — `origin/dev` included — comes from that
+ * other repository. The runner would then fast-forward to a foreign commit and
+ * record it under its own path. Hence the backlink check: a linked worktree's
+ * administration directory points back at that exact pointer file.
+ *
+ * The third only applies when an expected repository is supplied: comparing
+ * `--git-common-dir` rejects a worktree that is internally consistent but
+ * registered to a different repository altogether.
+ *
+ * GPT Sol, 2026-09-09, in a review that timed out before it could report; this
+ * reasoning is reconstructed from the diff it left.
  */
-export function runnerWorktreeProblem(runner: string): string | null {
+export function runnerWorktreeProblem(
+  runner: string,
+  exec: typeof runCommand = runCommand,
+  expectedRepository?: string,
+): string | null {
   const requestedText = path.resolve(runner);
   let requested: string;
   try {
@@ -272,7 +294,7 @@ export function runnerWorktreeProblem(runner: string): string | null {
     return `runner path ${requestedText}; Git top-level unavailable because the runner path could not be canonicalised: ${(error as Error).message}`;
   }
 
-  const result = runCommand(
+  const result = exec(
     runner,
     "git",
     ["rev-parse", "--path-format=absolute", "--show-toplevel"],
@@ -283,15 +305,93 @@ export function runnerWorktreeProblem(runner: string): string | null {
   }
 
   const reportedText = result.stdout.trim();
+  if (reportedText === "") {
+    return `runner path ${requested}; Git reported top-level <empty>, so it could not be canonicalised`;
+  }
   let reported: string;
   try {
     reported = realpathSync(reportedText);
   } catch (error) {
     return `runner path ${requested}; Git reported top-level ${reportedText || "<empty>"}, which could not be canonicalised: ${(error as Error).message}`;
   }
-  return requested === reported
-    ? null
-    : `runner path ${requested}; Git reported top-level ${reported}. Refusing to fetch or fast-forward a different work tree`;
+  if (requested !== reported) {
+    return `runner path ${requested}; Git reported top-level ${reported}. Refusing to fetch or fast-forward a different work tree`;
+  }
+
+  const pointerProblem = linkedWorktreePointerProblem(requested);
+  if (pointerProblem !== null) return pointerProblem;
+
+  if (expectedRepository !== undefined) {
+    const commonArgs = ["rev-parse", "--path-format=absolute", "--git-common-dir"];
+    const expectedCommonResult = exec(expectedRepository, "git", commonArgs);
+    const runnerCommonResult = exec(requested, "git", commonArgs);
+    if (!commandSucceeded(expectedCommonResult)) {
+      return `expected repository ${expectedRepository}; Git common directory unavailable: ${usefulOutput(expectedCommonResult)}`;
+    }
+    if (!commandSucceeded(runnerCommonResult)) {
+      return `runner path ${requested}; Git common directory unavailable: ${usefulOutput(runnerCommonResult)}`;
+    }
+    const expectedCommonText = expectedCommonResult.stdout.trim();
+    const runnerCommonText = runnerCommonResult.stdout.trim();
+    if (expectedCommonText === "" || runnerCommonText === "") {
+      return `runner path ${requested}; Git reported an empty common directory for ${expectedCommonText === "" ? "the expected repository" : "the runner"}`;
+    }
+    try {
+      const expectedCommon = realpathSync(expectedCommonText);
+      const runnerCommon = realpathSync(runnerCommonText);
+      if (expectedCommon !== runnerCommon) {
+        return `runner path ${requested}; Git common directory ${runnerCommon} does not match expected repository ${expectedCommon}`;
+      }
+    } catch (error) {
+      return `runner path ${requested}; Git common directory could not be canonicalised: ${(error as Error).message}`;
+    }
+  }
+  return null;
+}
+
+function linkedWorktreePointerProblem(requested: string): string | null {
+  const dotGit = path.join(requested, ".git");
+  let dotGitKind: ReturnType<typeof lstatSync>;
+  try {
+    dotGitKind = lstatSync(dotGit);
+  } catch (error) {
+    return `runner path ${requested}; ${dotGit} could not be inspected: ${(error as Error).message}`;
+  }
+  /* A primary checkout has a .git directory. A linked worktree has a pointer
+     file, and its administration directory points back to that exact file.
+     Checking the backlink catches a copied pointer: --show-toplevel still
+     reports `requested` in that state, while every ref comes from the other
+     repository. */
+  if (dotGitKind.isDirectory()) return null;
+  if (!dotGitKind.isFile()) {
+    return `runner path ${requested}; ${dotGit} is neither a repository directory nor a linked-worktree pointer`;
+  }
+  let pointerText: string;
+  try {
+    pointerText = readFileSync(dotGit, "utf8").trim();
+  } catch (error) {
+    return `runner path ${requested}; ${dotGit} could not be read: ${(error as Error).message}`;
+  }
+  const match = /^gitdir:\s*(.+)$/.exec(pointerText);
+  if (match?.[1] === undefined) {
+    return `runner path ${requested}; ${dotGit} is not a linked-worktree gitdir pointer`;
+  }
+  const adminText = path.resolve(requested, match[1]);
+  try {
+    const admin = realpathSync(adminText);
+    const backlinkText = readFileSync(path.join(admin, "gitdir"), "utf8").trim();
+    if (backlinkText === "") {
+      return `runner path ${requested}; linked-worktree backlink is empty`;
+    }
+    const backlink = realpathSync(path.resolve(admin, backlinkText));
+    const pointer = realpathSync(dotGit);
+    if (backlink !== pointer) {
+      return `runner path ${requested}; linked-worktree backlink resolves to ${backlink}, not ${pointer}`;
+    }
+  } catch (error) {
+    return `runner path ${requested}; linked-worktree pointer or backlink could not be canonicalised: ${(error as Error).message}`;
+  }
+  return null;
 }
 
 function requireCommand(
@@ -351,6 +451,11 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
     return runner;
   }
 
+  const primaryProblem = runnerWorktreeProblem(primary);
+  if (primaryProblem !== null) {
+    throw new Error(`refusing to create the runner from an unexpected primary worktree: ${primaryProblem}`);
+  }
+
   /* A new branch starts from the ref just fetched; an existing one is attached
      without `-B`, whose reset semantics would violate the fast-forward-only
      contract. setup has its own ordinary merge, so we make that a no-op below
@@ -363,6 +468,10 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
     worktreeAddArgs(runner, runnerBranchExists(primary)),
     "creating the runner worktree",
   );
+  const createdProblem = runnerWorktreeProblem(runner, runCommand, primary);
+  if (createdProblem !== null) {
+    throw new Error(`the newly-created runner worktree is not the requested checkout: ${createdProblem}`);
+  }
   /* An existing dedicated branch may lag origin/dev. Advance it before setup,
      whose reusable freshener permits an ordinary merge; making that merge a
      no-op is how this runner keeps its stricter fast-forward-only contract. */
@@ -419,12 +528,25 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * into the suite would manufacture the permanent false red this exists to
  * prevent.
  */
-function ensureFleetClient(runner: string, rebuild: boolean): void {
+export function ensureFleetClient(
+  runner: string,
+  rebuild: boolean,
+  exec: typeof runCommand = runCommand,
+): void {
   const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
   if (!rebuild && existsSync(entry)) return;
-  const built = runCommand(runner, "npm", ["run", "build:fleet"]);
+  /* An old entry cannot prove this build wrote anything, and an entry emitted
+     before a failed build must not make the next tick trust that failure. */
+  if (existsSync(entry)) unlinkSync(entry);
+  const built = exec(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
-    throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}`);
+    let cleanup = "";
+    try {
+      if (existsSync(entry)) unlinkSync(entry);
+    } catch (error) {
+      cleanup = `; its incomplete entry could not be removed: ${(error as Error).message}`;
+    }
+    throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}${cleanup}`);
   }
   if (!existsSync(entry)) throw new Error(`build:fleet exited 0 but did not create ${entry}`);
 }
@@ -446,7 +568,8 @@ function preparationChanges(
   if (preparedFor === null) return null;
   const diff = exec(runner, "git", [
     "diff", "--name-only", preparedFor, target, "--",
-    "package.json", "package-lock.json", "drizzle", "tools/fleet/web", "vite.fleet.config.ts",
+    ".npmrc", "npm-shrinkwrap.json", "package.json", "package-lock.json", "drizzle",
+    "tools/fleet", "src/web", "vite.fleet.config.ts",
   ]);
   if (commandSucceeded(diff)) {
     return diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
@@ -491,12 +614,13 @@ export function prepareRunner(
     stamp: stampTree,
   },
 ): void {
-  const shouldPrepare = target !== null && preparation.preparedFor !== target;
-  if (target !== null && shouldPrepare) {
+  if (target === null) return;
+  const shouldPrepare = preparation.preparedFor !== target;
+  if (shouldPrepare) {
     const changed = preparationChanges(runner, preparation.preparedFor, target, deps.exec);
     preparation.needs = preparationAfterChanges(preparation.needs, changed);
     if (preparation.needs.dependencies) {
-      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline"]);
+      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline", "--dry-run=false"]);
       if (!commandSucceeded(installed)) {
         throw new Error(`installing dependencies for the runner checkout failed: ${usefulOutput(installed)}`);
       }
@@ -515,7 +639,7 @@ export function prepareRunner(
 
   deps.buildFleetClient(runner, preparation.needs.fleetClient);
 
-  if (target !== null && shouldPrepare) {
+  if (shouldPrepare) {
     if (latchPreparation(preparation, target, deps.stamp(runner))) {
       /* Keep every classified need pending until the whole attempt latches.
          Otherwise B can install successfully, fail later, then leave its
@@ -624,6 +748,7 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
 
 async function tick(
   runner: string,
+  expectedRepository: string,
   store: ReadinessStore,
   preparation: PreparationState,
   assertLock: () => void,
@@ -631,7 +756,7 @@ async function tick(
   assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
-  let fastForwardProblem = runnerWorktreeProblem(runner);
+  let fastForwardProblem = runnerWorktreeProblem(runner, runCommand, expectedRepository);
 
   if (fastForwardProblem === null) {
     const fetch = runCommand(runner, "git", ["fetch", "origin", "dev"]);
@@ -645,7 +770,7 @@ async function tick(
 
   const dev = snapshotDev(runner, nowIso);
   const afterMerge = stampTree(runner);
-  const target = fastForwardProblem === null && afterMerge.kind === "known" ? afterMerge.sha : null;
+  const target = preparationTarget(fastForwardProblem, afterMerge, dev);
   prepareRunner(runner, preparation, target);
 
   const db = runCommand(
@@ -702,6 +827,11 @@ async function main(): Promise<number> {
   const once = argv.includes("--once");
 
   const root = repoRoot();
+  const rootProblem = runnerWorktreeProblem(root);
+  if (rootProblem !== null) {
+    console.error(`readiness-loop: the checkout containing this script is not internally consistent: ${rootProblem}`);
+    return 1;
+  }
   const primary = primaryCheckout(root);
   if ("why" in primary) {
     console.error(`readiness-loop: could not find the primary checkout: ${primary.why}`);
@@ -766,7 +896,7 @@ async function main(): Promise<number> {
        * person who asked for one tick wants its status.
        */
       try {
-        await tick(runner, opened.store, preparation, assertLock);
+        await tick(runner, primary.path, opened.store, preparation, assertLock);
       } catch (error) {
         if (error instanceof LostLoopLockError) throw error;
         if (once) throw error;

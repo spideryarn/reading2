@@ -127,19 +127,24 @@ So the honest claim is narrower, and it is the one the code should carry:
 > `gitEnv()` removes inherited git path overrides, so those environment variables cannot replace
 > git's normal repository discovery from `cwd`. It does not make `cwd` authoritative over repository
 > metadata or repository-local configuration: `core.worktree` and a linked worktree's `.git`
-> `gitdir:` pointer remain trusted inputs.
+> `gitdir:` pointer remain separate inputs that the runner validates before mutation.
 
 **Remedy taken:** one guard before the tick's fetch and fast-forward — assert that
 `git -C <runner> rev-parse --show-toplevel`, run with a clean environment, canonicalises to the
-runner path. If it does not, skip the tick and say so. That is one 5 ms git call every ten minutes
-and it closes the `core.worktree` redirect at the only place the runner mutates anything.
+runner path. The finished guard also validates a linked worktree pointer against its administration
+directory's backlink: the later code review demonstrated that copying another worktree's `.git`
+pointer still makes `--show-toplevel` report the requested directory while every ref comes from the
+other repository. It also compares the runner's canonical Git common directory with the primary's,
+because a valid backlink proves self-consistency but not membership of the intended repository. If
+any check fails, skip the tick and say so.
 
 ### A replace ref forges the content without disturbing the stamp
 
 Found sideways, in the activity log of a Stage 1 review that OpenAI's content filter killed before
 it could report — it had been building `refs/replace` scenarios. Reproduced here properly, and it is
-the worst of the three because it leaves nothing to notice. A consumer sitting at A, fast-forwarded
-to B, with a `refs/replace/<B>` ref present:
+the worst of the three because it leaves nothing to notice. These are two fresh scratch repositories,
+each with a consumer sitting at A and fast-forwarded to its own B while a `refs/replace/<B>` ref is
+present:
 
 ```
 [replace active] real-B=5a929f0d stamped=5a929f0d dirty=clean content=SUBSTITUTED CONTENT
@@ -156,11 +161,11 @@ replacement semantics. The test for it reads the bytes on disk, because no stamp
 watched red with `SUBSTITUTED CONTENT`, and the `stampTree` assertion in the same test passed *while
 it was red*, which is the finding in one line.
 
-**Remedy declined:** threading `--work-tree=<cwd>` through every invocation, and validating the
-linked worktree's `.git` backlink. Once `--show-toplevel` agrees with `cwd`, `--work-tree` adds
-nothing; and a redirected *metadata* directory with a correct work tree cannot move another
-checkout's files, only its branch ref — which git's own worktree bookkeeping maintains and which
-nothing here sets by hand. The limit is written down rather than defended against.
+**Remedy declined:** threading `--work-tree=<cwd>` through every invocation. Once
+`--show-toplevel` agrees with `cwd`, `--work-tree` adds nothing and still does not pin the metadata,
+index or object store. Backlink validation was initially declined too; the finished review reversed
+that decision because it is cheap and because a copied pointer selects another repository's
+`origin/dev` without failing the top-level check.
 
 ### Latch preparation to the sha it was prepared for
 
@@ -199,18 +204,26 @@ Nothing downstream can see it, because the tree stamp is clean by then.
 
 So the latch takes a second stamp *after* preparation, and records `preparedFor` only when that
 stamp is `known`, not `dirty`, and still at the target sha. Anything else sets `preparedFor` back to
-`null` — prepare everything next time — and says why. This is cheaper than Sol's proposed version,
-which also gates entry on a clean tree: preparing from a dirty tree is harmless in itself (the tick's
-own gates refuse to *check* a dirty tree anyway), and it is only the latch that must not believe it.
+`null` — prepare everything next time — and says why. The finished review also adopted Sol's entry
+gate: a dirty tree is not a preparation target. In particular, an uncommitted migration must not
+reach the shared database merely because the later stamp would refuse to latch it. The target must
+also equal the known `origin/dev`: `merge --ff-only origin/dev` exits zero when a manually advanced
+runner branch is already ahead, and preparation must not apply that branch's migrations before the
+later decision notices the SHA mismatch.
 
-**`package.json` is a dependency input too, and was missing.** Sol's F4, established: the classifier
-watches `package-lock.json` and not `package.json`, and this repo's history has many commits that
-change one without the other. A commit that changes a dependency in the manifest without the lock is
-a commit `npm ci` refuses — so a fresh checkout of it cannot pass, while the runner, having skipped
-the install, records it green. Both root manifests go into the watched pathspec and into both the
-`dependencies` and `fleetClient` rules. The cost is an extra `npm ci` on every commit that only
-edits an npm *script*, about a minute, against a 26-minute check; taking the accurate rule rather
-than parsing the manifest's dependency sections is the simpler-first choice.
+**The install inputs are more than the lockfile.** Sol's F4 established `package.json`; the finished
+review added `.npmrc` and `npm-shrinkwrap.json`, which npm prefers to `package-lock.json`. All four
+go into the watched pathspec and into both the `dependencies` and `fleetClient` rules. The cost is
+an extra `npm ci` on every commit that only edits an npm *script*, about a minute, against a
+26-minute check; taking the accurate rule rather than parsing selected manifest fields is the
+simpler-first choice. `npm ci` also receives `--dry-run=false`: npm 11.19.0 otherwise exits zero
+under an inherited `npm_config_dry_run=true` while leaving the old `node_modules` untouched.
+
+The fleet build watches its real current source roots, `tools/fleet/` and `src/web/`, not only
+`tools/fleet/web/`: the client imports shared fleet wire modules and the product's dictation hooks.
+Before a requested rebuild its old `dist/index.html` is removed, and a failed build removes any
+partial replacement, so a later tick cannot turn mere existence into evidence of a successful
+build.
 
 ### RR2-03: narrow the claim rather than close the channel
 
@@ -280,12 +293,48 @@ findings are folded into the sections above.
 |----|--------------|-------------|
 | F1 | The check itself is launched by a separate raw `spawn()` that the proposed scrub never reaches, and `readiness-run.ts` copies the poison again into its own `npm` child. Reachable false green via `scripts/conflict-markers.ts`, which takes its tracked-file inventory from git. | **Taken.** Both spawns scrubbed, with a test over the spawn boundary rather than over `gitEnv` alone. |
 | F2 | A clean environment does not make `cwd` authoritative — `core.worktree` still redirects, demonstrated on git 2.43.0. | **Taken**, with a narrower remedy than proposed: one `--show-toplevel` guard before the tick mutates, and the claim restated. |
-| F3 | A sha alone does not identify preparation done from a dirty tree. | **Taken**, with a simpler remedy: latch only on a clean post-preparation stamp. |
+| F3 | A sha alone does not identify preparation done from a dirty tree. | **Taken.** The candidate latched only on a clean post-preparation stamp; the finished review also gated entry, because a dirty migration has effects before that stamp. |
 | F4 | `package.json` is missing from the dependency inputs. | **Taken.** |
 | F5 | The shared local database can be ahead of the commit under test, so a green can be produced against another worktree's schema. | **Named, not fixed** — see above. Both repairs are larger decisions than this stage; the claim is weakened instead and it goes to the Overseer. |
 | F6 | The conservative diff fallback must be noisy. | **Taken.** |
 | F7 | The nonce over-claim is in a third file too. | **Taken** — this plan had said that file needed no change, and was wrong. |
 | F8 | The fleet-prerequisite comment misdescribes what needs the build. | **Taken.** Verified: `tests/fleet-decisions-route.test.ts` never reads `dist`; `tools/fleet/server.ts` exits at import unless `dist/index.html` exists. |
+
+## The code review, which timed out but did the work anyway
+
+The cross-family review of Stages 1–3 was killed at its 45-minute budget with **no answer file**, so
+there is no findings document and no verdict. It had been editing under `--sandbox workspace-write`,
+and what it left in the tree is the whole of its output: a diff, its own edits to this plan, and
+`docs/postmortems/260909c-artifact-provenance-after-successful-commands.md`. The diff is therefore a
+proposal with its reasoning attached but its severities missing, and it was adjudicated here rather
+than accepted.
+
+Two findings were reproduced independently before being taken, both of the same class — **a command
+that succeeds without doing its job**:
+
+- **`npm ci` exits 0 and installs nothing when `npm_config_dry_run=true` is in the environment.**
+  Measured on npm 11.19.0: a sentinel file under `node_modules` survived, while npm printed
+  `removed 1 package` and exited 0. Adding `--dry-run=false` overrides it, and the sentinel is then
+  gone. The test runs a real `npm ci` with the poisoned environment and asserts the sentinel is
+  removed, so it cannot pass on a fake; removing the flag reddens it.
+- **A failed `build:fleet` can leave `dist/index.html`**, which the next tick accepts because it only
+  ever checks that the file exists. This compounds F8 above: nothing reads the built *content*, so any
+  `index.html` from any past build satisfies the prerequisite forever.
+
+Its argument for reversing two of this plan's decisions was better than the plan's, and both were
+taken. The entry gate on a dirty tree — declined earlier on the grounds that only the latch needs to
+be careful — is right after all, because **preparation has a side effect the latch cannot undo**: an
+uncommitted migration in a dirty tree would reach the shared database whether or not the later stamp
+refuses to record it. And the `.git` pointer backlink check, declined on the grounds that redirected
+metadata can only move a branch ref, misses that a pointer *copied from another repository* passes
+the `--show-toplevel` check while taking `origin/dev` from that other repository.
+
+What was not taken on trust: the timeout means nobody has reviewed this reviewer's own code, and it
+is a substantial diff. The gates were re-run here (61 tests green, typecheck exit 0), its factual
+claim that the fleet client reads `src/web/` was checked — `tools/fleet/web/src/DictationControl.tsx`
+imports from `../../../../src/web/`, so it is true — and one broken sentence it left in a comment was
+rewritten. **A second review of this diff is still owed**, and is the first thing to do if this area
+is picked up again.
 
 ## Stages
 
@@ -364,7 +413,8 @@ filter before it reported.
 
 - [x] `PreparationState` with `preparedFor`, in `tools/fleet/readiness-loop.ts`.
 - [x] `preparationAfterChanges` accepts `null` for "could not classify" and returns everything
-      pending; `package.json` joins `package-lock.json` as an input (F4).
+      pending; both npm manifests, `.npmrc` and `npm-shrinkwrap.json` are install inputs, and the
+      fleet rule covers its shared source roots as well as its own directory.
 - [x] `tick()` classifies from `preparedFor`, prepares, re-stamps, and records `preparedFor` only
       for a clean tree still at the target (F3).
 - [x] A failed classification is loud on stderr and not fatal (F6).
