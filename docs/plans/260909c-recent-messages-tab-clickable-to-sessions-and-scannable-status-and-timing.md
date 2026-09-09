@@ -368,6 +368,13 @@ The resolution keeps both sides' better half rather than picking a winner:
   part of the collision that would otherwise exist twice. The inline `zonedLine` call is gone.
 - **`SPEAKER_TIPS` on the speaker label is kept from `dev`** — this branch had the label bare.
 
+Checked in the browser afterwards, because the row's markup changed and a green suite is not evidence
+about a layout. At 1280 the four elements still sit on one line with room to spare. At 390 the merge
+made the wrapping **milder**, measured by bounding box rather than by eye: four of six rows fit
+entirely on one line, one drops only its age, and the sixth wraps for a reason that predates all of
+this (`not in the current session list` is a phrase, not a pill). `scrollWidth === clientWidth === 390`
+still, collapsed and expanded.
+
 ## Coordination
 
 Live in neighbouring files: `dashboard-tooltips`, `dashboard-design-system`, `deploys-ui`,
