@@ -1,9 +1,10 @@
 # "Queued ideas" — the Overseer's queue as NDJSON, editable from the dashboard
 
-**Status, 2026-09-09: Stage 1 landed. Stages 2–4 not started.** What exists is the file, the fold,
-the lock, the CLI and the migration seed, with 74 tests. **The dashboard mode is not built** — it
-moved to Stage 3 after a GPT Sol review of this plan restaged the work, and the reason is in
-[§ What the review changed](#what-the-review-changed).
+**Status, 2026-09-09: Stages 1–3 landed on `dev` (`774f2d4f`). Stages 4–5 not started, and 4 is
+blocked on Greg.** What exists: the append-only file, the fold, its own lock, the CLI, the migration
+seed (built, **not applied**), `GET /api/queue`, and the read-only **Queued ideas** tab — 120 tests
+of its own, 553 across the affected fleet suites, typecheck and lint clean, and verified in a real
+browser at 430px and 1280px against a seeded queue on a throwaway port.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer-queue.md](../project/overseer-queue.md), which is the doc this work turns into a file.
@@ -76,8 +77,10 @@ not an OS capability boundary**, and `by` is a self-declaration rather than a pr
 P0-1. A claimed protection is worse than an admitted gap, so it is admitted in
 [`idea-queue.ts`](../../tools/overseer/idea-queue.ts)'s header, in the CLI's header, and here.
 
-The consequence for staging is the important part: **Stage 1 ships no write route**, so the exposure
-Sol described is not created yet, and Stage 2 waits on a question for Greg.
+The consequence for staging is the important part: **nothing that landed accepts a write over HTTP**,
+so the exposure Sol described is not created yet. The route is `GET`/`HEAD` only and refuses anything
+else with a sentence saying why, rather than 404ing it — a reader who wants a write path is sent to
+the question rather than to a gap. That question is Stage 4's, and it is Greg's.
 
 ## The file shape: append-only events
 
@@ -199,16 +202,29 @@ Two of its findings were **not** taken as written, and both are recorded rather 
       lives: a status guard that read the item's current state instead of the incoming one (so a
       crafted `edited` could drop an item); a settled item left anchorable in the ordering; and
       `Number("")` being `0`, so an empty version string parsed as *the queue is empty*.
-- [ ] **Stage 2 — the read route.** `GET /api/queue`, the house shape of
-      [`routes-health-history.ts`](../../tools/fleet/routes-health-history.ts): pure payload builder,
-      the three read arms carried rather than flattened, `problems` on the wire. Its own suite
-      driving the same composition the server calls.
-- [ ] **Stage 3 — the "Queued ideas" mode.** Read-only: the queue in order, each row saying why it is
-      or is not ready, the depth split, the throughput lines. Four registrations plus the mount in
-      `App.tsx` — [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) is the checklist,
-      and `expect(MODES).toContain("ideas")` is the assertion that survives a clean merge dropping
-      the entry. Key: **`ideas`**, deliberately not `queue` (`tools/fleet/queue.ts` is the
-      dashboard's *steering* queue and the confusion would be permanent).
+- [x] **Stage 2 — the read route.** [`routes-idea-queue.ts`](../../tools/fleet/routes-idea-queue.ts):
+      pure payload builder, the three read arms carried rather than flattened, `problems` on the
+      wire, and **`ready`/`why` computed server-side** — `ready` is `isDispatchable`, and a second
+      implementation of it in browser TypeScript would be a second answer to *"may this go out?"*.
+      **`GET`/`HEAD` only**: a `POST` gets 405 with a sentence naming the reason, and a test asserts
+      that refusal so adding a write path has to change a test that says why it exists.
+      19 tests.
+- [x] **Stage 3 — the "Queued ideas" mode.** Key **`ideas`**, deliberately not `queue`
+      (`tools/fleet/queue.ts` is the dashboard's *steering* queue and the confusion would be
+      permanent). Four registrations plus the mount in `App.tsx`, per
+      [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md); `expect(MODES).toContain("ideas")`
+      is the one that survives a clean merge dropping the entry, and the mount test was **verified by
+      mutation** — commenting the `App.tsx` arm out reds it, which no type can do.
+      27 tests in [`fleet-queue-panel.test.tsx`](../../tests/fleet-queue-panel.test.tsx).
+
+      **The badge is the tab, not the list.** Four reasons an item sits still — *needs you*,
+      *proposal*, *approval lapsed*, *ready* — and only the first is Greg's to clear, so flattening
+      them into "blocked" would delete the point. A queue-wide problem outranks all four with *on
+      hold*, because while the file has a hole in it nothing is dispatchable.
+
+      **Five kinds of nothing, each drawn differently**, since collapsing any two gives an empty
+      list that reads as *nothing is queued*: `never-written`, an emptied-but-readable queue,
+      `unreadable` (the loud one), `no-answer` in the browser's own voice, and `loading`.
 - [ ] **Stage 4 — writes from the page, and dispatch.** ***Blocked on Greg*** — see below. Add
       (front/back), edit, reorder (up/down buttons first, drag as enhancement), authorise, drop; and
       the reservation-based dispatch lifecycle designed with the coordinator.
@@ -216,6 +232,18 @@ Two of its findings were **not** taken as written, and both are recorded rather 
       `overseer.md` and `overseer-queue.md` to one canonical source **in one approved change**.
       Sol's P1-4: two sources of authorisation is worse than an old one, and `overseer.md`'s rule
       text is Greg's to change.
+
+## What the browser check showed
+
+Built the client, seeded a queue into the scratchpad, ran a **throwaway server on 8799** — not the
+live dashboard on 8787, which the Overseer reads and which this stage was told not to disturb; it
+was still serving afterwards. At 430px and 1280px the sixteen migrated clusters render with four
+*needs you* badges and twelve *ready*, the Overseer's test proposal renders as *proposal*, the depth
+line reads `12 ready · 4 need you · 1 not approved`, and the footer names the file and the version.
+`/api/queue` answered with `problems: []` and the same counts, so the route and the panel agree.
+
+**The live dashboard will not show this tab until it is restarted** — it serves the `web/dist/` it
+started with. That is the Overseer's to arrange, and it is in the debrief.
 
 ## Needs Greg
 
