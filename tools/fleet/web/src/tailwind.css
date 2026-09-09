@@ -728,4 +728,45 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
+
+  /* A collapsed deploy row's disclosure triangle — DeploysPanel.tsx.
+     Lifted from the product's own changelog page (src/web/styles/changelog.css),
+     which is the reader-facing twin of that tab and had already paid for the
+     browser knowledge below. The two files cannot share code — the fleet may
+     not import from `src/` (tests/fleet-imports.test.ts) — so this is a copy,
+     and it is a copy of four lines rather than of a decision.
+
+     `tw:list-none` in the JSX covers Chrome and Firefox, which take
+     `list-style` on a summary. **Safari does not**, and Safari is where this
+     page is actually read: its marker is a shadow pseudo element and
+     `::-webkit-details-marker` is the only thing that reaches it. A rule here
+     rather than an arbitrary variant in the JSX, for the reason changelog.css
+     gives: a vendor pseudo element inside `tw:[&::-webkit-details-marker]:hidden`
+     is unreadable and, in a v4 prefix build, one bracket away from silently
+     emitting nothing.
+
+     The native triangle is drawn differently in every browser and cannot be
+     aligned with a baseline row; the chevron in the JSX is ours and turns
+     because `group-open:` reads the parent's `open` attribute. */
+  .deploy-row > summary::-webkit-details-marker {
+    display: none;
+  }
+  /* **Where a row jumped to from the contents comes to rest**, and it belongs
+     on the `<details>` because that is the element `scrollIntoView` is called
+     on — `scroll-margin` is read off the target and an offset on an ancestor
+     does nothing at all. It was `tw:scroll-mt-20` in the JSX until GPT Sol
+     pointed out that 80px is a fixed number while the masthead above adds
+     `--safe-top`: on a notched iPhone with `viewport-fit=cover` the row lands
+     back under the header, and a 390px desktop emulation passes happily
+     because there is no notch to emulate. So it is arithmetic on the same
+     variable the masthead uses, written here rather than as a bracketed
+     arbitrary value for the reason the marker rule above gives. */
+  .deploy-row {
+    scroll-margin-top: calc(5rem + var(--safe-top, 0px));
+  }
+  /* Safari again: `<summary>` is `display: list-item` by default there, and a
+     flex row that is also a list item keeps a marker box. */
+  .deploy-row > summary {
+    display: flex;
+  }
 }

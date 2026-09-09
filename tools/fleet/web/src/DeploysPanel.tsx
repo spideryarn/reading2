@@ -41,6 +41,7 @@
  * sharpened here by the fact that every failure has a reassuring wrong answer to
  * fall back to.
  */
+import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
@@ -48,13 +49,20 @@ import {
   FIRST_PAGE,
   MAX_LIMIT,
   MORE_PAGE,
+  OPEN_ZONE_LABELS,
   ago,
   agoFrom,
   commitUrl,
+  deployDays,
+  deployGist,
+  deployWhenIn,
   deployWhen,
   groupedEntries,
   httpDeploysApi,
+  ROW_ZONE,
   shortSha,
+  type DeployDay,
+  type DeployGist,
   type DeploysApi,
   type DeploysView,
 } from "./deploys-client";
@@ -262,105 +270,410 @@ function Freshness({
   );
 }
 
-/** One deploy. */
-function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number }): ReactNode {
+/**
+ * The gist on a closed row: what this deploy shipped, in one clause.
+ *
+ * **Three arms, and they are the same three the open card draws at length.** A
+ * collapsed view is a new chance to say *nothing changed* over a deploy whose
+ * changelog could not be READ, which is the exact collapse 260909b's review
+ * spent a round pulling apart — so the branch is on `gist.kind` rather than on
+ * "are there any entries", and the unreadable arm keeps its own colour.
+ */
+function Gist({ gist }: { gist: DeployGist }): ReactNode {
+  return (
+    <span className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-1.5">
+      {gist.kind === "unreadable" ? (
+        /* **Not an early return.** This arm returned before reaching the
+           unreadable count below, so a deploy whose entries were ALL malformed
+           closed to a bare "could not be read" and only said how many when you
+           opened it — while the helper's own comment claimed the count rode on
+           every arm. GPT Sol's P2. The arm that has lost the most is the one
+           that was saying the least. */
+        <span className="tw:text-[13px] tw:text-unknown-ink">what changed could not be read</span>
+      ) : gist.kind === "quiet" ? (
+        <span className="tw:text-[13px] tw:text-ink-faint">Nothing a reader would notice</span>
+      ) : (
+        <>
+          <span className="tw:text-[13px] tw:text-ink">{gist.title}</span>
+          {gist.more > 0 ? <span className="tw:text-[12px] tw:text-ink-faint">+{gist.more} more</span> : null}
+        </>
+      )}
+      {/* **A short list presented as a whole one is the collapsed view's own
+          way of lying.** The open card says how many entries would not parse;
+          without this the row above it quietly does not. */}
+      {gist.unreadable > 0 ? (
+        <span className="tw:text-[12px] tw:text-unknown-ink">+{gist.unreadable} unreadable</span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * One deploy — **closed**, and one line of it.
+ *
+ * A normal deploy card was 950–1000 px tall, so learning that a *second* deploy
+ * existed meant scrolling past the whole write-up of the first (measured on the
+ * live tab at 1280×900, 2026-09-09: ten deploys made a 6066 px page, and 8824 px
+ * at 390). The record is not less honest for being closed; it was unreadable for
+ * being open.
+ *
+ * **Uncontrolled `<details>`, deliberately.** This page re-renders once a second
+ * off `useNow`, and an `open` prop recomputed on every tick would shut every row
+ * the reader had opened. Open-ness is DOM state, and `register` is how the
+ * table of contents reaches it.
+ *
+ * The pattern — a bare `<details>` with a `<summary>` you can read closed — is
+ * `SessionDetail.tsx`'s ("Rename", "Where it is"), reused as a vocabulary rather
+ * than as a component: that summary is one faint word and this one is a whole
+ * row, so anything general enough for both would be a `ReactNode` and a
+ * `className`, which is not a component.
+ */
+function DeployRow({
+  version,
+  nowMs,
+  register,
+}: {
+  version: DeployVersion;
+  nowMs: number;
+  register: (id: string, el: HTMLDetailsElement | null) => void;
+}): ReactNode {
   const groups = useMemo(() => groupedEntries(version), [version]);
+  const gist = useMemo(() => deployGist(version), [version]);
   /* **Memoised because this page re-renders once a second and the answer never
      changes.** `zonedLine` builds three `Intl.DateTimeFormat` instances per
      call; GPT Sol measured the un-memoised version at 46–64 ms per render for
      70 deploys and 110–126 ms for 200 — every second, on a phone. The absolute
      time of a deploy that already happened is the most immutable value on the
-     page. Sol's F4. */
+     page. Sol's F4. The one-zone reading below is the same argument again. */
   const when = useMemo(() => deployWhen(version.version), [version.version]);
+  const local = useMemo(() => deployWhenIn(version.version), [version.version]);
+
+  /* **A stable ref callback.** An inline `ref={(el) => register(id, el)}` is a
+     new function on every render, and React answers a changed ref by calling
+     the old one with `null` and the new one with the element — so this page,
+     which re-renders once a second, was detaching and re-registering every row
+     twice a second for nothing. 200 rows is 800 map operations a second to
+     arrive back where it started. GPT Sol, round 2; `register` is itself
+     `useCallback([])`, so this is stable for the life of the row. */
+  const attach = useCallback(
+    (el: HTMLDetailsElement | null) => register(version.deploymentId, el),
+    [register, version.deploymentId],
+  );
 
   return (
-    <Card className="tw:px-3 tw:py-2.5">
-      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1">
-        <span className="tw:font-semibold tw:text-ink">Release {version.release}</span>
-        <span className="tw:text-[13px] tw:text-ink-soft">{ago(version.version, nowMs) ?? "at an unreadable time"}</span>
-        {version.invisible ? <Pill tone="idle">quiet</Pill> : null}
-      </div>
+    <Card className="tw:px-3 tw:py-1.5">
+      {/* **`scroll-mt` belongs on the element `scrollIntoView` is called on**,
+          which is this `<details>` and not the card around it. It was on the
+          card for the first draft, and a browser pass caught what that looks
+          like: the jump works, the right row opens, and the "Release 73" line
+          you aimed at sits behind the 62 px sticky masthead, so you land in the
+          middle of the body with no heading to tell you where you are. A scroll
+          offset on an ancestor does nothing at all — `scroll-margin` is read
+          off the target. */}
+      {/* `deploy-row` carries the scroll offset as well as the marker rules —
+          tailwind.css § deploy-row says why it is arithmetic on `--safe-top`
+          rather than a fixed `scroll-mt-20`. */}
+      <details className="deploy-row tw:group" ref={attach}>
+        {/* **The row is the flex container, not a box inside it.** The first
+            draft kept the native `list-item` marker and put an `inline-flex`
+            span beside it, and at 390 px that span is an atomic box too wide
+            for what the marker leaves, so it dropped to the next line and the
+            triangle sat alone above the row. `list-none` plus our own chevron
+            (the product's changelog page, tailwind.css § deploy-row) makes the
+            marker a flex item like any other, and the row wraps field by field
+            instead of all at once. */}
+        <summary className="tw:flex tw:cursor-pointer tw:list-none tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-0.5 tw:rounded-md tw:px-1 tw:py-1">
+          <ChevronRight
+            size={14}
+            className="tw:mt-0.5 tw:shrink-0 tw:self-start tw:text-ink-faint tw:transition-transform tw:group-open:rotate-90"
+            aria-hidden="true"
+          />
+          <span className="tw:font-semibold tw:text-ink">Release {version.release}</span>
+          {/* The clock time carries its zone every time it is drawn. The date
+              is not here — it is the heading this row sits under, and
+              repeating it ten times is what made the old card's second line
+              unscannable. */}
+          <span className="tw:text-[12px] tw:text-ink-soft">
+            {local === null ? "at a time this page cannot read" : `${local.time} ${local.label}`}
+          </span>
+          <span className="tw:text-[12px] tw:text-ink-faint">{ago(version.version, nowMs) ?? "age unknown"}</span>
+          {/* Plain text, not a link: an anchor inside a `<summary>` both
+              follows and toggles, and it is a poor tap target on a phone. The
+              linked sha is in the body, where it always was. */}
+          <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{shortSha(version.sha)}</span>
+          {/* **Null is not zero.** A line that has forgotten what it shipped
+              has not shipped nothing, and drawing "0 commits" would be a
+              number somebody could act on. */}
+          <span className="tw:text-[12px] tw:text-ink-faint">
+            {version.commitCount === null
+              ? "commit count not recorded"
+              : `${version.commitCount} ${version.commitCount === 1 ? "commit" : "commits"}`}
+          </span>
+          {/* **The pill only when it says something the gist does not.** The
+              record's `invisible` flag and a gist of *nothing a reader would
+              notice* are the same fact, and a browser pass showed them side
+              by side on every quiet deploy — twice the ink for one claim, on
+              the rows that deserve the least of it. Kept for the case where
+              they DISAGREE: a line that calls itself quiet and then carries
+              entries is a contradiction in the record, and the pill is the
+              only place on the row that would say so. */}
+          {version.invisible && gist.kind !== "quiet" ? <Pill tone="idle">quiet</Pill> : null}
+          <Gist gist={gist} />
+        </summary>
 
-      <div className="tw:mt-1 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1 tw:text-[12px] tw:text-ink-faint">
-        <span>{when ?? version.version}</span>
-        <span aria-hidden="true">·</span>
-        <Sha sha={version.sha} />
-        {/* **Null is not zero.** A line that has forgotten what it shipped has
-            not shipped nothing, and drawing "0 commits" would be a number
-            somebody could act on. */}
-        <span aria-hidden="true">·</span>
-        <span>
-          {version.commitCount === null
-            ? "commit count not recorded"
-            : `${version.commitCount} ${version.commitCount === 1 ? "commit" : "commits"}`}
-        </span>
-        {version.previousSha !== null ? (
-          <>
+        <div className="tw:mt-1 tw:border-l tw:border-rule tw:pt-1 tw:pb-1 tw:pl-3">
+          <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1 tw:text-[12px] tw:text-ink-faint">
+            {/* Every zone the box shows, which is the canonical line — the
+                closed row's single labelled time is a reading of the same
+                instant through the same code, not a second opinion. */}
+            <span>{when ?? version.version}</span>
             <span aria-hidden="true">·</span>
-            {/* The range, so what this deploy covers is visible rather than
-                implied. */}
-            <span>
-              since <Sha sha={version.previousSha} />
-            </span>
-          </>
-        ) : null}
-      </div>
-
-      {!version.changelogReadable ? (
-        /* **"We could not read what changed" is NOT "nothing changed".** The two
-           look identical on a card and mean opposite things: one is the common
-           quiet deploy, the other is a headline feature rendered as an empty
-           box. GPT Sol's P1 finding 3, 2026-09-09. */
-        <p className="tw:mt-2 tw:text-[13px] tw:text-unknown-ink">
-          What changed here could not be read from the record
-          {version.unreadableEntries > 0
-            ? ` — ${version.unreadableEntries} ${version.unreadableEntries === 1 ? "entry" : "entries"} would not parse`
-            : ""}
-          . This is not a quiet deploy; it is a gap in the changelog.
-        </p>
-      ) : groups.length === 0 ? (
-        /* **NOT an empty card.** Most deploys are quiet — 19 of the 20 in one
-           42-hour stretch — and that is expected rather than a fault, so it is
-           said in words rather than left as a gap somebody has to interpret. */
-        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">Nothing a reader would notice.</p>
-      ) : (
-        groups.map((group) => (
-          <div key={group.section} className="tw:mt-2.5">
-            <h3 className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
-              {group.label}
-            </h3>
-            <ul className="tw:mt-1 tw:flex tw:flex-col tw:gap-2">
-              {group.entries.map((entry) => (
-                /* Keyed by the title within its section rather than by index:
-                   these are drawn from a file that can gain a line above them,
-                   and an index key would then re-use one entry's DOM for
-                   another's text. */
-                <li key={`${group.section}-${entry.title}`} className="tw:text-[13px]">
-                  <span className="tw:font-medium tw:text-ink">{entry.title}</span>
-                  <p className="tw:mt-0.5 tw:text-ink-soft">{entry.body}</p>
-                  <div className="tw:mt-0.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
-                    {entry.where !== null ? <Mono>{entry.where}</Mono> : null}
-                    {entry.commits.map((sha) => (
-                      <Sha key={sha} sha={sha} />
-                    ))}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <Sha sha={version.sha} />
+            {version.previousSha !== null ? (
+              <>
+                <span aria-hidden="true">·</span>
+                {/* The range, so what this deploy covers is visible rather than
+                    implied. */}
+                <span>
+                  since <Sha sha={version.previousSha} />
+                </span>
+              </>
+            ) : null}
           </div>
-        ))
-      )}
 
-      {/* Some entries read, some not. The list above is real and short, and
-          saying by how much is the difference between a partial list and a
-          list. */}
-      {version.changelogReadable && version.unreadableEntries > 0 ? (
-        <p className="tw:mt-2 tw:text-[12px] tw:text-unknown-ink">
-          {version.unreadableEntries} further {version.unreadableEntries === 1 ? "entry" : "entries"} on this deploy
-          could not be read, so this list is short.
-        </p>
-      ) : null}
+          {!version.changelogReadable ? (
+            /* **"We could not read what changed" is NOT "nothing changed".** The two
+               look identical on a card and mean opposite things: one is the common
+               quiet deploy, the other is a headline feature rendered as an empty
+               box. GPT Sol's P1 finding 3, 2026-09-09. */
+            <p className="tw:mt-2 tw:text-[13px] tw:text-unknown-ink">
+              What changed here could not be read from the record
+              {version.unreadableEntries > 0
+                ? ` — ${version.unreadableEntries} ${version.unreadableEntries === 1 ? "entry" : "entries"} would not parse`
+                : ""}
+              . This is not a quiet deploy; it is a gap in the changelog.
+            </p>
+          ) : groups.length === 0 ? (
+            /* **NOT an empty card.** Most deploys are quiet — 19 of the 20 in one
+               42-hour stretch — and that is expected rather than a fault, so it is
+               said in words rather than left as a gap somebody has to interpret. */
+            <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">Nothing a reader would notice.</p>
+          ) : (
+            groups.map((group) => (
+              <div key={group.section} className="tw:mt-2.5">
+                <h3 className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+                  {group.label}
+                </h3>
+                <ul className="tw:mt-1 tw:flex tw:flex-col tw:gap-2">
+                  {group.entries.map((entry) => (
+                    /* Keyed by the title within its section rather than by index:
+                       these are drawn from a file that can gain a line above them,
+                       and an index key would then re-use one entry's DOM for
+                       another's text. */
+                    <li key={`${group.section}-${entry.title}`} className="tw:text-[13px]">
+                      <span className="tw:font-medium tw:text-ink">{entry.title}</span>
+                      <p className="tw:mt-0.5 tw:text-ink-soft">{entry.body}</p>
+                      <div className="tw:mt-0.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
+                        {entry.where !== null ? <Mono>{entry.where}</Mono> : null}
+                        {entry.commits.map((sha) => (
+                          <Sha key={sha} sha={sha} />
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+
+          {/* Some entries read, some not. The list above is real and short, and
+              saying by how much is the difference between a partial list and a
+              list. */}
+          {version.changelogReadable && version.unreadableEntries > 0 ? (
+            <p className="tw:mt-2 tw:text-[12px] tw:text-unknown-ink">
+              {version.unreadableEntries} further {version.unreadableEntries === 1 ? "entry" : "entries"} on this
+              deploy could not be read, so this list is short.
+            </p>
+          ) : null}
+        </div>
+      </details>
     </Card>
+  );
+}
+
+/**
+ * The table of contents: every deploy in the window, one press away.
+ *
+ * **Buttons, not anchors, and that is not a style preference.** This page keeps
+ * its mode in the URL fragment, and `mode.ts`'s `parseHash` falls back to
+ * `sessions` for any name it does not recognise — so an `<a href="#deploy-74">`
+ * would not scroll to a deploy, it would throw the reader onto the Sessions tab
+ * and lose the whole panel. `tests/fleet-web.test.tsx` refuses any `href`
+ * starting `#` inside this panel.
+ *
+ * **Grouped by day rather than a flat list**, which is the literal reading of
+ * the brief and would have been the list a second time: with every deploy
+ * collapsed to one line, a row-per-deploy index directly above a row-per-deploy
+ * list doubles the page to say nothing new. A day is the question a person
+ * actually arrives with, it stays a handful of rows when "show more" takes the
+ * window to seventy, and each deploy is still individually reachable.
+ */
+function Contents({
+  days,
+  onJump,
+}: {
+  days: DeployDay[];
+  onJump: (deploymentId: string) => void;
+}): ReactNode {
+  return (
+    /* **A `<nav>` with the day groups named, because this IS navigation.** A
+       screen-reader reader tabbing the buttons heard "Jump to release 74",
+       "Jump to release 73" and so on with none of the day structure a sighted
+       reader gets for free — the dates were unassociated `<span>`s beside them.
+       `role="group"` plus `aria-labelledby` puts each day back on its own
+       buttons. GPT Sol's P3, round 2. */
+    <nav aria-labelledby="deploys-contents">
+      <Card className="tw:px-3 tw:py-2.5">
+        <h3
+          id="deploys-contents"
+          className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase"
+        >
+          Jump to a release
+        </h3>
+        {/* **The zone is stated once here, and named on every row and heading
+            besides.** The list of zones comes from `DISPLAY_ZONES` rather than
+            being retyped, so the sentence cannot outlive the list it
+            describes. */}
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+          Times and days below are {ROW_ZONE.label}, the zone the record itself is in. Open a deploy to see it in{" "}
+          {andList(OPEN_ZONE_LABELS)}.
+        </p>
+        {days.map((day) => (
+          <div
+            key={day.key}
+            role="group"
+            aria-labelledby={`deploys-contents-${day.key}`}
+            className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1"
+          >
+            <span id={`deploys-contents-${day.key}`} className="tw:text-[12px] tw:text-ink-soft">
+              {day.label}
+            </span>
+            {day.versions.map((version) => (
+              <Button
+                key={version.deploymentId}
+                onClick={() => onJump(version.deploymentId)}
+                aria-label={`Jump to release ${version.release}`}
+                className="tw:font-mono"
+              >
+                {version.release}
+              </Button>
+            ))}
+          </div>
+        ))}
+      </Card>
+    </nav>
+  );
+}
+
+/** `a, b and c`. Prose, so the sentence above reads as one. */
+function andList(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * The window: its contents, its day headings, and its rows.
+ *
+ * Its own component because the panel above it is a chain of *which nothing is
+ * this* arms, and the list is the one arm that has a shape. Keeping the two
+ * apart is also what keeps either of them readable — `DeploysPanel` was over
+ * biome's complexity ceiling with this inlined.
+ */
+function DeployList({
+  versions,
+  nowMs,
+}: {
+  versions: DeployVersion[];
+  nowMs: number;
+}): ReactNode {
+  /* **One constant, not a reading**, so a row's clock and the heading above it
+     cannot be measured in different zones — and so nothing here has to be
+     memoised against a value that could change under a tab left open for
+     hours. deploys-client.ts § ROW_ZONE has the argument, and it is a reversal:
+     this detected the device's zone until GPT Sol's P1. */
+  const days = useMemo(() => deployDays(versions), [versions]);
+
+  /**
+   * The rows, by deployment id, so the contents can reach one.
+   *
+   * **A ref rather than state**, because open-ness lives in the DOM: see
+   * `DeployRow`. Nothing here re-renders when a row opens, which is the point —
+   * this page redraws once a second anyway.
+   */
+  const rows = useRef(new Map<string, HTMLDetailsElement>());
+
+  const register = useCallback((id: string, el: HTMLDetailsElement | null): void => {
+    if (el === null) rows.current.delete(id);
+    else rows.current.set(id, el);
+  }, []);
+
+  const jump = useCallback((id: string): void => {
+    const el = rows.current.get(id);
+    if (el === undefined) return;
+    el.open = true;
+    /* **Move focus, or the jump is a visual effect only.** Scrolling moves the
+       viewport and nothing else: a keyboard or screen-reader reader is still
+       standing on the contents button, and their next Tab goes to the next
+       index entry rather than into the release they just asked for. GPT Sol's
+       P2. `preventScroll` because the scroll below is the one that knows where
+       to stop — focus's own scrolling ignores `scroll-margin`. */
+    const summary = el.querySelector("summary");
+    if (summary !== null && typeof summary.focus === "function") summary.focus({ preventScroll: true });
+    /* **Guarded, because jsdom does not implement it** — an unguarded call
+       throws in every test that presses a contents button, which would make
+       those tests a statement about jsdom rather than about the page.
+
+       **No `behavior`**, so the stylesheet decides. An explicit `"smooth"` is a
+       direct request for animation that
+       `@media (prefers-reduced-motion: reduce)`'s `scroll-behavior: auto` does
+       not override — and after "show more" this can travel thousands of pixels.
+       GPT Sol's P3. */
+    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "start" });
+  }, []);
+
+  return (
+    <>
+      {/* One deploy needs no index of itself. */}
+      {versions.length > 1 ? <Contents days={days} onJump={jump} /> : null}
+
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        {days.map((day) => (
+          /* `data-day` so a test can say "these releases, under that heading"
+             rather than guessing which `<h3>` is a day — the contents above and
+             every changelog section inside an open row are `<h3>`s too, and a
+             test that cannot tell them apart reads a release number out of the
+             wrong element. */
+          <div key={day.key} data-day={day.key} className="tw:flex tw:flex-col tw:gap-1.5">
+            {/* **The zone on the heading too**, not only in the contents at the
+                top of the page: a day heading eight releases down is read on
+                its own, and a bare date is a claim about somebody's calendar.
+                The unreadable-instant heading is its own sentence and does not
+                take one. */}
+            <h3 className="tw:px-1 tw:pt-1 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+              {day.key === "" ? day.label : `${day.label} · ${ROW_ZONE.label}`}
+            </h3>
+            {day.versions.map((version) => (
+              <DeployRow
+                key={version.deploymentId}
+                version={version}
+                register={register}
+                nowMs={nowMs}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -463,17 +776,12 @@ export function DeploysPanel({
               The record was read and holds no deploys at all. It has {state.recordLines} lines.
             </Card>
           ) : (
-            <div className="tw:flex tw:flex-col tw:gap-2">
-              {state.versions.map((version) => (
-                <DeployCard
-                  key={version.deploymentId}
-                  version={version}
-                  /* The same corrected clock the header uses, so a deploy's age
-                     and the record's age cannot disagree by the device's drift. */
-                  nowMs={state.servedAtMs + (now - arrivedAtMs)}
-                />
-              ))}
-            </div>
+            <DeployList
+              versions={state.versions}
+              /* The same corrected clock the header uses, so a deploy's age and
+                 the record's age cannot disagree by the device's drift. */
+              nowMs={state.servedAtMs + (now - arrivedAtMs)}
+            />
           )}
 
           {/* **The button disappears at the ceiling rather than sitting there

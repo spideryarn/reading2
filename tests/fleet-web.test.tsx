@@ -1306,6 +1306,341 @@ describe("the deploys tab", () => {
     expect(container.textContent).toContain("1 of 75 lines in the record could not be read");
     expect(container.textContent).toContain("line 12: does not parse");
   });
+
+  /* ---------------------------------------------------------------- *
+   * Closed by default, and the contents that reaches one — 260909c.
+   *
+   * **`textContent` cannot see any of this**, which is why these tests exist
+   * as a separate group and why none of the assertions above went red when
+   * the cards became rows: a closed `<details>` keeps every one of its
+   * children in the DOM, so every existing `toContain` on this tab passed
+   * unchanged through a rewrite that changed what a reader can see. The
+   * assertions below are about the `open` attribute and about which element
+   * a string sits inside.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Three deploys over two days.
+   *
+   * **Two days in UTC, which is the page's zone by contract — not jsdom's.**
+   * jsdom inherits the host's zone, so a fixture leaning on the runner being
+   * UTC would be a fixture about this box. `ROW_ZONE` is what makes these
+   * expectations constants; GPT Sol caught the earlier claim that it was jsdom.
+   */
+  function threeDeploys(): DeploysView {
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    const base = one.versions[0];
+    if (base === undefined) throw new Error("unreachable");
+    return deploysView({
+      versions: [
+        { ...base, version: "2026-09-08T05:32:17Z", release: 74, deploymentId: "dpl_74" },
+        {
+          ...base,
+          version: "2026-09-07T23:55:16Z",
+          release: 73,
+          deploymentId: "dpl_73",
+          entries: [],
+          invisible: true,
+        },
+        { ...base, version: "2026-09-07T14:45:29Z", release: 72, deploymentId: "dpl_72" },
+      ],
+      total: 74,
+    });
+  }
+
+  const rows = (): HTMLDetailsElement[] => [...container.querySelectorAll("details")];
+
+  /* **The expectations below are literal, and they can be** — the rows and the
+     day headings are drawn in UTC by contract (`deploys-client.ts § ROW_ZONE`),
+     not in whatever zone the suite happens to run in.
+
+     They were derived at runtime from `Intl.DateTimeFormat().resolvedOptions()`
+     for an hour, while the panel detected the device's zone, because a literal
+     would then have been an assertion about where the test was running — this
+     box is `Europe/London` and a CI runner is usually UTC. GPT Sol's P1 took
+     the detection out, and this went with it: a test that is allowed to be a
+     constant should be one. The zone-dependent behaviour is still exercised,
+     but in `tests/fleet-deploys-client.test.ts`, where `deployDays` is handed
+     `Europe/Athens` explicitly and the `(+1d)` case can be checked. */
+
+  it("draws every deploy CLOSED, which is the whole point of the pass", async () => {
+    /* A normal deploy card was 950–1000 px, so ten of them made a 6066 px page
+       at 1280 and 8824 px at 390 (measured on the live tab, 2026-09-09) —
+       reaching the second deploy meant reading the whole of the first. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    expect(rows()).toHaveLength(3);
+    for (const row of rows()) expect(row.open, "a deploy opened itself").toBe(false);
+  });
+
+  it("says what the deploy shipped WITHOUT opening it", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    const summary = container.querySelector("summary");
+    const closed = summary?.textContent ?? "";
+    /* Everything a reader scans for, on the line they can see: which release,
+       when, which commit, how much, and what it was. */
+    expect(closed).toContain("Release 74");
+    /* The clock time carries its zone. An unlabelled one is the single thing
+       zones.ts forbids, and on a page that also prints UTC it is a puzzle. */
+    expect(closed).toContain("05:32 UTC");
+    expect(closed).toContain("8cd2206");
+    expect(closed).toContain("137 commits");
+    expect(closed).toContain("Hover cards on links");
+    /* And the body is NOT on that line — it is what opening the row is for. */
+    expect(closed).not.toContain("See where a link goes");
+  });
+
+  it("puts each deploy under the day it happened on, in the zone the rows are drawn in", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    /* **Which releases sit under which heading, not merely which headings
+       exist.** The weaker version of this test could not tell UTC from Athens:
+       these three timestamps produce the labels "Tue 8 Sep" and "Mon 7 Sep" in
+       both zones, and only the *membership* differs — 23:55 UTC on the 7th is
+       02:55 on the 8th in Athens. Changing the grouping zone left the weak
+       assertion green, which is how a mutation check earns its keep.
+
+       **The zone is on the heading, too**, not only in the contents at the top
+       of the page: a day heading eight releases down is read on its own, and a
+       bare date is a claim about somebody's calendar. */
+    const grouped = [...container.querySelectorAll("[data-day]")].map((group) => ({
+      day: group.querySelector("h3")?.textContent,
+      /* The first `<span>` of a summary, not a regex over its `textContent` —
+         which runs "Release 74" straight into "05:32 UTC" and yields `7405`. */
+      releases: [...group.querySelectorAll("summary")].map((s) => s.querySelector("span")?.textContent),
+    }));
+
+    expect(grouped).toEqual([
+      { day: "Tue 8 Sep 2026 · UTC", releases: ["Release 74"] },
+      { day: "Mon 7 Sep 2026 · UTC", releases: ["Release 73", "Release 72"] },
+    ]);
+  });
+
+  it("does not call a deploy quiet when its changelog could not be READ", async () => {
+    /* The collapse the closed row invents a fresh chance at: an unreadable
+       changelog has no entries, so a gist branching on "any entries?" would
+       print *nothing a reader would notice* over a headline release. GPT Sol's
+       P1 finding 3, one level up. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    const base = one.versions[0];
+    if (base === undefined) throw new Error("unreachable");
+    mount(
+      feed.transport,
+      recordingDeploys(() =>
+        deploysView({
+          versions: [{ ...base, entries: [], changelogReadable: false, unreadableEntries: 2 }],
+        }),
+      ).api,
+    );
+    await act(async () => undefined);
+
+    const closed = container.querySelector("summary")?.textContent ?? "";
+    expect(closed).toContain("could not be read");
+    expect(closed).not.toContain("Nothing a reader would notice");
+    /* **And how many were lost.** This arm returned early, before the count
+       below it, so a deploy whose entries were ALL malformed closed to a bare
+       "could not be read" and only said "3" once you opened it — while the
+       helper's own comment claimed the count rode on every arm. The row that
+       has lost the most was the one saying the least. GPT Sol's P2. */
+    expect(closed).toContain("+2 unreadable");
+  });
+
+  it("says on the closed row how many entries it could not read", async () => {
+    /* Otherwise the row shows a short list as though it were a whole one — the
+       open card says so and, without this, the line above it would not. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    const base = one.versions[0];
+    if (base === undefined) throw new Error("unreachable");
+    mount(
+      feed.transport,
+      recordingDeploys(() => deploysView({ versions: [{ ...base, unreadableEntries: 3 }] })).api,
+    );
+    await act(async () => undefined);
+
+    expect(container.querySelector("summary")?.textContent).toContain("+3 unreadable");
+  });
+
+  const jumpButton = (release: number): HTMLButtonElement | undefined =>
+    [...container.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === `Jump to release ${release}`);
+
+  it("offers a jump to every deploy in the window", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    for (const release of [74, 73, 72]) {
+      expect(jumpButton(release), `no way to jump to release ${release}`).toBeDefined();
+    }
+  });
+
+  it("opens the deploy the contents points at, and only that one", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    /* **jsdom has no `scrollIntoView`, so one is installed per row and the call
+       is asserted.** The plan claimed for a while that the open and the scroll
+       were checked separately; they were not — deleting the `scrollIntoView`
+       call left every assertion green, which is a test agreeing with a page
+       that no longer scrolls. GPT Sol's P3. */
+    const scrolled: HTMLDetailsElement[] = [];
+    for (const row of rows()) {
+      row.scrollIntoView = function scrollIntoView(): void {
+        scrolled.push(row);
+      };
+    }
+
+    act(() => jumpButton(72)?.click());
+
+    expect(rows().map((r) => r.open)).toEqual([false, false, true]);
+    expect(scrolled).toEqual([rows()[2]]);
+  });
+
+  it("takes the reader's FOCUS to the deploy, not just the viewport", async () => {
+    /* **Scrolling moves the viewport and nothing else.** A keyboard or
+       screen-reader reader who presses a jump button is still standing on that
+       button afterwards, so their next Tab goes to the next entry in the index
+       rather than into the release they just asked for — the jump is a visual
+       effect that does not exist for them. GPT Sol's P2. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    act(() => jumpButton(72)?.click());
+
+    const landed = document.activeElement;
+    expect(landed?.tagName).toBe("SUMMARY");
+    expect(landed?.textContent).toContain("Release 72");
+  });
+
+  it("stays on the Deploys tab when the contents is used", async () => {
+    /* The other half of the fragment hazard: not only must the contents avoid
+       writing the hash, using it must leave the hash — and therefore the
+       mounted panel — alone. A control that navigates away from the page it is
+       part of is the failure this whole shape was chosen to avoid. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    act(() => jumpButton(72)?.click());
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe("#deploys");
+    expect(container.textContent).toContain("Jump to a release");
+  });
+
+  it("puts the scroll offset on the element it actually scrolls", async () => {
+    /* **A browser pass caught this and no unit test could have.** The offset
+       was on the `Card` wrapping each row while `jump` calls `scrollIntoView`
+       on the `<details>` inside it — and `scroll-margin` is read off the
+       target, never off an ancestor, so it did nothing. What that looks like:
+       the jump works, the right row opens, and the release line you aimed at
+       is behind the 62 px sticky masthead, so you land in the middle of a
+       deploy with no heading saying which.
+
+       jsdom does no layout and loads no stylesheet, so the assertable thing is
+       the pairing rather than the pixel: **the element that gets scrolled
+       carries the class, and that class is the one the stylesheet gives a
+       scroll margin.** Either half alone passes while the page is broken — a
+       class with no rule behind it, or a rule nothing wears. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    for (const row of rows()) {
+      expect(row.className, "the scroll target does not carry the class").toContain("deploy-row");
+    }
+
+    /* `process.cwd()`, which is what the `dangerouslySetInnerHTML` guard lower
+       down this file uses — this suite is jsdom, so `import.meta.url` is an
+       `http:` URL and `readFileSync` refuses it. */
+    const css = readFileSync(join(process.cwd(), "tools/fleet/web/src/tailwind.css"), "utf8");
+    /* The guard against a guard that has stopped looking: an empty or moved
+       file would make the assertion below vacuous rather than red. */
+    expect(css.length).toBeGreaterThan(1000);
+    /* And the offset itself accounts for the notch: the masthead adds
+       `--safe-top`, so a fixed 80px puts the row back underneath it on a real
+       iPhone while a 390px desktop emulation passes happily. GPT Sol's P2. */
+    expect(css).toMatch(/\.deploy-row\s*\{[^}]*scroll-margin-top:[^;]*--safe-top/);
+  });
+
+  it("navigates with buttons, never with a fragment link", async () => {
+    /* **The hazard this design walks straight into.** The page's mode lives in
+       the URL fragment and `parseHash` falls back to `sessions` for a name it
+       does not know — so `<a href="#deploy-72">` would not scroll to a deploy,
+       it would throw the reader onto the Sessions tab and take the panel with
+       it. There is no test anywhere else that would notice. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    const fragmentLinks = [...container.querySelectorAll("a")].filter((a) =>
+      (a.getAttribute("href") ?? "").startsWith("#"),
+    );
+    expect(
+      fragmentLinks.map((a) => a.getAttribute("href")),
+      "a fragment link on this page rewrites the mode and loses the tab",
+    ).toEqual([]);
+  });
+
+  it("names the day groups for a reader who cannot see them", async () => {
+    /* **The day structure was purely visual.** Tabbing the contents gave "Jump
+       to release 74", "Jump to release 73" and so on, with the dates sitting
+       alongside as unassociated `<span>`s — so a sighted reader got an index
+       organised by day and a screen-reader reader got a flat run of numbers.
+       GPT Sol's P3, round 2. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(threeDeploys).api);
+    await act(async () => undefined);
+
+    const nav = container.querySelector("nav");
+    expect(nav, "the index is not a landmark").not.toBeNull();
+    expect(container.querySelector(`[id="${nav?.getAttribute("aria-labelledby")}"]`)?.textContent).toBe(
+      "Jump to a release",
+    );
+
+    const groups = [...container.querySelectorAll('[role="group"]')];
+    expect(groups).toHaveLength(2);
+    /* Each group is named by the day it holds — and named by the element a
+       sighted reader is looking at, not by a duplicate string. */
+    expect(
+      groups.map((g) => container.querySelector(`[id="${g.getAttribute("aria-labelledby")}"]`)?.textContent),
+    ).toEqual(["Tue 8 Sep 2026", "Mon 7 Sep 2026"]);
+  });
+
+  it("does not index a record of one against itself", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport);
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("Release 74");
+    expect(container.textContent).not.toContain("Jump to a release");
+  });
 });
 
 describe("box health, whose shape belongs to somebody else", () => {

@@ -337,8 +337,33 @@ a careful evidentiary document rather than a decision display. The order to buil
 3. **Any caveat that changes that decision**, immediately adjacent to it.
 4. **Provenance, old incidents and the second clock**, progressively disclosed.
 
-- [ ] Rewrite to that hierarchy, using `StatCard` for (2). Before/after pair at both widths.
-- [ ] Cut the duplication found in Stage 1: three non-answers printed twice on one screen.
+- [x] Rewrite to that hierarchy, using `StatCard` for (2). Before/after pair at both widths in
+      `260909c-dashboard-design-system-screenshots/`.
+- [ ] Cut the duplication found in Stage 1: three non-answers printed twice on one screen. **Still
+      open** — the second copy is under the 24-hour chart in `UsageHistory.tsx`, untouched so far.
+
+#### Two defects the tests could not have caught, found by looking at the picture
+
+Both were mine, both were in the component written to prevent exactly them, and both were found
+after the suite was green. Recorded because the *shape* is the lesson:
+
+- **A window whose `kind` is `unknown` was mapped to the `unavailable` state.** That arm means *a
+  number arrived and cannot be shown to be valid* — typically no `resets_at`. Nothing failed. The
+  consequence was **three red alarm cards on a tab whose verdict is "cannot tell"**: a gap painted
+  as a fault, which is a misattribution and alert fatigue at once. It is `withheld` now, which is
+  what that state exists for. **No test could have caught it**, because both are honest absences
+  and every assertion is about which words appear, not about how alarming the page reads.
+- **The producer's own sentence was printed twice.** For an expired window the card prefixed `why`
+  with *"this window has already reset, so the cached number describes nothing: "* — and `why`
+  already says exactly that. Eleven lines in one grid cell, on the tab whose entire complaint is
+  that it is a wall of text. The prefix is gone; the state word `Unknown` carries what it was
+  carrying.
+
+The general form, which is now the last item in
+[design-a-screen.md § Afterwards](../reusable/design-a-screen.md): **a suite that asserts which
+words appear cannot see how a screen reads.** Both of these were a green suite and a wrong picture,
+and the only instrument that found them was a screenshot looked at by someone asking whether the
+answer was where it should be.
 - [ ] Decide the three-zone timestamps. They are deliberate — Greg moves between London and Athens —
       but they are a large fraction of the tab's height, and the ten-second test says a wall-clock
       instant in three zones changes belief rather than action for every line except the *next

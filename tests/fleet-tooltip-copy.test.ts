@@ -57,6 +57,13 @@ import {
 } from "../tools/fleet/web/src/SessionsPanel";
 import { CLAIM_TIPS, COUNT_TIPS } from "../tools/fleet/web/src/Header";
 import { SPEAKER_TIPS } from "../tools/fleet/web/src/Turn";
+/* The Usage tab's stat cards, exported for this guard rather than written
+   inline — session `dashboard-design-system`, 2026-09-09, on this file's own
+   author pointing out that a tip written inline in a component gets none of the
+   three rules below and does not count towards the floor. `usageWindowTip` is
+   computed from a window, so it is registered on one value each way, like
+   `instantTip`. */
+import { USAGE_TIPS, usageWindowTip } from "../tools/fleet/web/src/UsagePanel";
 import {
   BADGE_TIPS,
   FACT_TIPS,
@@ -240,6 +247,16 @@ function everyTip(): [string, Tip][] {
        — an instant it cannot parse — is covered in fleet-speaker-tips. */
     ["instantTip", instantTip("2026-09-08T23:40:00.000Z")],
     ["badgeTip(unknown)", badgeTip("a badge from a newer server")],
+    [
+      "usageWindowTip(value)",
+      usageWindowTip({
+        kind: "value",
+        window: "five_hour",
+        utilizationPercent: 40,
+        resetsAt: "2026-09-09T12:00:00.000Z",
+      }),
+    ],
+    ["usageWindowTip(unknown)", usageWindowTip({ kind: "unknown", window: "five_hour", why: "no resets_at on it" })],
   ];
   const maps: [string, Record<string, Tip>][] = [
     ["MODE_TIPS", MODE_TIPS],
@@ -252,6 +269,7 @@ function everyTip(): [string, Tip][] {
     ["BADGE_TIPS", BADGE_TIPS],
     ["PROBLEM_TIPS", PROBLEM_TIPS],
     ["FACT_TIPS", FACT_TIPS],
+    ["USAGE_TIPS", USAGE_TIPS],
   ];
   for (const [name, map] of maps) {
     for (const [key, tip] of Object.entries(map)) out.push([`${name}.${key}`, tip]);

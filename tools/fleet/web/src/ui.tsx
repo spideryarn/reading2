@@ -231,6 +231,25 @@ export type StatValue =
  * card becomes the trigger and the sentence lands in its accessible name.
  * `health-view.ts` already computes a `Tip` per stat, so its tiles get theirs
  * for free.
+ *
+ * **PASSING A `tip` ASSERTS THAT THE CARD IS NOT OTHERWISE INTERACTIVE**, and
+ * nothing will tell you when that stops being true. `Explain` wraps its child in
+ * a `<button>`; the day a stat card gains a link or a drill-in, that is a button
+ * inside a button — invalid HTML, announced as one control, and **it renders
+ * perfectly**. If a caller makes a card actionable, the tip has to become a
+ * `Tooltip` plus an `sr-only` span on a non-button element instead. Session
+ * `dashboard-tooltips` hit exactly this with the queue badge on 2026-09-09,
+ * which is why it is written down here rather than learned twice.
+ *
+ * The other cost of a block trigger, worth knowing before adding one: the
+ * accessible name is the button's whole contents, so a card with a tip
+ * announces label + value + evidence as well as the tip. That is correct rather
+ * than a bug, and it is a reason to ask whether a given stat's tip is earning
+ * its place — but it is a difference of *length* only. **The tip itself is
+ * announced twice on every trigger on this page, word or block**: `Explain`
+ * puts the sentence in an `sr-only` span and `useRole` also wires the open card
+ * up as `aria-describedby`. That predates this component and is not something a
+ * block trigger introduced, so do not "fix" it here.
  */
 export function StatCard({
   label,
