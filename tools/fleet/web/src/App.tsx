@@ -239,8 +239,11 @@ export function App({
                  otherwise a rollback puts this tab back to its pre-stage
                  appearance with nothing saying why. GPT Sol's P1. */
               overseer={feed.state === null ? null : feed.state.overseer}
+              /* The same distinction one field along, and for the same reason. */
+              usage={feed.state === null ? null : feed.state.usage}
               now={now}
               receivedAt={feed.receivedAt}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
         ) : null}

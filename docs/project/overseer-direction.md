@@ -439,13 +439,14 @@ holds.
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
 file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
-shape. Five files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+shape. Six files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
 
 | file | what it is | who may read it |
 |---|---|---|
-| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, and the session register | anyone, any time |
+| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, the session register, the attention inbox and the last usage reading | anyone, any time |
 | `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
 | `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
+| `attention.json` | the attention pass's memory (schema 1; keys `epoch`, `waits`, `verdicts`): when each session was first seen asking each question, and the cached model verdict per `tailFingerprint` | the daemon only |
 | `last-snapshot.json` | the differ's baseline — the last snapshot seen, so a restart emits changes rather than re-announcing the fleet | the daemon only |
 | `overseer.lock` | the single-writer claim | the daemon only |
 
@@ -454,6 +455,12 @@ shape. Five files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
 daemon's private working state rather than part of the seam, which is why it was easy to leave out
 and why it is listed anyway: a reader deciding what `~/.overseer` contains should not have to discover
 a fifth file by running `ls`.
+
+**And it said "five files" until 2026-09-08 evening, when `attention.json` turned out to be the sixth**
+— found by the Baseline census of plan [260908f](../plans/260908f-overseer-and-fleet-improvement-roadmap.md).
+Same class as the omission above and the same cure: it is the attention pass's private memory rather
+than part of the seam, so nothing outside the daemon reads it, and it is listed for exactly the reason
+`last-snapshot.json` is.
 
 **Reads are lock-free and writers are single**, which is what makes this a seam rather than a
 coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
