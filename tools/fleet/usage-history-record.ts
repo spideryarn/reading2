@@ -84,6 +84,24 @@
  * the chart every time a single transcript was unreadable.
  */
 
+/*
+ * THE INCIDENT AND ITS MERGE RULE LIVE NEXT DOOR, and are re-exported here so
+ * this module stays the one place a reader looks for "what is in a record".
+ *
+ * They were defined HERE until 2026-09-09, and the browser's series layer had
+ * grown a second hand-written copy of the same rule while this one had no
+ * production caller at all. Two implementations of one contract is how they
+ * drift; the split is so both sides import the same function. It could not
+ * simply stay here because the browser has to import it and this module reaches
+ * for `Buffer` to enforce the line-size ceiling.
+ */
+export {
+  mergeIncidents,
+  type HistoryIncident,
+  type IncidentSighting,
+  type MergedIncident,
+} from "./usage-incident-merge.js";
+
 /** The envelope. Bumped if the LINE's shape changes. */
 export const LINE_SCHEMA = 1;
 
@@ -155,23 +173,7 @@ export type CacheObservation =
   | { kind: "unattributed"; why: string }
   | { kind: "unknown"; why: string };
 
-/**
- * Narrower than the UI's `UsageIncident`: a conversation COUNT rather than the
- * uuid list, which the chart does not need repeated every five minutes.
- *
- * `id` is the producer's derived `` `${window}@${resetsAt}` `` — stable across
- * passes, which is what makes merging possible at all.
- */
-export type HistoryIncident = {
-  id: string;
-  window: string;
-  resetsAt: string;
-  firstHitAt: string | null;
-  lastHitAt: string | null;
-  rejections: number;
-  unidentifiedRejections: number;
-  conversations: number;
-};
+import type { HistoryIncident } from "./usage-incident-merge.js";
 
 export type ScanObservation = {
   /** Whether the transcript scan finished. An incomplete scan's counts are floors, not totals. */
@@ -229,21 +231,6 @@ export type DecodedLine =
    */
   | { kind: "unsupported"; summarySchema: number | null; why: string }
   | { kind: "unreadable"; why: string };
-
-export type MergedIncident = HistoryIncident & {
-  /**
-   * Whether `rejections`/`conversations` came from a scan that finished.
-   *
-   * Counts from disjoint incomplete scans cannot be unioned exactly without raw
-   * hit ids, which this format does not store. That is only acceptable because
-   * the UI can say what the number means — "most seen in one complete scan",
-   * never "rejections in these 24 hours". This flag is what lets it.
-   */
-  fromConclusiveScan: boolean;
-  /** Two records disagreed about an invariant, so neither can be published. */
-  unreadable: boolean;
-  why: string | null;
-};
 
 function truncateWhy(why: string): string {
   return why.length <= MAX_WHY_CHARS ? why : `${why.slice(0, MAX_WHY_CHARS)}… (truncated for the history)`;
@@ -357,96 +344,5 @@ export function decodeUsageHistoryLine(raw: string): DecodedLine {
   return { kind: "line", line: record as unknown as UsageHistoryLine };
 }
 
-type Counts = Pick<HistoryIncident, "rejections" | "unidentifiedRejections" | "conversations">;
-
-/**
- * Which of two sightings of one incident supplies the counts.
- *
- * The rule is not "the larger number wins", because the numbers are not
- * comparable across scans of different completeness: **a scan that stopped early
- * saw fewer rejections, not a corrected number.** So a conclusive sighting always
- * displaces an inconclusive one even if its count is lower, two sightings of the
- * same completeness take the maximum, and an inconclusive sighting never
- * overwrites a conclusive one.
- */
-function mergeCounts(seen: MergedIncident, incident: HistoryIncident, sampleConclusive: boolean): Counts {
-  if (sampleConclusive && !seen.fromConclusiveScan) return incident;
-  if (sampleConclusive !== seen.fromConclusiveScan) return seen;
-  return {
-    rejections: Math.max(seen.rejections, incident.rejections),
-    unidentifiedRejections: Math.max(seen.unidentifiedRejections, incident.unidentifiedRejections),
-    conversations: Math.max(seen.conversations, incident.conversations),
-  };
-}
-
-function earlier(a: string | null, b: string | null): string | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return Date.parse(a) <= Date.parse(b) ? a : b;
-}
-
-function later(a: string | null, b: string | null): string | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return Date.parse(a) >= Date.parse(b) ? a : b;
-}
-
-/**
- * **The merge contract. A stable id is not one on its own.**
- *
- * The same rejection sits in every five-minute scan until it expires or leaves
- * the eight-day scan window, and the incident gets RICHER as more of it is seen
- * — the card's own committed test constructs exactly that: one rejection on the
- * first pass, two rejections and another conversation on the second, same id.
- *
- * So neither "first wins" nor "last wins" is safe. First-wins permanently
- * under-reports and truncates the span; last-wins lets an incomplete scan
- * replace richer evidence with poorer. The rules instead:
- *
- *  - the span widens to the earliest and latest instants ever observed;
- *  - the counts are the largest seen in a **conclusive** scan, falling back to
- *    the largest inconclusive one with `fromConclusiveScan: false` so the UI can
- *    say which it is;
- *  - `window` and `resetsAt` must agree across occurrences. If they do not, one
- *    of the records is lying about what it observed and the incident is
- *    `unreadable` rather than resolved by picking a side.
- *
- * An incident with no known hit time is kept, **unplaced**. Pinning it to scan
- * time would claim the rejection happened when we happened to look.
- */
-export function mergeIncidents(
-  samples: readonly { conclusive: boolean; incidents: readonly HistoryIncident[] }[],
-): MergedIncident[] {
-  const merged = new Map<string, MergedIncident>();
-  for (const sample of samples) {
-    for (const incident of sample.incidents) {
-      const seen = merged.get(incident.id);
-      if (seen === undefined) {
-        merged.set(incident.id, {
-          ...incident,
-          fromConclusiveScan: sample.conclusive,
-          unreadable: false,
-          why: null,
-        });
-        continue;
-      }
-      if (seen.window !== incident.window || seen.resetsAt !== incident.resetsAt) {
-        merged.set(incident.id, {
-          ...seen,
-          unreadable: true,
-          why: `two records disagree about this incident: window ${seen.window}/${incident.window}, resets ${seen.resetsAt}/${incident.resetsAt}`,
-        });
-        continue;
-      }
-      if (seen.unreadable) continue;
-      merged.set(incident.id, {
-        ...seen,
-        ...mergeCounts(seen, incident, sample.conclusive),
-        firstHitAt: earlier(seen.firstHitAt, incident.firstHitAt),
-        lastHitAt: later(seen.lastHitAt, incident.lastHitAt),
-        fromConclusiveScan: seen.fromConclusiveScan || sample.conclusive,
-      });
-    }
-  }
-  return [...merged.values()];
-}
+// The merge contract and its types live in `usage-incident-merge.ts` - see the
+// re-export near the top of this file for why.
