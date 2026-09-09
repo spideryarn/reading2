@@ -80,6 +80,18 @@ the scan result and the publication decision as three separate facts.
 An earlier design folded them together, and would have dropped a real, attributed utilisation point
 off the chart every time a single transcript could not be opened.
 
+## The Codex subscription reading
+
+The Codex card uses `account/rateLimits/read` from the Codex app-server. Every observation is a real
+fetch from the service, not a locally cached value. Its `primary` and `secondary` fields are positions,
+not window names: the duration identifies the window, and the same position can mean five hours in
+one bucket and seven days in another.
+
+At short range the reported percentage is non-monotonic: readings seconds apart can oscillate by a
+full point. A threshold therefore flaps without hysteresis, and a one-point drop is not evidence of a
+refund. The measurements and source details are in
+[plan 260909d](../plans/260909d-read-the-codex-subscription-usage-limits-and-show-them-beside-claude-s.md#stage-1-research-where-the-number-lives-done).
+
 ## What the chart may not claim
 
 Each of these is a way a usage chart is confidently wrong, and each has a test.

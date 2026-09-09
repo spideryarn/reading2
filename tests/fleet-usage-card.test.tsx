@@ -85,7 +85,7 @@ function screen(): string {
 
 function draw(usage: UsageView | null, now: number, receivedAt: number | null = now): void {
   act(() =>
-    root.render(<UsageCard usage={usage} now={now} receivedAt={receivedAt} skew={CLOCK_SKEW_UNMEASURED} />),
+    root.render(<UsageCard usage={usage} codex={null} now={now} receivedAt={receivedAt} skew={CLOCK_SKEW_UNMEASURED} />),
   );
 }
 
@@ -720,7 +720,7 @@ describe("the card, against its own clock", () => {
     });
     act(() =>
       root.render(
-        <UsageCard usage={feed} now={BASE} receivedAt={BASE} skew={{ kind: "known", ms: skewMs }} />,
+        <UsageCard usage={feed} codex={null} now={BASE} receivedAt={BASE} skew={{ kind: "known", ms: skewMs }} />,
       ),
     );
     /* CORRECTED: one minute by the box's clock is one minute here. Uncorrected

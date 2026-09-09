@@ -148,8 +148,83 @@ export function usageHistoryDaemonOptions(
  * (docs/reusable/silent-success.md). Likewise an expired cached window prints
  * its `why`, never a percentage: there is no percentage on that arm to print.
  */
-function usageLines(report: UsageReport): string[] {
-  const out: string[] = [];
+type CodexValueReading = Extract<CodexUsageReading, { kind: "value" }>;
+
+function codexBucketLines(bucket: CodexValueReading["buckets"][number], general: boolean): string[] {
+  /* Padded to the 10-column label gutter every other line in this output uses
+     — `account`, `reading`, `resets`, and the bare 10-space continuation
+     indent. Unpadded, `model` sat three characters left of `headroom` and the
+     bucket rows stopped lining up with their own headings. */
+  const out = [`${(general ? "headroom" : "model").padEnd(8)}  ${bucket.limitName ?? bucket.limitId}`];
+  if (bucket.rateLimitReachedType !== null) {
+    out.push(`          RATE LIMIT REACHED — ${bucket.rateLimitReachedType || "type not named"}`);
+  }
+  if (bucket.spendControlReached === true) out.push("          SPEND CONTROL REACHED");
+
+  const slots = new Map<string, typeof bucket.windows>();
+  for (const window of bucket.windows) {
+    const group = slots.get(window.slot) ?? [];
+    group.push(window);
+    slots.set(window.slot, group);
+  }
+  if (slots.size === 0) out.push("          no windows were reported");
+  for (const [slot, windows] of slots) {
+    if (windows.length !== 1) {
+      out.push(`          ${slot}: could not tell — duplicate ${slot} windows`);
+      continue;
+    }
+    const window = windows[0]!;
+    const duration =
+      window.windowMinutes === 300
+        ? "5 hours"
+        : window.windowMinutes === 10_080
+          ? "7 days"
+          : window.windowMinutes === null
+            ? `${slot} window (duration unknown)`
+            : `${window.windowMinutes} minutes`;
+    out.push(
+      window.kind === "value"
+        ? `          ${duration}: ${window.usedPercent}% used, resets ${when(window.resetsAt)}`
+        : `          ${duration}: unknown — ${window.why}`,
+    );
+  }
+  return out;
+}
+
+function codexUsageLines(codex: CodexUsageReading): string[] {
+  const out = ["Codex subscription"];
+  if (codex.kind === "unknown") {
+    out.push(`account   could not tell: ${codex.why}`);
+    out.push(`reading   unavailable${codex.retryable ? " — retryable" : ""}`);
+    return out;
+  }
+
+  out.push(`account   ${codex.accountId ?? "unattributed"}`);
+  out.push(`reading   at ${when(codex.readAt)}`);
+  const buckets = new Map<string, typeof codex.buckets>();
+  for (const bucket of codex.buckets) {
+    const group = buckets.get(bucket.limitId) ?? [];
+    group.push(bucket);
+    buckets.set(bucket.limitId, group);
+  }
+  if (!buckets.has("codex")) out.push("headroom  could not tell: no general codex bucket (model-specific buckets do not stand in)");
+  for (const [limitId, group] of buckets) {
+    if (group.length !== 1) {
+      out.push(`${limitId === "codex" ? "headroom" : "bucket"}  could not tell: duplicate ${limitId} buckets`);
+      continue;
+    }
+    out.push(...codexBucketLines(group[0]!, limitId === "codex"));
+  }
+  out.push(
+    codex.resetCredits === null
+      ? "resets    could not tell how many full resets are available"
+      : `resets    ${codex.resetCredits} full reset ${codex.resetCredits === 1 ? "credit" : "credits"} available`,
+  );
+  return out;
+}
+
+export function usageLines(report: UsageReport, codex: CodexUsageReading): string[] {
+  const out: string[] = ["Claude subscription"];
   const a = report.account;
   out.push(
     a.kind === "value"
@@ -220,7 +295,46 @@ function usageLines(report: UsageReport): string[] {
     }
   }
   out.push(`took      ${report.tookMs}ms, at ${when(report.collectedAt)}`);
+  out.push("", ...codexUsageLines(codex));
   return out;
+}
+
+/** The old report remains at the top level; Codex is an additive JSON field. */
+export function usageJson(report: UsageReport, codex: CodexUsageReading): UsageReport & { codex: CodexUsageReading } {
+  return { ...report, codex };
+}
+
+/** The complete `overseer usage` action, injectable so both output paths are exercised without live reads. */
+export async function runUsageCommand(
+  parsed: Extract<Parsed, { command: "usage" }>,
+  deps: {
+    claude: typeof collectUsage;
+    codex: typeof collectCodexUsage;
+    out(line: string): void;
+  } = { claude: collectUsage, codex: collectCodexUsage, out: console.log },
+): Promise<number> {
+  const [claudeResult, codexResult] = await Promise.allSettled([
+    Promise.resolve().then(() => deps.claude({
+      ...(parsed.sinceHours === undefined ? {} : { sinceMs: parsed.sinceHours * 3600_000 }),
+      ...(parsed.maxTranscripts === undefined ? {} : { maxTranscripts: parsed.maxTranscripts }),
+    })),
+    Promise.resolve().then(() => deps.codex()),
+  ]);
+  if (claudeResult.status === "rejected") throw claudeResult.reason;
+  const codex: CodexUsageReading =
+    codexResult.status === "fulfilled"
+      ? codexResult.value
+      : {
+          kind: "unknown",
+          why: `the Codex usage collector rejected: ${codexResult.reason instanceof Error ? codexResult.reason.message : String(codexResult.reason)}`,
+          retryable: true,
+        };
+  deps.out(
+    parsed.json
+      ? JSON.stringify(usageJson(claudeResult.value, codex), null, 2)
+      : usageLines(claudeResult.value, codex).join("\n"),
+  );
+  return 0;
 }
 
 /**
@@ -863,13 +977,7 @@ async function runParsed(parsed: Parsed): Promise<number> {
       // The nonsense-number arms that used to live here are now `positiveNumber`
       // above, which refuses at parse time — so a bad `--max-transcripts` never
       // reaches this body at all, rather than reaching it as `NaN`.
-      const report = await collectUsage({
-        ...(parsed.sinceHours === undefined ? {} : { sinceMs: parsed.sinceHours * 3600_000 }),
-        ...(parsed.maxTranscripts === undefined ? {} : { maxTranscripts: parsed.maxTranscripts }),
-      });
-      if (parsed.json) console.log(JSON.stringify(report, null, 2));
-      else console.log(usageLines(report).join("\n"));
-      return 0;
+      return await runUsageCommand(parsed);
     }
     case "mine":
       return runMine(root, parsed);
