@@ -274,11 +274,37 @@ Stages 2–4 and, where they bear on Stage 1, in a follow-up commit.
       load/memory from `collectHealth()`, the daemon/scheduler/usage/register/inbox block from
       `statusLines()`, the direct five-hour read from `parseUsageCache()` with the 55/70/85
       thresholds named, and the last assistant line for each name in `mine`.
-- [ ] Tests against a fake dashboard (fixtures for `/api/state` and `/api/messages`) and a fixture
+- [x] Tests against a fake dashboard (fixtures for `/api/state` and `/api/messages`) and a fixture
       `~/.claude.json`: a stale cache is dated, an absent one is *unknown* and never 0%, a session in
       `mine` that the dashboard cannot see says so rather than being omitted.
 
-Status: not started.
+**Status: done. Implemented by GPT Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`) from
+[260909d-stage2-codex-task.md](260909d-stage2-codex-task.md); its answer is
+[260909d-stage2-codex-answer.md](260909d-stage2-codex-answer.md). I reviewed the diff, ran the tests
+and typecheck outside its sandbox, and exercised the real command against the live box. This is the
+first stage under Greg's 2026-09-09 instruction to delegate implementation to GPT while the Claude
+weekly window is at 76%.
+
+Verified rather than taken on report: 87 tests green across the four suites, `npm run typecheck`
+exit 0, `npx tsx scripts/overseer.ts tick` and `… last <session>` both correct against the live
+fleet. **Codex reported one test failing in its sandbox and it was not its code** — `tsx` is denied
+its Unix IPC socket there, so the two child processes in the lost-update test cannot start; both
+pass here.
+
+Three things worth keeping:
+
+- **The `messages-client.ts` reuse did not work, for a checkable reason.** Importing the browser's
+  parser drags `tools/fleet/web/src/messages-client.ts` into the root NodeNext project, where its
+  Vite-valid extensionless `./types` import is TS2835. Fixing that is a `tools/fleet/` edit, outside
+  the file set, so `cli-messages.ts` preserves the same four-arm contract locally. The shared core is
+  still the right end state.
+- **The skipped-session list is one line, not one per session.** The first shape printed
+  *"not in mine; last turn not fetched"* for every session — honest and unreadable: thirteen of them
+  pushed the register, the inbox and the usage band off a screen the Overseer reads under time
+  pressure. Collapsed, every skipped name is still printed and counted. **The two reasons stay
+  distinct**, because "not in mine" is a choice and "the list could not be read" means nothing was
+  fetched for anybody — a broken tick wearing a quiet tick's clothes. Mutation checked.
+- **Codex's own test caught my change to it**, which is the thing you want from a delegated test.
 
 ### Stage 1a — Sol's Stage-1 fixes
 
