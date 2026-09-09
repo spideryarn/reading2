@@ -225,6 +225,27 @@ describe("add and register identity", () => {
     expect(records(root)[0]).toMatchObject({ question: payload().question });
   });
 
+  test("a reused command id with the same file but a different --by is a conflict, not a retry", () => {
+    /* The narrower edge my first fix left open, found by GPT Sol reviewing it.
+       `--by` is who RECORDED the decision and it is a self-declaration the
+       record is built on — so the same words filed by a different actor is a
+       different command. It also has to agree with the fold, whose own
+       `commandPayload` includes `by`: two layers with different rules for the
+       same key is the shape of the original bug, one level down. */
+    const root = tempRoot();
+    const file = join(root, "a.json");
+    writeFileSync(file, JSON.stringify(payload()));
+
+    const first = run(root, ["add", "--file", file, "--by", "overseer", "--command-id", "same-key"]);
+    const second = run(root, ["add", "--file", file, "--by", "greg", "--command-id", "same-key"]);
+
+    expect(first.status).toBe(0);
+    expect(second.status).not.toBe(0);
+    expect(second.stderr).toMatch(/same-key/);
+    expect(records(root)).toHaveLength(1);
+    expect(records(root)[0]).toMatchObject({ recordedBy: "overseer" });
+  });
+
   test("add writes a well-formed decided event and prints its id and version", () => {
     const root = tempRoot();
     const file = join(root, "decision.json");
