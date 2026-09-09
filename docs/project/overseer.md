@@ -48,7 +48,9 @@ briefed with [engineering-manager.md](../reusable/engineering-manager.md) and to
 guidance from GPT Sol and product or wording arbitration from Fable rather than from you — so that
 your context stays a record of the fleet and not of one job's details. The same goes for your own
 tooling: when you find yourself repeating a recipe, specify a tool in a brief and let an agent build
-and test it (the `overseer` CLI in `scripts/overseer.ts` is where such things live). Greg,
+and test it (the `overseer` CLI in `scripts/overseer.ts` is where such things live — `overseer tick` is the
+half-hourly screen, `overseer last <session>` reads an agent's recent turns, and `overseer mine` is
+the list of sessions it fetches turns for). Greg,
 2026-09-09: *"your job is to oversee, not to do … for any non-trivial implementation, you're better
 off delegating … so that you can keep your context clean."*
 
