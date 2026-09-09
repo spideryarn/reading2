@@ -127,14 +127,16 @@ not what the acceptance asks for. **Recorded for the Overseer as the obvious nex
 
 `projectRegister` currently drops every `idle` entry from the history card: *"an idle session that
 has been idle for six hours wants nothing"*. That filter is exactly what would hide the four codex
-sessions this stage exists to find. **An idle entry with recognised child work is kept**; an idle
-entry with none, or with a `cannot-tell`, is dropped as before. The rank is unchanged.
+sessions this stage exists to find. **An idle entry with recognised child work is kept.** An idle
+entry with measured `none` is still dropped; `cannot-tell` and a missing scan entry are kept, because
+filtering either would render an unmeasured absence as idle. The rank is unchanged.
 
 **And the card's sentence changes with it**, on Sol's fifth finding. Today it claims *these are the
 ones that have waited longest*, and an idle row admitted for an 18-minute review may sort first
 because it went idle six hours ago — which is not a wait. The card now says what it is: the oldest
-status records worth showing — non-idle sessions, and idle sessions with recognised child work — and
-the tooltip says the order is by pane-status age, not by child-work age.
+status records worth showing — non-idle sessions, idle sessions with recognised child work, and idle
+sessions without a usable pane reading — and the tooltip says the order is by pane-status age, not
+by child-work age.
 
 ## Product default, recorded rather than asked
 
@@ -345,6 +347,78 @@ fixes-only second round ([review artefact](260909h-stage3-code-review-sol.md)):
 join; all four TypeScript projects clean when run directly; fleet production build and diff check
 clean. The `npm run typecheck` wrapper itself could not open tsx's IPC socket in this sandbox, so its
 four underlying projects were run separately.
+
+### Round 4: independent review of stage 3
+
+An independent review on 2026-09-10 refused the candidate on five established P1s, all fixed
+red-first without changing the register when only work was bad:
+
+- **F17:** the row filter discarded idle `cannot-tell` and missing-pane readings, and `HistoryRow`
+  rendered a meaningful `work: null` as silence. Both facts now remain visible and distinct from
+  measured `none`; the all-idle sentence names pane status and says what the scan did or did not know.
+- **F18:** a scan could predate the inventory it claimed to describe. The projection now requires
+  `sourceCollectedAt <= scannedAt <= writtenAt` as well as exact inventory equality.
+- **F19:** the exact-inventory check covered `scan` but not `probe-failed`, so an old probe failure
+  could be attributed to the current register. Both attempted arms now enforce the same provenance.
+- **F20:** the parsers shape-checked `ranForMs`, starts, depths and counts without checking that the
+  facts agreed. Both boundaries now reject incoherent durations, impossible ancestry/counts and
+  duplicate job pids, while preserving bare panes and genuinely unknown job starts.
+- **F21:** duplicate register keys attached one pane measurement to two sessions. The register now
+  becomes unreadable on a repeated join key rather than duplicating the claim.
+
+**F22 (P2) was fixed:** the end-to-end test used the four named implementations but passed the
+projection object directly to `parseOverseer`; it did not cover `statePayload`, JSON serialization or
+the top-level `parseFleetState` field. It now does. The source stream and process-table probe remain
+controlled inputs, and the HTTP route/default `probeProcessTable` adapter remain outside its claim.
+
+**F23 (P2) remains wider than stage 3:** `PaneWork.jobs` is typed as an ordinary array even though
+the producer and both parsers require it to be non-empty. That is why `workLine` still carries the
+otherwise unreachable “positive reading carried no job” sentence. The complete fix is a non-empty
+tuple through the wire and the stage-1 store parser, not another renderer branch.
+
+**F24 (P2) was fixed:** the parser tests did not assert the cases Round 3 said were preserved or
+rejected: `inspected: 0`, unknown job starts, equality with the scan clock, future job starts and
+depth zero. After the missing assertions were added, removing the depth-zero checks at both
+boundaries made both strengthened suites fail until the checks were put back.
+
+**Gates after Round 4:** all five requested focused suites green (518 tests), the TypeScript wrapper
+clean across all four projects, scoped lint without errors, and diff check clean. The whole suite was
+not run, as this review explicitly excludes it.
+
+### What it actually says about this box — measured, 2026-09-10 00:18 UTC
+
+The suite proves the wire carries a reading. It cannot say whether the reading is worth having, so I
+ran the same computation by hand against the live `~/.overseer/current.json` register and one real
+`ps`. Read-only; the live daemon was not restarted and still runs the old code.
+
+```
+register: 20 sessions, last inventory 2026-09-09T23:17:09.965Z
+
+  18  none
+   2  work
+
+  shell:true  codex-round2-260909g-2351-1382811   GPT review (codex exec) running 27m, depth 5
+  shell:true  bc-s3rev-0004-1444220               GPT review (codex exec) running 13m, depth 5
+
+idle sessions: 10; of those RETAINED on the card by the new rule: 0
+```
+
+Three things worth having written down:
+
+1. **It finds real work.** Two live `codex exec` reviews, at depth 5, with honest durations. Both are
+   other agents' Sol reviews, running while this was measured.
+2. **And it did NOT find an idle-but-working session at this instant.** Both rows already read as
+   `shell:true`, so the dashboard already knew something was running in them. **This is the
+   direction doc's caveat coming true rather than a disappointment** — what work evidence adds here
+   is *which* review and *how long*, not the discovery that the pane is busy. The original finding's
+   four `idle` rows were a different moment; nothing in this measurement contradicts it, and nothing
+   in it confirms that this stage fixes it either. Claiming otherwise would be the kind of
+   unearned conclusion this whole area exists to refuse.
+3. **The crowding risk from F17 measures zero today.** Retaining idle `cannot-tell` rows could have
+   filled an eight-row card and pushed out the sessions worth acting on; on this box, right now, no
+   pane classifies as `cannot-tell` at all. **That is one snapshot, not a rule** — a survey cannot see
+   a state that happens to be absent — so it is a reason to stop worrying now and a reason to look
+   again once the daemon has been running this code for a day.
 
 ### Stage 4 — gates, review, docs
 

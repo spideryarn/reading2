@@ -33,7 +33,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readCheckpointFeeds } from "../tools/fleet/overseer-status.js";
 import { statePayload } from "../tools/fleet/state.js";
-import type { OverseerRegisterWork, PaneWork } from "../tools/fleet/wire.js";
+import type { OverseerRegisterWork, PaneJob, PaneWork } from "../tools/fleet/wire.js";
 import { OverseerStatusCard } from "../tools/fleet/web/src/OverseerPanel";
 import { CLOCK_SKEW_UNMEASURED, parseFleetState, parseOverseer, type OverseerView } from "../tools/fleet/web/src/types";
 import { identityOf, sessionKey, statusKey, type OverseerEvent } from "../tools/overseer/diff.js";
@@ -430,7 +430,7 @@ describe("the history, which is history", () => {
       NOW,
     );
     expect(screen()).toContain("pane: idle · work: GPT review, running 18m");
-    expect(screen()).toContain("Work checked 1m ago");
+    expect(screen()).toContain("Process table read 1m ago");
   });
 
   it("freezes a stale scan's duration and says when it was checked", () => {
@@ -462,6 +462,34 @@ describe("the history, which is history", () => {
     );
     expect(screen()).toContain("pane: working · work: cannot tell — the pane start could not be read");
     expect(screen()).not.toContain("work: idle");
+    expect(screen()).not.toContain("nothing recognised");
+  });
+
+  it("keeps an idle cannot-tell visible instead of summarising it as idle", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [
+          {
+            ...idleReview,
+            work: { kind: "cannot-tell", cause: "pane-not-in-table", why: "the pane process was absent" },
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("pane: idle · work: cannot tell — the pane process was absent");
+  });
+
+  it("says when the scan carried no reading for a shown session", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [{ ...idleReview, status: "working", work: null }],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("pane: working · work: the scan carried no reading for this session");
     expect(screen()).not.toContain("nothing recognised");
   });
 
@@ -582,7 +610,7 @@ describe("the history, which is history", () => {
 
   it("says all-idle rather than empty when the register holds idle sessions only", () => {
     draw(published({ sessions: [], total: 7 }), NOW);
-    expect(screen()).toContain("All 7 sessions in the Overseer's register were idle");
+    expect(screen()).toContain("All 7 sessions in the Overseer's register had pane status idle");
   });
 });
 
@@ -724,6 +752,121 @@ describe("the client's own parse", () => {
     expect(view.status.register.sessions).toHaveLength(1);
     expect(view.status.register.sessions[0]?.work).toBeNull();
   });
+
+  it("degrades a duration that was not measured by the job and scan clocks", () => {
+    const raw = published({
+      work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+      sessions: [
+        {
+          name: "review",
+          tmuxId: "$1",
+          status: "working",
+          since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+          work: {
+            kind: "work",
+            jobs: [
+              {
+                recogniser: "codex-review",
+                label: "GPT review",
+                startedAt: "2026-09-08T12:41:00.000Z",
+                ranForMs: 99 * 60_000,
+                pid: 42_812,
+                depth: 8,
+                command: "codex exec",
+              },
+            ],
+            inspected: 11,
+            paneCommand: "claude",
+            paneStartedAt: "2026-09-08T10:00:00.000Z",
+          },
+        },
+      ],
+    });
+    const view = parseOverseer(raw, CLOCK_SKEW_UNMEASURED);
+    if (view.kind !== "published" || view.status.register.kind !== "read") throw new Error("expected register");
+    expect(view.status.register.work.kind).toBe("unavailable");
+    expect(view.status.register.sessions[0]?.work).toBeNull();
+  });
+
+  it("keeps the valid edges and rejects future and depth-zero jobs at the browser boundary", () => {
+    const base = {
+      recogniser: "codex-review",
+      label: "GPT review",
+      pid: 42_812,
+      command: "codex exec",
+    };
+    const workOf = (job: PaneJob): "scanned" | "unavailable" => {
+      const raw = published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [
+          {
+            name: "review",
+            tmuxId: "$1",
+            status: "working",
+            since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+            work: {
+              kind: "work",
+              jobs: [job],
+              inspected: 11,
+              paneCommand: "claude",
+              paneStartedAt: "2026-09-08T10:00:00.000Z",
+            },
+          },
+        ],
+      });
+      const view = parseOverseer(raw, CLOCK_SKEW_UNMEASURED);
+      if (view.kind !== "published" || view.status.register.kind !== "read") throw new Error("expected register");
+      return view.status.register.work.kind;
+    };
+
+    expect(workOf({ ...base, startedAt: null, ranForMs: null, depth: 8 })).toBe("scanned");
+    expect(workOf({ ...base, startedAt: "2026-09-08T12:59:00.000Z", ranForMs: 0, depth: 1 })).toBe("scanned");
+    expect(workOf({ ...base, startedAt: "2026-09-08T12:40:59.000Z", ranForMs: 18 * 60_000, depth: 1 })).toBe("scanned");
+    expect(workOf({ ...base, startedAt: "2026-09-08T12:59:01.000Z", ranForMs: 0, depth: 1 })).toBe("unavailable");
+    expect(workOf({ ...base, startedAt: "2026-09-08T12:41:00.000Z", ranForMs: 18 * 60_000, depth: 0 })).toBe("unavailable");
+  });
+
+  it("rejects positive browser evidence that contradicts its pane walk", () => {
+    const workKind = (inspected: number, paneStartedAt: string): "scanned" | "unavailable" => {
+      const raw = published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [
+          {
+            name: "review",
+            tmuxId: "$1",
+            status: "working",
+            since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+            work: {
+              kind: "work",
+              jobs: [
+                {
+                  recogniser: "codex-review",
+                  label: "GPT review",
+                  startedAt: "2026-09-08T12:41:00.000Z",
+                  ranForMs: 18 * 60_000,
+                  pid: 42_812,
+                  depth: 1,
+                  command: "codex exec",
+                },
+              ],
+              inspected,
+              paneCommand: "claude",
+              paneStartedAt,
+            },
+          },
+        ],
+      });
+      const view = parseOverseer(raw, CLOCK_SKEW_UNMEASURED);
+      if (view.kind !== "published" || view.status.register.kind !== "read") {
+        throw new Error("expected register");
+      }
+      return view.status.register.work.kind;
+    };
+
+    expect(workKind(0, "2026-09-08T10:00:00.000Z")).toBe("unavailable");
+    expect(workKind(1, "2026-09-08T12:50:00.000Z")).toBe("unavailable");
+  });
+
   it("reads an absent field as `not-asked` and a broken one as `feed-unreadable`", () => {
     /* ABSENT IS SILENCE, PRESENT-AND-WRONG IS A FAULT. Collapsing the second
        into the first would say *nobody asked* about a server that did. */

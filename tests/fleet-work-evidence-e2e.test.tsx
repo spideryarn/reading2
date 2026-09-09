@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** A real daemon scan, projected and parsed through to the words in the browser. */
+/** A real daemon over controlled source/probe inputs, through the production payload and browser DOM. */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,8 +9,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test } from "vitest";
 
 import { readCheckpointFeeds } from "../tools/fleet/overseer-status.js";
+import { statePayload } from "../tools/fleet/state.js";
 import { OverseerStatusCard } from "../tools/fleet/web/src/OverseerPanel";
-import { CLOCK_SKEW_UNMEASURED, parseOverseer } from "../tools/fleet/web/src/types";
+import { parseFleetState } from "../tools/fleet/web/src/types";
 import { runOverseer } from "../tools/overseer/daemon.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
 import { parseProcessTable } from "../tools/overseer/work.js";
@@ -75,9 +76,25 @@ test("recognised child work reaches the browser through the real daemon, project
   });
   expect(outcome.kind).toBe("stopped");
 
-  const serverFeed = readCheckpointFeeds(storeRoot).overseer;
-  const browserFeed = parseOverseer(serverFeed, CLOCK_SKEW_UNMEASURED);
-  act(() => reactRoot.render(<OverseerStatusCard overseer={browserFeed} now={SCANNED_AT_MS} receivedAt={SCANNED_AT_MS} />));
+  /* Use the production payload composition and outer browser parser. Passing
+     the projected object straight to `parseOverseer` would leave the HTTP JSON
+     seam and the top-level `overseer` field untested. */
+  const payload: unknown = JSON.parse(
+    statePayload({
+      snapshot: null,
+      error: null,
+      health: null,
+      refreshMs: 60_000,
+      answeringEnabled: true,
+      attemptedAt: null,
+      readCheckpoint: () => readCheckpointFeeds(storeRoot),
+    }),
+  );
+  const receivedAt = Date.now();
+  const read = parseFleetState(payload, receivedAt);
+  expect(read.ok, read.ok ? "" : read.why).toBe(true);
+  if (!read.ok) return;
+  act(() => reactRoot.render(<OverseerStatusCard overseer={read.state.overseer} now={receivedAt} receivedAt={receivedAt} />));
 
   const text = (container.textContent ?? "").replace(/\s+/g, " ");
   expect(text).toContain("pane: idle · work:");

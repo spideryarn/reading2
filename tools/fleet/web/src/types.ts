@@ -1968,9 +1968,10 @@ function parseOverseerScheduler(raw: unknown, skew: ClockSkew): OverseerSchedule
 /**
  * The Overseer's oldest status records worth showing — **and one bad entry
  * degrades the whole register**, for the reason the server's projection gives:
- * it is a bounded, ordered selection of non-idle sessions and idle sessions
- * with recognised child work. Quietly dropping one would make a false claim
- * about both what qualified and which pane-status records were oldest.
+ * it is a bounded, ordered selection of non-idle sessions, idle sessions with
+ * recognised child work, and idle sessions without a usable pane reading.
+ * Quietly dropping one would make a false claim about both what qualified and
+ * which pane-status records were oldest.
  */
 function parseOverseerRegister(raw: unknown, skew: ClockSkew, writtenAt: string): OverseerRegister {
   const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
@@ -2026,6 +2027,9 @@ type ParsedPaneWork =
   | { kind: "read"; work: PaneWork | null }
   | { kind: "unreadable"; why: string };
 
+/** `ps etimes` gives whole seconds, so its derived start and duration may differ by one second. */
+const PROCESS_START_TOLERANCE_MS = 1_000;
+
 /** One pane's work measurement, with every instant moved onto the browser's clock. */
 function parsePaneWork(raw: unknown, skew: ClockSkew, scannedAt: string | null): ParsedPaneWork {
   const bad = (why: string): ParsedPaneWork => ({ kind: "unreadable", why });
@@ -2057,7 +2061,11 @@ function parsePaneWork(raw: unknown, skew: ClockSkew, scannedAt: string | null):
   if (!Array.isArray(raw["jobs"]) || raw["jobs"].length === 0) {
     return bad("a positive work reading arrived without any jobs");
   }
+  if (inspected < raw["jobs"].length) {
+    return bad("a positive work reading contains more jobs than processes it says were inspected");
+  }
   const jobs: PaneJob[] = [];
+  const pids = new Set<number>();
   for (const rawJob of raw["jobs"]) {
     if (!isRecord(rawJob)) return bad("a job in the work reading is not an object");
     const recogniser = nonBlank(rawJob["recogniser"]);
@@ -2078,15 +2086,35 @@ function parsePaneWork(raw: unknown, skew: ClockSkew, scannedAt: string | null):
       pid === 0 ||
       depth === null ||
       depth === 0 ||
+      depth > inspected ||
       command === null ||
       (startedAt === null && rawStartedAt !== null) ||
       (ranForMs === null && rawRanForMs !== null)
     ) {
       return bad("a job in the work reading is missing evidence this page requires");
     }
+    if (pids.has(pid)) return bad("the same process appears more than once in a work reading");
+    pids.add(pid);
     const shiftedStartedAt = startedAt === null ? null : shiftToBrowserClock(startedAt, skew) ?? startedAt;
+    if (startedAt === null && ranForMs !== null) {
+      return bad("a job with an unreadable start arrived with a measured duration");
+    }
+    if (startedAt !== null && ranForMs === null) {
+      return bad("a job with a readable start arrived without its measured duration");
+    }
     if (scannedAt !== null && shiftedStartedAt !== null && Date.parse(shiftedStartedAt) > Date.parse(scannedAt)) {
       return bad("a job start is later than the scan that reports it");
+    }
+    if (shiftedStartedAt !== null && Date.parse(shiftedStartedAt) < Date.parse(shiftedPaneStartedAt)) {
+      return bad("a child job start is earlier than the pane process that contains it");
+    }
+    if (
+      scannedAt !== null &&
+      shiftedStartedAt !== null &&
+      ranForMs !== null &&
+      Math.abs(Date.parse(scannedAt) - Date.parse(shiftedStartedAt) - ranForMs) > PROCESS_START_TOLERANCE_MS
+    ) {
+      return bad("a job's measured duration disagrees with its start and scan clocks");
     }
     jobs.push({
       recogniser,

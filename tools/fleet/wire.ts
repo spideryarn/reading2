@@ -1366,9 +1366,10 @@ export type OverseerRegisterWork =
  * The register is the Overseer's past tense: it knows when a session entered
  * the state it is in, which the dashboard cannot know because it has no
  * yesterday. This carries a BOUNDED, RANKED PROJECTION of the oldest status
- * records worth showing: non-idle sessions, and idle sessions with recognised
- * child work, ordered by pane-status age. Nothing on the page matches these
- * entries to the fleet rows beside them.
+ * records worth showing: non-idle sessions, idle sessions with recognised
+ * child work, and idle sessions without a usable pane reading, ordered by
+ * pane-status age. Nothing on the page matches these entries to the fleet rows
+ * beside them.
  *
  * **That refusal is the design.** A register entry and a fleet row can agree
  * about a pane and still be about different children: the generation tuple

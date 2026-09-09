@@ -196,8 +196,13 @@ function schedulerLine(scheduler: OverseerScheduler): string {
 type WorkScan = { scannedAt: string; shownAge: string; fresh: boolean };
 
 /** The frozen observation in one line. Its tense comes from the scan, not the process start. */
-function workLine(work: PaneWork, paneStatus: string, scan: WorkScan): string {
+function workLine(work: PaneWork | null, paneStatus: string, scan: WorkScan): string {
   const prefix = `pane: ${paneStatus} · work: `;
+  if (work === null) {
+    return scan.fresh
+      ? `${prefix}the scan carried no reading for this session`
+      : `${prefix}the scan carried no reading for this session when checked ${scan.shownAge}`;
+  }
   switch (work.kind) {
     case "cannot-tell":
       return scan.fresh
@@ -224,8 +229,15 @@ function workLine(work: PaneWork, paneStatus: string, scan: WorkScan): string {
 }
 
 /** The evidence behind one work phrase, including facts too dense for a phone-width row. */
-function workEvidence(work: PaneWork, scan: WorkScan): { head: string; what: string; how: string } {
+function workEvidence(work: PaneWork | null, scan: WorkScan): { head: string; what: string; how: string } {
   const order = "Rows are ordered by pane-status age, not by child-work age.";
+  if (work === null) {
+    return {
+      head: "No pane reading in this scan",
+      what: "The process-table scan carried no entry for this session. That is not a no-work result.",
+      how: `Process table read ${scan.scannedAt}. ${order}`,
+    };
+  }
   switch (work.kind) {
     case "cannot-tell":
       return {
@@ -270,7 +282,7 @@ function HistoryRow({ entry, asOf, scan }: { entry: OverseerSessionHistory; asOf
         <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-ink-soft">{entry.name}</span>
         <span className="tw:font-mono tw:text-[11px] tw:text-ink-faint">{entry.tmuxId}</span>
       </div>
-      {scan !== null && entry.work !== null ? (
+      {scan !== null ? (
         <div className="tw:min-w-0 tw:whitespace-normal tw:break-words tw:pl-0 tw:text-[12px] tw:text-ink-faint">
           <Explain tip={workEvidence(entry.work, scan)} placement="bottom" className="tw:max-w-full tw:whitespace-normal tw:text-left">
             {workLine(entry.work, entry.status, scan)}
@@ -433,7 +445,7 @@ function History({
     register.work.kind === "unavailable" ? (
       <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">Work evidence is unavailable — {register.work.why}.</p>
     ) : (
-      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">Work checked {shownScanAge}.</p>
+      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">Process table read {shownScanAge}.</p>
     );
   if (register.sessions.length === 0) {
     return (
@@ -441,7 +453,9 @@ function History({
         <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">
           {register.total === 0
             ? "The Overseer is holding no sessions in its register."
-            : `All ${register.total} sessions in the Overseer's register were idle when it last wrote.`}
+            : register.work.kind === "scanned"
+              ? `All ${register.total} sessions in the Overseer's register had pane status idle, and the scan found no recognised child work under them.`
+              : `All ${register.total} sessions in the Overseer's register had pane status idle when it last wrote.`}
         </p>
         {workState}
       </>
@@ -453,7 +467,7 @@ function History({
         <Explain
           tip={{
             head: "The Overseer's history, not this page's sessions",
-            what: "The oldest pane-status records worth showing: non-idle sessions, plus idle sessions with recognised child work.",
+            what: "The oldest pane-status records worth showing: non-idle sessions, plus idle sessions with recognised child work or without a usable pane reading.",
             how: "Rows are ordered by pane-status age, not by child-work age. They are not matched to Sessions-tab rows: a pane can keep its identifiers while the agent inside it is replaced, so read them only as what the Overseer remembers.",
           }}
         >

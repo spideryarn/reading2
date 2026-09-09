@@ -479,6 +479,40 @@ describe("the parts that degrade on their own", () => {
     }
   });
 
+  it("refuses a scan taken before the inventory it claims to describe", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([{ key: "$215 none", work: recognisedWork() }], {
+        scannedAt: "2026-09-08T12:40:59.000Z",
+      }),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read") return;
+    expect(register.work.kind).toBe("unavailable");
+    expect(register.sessions[0]?.work).toBeNull();
+  });
+
+  it("does not attach a failed probe to a different accepted inventory", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: {
+        kind: "probe-failed",
+        why: "ps was denied",
+        attemptedAt: "2026-09-08T12:40:01.000Z",
+        sourceCollectedAt: "2026-09-08T12:40:00.000Z",
+      },
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read" || register.work.kind !== "unavailable") return;
+    expect(register.work.why).toContain("2026-09-08T12:40:00.000Z");
+    expect(register.work.why).toContain("2026-09-08T12:41:00.000Z");
+    expect(register.work.why).not.toBe("ps was denied");
+  });
+
   it("carries the daemon's own reason for work that has not run and for a failed probe", () => {
     const notRun = tempRoot();
     writeCheckpoint(notRun, {
@@ -561,6 +595,179 @@ describe("the parts that degrade on their own", () => {
     }
   });
 
+  it("degrades a duration that disagrees with the job and scan clocks", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([
+        {
+          key: "$215 none",
+          work: recognisedWork({
+            jobs: [
+              {
+                recogniser: "codex-review",
+                label: "GPT review",
+                startedAt: "2026-09-08T12:23:01.000Z",
+                ranForMs: 99 * 60_000,
+                pid: 8123,
+                depth: 8,
+                command: "codex exec",
+              },
+            ],
+          }),
+        },
+      ]),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read") return;
+    expect(register.work.kind).toBe("unavailable");
+    expect(register.sessions[0]?.work).toBeNull();
+  });
+
+  it("keeps valid bare panes, unknown job starts and scan-time job starts", () => {
+    const cases: unknown[] = [
+      { kind: "none", inspected: 0, paneCommand: "claude", paneStartedAt: "2026-09-08T12:41:01.000Z" },
+      recognisedWork({
+        jobs: [
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: null,
+            ranForMs: null,
+            pid: 8123,
+            depth: 8,
+            command: "codex exec",
+          },
+        ],
+      }),
+      recognisedWork({
+        jobs: [
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: "2026-09-08T12:41:01.000Z",
+            ranForMs: 0,
+            pid: 8123,
+            depth: 1,
+            command: "codex exec",
+          },
+        ],
+      }),
+    ];
+
+    for (const paneWork of cases) {
+      const root = tempRoot();
+      writeCheckpoint(root, { work: workScan([{ key: "$215 none", work: paneWork }]) });
+      const register = mustPublish(root).status.register;
+      expect(register.kind).toBe("read");
+      if (register.kind === "read") expect(register.work.kind).toBe("scanned");
+    }
+  });
+
+  it("degrades a job start after the scan and a depth-zero child reading", () => {
+    const cases = [
+      {
+        startedAt: "2026-09-08T12:41:02.000Z",
+        ranForMs: 0,
+        depth: 1,
+      },
+      {
+        startedAt: "2026-09-08T12:23:01.000Z",
+        ranForMs: 18 * 60_000,
+        depth: 0,
+      },
+    ];
+
+    for (const job of cases) {
+      const root = tempRoot();
+      writeCheckpoint(root, {
+        work: workScan([
+          {
+            key: "$215 none",
+            work: recognisedWork({
+              jobs: [
+                {
+                  recogniser: "codex-review",
+                  label: "GPT review",
+                  pid: 8123,
+                  command: "codex exec",
+                  ...job,
+                },
+              ],
+            }),
+          },
+        ]),
+      });
+      const register = mustPublish(root).status.register;
+      expect(register.kind).toBe("read");
+      if (register.kind === "read") expect(register.work.kind).toBe("unavailable");
+    }
+  });
+
+  it("degrades positive evidence that could not have come from the pane walk", () => {
+    const cases = [
+      recognisedWork({
+        paneStartedAt: "2026-09-08T12:30:00.000Z",
+        jobs: [
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: "2026-09-08T12:23:01.000Z",
+            ranForMs: 18 * 60_000,
+            pid: 8123,
+            depth: 8,
+            command: "codex exec",
+          },
+        ],
+      }),
+      recognisedWork({
+        inspected: 0,
+        jobs: [
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: "2026-09-08T12:23:01.000Z",
+            ranForMs: 18 * 60_000,
+            pid: 8123,
+            depth: 1,
+            command: "codex exec",
+          },
+        ],
+      }),
+      recognisedWork({
+        jobs: [
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: "2026-09-08T12:23:01.000Z",
+            ranForMs: 18 * 60_000,
+            pid: 8123,
+            depth: 8,
+            command: "codex exec",
+          },
+          {
+            recogniser: "codex-review",
+            label: "GPT review",
+            startedAt: "2026-09-08T12:23:01.000Z",
+            ranForMs: 18 * 60_000,
+            pid: 8123,
+            depth: 8,
+            command: "codex exec",
+          },
+        ],
+      }),
+    ];
+
+    for (const paneWork of cases) {
+      const root = tempRoot();
+      writeCheckpoint(root, { work: workScan([{ key: "$215 none", work: paneWork }]) });
+      const register = mustPublish(root).status.register;
+      expect(register.kind).toBe("read");
+      if (register.kind === "read") expect(register.work.kind).toBe("unavailable");
+    }
+  });
+
   it("refuses a scan timestamp after the checkpoint that reports it", () => {
     const root = tempRoot();
     writeCheckpoint(root, {
@@ -632,6 +839,42 @@ describe("the parts that degrade on their own", () => {
     if (register.kind !== "read") return;
     expect(register.total).toBe(3);
     expect(register.sessions.map((s) => s.name)).toEqual(["review", "busy"]);
+  });
+
+  it("keeps an idle cannot-tell and a missing pane reading distinct from measured quiet", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      register: [
+        { key: "a", tmuxId: "$1", name: "unreadable", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T09:00:00.000Z" } },
+        { key: "b", tmuxId: "$2", name: "quiet", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T10:00:00.000Z" } },
+        { key: "c", tmuxId: "$3", name: "missing", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T11:00:00.000Z" } },
+      ],
+      work: workScan([
+        { key: "a", work: { kind: "cannot-tell", cause: "pane-not-in-table", why: "the pane process was absent" } },
+        { key: "b", work: { kind: "none", inspected: 0, paneCommand: "claude", paneStartedAt: "2026-09-08T09:00:00.000Z" } },
+      ]),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read") return;
+    expect(register.sessions.map((session) => [session.name, session.work?.kind ?? "missing"])).toEqual([
+      ["unreadable", "cannot-tell"],
+      ["missing", "missing"],
+    ]);
+  });
+
+  it("refuses duplicate register keys before one pane measurement can be attributed twice", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      register: [
+        { key: "same", tmuxId: "$1", name: "first", lastStatusKey: "working", statusSince: { kind: "observed", at: "2026-09-08T09:00:00.000Z" } },
+        { key: "same", tmuxId: "$2", name: "second", lastStatusKey: "working", statusSince: { kind: "observed", at: "2026-09-08T10:00:00.000Z" } },
+      ],
+      work: workScan([{ key: "same", work: recognisedWork() }]),
+    });
+
+    expect(mustPublish(root).status.register.kind).toBe("unreadable");
   });
 
   it("caps the rows and keeps the oldest status records, so the card is not a second session list", () => {

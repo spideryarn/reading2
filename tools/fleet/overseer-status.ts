@@ -423,6 +423,9 @@ type ResolvedWork =
   | { kind: "scanned"; scannedAt: string; panes: ReadonlyMap<string, PaneWork> }
   | { kind: "unavailable"; why: string };
 
+/** `ps etimes` gives whole seconds, so its derived start and duration may differ by one second. */
+const PROCESS_START_TOLERANCE_MS = 1_000;
+
 /**
  * The work reading that belongs to this exact inventory, or one sentence saying
  * why no join may be drawn. A bad enrichment never takes the register down.
@@ -450,14 +453,53 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
       const why = nonBlank(u["why"]);
       const attemptedAt = iso(u["attemptedAt"]);
       const sourceCollectedAt = iso(u["sourceCollectedAt"]);
-      return why === null || attemptedAt === null || sourceCollectedAt === null
-        ? malformed()
-        : { kind: "unavailable", why };
+      if (why === null || attemptedAt === null || sourceCollectedAt === null) return malformed();
+      if (lastGoodSnapshotAt === null) {
+        return {
+          kind: "unavailable",
+          why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
+        };
+      }
+      if (sourceCollectedAt !== lastGoodSnapshotAt) {
+        return {
+          kind: "unavailable",
+          why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
+        };
+      }
+      if (Date.parse(attemptedAt) < Date.parse(sourceCollectedAt) || Date.parse(attemptedAt) > Date.parse(writtenAt)) {
+        return malformed();
+      }
+      return { kind: "unavailable", why };
     }
     case "scan": {
       const scannedAt = iso(u["scannedAt"]);
       const sourceCollectedAt = iso(u["sourceCollectedAt"]);
       if (scannedAt === null || sourceCollectedAt === null || !Array.isArray(u["panes"])) return malformed();
+
+      if (lastGoodSnapshotAt === null) {
+        return {
+          kind: "unavailable",
+          why: `the work scan belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
+        };
+      }
+      if (sourceCollectedAt !== lastGoodSnapshotAt) {
+        return {
+          kind: "unavailable",
+          why: `the work scan belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
+        };
+      }
+      if (Date.parse(scannedAt) < Date.parse(sourceCollectedAt)) {
+        return {
+          kind: "unavailable",
+          why: `the work scan says it read the process table at ${scannedAt}, before the ${sourceCollectedAt} inventory it claims to describe was collected`,
+        };
+      }
+      if (Date.parse(scannedAt) > Date.parse(writtenAt)) {
+        return {
+          kind: "unavailable",
+          why: `the work scan says it read the process table at ${scannedAt}, after the ${writtenAt} checkpoint that reports it`,
+        };
+      }
 
       const panes = new Map<string, PaneWork>();
       for (const rawPane of u["panes"]) {
@@ -473,24 +515,6 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
         panes.set(key, paneWork);
       }
 
-      if (lastGoodSnapshotAt === null) {
-        return {
-          kind: "unavailable",
-          why: `the work scan belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
-        };
-      }
-      if (sourceCollectedAt !== lastGoodSnapshotAt) {
-        return {
-          kind: "unavailable",
-          why: `the work scan belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
-        };
-      }
-      if (Date.parse(scannedAt) > Date.parse(writtenAt)) {
-        return {
-          kind: "unavailable",
-          why: `the work scan says it read the process table at ${scannedAt}, after the ${writtenAt} checkpoint that reports it`,
-        };
-      }
       return { kind: "scanned", scannedAt, panes };
     }
     default:
@@ -501,10 +525,21 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
 /** Producer invariants which the wire type cannot express. */
 function paneWorkFitsScan(work: PaneWork, scannedAtMs: number): boolean {
   if (work.kind === "cannot-tell") return true;
-  if (Date.parse(work.paneStartedAt) > scannedAtMs) return false;
-  return work.kind === "none" || work.jobs.every((job) =>
-    job.depth > 0 && (job.startedAt === null || Date.parse(job.startedAt) <= scannedAtMs)
-  );
+  const paneStartedAtMs = Date.parse(work.paneStartedAt);
+  if (paneStartedAtMs > scannedAtMs) return false;
+  if (work.kind === "none") return true;
+  if (work.inspected < work.jobs.length) return false;
+  const pids = new Set<number>();
+  return work.jobs.every((job) => {
+    if (job.depth === 0 || job.depth > work.inspected || pids.has(job.pid)) return false;
+    pids.add(job.pid);
+    if (job.startedAt === null) return job.ranForMs === null;
+    const startedAtMs = Date.parse(job.startedAt);
+    return startedAtMs >= paneStartedAtMs &&
+      startedAtMs <= scannedAtMs &&
+      job.ranForMs !== null &&
+      Math.abs(scannedAtMs - startedAtMs - job.ranForMs) <= PROCESS_START_TOLERANCE_MS;
+  });
 }
 
 function parsePaneWork(u: unknown): PaneWork | null {
@@ -591,12 +626,12 @@ function registerWork(work: ResolvedWork): OverseerRegisterWork {
  * The register, ranked and capped — **the Overseer's history, and not a join
  * to the live fleet rows.**
  *
- * These are the oldest status records worth showing: non-idle sessions, and
- * idle sessions with recognised child work, ordered by pane-status age. The
- * sort deliberately does not claim that an idle pane's child work has waited
- * for the whole status age. A floor is still the best estimate available, so
- * the sort ignores the arm — it can only rank a session too LOW, which
- * under-reports rather than inventing urgency.
+ * These are the oldest status records worth showing: non-idle sessions, idle
+ * sessions with recognised child work, and idle sessions for which a scan
+ * could not supply a usable pane reading. The last group is load-bearing: if
+ * it were filtered out, an unreadable or missing measurement would be rendered
+ * as idle. Rows remain ordered by pane-status age; the sort deliberately does
+ * not claim that child work has waited for the whole status age.
  *
  * **One bad entry degrades the whole register**, the way one bad item degrades
  * the inbox and unlike the way a bad row is dropped from `rows`. The claim this
@@ -612,17 +647,20 @@ function projectRegister(u: unknown, writtenAt: string, work: ResolvedWork): Ove
   if (u === undefined) return bad("this checkpoint carries no register");
   if (!Array.isArray(u)) return bad("the register is not an array");
   const entries: OverseerSessionHistory[] = [];
+  const keys = new Set<string>();
   for (const raw of u) {
     if (!isRecord(raw)) return bad("an entry in the register is not one this page can read");
     const key = nonBlank(raw["key"]);
     if (key === null) return bad("an entry in the register is not one this page can read");
+    if (keys.has(key)) return bad(`the register carries the session key ${key} twice`);
+    keys.add(key);
     const paneWork = work.kind === "scanned" ? (work.panes.get(key) ?? null) : null;
     const entry = projectEntry(raw, writtenAt, paneWork);
     if (entry === null) return bad("an entry in the register is not one this page can read");
     entries.push(entry);
   }
   const waiting = entries
-    .filter((entry) => entry.status !== "idle" || entry.work?.kind === "work")
+    .filter((entry) => entry.status !== "idle" || (work.kind === "scanned" && entry.work?.kind !== "none"))
     .sort((a, b) => Date.parse(a.since.at) - Date.parse(b.since.at))
     .slice(0, MAX_HISTORY);
   /* `total` IS THE WHOLE REGISTER, idle included, because it answers "how many
