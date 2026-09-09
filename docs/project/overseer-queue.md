@@ -56,3 +56,17 @@ Greg promotes one by saying so, and then it moves up into a plan.
   page — gate 1 is kept by hand until then ([overseer.md § gate 1](overseer.md#1-never-hide-who-decided)).
 - **Local-time display in the usage and status commands.** Greg moves between London and Athens, so
   a reset time printed only in UTC is a subtraction he has to do at midnight; print both zones.
+- **A sweep of the fleet suites for guards that cannot fail.** On the night of 2026-09-08/09 five
+  independent sessions found the same class in `tools/fleet/` tests: an assertion cheap to write that
+  cannot go red in the case it was written for — a source grep that passes with the mount commented
+  out (`tests/fleet-health-wiring.test.ts`), a `Record<Mode,…>` type that cannot see a whole mode
+  removed, a diff-and-grep mutation check blind to a reversion, a `planCompleted` flag that could only
+  be true, a page-wide "must not contain" that fails for the wrong reason. Five patches were made; the
+  property that produced them was not looked for. [silent-success.md](../reusable/silent-success.md)
+  is the doc; the sweep is one session, read-only first, listing every guard with the mutation that
+  should red it and whether it does. Proposed by the Overseer from the `dashboard-modes-doc` session's
+  count, 2026-09-09.
+- **`routes-health-history.ts` reads and gzips synchronously in its handler**, and the dashboard is one
+  Node process, so a slow read there stalls every session, action and heartbeat. Found by GPT Sol
+  reviewing the Deploys tab, which had copied the shape. Settle whether the exemplar is clean before
+  the modes doc holds it up as one. 2026-09-09.
