@@ -245,6 +245,27 @@ attributed to Grafana).
       ask his question per screen and for the ranked changes per tab.
 - [ ] Sol reviews this plan, as the engineering-manager cadence requires, before any code.
 
+### Stage 4b — the type scale and `StatCard`
+
+*Status: done.* Additive: no existing panel changed, nothing existing restyled.
+
+- [x] A **five-step type scale** in `tailwind.css` — `answer` 22px, `lead` 15px, `body` 13px,
+      `note` 12px, `label` 11px, each at least ~25% from its neighbour. Not invented: they are
+      `HealthPanel`'s stat tile's own three sizes, named, plus the body size and one step down.
+      **Sizes only** — weight and colour are deliberately not welded to the step, because emphasis
+      wants two dimensions moving together and fusing them would take that choice away at every call
+      site. No sixth step, and nothing below 11px.
+- [x] **`StatCard`** in `ui.tsx`, with `StatValue` as a four-arm union — `value`, `stale`, and
+      `absent` in one of three named states. An absence **cannot** carry a number, and **cannot**
+      inherit the caller's calm tone.
+- [x] [tests/fleet-stat-card.test.tsx](../../tests/fleet-stat-card.test.tsx) — 11 assertions about
+      *distinguishability* rather than styling.
+
+**They passed first time, so they proved nothing until they were made to fail.** Three mutations,
+each killing exactly the tests that should die and no others: collapsing the three absence words
+back to one em-dash killed 5; letting an absence take the caller's tone killed 2; dropping the stale
+age killed 1. [silent-success.md](../reusable/silent-success.md).
+
 ### Stage 5a — the landing surface's data contract, before any of it is built
 
 Dispatched into this plan by the Overseer on 2026-09-09, and it outranks the Usage restyle because
@@ -271,6 +292,9 @@ its own feasibility work until inside the build.
 
 - [ ] Build only what 5a showed to be supported. State unknown coverage rather than inventing a
       generic "blocked" count.
+- [ ] **It replaces the Sessions page rather than sitting above it** — Sol's GLOBAL-01, and the trap
+      this plan was walking into. Three regions: *needs you*, *blocked* (never a `0` that was not
+      measured), *progress* (movement, not `7 working`). Roster and log become drill-ins.
 
 #### What the data can already support, from the captured snapshot
 
@@ -431,6 +455,46 @@ either alone.
 Sol's own recommended order and mine now differ in one place only: it would *"stop and reassess
 before mechanically restyling every remaining tab"*. Adopted as written — Stage 7 is explicitly a
 reassessment, not a queue.
+
+### The Sol screens review, and the one finding that changes the landing surface
+
+[260909c-dashboard-design-system-screens-review-sol-r1.md](260909c-dashboard-design-system-screens-review-sol-r1.md),
+at `5b3efeb3`. No P0. Its verdict agrees with the plan's reframing and sharpens it:
+
+> The dashboard is organised around data producers — sessions, transcripts, checkpoints, usage scans
+> — while Greg arrives with three decisions … Box health and Readiness work because they lead with a
+> verdict and subordinate the evidence. Usage, Overseer, and Recent messages foreground their
+> evidence-gathering machinery.
+
+**GLOBAL-01 is the finding that changes what gets built**, and it catches the plan about to repeat
+the failure it had just diagnosed:
+
+> Build it, but do not make it another block above the existing Sessions page. That would repeat the
+> current failure: the useful summary becomes a preamble to 3,529px of roster.
+
+So the landing surface **replaces** the Sessions page rather than prefacing it, with the roster and
+the log as drill-ins, and three explicit regions: *needs you* (the first actionable question),
+*blocked* (**never `0 blocked` unless it was actually measured**), and *progress* — which is *not*
+`7 working`, because working is activity, and the question is whether anything moved.
+
+**S2-01 landed on code I had written an hour earlier and was right.** `StatCard`'s first draft drew
+a bare em-dash for any missing number. *"Without the explanatory state word, it conflates unknown,
+absent, and failed."* The primitive now has three named absence states — `Unknown`, `Withheld`,
+`Unavailable` — from a closed vocabulary, plus a fourth `stale` arm that keeps the number and wears
+its age, because blanking an old-but-valid reading throws away the best information there is. That
+is the honest-absence rule arriving inside the component written to enforce it, which is worth
+recording rather than quietly fixing.
+
+**DOC-01 corrected three sentences in the reusable doc**, and the third is the one worth naming:
+*"every live number carries when it was taken"*, applied per tile rather than per group of readings
+taken together, **produces exactly the Usage tab's wall of provenance.** A rule that fails when
+applied naively needs to say so, and now does.
+
+Its ranked three, adopted as the order of the remaining work: the landing surface as a true
+action-first overview; Sessions rewritten around purpose, blocker and progress with the two constant
+lines removed; Usage rebuilt from its typed epistemic states. It also names the **best single
+existing-screen deletion** as those two constant lines — which is where I had independently landed
+from the pixels, and it is a product call for Greg rather than mine.
 
 ### Stage 7+ — the remaining tabs: a reassessment, not a queue
 

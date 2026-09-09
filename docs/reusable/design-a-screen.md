@@ -53,11 +53,12 @@ words; "can I start more work right now, or will it be rejected?" is the reader'
 decides the layout: the first is a list of fields, the second is one yes/no with its evidence
 underneath.
 
-Rank them, and be honest that the list is short. **A screen answers one question well.** Grafana's
-own guidance is one panel, one question; the SRE book's version is that a dashboard's top level
-shows what is broken and user-visible *now*, with cause and diagnosis one level down. If your
-ranked list has six equal items, you have either two screens or a screen with a summary and a
-drill-in, and finding that out now is the cheapest it will ever be.
+Rank them, and be honest that the list is short. **One screen supports one decision or task** —
+an overview may legitimately need several subordinate questions, but they must be subordinate to
+something. Grafana's own guidance is one panel, one question; the SRE book's version is that a
+dashboard's top level shows what is broken and user-visible *now*, with cause and diagnosis one
+level down. If your ranked list has six *equal* items, you have either two screens or a screen with
+a summary and a drill-in, and finding that out now is the cheapest it will ever be.
 
 **Ask the reader if you can.** One sentence from the person who uses it beats a day of inference,
 and their answer is usually blunter and narrower than anything you would have written for them. If
@@ -68,9 +69,15 @@ screen that does not help answer it is not finished, however tidy it looks.
 
 For each question: **what action does the answer lead to, and is that action on this screen?** An
 answer with its action three taps away is a screen that informs rather than one that helps. This is
-also the test for a caveat, an explanation, a provenance line: *would it change what the reader does
-on this screen in the next ten seconds?* If it would only change what they **believe**, it belongs
-one tap away, attached to the fact it qualifies — not deleted, and not on the page.
+also the test for a caveat, an explanation, a provenance line: *would it change the reader's
+immediate action, or their confidence in taking it?* If it would change neither — if it only alters
+what they believe about how the system works — it belongs one tap away, attached to the fact it
+qualifies. Not deleted, and not on the page.
+
+The confidence half is not a loophole, and leaving it out makes the rule wrong: an operator who
+does not trust a number will go and check it by hand, which is a worse outcome than the caveat
+costing a line. What fails the test is the material that explains the *mechanism* rather than
+qualifying the *reading*.
 
 ### 3. Say what the screen must never do
 
@@ -174,9 +181,16 @@ making the important thing loud is the same gesture as making a caveat invisible
 - [ ] **A reassuring sentence is only worth saying beside the evidence that makes it falsifiable.**
       "Nothing is wrong" and "nothing was checked" read identically; print what was actually
       examined — *opened 235 of 240, 232,961 lines* — under the reassurance, every time.
-- [ ] **Every live number carries when it was taken**, especially where different figures on one
-      screen refresh at different rates.
+- [ ] **Every live number carries when it was taken** — but *once per group of readings taken
+      together*, not once per tile. Where figures on one screen refresh at different rates, each
+      rate needs its own stamp; where twelve numbers came from one pass, twelve timestamps is the
+      wall of provenance this checklist exists to prevent. Applying the rule naively is itself a
+      way to fail it.
       ([Smashing, 2025](https://www.smashingmagazine.com/2025/09/ux-strategies-real-time-dashboards/))
+- [ ] **Prefer a duration to an instant** for anything the reader is judging freshness by. *Read 6m
+      ago* survives being read in another timezone; `05:51 UTC · 06:51 London · 08:51 Athens` is the
+      same fact three times and ages badly on a phone. Keep the wall-clock instant for the thing a
+      reader must act *at* — a deadline, a reset — and put the rest one tap away.
 - [ ] **Stale must look stale.** Showing the last good reading rather than a blank is right; showing
       it at full weight with no mark is not.
 - [ ] **A fetch failure gets its own banner**, distinct from stale and from empty, because it is a
