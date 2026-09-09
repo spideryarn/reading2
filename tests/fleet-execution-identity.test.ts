@@ -167,6 +167,7 @@ describe("a fresh claude under an unchanged pane", () => {
       panePid: PANE_PID,
       claimedConversationId: CLAIMED,
       table: tableOf(before),
+      after: tableOf(before),
       boot: BOOT,
       uptime: UPTIME,
       readStart: agreeingStarts(tableOf(before)),
@@ -175,6 +176,7 @@ describe("a fresh claude under an unchanged pane", () => {
       panePid: PANE_PID,
       claimedConversationId: CLAIMED,
       table: tableOf(after),
+      after: tableOf(after),
       boot: BOOT,
       uptime: UPTIME,
       readStart: agreeingStarts(tableOf(after)),
@@ -199,6 +201,7 @@ describe("a fresh claude under an unchanged pane", () => {
       panePid: PANE_PID,
       claimedConversationId: CLAIMED,
       table: tableOf(after),
+      after: tableOf(after),
       boot: BOOT,
       uptime: UPTIME,
       readStart: agreeingStarts(tableOf(after)),
@@ -254,6 +257,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 999_999_999,
       claimedConversationId: "abc",
       table,
+      after: table,
       boot: BOOT,
       uptime: UPTIME,
       readStart: startsFrom(new Map()),
@@ -276,6 +280,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 652780,
       claimedConversationId: "404961e7-a9af-47c9-bf9e-38918ba8ffc4",
       table: tableOf(raw),
+      after: tableOf(raw),
       boot: BOOT,
       uptime: UPTIME,
       readStart: startsFrom(new Map([[412924, 72055933]])),
@@ -290,6 +295,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 652780,
       claimedConversationId: "404961e7-a9af-47c9-bf9e-38918ba8ffc4",
       table,
+      after: table,
       boot: BOOT,
       uptime: UPTIME,
       // No entry for the claude's pid: the read fails, as it does when the
@@ -324,6 +330,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 100,
       claimedConversationId: "claimed-uuid",
       table: tableOf(text),
+      after: tableOf(text),
       boot: BOOT,
       uptime: { read: true, seconds: 1000 },
       // …but /proc says it started at tick 99_000, i.e. 10 s before this
@@ -344,6 +351,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 100,
       claimedConversationId: "claimed-uuid",
       table: tableOf(text),
+      after: tableOf(text),
       boot: BOOT,
       uptime: { read: true, seconds: 1000 },
       readStart: startsFrom(new Map([[101, 60_000]])),
@@ -357,6 +365,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 100,
       claimedConversationId: "claimed-uuid",
       table: tableOf(text),
+      after: tableOf(text),
       boot: BOOT,
       uptime: { read: false, why: "/proc/uptime could not be read" },
       readStart: startsFrom(new Map([[101, 60_000]])),
@@ -365,11 +374,69 @@ describe("what happens when we cannot tell", () => {
     expect(reading.kind === "unknown" && reading.cause).toBe("uptime-unreadable");
   });
 
+  /**
+   * **THE BRACKET — GPT Sol's round-2 P1, and the proof the elapsed-time check
+   * could not give.**
+   *
+   * The `/proc` read happens between two classifications. Here the pid survives
+   * into the second table but is running a DIFFERENT conversation, which is
+   * what a reused pid looks like from the far end. The old five-second
+   * elapsed-time tolerance passed this whenever both processes were young; the
+   * bracket refuses it whatever their ages.
+   */
+  it("refuses when the pane holds a different conversation on the far side of the /proc read", () => {
+    const first = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id was-this --permission-mode auto\n";
+    const second = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id now-this --permission-mode auto\n";
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "was-this",
+      table: tableOf(first),
+      after: tableOf(second),
+      boot: BOOT,
+      uptime: UPTIME,
+      readStart: agreeingStarts(tableOf(first)),
+    });
+    expect(reading.kind).toBe("unknown");
+    expect(reading.kind === "unknown" && reading.cause).toBe("process-changed-under-read");
+    expect(identityWriteGate(reading).allowed).toBe(false);
+  });
+
+  it("refuses when the harness kind changes across the /proc read", () => {
+    const first = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id x --permission-mode auto\n";
+    const second = " 100  99  500 bash /home/greg/job.sh\n";
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "x",
+      table: tableOf(first),
+      after: tableOf(second),
+      boot: BOOT,
+      uptime: UPTIME,
+      readStart: agreeingStarts(tableOf(first)),
+    });
+    expect(reading.kind === "unknown" && reading.cause).toBe("process-changed-under-read");
+  });
+
+  it("refuses when the second table could not be read at all", () => {
+    const first = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id x --permission-mode auto\n";
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "x",
+      table: tableOf(first),
+      after: { read: false, why: "ps was killed" },
+      boot: BOOT,
+      uptime: UPTIME,
+      readStart: agreeingStarts(tableOf(first)),
+    });
+    // AN UNMADE CHECK IS NOT A PASSED CHECK.
+    expect(reading.kind === "unknown" && reading.cause).toBe("process-changed-under-read");
+  });
+
   it("an unreadable process table is unknown with the probe's own sentence", () => {
     const reading = readExecutionIdentity({
       panePid: 652780,
       claimedConversationId: null,
       table: { read: false, why: "ps exited 1: nope" },
+      after: { read: false, why: "ps exited 1: nope" },
       boot: BOOT,
       uptime: UPTIME,
       readStart: startsFrom(new Map()),
@@ -382,6 +449,7 @@ describe("what happens when we cannot tell", () => {
       panePid: null,
       claimedConversationId: null,
       table,
+      after: table,
       boot: BOOT,
       uptime: UPTIME,
       readStart: startsFrom(new Map()),
@@ -395,6 +463,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 100,
       claimedConversationId: "claimed-uuid",
       table: tableOf(text),
+      after: tableOf(text),
       boot: BOOT,
       uptime: UPTIME,
       readStart: agreeingStarts(tableOf(text)),
@@ -412,6 +481,7 @@ describe("what happens when we cannot tell", () => {
       panePid: 100,
       claimedConversationId: "claimed-uuid",
       table: tableOf(text),
+      after: tableOf(text),
       boot: BOOT,
       uptime: UPTIME,
       readStart: agreeingStarts(tableOf(text)),
@@ -440,6 +510,7 @@ describe("boot identity", () => {
       panePid: 100,
       claimedConversationId: "x",
       table: tableOf(" 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id x\n"),
+      after: tableOf(" 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id x\n"),
       boot,
       uptime: UPTIME,
       readStart: startsFrom(new Map([[101, 1]])),
@@ -563,7 +634,7 @@ describe("the collection pass", () => {
     });
   });
 
-  it("one process-table probe answers every row", () => {
+  it("probes twice for the whole fleet — the bracket — and reads uptime once", () => {
     const rows: FleetRow[] = [
       { paneId: "%1", panePid: 100, claudeSessionId: "conv-1" } as FleetRow,
       { paneId: "%2", panePid: 200, claudeSessionId: null } as FleetRow,
@@ -587,10 +658,13 @@ describe("the collection pass", () => {
       },
       readStart: agreeingStarts(table),
     });
-    // ONE OF EACH FOR THE WHOLE FLEET, which is the collector contract and the
-    // reason this is a pass rather than a probe per row.
+    // **TWO PROBES FOR THE WHOLE FLEET, NOT TWO PER ROW.** The pair is the
+    // bracket that makes a `verified` reading a claim about one process — the
+    // `/proc` reads all happen between them — and the collector contract is
+    // that it stays a fixed cost rather than growing with the fleet. Thirty
+    // sessions must still be two.
+    expect(probes).toBe(2);
     expect(uptimes).toBe(1);
-    expect(probes).toBe(1);
     expect(rows[0]?.execution.kind).toBe("verified");
     expect(rows[1]?.execution.kind).toBe("verified");
     // The second row is a bare shell: verified as a process, and nothing was
@@ -904,15 +978,21 @@ describe("the register", () => {
   });
 
   /**
-   * **LEARNING AN IDENTITY IS NOT A REPLACEMENT, and the difference is a whole
-   * fleet's measured ages.**
+   * **A FIRST SIGHTING RESETS THE AGE TOO — GPT Sol's round-2 P1.**
    *
-   * On the first collection after this field ships, every session already in
-   * the register learns its token at once. If that reset `statusSince` the way
-   * a real replacement does, the deploy itself would wipe every duration on the
-   * box — and the attention inbox ranks by exactly that number.
+   * This test asserted the opposite until 2026-09-09: that learning an identity
+   * preserved the measured age, on the reasoning that the migration should not
+   * wipe every duration on the box. The reasoning was right about the migration
+   * and wrong about the other case a null `previousToken` covers — a session
+   * registered while its execution was unknown, replaced during the blind
+   * interval, whose first verified reading is already the new run. Preserving
+   * the age there hands run B the age of run A, which is the failure this whole
+   * stage exists to prevent.
+   *
+   * One null cannot carry both decisions, so the honest one is taken: the age
+   * becomes a floor whenever the verified run is recorded or moves.
    */
-  it("records a first-seen identity without resetting the measured age", () => {
+  it("resets the measured age even on a first sighting, because it cannot prove no replacement", () => {
     const register = seenAndChanged();
     const [key, before] = [...register.entries()][0] ?? [];
     if (key === undefined || before === undefined) return;
@@ -941,8 +1021,9 @@ describe("the register", () => {
 
     const after = register.get(key);
     expect(after?.verifiedExecution).toEqual({ token: TOKEN_A, since: "2026-09-08T06:00:00.000Z" });
-    // UNTOUCHED. The session has been working for an hour and still has been.
-    expect(after?.statusSince).toEqual({ kind: "observed", at: "2026-09-08T05:00:00.000Z" });
+    // A FLOOR, not the inherited hour: we are seeing this run for the first
+    // time and cannot show that it is the run that has been here all along.
+    expect(after?.statusSince).toEqual({ kind: "lower-bound", at: "2026-09-08T06:00:00.000Z" });
   });
 
   it("refuses a token that is not one, wherever it arrives from", () => {
@@ -951,6 +1032,25 @@ describe("the register", () => {
     for (const bad of ["", "not-a-token", "boot:0:1", "boot:12", "boot:12:", "boot:-1:2", "a b:1:2", `${TOKEN_A}:extra`]) {
       expect(isExecutionTokenText(bad), bad).toBe(false);
     }
+  });
+
+  /**
+   * **ONE TEXT PER IDENTITY — GPT Sol's round-2 P2.**
+   *
+   * Tokens are compared as whole strings, so a second spelling of one identity
+   * is a replacement that never happened: it would fire
+   * `session-execution-changed` and reset a live session's measured age for
+   * nothing. A leading zero is the cheap way in; an unsafe integer is the other,
+   * and it cannot survive the wire parsers that require `Number.isSafeInteger`.
+   */
+  it("refuses a second spelling of a token it would otherwise accept", () => {
+    expect(isExecutionTokenText("boot:1:1")).toBe(true);
+    // Same identity, different bytes — and the comparison is on bytes.
+    expect(isExecutionTokenText("boot:1:01")).toBe(false);
+    expect(isExecutionTokenText("boot:01:1")).toBe(false);
+    // Past MAX_SAFE_INTEGER: the wire parsers would refuse it, so this must too.
+    expect(isExecutionTokenText("boot:1:9007199254740992")).toBe(false);
+    expect(isExecutionTokenText(`boot:1:${Number.MAX_SAFE_INTEGER}`)).toBe(true);
   });
 
   // The checkpoint round trip — an old `current.json` with no

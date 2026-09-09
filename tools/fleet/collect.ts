@@ -41,6 +41,7 @@ import {
   type UptimeReading,
 } from "./execution-identity.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
+import { classifyPaneHarness } from "../overseer/harness.js";
 import { probeProcessTable } from "../overseer/work-probe.js";
 import type { ProcessTableReading } from "../overseer/work.js";
 
@@ -837,13 +838,18 @@ export type ExecutionIo = {
  * this call site had no production caller at all. `classifyPaneHarness` is the
  * same story. Nothing here re-walks a tree or re-reads a `claude` command line.
  *
- * **COST, MEASURED RATHER THAN ASSUMED.** `probeProcessTable` uses `spawnSync`,
- * which blocks the event loop; work-probe.ts measures it at ~40 ms over ~1000
- * processes here. That is against a collection that already takes 8–12 seconds,
- * so it is noise — but it is a NEW synchronous spawn on the request process, and
- * the Responsive collection stage should take it with the two `execFileSync`
- * calls it is already going after rather than leave it as the one nobody
- * remembered. Named here so it is found.
+ * **COST, MEASURED ON THIS BOX RATHER THAN ASSUMED — and it is not the ~40 ms
+ * this comment first claimed.** The whole pass over **26 live sessions took
+ * 236 ms** (2026-09-09): two `ps` probes plus one `/proc/<pid>/stat` read per
+ * distinct harness. The 40 ms was work-probe.ts's figure for ONE probe, and
+ * quoting it for the pass was the kind of borrowed number that becomes a source
+ * comment nobody re-derives.
+ *
+ * 236 ms against a collection that already takes 8–12 seconds is ~2–3%, so it
+ * is affordable — but it is all `spawnSync` and `readFileSync` **on the request
+ * process**, and the Responsive collection stage should take it along with the
+ * two `execFileSync` calls it is already going after, rather than leave it as
+ * the one nobody remembered. Named here so it is found.
  *
  * **A FAILURE COSTS NOTHING BUT THE READING.** Every arm of `ExecutionReading`
  * is a value, including all the failures, so a box whose `ps` will not run
@@ -867,15 +873,44 @@ export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}):
   // process cannot land in the future.
   const uptime = uptimeOf();
 
+  /* **EVERY `/proc` READ HAPPENS BETWEEN THE TWO TABLES**, and that ordering is
+     the whole of the pid-reuse defence — so the reads are done HERE, up front,
+     rather than lazily inside the classifier below. If they were lazy, the
+     second probe would fire on the first row's bracket and every later row's
+     read would fall outside it: a bracket that contains only one of thirty
+     reads, looking exactly like one that contains them all.
+
+     The pids are found by classifying the first table, which is pure and is
+     done again below. Two cheap classifications beat one subtle ordering bug. */
+  const starts = new Map<number, ProcessStartTicks>();
+  if (table.read) {
+    for (const row of rows) {
+      const harness = classifyPaneHarness(row.panePid, table);
+      if (harness.kind === "unknown" || starts.has(harness.pid)) continue;
+      starts.set(harness.pid, readStart(harness.pid));
+    }
+  }
+  const memoised = (pid: number): ProcessStartTicks =>
+    starts.get(pid) ?? { read: false, why: `pid ${pid} was not among the harnesses this collection read` };
+
+  /* AND THE FAR END OF THE BRACKET. A second `ps`, ~40 ms, after every read. */
+  let after: ProcessTableReading;
+  try {
+    after = probe();
+  } catch (cause) {
+    after = { read: false, why: `the second process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+
   for (const row of rows) {
     try {
       row.execution = readExecutionIdentity({
         panePid: row.panePid,
         claimedConversationId: row.claudeSessionId,
         table,
+        after,
         boot,
         uptime,
-        readStart,
+        readStart: memoised,
       });
     } catch (cause) {
       // `readExecutionIdentity` returns values for every failure it knows

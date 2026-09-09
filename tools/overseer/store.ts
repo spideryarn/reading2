@@ -2359,28 +2359,32 @@ export function foldEvents(
       case "session-execution-changed": {
         const was = into.get(event.key);
         if (was !== undefined) {
-          // **A FIRST SIGHTING AND A REPLACEMENT ARE NOT THE SAME EVENT**, and
-          // this is the line that keeps them apart. A null `previousToken` means
-          // the register had never verified a run for this session — the upgrade
-          // path, where every existing entry learns its identity on the first
-          // collection after the deploy. Resetting the status clock there would
-          // wipe the measured age of every session on the box at once, which is
-          // the opposite of what this stage is for.
-          const learned = event.previousToken === null;
           into.set(event.key, {
             ...was,
             verifiedExecution: { token: event.token, since: event.at },
             lastSeenAlive: event.at,
-            // **A REPLACEMENT DOES NOT INHERIT THE OLD RUN'S MEASURED AGE.**
-            // `statusSince` was a reading about a process that has gone; the
-            // status key is unchanged (a working session replaced by a working
-            // session is still `working`) so nothing else in this fold would
-            // touch it, and a triage view ranking by "waiting longest" would go
-            // on crediting a fresh Claude with its predecessor's hours. Reset to
-            // a FLOOR rather than to `observed`: we know this run was in this
-            // state when we looked and not when it entered it, which is exactly
-            // what `lower-bound` means.
-            statusSince: learned ? was.statusSince : { kind: "lower-bound", at: event.at },
+            // **THE AGE RESETS ON EVERY ARM, INCLUDING A FIRST SIGHTING**, and
+            // the version that did not was GPT Sol's second-round P1.
+            //
+            // It read: a null `previousToken` is the one-time migration case, so
+            // preserve the age rather than wiping every duration on the box at
+            // deploy. That is true of the migration and **false of the other
+            // case null covers** — a session registered while its execution was
+            // unknown, whose harness was replaced during the blind interval, and
+            // whose first verified reading is therefore already the NEW run. One
+            // null cannot carry both decisions, and preserving the age there
+            // hands run B the age of run A: the original failure class, narrowed
+            // to sessions we could not see for a while.
+            //
+            // So it resets unconditionally. What that costs is real and is a
+            // one-off: on the first collection after this ships, every session
+            // learns its token and its measured age becomes a floor. What it
+            // buys is that `statusSince` after this stage means *how long THIS
+            // RUN has been in this state*, with no arm where it silently means
+            // something else. The measured age we would have kept was a fact
+            // about the SESSION, and this field stopped being about the session
+            // the moment execution identity existed.
+            statusSince: { kind: "lower-bound", at: event.at },
           });
         }
         break;

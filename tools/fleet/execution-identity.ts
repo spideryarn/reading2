@@ -70,7 +70,7 @@
  */
 import { readFileSync } from "node:fs";
 
-import { classifyPaneHarness } from "../overseer/harness.js";
+import { classifyPaneHarness, type Harness } from "../overseer/harness.js";
 import type { ProcessTableReading } from "../overseer/work.js";
 import type { ConversationReading, ExecutionReading } from "./wire.js";
 
@@ -107,12 +107,17 @@ const USER_HZ = 100;
  * `ps` (up to the probe's own duration), `USER_HZ` rounding (±0.01 s), and the
  * two reads are simply taken at different instants.
  *
- * Five seconds is generous against all of that and still decisive against the
- * failure: a process that took over a pid inside the race window is seconds
- * old while the table said minutes or hours, so a real mismatch is off by the
- * whole of the previous process's life, not by a rounding.
+ * **FIFTEEN, NOT FIVE, and the old number was too tight in the safe
+ * direction.** `probeProcessTable`'s own timeout allows a `ps` to take ten
+ * seconds on a swapping box, and the whole of that lands between the table's
+ * elapsed times and the uptime read — so five seconds turned a slow but
+ * perfectly valid collection into `unknown` for every row. GPT Sol, 2026-09-09.
+ * Widening it costs nothing now that {@link stillTheSameHarness} carries the
+ * proof: this check is here to exclude a `/proc` read of a process the table
+ * never described, and that mismatch is off by the whole of a process's life
+ * rather than by seconds.
  */
-const START_AGREEMENT_TOLERANCE_S = 5;
+const START_AGREEMENT_TOLERANCE_S = 15;
 
 /** Everything {@link readExecutionIdentity} needs, all of it injectable. */
 export type ExecutionInput = {
@@ -125,9 +130,32 @@ export type ExecutionInput = {
   /** One boot identity, shared across the whole fleet. */
   boot: BootIdentity;
   /**
+   * **A SECOND PROCESS TABLE, READ AFTER THE `/proc` READS.**
+   *
+   * This is what makes a `verified` reading a claim about ONE process rather
+   * than about two. The harness kind and its conversation come from `table`;
+   * the start token comes from a `/proc` read taken afterwards. If the pid is
+   * reused in between, those describe different processes and the result is
+   * coherent nonsense.
+   *
+   * The first attempt at closing this compared `ps`'s elapsed time against
+   * `/proc`'s start ticks and called them two independent measurements. **They
+   * are not**: procps derives `etimes` from its own uptime read and the same
+   * field 22, so it is a lossy earlier reading of the one value, and a
+   * replacement landing within the tolerance passed. GPT Sol, twice, 2026-09-09.
+   *
+   * Bracketing is the proof that argument wanted: classify from a table taken
+   * BEFORE the `/proc` read and again from one taken AFTER it, and require the
+   * same pid, kind and conversation in both. A pid that was reused inside the
+   * window cannot present the same harness at both ends unless it was never
+   * reused at all. One extra `ps` per collection, ~40 ms against 8–12 s.
+   */
+  after: ProcessTableReading;
+  /**
    * Seconds since boot, read once per collection — the clock that lets the
-   * process table's elapsed times and `/proc`'s start ticks be compared. See
-   * the cross-check in {@link readExecutionIdentity}.
+   * process table's elapsed times and `/proc`'s start ticks be compared. A
+   * SECONDARY check now that bracketing carries the proof: it still catches a
+   * `/proc` read of a process the table never described. See {@link startAgrees}.
    */
   uptime: UptimeReading;
   /** Start ticks for one pid. Called at most once per row. */
@@ -148,7 +176,7 @@ export type ExecutionInput = {
  * ask*, and one of them is allowed to be reassuring in a way the other is not.
  */
 export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
-  const { panePid, claimedConversationId, table, boot, uptime, readStart } = input;
+  const { panePid, claimedConversationId, table, after, boot, uptime, readStart } = input;
 
   if (!boot.read) return { kind: "unknown", cause: boot.cause, why: boot.why };
   if (panePid === null) {
@@ -206,6 +234,12 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
   const agreement = startAgrees(harness.pid, table, uptime, start.ticks);
   if (agreement !== null) return agreement;
 
+  // AND THE BRACKET, which is the part that actually proves it. The `/proc`
+  // read happened between these two classifications, so a pid reused inside
+  // that window shows a different harness at the far end.
+  const settled = stillTheSameHarness(panePid, harness, after);
+  if (settled !== null) return settled;
+
   const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
   const whyUnobserved =
     harness.kind === "claude-code"
@@ -221,25 +255,80 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
 }
 
 /**
- * **DO THE PROCESS TABLE AND `/proc` DESCRIBE THE SAME PROCESS?** — null when
- * they agree, and the refusal to return when they do not.
+ * **THE SAME HARNESS AT BOTH ENDS OF THE `/proc` READ** — null when it is, and
+ * the refusal to return when it is not.
  *
- * The check costs nothing anybody was not already paying. `ps` reported this
- * process's ELAPSED TIME and `/proc` reported its START TICK; with one uptime
- * reading those are two independent measurements of one instant, taken by two
- * different mechanisms moments apart. **A second, independent join, built so
- * that it CAN contradict the first** — which is the only kind of check worth
- * having here, since a reading assembled from two processes is internally
- * consistent and looks perfect.
+ * This is the one that proves a `verified` reading is about a single process.
+ * The `/proc` read happens between the two classifications, so a pid handed to
+ * another process inside that window presents a different harness — a different
+ * pid, kind, or conversation — when the tree is walked again afterwards.
  *
- * A replacement that took the pid inside the race window is seconds old while
- * the table said minutes, so the disagreement is the whole of the previous
- * process's life rather than a rounding. See `START_AGREEMENT_TOLERANCE_S` for
- * the honest slack this has to allow.
+ * **IT COMPARES THE WHOLE ANSWER, not just the pid.** A replacement that
+ * happened to be a `claude` too would keep the pid and change the conversation;
+ * one that was not would change the kind. Comparing only pids would pass both.
+ *
+ * A second table that could not be read is a refusal, not a pass — an unmade
+ * check is not a passed check, the same rule as everywhere else here.
+ */
+function stillTheSameHarness(panePid: number, before: Harness, after: ProcessTableReading): ExecutionReading | null {
+  if (!after.read) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why: `the process table could not be read again after ${before.kind === "unknown" ? "the walk" : `pid ${before.pid}`}'s start time, so nothing shows the pid still belongs to the process it was classified from: ${after.why}`,
+    };
+  }
+  const now = classifyPaneHarness(panePid, after);
+  if (now.kind !== before.kind) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why: `this pane held ${before.kind} when its start time was read and holds ${now.kind} immediately afterwards, so the two readings are not of one process`,
+    };
+  }
+  if (now.kind !== "unknown" && before.kind !== "unknown" && now.pid !== before.pid) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why: `the harness under this pane was pid ${before.pid} when its start time was read and is pid ${now.pid} immediately afterwards`,
+    };
+  }
+  if (
+    now.kind === "claude-code" &&
+    before.kind === "claude-code" &&
+    now.claudeSessionId !== before.claudeSessionId
+  ) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why:
+        `pid ${before.pid} was running conversation ${before.claudeSessionId ?? "none"} when its start time was read and ` +
+        `${now.claudeSessionId ?? "none"} immediately afterwards, so the pid was reused between the two`,
+    };
+  }
+  return null;
+}
+
+/**
+ * **DO THE PROCESS TABLE AND `/proc` ROUGHLY AGREE ABOUT WHEN THIS STARTED?** —
+ * null when they do, and the refusal to return when they do not.
+ *
+ * **A SECONDARY CHECK, AND THE COMMENT HERE USED TO OVERSELL IT.** It said `ps`
+ * elapsed time and `/proc` start ticks were two independent measurements of one
+ * instant. They are not independent: procps computes `etimes` from its own
+ * uptime read and the same field 22, so this compares a value against a lossy
+ * earlier copy of itself. GPT Sol, 2026-09-09, and the bracket above is what
+ * actually carries the proof.
+ *
+ * It is kept because it still catches something the bracket does not: a `/proc`
+ * read that answered for a process the table never described at all — a pid
+ * threaded through wrongly, a stubbed reader in a test, a table and a `/proc`
+ * from two different boxes. That is a real class and it is nearly free to
+ * exclude.
  *
  * **AN UNMADE CHECK IS NOT A PASSED CHECK.** No uptime, or a table row whose
  * elapsed time could not be converted, refuses rather than waving the pair
- * through — the same rule as every other arm in this file.
+ * through.
  */
 function startAgrees(
   pid: number,

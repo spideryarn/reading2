@@ -51,10 +51,35 @@ export function executionTokenText(token: ExecutionToken): string {
  * take a token apart, because a consumer that compares fields instead of whole
  * strings is a second definition of what identity means.
  */
-const TOKEN_TEXT = /^[^:\s]+:[1-9]\d{0,9}:\d{1,19}$/;
+const TOKEN_TEXT = /^([^:\s]+):(\d{1,19}):(\d{1,19})$/;
 
+/**
+ * **ONE TEXT PER TOKEN, ENFORCED BY ROUND-TRIP** rather than by a pattern that
+ * merely looks strict.
+ *
+ * The first version tested a regex and stopped there, which accepted
+ * `boot:1:01` — a SECOND spelling of `boot:1:1` — and `boot:1:9007199254740992`,
+ * which is past `Number.MAX_SAFE_INTEGER` and so cannot survive the wire
+ * parsers that require a safe integer. Tokens are compared as whole strings, so
+ * two spellings of one identity is a replacement that never happened: it would
+ * fire `session-execution-changed` and reset a session's measured age for
+ * nothing. GPT Sol's round-2 P2.
+ *
+ * Re-serialising and demanding equality is the whole check, and it is the same
+ * trick as a canonical-form test anywhere: if `executionTokenText` of the parts
+ * is not the input, the input was not something this system wrote.
+ */
 export function isExecutionTokenText(value: unknown): value is string {
-  return typeof value === "string" && TOKEN_TEXT.test(value);
+  if (typeof value !== "string") return false;
+  const match = TOKEN_TEXT.exec(value);
+  if (match === null) return false;
+  const [, boot, pidText, ticksText] = match;
+  if (boot === undefined || pidText === undefined || ticksText === undefined) return false;
+  const pid = Number(pidText);
+  const startTicks = Number(ticksText);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  if (!Number.isSafeInteger(startTicks) || startTicks < 0) return false;
+  return executionTokenText({ boot, pid, startTicks }) === value;
 }
 
 /**
@@ -139,6 +164,21 @@ export type IdentityWriteGate = { allowed: true; token: string; conversationId: 
  */
 const ADDRESSABLE: ReadonlySet<string> = new Set(["claude-code"]);
 
+/**
+ * **THE ONE PLACE THAT ANSWERS IT**, exported because it was being answered in
+ * three.
+ *
+ * The gate below, the Overseer's row parser and the browser's row parser each
+ * had their own copy of "which harness can hold an addressable conversation" —
+ * and the browser's carried a comment claiming the policy was *not* duplicated,
+ * which was simply false. The next harness added to `HarnessKind` would have
+ * been handled in whichever of the three its author happened to be reading.
+ * GPT Sol's round-2 follow-on.
+ */
+export function isAddressableHarness(harness: string): boolean {
+  return ADDRESSABLE.has(harness);
+}
+
 export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate {
   if (reading.kind === "unknown") {
     return {
@@ -158,7 +198,7 @@ export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate 
       // `verified` conversation on a `shell` is a combination this box's
       // producer cannot make and a payload can assert; the parsers refuse it
       // too, and this is the second of the two locks.
-      if (!ADDRESSABLE.has(reading.harness)) {
+      if (!isAddressableHarness(reading.harness)) {
         return {
           allowed: false,
           why: `this pane holds ${reading.harness}, which cannot be addressed by conversation, so a claim that it is running ${reading.conversation.id} is not something to act on`,

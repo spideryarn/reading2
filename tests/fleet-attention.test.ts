@@ -435,8 +435,32 @@ describe("readAttention", () => {
  * thing this seam exists to keep out: it pulls usage, memory, diff, lock and log
  * in behind it, and it holds the Overseer's own opinion about what a bad
  * checkpoint means.
+ *
+ * **THREE MORE ADDED ON 2026-09-09, for execution identity, and they pass the
+ * same test rather than being exceptions to it.** `work.ts`, `work-probe.ts`
+ * and `harness.ts` walk a process table and name what is holding a pane. Their
+ * whole closure is `work.ts` → `fleet/claude-argv.js` (a true leaf),
+ * `harness.ts` → `claude-argv.js` + `wire.js` (types only) + `work.js`, and
+ * `work-probe.ts` → `node:child_process` + `work.js`. **None reaches the
+ * store**, which is what this seam exists to keep out, and none closes a cycle.
+ * `tools/fleet/execution-identity.ts` imports them because the alternative was
+ * a second copy of a process-tree walk that is tested against captures taken
+ * off this box.
+ *
+ * **The count is not the rule; the store is.** Five is not more permissive than
+ * two in the way that matters — it is two more leaves on the safe side of the
+ * same line. The Overseer took this decision explicitly rather than it being
+ * slipped in with the diff.
+ *
+ * **AND THE REAL END STATE IS A MOVE, NOT A LONGER LIST.** Those three modules
+ * are about panes and processes, which is the fleet's own domain — the Overseer
+ * uses them for *interpretation*, which is a consumer relationship, not
+ * ownership. Moving them under `tools/fleet/` would take this list back to two
+ * and put each module where its subject lives. It is named in
+ * docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md as work for a
+ * later stage, and it is too large to do inside one.
  */
-const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["jsonl.ts", "lock.ts"];
+const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["harness.ts", "jsonl.ts", "lock.ts", "work-probe.ts", "work.ts"];
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. Build output excluded. */
 /**

@@ -55,6 +55,7 @@
 import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
 import { readAttemptClock } from "../fleet/attempt-clock.js";
+import { isAddressableHarness } from "../fleet/execution-token.js";
 import type { ConversationReading, ExecutionReading, ExecutionUnknownCause, HarnessKind } from "../fleet/wire.js";
 
 /**
@@ -628,7 +629,7 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
 function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
   if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
   const observed = reading.conversation.id;
-  if (claimed !== null && observed === claimed && ADDRESSABLE_HARNESSES.has(reading.harness)) return reading;
+  if (claimed !== null && observed === claimed && isAddressableHarness(reading.harness)) return reading;
   const why =
     claimed === null
       ? `this row claims no conversation, so a producer's report that it is running ${observed} agrees with nothing`
@@ -637,12 +638,6 @@ function coherentWith(reading: ExecutionReading, claimed: string | null): Execut
         : `the producer reports a verified conversation on ${reading.harness}, which cannot hold one`;
   return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
 }
-
-/**
- * The harnesses that can hold an addressable conversation — see the twin in
- * `tools/fleet/execution-token.ts`, which is the policy this defers to.
- */
-const ADDRESSABLE_HARNESSES: ReadonlySet<HarnessKind> = new Set<HarnessKind>(["claude-code"]);
 
 /**
  * The named causes, as a `Record` over the closed union so that a new arm in
