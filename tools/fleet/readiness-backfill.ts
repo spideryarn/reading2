@@ -573,15 +573,22 @@ export function checkoutRoots(primary: string): { roots: string[]; truncated: bo
      entry before returning, so the cap bounded the loop and not the listing:
      exactly the bug that had just been fixed one function down, left in place
      here. GPT Sol, round 3. */
+  /* **The cap counts entries INSPECTED, not roots accepted.** Counting the
+     accepted ones meant a directory of 150 non-directory entries was walked in
+     full while `truncated` stayed false — the bound measuring the wrong thing,
+     which is the same mistake as putting it after `readdirSync`, one level in.
+     GPT Sol, round 4. */
   let truncated = false;
+  let inspected = 0;
   try {
     for (;;) {
-      if (roots.length >= MAX_ROOTS) {
+      if (inspected >= MAX_ROOTS) {
         truncated = true;
         break;
       }
       const entry: Dirent | null = handle.readSync();
       if (entry === null) break;
+      inspected += 1;
       if (entry.isDirectory()) roots.push(join(worktrees, entry.name));
     }
   } finally {

@@ -797,7 +797,24 @@ describe("scanning a directory of logs", () => {
     try {
       for (let i = 0; i < 150; i += 1) mkdirSync(join(many, ".claude", "worktrees", `w${i}`), { recursive: true });
       const found = checkoutRoots(many);
-      expect(found.roots.length).toBe(100);
+      expect(found.roots.length).toBeLessThanOrEqual(101);
+      expect(found.truncated).toBe(true);
+    } finally {
+      rmSync(many, { recursive: true, force: true });
+    }
+  });
+
+  it("counts entries INSPECTED, not roots accepted", () => {
+    /* 150 non-directory entries used to be walked in full with `truncated`
+       staying false — the bound measuring the wrong thing. GPT Sol, round 4. */
+    const many = mkdtempSync(join(tmpdir(), "readiness-files-"));
+    try {
+      mkdirSync(join(many, ".claude", "worktrees"), { recursive: true });
+      for (let i = 0; i < 150; i += 1) writeFileSync(join(many, ".claude", "worktrees", `f${i}`), "");
+      const found = checkoutRoots(many);
+      /* No worktrees found — they are all files — but the listing was still
+         abandoned, and that has to be said. */
+      expect(found.roots).toEqual([many]);
       expect(found.truncated).toBe(true);
     } finally {
       rmSync(many, { recursive: true, force: true });
@@ -1075,6 +1092,88 @@ describe("the readiness verdict", () => {
       counts: { kind: "vitest", files: null, tests: { passed: 371, failed: 0, skipped: 0, total: 371 } },
     };
     expect(parseRunRecord(JSON.stringify(setupFailure))).not.toBeNull();
+  });
+
+  it("does NOT let a PASSING check promote a `DID NOT RUN` required row to a pass", () => {
+    /* GPT Sol drove this to `ready`. The passing branch emitted a pass for every
+       required check without consulting the table at all, so a record whose two
+       halves disagree produced green. */
+    const out = verdict([
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "gate", verdict: "did-not-run", findings: null },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+    expect(out.kind === "unknown" && out.why).toContain("disagree");
+  });
+
+  it("does NOT let a PASSING check promote a `findings` required row to a pass", () => {
+    const out = verdict([
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "unknown", verdict: "findings", findings: 2 },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+  });
+
+  it("still accepts a passing check whose table is merely truncated", () => {
+    /* An ABSENT row is not a contradiction: `check.ts` prints one per step, so a
+       missing one means we read part of the table, and the outer status already
+       proves the gates ran. Rejecting these would make the strongest single
+       piece of evidence useless. */
+    const out = verdict([
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          counts: { kind: "check", steps: [{ name: "typecheck", gate: "unknown", verdict: "clean", findings: null }] },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("ready");
+  });
+
+  it("still accepts a passing check whose ADVISORY steps are noisy", () => {
+    /* lint and knip have a known backlog by design — that is the whole point of
+       the gate/advisory split — so findings there must not unsettle anything. */
+    const out = verdict([
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "unknown", verdict: "clean", findings: null },
+              { name: "lint", gate: "advisory", verdict: "findings", findings: 48 },
+              { name: "dupes", gate: "advisory", verdict: "findings", findings: 308 },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("ready");
   });
 
   it("takes the WORST of duplicate rows for one check, not the last", () => {

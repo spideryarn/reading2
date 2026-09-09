@@ -38,6 +38,8 @@ import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
+import { makeReadinessRetention, WINDOW_HOURS as READINESS_WINDOW_HOURS } from "./readiness-wiring.js";
+import { readinessRoute } from "./routes-readiness.js";
 import { usageHistoryRoute } from "./routes-usage-history.js";
 import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
@@ -163,6 +165,50 @@ const retention = makeHealthRetention({
 });
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
+
+/**
+ * Readiness: whether dev is green, and the day behind that answer.
+ *
+ * **The snapshot is computed on the refresh loop and served from memory.** Its
+ * inputs are git, a scan of every checkout's `logs/tmux-jobs/`, and `tmux ls` —
+ * none of which may happen inside a request on a single-threaded server that has
+ * to stay up when the box is at load 391. `readiness-wiring.ts` § the timer.
+ *
+ * Like health retention, a store that will not open does not stop the
+ * dashboard: the payload then reports that nothing is being recorded, which the
+ * verdict turns into `unknown` rather than into a quiet green.
+ */
+const readiness = makeReadinessRetention({ primary: process.cwd() });
+for (const line of readiness.lines.log) console.log(line);
+for (const line of readiness.lines.error) console.error(line);
+
+let readinessSnapshot: import("./readiness-wiring.js").ReadinessSnapshot | null = null;
+
+/**
+ * Recompute it, never throwing into the loop.
+ *
+ * A readiness collection that failed must leave the PREVIOUS snapshot in place
+ * — the page shows how old it is, so a stale answer is legible, where a blank
+ * one is a lie that looks like an empty box. Same rule as `health` above.
+ */
+function refreshReadiness(): void {
+  try {
+    readinessSnapshot = readiness.collect();
+  } catch (err) {
+    console.error(`readiness collection failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+refreshReadiness();
+
+/** How often readiness is recomputed. See the loop for why it is not REFRESH_MS. */
+const READINESS_REFRESH_MS = Number(process.env["FLEET_READINESS_REFRESH_MS"] ?? 120_000);
+let lastReadinessMs = Date.now();
+
+const readinessApi = readinessRoute({
+  snapshot: () => readinessSnapshot,
+  windowHours: READINESS_WINDOW_HOURS,
+  refreshMs: REFRESH_MS,
+});
 
 /**
  * The cross-agent feed. **The snapshot is passed as a function, not a value** —
@@ -545,6 +591,15 @@ async function describeLoop(): Promise<void> {
 async function refreshLoop(): Promise<void> {
   for (;;) {
     await refresh();
+    /* **Readiness on its own, slower cadence.** It spawns several subprocesses
+       and scans every checkout — measured at ~50 ms in total, but on a box that
+       reaches load 391 the right instinct is to do that as rarely as the answer
+       needs. What it is about — which commit dev is on, and what has been run
+       against it — changes on the scale of minutes, not seconds. */
+    if (Date.now() - lastReadinessMs >= READINESS_REFRESH_MS) {
+      lastReadinessMs = Date.now();
+      refreshReadiness();
+    }
     /* `nextWaitMs` in refresh.ts, not the expression that used to be here: the
        same number is recorded in every health sample as what the next reading
        was expected at, and two copies of this rule would draw a legitimate
@@ -595,6 +650,10 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  // Whether dev is green, and the day behind it. Read-only, and it serves the
+  // snapshot the refresh loop built rather than computing anything here.
+  if (readinessApi.handle(req, res)) return;
 
   /* The last day of usage limits, for the chart on Usage limits.
      **Read-only and lock-free, and it reads a file THIS PROCESS DOES NOT
