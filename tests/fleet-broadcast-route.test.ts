@@ -299,6 +299,57 @@ describe("the door", () => {
     expect(h.calls).toHaveLength(0);
   });
 
+  it("refuses a multi-line message the same way whatever the fleet is doing", async () => {
+    /**
+     * **THE SAME BAD MESSAGE BEHAVED TWO WAYS**, which is GPT Sol's P1-1 and the
+     * reason `checkText` is now asked once at the top rather than being left to
+     * whichever downstream happened to run.
+     *
+     * A newline submits the message early, so `checkText` refuses it. With
+     * anything WORKING in the fleet, `enqueueMessage`'s own `checkText` caught it
+     * and the whole broadcast was refused. With an ALL-IDLE fleet the queue was
+     * never touched, every recipient reached `sendMessage`, and the answer was
+     * HTTP 200 with N failed rows and a spent cooldown.
+     *
+     * The card's box is a multi-line textarea, so this is one paste away.
+     */
+    const idle = harness();
+    const allIdle = await post(idle.routes, run({ text: "first line\nsecond line" }));
+    expect(allIdle.status).toBe(400);
+    expect(allIdle.json["code"]).toBe("bad-text");
+    expect(idle.calls).toHaveLength(0);
+
+    const mixed = harness();
+    const withWorking = await post(
+      mixed.routes,
+      run({
+        text: "first line\nsecond line",
+        recipients: [recipient({ id: "$1" }), recipient({ id: "$2", status: WORKING })],
+      }),
+    );
+    expect(withWorking.status).toBe(400);
+    expect(withWorking.json["code"]).toBe("bad-text");
+    expect(mixed.calls).toHaveLength(0);
+    expect(mixed.queued).toHaveLength(0);
+
+    // And neither spent the cooldown, since neither reached anybody.
+    expect((await post(idle.routes, run())).status).toBe(200);
+  });
+
+  it("refuses a control character, which is a keystroke and not a letter", async () => {
+    /* **BUILT FROM A CODE POINT, NEVER TYPED INTO THIS FILE.** The first
+       version of this line carried a literal BEL byte, which is exactly what
+       steer.ts refuses to write and says why: "a control character in a SOURCE
+       file is a byte grep cannot see and a reviewer cannot read, and this repo
+       has been bitten by writing one." A test for the rule is not exempt from
+       the rule. */
+    const bell = String.fromCharCode(7);
+    const r = await post(h.routes, run({ text: `ease off${bell}now` }));
+    expect(r.status).toBe(400);
+    expect(r.json["code"]).toBe("bad-text");
+    expect(h.calls).toHaveLength(0);
+  });
+
   it("refuses a slash command rather than stripping the slash", async () => {
     const r = await post(h.routes, run({ text: "/compact", speaker: "overseer" }));
     expect(r.status).toBe(400);
@@ -336,6 +387,41 @@ describe("who gets it — and the busiest sessions are the point", () => {
     expect(h.queued.map((q) => q.sessionId)).toEqual(["$2"]);
     expect(row(r.json, "$2").kind).toBe("queued");
     expect(result(r.json).counts).toMatchObject({ asked: 2, submitted: 1, queued: 1, skipped: 0 });
+  });
+
+  it("QUEUES a session that is asking a question, rather than typing at its dialog", async () => {
+    /**
+     * **THE ONE STATUS THE TWO GATES DISAGREE ABOUT**, and this route had the
+     * wrong one until GPT Sol's P1-2.
+     *
+     * `drainGate` says `needs-you → now`, which is right for the enqueue route:
+     * you may queue for a session sitting on a dialog. `deliveryGate` says
+     * `later`, because `sendMessage` refuses a pane with a dialog on it and a
+     * message typed AT a dialog would answer it instead of arriving.
+     *
+     * With `drainGate` the preview said *would send*, the run was refused, and
+     * the line ended up neither delivered nor queued — silently lost for the
+     * session most likely to be waiting on a person.
+     */
+    const r = await post(
+      h.routes,
+      run({ recipients: [recipient({ id: "$1" }), recipient({ id: "$2", status: { kind: "needs-you" } })] }),
+    );
+    expect(h.calls.map((c) => c.target.sessionId)).toEqual(["$1"]);
+    expect(h.queued.map((q) => q.sessionId)).toEqual(["$2"]);
+    expect(row(r.json, "$2").kind).toBe("queued");
+  });
+
+  it("previews a question-asking session as would-queue, so the preview matches the run", async () => {
+    const r = await post(
+      h.routes,
+      run({
+        mode: "dry-run",
+        confirm: false,
+        recipients: [recipient({ id: "$2", status: { kind: "needs-you" } })],
+      }),
+    );
+    expect(row(r.json, "$2").kind).toBe("would-queue");
   });
 
   it("hands the queue the RAW line, so the prefix is not applied twice", async () => {
@@ -706,6 +792,38 @@ describe("it must not hold the server's only thread", () => {
     expect(result(r.json).counts["notReached"]).toBe(unreached.length);
   });
 
+  it("stops when the DEADLINE passes during the yield, not only during a send", async () => {
+    /**
+     * GPT Sol's P2 on ordering. The clock check used to run before the yield, so
+     * a yield that came back late — which is the normal case on a loaded box,
+     * and this button exists for loaded boxes — had already been approved by a
+     * check made before the wait. The deadline test next door only advances time
+     * inside `sendMessage`, so it never saw this.
+     *
+     * Here every send is instant and all the time passes in the yield.
+     */
+    let sent = 0;
+    let clock = 1_000_000;
+    const routes = makeBroadcastRoutes({
+      sendMessage: () => {
+        sent += 1;
+        return OK;
+      },
+      now: () => clock,
+      log: () => {},
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "t" }),
+      enqueue: null,
+      runEnabled: () => true,
+      yieldToLoop: async () => {
+        clock += 40_000;
+      },
+    });
+    const r = await post(routes, run({ recipients: Array.from({ length: 8 }, (_, i) => recipient({ id: `$${i + 1}` })) }));
+    expect(r.status).toBe(200);
+    expect(sent).toBeLessThan(8);
+    expect(rows(r.json).filter((x) => x.kind === "not-reached").length).toBeGreaterThan(0);
+  });
+
   it("hands the event loop back between recipients", async () => {
     let yields = 0;
     const routes = makeBroadcastRoutes({
@@ -769,6 +887,43 @@ describe("the cooldown", () => {
     await post(h.routes, run({ recipients: [recipient({ id: "$1", status: SHELL })] }));
     const real = await post(h.routes, run());
     expect(real.status).toBe(200);
+  });
+
+  it("hands the cooldown back when every enqueue was refused and nothing was sent", async () => {
+    /**
+     * GPT Sol's P2. A queue-only broadcast whose enqueues all bounce — session
+     * full, fleet full, double-tap — answered 200 and then held the whole fleet
+     * for ten minutes having interrupted nobody. The cooldown exists to stop the
+     * fleet being told two things at once; a run that told nobody anything has
+     * not spent it.
+     *
+     * Distinct from the test above, which never reaches the cooldown at all
+     * because it is refused at the `not-steerable` gate first.
+     */
+    const full = harness({
+      enqueue: () => ({ ok: false, rule: "session-queue-full", why: "that session already has 20 items queued" }),
+    });
+    const nothing = await post(full.routes, run({ recipients: [recipient({ id: "$2", status: WORKING })] }));
+    expect(nothing.status).toBe(200);
+    expect(nothing.json["result"]).toMatchObject({ counts: { submitted: 0, queued: 0 } });
+
+    const next = await post(full.routes, run({ recipients: [recipient({ id: "$1" })] }));
+    expect(next.status).toBe(200);
+    expect(full.calls).toHaveLength(1);
+  });
+
+  it("keeps the cooldown when even one recipient was reached", async () => {
+    /* The other side of the rule, so "hand it back" cannot quietly become
+       "never take it": one queued recipient is an interruption of the fleet. */
+    const partial = harness({
+      enqueue: (target) =>
+        target.sessionId === "$2"
+          ? { ok: true, position: 1 }
+          : { ok: false, rule: "session-queue-full", why: "full" },
+    });
+    await post(partial.routes, run({ recipients: [recipient({ id: "$2", status: WORKING })] }));
+    const second = await post(partial.routes, run({ recipients: [recipient({ id: "$1" })] }));
+    expect(second.status).toBe(429);
   });
 
   it("lets one through once the cooldown has passed", async () => {

@@ -485,12 +485,17 @@ export function OverseerPanel({
   actions: ActionsUi;
   rows: readonly FleetRow[];
   /**
-   * How many rows in this payload could not be read. Passed through to
-   * `MessageOverseerCard`, which refuses while it is non-zero: a dropped row can
-   * be the one holding the Overseer claim, or a second claimant, and the claim
-   * cannot be settled from a list that is known to be short.
+   * How many rows in this payload could not be read, **or `null` when no
+   * collection has finished** — which is not the same as zero and must not be
+   * flattened into it.
+   *
+   * Both cards below refuse while it is non-zero, for two different reasons: a
+   * dropped row can be the one holding the Overseer claim or a second claimant,
+   * and it is also a session that would silently miss a broadcast labelled
+   * *every agent*. `null` refuses too — see each card — because "we have not
+   * looked" is not "we looked and found none".
    */
-  unreadableRows: number;
+  unreadableRows: number | null;
   /** The Overseer's own state, `not-asked` from a server that does not report it, or `null` before any payload. */
   overseer: OverseerView | null;
   /** The page's one clock. Every age on screen agrees because they all read this. */
@@ -551,7 +556,7 @@ export function OverseerPanel({
           sentence with a staggered pause in it, this one says whatever you type.
           routes-broadcast.ts § the header says why they are two loops today and
           which way the dependency should run when they become one. */}
-      <BroadcastCard rows={rows} />
+      <BroadcastCard rows={rows} unreadableRows={unreadableRows} />
     </div>
   );
 }

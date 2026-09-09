@@ -236,6 +236,37 @@ describe("who the card decides to speak to", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("refuses before any collection has finished, which is not the same as none being dropped", () => {
+    /* Zero unreadable rows is a MEASUREMENT — *we read every row and dropped
+       none*. Before the first payload nothing has been read at all, and `?? 0`
+       in App.tsx dressed the second up as the first. */
+    const { api, calls } = fakeApi(SENT);
+    render(
+      <MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={null} steer={api} />,
+    );
+
+    expect(text()).toContain("No collection has finished yet");
+    expect(text()).not.toContain("no Overseer session");
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("does not promise the role was checked at send time", () => {
+    /**
+     * **THE COPY HALF OF THE ROLE RACE.** The header was corrected and this
+     * tooltip was left saying *"a row that has gone stale produces a refusal
+     * here rather than a message at the wrong session"* — false when only the
+     * role has moved, and it survived an hour into the branch before GPT Sol
+     * read the built code. Four surfaces describe this fact and only one of
+     * them had been fixed.
+     */
+    const { api } = fakeApi(SENT);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
+    const tips = container.querySelectorAll("[aria-describedby], [data-slot]");
+    const all = `${text()} ${[...tips].map((t) => t.getAttribute("aria-label") ?? "").join(" ")}`;
+    expect(all).not.toContain("rather than a message at the wrong session");
+  });
+
   it("refuses a holder with no pane handle, because that is not an address", () => {
     const { api } = fakeApi(SENT);
     render(<MessageOverseerCard rows={[overseerRow({ id: "$1643", paneId: null })]} unreadableRows={0} steer={api} />);

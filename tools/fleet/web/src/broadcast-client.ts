@@ -91,7 +91,7 @@ export type RecipientOutcome = { sessionId: string; paneId: string } & (
   | { kind: "would-send" }
   | { kind: "would-queue" }
   | { kind: "attempted"; outcome: SteerOutcome }
-  | { kind: "queued"; position: number }
+  | { kind: "queued"; position: number | null }
   | { kind: "skipped"; code: string; why: string }
   | { kind: "not-reached"; why: string }
   /** A row the server answered with something this build cannot read. */
@@ -166,19 +166,31 @@ function parseSent(v: unknown): string[][] {
  * dropped: a shorter list would read as a smaller fleet, and the row most likely
  * to be malformed is as likely as any to be the interesting one.
  */
-function parseRecipient(v: unknown): RecipientOutcome | null {
-  if (!isRecord(v)) return null;
-  const sessionId = v["sessionId"];
-  const paneId = v["paneId"];
-  if (typeof sessionId !== "string" || typeof paneId !== "string") return null;
+function parseRecipient(v: unknown, at: number): RecipientOutcome {
+  /* **A ROW THIS BUILD CANNOT READ IS KEPT, NOT DROPPED**, and until GPT Sol's
+     P2 the comment said so while the code returned `null` and the caller threw
+     it away. A shorter list reads as a smaller fleet, and the row most likely to
+     be malformed is as likely as any to be the interesting one — so it keeps its
+     place, with whatever identity survived, and says it could not be read. */
+  const known = isRecord(v) ? v : {};
+  const sessionId = typeof known["sessionId"] === "string" ? known["sessionId"] : `(row ${at + 1})`;
+  const paneId = typeof known["paneId"] === "string" ? known["paneId"] : `(row ${at + 1})`;
+  if (!isRecord(v) || typeof v["sessionId"] !== "string" || typeof v["paneId"] !== "string") {
+    return { sessionId, paneId, kind: "unreadable", why: "the server sent a recipient with no session or pane id" };
+  }
   const where = { sessionId, paneId };
   switch (v["kind"]) {
     case "would-send":
       return { ...where, kind: "would-send" };
     case "would-queue":
       return { ...where, kind: "would-queue" };
-    case "queued":
-      return { ...where, kind: "queued", position: num(v["position"]) };
+    case "queued": {
+      /* **`null`, NOT `0`, FOR A POSITION THAT DID NOT ARRIVE.** Zero is a
+         place in a queue and would render as one; the honest answer is that
+         this build was not told where it landed. */
+      const at = v["position"];
+      return { ...where, kind: "queued", position: typeof at === "number" && Number.isFinite(at) ? at : null };
+    }
     case "skipped":
       return {
         ...where,
@@ -224,11 +236,9 @@ function parseResult(v: unknown): BroadcastResult {
   if (!isRecord(v)) return { counts: { asked: 0, submitted: 0, queued: 0, skipped: 0, notReached: 0 }, recipients: [], sample: null };
   const counts = isRecord(v["counts"]) ? v["counts"] : {};
   const rows = Array.isArray(v["recipients"]) ? v["recipients"] : [];
-  const recipients: RecipientOutcome[] = [];
-  for (const row of rows) {
-    const parsed = parseRecipient(row);
-    if (parsed !== null) recipients.push(parsed);
-  }
+  // Every row survives — see `parseRecipient`. The index is passed so a row
+  // with no identity at all can still be pointed at.
+  const recipients: RecipientOutcome[] = rows.map((row, at) => parseRecipient(row, at));
   return {
     counts: {
       asked: num(counts["asked"]),
@@ -285,8 +295,31 @@ export function makeBroadcastApi(fetchImpl: typeof fetch = fetch): BroadcastApi 
       }
 
       if (isRecord(parsed) && parsed["ok"] === true) {
-        const op = parsed["op"] === "broadcast-preview" ? "broadcast-preview" : "broadcast";
-        return { kind: "ran", op, result: parseResult(parsed["result"]) };
+        /**
+         * **THE ANSWER'S OPERATION MUST BE THE ONE THAT WAS ASKED FOR, AND A
+         * MISMATCH IS `unknown` RATHER THAN EITHER.**
+         *
+         * This used to map anything that was not `broadcast-preview` onto
+         * `broadcast`, so a version-skewed or mismatched response to a DRY RUN
+         * could be a real fan-out that had already gone out — and the card
+         * would have drawn it as a confirmation and invited a second Send. GPT
+         * Sol's P1-5.
+         *
+         * `unknown` and not `refused`, because the response itself is evidence
+         * that something ran: the honest reading of *I asked for a preview and
+         * was told about a broadcast* is that the fleet may already have it.
+         */
+        const op = parsed["op"];
+        const wanted = dryRun ? "broadcast-preview" : "broadcast";
+        if (op !== wanted) {
+          return {
+            kind: "unknown",
+            why:
+              `this was a ${dryRun ? "dry run" : "real broadcast"} and the server answered ${JSON.stringify(op)}. ` +
+              "The two do not match, so what reached the fleet cannot be read off this answer — look at the queue and at a session before sending anything else.",
+          };
+        }
+        return { kind: "ran", op: wanted, result: parseResult(parsed["result"]) };
       }
       return {
         kind: "refused",

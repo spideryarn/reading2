@@ -13,9 +13,14 @@
  * they use different rules and they diverge exactly when the box is changing
  * fastest, which is when somebody reaches for this button. So there is no
  * client-side count. Press **Preview** and the server classifies the rows with
- * the same `drainGate` the send will use, and answers with what it WOULD do to
- * each and the exact line it would say. Press **Send it** and that is what
+ * the same `deliveryGate` the send will use, and answers with what it WOULD do
+ * to each and the exact line it would say. Press **Send it** and that is what
  * happens.
+ *
+ * A preview stops being current when the words change, when the **recipient
+ * set** changes — a set, not a count, because a one-for-one replacement keeps
+ * the length identical — or when the server answers a dry run with something
+ * other than a preview, which is read as *the fleet may already have it*.
  *
  * The cost of a broadcast is the reason it is two presses rather than one:
  *
@@ -29,15 +34,18 @@
  * ## What the receipts may and may not say
  *
  * **Never "sent to everybody".** A row was `submitted` (the tmux calls
- * completed), `queued` (it is working, so the line is in its queue and arrives
- * at its next prompt), `skipped`, or `not-reached`. Even a submitted row is not
+ * completed), `queued` (it is working, so the line is in its queue and is attempted
+ * when it is next eligible), `skipped`, or `not-reached`. Even a submitted row is not
  * a receipt: nothing on this box can establish that an agent read a line, and
  * `verified` is a pre-send identity check. So the headline counts what was
  * measured and the words are `submitted` and `queued`, never *heard*.
  *
  * A `queued` row is the one most easily misread. It may be delivered a long time
- * later, to a session whose situation has moved on — so it says *will arrive
- * when it is next at a prompt*, and nothing on it reads as "sent".
+ * later, to a session whose situation has moved on — and it may never be
+ * delivered at all, because a queued item can expire, be cancelled, be orphaned
+ * with its session, or sit behind a quarantine hold. So it says it will be
+ * **attempted when that session is next eligible**, which is the strongest true
+ * statement available, and nothing on it reads as "sent" or as "it will arrive".
  *
  * ## The Overseer's own row
  *
@@ -56,6 +64,7 @@ import {
   type BroadcastResult,
   type RecipientOutcome,
 } from "./broadcast-client";
+import { sentTarget, type SentTarget } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
 import type { FleetRow } from "./types";
@@ -64,7 +73,7 @@ import { Button, Card, Mono } from "./ui";
 /**
  * Which rows are worth sending up at all.
  *
- * **This is not a decision about who may be spoken to** — `drainGate` makes that
+ * **This is not a decision about who may be spoken to** — `deliveryGate` makes that
  * cut on the server, and duplicating it here is how the count in front of a
  * person stops matching the fan-out. This only drops rows that carry no address:
  * without a pane handle there is nowhere for keystrokes to go, and without a
@@ -78,6 +87,23 @@ function addressable(rows: readonly FleetRow[]): FleetRow[] {
 
 function isOverseer(row: FleetRow): boolean {
   return row.role.kind === "overseer";
+}
+
+/**
+ * **WHAT A PREVIEW WAS ABOUT, AS A STRING THAT CHANGES WHEN ANYTHING DOES.**
+ *
+ * This was a recipient COUNT, and GPT Sol's P1-3 is why it is not: a one-for-one
+ * replacement — one session ends and another appears between Preview and Send —
+ * keeps the length identical, so the preview stayed "current" while describing a
+ * different fleet. A pane, uuid or pid changing under a live row did the same.
+ *
+ * So the signature is every field the request actually carries, in order,
+ * including the status each row was in — because a session that was working
+ * when the preview said *would queue* and is idle now would be typed at
+ * instead, which is a different thing from what was agreed to.
+ */
+function signature(rows: readonly FleetRow[]): string {
+  return rows.map((r) => `${r.id}|${r.paneId}|${r.claudeSessionId}|${r.panePid}|${r.status.kind}`).join("\n");
 }
 
 /** The line under the counts. Every number here was measured, not assumed. */
@@ -95,7 +121,7 @@ function headline(result: BroadcastResult, preview: boolean): string {
 }
 
 /** One row of the receipts. The arm decides the words; nothing is generic. */
-function Receipt({ row, name }: { row: RecipientOutcome; name: string }): ReactNode {
+function Receipt({ row, name, sent }: { row: RecipientOutcome; name: string; sent: SentTarget | undefined }): ReactNode {
   const head = (
     <span className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
       <span className="tw:font-medium tw:text-ink">{name}</span>
@@ -106,15 +132,27 @@ function Receipt({ row, name }: { row: RecipientOutcome; name: string }): ReactN
     <li className="tw:border-t tw:border-rule tw:py-2 tw:text-[13px]">
       {head}
       {row.kind === "attempted" ? (
-        <SteerReceipt outcome={row.outcome} target={{ paneId: row.paneId, sessionId: row.sessionId, panePid: null }} />
+        /* **THE TARGET AS IT WAS POSTED**, so `checkLanding` compares against
+           what was actually addressed. Synthesising one here with `panePid:
+           null` made every receipt report the pid as uncomparable when it had
+           been sent — the comparison this component exists for, quietly not
+           made. */
+        <SteerReceipt
+          outcome={row.outcome}
+          target={sent ?? { paneId: row.paneId, sessionId: row.sessionId, panePid: null }}
+        />
       ) : null}
       {row.kind === "queued" ? (
-        /* **NOT "SENT", AND NOT "IT WILL BE READ".** It is in that session's
-           queue, it goes when the session is next at a prompt, and that may be a
-           long time — by which point what it is doing has moved on. */
+        /* **NOT "SENT", AND NOT "IT WILL BE READ", AND NOT EVEN "IT WILL GO".**
+           A queued item can expire, be cancelled, be orphaned when its session
+           ends, or sit behind a quarantine hold — so the only true statement is
+           that it will be ATTEMPTED when the session is next eligible. GPT Sol's
+           P2, and the test that pinned the old wording was enforcing the
+           overclaim. */
         <p className="tw:mt-1 tw:text-ink-soft">
-          Queued (position {row.position}). It goes when that session is next at a prompt, which may be a while — it is
-          working now. Nothing has been typed at it.
+          Queued{row.position === null ? "" : ` (position ${row.position})`}. It will be attempted when that session is
+          next eligible, which may be a while — it is working now. Nothing has been typed at it, and nothing here can
+          promise it arrives.
         </p>
       ) : null}
       {row.kind === "skipped" ? (
@@ -136,9 +174,19 @@ function Receipt({ row, name }: { row: RecipientOutcome; name: string }): ReactN
 
 export function BroadcastCard({
   rows,
+  unreadableRows,
   api = httpBroadcastApi,
 }: {
   rows: readonly FleetRow[];
+  /**
+   * How many rows in this payload the page could not read.
+   *
+   * **A control that says "every live Claude session" must not run off a list
+   * it knows is short.** The Overseer card had this from the start and this one
+   * did not, which GPT Sol found: a dropped row here is a session that silently
+   * does not get the message, under a label promising all of them.
+   */
+  unreadableRows: number | null;
   /** The seam. A test drives this card without a network; the browser gets the default. */
   api?: BroadcastApi;
 }): ReactNode {
@@ -146,51 +194,87 @@ export function BroadcastCard({
   const [includeOverseer, setIncludeOverseer] = useState(false);
   const [busy, setBusy] = useState(false);
   /**
-   * The preview, and **the exact text it was made against**.
+   * The preview, and **exactly what it was a preview of** — the words, the
+   * recipient signature, and the addresses that were posted.
    *
-   * Held together because they are one fact. A preview of one sentence beside a
-   * box now containing another is a confirmation of something nobody is about to
-   * send, so editing the text drops the preview rather than leaving it looking
-   * current — which is the same class as a stale row: a number on screen that no
-   * longer describes what the button will do.
+   * Held together because they are one fact. A preview beside a box now
+   * containing another sentence, or beside a fleet that has changed underneath
+   * it, is a confirmation of something nobody is about to send.
    */
-  const [preview, setPreview] = useState<{ result: BroadcastResult; of: string; to: number } | null>(null);
-  const [done, setDone] = useState<BroadcastOutcome | null>(null);
+  const [preview, setPreview] = useState<{
+    result: BroadcastResult;
+    of: string;
+    to: string;
+    sent: Map<string, SentTarget>;
+  } | null>(null);
+  const [done, setDone] = useState<{ outcome: BroadcastOutcome; sent: Map<string, SentTarget> } | null>(null);
 
   const targets = addressable(rows).filter((r) => includeOverseer || !isOverseer(r));
   const words = text.trim();
   const names = new Map<string, string>();
   for (const row of rows) names.set(row.id, row.title ?? row.name);
 
-  /* The preview is only current if BOTH the words and the recipient set are the
-     ones it was made against. Ticking the Overseer box changes who is being
-     agreed to, which is exactly as invalidating as retyping the sentence. */
-  const current = preview !== null && preview.of === words && preview.to === targets.length;
+  /* The preview is current only if the words AND the exact recipient set are the
+     ones it was made against — see `signature`, which is a set rather than a
+     count for a reason. Ticking the Overseer box changes who is being agreed to,
+     which is exactly as invalidating as retyping the sentence. */
+  const now = signature(targets);
+  const current = preview !== null && preview.of === words && preview.to === now;
+  const incomplete = unreadableRows === null || unreadableRows > 0;
 
   const go = useCallback(
     async (dryRun: boolean) => {
-      if (words === "" || targets.length === 0) return;
+      if (words === "" || targets.length === 0 || incomplete) return;
       setBusy(true);
-      const outcome = await api.send(targets, words, dryRun);
+      /* SNAPSHOTTED BEFORE THE AWAIT, and kept: `SteerReceipt` compares what
+         the server verified against what was addressed, and the rows underneath
+         are replaced at every collection while the receipts stay on screen.
+         Passing `panePid: null` — which this did until GPT Sol's P2 — made every
+         receipt say the pid "could not be compared" when it had been sent. */
+      const sent = new Map<string, SentTarget>(targets.map((r) => [r.id, sentTarget(r)]));
+      const answer = await api.send(targets, words, dryRun);
+      /**
+       * **THE ANSWER'S OPERATION IS CHECKED HERE TOO, AND THAT IS NOT
+       * BELT-AND-BRACES.**
+       *
+       * `makeBroadcastApi` refuses a mismatch on the wire, but `api` is an
+       * injected seam — a test's fake, or a later implementation, hands this
+       * card whatever it likes. A card that read `kind: "ran"` and never looked
+       * at `op` would draw a fan-out that HAD ALREADY GONE OUT as a preview,
+       * with a Send button under it. GPT Sol's P1-5, whose second half this is;
+       * the first version of this fix changed only the client and a test caught
+       * that the card was still wrong.
+       *
+       * `unknown` rather than a refusal, for the same reason as on the wire: an
+       * answer describing a broadcast is evidence that one happened.
+       */
+      const wanted = dryRun ? "broadcast-preview" : "broadcast";
+      const outcome: BroadcastOutcome =
+        answer.kind === "ran" && answer.op !== wanted
+          ? {
+              kind: "unknown",
+              why: `this was a ${dryRun ? "dry run" : "real broadcast"} and the answer describes a ${answer.op}. The two do not match, so what reached the fleet cannot be read off it.`,
+            }
+          : answer;
       if (dryRun) {
         setDone(null);
         setPreview(
           outcome.kind === "ran"
-            ? { result: outcome.result, of: words, to: targets.length }
+            ? { result: outcome.result, of: words, to: signature(targets), sent }
             : /* A refusal is not a preview. Showing the old one under a fresh
                  refusal is how somebody confirms a count the server has just
                  told them is wrong. */
               null,
         );
-        if (outcome.kind !== "ran") setDone(outcome);
+        if (outcome.kind !== "ran") setDone({ outcome, sent });
       } else {
         setPreview(null);
-        setDone(outcome);
+        setDone({ outcome, sent });
         if (outcome.kind === "ran") setText("");
       }
       setBusy(false);
     },
-    [api, targets, words],
+    [api, incomplete, targets, words],
   );
 
   const overseerRow = rows.find(isOverseer);
@@ -243,13 +327,30 @@ export function BroadcastCard({
         ) : null}
       </p>
 
-      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">
-        {targets.length} addressable session{targets.length === 1 ? "" : "s"} would be considered. How many of those can
-        actually be reached is the server's answer, not this page's — press Preview.
-      </p>
+      {incomplete ? (
+        /* **A LIST KNOWN TO BE SHORT CANNOT BACK A CONTROL LABELLED "ALL
+           AGENTS".** A dropped row is a session that silently does not get the
+           message, and this card would have promised it did. Refused rather
+           than sent with a caveat: the caveat is the part people stop reading.
+           GPT Sol's P1-3, second half. */
+        <div className="tw:mt-3 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
+          <p className="tw:font-medium tw:text-alarm-ink">
+            {unreadableRows} session row{unreadableRows === 1 ? "" : "s"} in this payload could not be read.
+          </p>
+          <p className="tw:mt-1 tw:text-ink">
+            So this page cannot say who "every agent" is, and will not broadcast to a list it knows is short. It comes
+            back when the next collection arrives whole.
+          </p>
+        </div>
+      ) : (
+        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">
+          {targets.length} addressable session{targets.length === 1 ? "" : "s"} would be considered. How many of those
+          can actually be reached is the server's answer, not this page's — press Preview.
+        </p>
+      )}
 
       <p className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
-        <Button disabled={busy || words === "" || targets.length === 0} onClick={() => void go(true)}>
+        <Button disabled={busy || words === "" || targets.length === 0 || incomplete} onClick={() => void go(true)}>
           {busy && !current ? "Checking…" : "Preview"}
         </Button>
         {/* **THE SEND IS ONLY OFFERED BEHIND A CURRENT PREVIEW.** Not disabled-
@@ -275,34 +376,34 @@ export function BroadcastCard({
           )}
           <ul className="tw:mt-2">
             {preview.result.recipients.map((r) => (
-              <Receipt key={r.paneId} row={r} name={names.get(r.sessionId) ?? r.sessionId} />
+              <Receipt key={r.paneId} row={r} name={names.get(r.sessionId) ?? r.sessionId} sent={preview.sent.get(r.sessionId)} />
             ))}
           </ul>
         </div>
       ) : null}
 
-      {done === null ? null : done.kind === "ran" ? (
+      {done === null ? null : done.outcome.kind === "ran" ? (
         <div className="tw:mt-3 tw:rounded-lg tw:border tw:border-work/40 tw:bg-work-wash tw:p-3 tw:text-[13px]">
-          <p className="tw:font-medium tw:text-work-ink">{headline(done.result, false)}</p>
+          <p className="tw:font-medium tw:text-work-ink">{headline(done.outcome.result, false)}</p>
           <p className="tw:mt-1 tw:text-ink-faint">
             Submitted means the keystrokes went, not that anybody has read them — there is no receipt for a keystroke.
           </p>
           <ul className="tw:mt-2">
-            {done.result.recipients.map((r) => (
-              <Receipt key={r.paneId} row={r} name={names.get(r.sessionId) ?? r.sessionId} />
+            {done.outcome.result.recipients.map((r) => (
+              <Receipt key={r.paneId} row={r} name={names.get(r.sessionId) ?? r.sessionId} sent={done.sent.get(r.sessionId)} />
             ))}
           </ul>
         </div>
       ) : (
         <div className="tw:mt-3 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-          {done.kind === "unknown" ? (
+          {done.outcome.kind === "unknown" ? (
             <>
               {/* **NOT "IT FAILED".** The request may have reached the server and
                   the server may have typed at half the fleet before the answer
                   was lost. Saying nothing happened would invite the retry that
                   says everything twice, to everybody. */}
               <p className="tw:font-medium tw:text-alarm-ink">It is not known what reached the fleet.</p>
-              <p className="tw:mt-1 tw:text-ink">{done.why}</p>
+              <p className="tw:mt-1 tw:text-ink">{done.outcome.why}</p>
               <p className="tw:mt-1 tw:text-ink">
                 Do NOT simply send it again — the server may have delivered some or all of it before the answer was
                 lost. Look at the queue and at a session or two first.
@@ -311,18 +412,23 @@ export function BroadcastCard({
           ) : (
             <>
               <p className="tw:font-medium tw:text-alarm-ink">Nothing was broadcast.</p>
-              <p className="tw:mt-1 tw:text-ink">{done.why}</p>
+              <p className="tw:mt-1 tw:text-ink">{done.outcome.why}</p>
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
-                <Mono>{done.code}</Mono>
+                <Mono>{done.outcome.code}</Mono>
                 <span className="tw:px-1">·</span>
-                <Mono>{`HTTP ${done.status}`}</Mono>
+                <Mono>{`HTTP ${done.outcome.status}`}</Mono>
               </p>
               {/* A refusal that judged the rows still carries WHY for each, which
                   is the only thing that makes it actionable. */}
-              {done.result === null || done.result.recipients.length === 0 ? null : (
+              {done.outcome.result === null || done.outcome.result.recipients.length === 0 ? null : (
                 <ul className="tw:mt-2">
-                  {done.result.recipients.map((r) => (
-                    <Receipt key={r.paneId} row={r} name={names.get(r.sessionId) ?? r.sessionId} />
+                  {done.outcome.result.recipients.map((r) => (
+                    <Receipt
+                      key={r.paneId}
+                      row={r}
+                      name={names.get(r.sessionId) ?? r.sessionId}
+                      sent={done.sent.get(r.sessionId)}
+                    />
                   ))}
                 </ul>
               )}

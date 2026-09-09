@@ -66,6 +66,13 @@
  * reaching an agent that has stopped supervising — not a keystroke in a
  * stranger's pane.
  *
+ * **THE WINDOW IS NOT "ONE COLLECTION INTERVAL", which is what this said
+ * first.** `useFleetState` deliberately keeps its last good state when a
+ * refresh fails, so the displayed rows can be arbitrarily old while the header
+ * shows STALE — and this card would go on offering a Send against them. The
+ * honest bound is **as old as the snapshot on screen**, and that is what the
+ * tooltip says.
+ *
  * **The fix, if it ever matters, is a route that re-reads the live claim off
  * tmux and then delegates to `sendMessage`** — another caller, not another
  * transport. Out of scope for a text box; written down so it is a decision
@@ -119,13 +126,24 @@ type Addressee =
  * everything else this card could be tempted to decide, it is checkable from
  * the row itself.
  */
-function addressee(claim: OverseerClaim, rows: readonly FleetRow[], unreadableRows: number): Addressee {
+function addressee(claim: OverseerClaim, rows: readonly FleetRow[], unreadableRows: number | null): Addressee {
   /* **CHECKED BEFORE THE CLAIM, because it is a reason to disbelieve the
      claim.** A row this payload could not read is as likely as any to be the
      one holding the claim, or to be a second claimant — and `overseerClaim`
      cannot know, since it was handed only the rows that survived. See the
      header for why this one clause is here and the rest of the header's rule is
-     not. */
+     not.
+
+     `null` — no collection has finished — refuses too, and is a DIFFERENT
+     sentence: *nothing has been read* is not *nothing was dropped*. */
+  if (unreadableRows === null) {
+    return {
+      kind: "nobody",
+      why: "No collection has finished yet.",
+      detail:
+        "Nothing has been read off the box, so there is no list of sessions to find the Overseer in. This is what the page looks like for the first few seconds after it loads, and it comes right on its own.",
+    };
+  }
   if (unreadableRows > 0) {
     return {
       kind: "nobody",
@@ -205,7 +223,7 @@ export function MessageOverseerCard({
    * the header: a dropped row can hide a second claimant, and this card refuses
    * rather than sending off a list it knows is short.
    */
-  unreadableRows: number;
+  unreadableRows: number | null;
   /** The seam. A test drives this card without a network; the browser gets the default. */
   steer?: SteerApi;
 }): ReactNode {
@@ -264,10 +282,19 @@ export function MessageOverseerCard({
         <>
           <p className="tw:mt-3 tw:text-[13px] tw:text-ink-soft">
             <Explain
+              /* **THIS TOOLTIP SAID THE THING THE HEADER HAD JUST STOPPED
+                 SAYING**, and it survived an hour into the branch: *"a row that
+                 has gone stale produces a refusal here rather than a message at
+                 the wrong session"*, which is exactly false when only the role
+                 has moved. GPT Sol found it in the built code after finding the
+                 same claim in the plan. A comment fixed and a tooltip left
+                 behind is the copy half of the defect this whole area is about
+                 — four surfaces read the same fact and only one of them was
+                 corrected. */
               tip={{
                 head: "Who holds the claim",
-                what: "The one session whose row says it is the Overseer, read off the snapshot on screen.",
-                how: "The address is checked again against live tmux in the moment before the keys go out, so a row that has gone stale produces a refusal here rather than a message at the wrong session.",
+                what: "The one session whose row says it is the Overseer, as old as the snapshot on screen — which is older than a minute whenever the page is showing STALE.",
+                how: "The ADDRESS is checked against live tmux just before the keys go out, so this cannot type into a stranger's pane. The ROLE is not checked: if this session has handed the claim on since the snapshot, the words still reach it. Look at the header's Overseer line if that would matter.",
               }}
             >
               To <span className="tw:font-medium tw:text-ink">{to.row.name}</span>

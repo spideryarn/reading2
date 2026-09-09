@@ -49,12 +49,21 @@
  * whatever somebody typed; a loop that owned "how a broadcast is authorised"
  * would hand the next caller whichever gating it happened to have.
  *
- * ## Three piles, and `drainGate` makes all three cuts
+ * ## Three piles, and `deliveryGate` makes all three cuts
  *
- * Nothing here decides who may be typed into. `drainGate` (queue.ts) does, and
- * it asks `steerableStatus` (steer.ts), so a shell — where the text would be
+ * Nothing here decides who may be typed into. `deliveryGate` (queue.ts) does,
+ * and it asks `steerableStatus` (steer.ts), so a shell — where the text would be
  * EXECUTED — and a Claude that has exited fall out carrying **their** sentence
  * rather than one written in this file.
+ *
+ * **`deliveryGate` AND NOT `drainGate`, and the difference is one status.** The
+ * first version of this file used `drainGate`, which answers *may this be
+ * QUEUED for* and says `now` for `needs-you`. This loop is asking *may this be
+ * DELIVERED now*, where a session sitting on a dialog is `later` — a message
+ * typed at a dialog answers it instead of arriving. With the wrong gate a
+ * `needs-you` session previewed as *would send*, was refused at send time, and
+ * ended up neither delivered nor queued. queue.ts already says those two
+ * questions "have been confused once"; this was the second time.
  *
  * **A WORKING SESSION IS QUEUED, NOT DROPPED**, and that was a late correction.
  * Keystrokes into a busy Claude do not queue themselves anywhere useful, which
@@ -94,7 +103,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderMessage, type Speaker } from "./actions.js";
 import { sharedQuarantineBook, type QuarantineBook, type UncertainSendReading } from "./quarantine.js";
-import { drainGate, nothingWasSent, type EnqueueRefusalRule } from "./queue.js";
+import { deliveryGate, nothingWasSent, type EnqueueRefusalRule } from "./queue.js";
 /* **THE ONE DOOR TO THE ONE QUEUE.** Written like `drainSharedQueues` beside
    it, and for the reason both that function and server.ts's mount point already
    state: two `SteeringQueue`s would be two queues, and the one the page can see
@@ -113,7 +122,7 @@ import {
   REFUSAL_STATUS,
   type Parsed,
 } from "./routes-steer.js";
-import { describeSend, sendMessage as realSendMessage, type SteerResult, type SteerTarget } from "./steer.js";
+import { checkText, describeSend, sendMessage as realSendMessage, type SteerResult, type SteerTarget } from "./steer.js";
 import type { FleetStatus } from "./status.js";
 import type { Delivery } from "./wire.js";
 
@@ -468,8 +477,15 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
       if (rec === undefined) continue;
       const where = { sessionId: rec.target.sessionId, paneId: rec.target.paneId };
 
-      /* CHECKED BEFORE EACH SEND, not after: the point is to stop before
-         spending another ten seconds, not to notice afterwards that we did. */
+      /* **YIELD FIRST, THEN CHECK THE CLOCK.** These were the other way round
+         until GPT Sol's P2, and the order matters on exactly the box this
+         button exists for: the yield hands the event loop to a server under
+         load, and it can come back long after the deadline has passed — at
+         which point a check made BEFORE it has approved another synchronous
+         send worth up to thirty seconds of tmux timeouts. Reading the clock on
+         the line adjacent to the send is the same discipline `verifyTarget`
+         keeps about the moment before the keys go out. */
+      if (index > 0) await deps.yieldToLoop();
       if (deps.now() - startedAt > BROADCAST_DEADLINE_MS) {
         into.set(rec.target.paneId, {
           ...where,
@@ -478,7 +494,6 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         });
         continue;
       }
-      if (index > 0) await deps.yieldToLoop();
 
       /**
        * **A PRODUCER OF AMBIGUOUS SENDS, AND IT IS THE SAME BOOK AS THE OTHERS.**
@@ -671,6 +686,28 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
       return;
     }
 
+    /* **`checkText` ON THE RENDERED LINE, ONCE, BEFORE ANYTHING IS CLASSIFIED
+       OR SPENT** — and it was missing until GPT Sol's P1-1, which found that
+       the same bad message behaved two different ways depending on the fleet.
+       `parseBody` above checks emptiness and length; `checkText` is the one that
+       refuses a newline (each one submits the message early) and a control
+       character (which is a keystroke, not a letter). Without it:
+
+         - a fleet with anything working hit `enqueueMessage`'s own `checkText`,
+           came back `bad-text`, and was refused globally — correct;
+         - an ALL-IDLE fleet skipped the queue entirely, reached `sendMessage`,
+           and got one failed row per recipient, HTTP 200, and a spent cooldown.
+
+       The multi-line textarea on the card makes that trivially reachable. So it
+       is asked here, of the RENDERED text — the prefix counts toward the 4,000
+       limit, and a newline in the raw line survives into it either way. */
+    const bad = checkText(rendered.text);
+    if (bad) {
+      deps.log(`broadcast: refused code=${bad.code} why=${oneLine(bad.why)}`);
+      respond(res, 400, { ok: false, code: bad.code, why: bad.why });
+      return;
+    }
+
     if (request.mode === "run" && !request.confirm) {
       respond(res, 400, {
         ok: false,
@@ -692,23 +729,36 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
       return;
     }
 
-    /* **THREE PILES, AND `drainGate` MAKES ALL THREE CUTS.** It is the queue's
-       rule and it asks `steerableStatus`, so a shell — where the text would be
-       EXECUTED — and a Claude that has exited fall out here carrying THEIR
-       sentence rather than one written in this file.
+    /* **THREE PILES, AND `deliveryGate` MAKES ALL THREE CUTS — NOT
+       `drainGate`.** Both exist, they differ on exactly one status, and this
+       route had the wrong one until GPT Sol's P1-2.
 
-       `later` is the interesting one. A working session cannot usefully be typed
-       at — keystrokes into a busy Claude do not queue themselves anywhere — but
-       that is an argument for putting the line in its QUEUE, not for dropping
-       it. On this box most sessions are working most of the time, so a fan-out
-       that silently omitted them would reach a third of the fleet while calling
-       itself a broadcast to all agents. GPT Sol's C, and it was right. */
+       `drainGate` answers *may this session be QUEUED for*, and says `now` for
+       `needs-you`, which is right for the enqueue route: a session sitting on a
+       dialog is one you may queue for. `deliveryGate` answers the different
+       question this loop is asking — *may this be DELIVERED right now* — and
+       says `later` for `needs-you`, because `sendMessage` refuses a pane with a
+       dialog on it (`pane-is-asking`) and a message typed AT a dialog would
+       answer it rather than arrive as a message.
+
+       With the wrong gate, a `needs-you` session previewed as `would-send`, was
+       refused at send time, and ended up neither delivered nor queued — the one
+       outcome a broadcast must not produce silently. queue.ts says the two
+       questions "have already been confused once"; this was the second time.
+
+       `later` is the interesting arm, and it is why this is a fan-out and not a
+       filter. A working session cannot usefully be typed at — keystrokes into a
+       busy Claude do not queue themselves anywhere — but that is an argument for
+       putting the line in its QUEUE, not for dropping it. On this box most
+       sessions are working most of the time, so a fan-out that omitted them
+       would reach a third of the fleet while calling itself a broadcast to all
+       agents. GPT Sol's C. */
     const outcomes = new Map<string, BroadcastRecipient>();
     const deliverable: Recipient[] = [];
     const queueable: Recipient[] = [];
     for (const rec of request.recipients) {
       const where = { sessionId: rec.target.sessionId, paneId: rec.target.paneId };
-      const gate = drainGate(rec.declaredStatus);
+      const gate = deliveryGate(rec.declaredStatus);
       if (gate.kind === "now") {
         deliverable.push(rec);
         continue;
@@ -879,6 +929,20 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     await fanOut(deliverable, render, at, outcomes);
     const rows = ordered(request, outcomes);
     const counts = countOf(rows, asked);
+    /* **A RUN THAT REACHED NOBODY HANDS THE COOLDOWN BACK.** GPT Sol's P2: a
+       queue-only broadcast whose every enqueue was refused — session full, fleet
+       full, double-tap — answered 200 and held the fleet for ten minutes having
+       done nothing at all. The cooldown is there to stop the fleet being
+       interrupted twice, and nothing that interrupted nobody has spent it.
+
+       Safe at this point for the same reason the `bad-text` rollback is: the
+       only thing that can have moved `lastBroadcastAt` since we took it is
+       another request, and one arriving during the awaits above would have been
+       refused by the cooldown we are about to release rather than setting it. */
+    if (counts.submitted === 0 && counts.queued === 0) {
+      lastBroadcastAt = cooldownWas;
+      deps.log("broadcast: cooldown returned — nothing was submitted and nothing was queued");
+    }
     deps.log(
       `broadcast: done asked=${counts.asked} submitted=${counts.submitted} queued=${counts.queued} ` +
         `skipped=${counts.skipped} notReached=${counts.notReached}`,

@@ -400,6 +400,63 @@ is respected, and given the above that omission is load-bearing rather than luck
 unaffected — `push` does not consult the book, and queueing to a held session is correct, because
 refusing would throw away the instruction the whole mechanism exists to protect.
 
+### D10. What the review of the BUILT code changed — five P1s, none of them findable from the plan
+
+The plan-stage review found four P1s and all were taken. The second round, against `33c459ac`, found
+five more, no P0s, and **every one of them was in something the plan could not have described** — a
+gate chosen, a validator not called, a guard written in terms of a count. That is the argument for
+weighting the second review higher, made concrete.
+
+- **The wrong gate.** The partition used `drainGate`, which answers *may this be queued for* and says
+  `now` for `needs-you`. This loop asks *may this be delivered now*, where `deliveryGate` says
+  `later` — `sendMessage` refuses a pane with a dialog on it. So a session sitting on a question
+  previewed as *would send*, was refused at send time, and ended up **neither delivered nor queued**,
+  for the session most likely to be waiting on a person. `queue.ts` already records that these two
+  questions "have been confused once"; this was the second time.
+
+- **The same bad message behaved two ways.** `checkText` — which refuses a newline (each one submits
+  early) and a control character (which is a keystroke) — was never called. With anything working in
+  the fleet the queue's own copy caught it and refused the broadcast; with an **all-idle** fleet it
+  reached `sendMessage` and produced N failed rows, HTTP 200, and a spent cooldown. The card's box is
+  a multi-line textarea, so it is one paste away. Now asked once, of the rendered line, before
+  anything is classified or spent.
+
+- **A count is not a set.** The preview was bound to the recipient *count*, so a one-for-one
+  replacement — one session ends, another starts, which is the ordinary shape of this box — kept the
+  preview "current" while it described a different fleet. It is now a signature over every field the
+  request carries, including each row's status. The existing test only *added* a row, so it was
+  exercising length and would have passed either way.
+
+- **A dry run could be answered with a real broadcast.** The client mapped any successful
+  non-preview `op` onto `broadcast`, and the card drew any success from its dry-run call as a
+  preview — so a mismatched or version-skewed answer describing a fan-out **that had already gone
+  out** would have been rendered as a confirmation with a Send button under it. Both halves now
+  check, and a mismatch is `unknown` rather than a refusal, because such an answer is evidence
+  something ran. Fixing only the client left the card wrong, and a test caught that.
+
+- **The tooltip still said the thing the header had stopped saying.** D2's correction went into the
+  file header and left `Explain`'s `how` asserting that a stale row "produces a refusal here rather
+  than a message at the wrong session" — exactly false when only the role has moved. Four surfaces
+  describe that fact and one was fixed. **This is the defect class this branch keeps removing,
+  committed inside the fix for an instance of it.**
+
+  The same finding corrected the plan's arithmetic: the window is **not** "one collection interval".
+  `useFleetState` keeps its last good state across refresh failures, so the rows can be arbitrarily
+  old while the header shows STALE. The honest bound is *as old as the snapshot on screen*.
+
+Taken from the P2s, because each is the same class rather than polish: a queued row now says it will
+be **attempted when next eligible** (it can expire, be cancelled, be orphaned, or sit behind a hold —
+and the test name enforcing the old wording was itself the overclaim); the deadline is checked
+**after** the yield, since a yield that returns late had already been approved by a check made before
+it; a run that reached nobody hands the cooldown back; `unreadableRows` is `number | null` because
+zero is a measurement and "nothing has been read" is not one; a malformed recipient row is kept as
+`unreadable` rather than dropped, which is what its comment always claimed; and a receipt now
+compares against the target as posted rather than a synthesised one with `panePid: null`, which had
+been quietly reporting the pid as uncomparable on every row.
+
+**Every fix has a test, and six of them were confirmed to go red under deliberate mutation** before
+being trusted.
+
 ## Open, for the debrief
 
 - **D5's limitation is a product call Greg may want differently**: on a busy box, a broadcast reaches
