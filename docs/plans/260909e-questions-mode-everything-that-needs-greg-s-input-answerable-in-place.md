@@ -833,8 +833,9 @@ silence there discards the one case where the inbox genuinely knows something th
 - [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
       things.
 
-**Delegated to Codex.** Status: *not started.* **This is where the session that picks this up
-begins**; Stage 1's contract is on `dev` and its shape is settled.
+**Delegated to Codex.** Status: **in progress**, picked up 2026-09-09 by the session dispatched for
+Stages 2 and 3. Stage 1's contract is on `dev` at `ed40da53` and its shape is settled; the five
+decisions below were taken before the task was written.
 
 **One requirement carried forward from Stage 1's code review, and it is not optional.** GPT Sol's
 second P1: `questionsAtTime` in `web/src/types.ts` recomputes all three clocks against a supplied
@@ -845,6 +846,53 @@ there was no render path to hang it on. When `QuestionsPanel` mounts, derive its
 add a DOM test that **advances time without delivering another payload** and watches the panel leave
 `complete`. A selector that is only ever called at parse time is the shape of a check that cannot
 fail.
+
+#### Five decisions this session took before writing the task, each with the thing it refused
+
+Written down here rather than discovered in the diff, because four of the five are the kind of
+choice that reads as arbitrary afterwards.
+
+**1. The answering-state notice is drawn once at the top, not on every card.** `SessionDetail.tsx`
+has `HeldBack`, which is three paragraphs per dialog explaining why the buttons are withheld — right
+there, where one dialog fills the screen, and wrong here, where six cards would carry six copies of
+one server-wide fact. `answeringEnabled` is a claim about **the server**, so it is stated once,
+above the list, and the cards simply have no buttons under it. The per-card sentence that stays
+per-card is the server's own refusal (`answering-disabled`, `grants-permission`), because that one
+is about *that* send.
+
+**`HeldBack` is deliberately not lifted, imported or copied.** It lives in `SessionDetail.tsx`,
+which session `claude-agents-dashboard` is live in; moving it would be an edit outside this file
+set, and copying its words would make a third home for a sentence this repo has already had to
+de-duplicate twice. The notice here is shorter and says a different thing in a different place —
+which is the honest version of *not a second vocabulary*.
+
+**2. The gate cases `HeldBack` exists for cannot arise on this tab.** A `permission` or `unknown`
+gate never becomes a `QuestionItem` at all (§ The item arms), so the panel needs no arm for them and
+must not grow one — an arm for an impossible state is a branch no test can ever make true, and the
+comment on it becomes the only evidence anyone reads.
+
+**3. `QuestionCard` from `SessionParts.tsx` draws the dialog, unchanged.** It already takes
+`onAnswer`, `busy` and `sessionName`, already refuses to make buttons out of `unreadable` material,
+and already carries the *"a long menu scrolls, so there may be more below"* line. Reusing it is the
+house rule and it costs nothing here; a second question renderer would be the *"second way to do the
+same thing"* § Prefer simple forbids, and the two would drift on the day one of them learned about a
+new `FleetOption` field.
+
+**4. A dialog whose row reference did not resolve is drawn as a stub card, not dropped and not
+crashed.** The client resolver already raises `dialog-reference-unresolved` for it, so the gap is
+said; the card is still drawn, saying that a session was observed showing a dialog and its row could
+not be read on this side. **A gap without a card would be a card silently missing from a list whose
+whole promise is that nothing is missing from it** — and the panel must not index into `rows` and
+render whatever `find` returned.
+
+**5. Card state is keyed by the item's own id and `row.execution.token`, and a row with no verified
+execution keys as `"unverified"`.** `ExecutionReading` has three arms and only `verified` carries a
+token; `claimed-only` and `unknown` carry none. The choice is between refusing to hold state on such
+a row and holding it under a constant. Holding it under a constant is right and is the smaller
+claim: the state being kept is *what the server said about the last tap*, which is discarded on any
+change of key — and a row that never has a token simply never invalidates on that axis, which is the
+same position every other surface on this page is already in. Refusing would withhold the receipt
+from exactly the rows whose sends are most worth reading.
 
 ### Stage 3 — see it, and the queue pointer
 
