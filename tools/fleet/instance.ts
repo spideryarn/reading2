@@ -52,3 +52,27 @@ export const INSTANCE_TOKEN = /^[0-9a-f]{8}$/;
 export function newServerInstanceId(): string {
   return randomBytes(TOKEN_BYTES).toString("hex");
 }
+
+/**
+ * The id for THIS run, minted once and answered with for ever after.
+ *
+ * **WHY THIS EXISTS ALONGSIDE THE MINT.** Two composition roots now need to
+ * agree about which run this is: the steering queue's ids (`<run>-q3`) and the
+ * quarantine book's (`<run>-h3`). They are built in different files — the book
+ * has to be reachable from `routes-steer.ts`, which cannot import
+ * `routes-actions.ts` — so "call the mint at the composition root" no longer
+ * names one place, and two mints would put two different run ids in one
+ * process's refusal messages.
+ *
+ * **IT DOES NOT WEAKEN THE RULE IN THE HEADER**, which is about classes: no
+ * `SteeringQueue` or `QuarantineBook` reaches for this, they are still handed
+ * an id, and the tests still build two of each with two ids in one process.
+ * This is only for the real deps functions, which have no id of their own to
+ * be handed.
+ */
+let thisRun: string | null = null;
+
+export function serverInstanceId(): string {
+  thisRun ??= newServerInstanceId();
+  return thisRun;
+}

@@ -46,7 +46,7 @@ import {
   type DeploysApi,
   type DeploysView,
 } from "./deploys-client";
-import { Button, Card, Mono, Pill, SectionHeading, cx } from "./ui";
+import { Button, Card, Mono, Pill, SectionHeading } from "./ui";
 import type { DeployVersion } from "../../wire";
 
 /** What the panel is doing, plus whatever it last heard. */
