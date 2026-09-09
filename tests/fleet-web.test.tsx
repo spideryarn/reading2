@@ -991,6 +991,7 @@ describe("the usage limits tab", () => {
         unsupportedLines: 0,
         recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
         refreshMs: 60_000,
+        latestCodex: { kind: "absent", why: "not part of this chart fixture" },
       }),
     });
     act(() => feed.push(state()));
@@ -1022,6 +1023,65 @@ describe("the usage limits tab", () => {
     const claim = "The payload arrived and carried no usage reading at all.";
     expect(onTab).toContain(claim);
     expect(onOverseer).toContain(claim);
+  });
+
+  it("gives both mounts the same newest Codex reading from one history owner", async () => {
+    const reset = Date.now() + 60 * 60_000;
+    let reads = 0;
+    const history: UsageHistoryApi = {
+      window: async () => {
+        reads += 1;
+        return {
+          kind: "history",
+          windowHours: 24,
+          fromMs: Date.now() - 86_400_000,
+          toMs: Date.now(),
+          samples: [],
+          predecessor: null,
+          holes: [],
+          earliestAt: null,
+          rotated: false,
+          unreadableLines: 0,
+          unsupportedLines: 0,
+          recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
+          refreshMs: 60_000,
+          latestCodex: {
+            kind: "value",
+            accountId: "same-account",
+            readAt: new Date().toISOString(),
+            resetCredits: 1,
+            buckets: [{
+              limitId: "codex",
+              limitName: null,
+              planType: "pro",
+              credits: null,
+              individualLimit: null,
+              spendControlReached: false,
+              rateLimitReachedType: null,
+              windows: [{
+                kind: "value",
+                slot: "primary",
+                windowMinutes: 10_080,
+                usedPercent: 61,
+                resetsAt: new Date(reset).toISOString(),
+                resetsAtMs: reset,
+              }],
+            }],
+          },
+        };
+      },
+    };
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys().api, fakeQueue(), history);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+    expect(container.textContent).toContain("61% used");
+
+    window.location.hash = "#overseer";
+    await act(async () => undefined);
+    expect(container.textContent).toContain("61% used");
+    expect(reads).toBe(1);
   });
 });
 

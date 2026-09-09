@@ -49,8 +49,48 @@ export type UsagePassView =
   | { kind: "collector-failed"; at: string; why: string }
   | { kind: "omitted"; at: string; why: string };
 
+export type CodexWindowView =
+  | {
+      kind: "value";
+      /** Source position is provenance only; duration names the window. */
+      slot: "primary" | "secondary";
+      windowMinutes: number;
+      usedPercent: number;
+      resetsAt: string;
+      resetsAtMs: number;
+    }
+  | { kind: "unknown"; slot: "primary" | "secondary"; windowMinutes: number | null; why: string };
+
+export type CodexBucketView = {
+  limitId: string;
+  limitName: string | null;
+  windows: CodexWindowView[];
+  planType: string | null;
+  credits: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null;
+  individualLimit: { limit: string; used: string; remainingPercent: number; resetsAt: number } | null;
+  spendControlReached: boolean | null;
+  rateLimitReachedType: string | null;
+};
+
+export type CodexRecordedObservationView =
+  | { kind: "value"; accountId: string | null; readAt: string; buckets: CodexBucketView[]; resetCredits: number | null }
+  | { kind: "unknown"; why: string; retryable: boolean };
+
+/**
+ * The latest attempt as the card sees it. `absent` is deliberately not the
+ * persisted `unknown` arm: it means the record came from a writer predating
+ * Codex collection, not that this writer tried and failed.
+ */
+export type CodexObservationView =
+  | CodexRecordedObservationView
+  | { kind: "absent"; why: string };
+
 export type UsageHistorySample =
-  | { kind: "sample"; sourceAtMs: number; line: { nextDueMs: number; recordedAt: string; pass: UsagePassView } }
+  | {
+      kind: "sample";
+      sourceAtMs: number;
+      line: { nextDueMs: number; recordedAt: string; pass: UsagePassView; codex?: CodexRecordedObservationView };
+    }
   | { kind: "omitted"; sourceAtMs: number; why: string }
   | { kind: "unsupported"; summarySchema: number | null; why: string };
 
@@ -75,6 +115,8 @@ export type UsageHistoryView =
       unsupportedLines: number;
       recorder: RecorderView;
       refreshMs: number;
+      /** Parsed from every raw record in file order, including unreadable markers. */
+      latestCodex: CodexObservationView;
     }
   | { kind: "unreadable"; why: string };
 
@@ -86,6 +128,145 @@ function str(raw: unknown): string | null {
 }
 function num(raw: unknown): number | null {
   return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+}
+
+function bool(raw: unknown): boolean | null {
+  return typeof raw === "boolean" ? raw : null;
+}
+
+function instant(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) && Math.abs(ms) <= 8.64e15 ? raw : null;
+}
+
+function nullableString(raw: unknown): string | null | undefined {
+  return raw === null || typeof raw === "string" ? raw : undefined;
+}
+
+function malformedCodex(why: string): CodexRecordedObservationView {
+  return { kind: "unknown", why: `the Codex observation was malformed: ${why}`, retryable: false };
+}
+
+function parseCodexWindow(raw: unknown, readAtMs: number): CodexWindowView | null {
+  const w = obj(raw);
+  const slot = w?.["slot"];
+  if (w === null || (slot !== "primary" && slot !== "secondary")) return null;
+  const rawWindowMinutes = w["windowMinutes"];
+  const windowMinutes = rawWindowMinutes === null ? null : num(rawWindowMinutes);
+  if (w["kind"] === "unknown") {
+    const why = str(w["why"]);
+    if (
+      why === null || why.length === 0 ||
+      (rawWindowMinutes !== null && windowMinutes === null) ||
+      (windowMinutes !== null && (!Number.isSafeInteger(windowMinutes) || windowMinutes <= 0))
+    ) return null;
+    return { kind: "unknown", slot, windowMinutes, why };
+  }
+  if (w["kind"] !== "value" || windowMinutes === null || !Number.isSafeInteger(windowMinutes) || windowMinutes <= 0) {
+    return null;
+  }
+  const usedPercent = num(w["usedPercent"]);
+  const resetsAt = instant(w["resetsAt"]);
+  const resetsAtMs = num(w["resetsAtMs"]);
+  const latestPossible = readAtMs + windowMinutes * 60_000;
+  if (
+    usedPercent === null || usedPercent < 0 || resetsAt === null || resetsAtMs === null ||
+    !Number.isSafeInteger(resetsAtMs) || !Number.isSafeInteger(latestPossible) ||
+    Date.parse(resetsAt) !== resetsAtMs || resetsAtMs <= readAtMs || resetsAtMs > latestPossible
+  ) return null;
+  return { kind: "value", slot, windowMinutes, usedPercent, resetsAt, resetsAtMs };
+}
+
+function parseCodexBucket(raw: unknown, readAtMs: number): CodexBucketView | null {
+  const b = obj(raw);
+  const limitId = str(b?.["limitId"]);
+  const limitName = nullableString(b?.["limitName"]);
+  const planType = nullableString(b?.["planType"]);
+  const reached = nullableString(b?.["rateLimitReachedType"]);
+  const spend = b?.["spendControlReached"] === null ? null : bool(b?.["spendControlReached"]);
+  if (b === null || limitId === null || limitId.length === 0 || limitName === undefined || planType === undefined || reached === undefined || spend === null && b["spendControlReached"] !== null) return null;
+
+  const rawCredits = b["credits"];
+  let credits: CodexBucketView["credits"] = null;
+  if (rawCredits !== null) {
+    const c = obj(rawCredits);
+    const hasCredits = bool(c?.["hasCredits"]);
+    const unlimited = bool(c?.["unlimited"]);
+    const balance = nullableString(c?.["balance"]);
+    if (c === null || hasCredits === null || unlimited === null || balance === undefined) return null;
+    credits = { hasCredits, unlimited, balance };
+  }
+
+  const rawIndividual = b["individualLimit"];
+  let individualLimit: CodexBucketView["individualLimit"] = null;
+  if (rawIndividual !== null) {
+    const i = obj(rawIndividual);
+    const limit = str(i?.["limit"]);
+    const used = str(i?.["used"]);
+    const remainingPercent = num(i?.["remainingPercent"]);
+    const resetsAt = num(i?.["resetsAt"]);
+    if (i === null || limit === null || used === null || remainingPercent === null || !Number.isInteger(remainingPercent) || resetsAt === null || !Number.isSafeInteger(resetsAt)) return null;
+    individualLimit = { limit, used, remainingPercent, resetsAt };
+  }
+
+  if (!Array.isArray(b["windows"])) return null;
+  const windows = b["windows"].map((w) => parseCodexWindow(w, readAtMs));
+  if (windows.some((w) => w === null)) return null;
+  return {
+    limitId,
+    limitName,
+    windows: windows as CodexWindowView[],
+    planType,
+    credits,
+    individualLimit,
+    spendControlReached: spend,
+    rateLimitReachedType: reached,
+  };
+}
+
+function parseCodex(raw: unknown): CodexRecordedObservationView {
+  const c = obj(raw);
+  if (c === null) return malformedCodex("it was not an object");
+  if (c["kind"] === "unknown") {
+    const why = str(c["why"]);
+    const retryable = bool(c["retryable"]);
+    return why !== null && why.length > 0 && retryable !== null
+      ? { kind: "unknown", why, retryable }
+      : malformedCodex("its unknown arm had no reason or retryability");
+  }
+  if (c["kind"] !== "value") return malformedCodex("it had an unknown kind");
+  const readAt = instant(c["readAt"]);
+  const accountId = nullableString(c["accountId"]);
+  const resetCredits = c["resetCredits"] === null ? null : num(c["resetCredits"]);
+  if (readAt === null || accountId === undefined || (typeof accountId === "string" && accountId.length === 0)) {
+    return malformedCodex("its identity or readAt was invalid");
+  }
+  if (resetCredits === null ? c["resetCredits"] !== null : !Number.isSafeInteger(resetCredits) || resetCredits < 0) {
+    return malformedCodex("its reset-credit count was invalid");
+  }
+  if (!Array.isArray(c["buckets"])) return malformedCodex("its buckets were not an array");
+  const buckets = c["buckets"].map((b) => parseCodexBucket(b, Date.parse(readAt)));
+  if (buckets.some((b) => b === null)) return malformedCodex("one of its buckets or windows was invalid");
+  return { kind: "value", accountId, readAt, buckets: buckets as CodexBucketView[], resetCredits };
+}
+
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.hasOwn(record, key);
+}
+
+function codexAttempt(raw: unknown): CodexObservationView {
+  const sample = parseSample(raw);
+  if (sample === null) {
+    return { kind: "unknown", why: "the newest history sample was unreadable", retryable: false };
+  }
+  if (sample.kind === "unsupported") {
+    return { kind: "unknown", why: "the newest history sample was written by an unsupported build", retryable: false };
+  }
+  if (sample.kind === "omitted") {
+    return { kind: "unknown", why: `the newest history sample was omitted: ${sample.why}`, retryable: false };
+  }
+  return sample.line.codex ?? { kind: "absent", why: "this history record predates Codex usage collection" };
 }
 
 function parseWindow(raw: unknown): UsageWindowView | null {
@@ -190,11 +371,32 @@ export function parseSample(raw: unknown): UsageHistorySample | null {
   const line = obj(s["line"]);
   const pass = parsePass(line?.["pass"]);
   if (line === null || pass === null) return null;
+  const codex = hasOwn(line, "codex") ? parseCodex(line["codex"]) : undefined;
   return {
     kind: "sample",
     sourceAtMs,
-    line: { nextDueMs: num(line["nextDueMs"]) ?? 300_000, recordedAt: str(line["recordedAt"]) ?? "", pass },
+    line: {
+      nextDueMs: num(line["nextDueMs"]) ?? 300_000,
+      recordedAt: str(line["recordedAt"]) ?? "",
+      pass,
+      ...(codex === undefined ? {} : { codex }),
+    },
   };
+}
+
+/**
+ * The newest Codex ATTEMPT, never the greatest `readAt`.
+ *
+ * The route is already oldest-first, including the predecessor. A newer
+ * unknown, legacy, omitted, unreadable or unsupported record therefore wins:
+ * keeping an older percentage would present a known-old value as current
+ * merely because the latest attempt failed.
+ */
+export function newestCodexObservation(view: UsageHistoryView): CodexObservationView {
+  if (view.kind === "unreadable") {
+    return { kind: "unknown", why: `Codex usage history could not be read: ${view.why}`, retryable: true };
+  }
+  return view.latestCodex;
 }
 
 export function parseUsageHistory(raw: unknown): UsageHistoryView {
@@ -224,19 +426,27 @@ export function parseUsageHistory(raw: unknown): UsageHistoryView {
     return { kind: "unreadable", why: "the server's answer had no readable window" };
   }
   const recorder = obj(r["recorder"]);
+  const rawSamples = Array.isArray(r["samples"]) ? r["samples"] : [];
+  const rawPredecessor = r["predecessor"];
+  const attempts = [...(rawPredecessor === null || rawPredecessor === undefined ? [] : [rawPredecessor]), ...rawSamples];
+  const holes = (Array.isArray(r["holes"]) ? r["holes"] : []).map((h) => ({
+    afterAt: str(obj(h)?.["afterAt"]),
+    beforeAt: str(obj(h)?.["beforeAt"]),
+  }));
+  /* A trailing unreadable physical line is newer than the last decodable
+     sample even though it has no sample object of its own. The null right edge
+     is the route's positional marker for exactly that case. */
+  const trailingUnreadable = holes.some((hole) => hole.beforeAt === null);
   return {
     kind: "history",
     windowHours: num(r["windowHours"]) ?? 24,
     fromMs,
     toMs,
-    samples: (Array.isArray(r["samples"]) ? r["samples"] : [])
+    samples: rawSamples
       .map(parseSample)
       .filter((s): s is UsageHistorySample => s !== null),
-    predecessor: parseSample(r["predecessor"]),
-    holes: (Array.isArray(r["holes"]) ? r["holes"] : []).map((h) => ({
-      afterAt: str(obj(h)?.["afterAt"]),
-      beforeAt: str(obj(h)?.["beforeAt"]),
-    })),
+    predecessor: parseSample(rawPredecessor),
+    holes,
     earliestAt: str(r["earliestAt"]),
     rotated: r["rotated"] === true,
     unreadableLines: num(r["unreadableLines"]) ?? 0,
@@ -247,6 +457,11 @@ export function parseUsageHistory(raw: unknown): UsageHistoryView {
       overdueByMs: num(recorder?.["overdueByMs"]),
     },
     refreshMs: num(r["refreshMs"]) ?? 60_000,
+    latestCodex: trailingUnreadable
+      ? { kind: "unknown", why: "the newest usage-history line could not be read", retryable: false }
+      : attempts.length === 0
+        ? { kind: "absent", why: "no Codex usage attempt has been recorded yet" }
+        : codexAttempt(attempts.at(-1)),
   };
 }
 

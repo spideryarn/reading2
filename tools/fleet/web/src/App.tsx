@@ -10,11 +10,10 @@
  * other panels stay at a reading measure, because a definition list stretched
  * across 1600px is worse than one that is not.
  *
- * **Nothing here fetches.** `useFleetState` is the only thing that knows where
- * state comes from, and swapping polling for Server-Sent Events is one default
- * argument in that file (see transport.ts § The seam). The `transport` prop
- * below exists so a test can drive the page without a clock or a network, and
- * it is the same seam.
+ * The pushed snapshot has one owner: `useFleetState`. On-demand data keeps its
+ * own typed seam; this component owns the usage-history view because its newest
+ * Codex observation feeds cards on two different tabs. Each seam is injectable,
+ * so tests drive the page without a clock or network.
  */
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -30,7 +29,7 @@ import { QueuePanel } from "./QueuePanel";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
-import { UsageHistory } from "./UsageHistory";
+import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { httpDecisionsApi, type DecisionsApi } from "./decisions-client";
 import {
@@ -42,7 +41,7 @@ import {
   type FeedApi,
 } from "./feed-client";
 import { httpDeploysApi, type DeploysApi } from "./deploys-client";
-import { httpUsageHistoryApi, type UsageHistoryApi } from "./usage-history-client";
+import { httpUsageHistoryApi, newestCodexObservation, type UsageHistoryApi } from "./usage-history-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
@@ -109,7 +108,7 @@ export function App({
    * it thought it was exercising.
    */
   deploysApi?: DeploysApi;
-  /** Injected so a test can drive the chart without a network. Same seam as `deploysApi`. */
+  /** Injected so a test can drive the chart and Codex card without a network. */
   usageHistoryApi?: UsageHistoryApi;
   /**
    * The queue of ideas. Injected here as well as defaulted in `QueuePanel`, so
@@ -160,6 +159,15 @@ export function App({
     feed.refresh();
     setRefreshNonce((n) => n + 1);
   }, [feed]);
+  /* The history route is the only source of the persisted Codex reading. Keep
+     one owner above both card mounts, and select the newest attempt once in
+     file order. `readAt` remains an age only. */
+  const usageHistory = useUsageHistoryView({
+    api: usageHistoryApi,
+    refreshNonce,
+    active: mode === "usage" || mode === "overseer",
+  });
+  const codexUsage = usageHistory === null ? null : newestCodexObservation(usageHistory);
   /* Both of these live in the URL for the reason the mode does: this page is
      reloaded by the browser whenever iOS reclaims the tab, and a sort order
      that resets every time is one nobody bothers to set. mode.ts § the hash. */
@@ -382,25 +390,25 @@ export function App({
         {/* **The same `UsageCard` the Overseer tab draws, mounted a second time
             rather than copied.** If this tab and that card could disagree, one
             of them would be a second interpretation of the same bytes — and the
-            whole point of the reading rules in tools/overseer/usage.ts is that
-            there is one. The history chart lands beneath it in a later stage;
-            until then this tab is the card with room around it. */}
+            whole point of the reading rules is that there is one. Both account
+            readings are in the component; the Codex one is selected once from
+            the history route above both mounts. */}
         {mode === "usage" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <UsageCard
               usage={feed.state === null ? null : feed.state.usage}
+              codex={codexUsage}
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
-            {/* **The history is on its OWN route, not in the snapshot.** It costs
-                nothing until somebody opens this tab, and it is written by the
-                Overseer daemon rather than by this process — so it cannot ride
-                along on the collection loop even if we wanted it to. */}
+            {/* **The history is on its OWN route, not in the snapshot.** That
+                route is active only on Usage and Overseer: the chart needs it
+                here and the shared Codex card needs its newest record on both.
+                The Overseer daemon, not this process, writes it. */}
             <UsageHistory
-              api={usageHistoryApi}
+              view={usageHistory}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
-              refreshNonce={refreshNonce}
             />
           </div>
         ) : null}
@@ -432,6 +440,7 @@ export function App({
               overseer={feed.state === null ? null : feed.state.overseer}
               /* The same distinction one field along, and for the same reason. */
               usage={feed.state === null ? null : feed.state.usage}
+              codex={codexUsage}
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}

@@ -89,6 +89,13 @@ assertions quietly skipped. Check each finding yourself; some are wrong. Check a
 arrived, exit code *and* answer file. Mechanics in
 [codex-cli-as-subagent.md](codex-cli-as-subagent.md).
 
+**The code reviewer fixes as well as finds, by default.** Greg, 2026-09-09: *"I'm wondering if we could tweak it so that the reviewer can actually make the fixes itself … I'd suggest that we default to full-access, but … instruct the reviewer-fixer to stay fairly focused on the task at hand for any fixes it makes and to provide feedback on wider changes that it also noticed (so that the caller can decide whether to incorporate those too)."* So the stage review runs
+write-capable in your worktree, and its brief says: fix what is inside this stage, narrowly and
+red-first; report, do not fix, anything wider you noticed. Commit the stage before the run so the
+diff is exactly the reviewer's; read that diff as a proposal, run the gates yourself, commit it naming
+the reviewer's fixes, and on the next round say those fixes are unreviewed code by someone else. The
+plan review stays read-only (`--sandbox review`) — there is nothing to fix but prose.
+
 ## Delegate
 
 The orchestrator should do **little of the implementation**. Hand the main work to Opus subagents,
@@ -129,9 +136,9 @@ whatever the model intends.
 **Send a spike to Sol as well as to a Claude subagent.** A `--sandbox workspace-write` run in a
 worktree of its own is already supported and, over hundreds of runs, has never been used — every one
 was a review. It is the right shape for *after* a review, when a fix wants proving: the deliverable
-is a diff **plus a red→green transcript**, read as evidence, never applied unread. Keep it separate
-from the review itself, which stays read-only for the reasons in
-[codex-cli-as-subagent.md](codex-cli-as-subagent.md).
+is a diff **plus a red→green transcript**, read as evidence, never applied unread. Since 2026-09-09
+the review itself may write too, so a spike is the shape for a fix that wants proving *outside* the
+tree under review.
 
 ## What the work turns up
 

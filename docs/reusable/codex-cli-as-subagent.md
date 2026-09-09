@@ -37,10 +37,25 @@ Sol before it is built, and the code built from it goes back for a second review
 
 ```bash
 npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
-  --prompt-file <review-prompt> --output <review-answer>
+  --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
 ```
 
-Read-only, in the background, and give it three quarters of an hour. The tree is read-only, but the
+**Write-capable by default since 2026-09-09, so the reviewer fixes what it finds.** Greg, 2026-09-09: *"I'm wondering if we could tweak it so that the reviewer can actually make the fixes itself … I'd suggest that we default to full-access, but … instruct the reviewer-fixer to stay fairly focused on the task at hand for any fixes it makes and to provide feedback on wider changes that it also noticed (so that the caller can decide whether to incorporate those too)."*
+So the code review runs `--sandbox workspace-write` in the implementer's worktree, and its brief says
+two things: **fix what is inside the stage under review** — narrowly, each finding red-first with the
+test that reproduces it — and **report, do not fix, anything wider it noticed**, so the caller decides
+whether to take those too. What comes back is a diff plus findings. The caller reads the diff as a
+proposal, runs the gates itself, and commits it naming the reviewer's fixes; *Commit before you let it
+write* below applies, so the stage is committed before the run and `git diff` is exactly the
+reviewer's work (in a linked worktree the run cannot commit anyway). Two things it gives up: a
+write-capable run has **no credential fallback** — if the subscription cannot run it, it stops rather
+than retrying on the key — and the reviewer that fixed a finding is the wrong one to check that fix,
+which is why the second-pass rule further down says to treat those fixes as somebody else's. Pass
+`--sandbox review` for the findings-only review that was the default until then: the right shape for
+a **plan review**, where the only thing to fix is prose, and for any pass where you want the mutation
+rather than the patch.
+
+Give it three quarters of an hour, in the background. Under `review` the tree is read-only, but the
 reviewer *can* run one test file or a tsx script — see [the review profile](#the-review-profile) —
 so say so in the prompt, and say how: `npx vitest run tests/<one>.test.ts` and
 `node --import tsx <script>`, not `npm test` or `npm run typecheck`, which the sandbox still stops.
@@ -92,9 +107,12 @@ implementer's rule is **apply (a) first and watch it go red**, apply (b), watch 
 report per finding *reproduced / could not reproduce / disagree*. Never apply a (b) whose (a) you
 could not make fail.
 
-Don't ask for the patch itself. It means a write-capable run in your working tree, and on the next
-pass the reviewer checks that its own patch was *applied* rather than whether it was *right*. Nobody
-gets invested in a mutation, which is what makes it the guardrail.
+**Until 2026-09-09 the rule here was not to ask for the patch itself**, because it means a
+write-capable run in your working tree, and on the next pass the reviewer checks that its own patch
+was *applied* rather than whether it was *right*; nobody gets invested in a mutation, which is what
+made it the guardrail. That cost was weighed and Greg chose the fix-capable default above for the
+round trips it saves. The hazard has not gone: it is handled by the second-pass rule next, and by the
+caller reading the diff rather than trusting it.
 
 **On a second pass, say what is new.** *"Previous findings are at `<file>`; treat their fixes as
 unreviewed code written by someone else, and spend most of the run on what has changed since."*
@@ -506,9 +524,10 @@ by running that suite yourself and handing over the raw output.
 It is a relaxation of what the reviewer can *run*, not of what it can *change*: the sandbox still
 refuses a write to anything git tracks, so nothing in [Commit before you let it write](#commit-before-you-let-it-write)
 applies, and a `review` run is retried on the other credential exactly as a `read-only` one is.
-The profile is not `workspace-write` under another name, and the reason not to reach for that
-instead is the reason the whole review design gives: a reviewer that can edit the tree is a
-reviewer that will fix the finding rather than hand back the mutation.
+The profile is not `workspace-write` under another name: a reviewer that can edit the tree is a
+reviewer that will fix the finding rather than hand back the mutation — which, since 2026-09-09, is
+what [the house workflow](#the-house-workflow-in-this-repo) asks of a code review, and why `review`
+is now the profile for a plan review or a findings-only pass rather than the default.
 
 Three traps in codex's side of it, all hit while measuring:
 

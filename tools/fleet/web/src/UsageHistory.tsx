@@ -30,6 +30,49 @@ const SERIES_H = 64;
 const STRIP_H = 20;
 export const WINDOW_HOURS = 24;
 
+/**
+ * One owner for the history route and therefore for the newest Codex attempt.
+ * Both account-card mounts consume this same view; neither performs its own
+ * newest-value selection or fetch. It polls at the server-declared cadence so
+ * a tab left open does not freeze, and `refreshNonce` makes the dock's Refresh
+ * button restart the read without a callback registry.
+ */
+export function useUsageHistoryView({
+  api,
+  refreshNonce,
+  active,
+}: {
+  api: UsageHistoryApi;
+  refreshNonce: number;
+  active: boolean;
+}): UsageHistoryView | null {
+  const [view, setView] = useState<UsageHistoryView | null>(null);
+  const [refreshMs, setRefreshMs] = useState(60_000);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    let newestRequest = 0;
+    const load = (): void => {
+      const request = ++newestRequest;
+      void api.window(WINDOW_HOURS).then((next) => {
+        if (!live || request !== newestRequest) return;
+        setView(next);
+        if (next.kind === "history" && next.refreshMs > 0) setRefreshMs(next.refreshMs);
+      });
+    };
+    load();
+    const timer = setInterval(load, refreshMs);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [active, api, refreshNonce, refreshMs]);
+
+  return view;
+}
+
 /** Distinct enough at a glance; the label beside the line is what actually names it. */
 const WINDOW_TONES = ["var(--work)", "var(--needs)", "var(--alarm)"];
 
@@ -96,48 +139,13 @@ function WindowLine({
 }
 
 export function UsageHistory({
-  api,
+  view,
   skew,
-  refreshNonce,
 }: {
-  api: UsageHistoryApi;
+  view: UsageHistoryView | null;
   /** The box's clock against this browser's. Labels are the reader's own time. */
   skew: ClockSkew;
-  refreshNonce: number;
 }): ReactNode {
-  const [view, setView] = useState<UsageHistoryView | null>(null);
-
-  /* IT REFRESHES ITSELF. It did not: open the tab and leave it, and the chart
-     stayed frozen at the moment it loaded — `toMs` fixed, new records invisible,
-     recorder health stuck — while the page around it went on updating. The
-     client parsed `refreshMs` off the payload and nothing ever used it. GPT Sol
-     H2.
-
-     The server's own `refreshMs` is the cadence, so one place decides how often
-     this box is asked anything. Falls back to 60 s before the first payload. */
-  const [refreshMs, setRefreshMs] = useState(60_000);
-  /* `refreshNonce` is in the dependency list for its effect on identity alone —
-     it is never read in the body. That IS the mechanism: pressing Refresh
-     changes it, which re-runs the effect, which re-fetches. The same idiom and
-     the same suppression as DeploysPanel. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
-  useEffect(() => {
-    let live = true;
-    const load = (): void => {
-      void api.window(WINDOW_HOURS).then((next) => {
-        if (!live) return;
-        setView(next);
-        if (next.kind === "history" && next.refreshMs > 0) setRefreshMs(next.refreshMs);
-      });
-    };
-    load();
-    const timer = setInterval(load, refreshMs);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [api, refreshNonce, refreshMs]);
-
   if (view === null) return <p className="tw:text-sm tw:opacity-70">Loading the last {WINDOW_HOURS} hours…</p>;
   if (view.kind === "unreadable") {
     return (
