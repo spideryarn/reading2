@@ -366,6 +366,35 @@ export function parseFeed(raw: unknown): FeedView {
   if (kind !== "feed") {
     return { kind: "no-answer", why: "the dashboard server answered something that is not this API" };
   }
+
+  /**
+   * **THE REQUIRED FIELDS ARE REQUIRED, AND A MISSING ONE IS `no-answer`.**
+   *
+   * Until GPT Sol's P1 on the code review, an absent array parsed as a
+   * successfully empty one — so `{ kind: "feed", coverage: { kind: "complete" } }`
+   * came back as a **confidently complete feed with no messages, no sessions and
+   * no caveat**: the exact "we looked and the fleet was silent" lie this whole
+   * payload is shaped to prevent, produced by a body that said almost nothing.
+   *
+   * `schema` is checked for the same reason. A later build's payload is not
+   * this one, and guessing at it would render some of it and drop the rest
+   * silently — better to say plainly that this page cannot read the answer.
+   */
+  if (raw["schema"] !== 1) {
+    return {
+      kind: "no-answer",
+      why: "the dashboard server answered with a feed this build does not know how to read — its schema is not the one this page was written for, so the page will not guess at it",
+    };
+  }
+  for (const required of ["messages", "undated", "sessions"]) {
+    if (!Array.isArray(raw[required])) {
+      return {
+        kind: "no-answer",
+        why: `the dashboard server answered a feed with no \`${required}\` list, so this page cannot tell an empty fleet from a broken answer and will not claim either`,
+      };
+    }
+  }
+
   const messages = parseRows(raw["messages"]);
   const undated = parseRows(raw["undated"]);
   const rawSessions = raw["sessions"];

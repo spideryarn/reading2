@@ -125,7 +125,7 @@ export function App({
      died. An age that only moves when data arrives is an age that freezes at
      the exact moment it matters. */
   const now = useNow();
-  const { mode, params, chooseMode, setParam } = useHashState();
+  const { mode, params, chooseMode, setParam, setParams } = useHashState();
   /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
      presents it as the page's refresh control, and until 2026-09-09 it called
      `feed.refresh()` only — so on a panel with its own route, pressing it did
@@ -245,7 +245,12 @@ export function App({
                  that resets every time is one nobody sets. */
               filters={filtersFromParams(params)}
               onFilters={(next) => {
-                for (const [key, value] of Object.entries(paramsFromFilters(next))) setParam(key, value);
+                /* **ONE WRITE, NOT FOUR.** `setParam` closes over the params it
+                   was built with, so four sequential calls all start from the
+                   same snapshot and only the last survives — which silently
+                   dropped every filter but `hideToolCalls`. mode.ts §
+                   `setParams`. */
+                setParams(paramsFromFilters(next));
               }}
             />
           </div>

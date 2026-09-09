@@ -58,13 +58,18 @@ the window, not of a row inside it.
 
 Three decisions inside that, each of which stops the warning being useless:
 
-- **`no-claude-session-id` is not a coverage failure.** It is a shell, or a scheduled session whose
-  pane is still running `sleep` — nine of 21 rows on this box. Counting them would make coverage
-  permanently indeterminate, and **a warning that never clears is one nobody reads**. Verified
-  against the live box: coverage comes back `complete`.
-- **`byte-budget` fires only when the truncation is inside the window.** A session cut short whose
-  oldest returned message is already older than the feed's cutoff has had everything it could
-  contribute read.
+- **The exemption keys off the launcher's own `kind`, never off the reason code.** A row declared
+  `shell` or `setup` has no conversation to miss — six of the box's rows — and counting those would
+  make coverage permanently indeterminate, which is **a warning that never clears, and one nobody
+  reads**. But `claudeSessionId` is null for *two* things: a session that is not a Claude, **and a
+  legacy Claude that predates the launcher pinning one**. Both produce `no-claude-session-id`, so
+  exempting the code rather than the declaration would hide a real conversation. Verified against the
+  live box: coverage still comes back `complete`.
+- **Every incomplete session is named.** There is deliberately no "the truncation fell outside the
+  window" exemption: it would rest on unread turns being older than read ones, which is the very
+  monotonicity `out-of-order` exists because we cannot assume — and that check can only see turns
+  that came back. **`complete` has to mean proven, or it means nothing.** The cost was measured
+  first: 0 sessions cut short at N=25, 1 at N=50, 3 at N=100.
 - **Reasons are keyed by `sessionId`, never by name.** Names are reassigned when a session dies and
   two sessions can wear one, so a warning keyed by name can point at the wrong agent.
 

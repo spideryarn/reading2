@@ -239,12 +239,51 @@ describe("parseFeed", () => {
     expect(view.kind === "feed" ? view.sessions[0]?.read : null).toMatchObject({ complete: false });
   });
 
-  /** An empty census and no census at all are opposite claims. */
-  it("distinguishes an empty session list from a server that sent none", () => {
-    const withList = parseFeed({ schema: 1, kind: "feed", messages: [], undated: [], sessions: [], coverage: { kind: "complete" } });
-    const without = parseFeed({ schema: 1, kind: "feed", messages: [], undated: [], coverage: { kind: "complete" } });
-    expect(withList.kind === "feed" ? withList.sessionsOffered : null).toBe(true);
-    expect(without.kind === "feed" ? without.sessionsOffered : null).toBe(false);
+  /**
+   * **A PAYLOAD MISSING A REQUIRED LIST IS NOT AN EMPTY FEED.**
+   *
+   * Until GPT Sol's P1 on the code review, an absent array parsed as a
+   * successfully empty one — so `{ kind: "feed", coverage: { kind: "complete" } }`
+   * rendered as a *confidently complete* feed with no messages, no sessions and
+   * no caveat: exactly the "we looked and the fleet was silent" claim this
+   * payload exists to prevent, produced by a body that said almost nothing.
+   *
+   * Goes red if any of the three required arrays stops being required.
+   */
+  it("refuses a feed that is missing a required list, rather than drawing it as empty", () => {
+    expect(parseFeed({ schema: 1, kind: "feed", coverage: { kind: "complete" } })).toMatchObject({
+      kind: "no-answer",
+    });
+    for (const missing of ["messages", "undated", "sessions"]) {
+      const body: Record<string, unknown> = {
+        schema: 1,
+        kind: "feed",
+        messages: [],
+        undated: [],
+        sessions: [],
+        coverage: { kind: "complete" },
+      };
+      delete body[missing];
+      expect(parseFeed(body), `missing ${missing}`).toMatchObject({ kind: "no-answer" });
+    }
+    /* And the complete one is still a feed. */
+    expect(
+      parseFeed({ schema: 1, kind: "feed", messages: [], undated: [], sessions: [], coverage: { kind: "complete" } })
+        .kind,
+    ).toBe("feed");
+  });
+
+  /**
+   * A later build's payload is not this one. Guessing at it would render some
+   * fields and drop the rest silently; saying so plainly is the honest answer.
+   */
+  it("refuses a schema it was not written for", () => {
+    expect(
+      parseFeed({ schema: 2, kind: "feed", messages: [], undated: [], sessions: [], coverage: { kind: "complete" } }),
+    ).toMatchObject({ kind: "no-answer" });
+    expect(
+      parseFeed({ kind: "feed", messages: [], undated: [], sessions: [], coverage: { kind: "complete" } }),
+    ).toMatchObject({ kind: "no-answer" });
   });
 
   /**
@@ -472,6 +511,33 @@ describe("what the panel must not hide", () => {
     expect(empty).toContain("No session in this window has a readable message");
   });
 
+  /**
+   * **THE UNDATED GROUP IS NOT A LOOPHOLE IN THE FILTERS.**
+   *
+   * It bypassed `applyFilters` entirely until GPT Sol's P2, so a speaker or
+   * text filter left the undated rows sitting on screen underneath a list that
+   * had excluded them — and the tally, counting only the dated rows, could say
+   * "0 messages" over a panel visibly showing some. Three statements, no two of
+   * them agreeing.
+   *
+   * Goes red if `shownUndated` stops being filtered.
+   */
+  it("applies the filters to the undated group too, and counts it", async () => {
+    const undatedRow = message({
+      turn: { speaker: "assistant", at: null, text: "undated and unwanted", truncated: false, fullChars: 20, toolCalls: [], uuid: "z" },
+    });
+    const text = await draw(
+      panel(feedOf({ messages: [message()], undated: [undatedRow] }), {
+        filters: { ...NO_FILTERS, text: "hello" },
+      }),
+    );
+    /* The dated row matches "hello"; the undated one does not, and must go. */
+    expect(text).toContain("hello");
+    expect(text).not.toContain("undated and unwanted");
+    /* And the tally counts both groups, so it cannot disagree with the screen. */
+    expect(text).toContain("1 of 2 messages");
+  });
+
   /** Undated messages are shown rather than dropped, and kept out of the ordering. */
   it("shows an undated message in its own group", async () => {
     const text = await draw(
@@ -656,6 +722,85 @@ describe("the filters in the URL", () => {
     expect(limitFromParams({ mn: "banana" })).toBe(50);
     expect(limitFromParams({})).toBe(50);
     expect(limitFromParams({ mn: "100" })).toBe(100);
+  });
+});
+
+describe("a filter survives being set", () => {
+  /**
+   * **THE BUG THE PURE-CONVERTER TESTS COULD NOT SEE.**
+   *
+   * `paramsFromFilters` and `filtersFromParams` were both correct, and both
+   * tested. The fault was in the composition: `App` wrote the four filter keys
+   * with four `setParam` calls, and `setParam` closes over the params it was
+   * built with — so each call started from the same stale snapshot and only the
+   * last survived. In practice "Hide tool calls" persisted, because it was
+   * last, and session, speaker and text silently reverted.
+   *
+   * GPT Sol's P1 on the code review, and its point about the tests was the
+   * sharper half: *"The URL round-trip test exercises only the pure converters,
+   * not this composition."* This test drives the real control through the real
+   * page and reads the real hash.
+   *
+   * Goes red if `setParams` stops being atomic — verified by mutating it to
+   * write only its last key, which is precisely the original bug.
+   */
+  it("keeps a session filter in the URL, not just the last key written", async () => {
+    const feed: FeedView = {
+      kind: "feed",
+      limit: 50,
+      messages: [
+        {
+          sessionId: "$1643",
+          sessionName: "alpha",
+          sessionTitle: null,
+          attribution: { kind: "claimed-only", why: "w" },
+          turn: { speaker: "assistant", at: "t", text: "hello", truncated: false, fullChars: 5, toolCalls: [], uuid: "a" },
+        },
+      ],
+      undated: [],
+      sessions: [],
+      sessionsOffered: true,
+      unreadableRows: 0,
+      coverage: { kind: "complete" },
+      collectedAt: null,
+      readStartedAt: null,
+      readFinishedAt: null,
+      servedAt: null,
+    };
+    window.location.hash = "#messages";
+    await act(async () => {
+      root.render(
+        <App transport={() => ({ refresh: () => {}, stop: () => {} })} feedApi={apiOf(feed)} actionsPollMs={0} />,
+      );
+    });
+
+    const chip = [...host.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "Show only alpha");
+    expect(chip, "the session chip should be offered").toBeDefined();
+    await act(async () => chip?.click());
+
+    /* The session key must actually be in the URL. Under the old four-call
+       version it was written and then overwritten before the render settled. */
+    expect(decodeURIComponent(window.location.hash)).toContain("ms=$1643");
+    window.location.hash = "";
+  });
+
+  /** And the whole set survives when several are written at once. */
+  it("writes every filter key in one go", async () => {
+    window.location.hash = "#messages";
+    const filters = {
+      sessions: ["$1643"],
+      speakers: ["human"] as MessageSpeaker[],
+      text: "deploy",
+      hideToolCalls: true,
+    };
+    /* Straight through the hook's own composition, which is what App uses. */
+    const params = paramsFromFilters(filters);
+    const search = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== null) search.set(k, v);
+    window.location.hash = `#messages?${search.toString()}`;
+    const roundTripped = filtersFromParams(Object.fromEntries(search));
+    expect(roundTripped).toEqual(filters);
+    window.location.hash = "";
   });
 });
 

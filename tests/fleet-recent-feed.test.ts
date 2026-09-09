@@ -22,6 +22,7 @@ import {
   MAX_FEED_LIMIT,
   STALE_TRANSCRIPT_MS,
   attributionOf,
+  contributedTurns,
   feedPayload,
   limitFrom,
   mergeFeed,
@@ -86,7 +87,7 @@ function input(sessionId: string, name: string, result: RecentMessages, working 
   /* `claudeSessionId` derived from the handle so two fixtures never accidentally
      collide and trip the duplicate-conversation check. A test that means to
      collide says so by passing the same one explicitly. */
-  return { sessionId, name, title: null, working, claudeSessionId: `conv-${sessionId}`, result };
+  return { sessionId, name, title: null, working, claudeSessionId: `conv-${sessionId}`, declaredNonClaude: false, result };
 }
 
 describe("limitFrom", () => {
@@ -234,21 +235,17 @@ describe("completeness — a truncated session must not read as a quiet one", ()
    *
    * Goes red if `mayBeMissing` becomes "every incomplete session".
    */
-  it("stays quiet about a cut-off session that falls entirely outside the window", () => {
+  it("names a cut-off session even when everything it returned is ancient", () => {
+    /* **THE EXEMPTION THIS TEST USED TO ASSERT IS DELETED.** It used to stay
+       quiet when a truncated session's messages all fell below the feed's
+       cutoff, on the reasoning that its unread turns must be older still. That
+       reasoning assumes the monotonicity the `out-of-order` check exists
+       because we cannot assume — and the check can only see turns that came
+       back, so a clock rollback below the read boundary is unknowable.
+       `complete` has to mean proven. GPT Sol's P1 on the code review. */
     const merged = mergeFeed(
       [
-        /* Incomplete — asked for 2, got 1, never reached the start of the file
-           — but everything it returned is ancient, so every turn it failed to
-           read is older still and none of them could be in this window. */
-        /* Two ancient turns, cut short. The oldest is discarded as the guard
-           turn, leaving one — fewer than the 2 asked for, so incomplete. */
-        input(
-          "$1",
-          "truncated",
-          found([turn("2026-09-08T20:00:00.000Z", "t-guard"), turn("2026-09-08T20:01:00.000Z", "t-old")], {
-            reachedStartOfFile: false,
-          }),
-        ),
+        input("$1", "truncated", found([turn("2026-09-08T20:00:00.000Z", "t-old")], { reachedStartOfFile: false })),
         input(
           "$2",
           "busy",
@@ -262,8 +259,7 @@ describe("completeness — a truncated session must not read as a quiet one", ()
       2,
       NOW,
     );
-    expect(merged.sessions.find((s) => s.name === "truncated")?.read).toMatchObject({ complete: false });
-    expect(merged.coverage).toEqual({ kind: "complete" });
+    expect(missingNames(merged.coverage)).toEqual(["truncated"]);
   });
 
   /**
@@ -422,16 +418,89 @@ describe("coverage — whether 'the last N messages' is a claim this answer can 
     const merged = mergeFeed(
       [
         input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hello")])),
-        input("$2", "a-shell", {
-          kind: "not-found",
-          reason: "no-claude-session-id",
-          why: "this session has no conversation id",
-        }),
+        {
+          sessionId: "$2",
+          name: "a-shell",
+          title: null,
+          working: false,
+          claudeSessionId: null,
+          /* The launcher positively says this is a shell — that, and not the
+             null id, is what exempts it. */
+          declaredNonClaude: true,
+          result: {
+            kind: "not-found",
+            reason: "no-claude-session-id",
+            why: "this session has no conversation id",
+          },
+        },
       ],
       10,
       NOW,
     );
     expect(merged.coverage).toEqual({ kind: "complete" });
+  });
+
+  /**
+   * **THE OTHER HALF OF THAT EXEMPTION, AND THE REASON IT KEYS OFF THE
+   * LAUNCHER RATHER THAN THE REASON CODE.** `claudeSessionId` is null for two
+   * different things: a session that is not a Claude, and a legacy Claude that
+   * predates the launcher pinning one. Both produce `no-claude-session-id`. If
+   * the null itself exempted the row, a real conversation we failed to read
+   * would be hidden — and this feed's whole job is to not do that.
+   *
+   * Goes red if the exemption is widened back to the reason code. GPT Sol's P1.
+   */
+  it("does blame a row with no conversation id that nothing declares a shell", () => {
+    const merged = mergeFeed(
+      [
+        {
+          sessionId: "$1",
+          name: "a-legacy-claude",
+          title: null,
+          working: false,
+          claudeSessionId: null,
+          /* A legacy session: the launcher never wrote a kind for it. */
+          declaredNonClaude: false,
+          result: { kind: "not-found", reason: "no-claude-session-id", why: "no conversation id was pinned" },
+        },
+      ],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["no-transcript"]);
+  });
+
+  /**
+   * Two fields the wire carried and nothing read — Class A out of
+   * docs/postmortems/260908b, found by GPT Sol on the code review. Either could
+   * sit beside `coverage: complete` and be invisible.
+   */
+  it("is indeterminate when a session's transcript had lines that would not parse", () => {
+    const merged = mergeFeed(
+      [input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hi")], { recordsUnparseable: 4 }))],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["unreadable"]);
+  });
+
+  /** One unparseable line is normal: the last record can be half-written as we read. */
+  it("stays complete for the single half-written line a live session always has", () => {
+    const merged = mergeFeed(
+      [input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hi")], { recordsUnparseable: 1 }))],
+      10,
+      NOW,
+    );
+    expect(merged.coverage).toEqual({ kind: "complete" });
+  });
+
+  it("is indeterminate when more than one file matches the conversation id", () => {
+    const merged = mergeFeed(
+      [input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hi")], { copies: 2 }))],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["unreadable"]);
   });
 
   /** But a session that claims a conversation whose transcript is gone IS a hole. */
@@ -460,8 +529,8 @@ describe("coverage — whether 'the last N messages' is a claim this answer can 
     const shared = "the-same-conversation";
     const merged = mergeFeed(
       [
-        { sessionId: "$1", name: "first", title: null, working: false, claudeSessionId: shared, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
-        { sessionId: "$2", name: "second", title: null, working: false, claudeSessionId: shared, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
+        { sessionId: "$1", name: "first", title: null, working: false, claudeSessionId: shared, declaredNonClaude: false, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
+        { sessionId: "$2", name: "second", title: null, working: false, claudeSessionId: shared, declaredNonClaude: false, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
       ],
       10,
       NOW,
@@ -575,6 +644,149 @@ describe("the guard turn", () => {
       NOW,
     );
     expect(merged.messages.map((m) => m.text)).toEqual(["second", "the very first thing"]);
+  });
+});
+
+describe("the guard turn, against the real reader", () => {
+  /**
+   * **THE TESTS ABOVE START FROM ALREADY-COALESCED TURNS, WHICH IS THE ONE
+   * THING THE HAZARD IS NOT.** GPT Sol's P2 on the code review: fabricating
+   * `TranscriptTurn`s and slicing them proves the slice, not the claim. The
+   * claim is about `readRecentMessages` — that when a byte budget stops the
+   * walk inside a group of records sharing one `message.id`, the oldest turn it
+   * returns is assembled from only the records above the boundary.
+   *
+   * So these three drive the real reader over a real file at a real byte
+   * budget, and assert on what the feed contributes afterwards.
+   */
+  const CONV = "b41f7c93-2a08-4d6e-9f51-c7e3a8d05b26";
+  const DIR = "/home/greg/code/spideryarn2";
+
+  /** One assistant record. Several sharing an id are one turn. */
+  function record(messageId: string, at: string, body: Record<string, unknown>): string {
+    return `${JSON.stringify({
+      type: "assistant",
+      uuid: `${messageId}-${at}`,
+      timestamp: at,
+      message: { id: messageId, role: "assistant", ...body },
+    })}\n`;
+  }
+
+  function textRecord(messageId: string, at: string, text: string): string {
+    return record(messageId, at, { content: [{ type: "text", text }] });
+  }
+
+  /** Stage a transcript and read it back through the real reader. */
+  async function readStaged(body: string, limit: number, maxBytes: number): Promise<RecentMessages> {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = (await import("node:path")).default;
+    const { readRecentMessages } = await import("../tools/fleet/transcript.js");
+    const projects = path.join(mkdtempSync(path.join(tmpdir(), "fleet-feed-guard-")), "projects");
+    const slug = DIR.replace(/[/.]/g, "-");
+    mkdirSync(path.join(projects, slug), { recursive: true });
+    writeFileSync(path.join(projects, slug, `${CONV}.jsonl`), body);
+    return readRecentMessages({ claudeSessionId: CONV, dir: DIR, limit, maxBytes, projectsDir: projects });
+  }
+
+  /**
+   * **THE CASE THE GUARD EXISTS FOR.** A multi-record turn straddles the byte
+   * boundary, so the reader returns it holding only its later fragment. The
+   * feed must not contribute that fragment.
+   *
+   * Goes red if `contributedTurns` stops discarding the oldest.
+   */
+  it("does not contribute a turn the reader assembled from half its records", async () => {
+    /* One turn written as two records sharing `m-split`, then two whole turns.
+       The byte budget is tuned so the walk stops BETWEEN the two `m-split`
+       records — measured against the real reader, not guessed: at 1000 bytes of
+       this 1201-byte file it returns three turns whose oldest is built from the
+       second record alone. */
+    const split =
+      textRecord("m-split", "2026-09-09T00:10:00.000Z", "FIRST HALF of the split turn") +
+      textRecord("m-split", "2026-09-09T00:10:01.000Z", "SECOND HALF of the split turn");
+    const later =
+      textRecord("m-a", "2026-09-09T00:20:00.000Z", `whole-a ${"x".repeat(200)}`) +
+      textRecord("m-b", "2026-09-09T00:30:00.000Z", `whole-b ${"y".repeat(200)}`);
+    const result = await readStaged(split + later, 3, 1000);
+
+    expect(result.kind).toBe("found");
+    if (result.kind !== "found") return;
+    /* The premise: the reader really did stop short of the file's start. */
+    expect(result.reachedStartOfFile).toBe(false);
+
+    /* **THE HAZARD ITSELF, ASSERTED RATHER THAN ASSUMED.** The reader hands
+       back a turn holding only the second half of what the agent said, and
+       nothing about it looks wrong — right speaker, plausible timestamp, real
+       prose. This is the assertion that would notice if `readRecentMessages`
+       ever stopped producing fragments, at which point the guard below is dead
+       weight and should be deleted rather than left as folklore. */
+    const raw = result.turns.map((t) => t.text).join("\n");
+    expect(raw).toContain("SECOND HALF");
+    expect(raw).not.toContain("FIRST HALF");
+
+    /* And the guard drops exactly that turn, keeping the whole ones. */
+    const texts = contributedTurns(result).map((t) => t.text).join("\n");
+    expect(texts).not.toContain("SECOND HALF");
+    expect(texts).toContain("whole-a");
+    expect(texts).toContain("whole-b");
+  });
+
+  /**
+   * When the walk reached byte 0 nothing was cut, so the oldest turn is whole
+   * and discarding it would throw away a real message — the first thing the
+   * agent ever said.
+   */
+  it("keeps the oldest turn when the reader reached the start of the file", async () => {
+    const body =
+      textRecord("m-1", "2026-09-09T00:10:00.000Z", "the very first thing") +
+      textRecord("m-2", "2026-09-09T00:20:00.000Z", "the second thing");
+    const result = await readStaged(body, 10, 1024 * 1024);
+
+    expect(result.kind).toBe("found");
+    if (result.kind !== "found") return;
+    expect(result.reachedStartOfFile).toBe(true);
+    expect(contributedTurns(result).map((t) => t.text)).toContain("the very first thing");
+  });
+
+  /**
+   * The whole way through: a staged transcript, the real reader, the real
+   * `feedPayload`, and coverage. A session cut short by the budget must come
+   * back `indeterminate` rather than quietly short.
+   */
+  it("reports a byte-budget cut as indeterminate coverage, end to end", async () => {
+    const body = Array.from({ length: 12 }, (_, i) =>
+      textRecord(`m-${i}`, new Date(Date.parse("2026-09-09T00:00:00.000Z") + i * 60_000).toISOString(), `turn ${i} ${"z".repeat(300)}`),
+    ).join("");
+
+    const payload = await feedPayload(
+      {
+        snapshot: () =>
+          ({
+            rows: [
+              {
+                id: "$1",
+                name: "cut-short",
+                title: null,
+                claudeSessionId: CONV,
+                meta: { version: 1, kind: "claude", dir: DIR },
+                status: { kind: "idle" },
+              },
+            ],
+            collectedAt: "2026-09-09T00:59:30.000Z",
+            tookMs: 1,
+            tmuxServerPid: 42,
+          }) as unknown as FleetSnapshot,
+        nowMs: () => NOW,
+        read: (_row, limit) => readStaged(body, limit, 512),
+      },
+      8,
+    );
+
+    expect(payload.kind).toBe("feed");
+    if (payload.kind !== "feed") return;
+    expect(payload.coverage.kind).toBe("indeterminate");
+    expect(reasonKinds(payload.coverage)).toContain("byte-budget");
   });
 });
 
@@ -809,14 +1021,52 @@ describe("the route", () => {
    * that is itself wrong. A hung request is indistinguishable from a dead box
    * on a phone.
    */
-  it("answers rather than hanging when the read throws", async () => {
+  /**
+   * A thrown read is one session's problem, not the fleet's: the feed still
+   * serves every other session and demotes coverage to say what it lost. A 500
+   * would throw away 20 good sessions because one was unreadable.
+   */
+  it("serves the rest of the fleet when one session's read throws", async () => {
     const { res, done } = fakeRes();
     recentFeedRoute({
       ...deps,
       read: () => Promise.reject(new Error("disk went away")),
     }).handle(req("/api/feed"), res);
     const out = await done;
-    expect(out.status).toBe(500);
-    expect(JSON.parse(out.body.toString())).toMatchObject({ kind: "unreadable" });
+    expect(out.status).toBe(200);
+    const payload = JSON.parse(out.body.toString()) as { kind: string; coverage: { kind: string } };
+    expect(payload.kind).toBe("feed");
+    expect(payload.coverage.kind).toBe("indeterminate");
+  });
+
+  /**
+   * **THE FAILURE A REJECTION DOES NOT COVER.** `Promise.all` waits for its
+   * slowest member for ever, so a read that never settles — a wedged mount, a
+   * bug in a future reader — held the whole route open until the phone gave up,
+   * which is indistinguishable from the box being down. A rejection was already
+   * handled; a hang was not.
+   *
+   * GPT Sol's P1 on the code review. Goes red if `readWithin` stops racing the
+   * deadline: the test simply never finishes.
+   */
+  it("gives up on a read that never settles, rather than hanging the whole route", async () => {
+    const { res, done } = fakeRes();
+    recentFeedRoute({
+      ...deps,
+      deadlineMs: 20,
+      /* Never resolves, never rejects. */
+      read: () => new Promise<never>(() => {}),
+    }).handle(req("/api/feed"), res);
+    const out = await done;
+    expect(out.status).toBe(200);
+    const payload = JSON.parse(out.body.toString()) as {
+      kind: string;
+      sessions: { read: { kind: string; why?: string } }[];
+      coverage: { kind: string };
+    };
+    expect(payload.kind).toBe("feed");
+    expect(payload.sessions[0]?.read.kind).toBe("unreadable");
+    expect(payload.sessions[0]?.read.why).toContain("gave up");
+    expect(payload.coverage.kind).toBe("indeterminate");
   });
 });

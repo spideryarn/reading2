@@ -16,7 +16,7 @@
  * Show a message under a session's name as though the attribution were settled,
  * or show a short list as though it were a complete one. **The reader was never
  * watching these sessions**, so nothing on screen contradicts a wrong answer —
- * which is the whole reason `attribution` and `mayBeMissing` are on the wire.
+ * which is the whole reason `attribution` and `coverage` are on the wire.
  * Three rules follow, and each has a test:
  *
  *  1. A session whose transcript could not be read is **a row saying so**, not
@@ -24,14 +24,17 @@
  *     a feed that omitted them would show a fleet of twelve and look complete.
  *  2. A `suspect` attribution is drawn **on the message**, not tucked into a
  *     footnote — it means these may be somebody else's words.
- *  3. `mayBeMissing` is printed whenever it is non-empty. "The last 50" that is
- *     quietly the last 50 of what fitted in a byte budget is the failure this
- *     feature is most exposed to.
+ *  3. `coverage` is printed as a headline whenever it is `indeterminate`.
+ *     "The last 50" that is quietly the last 50 of what fitted in a byte budget
+ *     is the failure this feature is most exposed to, and an unreadable session
+ *     can hold all of the newest messages — so the qualification belongs to the
+ *     whole list, never to a row inside it.
  *
  * ## NOT POLLED
  *
- * A refresh is ~250 ms on the box and 266 kB on the wire at N=50, read on a
- * phone over Tailscale. Fetched when the tab opens and when the reader asks,
+ * A refresh costs the box ~250 ms and about 10 MB of transcript reads; the
+ * answer itself is only 40 kB (8 kB gzipped). **The disk is what decides the
+ * cadence, not the wire.** Fetched when the tab opens and when the reader asks,
  * never on a timer — routes-recent-feed.ts § cadence.
  *
  * ## UNTRUSTED, ALL OF IT
@@ -44,6 +47,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { SPEAKERS } from "./Turn";
 import { Explain } from "./Tooltip";
 import {
+  NO_FILTERS,
   applyFilters,
   httpFeedApi,
   type FeedApi,
@@ -340,7 +344,18 @@ export function FeedPanel({
 
   const view = reading.kind === "ready" ? reading.view : null;
   const rows = view?.kind === "feed" ? view.messages : [];
+  /* **THE UNDATED GROUP IS FILTERED AND COUNTED LIKE EVERY OTHER MESSAGE.**
+     It was neither until GPT Sol's P2: filters applied to the dated list only,
+     so a speaker filter left the undated rows on screen underneath it, and the
+     tally said "0 messages" over a panel visibly showing some. Three claims,
+     none of them agreeing with the other two. */
+  const undatedRows = view?.kind === "feed" ? view.undated : [];
   const shown = useMemo(() => applyFilters(rows, filters), [rows, filters]);
+  const shownUndated = useMemo(() => applyFilters(undatedRows, filters), [undatedRows, filters]);
+  const total = rows.length + undatedRows.length;
+  const totalShown = shown.length + shownUndated.length;
+  const filtering =
+    filters.sessions.length > 0 || filters.speakers.length > 0 || filters.text.trim() !== "" || filters.hideToolCalls;
 
   /* The sessions offered in the picker are the ones actually PRESENT in this
      window, not every session on the box: a filter chip that can only ever
@@ -389,6 +404,16 @@ export function FeedPanel({
         <Button onClick={refresh} disabled={busy} aria-label="Read the transcripts again">
           {busy ? "Reading…" : "Read again"}
         </Button>
+        {/* **A WAY OUT THAT DOES NOT DEPEND ON SEEING THE FILTER.** The session
+            chips are drawn only for sessions present in this window, so a
+            bookmarked filter — or one whose session has since gone quiet — can
+            empty the feed with no lit chip to press. Without this the reader's
+            only remedy is editing the URL. GPT Sol's P2. */}
+        {filtering ? (
+          <Button onClick={() => onFilters(NO_FILTERS)} aria-label="Clear every filter">
+            Clear filters
+          </Button>
+        ) : null}
         <label className="tw:flex tw:items-center tw:gap-1 tw:text-[12px] tw:text-ink-faint">
           Last
           <select
@@ -457,15 +482,15 @@ export function FeedPanel({
       {view?.kind === "feed" ? (
         <>
           <Caveats view={view} />
-          {shown.length === 0 ? (
+          {totalShown === 0 ? (
             /* **TWO DIFFERENT EMPTINESSES, AND THEY MUST NOT READ THE SAME.**
                "Your filters match nothing" is the reader's own doing; "no
                session on this box has said anything" is a claim about the
                fleet, and it is nearly always the wrong one to make. */
             <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">
-              {rows.length === 0
+              {total === 0
                 ? "No session in this window has a readable message. That is a claim about the transcripts, not about whether the agents are working — see the sessions above."
-                : `None of the ${rows.length} messages in this window match these filters.`}
+                : `None of the ${total} messages in this window match these filters.`}
             </p>
           ) : (
             <ul className="tw:mt-2">
@@ -475,7 +500,7 @@ export function FeedPanel({
             </ul>
           )}
 
-          {view.undated.length > 0 ? (
+          {shownUndated.length > 0 ? (
             <>
               <SectionHeading>Undated</SectionHeading>
               <p className="tw:px-1 tw:text-[12px] tw:text-ink-faint">
@@ -483,7 +508,7 @@ export function FeedPanel({
                 dropped.
               </p>
               <ul className="tw:mt-2">
-                {view.undated.map((row) => (
+                {shownUndated.map((row) => (
                   <Row key={row.turn.uuid ?? `${row.sessionId}-undated-${row.turn.text.slice(0, 24)}`} row={row} />
                 ))}
               </ul>
@@ -491,7 +516,7 @@ export function FeedPanel({
           ) : null}
 
           <p className="tw:mt-3 tw:px-1 tw:text-[11px] tw:text-ink-faint">
-            {shown.length === rows.length ? `${rows.length} messages` : `${shown.length} of ${rows.length} messages`}
+            {totalShown === total ? `${total} messages` : `${totalShown} of ${total} messages`}
             {view.sessionsOffered ? ` across ${view.sessions.length} sessions` : ""}
           </p>
           {/* **THE CENSUS BOUNDARY, SAID OUT LOUD.** There is no instant at

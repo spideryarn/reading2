@@ -110,8 +110,8 @@ coverage: { kind: "complete" } | { kind: "indeterminate"; reasons: FeedCoverageR
 
 | reason | premise it breaks |
 |---|---|
-| `byte-budget` | a session was cut short *inside the window shown* |
-| `unreadable` | there was a transcript and we could not read it |
+| `byte-budget` | a session was cut short before its newest N were reached |
+| `unreadable` | there was a transcript and we could not read it — including a read that timed out, more than one half-written line, or more than one file matching the conversation id |
 | `no-transcript` | a conversation was claimed and its file could not be found |
 | `undated` | a turn with no timestamp displaced a dated one that was never fetched |
 | `out-of-order` | a session's own timestamps go backwards, so "newest" is not a total order |
@@ -119,13 +119,17 @@ coverage: { kind: "complete" } | { kind: "indeterminate"; reasons: FeedCoverageR
 
 Three details that are decisions rather than bookkeeping:
 
-- **`no-claude-session-id` is deliberately NOT a coverage failure.** It is a shell, or a scheduled
-  session whose pane is still running `sleep`, and nine of 21 rows on this box are that. Counting
-  them would make coverage permanently indeterminate — and a warning that is always on is one nobody
-  reads. Verified against the live box: coverage comes back `complete`.
-- **`byte-budget` still uses the sharper condition.** A session cut short whose oldest returned
-  message is already older than the feed's cutoff has had everything it could contribute read, so it
-  is not named. Same argument: a warning that is usually wrong is one nobody reads.
+- **The one exemption keys off the launcher, not off the reason code.** A row the launcher positively
+  declares `shell` or `setup` has no conversation to miss, and six of the box's rows are exactly
+  that; counting them would make coverage permanently indeterminate, and a warning that never clears
+  is one nobody reads. But `no-claude-session-id` alone does **not** mean that — a legacy Claude that
+  predates the launcher pinning an id produces the same code, and hiding one of those would hide a
+  real conversation. Sol's P1 on the code review; the first version exempted the reason code and was
+  too broad. Verified against the live box: coverage still comes back `complete`.
+- **Every incomplete session is named, with no window-relative exemption.** The first version only
+  named a cut-short session whose oldest returned message was newer than the feed's cutoff. That is
+  deleted rather than repaired — see *The code review* below for why an unverifiable assumption
+  cannot underwrite a `complete`.
 - **Reasons are keyed by `sessionId`, not by name.** Names are reassigned when a session dies and two
   can wear the same one, so a warning keyed by name can point at the wrong agent. Sol's P1 again.
 
@@ -343,6 +347,60 @@ it is not arithmetic. Two assert the dock's mode list and its `aria-checked` row
 entry. The third asserted that the page does **not** say "Recent messages" until a session is opened
 — and the new tab's own button says exactly that, so a whole-page text search stopped meaning what it
 was written to mean. Scoped to `main`, which is the panel area; the dock is a `nav` beside it.
+
+## The code review, and the bug it found that no test could
+
+GPT Sol's second review — of the built code, weighted higher than the plan review — returned **no
+P0, six P1 and three P2**, all acted on. Prompt and answer:
+[review-code-prompt](260909b-recent-messages-tab-code-review-prompt.md) ·
+[review-code-sol](260909b-recent-messages-tab-code-review-sol.md).
+
+**The one that was a live bug, not a design objection:** `App` wrote the four filter keys with four
+`setParam` calls, and `setParam` closes over the params it was built with — so each call started from
+the same stale snapshot and **only the last survived**. "Hide tool calls" persisted because it was
+last; session, speaker and text silently reverted. `mode.ts` now has an atomic `setParams`.
+
+The instructive part is why the suite was green. Both converters were correct and both were tested;
+the fault was in the composition, and **no test drove the composition**. Sol said it plainly: *"The
+URL round-trip test exercises only the pure converters."* That is the same shape as
+[a-check-can-answer-a-weaker-question]: the test answered *does the mapping round-trip?* while the
+question was *does setting a filter keep it?*
+
+**And the mutation round proved the point twice more.** Nine mutations, seven went red immediately —
+and the two that did not were the two Sol had just found: writing only the last hash key, and letting
+the undated group bypass the filters. Both had passing tests over them and neither test could fail.
+They have real ones now, driving the actual control through the actual page.
+
+The other findings, briefly:
+
+| | what changed |
+|---|---|
+| **P1** an unreadable session can hold all the newest messages | already the coverage design; extended to `no-transcript` |
+| **P1** `oldest > cutoffMs` missed equality | the window-relative exemption is **deleted**, not repaired — see below |
+| **P1** `no-claude-session-id` is two different things | the exemption now keys off the launcher's own `kind`, so a legacy Claude is still a hole |
+| **P1** `copies`/`recordsUnparseable` carried and read by nothing | both now demote coverage — Class A out of [260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md), found in code written while fixing that class |
+| **P1** an unsettled read hangs the whole route | a 5 s per-read deadline; a timed-out session becomes `unreadable` and the feed still answers |
+| **P1** a malformed payload rendered as confidently complete | `schema` and the three required arrays are now required; anything else is `no-answer` |
+| **P2** filters unclearable when their chip is absent | a "Clear filters" control |
+| **P2** undated rows bypassed filtering and counting | filtered and counted with everything else; the server no longer truncates them |
+| **P2** the guard test used fabricated coalesced turns | an end-to-end fixture — see below |
+
+**Deleting the window-relative exemption is the decision worth recording.** It only named a
+cut-short session when its oldest returned message was newer than the feed's cutoff. Sol found the
+off-by-one (`>` where `>=` was needed) and then the deeper problem: the exemption *assumes* unread
+turns are older than read ones, which is the monotonicity the `out-of-order` check exists because we
+cannot assume — and that check can only see turns that came back, so a clock rollback below the read
+boundary is unknowable by construction. **`complete` has to mean proven or it means nothing.** The
+cost was measured before choosing: sessions cut short number **0 at N=25, 1 at N=50, 3 at N=100** of
+16 readable, which is a specific handful rather than a permanent warning.
+
+**The guard test now drives the real reader.** The original asserted a slice over fabricated,
+already-coalesced turns — which proves the slice, not the claim. The new one stages a transcript
+where one turn is two records sharing a `message.id`, reads it at a byte budget tuned by measurement
+(1000 bytes of a 1201-byte file), and **asserts the hazard itself**: the reader returns a turn
+reading `"SECOND HALF of the split turn"`, with no sign anything is wrong, and the guard drops
+exactly that one. If `readRecentMessages` ever stops producing fragments that assertion fails, and
+the guard should then be deleted rather than kept as folklore.
 
 ## Coordination
 
