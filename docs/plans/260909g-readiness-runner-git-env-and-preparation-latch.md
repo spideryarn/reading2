@@ -91,20 +91,54 @@ and turn a genuine failure into `void`.
 ### Strip git's location variables in one place, and use it everywhere
 
 One exported helper in `tools/fleet/readiness-git.ts`, used by its own `git()`, by
-`makeRelationCache`'s bare `spawnSync`, and by `scripts/readiness-loop.ts`'s `run()`. Stripping in
-`run()` rather than only at its git call sites is deliberate: `run()` also launches `npm`, and an
+`makeRelationCache`'s bare `spawnSync`, by `scripts/readiness-loop.ts`'s `run()`, **by the `spawn()`
+that launches the check itself**, and by the `npm` spawn inside `scripts/readiness-run.ts`. Stripping
+in `run()` rather than only at its git call sites is deliberate: `run()` also launches `npm`, and an
 `npm` script that shells out to git would inherit the same poison.
 
 The set is the variables that **redirect** a command away from its `cwd`: `GIT_DIR`,
 `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
 `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`. `GIT_CEILING_DIRECTORIES` is left alone: it can
 only make repository discovery *fail*, and a failure is a safe outcome here — every caller treats an
-unreadable answer as unknown, and unknown never lets a run count towards green.
+unreadable answer as unknown, and unknown never lets a run count towards green. GPT Sol ran it and
+confirmed the reasoning: it cannot exclude the current directory, and from a child directory it made
+discovery fail rather than select another repository.
 
 **Simpler option passed over:** `git --git-dir=… --work-tree=…` on every invocation. It would fix
 the two named variables and silently miss `GIT_INDEX_FILE` and the object-directory pair, it does
 not help the `npm` children at all, and it puts the burden on whoever writes the *next* git call.
-Stripping the environment is one edit that cannot be forgotten at a call site.
+Stripping the environment is one edit that cannot be forgotten at a call site. (It does have one
+advantage the environment scrub lacks — `--work-tree` overrides `core.worktree`, which is the next
+paragraph.)
+
+### What a clean environment does *not* buy, and the one check that does
+
+A stripped environment is not the same as "`cwd` decides". GPT Sol demonstrated it on git 2.43.0
+with all seven variables unset:
+
+```sh
+git -C A config core.worktree B
+git -C A rev-parse --show-toplevel          # → B
+git -C A merge --ff-only dev                # → wrote the new file into B, not A
+```
+
+So the honest claim is narrower, and it is the one the code should carry:
+
+> `gitEnv()` removes inherited git path overrides, so those environment variables cannot replace
+> git's normal repository discovery from `cwd`. It does not make `cwd` authoritative over repository
+> metadata or repository-local configuration: `core.worktree` and a linked worktree's `.git`
+> `gitdir:` pointer remain trusted inputs.
+
+**Remedy taken:** one guard before the tick's fetch and fast-forward — assert that
+`git -C <runner> rev-parse --show-toplevel`, run with a clean environment, canonicalises to the
+runner path. If it does not, skip the tick and say so. That is one 5 ms git call every ten minutes
+and it closes the `core.worktree` redirect at the only place the runner mutates anything.
+
+**Remedy declined:** threading `--work-tree=<cwd>` through every invocation, and validating the
+linked worktree's `.git` backlink. Once `--show-toplevel` agrees with `cwd`, `--work-tree` adds
+nothing; and a redirected *metadata* directory with a correct work tree cannot move another
+checkout's files, only its branch ref — which git's own worktree bookkeeping maintains and which
+nothing here sets by hand. The limit is written down rather than defended against.
 
 ### Latch preparation to the sha it was prepared for
 
@@ -131,7 +165,30 @@ tick.
 
 **Consequence worth naming:** a classification failure now costs an `npm ci` where before it cost a
 thrown tick. That is the trade — a minute of work in exchange for never recording a check that ran
-against the wrong dependencies.
+against the wrong dependencies. It must still be **loud** on stderr, naming both shas and git's own
+error: a permanently broken classifier that quietly reinstalled on every sha while every verdict
+looked healthy is precisely the shape [silent-success.md](../reusable/silent-success.md) is about.
+
+**A sha alone does not identify a prepared state.** GPT Sol's F3: prepare from a tree that is at B
+but *dirty* — `package.json` and `package-lock.json` both edited — and `npm ci` installs from files
+that are not B's. Latch `preparedFor = B`, let a person restore the two files, and the next tick sees
+`preparedFor === B`, skips the install, and checks B against modules built from something else.
+Nothing downstream can see it, because the tree stamp is clean by then.
+
+So the latch takes a second stamp *after* preparation, and records `preparedFor` only when that
+stamp is `known`, not `dirty`, and still at the target sha. Anything else sets `preparedFor` back to
+`null` — prepare everything next time — and says why. This is cheaper than Sol's proposed version,
+which also gates entry on a clean tree: preparing from a dirty tree is harmless in itself (the tick's
+own gates refuse to *check* a dirty tree anyway), and it is only the latch that must not believe it.
+
+**`package.json` is a dependency input too, and was missing.** Sol's F4, established: the classifier
+watches `package-lock.json` and not `package.json`, and this repo's history has many commits that
+change one without the other. A commit that changes a dependency in the manifest without the lock is
+a commit `npm ci` refuses — so a fresh checkout of it cannot pass, while the runner, having skipped
+the install, records it green. Both root manifests go into the watched pathspec and into both the
+`dependencies` and `fleetClient` rules. The cost is an extra `npm ci` on every commit that only
+edits an npm *script*, about a minute, against a 26-minute check; taking the accurate rule rather
+than parsing the manifest's dependency sections is the simpler-first choice.
 
 ### RR2-03: narrow the claim rather than close the channel
 
@@ -143,43 +200,100 @@ Building the one-shot out-of-band channel the review offers as the alternative w
 against an attacker who can already edit `vitest.config.ts` in our own repository. That is not in
 this project's threat model — `docs/project/security-map.md` names the untrusted parties, and none
 of them is our own test suite — and anyone in that position can do considerably worse than launder
-one refusal. So the code stays and the comments stop over-claiming, in the two places that currently
-say more than is true. `tools/fleet/readiness-parse.ts` already says the narrow thing ("an ordinary
-test, fixture or quoted log line") and needs no change.
+one refusal. So the code stays and the comments stop over-claiming.
+
+Three files, not the two this plan first said: Sol's F7 caught that `tools/fleet/readiness-parse.ts`
+calls the marker "authenticated" and says "the authenticated sentence proves", which is the same
+over-claim in different words. It becomes "token-matched".
+
+### The shared local database can be ahead of the commit under test — named, not fixed
+
+Sol's F5, established, and **new**: it is not one of the two findings this plan was dispatched for,
+and it is not fixed here.
+
+Every worktree on this box shares one local Supabase. `scripts/db-migrate.ts` passes
+`allowHistoricalExtras: isLocal`, so on a local database a ledger row belonging to no migration in
+this commit's journal is a warning and not a refusal. That is the right call for a developer's
+laptop and the wrong one for a machine recording verdicts:
+
+1. `origin/dev` is B. B's code declares a new column but its migration was left out of the commit.
+2. Another worktree C adds that migration and applies it locally. C is not on `origin/dev`.
+3. The runner prepares B. B's migrator tolerates C's ledger row as historical extra.
+4. `db:check` finds the column and passes. B's tests pass **against C's schema**, and B is recorded
+   green.
+
+**Decision: weaken the claim, and hand the fix to the Overseer.** The two repairs Sol offers are a
+dedicated readiness database, or holding the migration advisory lock across the whole 26-minute
+check. The first is a real piece of work; the second would block every other agent's tests on this
+box for 26 minutes at a time, which is an operational trade-off for the Overseer or Greg to make and
+not one to slip into a bug-fix stage. Sol's own remedy permits this ending in as many words —
+*"Without one of these, the stated exact-schema invariant must be weakened explicitly."*
+
+So the runner's header stops claiming that a green means B passed against B's schema, and says what
+it actually means: B passed against **this box's** schema, which is B's own migrations applied to a
+database that other worktrees also migrate. A middle option was considered and refused for now —
+making the runner skip whenever the ledger holds unknown rows. It is correct and self-clearing, but
+on a box where several agents are usually mid-migration it could silence the runner for long
+stretches, and trading availability for accuracy is the same decision, made smaller and less
+visibly.
+
+## The plan review, and what it changed
+
+GPT Sol reviewed this plan before any code was written and **refused** it, on four established P1s —
+two of them things this plan had got wrong, two of them new. The full answer is
+[260909g-readiness-runner-plan-review-sol.md](260909g-readiness-runner-plan-review-sol.md), and the
+findings are folded into the sections above.
+
+| ID | What it said | Disposition |
+|----|--------------|-------------|
+| F1 | The check itself is launched by a separate raw `spawn()` that the proposed scrub never reaches, and `readiness-run.ts` copies the poison again into its own `npm` child. Reachable false green via `scripts/conflict-markers.ts`, which takes its tracked-file inventory from git. | **Taken.** Both spawns scrubbed, with a test over the spawn boundary rather than over `gitEnv` alone. |
+| F2 | A clean environment does not make `cwd` authoritative — `core.worktree` still redirects, demonstrated on git 2.43.0. | **Taken**, with a narrower remedy than proposed: one `--show-toplevel` guard before the tick mutates, and the claim restated. |
+| F3 | A sha alone does not identify preparation done from a dirty tree. | **Taken**, with a simpler remedy: latch only on a clean post-preparation stamp. |
+| F4 | `package.json` is missing from the dependency inputs. | **Taken.** |
+| F5 | The shared local database can be ahead of the commit under test, so a green can be produced against another worktree's schema. | **Named, not fixed** — see above. Both repairs are larger decisions than this stage; the claim is weakened instead and it goes to the Overseer. |
+| F6 | The conservative diff fallback must be noisy. | **Taken.** |
+| F7 | The nonce over-claim is in a third file too. | **Taken** — this plan had said that file needed no change, and was wrong. |
+| F8 | The fleet-prerequisite comment misdescribes what needs the build. | **Taken.** Verified: `tests/fleet-decisions-route.test.ts` never reads `dist`; `tools/fleet/server.ts` exits at import unless `dist/index.html` exists. |
 
 ## Stages
 
-### Stage 1 — one git environment, stripped, used by every git call the runner makes
+### Stage 1 — one git environment, and the guard a clean environment cannot give
 
 **Status: not started.**
 
-- [ ] `gitEnv()` (or similarly named) exported from `tools/fleet/readiness-git.ts`, with the set
-      above and the reasoning for what is left out.
-- [ ] Used by `git()` in that file, by `makeRelationCache`'s `spawnSync`, and by `run()` in
-      `scripts/readiness-loop.ts`.
-- [ ] Red first: a test that poisons `GIT_DIR`/`GIT_WORK_TREE` to point at a second real repository
-      and asserts the helper's consumers still describe their own `cwd`. It must fail against the
-      current code.
+- [ ] `gitEnv()` exported from `tools/fleet/readiness-git.ts`, with the set above and the reasoning
+      for what is left out.
+- [ ] Used by `git()` in that file, `makeRelationCache`'s `spawnSync`, `run()` in
+      `scripts/readiness-loop.ts`, the `spawn()` that launches the check (F1), and the `npm` spawn
+      in `scripts/readiness-run.ts` (F1).
+- [ ] A `--show-toplevel` guard before the tick's fetch and fast-forward (F2).
+- [ ] Red first: poison `GIT_DIR`/`GIT_WORK_TREE` at a second real repository and assert each
+      consumer still describes its own `cwd` — including a test over the check's spawn boundary,
+      because testing `gitEnv` alone cannot catch an omitted caller.
+- [ ] Red first: a `core.worktree` redirect is refused rather than fast-forwarded (F2).
 - [ ] Unit coverage that the helper removes every named variable and preserves the rest.
 
-### Stage 2 — preparation latched to the sha it was prepared for
+### Stage 2 — preparation latched to the sha, and to a clean tree
 
 **Status: not started.**
 
 - [ ] `PreparationState` with `preparedFor`, in `tools/fleet/readiness-loop.ts`.
 - [ ] `preparationAfterChanges` accepts `null` for "could not classify" and returns everything
-      pending.
-- [ ] `tick()` classifies from `preparedFor`, prepares, and only then records `preparedFor`.
-- [ ] Red first: two ticks — a successful fast-forward with an injected diff failure, then a second
-      tick at the same sha — asserting that dependencies are still installed. It must fail against
-      the current code.
+      pending; `package.json` joins `package-lock.json` as an input (F4).
+- [ ] `tick()` classifies from `preparedFor`, prepares, re-stamps, and records `preparedFor` only
+      for a clean tree still at the target (F3).
+- [ ] A failed classification is loud on stderr and not fatal (F6).
+- [ ] Red first: two ticks — an injected diff failure, then a failed `npm ci` — asserting the latch
+      does not advance and the install is retried. It must fail against the current code.
 
-### Stage 3 — the nonce's claim, narrowed to what it does
+### Stage 3 — the nonce's claim, and the runner's, narrowed to what they are
 
 **Status: not started.**
 
-- [ ] `vitest.config.ts` and `vitest-admission.ts` say what the nonce actually protects, and name
-      `/proc/self/environ` as the reason it is not more.
+- [ ] `vitest.config.ts`, `vitest-admission.ts` and `tools/fleet/readiness-parse.ts` say what the
+      nonce actually protects, and name `/proc/self/environ` as the reason it is not more (F7).
+- [ ] `scripts/readiness-loop.ts`'s header stops claiming a green means "against this commit's
+      schema" (F5), and its fleet-prerequisite comment is made accurate (F8).
 
 ### Stage 4 — land it, and restart the loop on it
 
