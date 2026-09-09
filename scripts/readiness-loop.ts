@@ -36,10 +36,10 @@ import {
 } from "../vitest-admission.js";
 import {
   decideTick,
-  initialPreparationNeeds,
+  initialPreparationState,
   preparationAfterChanges,
   TICK_INTERVAL_MS,
-  type PreparationNeeds,
+  type PreparationState,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
 import {
@@ -52,6 +52,7 @@ import {
 } from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
+import type { TreeStamp } from "../tools/fleet/readiness.js";
 import { collectHealth } from "../tools/fleet/health.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
@@ -65,7 +66,7 @@ const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 export const CHECK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 export const TERMINATION_GRACE_MS = 10 * 1000;
 
-type CommandResult = {
+export type CommandResult = {
   status: number | null;
   signal: NodeJS.Signals | null;
   stdout: string;
@@ -363,17 +364,6 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
   return runner;
 }
 
-function changedPaths(runner: string, before: string, after: string): Set<string> {
-  if (before === after) return new Set();
-  const diff = requireCommand(
-    runner,
-    "git",
-    ["diff", "--name-only", before, after, "--", "package-lock.json", "drizzle", "tools/fleet/web", "vite.fleet.config.ts"],
-    "reading the files changed by the fast-forward",
-  );
-  return new Set(diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== ""));
-}
-
 /**
  * **`npm run check` has an undeclared prerequisite, and without this the runner
  * would record a permanent false red.**
@@ -407,6 +397,105 @@ function ensureFleetClient(runner: string, rebuild: boolean): void {
     throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}`);
   }
   if (!existsSync(entry)) throw new Error(`build:fleet exited 0 but did not create ${entry}`);
+}
+
+export type PreparationDeps = {
+  exec: (cwd: string, command: string, args: readonly string[], sourceEnv?: NodeJS.ProcessEnv) => CommandResult;
+  buildFleetClient: (runner: string, rebuild: boolean) => void;
+  databaseEnv: (runner: string) => NodeJS.ProcessEnv;
+  /** A sha only names the prepared files when the clean tree is still there. */
+  stamp: (cwd: string) => TreeStamp;
+};
+
+function preparationChanges(
+  runner: string,
+  preparedFor: string | null,
+  target: string,
+  exec: PreparationDeps["exec"],
+): readonly string[] | null {
+  if (preparedFor === null) return null;
+  const diff = exec(runner, "git", [
+    "diff", "--name-only", preparedFor, target, "--",
+    "package.json", "package-lock.json", "drizzle", "tools/fleet/web", "vite.fleet.config.ts",
+  ]);
+  if (commandSucceeded(diff)) {
+    return diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  }
+  console.error(
+    `readiness-loop: could not classify preparation changes from ${preparedFor} to ${target}: ` +
+      `${usefulOutput(diff)}; preparing everything`,
+  );
+  return null;
+}
+
+function latchPreparation(
+  preparation: PreparationState,
+  target: string,
+  tree: TreeStamp,
+): boolean {
+  if (tree.kind === "known" && !tree.dirty && tree.sha === target) {
+    /* The sha is evidence only after every preparation step succeeded and
+       the files they read are still a clean checkout of that exact sha. */
+    preparation.preparedFor = target;
+    return true;
+  }
+  preparation.preparedFor = null;
+  const found = tree.kind === "unknown"
+    ? `the tree could not be stamped: ${tree.why}`
+    : `the tree was at ${tree.sha}${tree.dirty ? " and dirty" : ""}`;
+  console.error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
+  return false;
+}
+
+export function prepareRunner(
+  runner: string,
+  preparation: PreparationState,
+  /** The sha to prepare for, or null when a failed fast-forward or unknown
+      stamp means this tick must not advance the latch. */
+  target: string | null,
+  deps: PreparationDeps = {
+    exec: (cwd, command, args, sourceEnv) =>
+      runCommand(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv),
+    buildFleetClient: ensureFleetClient,
+    databaseEnv: runnerLocalDatabaseEnv,
+    stamp: stampTree,
+  },
+): void {
+  const shouldPrepare = target !== null && preparation.preparedFor !== target;
+  if (target !== null && shouldPrepare) {
+    const changed = preparationChanges(runner, preparation.preparedFor, target, deps.exec);
+    preparation.needs = preparationAfterChanges(preparation.needs, changed);
+    if (preparation.needs.dependencies) {
+      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline"]);
+      if (!commandSucceeded(installed)) {
+        throw new Error(`installing dependencies for the runner checkout failed: ${usefulOutput(installed)}`);
+      }
+    }
+    if (preparation.needs.migrations) {
+      /* This deterministic runner is local-only: the injected environment
+         strips the shell values that can select and authorise a remote
+         database. A failed migration stays pending because the migrator's own
+         ledger preflight is the authority on whether retrying may change it. */
+      const migrated = deps.exec(runner, "npm", ["run", "db:migrate"], deps.databaseEnv(runner));
+      if (!commandSucceeded(migrated)) {
+        throw new Error(`applying local database migrations failed: ${usefulOutput(migrated)}`);
+      }
+    }
+  }
+
+  deps.buildFleetClient(runner, preparation.needs.fleetClient);
+
+  if (target !== null && shouldPrepare) {
+    if (latchPreparation(preparation, target, deps.stamp(runner))) {
+      /* Keep every classified need pending until the whole attempt latches.
+         Otherwise B can install successfully, fail later, then leave its
+         modules under an A latch; an A..C diff that happens to be empty would
+         wrongly bless C without repairing B's partial derived state. */
+      preparation.needs = { dependencies: false, migrations: false, fleetClient: false };
+    }
+  } else {
+    preparation.needs.fleetClient = false;
+  }
 }
 
 function databaseProblem(result: CommandResult): string | null {
@@ -506,14 +595,13 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
 async function tick(
   runner: string,
   store: ReadinessStore,
-  preparation: PreparationNeeds,
+  preparation: PreparationState,
   assertLock: () => void,
 ): Promise<void> {
   assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
   let fastForwardProblem = runnerWorktreeProblem(runner);
-  const before = stampTree(runner);
 
   if (fastForwardProblem === null) {
     const fetch = runCommand(runner, "git", ["fetch", "origin", "dev"]);
@@ -526,39 +614,9 @@ async function tick(
   }
 
   const dev = snapshotDev(runner, nowIso);
-  let changed = new Set<string>();
   const afterMerge = stampTree(runner);
-  if (
-    fastForwardProblem === null &&
-    before.kind === "known" &&
-    afterMerge.kind === "known"
-  ) {
-    changed = changedPaths(runner, before.sha, afterMerge.sha);
-    Object.assign(preparation, preparationAfterChanges(preparation, [...changed]));
-    if (preparation.dependencies) {
-      requireCommand(runner, "npm", ["ci", "--prefer-offline"], "installing dependencies for the runner checkout");
-      preparation.dependencies = false;
-    }
-    if (preparation.migrations) {
-      /* This deterministic runner is local-only: strip the two shell values
-         that can deliberately select and authorise a remote database, then
-         let db:migrate load the copied .env.local. db:check below decides
-         whether this box is now usable. A failed
-         migration remains pending and is retried: the migrator's own ledger
-         preflight is the authority on whether retrying may change anything. */
-      requireCommand(
-        runner,
-        "npm",
-        ["run", "db:migrate"],
-        "applying local database migrations",
-        runnerLocalDatabaseEnv(runner),
-      );
-      preparation.migrations = false;
-    }
-  }
-
-  ensureFleetClient(runner, preparation.fleetClient);
-  preparation.fleetClient = false;
+  const target = fastForwardProblem === null && afterMerge.kind === "known" ? afterMerge.sha : null;
+  prepareRunner(runner, preparation, target);
 
   const db = runCommand(
     runner,
@@ -653,7 +711,7 @@ async function main(): Promise<number> {
 
   try {
     const runner = ensureRunnerWorktree(primary.path, new Date().toISOString());
-    const preparation = initialPreparationNeeds();
+    const preparation = initialPreparationState();
     const assertLock = (): void => {
       if (held === null) throw new LostLoopLockError(`this process no longer holds ${lockPath}`);
       requireHeldLoopLock(held, lockPath);
@@ -664,7 +722,7 @@ async function main(): Promise<number> {
       /**
        * **One bad tick must not end the loop.**
        *
-       * `tick` throws on a failed `npm ci` or an unreadable diff, and this used
+       * `tick` throws on failed preparation such as `npm ci`, and this used
        * to let that reach the outer catch — which returns, so a single
        * transient failure would stop the runner *for every later commit* and
        * leave the tab silently ageing into `unknown` with nothing to say why.

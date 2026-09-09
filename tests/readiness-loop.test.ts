@@ -20,11 +20,12 @@ import {
 } from "../vitest-admission.js";
 import {
   decideTick,
-  initialPreparationNeeds,
+  initialPreparationState,
   MAX_VOIDS_PER_WINDOW,
   preparationAfterChanges,
   TICK_INTERVAL_MS,
   VOID_RETRY_COOLDOWN_MS,
+  type PreparationState,
   type TickInput,
 } from "../tools/fleet/readiness-loop.js";
 import {
@@ -44,10 +45,12 @@ import {
 import {
   CHECK_TIMEOUT_MS,
   localDatabaseEnv,
+  prepareRunner,
   readinessCheckEnv,
   runCommand,
   runnerWorktreeProblem,
   TERMINATION_GRACE_MS,
+  type PreparationDeps,
   requireHeldLoopLock,
   waitForReadinessChild,
   worktreeAddArgs,
@@ -102,6 +105,7 @@ afterEach(() => {
 const NOW_MS = Date.parse("2026-09-09T18:00:00.000Z");
 const SHA_A = "3333333333333333333333333333333333333333";
 const SHA_B = "4444444444444444444444444444444444444444";
+const SHA_C = "5555555555555555555555555555555555555555";
 const GB = 1024 ** 3;
 
 const clean = (sha = SHA_A): Extract<TreeStamp, { kind: "known" }> => ({
@@ -191,6 +195,53 @@ function input(over: Partial<TickInput> = {}): TickInput {
     health: healthy,
     databaseProblem: null,
     ...over,
+  };
+}
+
+type FakeCommandResult = ReturnType<PreparationDeps["exec"]>;
+
+function commandResult(over: Partial<FakeCommandResult> = {}): FakeCommandResult {
+  return {
+    status: 0,
+    signal: null,
+    stdout: "",
+    stderr: "",
+    error: null,
+    ...over,
+  };
+}
+
+function preparedAt(
+  sha: string,
+  needs: Partial<PreparationState["needs"]> = {},
+): PreparationState {
+  return {
+    preparedFor: sha,
+    needs: { dependencies: false, migrations: false, fleetClient: false, ...needs },
+  };
+}
+
+function preparationFakes(over: Partial<PreparationDeps> = {}): {
+  calls: Array<{ command: string; args: readonly string[] }>;
+  builds: ReturnType<typeof vi.fn<PreparationDeps["buildFleetClient"]>>;
+  deps: PreparationDeps;
+} {
+  const calls: Array<{ command: string; args: readonly string[] }> = [];
+  const execImpl = over.exec ?? (() => commandResult());
+  const exec = vi.fn<PreparationDeps["exec"]>((cwd, command, args, sourceEnv) => {
+    calls.push({ command, args: [...args] });
+    return execImpl(cwd, command, args, sourceEnv);
+  });
+  const builds = vi.fn<PreparationDeps["buildFleetClient"]>(over.buildFleetClient);
+  return {
+    calls,
+    builds,
+    deps: {
+      exec,
+      buildFleetClient: builds,
+      databaseEnv: over.databaseEnv ?? (() => ({})),
+      stamp: over.stamp ?? (() => clean(SHA_B)),
+    },
   };
 }
 
@@ -350,7 +401,10 @@ describe("decideTick", () => {
 
 describe("runner preparation follows the checked-out state", () => {
   it("starts unprepared so a restart repairs an interrupted install or migration", () => {
-    expect(initialPreparationNeeds()).toEqual({ dependencies: true, migrations: true, fleetClient: true });
+    expect(initialPreparationState()).toEqual({
+      preparedFor: null,
+      needs: { dependencies: true, migrations: true, fleetClient: true },
+    });
   });
 
   it("recognises this repo's drizzle migrations, including metadata", () => {
@@ -365,6 +419,189 @@ describe("runner preparation follows the checked-out state", () => {
       { dependencies: false, migrations: false, fleetClient: false },
       ["package-lock.json"],
     )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
+  });
+
+  it("keeps an unknown change classification safe by preparing everything", () => {
+    const state = preparedAt(SHA_A);
+    const { calls, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ status: 1, stderr: "fatal: temporary object read failure" })
+          : commandResult(),
+    });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(calls).toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("does not spend the sha transition when npm ci fails, and retries it next tick", () => {
+    const state = preparedAt(SHA_A);
+    let diffAttempts = 0;
+    let installAttempts = 0;
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          diffAttempts += 1;
+          return diffAttempts === 1
+            ? commandResult({ status: 1, stderr: "fatal: temporary object read failure" })
+            : commandResult({ stdout: "package-lock.json\n" });
+        }
+        if (command === "npm" && args[0] === "ci") {
+          installAttempts += 1;
+          return installAttempts === 1
+            ? commandResult({ status: 1, stderr: "npm ci failed" })
+            : commandResult();
+        }
+        return commandResult();
+      },
+    });
+
+    expect(() => prepareRunner("/runner", state, SHA_B, deps)).toThrow(/installing dependencies/);
+    expect(state.preparedFor).toBe(SHA_A);
+
+    prepareRunner("/runner", state, SHA_B, deps);
+    expect(diffAttempts).toBe(2);
+    expect(installAttempts).toBe(2);
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("keeps successful partial work pending when a later preparation step fails", () => {
+    const state = preparedAt(SHA_A);
+    let installAttempts = 0;
+    let buildAttempts = 0;
+    let target = SHA_B;
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          return commandResult({ stdout: target === SHA_B ? "package-lock.json\n" : "" });
+        }
+        if (command === "npm" && args[0] === "ci") installAttempts += 1;
+        return commandResult();
+      },
+      buildFleetClient: () => {
+        buildAttempts += 1;
+        if (buildAttempts === 1) throw new Error("fleet build failed");
+      },
+      stamp: () => clean(target),
+    });
+
+    expect(() => prepareRunner("/runner", state, SHA_B, deps)).toThrow(/fleet build failed/);
+    expect(state.preparedFor).toBe(SHA_A);
+    expect(state.needs.dependencies).toBe(true);
+
+    target = SHA_C;
+    prepareRunner("/runner", state, SHA_C, deps);
+    expect(installAttempts).toBe(2);
+    expect(state.preparedFor).toBe(SHA_C);
+  });
+
+  it("narrows successful classification to the preparation its paths need", () => {
+    const state = preparedAt(SHA_A);
+    const { calls, builds, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ stdout: "tools/fleet/web/index.tsx\n" })
+          : commandResult(),
+    });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls).not.toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(calls).not.toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
+    expect(builds).toHaveBeenCalledWith("/runner", true);
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("does not change the latch or pending work without a target, but still ensures the fleet client", () => {
+    const state = preparedAt(SHA_A, { dependencies: true });
+    const { calls, builds, deps } = preparationFakes();
+
+    prepareRunner("/runner", state, null, deps);
+
+    expect(calls).toEqual([]);
+    expect(builds).toHaveBeenCalledWith("/runner", false);
+    expect(state).toEqual({
+      preparedFor: SHA_A,
+      needs: { dependencies: true, migrations: false, fleetClient: false },
+    });
+  });
+
+  it("skips classification when preparation is already latched to the target", () => {
+    const state = preparedAt(SHA_B);
+    const { calls, builds, deps } = preparationFakes();
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls.some((call) => call.command === "git" && call.args[0] === "diff")).toBe(false);
+    expect(builds).toHaveBeenCalledWith("/runner", false);
+  });
+
+  it("distinguishes an unknown classification from no changed paths", () => {
+    const needs = { dependencies: false, migrations: true, fleetClient: false };
+    expect(preparationAfterChanges(needs, null)).toEqual({
+      dependencies: true,
+      migrations: true,
+      fleetClient: true,
+    });
+    expect(preparationAfterChanges(needs, [])).toEqual(needs);
+  });
+
+  it("treats package.json alone as both a dependency and fleet-client input", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["package.json"],
+    )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
+
+    const state = preparedAt(SHA_A);
+    const { calls, builds, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ stdout: "package.json\n" })
+          : commandResult(),
+    });
+    prepareRunner("/runner", state, SHA_B, deps);
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline"] });
+    expect(builds).toHaveBeenCalledWith("/runner", true);
+    const diff = calls.find((call) => call.command === "git" && call.args[0] === "diff");
+    expect(diff?.args).toContain("package.json");
+  });
+
+  it.each([
+    ["dirty", { ...clean(SHA_B), dirty: true }],
+    ["unknown", { kind: "unknown", why: "git status timed out" }],
+    ["at another sha", clean(SHA_A)],
+  ] as const)("does not latch preparation when the post-preparation tree is %s", (_name, stamp) => {
+    const state = preparedAt(SHA_A);
+    const { deps } = preparationFakes({ stamp: () => stamp });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(state.preparedFor).toBeNull();
+  });
+
+  it("warns with both shas and git's error when classification fails", () => {
+    const state = preparedAt(SHA_A);
+    const warning = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ status: 128, stderr: "fatal: bad object bbbb" })
+          : commandResult(),
+    });
+
+    try {
+      prepareRunner("/runner", state, SHA_B, deps);
+
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(warning.mock.calls[0]?.[0]).toContain(SHA_A);
+      expect(warning.mock.calls[0]?.[0]).toContain(SHA_B);
+      expect(warning.mock.calls[0]?.[0]).toContain("fatal: bad object bbbb");
+    } finally {
+      warning.mockRestore();
+    }
   });
 });
 

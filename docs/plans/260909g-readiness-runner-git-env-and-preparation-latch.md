@@ -333,15 +333,42 @@ without.
 
 ### Stage 2 — preparation latched to the sha, and to a clean tree
 
-**Status: not started.**
+**Status: done, 2026-09-09.** The final-form tests were first run against Stage 1: all twelve Stage 2
+expectations failed (missing exported APIs for ten, then the `null`/empty distinction and
+`package.json` classifier). After extracting the seam with the old early-latch ordering intact, the
+two-tick reproduction failed behaviorally too: a failed `npm ci` left `preparedFor` at B rather than
+A. Moving that assignment after preparation and the clean post-preparation stamp made the latch
+tests pass.
 
-- [ ] `PreparationState` with `preparedFor`, in `tools/fleet/readiness-loop.ts`.
-- [ ] `preparationAfterChanges` accepts `null` for "could not classify" and returns everything
+The code review then established one more P1 that the plan's pseudocode had missed: clearing each
+need immediately after its own successful step lets B's partial preparation survive under the old A
+latch when a later step fails, and an empty A→C diff can then bless C over B's derived state. Its
+three-commit reproduction was red before the repair. Classified needs now remain pending until the
+whole attempt succeeds and latches.
+
+Verified here rather than taken on report: **47/47 green on this box** — the three `spawnSync git
+EPERM` failures it saw are Stage 1's already-documented sandbox artefact and do not reproduce —
+typecheck exit 0, Biome clean. Two negative controls were run against the finished code, because a
+test that has only ever been green proves nothing:
+
+- re-introducing the step-by-step clearing of `needs.dependencies` reddens *keeps successful partial
+  work pending when a later preparation step fails*;
+- re-introducing the early `preparedFor = target` assignment — the original RR2-02 bug — reddens
+  *does not spend the sha transition when npm ci fails*, with `preparedFor` at B where A is expected.
+
+The implementer also reported that it had run its own Sol review, which refused and then accepted.
+**That is not counted here**: no artefact was written, so the claim cannot be read; and a model
+reviewing its own work is not the cross-family check the house rule asks for. The durable review
+covering Stages 1 and 2 together is the one that matters — Stage 1's own was killed by a content
+filter before it reported.
+
+- [x] `PreparationState` with `preparedFor`, in `tools/fleet/readiness-loop.ts`.
+- [x] `preparationAfterChanges` accepts `null` for "could not classify" and returns everything
       pending; `package.json` joins `package-lock.json` as an input (F4).
-- [ ] `tick()` classifies from `preparedFor`, prepares, re-stamps, and records `preparedFor` only
+- [x] `tick()` classifies from `preparedFor`, prepares, re-stamps, and records `preparedFor` only
       for a clean tree still at the target (F3).
-- [ ] A failed classification is loud on stderr and not fatal (F6).
-- [ ] Red first: two ticks — an injected diff failure, then a failed `npm ci` — asserting the latch
+- [x] A failed classification is loud on stderr and not fatal (F6).
+- [x] Red first: two ticks — an injected diff failure, then a failed `npm ci` — asserting the latch
       does not advance and the install is retried. It must fail against the current code.
 
 ### Stage 3 — the nonce's claim, and the runner's, narrowed to what they are

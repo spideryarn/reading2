@@ -48,26 +48,48 @@ export type PreparationNeeds = {
   fleetClient: boolean;
 };
 
+export type PreparationState = {
+  /** The sha this checkout's node_modules, local schema and fleet client are
+      known to match, or null when nothing is known to be prepared. */
+  preparedFor: string | null;
+  needs: PreparationNeeds;
+};
+
+/** `null` means the changed paths could not be classified, not that none changed. */
+export type ChangeClassification = readonly string[] | null;
+
+/* `package.json` includes npm scripts as well as dependencies, so this spends
+   an extra `npm ci` on script-only edits. That minute is preferable to parsing
+   selected manifest fields and risking a check against stale dependencies. */
+const DEPENDENCY_INPUTS = new Set(["package.json", "package-lock.json"]);
+
 /**
  * Preparation is state convergence, not an edge triggered by one merge.
  * Starting unprepared makes a restarted loop repair an install or migration
  * that the previous process was killed halfway through.
  */
-export function initialPreparationNeeds(): PreparationNeeds {
-  return { dependencies: true, migrations: true, fleetClient: true };
+export function initialPreparationState(): PreparationState {
+  return {
+    preparedFor: null,
+    needs: { dependencies: true, migrations: true, fleetClient: true },
+  };
 }
 
 /** Changes that make already-completed preparation stale. */
 export function preparationAfterChanges(
   current: PreparationNeeds,
-  changedPaths: readonly string[],
+  changedPaths: ChangeClassification,
 ): PreparationNeeds {
+  if (changedPaths === null) {
+    return { dependencies: true, migrations: true, fleetClient: true };
+  }
+  const dependencyInputChanged = changedPaths.some((name) => DEPENDENCY_INPUTS.has(name));
   return {
-    dependencies: current.dependencies || changedPaths.includes("package-lock.json"),
+    dependencies: current.dependencies || dependencyInputChanged,
     migrations: current.migrations || changedPaths.some((name) => name.startsWith("drizzle/")),
     fleetClient:
       current.fleetClient ||
-      changedPaths.includes("package-lock.json") ||
+      dependencyInputChanged ||
       changedPaths.includes("vite.fleet.config.ts") ||
       changedPaths.some((name) => name.startsWith("tools/fleet/web/")),
   };
