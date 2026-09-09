@@ -23,6 +23,7 @@ import {
   encodeUsageHistoryLine,
   mergeIncidents,
   type CacheObservation,
+  type CodexObservation,
   type HistoryIncident,
   type UsageHistoryLine,
 } from "../tools/fleet/usage-history-record.js";
@@ -43,12 +44,41 @@ const CACHE: CacheObservation = {
   ],
 };
 
+const CODEX: CodexObservation = {
+  kind: "value",
+  accountId: "redacted-codex-account",
+  readAt: "2026-09-09T00:50:36.000Z",
+  buckets: [
+    {
+      limitId: "codex",
+      limitName: null,
+      windows: [
+        {
+          kind: "value",
+          slot: "primary",
+          windowMinutes: 10_080,
+          usedPercent: 24,
+          resetsAt: "2026-09-15T01:23:19.000Z",
+          resetsAtMs: 1789435399000,
+        },
+      ],
+      planType: "pro",
+      credits: { hasCredits: false, unlimited: false, balance: "0" },
+      individualLimit: null,
+      spendControlReached: false,
+      rateLimitReachedType: null,
+    },
+  ],
+  resetCredits: 2,
+};
+
 function pass(over: Partial<UsageHistoryLine> = {}): UsageHistoryLine {
   return {
     lineSchema: LINE_SCHEMA,
     summarySchema: SUMMARY_SCHEMA,
     recordedAt: "2026-09-09T00:50:40.000Z",
     nextDueMs: 300_000,
+    codex: CODEX,
     pass: {
       kind: "pass",
       collectedAt: "2026-09-09T00:50:35.000Z",
@@ -94,6 +124,79 @@ describe("encode/decode", () => {
     expect(decoded.kind).toBe("line");
     if (decoded.kind !== "line") return;
     expect(decoded.line.pass).toEqual({ kind: "collector-failed", at: "2026-09-09T00:55:00.000Z", why: "ENOENT" });
+  });
+
+  it("never encodes a current omission marker as a legacy line with no Codex key", () => {
+    /* THE KEY IS REMOVED, NOT SET TO `undefined`, and the two are different
+       things here. `exactOptionalPropertyTypes` is on, so `codex: undefined`
+       does not mean "absent" — it means the property is present and holds
+       `undefined`, which is a shape `UsageHistoryLine` does not permit and
+       which `JSON.stringify` would drop anyway, silently turning this test's
+       premise into something it never asserted. Destructuring it away gives an
+       `Omit<UsageHistoryLine, "codex">`, which is assignable precisely because
+       the field is optional, so the input genuinely has no key. */
+    const { codex: _absent, ...omitted } = pass({
+      pass: { kind: "omitted", at: "2026-09-09T00:55:00.000Z", why: "the full record was too large" },
+    });
+    const decoded = decodeUsageHistoryLine(encodeUsageHistoryLine(omitted));
+    expect(decoded.kind).toBe("line");
+    if (decoded.kind !== "line") return;
+    expect(decoded.line.codex).toMatchObject({ kind: "unknown", retryable: false });
+    expect(Object.hasOwn(decoded.line, "codex")).toBe(true);
+  });
+
+  it("keeps all six Codex absences distinct", () => {
+    const legacy = pass();
+    delete legacy.codex;
+    const cases: { name: string; line: UsageHistoryLine; expected: unknown }[] = [
+      { name: "writer predates the field", line: legacy, expected: undefined },
+      {
+        name: "collection attempted and failed",
+        line: pass({ codex: { kind: "unknown", why: "authentication required", retryable: false } }),
+        expected: { kind: "unknown", why: "authentication required", retryable: false },
+      },
+      {
+        name: "target bucket absent",
+        line: pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, limitId: "codex_spark" }] } }),
+        expected: { kind: "value", buckets: [{ limitId: "codex_spark" }] },
+      },
+      {
+        name: "expected window absent",
+        line: pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, windows: [] }] } }),
+        expected: { kind: "value", buckets: [{ limitId: "codex", windows: [] }] },
+      },
+      {
+        name: "reading unattributed",
+        line: pass({ codex: { ...CODEX, accountId: null } }),
+        expected: { kind: "value", accountId: null },
+      },
+      {
+        name: "source cannot supply reset credits",
+        line: pass({ codex: { ...CODEX, resetCredits: null } }),
+        expected: { kind: "value", resetCredits: null },
+      },
+    ];
+
+    for (const one of cases) {
+      const decoded = decodeUsageHistoryLine(encodeUsageHistoryLine(one.line));
+      expect(decoded.kind, one.name).toBe("line");
+      if (decoded.kind !== "line") continue;
+      if (one.expected === undefined) {
+        expect(decoded.line.codex, one.name).toBeUndefined();
+        expect(Object.hasOwn(decoded.line, "codex"), one.name).toBe(false);
+      } else {
+        expect(decoded.line.codex, one.name).toMatchObject(one.expected as object);
+      }
+    }
+  });
+
+  it("degrades malformed Codex data without discarding the valid Claude observation", () => {
+    const malformed = JSON.stringify({ ...pass(), codex: { kind: "value", readAt: "not an instant" } });
+    const decoded = decodeUsageHistoryLine(malformed);
+    expect(decoded.kind).toBe("line");
+    if (decoded.kind !== "line" || decoded.line.pass.kind !== "pass") return;
+    expect(decoded.line.pass.cache.kind).toBe("attributed");
+    expect(decoded.line.codex).toMatchObject({ kind: "unknown", retryable: false });
   });
 
   it("encodes one line with no interior newline, because the file is line-delimited", () => {
@@ -171,7 +274,7 @@ describe("encode/decode", () => {
        one ever is, the rotation arithmetic in the store changes. */
     const many = Array.from({ length: 9 }, (_, i) => incident({ id: `five_hour@w${i}`, rejections: 27 }));
     const line = pass({ pass: { ...pass().pass, scan: { conclusive: true, why: null, incidents: many } } as never });
-    expect(Buffer.byteLength(encodeUsageHistoryLine(line), "utf8")).toBeLessThan(8 * 1024);
+    expect(Buffer.byteLength(encodeUsageHistoryLine(line), "utf8")).toBeLessThan(12 * 1024);
   });
 
   it("REFUSES to encode a line that would exceed the legal ceiling", () => {

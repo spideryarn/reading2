@@ -9,14 +9,16 @@
  * So this runs the **real daemon** against a scratch store with an injected
  * collector, and reads the bytes back off the disk with the real reader.
  */
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
+import { usageHistoryDaemonOptions } from "../scripts/overseer.js";
 import { openUsageHistoryForRead } from "../tools/fleet/usage-history.js";
 import { makeUsageRetention } from "../tools/fleet/usage-history-wiring.js";
-import type { ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
+import type { CodexUsageReading, ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
 
 const roots: string[] = [];
@@ -59,6 +61,34 @@ const ACCOUNT: UsageAccount = {
   rateLimitTier: null,
 };
 
+const CODEX: CodexUsageReading = {
+  kind: "value",
+  accountId: "redacted-codex-account",
+  readAt: "2026-09-09T00:50:36.000Z",
+  buckets: [
+    {
+      limitId: "codex",
+      limitName: null,
+      windows: [
+        {
+          kind: "value",
+          slot: "primary",
+          windowMinutes: 10_080,
+          usedPercent: 24,
+          resetsAt: "2026-09-15T01:23:19.000Z",
+          resetsAtMs: 1789435399000,
+        },
+      ],
+      planType: "pro",
+      credits: { hasCredits: false, unlimited: false, balance: "0" },
+      individualLimit: null,
+      spendControlReached: false,
+      rateLimitReachedType: null,
+    },
+  ],
+  resetCredits: 2,
+};
+
 function report(over: Partial<UsageReport> = {}): UsageReport {
   return {
     account: ACCOUNT,
@@ -99,7 +129,23 @@ async function heldOpen(signal: AbortSignal): Promise<void> {
   });
 }
 
-async function runWith(run: () => Promise<UsageReport>, forMs = 400): Promise<string> {
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function pause(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runWith(
+  run: () => Promise<UsageReport>,
+  forMs = 400,
+  collectCodex: () => Promise<CodexUsageReading> = async () => CODEX,
+): Promise<string> {
   const root = tempRoot();
   const controller = abortAfter(forMs);
   const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
@@ -111,9 +157,10 @@ async function runWith(run: () => Promise<UsageReport>, forMs = 400): Promise<st
     tickMs: 40,
     log: () => {},
     source: async function* () {
+      yield* [];
       await heldOpen(controller.signal);
     },
-    usage: { intervalMs: 120, run, onPass: retention.onPass },
+    usage: { ...usageHistoryDaemonOptions(retention, { claude: run, codex: collectCodex }), intervalMs: 120 },
   });
   retention.close();
   return root;
@@ -136,6 +183,7 @@ describe("a usage pass becomes a line on disk", () => {
     expect(first.line.nextDueMs).toBe(300_000);
     expect(first.line.pass.cache.kind).toBe("attributed");
     expect(first.line.pass.publication.decision).toBe("take-fresh");
+    expect(first.line.codex).toEqual(CODEX);
   });
 
   test("a collector that throws still leaves a record, with the reason", async () => {
@@ -150,6 +198,88 @@ describe("a usage pass becomes a line on disk", () => {
     const first = read.samples[0];
     if (first?.kind !== "sample" || first.line.pass.kind !== "collector-failed") throw new Error("shape");
     expect(first.line.pass.why).toMatch(/ENOENT/);
+    expect(first.line.codex).toEqual(CODEX);
+  });
+
+  test("the composition root keeps Codex inside the single-flight pass and shutdown wait", async () => {
+    /* This uses the helper called by scripts/overseer.ts, the real daemon, the
+       real retention hook and real bytes. If Codex collection moves into an
+       async onPass, shutdown returns at the assertion below and closes the
+       writer while that collection is still unresolved. */
+    const compositionRoot = readFileSync(fileURLToPath(new URL("../scripts/overseer.ts", import.meta.url)), "utf8");
+    expect(compositionRoot).toContain("usage: usageHistoryDaemonOptions(usageRetention)");
+
+    const root = tempRoot();
+    const controller = new AbortController();
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const codex = deferred<CodexUsageReading>();
+    let claudeCalls = 0;
+    let codexCalls = 0;
+    const firstCodexCall = deferred<void>();
+
+    const running = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:1",
+      signal: controller.signal,
+      tickMs: 10,
+      log: () => {},
+      source: async function* () {
+        yield* [];
+        await heldOpen(controller.signal);
+      },
+      usage: {
+        ...usageHistoryDaemonOptions(retention, {
+          claude: async () => {
+            claudeCalls += 1;
+            return report();
+          },
+          codex: () => {
+            codexCalls += 1;
+            firstCodexCall.resolve();
+            return codex.promise;
+          },
+        }),
+        intervalMs: 20,
+      },
+    });
+
+    await firstCodexCall.promise;
+    await pause(70);
+    expect(claudeCalls).toBe(1);
+    expect(codexCalls).toBe(1);
+
+    let stopped = false;
+    void running.then(() => {
+      stopped = true;
+    });
+    controller.abort();
+    await pause(20);
+    expect(stopped, "shutdown returned while Codex collection was still in flight").toBe(false);
+
+    codex.resolve(CODEX);
+    await running;
+    retention.close();
+
+    const read = openUsageHistoryForRead(root).read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error("unreadable");
+    expect(read.samples).toHaveLength(1);
+    const first = read.samples[0];
+    if (first?.kind !== "sample" || first.line.pass.kind !== "pass") throw new Error("shape");
+    expect(first.line.pass.collectedAt).toBe(report().collectedAt);
+    expect(first.line.codex).toEqual(CODEX);
+  });
+
+  test("a rejected Codex collection does not turn a good Claude pass into collector-failed", async () => {
+    const root = await runWith(async () => report(), 400, async () => {
+      throw new Error("temporary Codex failure");
+    });
+
+    const read = openUsageHistoryForRead(root).read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error("unreadable");
+    const first = read.samples[0];
+    if (first?.kind !== "sample") throw new Error("shape");
+    expect(first.line.pass.kind).toBe("pass");
+    expect(first.line.codex).toMatchObject({ kind: "unknown", retryable: true });
   });
 
   test("an incomplete scan still records its CACHE reading", async () => {
@@ -221,9 +351,13 @@ describe("a usage pass becomes a line on disk", () => {
       tickMs: 40,
       log: () => {},
       source: async function* () {
+        yield* [];
         await heldOpen(controller.signal);
       },
-      usage: { intervalMs: 100_000, run: async () => report(), onPass: retention.onPass },
+      usage: {
+        ...usageHistoryDaemonOptions(retention, { claude: async () => report(), codex: async () => CODEX }),
+        intervalMs: 100_000,
+      },
     });
     retention.close();
 

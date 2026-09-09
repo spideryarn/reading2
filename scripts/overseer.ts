@@ -50,7 +50,8 @@ import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-j
    allowed direction of the seam — and two renderings of one measurement is how
    a page and a terminal come to disagree about how many things happened. */
 import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
-import { makeUsageRetention } from "../tools/fleet/usage-history-wiring.js";
+import { makeUsageRetention, type UsageRetention } from "../tools/fleet/usage-history-wiring.js";
+import type { CodexUsageReading } from "../tools/fleet/wire.js";
 import { reconcileArming } from "../tools/overseer/arming.js";
 import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
@@ -63,6 +64,7 @@ import {
   storeRoot,
 } from "../tools/overseer/store.js";
 import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
+import { collectCodexUsage } from "../tools/overseer/codex-usage.js";
 import { fetchLastLines } from "../tools/overseer/cli-messages.js";
 import { tickLines } from "../tools/overseer/cli-tick.js";
 import {
@@ -92,6 +94,47 @@ export const DEFAULT_FLEET_URL = "http://127.0.0.1:8787";
  */
 export function repoRoot(): string {
   return join(fileURLToPath(new URL(".", import.meta.url)), "..");
+}
+
+/**
+ * Compose the two account collectors into the daemon's one awaited usage pass.
+ *
+ * Codex is stashed for the synchronous history hook because `safeOnPass` does
+ * not await callbacks. This remains safe only while the daemon refuses to
+ * overlap usage passes: `onPass` then runs in this same `run` continuation,
+ * before another call can replace the stash.
+ *
+ * The injectable leaves let the real daemon exercise this composition without
+ * reading either live account. Production omits them and gets the real
+ * collectors by default.
+ */
+export function usageHistoryDaemonOptions(
+  retention: UsageRetention,
+  collectors: {
+    claude: () => Promise<UsageReport>;
+    codex: () => Promise<CodexUsageReading>;
+  } = {
+    claude: () => collectUsage(),
+    codex: () => collectCodexUsage(),
+  },
+): NonNullable<DaemonOptions["usage"]> {
+  return {
+    run: async () => {
+      const [claude, codex] = await Promise.allSettled([collectors.claude(), collectors.codex()]);
+      retention.stashCodex(
+        codex.status === "fulfilled"
+          ? codex.value
+          : {
+              kind: "unknown",
+              why: `the Codex usage collector rejected: ${codex.reason instanceof Error ? codex.reason.message : String(codex.reason)}`,
+              retryable: true,
+            },
+      );
+      if (claude.status === "rejected") throw claude.reason;
+      return claude.value;
+    },
+    onPass: retention.onPass,
+  };
 }
 
 /**
@@ -913,7 +956,7 @@ async function runParsed(parsed: Parsed): Promise<number> {
         // apart, and absent is what "take the default" means.
         ...(parsed.tickMs === undefined ? {} : { tickMs: parsed.tickMs }),
         ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
-        ...(usageOff ? {} : { usage: { run: () => collectUsage(), onPass: usageRetention.onPass } }),
+        ...(usageOff ? {} : { usage: usageHistoryDaemonOptions(usageRetention) }),
         // ABSENT rather than present-and-empty when disarmed: an absent `jobs`
         // is what makes `daemon.ts` build no scheduler timer at all, and it is
         // also what it reads to decide the checkpoint says OFF.
