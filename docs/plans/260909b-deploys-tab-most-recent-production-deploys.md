@@ -188,8 +188,13 @@ output, two rounds.
 
 - [x] Round 1 on the plan: `260909b-deploys-tab-plan-review-sol-r1.md`. Verdict *not ready to build
   unchanged* — four P1s. Every factual claim in it was checked before acting; all held.
-- [x] Round 2 on the code: `260909b-deploys-tab-code-review-prompt.md`.
+- [x] Round 2 on the code: `260909b-deploys-tab-code-review-sol-r1.md`. **Four more P1s**, and the
+  code round earned its higher weighting — see § What the code review changed. None of them were
+  findable from the plan.
+- [x] Round 3, verifying the fixes: `260909b-deploys-tab-code-review-2-prompt.md`.
 - [x] `npm run typecheck` clean; lint clean on the touched files.
+- [x] `zonedLine` from `tools/fleet/zones.ts` swapped in when it landed (`af1ec002`), which was the
+  one line the seam existed for.
 
 ## What the review changed
 
@@ -226,6 +231,46 @@ is the only thing it is for.
 token-free build stamps, so *"commits included in the serving build"* and *"commits that are not"* is
 answerable without Vercel. See § The honest sentence for what it would take. It is the right next
 step and it is not this branch.
+
+## What the code review changed
+
+The plan round could not have found any of these, which is why AGENTS.md weights the second review
+higher — *"a plan-stage review can't find a `PATCH` that writes one field and then rejects the
+request"*. Four P1s:
+
+- **The tab re-fetched once a second, aborting the previous request each time.** `api =
+  httpDeploysApi()` in a default argument builds a new object on every render, `useNow` re-renders
+  this page once a second, and the panel's effect depends on the api's identity. So the browser
+  aborted and restarted `/api/deploys` every second for as long as the tab was open, while the box
+  went on working on every abandoned one — and a response slower than a second would never have been
+  accepted at all. **The tests could not see it because they inject a stable fake**, which is the
+  precise shape of hole a code review exists for. It is a module-level `const` now, like
+  `httpHistoryApi` and `httpActionsApi` beside it.
+- **A stale cached ref was drawn as a rollback alarm.** Any non-ancestor produced *"a rollback, or a
+  deploy from a working directory"* — including the commonest benign state, a checkout that has not
+  fetched since the changelog job last ran. An alarm that fires on the normal case is an alarm nobody
+  reads. The probe asks the ancestry question in both directions now and answers four ways, and the
+  count is withheld unless the histories are comparable, because `rev-list A..B` across a divergence
+  is a set difference that reads like a distance.
+- **The route's worst case was longer than the browser's timeout** — four sequential waits at 5 s
+  against a 15 s client deadline — so a merely slow git would have let the browser replace a
+  perfectly readable deploy list with "no answer". There is an 8 s budget for the whole snapshot now.
+- **A corrupt newest line let the header measure from the wrong deploy.** The record is append-only,
+  so its last line is its newest deploy; when it failed, everything downstream called the survivor
+  "the newest recorded deploy" and computed a confident distance from it. The earlier tests covered a
+  corrupt *oldest* line, which costs a row and nothing else — the difference between a test suite
+  that looks thorough and one that is.
+
+**And one of my own tests proved nothing.** The cache test compared two snapshots for equality —
+which only shows git is deterministic — and counted calls to the injected *clock*, so deleting the
+cache entirely would have left it green. It counts real command executions through an injected runner
+now.
+
+That was the fourth instance in one night of a check that could not fail in the case it was written
+for, across five sessions on this subsystem; `dashboard-modes-doc` has put the pattern to the
+Overseer as a queue item. The others here: a source guard satisfied by the line inside a `//`, a
+`toContain` on copy that flagged a true sentence, and `Record<Mode, …>` proving a half-added mode and
+not a wholly-removed one.
 
 ## What this deliberately does not do
 
