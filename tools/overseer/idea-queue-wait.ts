@@ -69,28 +69,42 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type Depth = QueueDepth;
 
 export function queueDepth(view: QueueView): Depth {
+  /* **THE QUEUE BEING HELD IS ITS OWN CATEGORY, and leaving it out produced a
+     page that contradicted itself.** `isDispatchable` is false for every item
+     while the file has any problem, so counting "not dispatchable and not
+     waiting on Greg" as *unauthorised* made a queue with one bad line report
+     `12 not approved` beside twelve rows that were all perfectly approved —
+     and `itemWait` went on saying "next in line". GPT Sol's P2-2.
+     Authority is now asked directly rather than inferred from the conjunction,
+     so each count means what its name says whatever else is wrong. */
+  const held = view.problems.length > 0;
   let dispatchable = 0;
   let needsGreg = 0;
   let unauthorized = 0;
+  let queueHeld = 0;
   let dispatched = 0;
   for (const item of view.items) {
     if (item.lifecycle === "dispatched") {
       dispatched += 1;
       continue;
     }
-    if (isDispatchable(view, item)) dispatchable += 1;
-    /* **The order of these two matters, and it is not arbitrary.** An item can
-       be both unauthorised and waiting on Greg; counting it twice would make the
-       parts exceed the whole, and a reader adding the numbers up would find the
-       queue longer than it is. Needing Greg is reported in preference because it
-       is the actionable half. */
+    const approved = item.authority.kind === "authorized" && item.authority.revision === item.revision;
+    /* **The order of these is not arbitrary**: an item can be several of these
+       at once, and counting it twice would make the parts exceed the whole, so
+       a reader adding them up would find the queue longer than it is. Each row
+       is reported under its most actionable reason — the queue being broken
+       first, because until it is fixed nothing else about the row matters, then
+       the answer only Greg can give, then the approval only he can grant. */
+    if (held) queueHeld += 1;
     else if (item.needsGreg) needsGreg += 1;
-    else unauthorized += 1;
+    else if (!approved) unauthorized += 1;
+    else dispatchable += 1;
   }
   return {
     dispatchable,
     needsGreg,
     unauthorized,
+    queueHeld,
     dispatched,
     done: view.settled.filter((i) => i.lifecycle === "done").length,
     dropped: view.settled.filter((i) => i.lifecycle === "dropped").length,
@@ -161,6 +175,18 @@ export function throughput(view: QueueView, nowMs: number, windowsDays: readonly
 export type ItemWait = QueueItemWait;
 
 export function itemWait(view: QueueView, item: IdeaItem): ItemWait {
+  /* **THE QUEUE'S OWN CONDITION COMES FIRST.** While the file has a problem
+     nothing in it may be dispatched, so "next in line" would be a promise the
+     queue cannot keep — and the panel was making it, in the same view as the
+     alarm saying otherwise. Sol's P2-2. */
+  if (view.problems.length > 0 && item.lifecycle !== "dispatched") {
+    return {
+      kind: "queue-held",
+      why:
+        `the queue file has ${view.problems.length} unresolved problem(s), so nothing in it is waiting for a ` +
+        `slot — it is waiting for somebody to fix the record`,
+    };
+  }
   if (item.lifecycle === "dispatched") {
     return {
       kind: "running",

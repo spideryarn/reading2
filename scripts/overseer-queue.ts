@@ -62,13 +62,14 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
   move <id> --by <who>              --front | --back | --before <id> | --after <id>
   edit <id> --by <who>              [--text T] [--title T] [--source P] [--waiting-on W]
                                     [--size S] [--runs D] [--areas a,b]
-                                    [--needs-greg | --ready]
+                                    [--needs-greg | --ready]   --ready is GREG'S ONLY
                                     clear a field with --clear-title, --clear-source,
                                     --clear-waiting-on, --clear-size, --clear-runs
-  dispatched <id> --by <who> --session <name> [--plan P] [--anyway]
+  dispatched <id> --by <who> --session <name> [--plan P]
   done <id> --by <who>
   drop <id> --by <who> [--why W]
-  seed                              the sixteen clusters from overseer-queue.md, into an empty queue
+  seed                              the sixteen clusters from overseer-queue.md, AS PROPOSALS, into
+                                    an empty queue; prints the authorize commands for Greg
   export [--json]                   every item as one line each, or the folded queue as JSON
 
   THREE THINGS ARE TRUE OF AN ITEM AND THEY ARE DIFFERENT QUESTIONS:
@@ -83,7 +84,9 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
   --by is 'greg' or 'overseer' and is required on every write: this file is an
   authorisation record, so a write with nobody's name on it is refused. Only
   Greg can authorise, and an edit by anyone else LAPSES his approval — that is
-  deliberate, so an item cannot be approved and then quietly enlarged.
+  deliberate, so an item cannot be approved and then quietly enlarged. Only he
+  can --ready an item either: noticing that something needs him is the
+  coordinator's job, and deciding it no longer does is the answer itself.
 
   --root <dir> overrides OVERSEER_QUEUE_DIR (default ~/.overseer).
 `;
@@ -414,7 +417,25 @@ function main(): void {
         );
       }
       const events = seedEvents({ at: new Date().toISOString() });
-      write(dir, events, queue.version, `seeded ${events.length} clusters from overseer-queue.md`);
+      const result = appendEvents(events, { root: dir, expect: queue.version });
+      if (!result.ok) fail(`${result.why} [${result.code}]`);
+      console.log(`✓ seeded ${events.length} clusters from overseer-queue.md AS PROPOSALS`);
+      console.log(`  ${result.path} · version ${spellVersion(result.view.version)}`);
+      /* **THE SEED DOES NOT AUTHORISE ANYTHING, and this is where that becomes
+         visible rather than a sentence in a header.** `by` means *who recorded
+         this*, and a script recorded these; Greg's approval is a separate,
+         dated, attributed act by the only person who can make one. So the
+         command prints what he has to run, in his own name, at cutover. */
+      console.log(
+        `\n  Nothing here is dispatchable yet — every row is a proposal, because a script recorded it\n` +
+          `  and only Greg can authorise. At cutover, he runs:\n`,
+      );
+      for (const item of result.view.items) {
+        console.log(`    npx tsx scripts/overseer-queue.ts authorize ${item.id} --by greg`);
+      }
+      console.log(
+        `\n  The four whose 'waiting on' names him stay blocked after that, which is the point of the column.`,
+      );
       return;
     }
     case "authorize": {
@@ -500,16 +521,29 @@ function main(): void {
       const session = str(parsed.flags, "session");
       if (session === null || session === "") fail("--session is required: the tmux session it was dispatched as");
       const queue = view(dir);
-      /* **REFUSES TO RECORD A DISPATCH THE GATE WOULD NOT HAVE ALLOWED.** The
-         CLI is not the authority — the fold is — but recording a dispatch of an
-         unauthorised item would put a line in the record that looks like
-         permission. `--anyway` exists for reconciling a launch that really did
-         happen, and it says which rule it is overriding. */
+      /* **REFUSES TO RECORD A DISPATCH THE GATE WOULD NOT HAVE ALLOWED**, and
+         says so here so the message is a sentence rather than a rejected
+         append. The fold refuses it too, and `appendEvents` will not write a
+         batch that adds a problem — three layers, of which this is only the
+         friendliest.
+
+         **`--anyway` USED TO EXIST HERE AND HAS BEEN REMOVED.** It let somebody
+         record a dispatch of an unauthorised item "to reconcile a launch that
+         already happened", which is exactly the line that later reads as
+         permission — GPT Sol's P1-3: *reconciliation should be a distinct,
+         conspicuous event, not the normal transition with its guard disabled*.
+         There is no such event yet, so for now the honest answer is that this
+         command cannot record it. When dispatch is designed properly (stage 4,
+         with the coordinator) reconciliation gets its own event kind. */
       const item = [...queue.items, ...queue.settled].find((i) => i.id === id);
       if (item !== undefined) {
         const why = whyNotDispatchable(queue, item);
-        if (why !== null && parsed.flags.get("anyway") === undefined) {
-          fail(`${id} is not dispatchable: ${why}. Pass --anyway only to record a launch that already happened.`);
+        if (why !== null) {
+          fail(
+            `${id} is not dispatchable: ${why}.\n` +
+              `  Recording it anyway is deliberately not possible: a dispatch line in this file reads as\n` +
+              `  permission, and there is no reconciliation event yet. Fix the cause, or wait for stage 4.`,
+          );
         }
       }
       write(

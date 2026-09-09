@@ -21,15 +21,24 @@
  * `source` points at the plan that holds the real detail, and these are not
  * presented as quotations.
  *
- * **`by: "greg"`, and Sol objected to it** — its P0-2 note that the migration
- * records the events while Greg's prior decision supplies their authority, so
- * calling him the recorder is loose. It stands, for one reason: `by` here is
- * carrying the authorisation, and his is real and documented — he approved all
- * sixteen in principle and deferred them, in his own words in that doc. The
- * alternative, a third `IdeaActor` for the migration, would record the clerk
- * accurately and then have to invent a way to say the work was nevertheless
- * approved, which is a worse trade than a loose recorder on sixteen rows that
- * name their source. Recorded in the plan as a judgement call.
+ * **`by: "overseer"`, so every seeded row arrives as a PROPOSAL — and Greg
+ * authorises the sixteen in one act at cutover.**
+ *
+ * The first version wrote `by: "greg"`, on the reasoning that his approval was
+ * real and documented so the field carrying it should name him. GPT Sol
+ * objected twice, and the second time named the cheaper honest option this file
+ * now takes: **under the documented meaning of `by` — *who recorded this* —
+ * naming Greg is simply false provenance.** He did not run the migration; a
+ * script did.
+ *
+ * Seeding them as proposals costs one command at cutover and buys three things.
+ * The field stops lying. The authorisation becomes a **fresh, dated, attributed
+ * act** by the only person who can make one, instead of a claim about a
+ * conversation the day before. And the cutover — which is Greg's anyway, since
+ * it edits `overseer.md` — is where that act naturally belongs.
+ *
+ * So the sixteen land as proposals, and `overseer-queue seed` prints the
+ * `authorize` commands rather than performing them.
  *
  * **The four clusters whose *waiting on* names Greg are seeded `needsGreg`**,
  * which is what that field is for: the doc says he was asked on 2026-09-08 and
@@ -180,8 +189,10 @@ function metadata(seed: Seed): IdeaMetadata {
 export function seedEvents(options: { at: string; mint?: () => string }): IdeaEvent[] {
   const mint = options.mint ?? mintId;
   return CLUSTERS.map((seed) => ({
-    /* `by: "greg"` — see the header, and the objection it answers. */
-    ...envelope("greg", { at: options.at }),
+    /* `by: "overseer"` — the script recorded these, and `by` means the
+       recorder. `foldQueue` therefore makes each one a PROPOSAL, and Greg's
+       `authorize` at cutover is the real authorisation. See the header. */
+    ...envelope("overseer", { at: options.at }),
     kind: "added" as const,
     id: mint(),
     text: seed.line,

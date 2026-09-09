@@ -109,7 +109,10 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
           {row.why === null ? null : (
             <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:text-ink-soft">{row.why}</span>
           )}
-          {row.wait.kind === "ahead" ? (
+          {/* **Only the two arms that add something the badge did not say.**
+              `needs-greg` and `not-authorized` repeat `why` above, and printing
+              a reason twice makes a reader look for the difference. */}
+          {row.wait.kind === "ahead" || row.wait.kind === "queue-held" ? (
             <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:text-ink-faint">{row.wait.why}</span>
           ) : null}
         </span>

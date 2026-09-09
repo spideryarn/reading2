@@ -490,7 +490,7 @@ function fakeQueue(view?: QueueView): QueueApi {
           rows: [],
           settled: [],
           settledWithheld: 0,
-          depth: { dispatchable: 0, needsGreg: 0, unauthorized: 0, dispatched: 0, done: 0, dropped: 0 },
+          depth: { dispatchable: 0, needsGreg: 0, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 0, dropped: 0 },
           throughput: {
             windows: [
               { days: 7, dispatched: 0, done: 0 },
