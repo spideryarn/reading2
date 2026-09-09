@@ -42,10 +42,10 @@ written into the doc as a known cost and goes to the Overseer in the debrief.
       `overseer-direction.md` (the direction), `overseer.md` (the runbook) and
       `overseer-queue.md`, and `hetzner-remote-server-box.md` for the box it runs on. None of them
       says how to add a tab.
-- [x] Asked all four sessions by `SendMessage` what tripped them. Three answered
-      (`overseer-tab-messaging`, `recent-messages-tab`, `usage-limits-tab`); `deploys-tab` had been
-      running 21 seconds when asked and did not. Their answers are quoted and attributed in the doc
-      and are the best content in it.
+- [x] Asked all four sessions by `SendMessage` what tripped them. All four answered —
+      `overseer-tab-messaging`, `recent-messages-tab` and `usage-limits-tab` before the first push,
+      `deploys-tab` afterwards, having read the landed doc. Their answers are quoted and attributed
+      in the doc and are the best content in it.
 - [x] Wrote `docs/project/fleet-dashboard-modes.md` with one parent line under
       `dev-and-deployment-overview.md` and a link back up.
 - [ ] `npm test tests/doc-links.test.ts`, `npm run typecheck`, GPT Sol review.
@@ -60,6 +60,13 @@ written into the doc as a known cost and goes to the Overseer in the debrief.
    checklist, which described the read path only.
 4. A measured byte budget for a fan-out tab — `recent-messages-tab`: ~60 ms and ~3 MB of disk read
    per refresh over 21 rows, for 14 kB of text.
+5. *The import allowlist is a design-time question, not a gate you meet at the end* —
+   `deploys-tab`, which found `src/changelog.ts` already parsing the file its tab is about and
+   could not use it. Verified: `src/changelog.ts` exists and appears **zero** times in
+   `tests/fleet-imports.test.ts`'s allowlist. This became the doc's first section on data, ahead of
+   the pushed-vs-on-demand choice, because it comes first in time. It also supplied the rule that a
+   second reader of a product artefact must be tested against the **real committed file** rather
+   than a fixture, since only that can go red on a day nobody touched the branch.
 
 **One question the doc answers that nobody had ruled on**: whether a `MODE_TIPS` string describes
 the artefact or the gesture. Answered from the three tips already in the file plus
