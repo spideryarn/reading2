@@ -70,3 +70,13 @@ Greg promotes one by saying so, and then it moves up into a plan.
   Node process, so a slow read there stalls every session, action and heartbeat. Found by GPT Sol
   reviewing the Deploys tab, which had copied the shape. Settle whether the exemplar is clean before
   the modes doc holds it up as one. 2026-09-09.
+- **Read production's own build stamps from the Deploys tab.** `/build.json` and `/api/health` name the
+  sha actually serving, token-free, and `deploy.ts` already cross-checks them; the tab could then say
+  which commits on `main` are in the serving build and which are not (a failed build leaves `main`
+  advanced with nothing serving). An outbound call from the dashboard, with unavailable/malformed/
+  disagreeing arms and a cache that never delays the recorded list — specified in
+  [260909b-deploys-tab](../plans/260909b-deploys-tab-most-recent-production-deploys.md) § The honest
+  sentence. Needs Greg's yes. 2026-09-09.
+- **`tests/fleet-health-wiring.test.ts` mount guard passes with the mount commented out** — the needle
+  survives inside the `//`. Assert against comment-stripped lines, as `fleet-deploys-route` now does.
+  It stands behind a feature that shipped dead once. 2026-09-09.
