@@ -471,8 +471,8 @@ describe("the fold protects the review state", () => {
        different instant, so including `at` makes each one a conflict and the
        idempotency key buys nothing it was added for. `decidedAt` IS part of the
        intent and stays in — see the conflict test below. */
-    const one = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:00.000Z", eventId: "11111111-1111-4111-8111-111111111111" });
-    const two = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:05.000Z", eventId: "22222222-2222-4222-8222-222222222222" });
+    const one = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:00.000Z", eventId: "c4a91f30-2d67-4b58-8e01-3f9a6c72d514" });
+    const two = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:05.000Z", eventId: "c4a91f30-2d67-4b58-8e01-3f9a6c72d515" });
     const view = foldDecisions([one, two]);
     expect(view.records).toHaveLength(1);
     expect(view.problems).toEqual([]);

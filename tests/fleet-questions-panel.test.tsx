@@ -69,12 +69,12 @@ function wireRow(
     status: { kind: "needs-you" },
     question: RAW_QUESTION,
     panePid: 101,
-    claudeSessionId: "00000000-0000-4000-8000-000000000001",
+    claudeSessionId: "9f2c41a7-6b5e-4d38-9a10-7c4e2b8f0d61",
     execution: {
       kind: "verified",
       token: { boot: "boot-a", pid: 202, startTicks: 10 },
       harness: "claude-code",
-      conversation: { kind: "verified", id: "00000000-0000-4000-8000-000000000001" },
+      conversation: { kind: "verified", id: "9f2c41a7-6b5e-4d38-9a10-7c4e2b8f0d61" },
     },
     ...over,
   };
@@ -631,7 +631,7 @@ describe("dialog answers", () => {
           kind: "verified",
           token: { boot: "boot-a", pid: 202, startTicks: 11 },
           harness: "claude-code",
-          conversation: { kind: "verified", id: "00000000-0000-4000-8000-000000000001" },
+          conversation: { kind: "verified", id: "9f2c41a7-6b5e-4d38-9a10-7c4e2b8f0d61" },
         },
       })],
     });
@@ -704,7 +704,7 @@ describe("dialog answers", () => {
           kind: "verified",
           token: { boot: "boot-a", pid: 202, startTicks: 20 + index },
           harness: "claude-code",
-          conversation: { kind: "verified", id: "00000000-0000-4000-8000-000000000001" },
+          conversation: { kind: "verified", id: "9f2c41a7-6b5e-4d38-9a10-7c4e2b8f0d61" },
         },
       })] });
       drawPanel(state.questions, state.rows, { steer: apiReturning(current.outcome).api });

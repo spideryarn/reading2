@@ -172,7 +172,7 @@ describe("composeQuestions: the inbox owns prose", () => {
         kind: "verified",
         token: { boot: "new-boot", pid: 991, startTicks: 88 },
         harness: "claude-code",
-        conversation: { kind: "verified", id: "00000000-0000-4000-8000-000000000001" },
+        conversation: { kind: "verified", id: "9f2c41a7-6b5e-4d38-9a10-7c4e2b8f0d62" },
       },
     });
     const item = items(compose({ rows: [replaced], attentionFeed: published([prose]) }))[0];
