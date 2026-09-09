@@ -73,13 +73,32 @@ bug ([database.md](../project/database.md)).
 ## 4. Run the checks
 
 ```bash
-npm run check          # the eight gates and advisories, ~20s; -- --fast skips the build
-npm run db:check       # only if a database is in play; point it at the app's credential
+npx tsx scripts/tmux-job.ts npx tsx scripts/readiness-run.ts check   # the eight gates and advisories
+npm run db:check                                                     # only if a database is in play; point it at the app's credential
 ```
 
 [code-quality-overview.md](../project/code-quality-overview.md) says which of those are gates and
 which are advice — lint's baseline is not clean, so read its findings on the files you touched and
-don't chase it to zero.
+don't chase it to zero. `check` runs `typecheck`, `build`, `test` and `lint` among others, so this
+one command is the whole of what this step needs.
+
+**Through the wrapper, not a bare `npm run check`.** The bare form leaves nothing behind, so the
+Readiness tab — the one place that answers *is the commit dev is on known to pass its checks?* — can
+never go green on it, however green the run was ([readiness.md](../project/readiness.md) § The one
+command). `readiness-run.ts` runs the same script and writes down what happened; `tmux-job.ts` keeps
+the output and survives a disconnect.
+
+**`tmux-job.ts` returns when the job has *started*.** Its exit status tells you tmux launched, and
+nothing whatever about the checks — so this step is not finished until the log's last line says
+`EXIT=<n>`. Wait for it, and read it:
+
+```bash
+until grep -q '^EXIT=' <log>; do sleep 30; done; tail -1 <log>
+```
+
+A non-zero `EXIT=` is the checks failing **or** the wrapper refusing to record them, which are
+different problems; the lines above it say which. Treating the launch as the gate is how a sweep gets
+to step 7 and pushes something nothing has verified.
 
 Then **drive a real browser**, in a Sonnet subagent, when the run has touched anything a reader
 sees — the merge brought in client code, or a fix in step 5 did — because tests going green is not
