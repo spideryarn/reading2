@@ -25,8 +25,8 @@
  * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
  * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, ShieldCheck, type LucideIcon } from "lucide-react";
-import type { ReactNode, RefObject } from "react";
+import { Gauge, Hourglass, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, Network, RefreshCw, Rocket, ShieldCheck, type LucideIcon } from "lucide-react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
 import { MODES, MODE_LABELS, type Mode } from "./mode";
@@ -63,6 +63,9 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
      every other glyph in this bar is a machine. */
   ideas: Lightbulb,
   deploys: Rocket,
+  /* A question inside one speech bubble: unlike `messages`' two bubbles this
+     means one thing awaiting an answer, not a transcript to browse. */
+  questions: MessageCircleQuestion,
 };
 
 export const MODE_TIPS: Record<Mode, Tip> = {
@@ -134,6 +137,11 @@ export const MODE_TIPS: Record<Mode, Tip> = {
        "only as fresh as the last run" invites the question the header already
        answers with a number. */
     how: "The record is a committed file, not a call to Vercel — this box has no token for one — so the first line of the tab says how far behind main it has fallen.",
+  },
+  questions: {
+    head: "Questions",
+    what: "Everything currently waiting for your input, with observed dialogs first and inferred prose handoffs after them.",
+    how: "Built from two observers on different cadences: dialogs are mechanically read from pane snapshots, prose handoffs are inferred from pane tails, and every empty list says whether both observers found nothing or one could not answer.",
   },
 };
 
@@ -214,7 +222,12 @@ export function Dock({
        reads as one control to point along rather than four separate waits. */
     <TooltipGroup delay={{ open: 240, close: 90 }}>
       <nav ref={barRef} className={`dock${fitClass}`} aria-label="Fleet views">
-        <div className="dock-modes" role="radiogroup" aria-label="Fleet views">
+        <div
+          className="dock-modes"
+          role="radiogroup"
+          aria-label="Fleet views"
+          style={{ "--dock-mode-count": MODES.length } as CSSProperties}
+        >
           {MODES.map((m) => (
             <DockMode
               key={m}

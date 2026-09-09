@@ -26,6 +26,7 @@ import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { QueuePanel } from "./QueuePanel";
+import { QuestionsPanel } from "./QuestionsPanel";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
@@ -50,7 +51,7 @@ import { httpQueueApi, type QueueApi } from "./queue-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
-import { ANSWERING_NOT_REPORTED, CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
+import { ANSWERING_NOT_REPORTED, CLOCK_SKEW_UNMEASURED, questionsAtTime, type ClockSkew } from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -184,6 +185,10 @@ export function App({
   });
 
   const rows = feed.state?.rows ?? [];
+  /* Re-derived from the page's one ticking clock on every render. Keeping the
+     parse-time view here would let a complete empty list remain reassuring
+     forever after polling stopped. */
+  const questions = feed.state === null ? null : questionsAtTime(feed.state, now);
   const needsYou = tally(rows).needsYou;
 
   /* The two things that change how wide the bar's row wants to be: which mode
@@ -453,6 +458,18 @@ export function App({
         {mode === "deploys" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
+          </div>
+        ) : null}
+        {mode === "questions" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <QuestionsPanel
+              view={questions}
+              rows={rows}
+              answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
+              onSelect={(id) => go("sessions", { sel: id, selpid: null })}
+              steer={steer}
+              now={now}
+            />
           </div>
         ) : null}
       </main>

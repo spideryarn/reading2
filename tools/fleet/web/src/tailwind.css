@@ -581,13 +581,11 @@
        by its contents rather than handing the whole segment the same share as a
        single loose icon.
 
-       **THIS NUMBER IS A HAND-KEPT COPY OF `MODES.length` IN mode.ts.** It said
-       3 while there were seven modes and then eight, so the segment was asking
-       for less than a third of what it holds and the bar apportioned badly on a
-       wide phone. CSS cannot read a TypeScript array; if you add a mode, add one
-       here. GPT Sol flagged the drift, 2026-09-09. */
+       The share count comes from `MODES.length`, passed by Dock.tsx as a custom
+       property, so adding a mode no longer requires a hand-kept CSS twin. The
+       fallback preserves the last known layout if the property is absent. */
     .dock-modes {
-      flex: 8 0 auto;
+      flex: var(--dock-mode-count, 8) 0 auto;
     }
     .dock > .dock-btn,
     .dock-modes .dock-btn {

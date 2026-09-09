@@ -699,9 +699,35 @@ which had it as a single derivation until asked:
   lands near **520px**.
 
 They agree at eight, which is the only count either session can currently check; **nine and ten are
-unmeasured**. This session is at 390 in Stage 3 anyway, so it takes the reading and sends the number
-back to replace the arithmetic. Past the last fit rung the row scrolls rather than clipping, which is
-the honest stopgap. Two things follow:
+unmeasured**. Past the last fit rung the row scrolls rather than clipping, which is the honest
+stopgap.
+
+**The reading is split rather than duplicated, settled by message with `decisions-mode` on
+2026-09-09.** They take **nine**, because their own Stage 4 gating check is a direct `#decisions`
+load at 390 × 844 and they have to measure it anyway; this session takes **ten**, which only it can
+take once `questions` exists. Two details, both of which decide whether the number means anything:
+
+- **The tenth is simulated with `decisions-mode`'s real label**, not a stub. A mode's width is its
+  glyph plus its label, so a tenth called `Temp` measures a shorter bar than the one that will
+  exist. The reading is taken with a local tenth entry labelled exactly *Decisions*, then reverted —
+  and the note that goes back says the tenth was simulated rather than merged, so nobody later reads
+  it as a measurement of a shipped state.
+- **Their arithmetic is a prediction this measurement is entitled to falsify**, and they said so
+  first. Their own correction, 2026-09-09: an earlier *"≥360px at nine"* counted the 40px button
+  floors alone and understated it; with Refresh, the active mode's retained label, the two `0.15rem`
+  gaps and the gutters it is nearer 480px. Whether the ruler confirms or contradicts it, the number
+  and the method go back — a prediction that was checked and held is worth more in the joint question
+  to Greg than one nobody tested.
+
+**One constraint on the share-count fix, from `decisions-mode`, 2026-09-09:** their edge fades are
+CSS **masks on `.dock`**, not child elements, *deliberately* — `fit.ts` picks its rung from
+`scrollWidth`, so anything that contributes width feeds back into the measurement and the ladder can
+oscillate. `--dock-mode-count` is therefore a custom property set in the `style` of the existing
+`.dock-modes` element and a `var()` inside the existing `flex` declaration: no new element, no
+padding, no margin. **Read the diff for that specifically** — a wrapper `div` is the plausible wrong
+move and nothing in the suite would notice.
+
+Two things follow from the dock being full:
 
 1. **The coarse-pointer share count.** `.dock-modes { flex: 8 0 auto }` hard-codes the mode count in
    CSS where no type and no test can see it, and its own comment says *"CSS cannot read a TypeScript
@@ -810,32 +836,66 @@ silence there discards the one case where the inbox genuinely knows something th
 
 ### Stage 2 — the panel, the answering, and the registrations
 
-- [ ] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`. One arm per item kind with a
+- [x] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`. One arm per item kind with a
       `never` default: **buttons** on `dialog`; **the excerpt, the age, the ranking and a tap that
       selects the session** on `prose`, with one short line saying why answering is one tap away;
       **the reason and no control** on the two `unaddressable` arms. `SteerReceipt` for the outcome
       of a dialog answer.
-- [ ] Card state keyed by **`row.execution.token`** — `{boot, pid, startTicks}`, the only thing in
+- [x] Card state keyed by **`row.execution.token`** — `{boot, pid, startTicks}`, the only thing in
       this payload that identifies a *run* rather than a *pane* — plus the item's own id, and
       discarded when either changes. **Not** `paneId + panePid + claudeSessionId`, which round three
       showed is exactly the tuple that survives one Claude exiting and another starting.
-- [ ] The six registrations, plus the `--dock-mode-count` custom property (agreed with
+- [x] The six registrations, plus the `--dock-mode-count` custom property (agreed with
       `decisions-mode`).
-- [ ] The four tests from
+- [x] The four tests from
       [§ The test](../project/fleet-dashboard-modes.md#the-test), driven through `SteerApi`'s seam
       rather than a stub of `fetch`; and four that are this tab's own: **a click sends the row's
       `rawQuestion` verbatim**; **it refuses when the row no longer carries a question**; **card
       state does not survive a change of `row.execution.token`**; and **a successful, a `partial` and
       an `unknown` send each leave the controls in the right state**, rather than inviting a retry
       that would append to half-sent text.
-- [ ] **No prose card renders anything that writes** — the assertion that keeps v1's decision from
+- [x] **No prose card renders anything that writes** — the assertion that keeps v1's decision from
       being undone by a later edit that looks harmless.
-- [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
+- [x] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
       things.
 
-**Delegated to Codex.** Status: **in progress**, picked up 2026-09-09 by the session dispatched for
-Stages 2 and 3. Stage 1's contract is on `dev` at `ed40da53` and its shape is settled; the five
-decisions below were taken before the task was written.
+**Delegated to Codex** (`gpt-5.6-sol`, high, `workspace-write`, 75 minutes — Stage 1's run was killed
+at 45), from [the task](260909e-questions-mode-stage2-codex-task.md). Its report is
+[here](260909e-questions-mode-stage2-report.md) and the review it ran on itself
+[here](260909e-questions-mode-stage2-review-sol.md).
+
+**Status: built, and green on checks this session ran rather than took from the implementer's
+claim** — seven suites, 509 tests, and `node --import tsx scripts/typecheck.ts` at `EXIT=0` across
+all four projects. Every box above is done. Codex's own GPT Sol pass found one P1 in its first
+attempt — a retained dialog item whose current row had lost its `paneId` still drew two enabled
+option buttons — reproduced it red, and closed it by requiring current-row addressability and exact
+row/target agreement at the action boundary.
+
+**Two defects this session found that neither Codex nor its reviewer did, both in one place, and
+both watched red before they were fixed.**
+
+**1. The answering notice spoke for a server that had not spoken.** `App.tsx` defaults
+`answeringEnabled` to `ANSWERING_NOT_REPORTED`, which is right — silence must never become `false` —
+but that arm's sentence is *this server did not report whether answering works*, and **before the
+first payload arrives no server has said anything at all**. So the tab drew *No Questions payload has
+arrived yet* and, underneath it, a paragraph attributing a silence to somebody who had not spoken.
+That is the same fabrication the default exists to prevent, one level along. The notice is now drawn
+only when there is a view, because it explains why cards have no buttons and with no view there are
+no cards.
+
+**2. The share-count fix replaced one unchecked register with another.** `--dock-mode-count` removes
+the hand-kept `8` from `tailwind.css` — but `var(--dock-mode-count, 8)` has a **fallback**, so if the
+property never reaches the element (a refactor to a wrapper, a value React declines to write) the bar
+looks exactly as it did while it was wrong. **A fallback that hides its own failure needs a test that
+reads the DOM.** There is now one, asserting `.dock-modes`'s inline custom property against
+`MODES.length` rather than against a literal, so the next session to add a mode inherits a check that
+is still true rather than one that has to be edited. Watched red by removing the `style` prop:
+`expected '' to be '9'`.
+
+**Kept from `decisions-mode`'s constraint**: the property is set in the `style` of the **existing**
+`.dock-modes` element. No wrapper, no padding, no margin — nothing that contributes width, because
+`fit.ts` picks its rung from `scrollWidth` and anything that adds width feeds back into the
+measurement.
 
 **One requirement carried forward from Stage 1's code review, and it is not optional.** GPT Sol's
 second P1: `questionsAtTime` in `web/src/types.ts` recomputes all three clocks against a supplied
@@ -899,6 +959,48 @@ from exactly the rows whose sends are most worth reading.
 - [ ] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
       server on a free port confirmed from its bind line — never `:8787`, whose process is not to be
       touched. Screenshots land in the repo root, are copied out, and are deleted.
+- [ ] **The ten-mode dock reading, in the method agreed with `decisions-mode`** — § Where the tab
+      goes has the split and the simulated tenth. Their two corrections, both adopted:
+      - **Three loads, not one, and the last mode is the worst case.** Their own gating check was a
+        direct `#decisions` load, and they found it proves almost nothing: `decisions` sits seventh
+        of nine, and the tab furthest from the scroll origin is the one that tests whether
+        scroll-into-view works. At ten the order is `sessions … deploys, questions`, so **this tab
+        is the worst case** — measured at `#sessions`, `#deploys` (the load both readings share, so
+        the two can be checked against each other) and `#questions`.
+      - **Read after the fit rung has settled**, never during first paint: the rung changes button
+        widths, so a `scrollWidth` sampled early is a different bar. If the two sessions' numbers
+        disagree, this is the first thing to check before believing either.
+      - **`scrollLeft` beside `scrollWidth` and `clientWidth`.** Those three together are the only
+        thing that separates *the bar overflows and we scrolled to the right place* from *the bar
+        overflows and the active button is off screen*. **Overflow on its own is expected** and is
+        the honest failure mode the dock was built to have; reporting it as a fault would be the
+        wrong number.
+- [ ] **The shared `#deploys` load's prediction, written down before either session measures.**
+      `decisions-mode` proposed the shared load as a cross-check and read a matching pair as *one of
+      us sampled before the fit rung settled*. That names one cause for a symptom with at least
+      three, and the other two are likelier: **one of us measured a tree with the wrong mode count**
+      (which produces identical numbers for the honest reason that it was the same bar twice), or
+      **the rung is the same at nine and ten** because both are past the last one, in which case the
+      per-mode delta is icon-width rather than glyph-plus-label. So a matching pair says something
+      is wrong and not which thing. What makes it diagnostic is the prediction, agreed 2026-09-09
+      and binding on both readings:
+      - `clientWidth` on `.dock` must be **identical** in both (390 at coarse). If it is not,
+        somebody is not at 390 × 844 coarse and nothing else in the two readings is comparable.
+      - `scrollWidth` at ten must exceed nine by **one mode's width** — their arithmetic says about
+        41px, **and that is the number under test.** A delta near zero means one of us measured the
+        wrong tree; a delta far from 41 falsifies the per-mode figure in the joint draft, which is a
+        result worth having on its own.
+      - The **fit rung** at each, reported as a rung rather than as a description. Equal rungs mean
+        the expected delta is icon-width, and that is said rather than the 41 being called wrong.
+- [ ] **Which half of that reading depends on `decisions-mode`'s fix, said on the reading itself.**
+      Reachability at the last tab is a property of their scroll-into-view, which is on their branch
+      and not on `dev`. So the **overflow** half (`scrollWidth` vs `clientWidth`, the fit rung,
+      Refresh past the edge, bar height) is taken whenever, and the **reachability** half
+      (`scrollLeft`, active button on screen) is taken only against a tree that contains their fix —
+      merging their branch locally to measure and reverting, if they have not pushed — with the
+      commit named on every number. Otherwise a failing `#questions` load measures the absence of
+      their fix and gets reported as a dock finding, which is the shape of wrong number that ends up
+      in a question to Greg.
 - [ ] **The screenshots are looked at by this session, not only reported on.** Delegated
       descriptions of a layout are wrong often enough to distrust on their own.
 - [ ] Every state from § 3 above forced and looked at individually — including each silence.
