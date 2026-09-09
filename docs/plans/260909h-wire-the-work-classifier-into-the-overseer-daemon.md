@@ -221,38 +221,50 @@ was read, **not** a later `now()`; on failure it is a separately named `attempte
 
 ### Stage 1 — the wire shape and the store field
 
-- [ ] `tools/fleet/wire.ts`: `PaneJob`, `PaneWork`, `OverseerPaneWork`, `OverseerWork`. Types only.
+- [x] `tools/fleet/wire.ts`: `PaneJob`, `PaneWork`, `OverseerPaneWork`, `OverseerWork`. Types only.
   Three arms on `OverseerWork` — `not-yet-run`, `probe-failed`, `scan` — so a global failure is one
   fact rather than N (round 1, finding 7); `sourceCollectedAt` on the two that describe a real
   attempt (finding 2); `ranForMs` frozen on the job (finding 1).
-- [ ] `tools/overseer/store.ts`: `Checkpoint.work`, `CheckpointUpdate.work?`, `workNotYetRun(at)`,
+- [x] `tools/overseer/store.ts`: `Checkpoint.work`, `CheckpointUpdate.work?`, `workNotYetRun(at)`,
   and the read-back parse, mirroring `attention` exactly — held across writes that carry none, not
   restored across a restart.
-- [ ] `tests/overseer-store-work.test.ts`: round-trips; absent on a cold store is `not-yet-run` and
+- [x] `tests/overseer-store-work.test.ts`: round-trips; absent on a cold store is `not-yet-run` and
   says so; omitted on an update keeps what is held with its clock unchanged; a restart does not
   restore one; a malformed stored value degrades to `not-yet-run` with a reason and **never** to an
   empty scan.
 
-**Status:** not started.
+**Status:** done, 2026-09-09. Implemented by GPT Sol (`gpt-5.6-sol`, `--sandbox workspace-write`)
+against a written brief; tests red first, then green. I ran the gates: the three new suites are
+green (35 tests), and so are the seven neighbouring Overseer and fleet suites (239). `npm run
+typecheck` caught three `Checkpoint` literals in `tests/overseer-cli.test.ts` and
+`tests/overseer-watchdog.test.ts` that now need the field — **Codex could not see them**, because it
+ran `tsc --noEmit` on the source projects and those do not cover `tests/`. Fixed by hand.
 
 ### Stage 2 — the daemon probes once and publishes
 
-- [ ] `tools/overseer/work-reading.ts` (new, pure): `paneWorkOf` and `scanPaneWork`, including the
+- [x] `tools/overseer/work-reading.ts` (new, pure): `paneWorkOf` and `scanPaneWork`, including the
   `pane-younger-than-inventory` backstop (finding 4) and the executable/subcommand reduction that
   replaces the deleted redactor (finding 8).
-- [ ] `tools/overseer/daemon.ts`: `DaemonOptions.probe?`, defaulting to `probeProcessTable`; one call
+- [x] `tools/overseer/daemon.ts`: `DaemonOptions.probe?`, defaulting to `probeProcessTable`; one call
   **below the `held` check**, on the path that will actually checkpoint (finding 3); `work` carried
   into `checkpointUpdate()` with the spread idiom.
-- [ ] `tests/overseer-daemon-work.test.ts`, the integration test the roadmap names: the probe is
+- [x] `tests/overseer-daemon-work.test.ts`, the integration test the roadmap names: the probe is
   called **exactly once per inventory that gets checkpointed**, and **not at all** for a duplicate, a
   rejected payload, a `held` diff, or a bare tick; the classification reaches `current.json`; a
   failed and a thrown probe both say why and never say idle.
-- [ ] `tests/overseer-work-reading.test.ts`: deep wrapper tree (the depth-8 codex capture),
+- [x] `tests/overseer-work-reading.test.ts`: deep wrapper tree (the depth-8 codex capture),
   foreground and background review, missing process table, exited child, pid reuse (both the caught
   case and the recorded uncaught one), no child work, and the safe-command reduction. Existing
   process-tree fixtures plus one disposable positive control.
 
-**Status:** not started.
+**Status:** done, 2026-09-09. Also GPT Sol's implementation.
+
+**The positive control was skipped in Codex's own run and is not skipped here** — its sandbox denies
+`ps` with `EPERM`, which is exactly the shape that makes a control worthless: a test that skips on
+the machine that matters proves nothing. Run in this worktree it passes, and I checked separately
+that it **discriminates**: `classifyPaneWork(process.pid, …)` returns `no-child-work` with nothing
+spawned and `child-work` matching the spawned pid immediately after. A control that would pass
+either way is not a control.
 
 ### Stage 3 — the projection and the browser
 
