@@ -1,7 +1,14 @@
 # Usage limits: a fourth fleet-dashboard tab, with the last 24 hours
 
-**Status as of 2026-09-09: planned and twice-reviewed, not built.** Evidence: `git grep -l
-usage-history` returns nothing, and `MODES` in `tools/fleet/web/src/mode.ts` still has three entries.
+**Status as of 2026-09-09 05:30 UTC: BUILT and on `dev`, all six stages.** Evidence: the tab is in
+`MODES`; `~/.overseer/usage.jsonl` has been filling since the daemon was relaunched at 03:51 UTC
+(one record per 5-minute pass, 3,777 bytes each, verified against the live file); and
+`GET /api/usage/history` was run against that store and returned four samples with the recorder not
+overdue.
+
+**Two things are outstanding and neither is code**: the browser check of the *chart* (the tab itself
+was browser-checked at Stage 1), and two `overseer-direction.md` edits that need Greg, prepared as a
+before/after in [260909b-seam-table-edit-for-greg.md](260909b-seam-table-edit-for-greg.md).
 
 Two GPT Sol rounds, 26 findings, eleven P0, **nothing overruled**. Discovery is closed. The dead ends
 and both rulings tables are in
@@ -442,7 +449,9 @@ is not free, build the read side first against a fixture store — the format is
 
 ### Stage 6 — docs
 
-Explanatory and polish only; the seam table landed in Stage 4.
+**Status: ✅ done.** `docs/project/usage-history.md` written and signposted; the two
+`overseer-direction.md` edits prepared as a before/after for Greg in
+`260909b-seam-table-edit-for-greg.md` rather than landed, because that file's wording is a rule.
 
 - [ ] Propose to Greg, via the Overseer, a sentence in `overseer-direction.md` saying what the
       `tools/fleet` ↔ `tools/overseer` rule actually is. Use
