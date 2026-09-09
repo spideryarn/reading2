@@ -807,6 +807,73 @@ describe("the modes", () => {
 });
 
 /**
+ * **The Usage limits tab.**
+ *
+ * The same three assertions as Deploys below, plus one this tab needs and the
+ * others do not: it draws the *same* `UsageCard` the Overseer tab draws, from
+ * the same field of the same payload. Mounted twice rather than copied, because
+ * two renderings of one reading is exactly the second interpretation the whole
+ * of tools/overseer/usage.ts exists to prevent.
+ */
+describe("the usage limits tab", () => {
+  it("is registered at all, which is the one thing the types cannot check", () => {
+    /* `Mode` is derived FROM `MODES`, so losing a whole mode and its four map
+       entries in a merge type-checks perfectly and the tab is simply gone. Four
+       sessions were adding modes on the night of 2026-09-08. */
+    expect(MODES).toContain("usage");
+    expect(MODE_LABELS.usage).toBe("Usage limits");
+  });
+
+  it("opens straight into it from the hash", async () => {
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("draws the panel when the button is pressed — the missing-mount test", async () => {
+    /* A mode registered in all four maps with no arm in App.tsx compiles, draws
+       a button, switches the hash, and shows an empty page. Nothing type-checks
+       that ternary. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Usage limits");
+    expect(button, "no Usage limits button in the bar").toBeDefined();
+
+    act(() => button?.click());
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe("#usage");
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("shows the SAME reading as the Overseer tab's card, from one payload", async () => {
+    /* The tab is a second mount of `UsageCard`, not a second renderer. If these
+       two ever diverge, one of them is inventing — and the reader has no way to
+       tell which. Checked on the text rather than the props, because the props
+       being equal is what a copy would also satisfy. */
+    const feed = manualTransport();
+    window.location.hash = "#usage";
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+    const onTab = container.textContent ?? "";
+
+    window.location.hash = "#overseer";
+    await act(async () => undefined);
+    const onOverseer = container.textContent ?? "";
+
+    const claim = "The payload arrived and carried no usage reading at all.";
+    expect(onTab).toContain(claim);
+    expect(onOverseer).toContain(claim);
+  });
+});
+
+/**
  * **The Deploys tab.**
  *
  * The three assertions docs/project/fleet-dashboard-modes.md § The test asks
