@@ -68,99 +68,21 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import {
   transcriptAge,
-  type MessageSpeaker,
   type MessageTurn,
   type MessagesApi,
   type MessagesView,
 } from "./messages-client";
 import { Explain } from "./Tooltip";
+import { Turn } from "./Turn";
 import type { FleetRow } from "./types";
-import { Button, Mono, cx } from "./ui";
+import { Button, Mono } from "./ui";
 import { formatDuration } from "./view";
-
-/**
- * How each speaker is named, and which of them need a warning beside the name.
- *
- * `note` is non-null only for the ones a reader would otherwise get wrong.
- * `human` has one because a steer sent from THIS PAGE lands here too and is
- * indistinguishable from Greg at the keyboard by anything in the transcript —
- * transcript.ts refuses to guess and so does this.
- */
-const SPEAKERS: Record<MessageSpeaker, { label: string; note: string | null; tone: string }> = {
-  human: {
-    label: "typed at the pane",
-    note: "a person, or a steering message sent from this page — the transcript cannot tell them apart",
-    tone: "tw:text-needs-ink",
-  },
-  assistant: { label: "the agent", note: null, tone: "tw:text-work-ink" },
-  peer: { label: "another agent", note: "over the peer socket, not a person", tone: "tw:text-work-ink" },
-  notification: { label: "machinery", note: "a subagent finishing, or an auto-continuation", tone: "tw:text-ink-faint" },
-  "compact-summary": {
-    label: "a compaction summary",
-    note: "written by Claude Code when the conversation ran out of context, and it wears a person's role — nobody said this",
-    tone: "tw:text-unknown-ink",
-  },
-  injected: {
-    label: "an injected reminder",
-    note: "machinery wearing a person's role — nobody typed this",
-    tone: "tw:text-unknown-ink",
-  },
-  "api-error": { label: "an API error", note: null, tone: "tw:text-alarm-ink" },
-  system: { label: "Claude Code itself", note: null, tone: "tw:text-ink-faint" },
-  unrecognised: {
-    label: "an unknown speaker",
-    note: "this build does not know this kind of turn, so it will not say who said it",
-    tone: "tw:text-unknown-ink",
-  },
-};
 
 /** Bytes, coarsely. A ratio is the point of this, not a byte count. */
 function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} kB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/** One turn. Text and tool calls, and neither is markup. */
-function Turn({ turn }: { turn: MessageTurn }): ReactNode {
-  const who = SPEAKERS[turn.speaker];
-  return (
-    <li className="transcript-turn tw:border-t tw:border-rule tw:py-2 tw:first:border-t-0">
-      <p className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[11px]">
-        <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
-        {turn.at === null ? null : <span className="tw:text-ink-faint">{turn.at}</span>}
-      </p>
-      {who.note === null ? null : <p className="tw:mt-0.5 tw:text-[11px] tw:text-ink-faint">{who.note}</p>}
-      {turn.text === "" ? (
-        /* An assistant turn with no words and some tool calls is a REAL state,
-           not a missing one — transcript.ts says so. Drawing nothing here would
-           make it look like a turn that failed to load. */
-        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-faint tw:italic">
-          {turn.toolCalls.length > 0 ? "No words in this turn — it only called tools." : "No words and no tool calls in this turn."}
-        </p>
-      ) : (
-        /* Untrusted text. `whitespace-pre-wrap` keeps the agent's own line
-           breaks without anything interpreting them. */
-        <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:whitespace-pre-wrap tw:text-ink">{turn.text}</p>
-      )}
-      {turn.truncated ? (
-        <p className="tw:mt-0.5 tw:text-[11px] tw:text-ink-faint">
-          Cut short{turn.fullChars === null ? "" : ` — ${turn.fullChars.toLocaleString()} characters in full`}.
-        </p>
-      ) : null}
-      {turn.toolCalls.length === 0 ? null : (
-        <ul className="tw:mt-1 tw:space-y-0.5">
-          {turn.toolCalls.map((call, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a turn's tool calls have no id of their own, and this list is fixed for the life of the turn — never reordered, appended to or filtered — so the index IS a stable identity here. Two calls to the same tool with the same detail are otherwise indistinguishable.
-            <li key={`${call.name}-${i}`} className="tw:text-[12px] tw:text-ink-soft">
-              <Mono>{call.name}</Mono>
-              {call.detail === null ? null : <span className="tw:pl-2 tw:break-all tw:text-ink-faint">{call.detail}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </li>
-  );
 }
 
 /**
