@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { USAGE_ZONES, zonedLine, zonedReadings } from "../tools/fleet/zones.js";
+import { DISPLAY_ZONES, zonedLine, zonedReadings } from "../tools/fleet/zones.js";
 
 describe("zonedReadings", () => {
   it("reads one summer instant in all three zones", () => {
@@ -58,7 +58,7 @@ describe("zonedReadings", () => {
   });
 
   it("counts a zone BEHIND UTC as a day back", () => {
-    /* Unreachable with USAGE_ZONES — both are ahead of UTC all year — which is
+    /* Unreachable with DISPLAY_ZONES — both are ahead of UTC all year — which is
        exactly why `zones` is a parameter. Honolulu is UTC−10 with no DST. */
     const readings = zonedReadings("2026-09-08T02:00:00.000Z", [{ zone: "Pacific/Honolulu", label: "Honolulu" }]);
     expect(readings).toEqual([
@@ -100,8 +100,8 @@ describe("zonedLine", () => {
   });
 });
 
-describe("USAGE_ZONES", () => {
+describe("DISPLAY_ZONES", () => {
   it("is the three Greg asked for, in reading order", () => {
-    expect(USAGE_ZONES.map((z) => z.zone)).toEqual(["UTC", "Europe/London", "Europe/Athens"]);
+    expect(DISPLAY_ZONES.map((z) => z.zone)).toEqual(["UTC", "Europe/London", "Europe/Athens"]);
   });
 });

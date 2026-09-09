@@ -1,6 +1,7 @@
 /**
- * **ONE INSTANT, THREE CLOCKS** — every reset time and source timestamp the
- * usage card and `scripts/overseer.ts` print, said in UTC, London and Athens.
+ * **ONE INSTANT, THREE CLOCKS** — every instant this box shows a person, said
+ * in UTC, London and Athens. The usage card and `scripts/overseer.ts` are the
+ * first consumers; the Deploys tab is the second.
  *
  * > include timezone because I'm bouncing between London/Athens
  * >
@@ -30,17 +31,30 @@
  * thing to say, not a thing to crash on.
  */
 
+/** A list of zones to render an instant in, each with the label that goes on screen. */
+export type Zones = readonly { readonly zone: string; readonly label: string }[];
+
 /**
- * The zones, in reading order, with the labels that go on screen.
+ * **THE ZONES THIS BOX RENDERS IN**, in reading order.
  *
  * UTC first because it is the one the underlying data is in — `resets_at` and
  * `collectedAt` are both ISO — so a reader comparing the page against a raw
  * file or a log line has the identical string in front of them, and the two
  * civil times are the convenience beside it.
+ *
+ * **Named `DISPLAY_ZONES` rather than `USAGE_ZONES`, which is what it was
+ * called for about an hour.** The usage card created it, but a deploy time is
+ * the same wall-clock question for the same person in the same two cities, and
+ * a shared formatter named after its first consumer is a misnomer that gets
+ * more expensive with every later one. Renamed on 2026-09-09 while the file was
+ * still unlanded and had three references.
+ *
+ * **A second consumer should pass its own list rather than edit this one.**
+ * That is what the `zones` parameter is for: this constant is Greg's *"I'm
+ * bouncing between London/Athens"* and changing it changes the usage card and
+ * `overseer status` too.
  */
-export type Zones = readonly { readonly zone: string; readonly label: string }[];
-
-export const USAGE_ZONES: Zones = [
+export const DISPLAY_ZONES: Zones = [
   { zone: "UTC", label: "UTC" },
   { zone: "Europe/London", label: "London" },
   { zone: "Europe/Athens", label: "Athens" },
@@ -80,7 +94,7 @@ export type ZonedReading = {
  * deleting it instead would print a zone a day BEHIND as if it were the same
  * day the moment the list changes.
  */
-export function zonedReadings(iso: string, zones: Zones = USAGE_ZONES): ZonedReading[] | null {
+export function zonedReadings(iso: string, zones: Zones = DISPLAY_ZONES): ZonedReading[] | null {
   const at = new Date(iso);
   const ms = at.getTime();
   if (!Number.isFinite(ms)) return null;
@@ -111,7 +125,7 @@ export function zonedReadings(iso: string, zones: Zones = USAGE_ZONES): ZonedRea
  * reader skims. `null` for an instant that cannot be read, so a caller can say
  * so in its own words rather than printing `Invalid Date`.
  */
-export function zonedLine(iso: string, zones: Zones = USAGE_ZONES): string | null {
+export function zonedLine(iso: string, zones: Zones = DISPLAY_ZONES): string | null {
   const readings = zonedReadings(iso, zones);
   if (readings === null) return null;
   return readings
