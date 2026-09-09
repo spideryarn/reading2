@@ -109,7 +109,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { DictationControl, useFleetDictation } from "./DictationControl";
 import { PauseLine } from "./PauseLine";
-import { EarlierMessages, LatestMessage, useRecentMessages } from "./RecentMessages";
+import { Conversation, useRecentMessages } from "./RecentMessages";
 import { Handles, Handoff, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
@@ -938,8 +938,7 @@ export function SessionDetail({
           honest answer there is the reader's own sentence rather than a section
           that quietly removed itself. See RecentMessages.tsx. */}
       <Section title="Latest message">
-        <LatestMessage row={row} now={now} reading={reading} />
-        <EarlierMessages view={reading.view} row={row} now={now} />
+        <Conversation row={row} now={now} reading={reading} />
       </Section>
 
       {/* A SHELL GETS ONE SENTENCE AND NONE OF THE CONTROLS. See the header's

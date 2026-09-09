@@ -247,23 +247,79 @@ function Refusal({ head, why, detail, said }: { head: string; why: string; detai
  * exactly where "this may be much older than it looks" has to be readable
  * without opening anything.
  */
+/**
+ * The newest turn we could read, and every caveat that changes what you would
+ * DO about it.
+ *
+ * **Four of the five things here were found by a cross-family review of the
+ * first version (F13–F16), and they are all the same mistake**: this section
+ * moved to the top of the page, where a sentence is read as the session's
+ * current state, and it went on saying things that were only ever true of a
+ * footnote. Each is now qualified where it is read rather than where it was
+ * written.
+ */
 function Latest({ view, row, now }: { view: MessagesView & { kind: "found" }; row: FleetRow; now: number }): ReactNode {
   const age = transcriptAge(view.lastModified, row.status, now);
   const newest = view.turns[view.turns.length - 1];
 
+  /* THE CAVEATS COME FIRST AND ARE DRAWN WHETHER OR NOT THERE IS A TURN. The
+     first version returned early on an empty read and skipped the stale
+     warning it had already computed (F13) — so the emptiest, least certain
+     reading was the one shown with the fewest qualifications. */
+  const caveats = (
+    <>
+      {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
+
+
+      {/* PROMOTED OUT OF THE PROVENANCE (F15). Which file is live changes what
+          you DO — steering on this message may answer a different conversation
+          — and by this file's own rule that puts it beside the turn rather than
+          inside a closed disclosure. The byte counts and the path stay down
+          there, because they only change what you believe. */}
+      {view.copies !== null && view.copies !== 1 ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:text-unknown-ink">
+          {view.copies} files carry this conversation id, and which of them is the live one is not something this
+          page can tell. Anything you send from here may reach a different conversation.
+        </p>
+      ) : null}
+
+      {/* PROMOTED FOR THE SAME REASON (F14), and this one is sharper than it
+          looks. `parseRecentMessages` drops a turn it cannot read and keeps
+          only a COUNT — the position is lost — so the last readable turn is not
+          necessarily the last turn, and the one below may not be the newest
+          thing this session said. */}
+      {view.unreadableTurns > 0 ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:text-unknown-ink">
+          {view.unreadableTurns} {view.unreadableTurns === 1 ? "turn came" : "turns came"} back in a shape this page
+          could not read. This is the latest turn it COULD read, and one of the missing ones may be newer.
+        </p>
+      ) : null}
+    </>
+  );
+
   if (newest === undefined) {
     return (
-      <p className="tw:text-[13px] tw:text-ink-soft">
-        {view.turnsOffered
-          ? "The transcript was read and there are no turns in it. That is a file that exists and has nothing to say — a session that has not spoken yet."
-          : "The server said it found the transcript and then sent no turns at all. That is not an empty conversation; it is an answer this page cannot read."}
-      </p>
+      <div>
+        {caveats}
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">
+          {!view.turnsOffered
+            ? "The server said it found the transcript and then sent no turns at all. That is not an empty conversation; it is an answer this page cannot read."
+            : view.unreadableTurns > 0
+              ? "No turns could be read. That is not the same as a session that has said nothing — every turn the server sent came back in a shape this page could not read."
+              : view.reachedStartOfFile === true
+                ? "The transcript was read from its beginning and there are no turns in it. That is a file that exists and has nothing to say — a session that has not spoken yet."
+                : /* F13: `false` says outright that the read did not reach the
+                     start, and `null` makes no claim at all. Neither
+                     establishes silence, and this used to say it had. */
+                  "No turns were found in the part of the transcript that was read, and the read did not reach the beginning of the file — so this is not evidence that the session has said nothing."}
+        </p>
+      </div>
     );
   }
 
   return (
     <div>
-      {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
+      {caveats}
       <ul className="tw:mt-1">
         <Turn turn={newest} />
       </ul>
@@ -285,16 +341,16 @@ function Latest({ view, row, now }: { view: MessagesView & { kind: "found" }; ro
  * you believe about the turn *above* may live only in here — that is why the
  * stale note is upstairs and only the provenance is down here.
  */
-export function EarlierMessages({
+function EarlierMessages({
   view,
   row,
   now,
 }: {
-  view: MessagesView | null;
+  /** ONLY the `found` arm (F18). See `Conversation` for why this is narrowed. */
+  view: MessagesView & { kind: "found" };
   row: FleetRow;
   now: number;
 }): ReactNode {
-  if (view === null || view.kind !== "found") return null;
   const older = view.turns.slice(0, -1);
 
   return (
@@ -402,12 +458,17 @@ function Found({
         </p>
       ) : null}
 
-      {/* The empty-transcript sentences are `Latest`'s, because they are what
-          stands in for the newest turn when there is not one. Here, no earlier
-          turns simply means the newest one is the only one. */}
+      {/* THE SENTENCE HERE BRANCHES ON THE TOTAL, NOT ON THE SLICE (F16). An
+          empty slice has two causes that mean opposite things: one turn was
+          read and it is above, or NOTHING was read and the thing above is an
+          empty-state sentence. The first version said "the message above is the
+          only turn read" for both, which on a zero-turn view directly
+          contradicted the sentence it was pointing at. */}
       {turns.length === 0 ? (
         <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          Nothing earlier — the message above is the only turn read.
+          {view.turns.length === 0
+            ? "No turns were read, so there is nothing earlier to show."
+            : "Nothing earlier — the message above is the only turn read."}
         </p>
       ) : (
         <ul className="tw:mt-2">
@@ -604,7 +665,16 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
 }
 
 /**
- * THE NEWEST TURN, AND EVERY ARM IN WHICH THERE IS NO NEWEST TURN.
+ * THE CONVERSATION: the newest turn we could read, then everything older.
+ *
+ * **ONE exported component owning the exhaustive switch, not two (F18).** The
+ * first version exported the two halves separately, and although the only
+ * caller paired them correctly, the *API* let a future consumer render the
+ * earlier-messages half alone — which returns `null` for every refusal state
+ * and would have flattened all four of them into a blank. The pairing is now a
+ * property of the module rather than of the caller's good manners, and
+ * `EarlierMessages` takes only the `found` arm, so "render the history without
+ * the refusals" is not expressible.
  *
  * Greg, 2026-09-09: *"show the most recent message (perhaps with a summary if
  * idle) prominently near the top, with the input-box and command-lists
@@ -622,7 +692,7 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
  * than it may render as a reading
  * (docs/project/overseer-direction.md § A higher bar for robustness).
  */
-export function LatestMessage({
+export function Conversation({
   row,
   now,
   reading,
@@ -641,7 +711,10 @@ export function LatestMessage({
           {busy ? "Reading the tail of this session's transcript…" : "Not read yet."}
         </p>
       ) : view.kind === "found" ? (
-        <Latest view={view} row={row} now={now} />
+        <>
+          <Latest view={view} row={row} now={now} />
+          <EarlierMessages view={view} row={row} now={now} />
+        </>
       ) : view.kind === "not-found" ? (
         <Refusal
           head="There is no transcript to read for this session."

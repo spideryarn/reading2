@@ -727,3 +727,52 @@ in them. Duplicating markup is cheap; duplicating a nine-arm discrimination with
 **The split, so neither agent edits the other's file:** that session creates a new file holding `Turn`
 and `SPEAKERS`, copied as-is; this one deletes the local copy and changes one import once Stage E is
 green and reviewed. Two copies exist harmlessly in between, and each step has one owner.
+
+## Review ledger — GPT Sol on the Stage E code, round one, 2026-09-09
+
+Verdict **refuse**: four established P1s, two P2s. Artefact:
+[260909a-dashboard-session-descriptions-review-e-sol.md](260909a-dashboard-session-descriptions-review-e-sol.md).
+It ran `tests/fleet-web.test.tsx` itself (345/345 at the time) rather than reasoning about it, and
+changed no files. All six accepted; every one verified against the code first.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F13 | An incomplete empty read is presented as a silent session | **Fixed** |
+| F14 | An older readable turn can be labelled "Latest message" | **Fixed** |
+| F15 | Uncertainty about which transcript is live is hidden as provenance | **Fixed** |
+| F16 | The zero-turn disclosure invents an "only turn" | **Fixed** |
+| F17 | The tests do not pin the stale warning *outside* the disclosure | **Fixed** |
+| F18 | The split does not make refusal loss unrepresentable | **Fixed** |
+
+**All six are one mistake with six faces, and it is a mistake the move itself created.** This section
+used to sit at the bottom of the page, where a sentence reads as a footnote. It now sits second, where
+a sentence reads as *the session's current state* — and four of its sentences had only ever been true
+as footnotes.
+
+- **F13** — `found` with no turns said *"a session that has not spoken yet"* even when
+  `reachedStartOfFile` was `false` (the read explicitly did not reach the beginning) or `null` (no
+  claim either way). Neither establishes silence. The empty branch also returned **before** the stale
+  warning it had already computed, so the least certain reading was the one shown with the fewest
+  qualifications. Now three distinct sentences, and the caveats are drawn whether or not there is a
+  turn.
+- **F14, and it is the sharpest.** `parseRecentMessages` drops a turn it cannot parse and keeps only a
+  **count** — the *position* is lost (`messages-client.ts:279-288`, verified). So given
+  `[readable, unreadable]` the page renders the readable one under "Latest message", and **the missing
+  one may be newer**. The warning existed and was inside the closed disclosure. Now beside the turn.
+- **F15** — `copies !== 1` means we cannot tell which file is live, and steering on that message may
+  answer a different conversation. That changes what you **do**, so by this file's own do/believe rule
+  it cannot live behind a disclosure. My rule, applied against me.
+- **F16** — an empty `older` slice has two causes that mean opposite things: one turn was read and it
+  is above, or nothing was read and the thing above is an empty-state sentence. The sentence I wrote
+  covered both and contradicted the second.
+- **F17 is a finding about the tests, and a good one.** jsdom's `container.textContent` **includes the
+  descendants of a closed `<details>`**, so every "is the warning on the page" assertion passes whether
+  a reader can see it or not — moving `StaleNote` back inside would have kept the suite green. The new
+  tests assert *containment* against the disclosure element. Verified by mutation: removing `StaleNote`
+  from the visible half turns exactly that test red.
+- **F18** — the two halves were exported separately, and although the only caller paired them
+  correctly, the *API* let a future consumer render the history alone and flatten all four refusal
+  states into nothing. Now one exported `Conversation` owns the exhaustive switch and
+  `EarlierMessages` takes only the `found` arm, so the bad composition is not expressible.
+
+Eight tests added (363 total), typecheck clean across 1765 files.
