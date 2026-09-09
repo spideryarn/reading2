@@ -39,6 +39,8 @@ interface FakeProc {
   cwd?: string | { opaque: string };
   uid?: number;
   command?: string;
+  /** `/proc/<pid>/comm`, readable even when cwd is not. */
+  comm?: string;
 }
 
 /** `/proc/<pid>/stat`, spelled the way the kernel spells it. */
@@ -67,6 +69,7 @@ function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
     },
     pids: () => Object.keys(table).map((k) => Number.parseInt(k, 10)),
     command: (pid) => table[pid]?.command ?? "some-command",
+    comm: (pid) => table[pid]?.comm ?? "bash",
     self: () => self,
   };
 }
@@ -136,14 +139,14 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 500: { start: 777, command: "claude" }, 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("alive");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("in-use");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("in-use");
   });
 
   it("ALLOWS: the owner is alive and is in the asker's ancestor chain — the owner is asking", () => {
     const proc = fakeProc({ 500: { ppid: 1, start: 777 }, 90: { ppid: 500, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("asking");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("idle");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("idle");
   });
 
   it("ALLOWS: the pid is gone, so the lock is stale", () => {
@@ -171,7 +174,7 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, "do not touch, mid-migration", ancestry(proc, 90));
     expect(standing.kind).toBe("unrecognised");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("unknown");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("unknown");
   });
 
   it("an unlocked worktree is not an owned one", () => {
@@ -213,7 +216,7 @@ describe("cwdUsersUnder", () => {
   it("REFUSES: a peer's process is sitting in the tree", () => {
     const proc = fakeProc({ 700: { start: 1, cwd: `${TREE}/src`, command: "vitest" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 0 });
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([700]);
   });
 
@@ -224,7 +227,7 @@ describe("cwdUsersUnder", () => {
     });
     const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
     const scan = cwdUsersUnder(proc, TREE, new Set(chain));
-    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 0 });
     if (scan.kind === "checked") expect(scan.found).toEqual([]);
   });
 
@@ -242,18 +245,41 @@ describe("cwdUsersUnder", () => {
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([71]);
   });
 
-  it("COUNTS, and does not block on, our own process whose cwd the kernel hides", () => {
+  it("COUNTS, and does not block on, a RECOGNISED ambient daemon that hides its cwd", () => {
     /* Measured on this box 2026-09-09: 6 of 208 same-uid processes are
        permanently opaque — systemd --user, (sd-pam), two sshd, two postgrest.
-       None has ever been in a worktree, and blocking on them made the scan report
-       an unknown on every single run, which took the owner waiver with it. So the
-       count is reported and the verdict stands. */
-    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" } } });
+       Blocking on those makes the scan report an unknown on every single run,
+       which takes the owner waiver with it. */
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, comm: "sshd" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", opaque: 1 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 1 });
     const verdict = composeInUse({ kind: "unlocked" }, scan);
     expect(verdict.kind).toBe("idle");
-    if (verdict.kind === "idle") expect(verdict.notes.join(" ")).toContain("would not let us inspect");
+    if (verdict.kind === "idle") expect(verdict.notes.join(" ")).toContain("ambient daemons");
+  });
+
+  it("REFUSES via unknown: an UNRECOGNISED process that hides its cwd", () => {
+    /* GPT Sol disproved "opaque implies daemon" by construction: a same-uid
+       python3 chdir'd into a worktree, called prctl(PR_SET_DUMPABLE, 0), and its
+       cwd went unreadable while genuinely being the worktree. So the ambient set
+       is NAMED and everything else is a hole — the shape worktree-check.ts
+       already uses for gitignored paths. */
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, comm: "python3" } });
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    if (scan.kind !== "checked") throw new Error("expected checked");
+    expect(scan.ambient).toBe(0);
+    expect(scan.unplaceable.map((u) => u.comm)).toEqual(["python3"]);
+
+    const verdict = composeInUse({ kind: "unlocked" }, scan);
+    expect(verdict.kind).toBe("unknown");
+    if (verdict.kind === "unknown") expect(verdict.why.join(" ")).toContain("python3");
+  });
+
+  it("an unreadable name is unplaceable too, not quietly ambient", () => {
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" } } });
+    /* `comm` defaults to "bash" in the fake, which is not on the allowlist. */
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    if (scan.kind === "checked") expect(scan.unplaceable).toHaveLength(1);
   });
 
   it("treats a process that EXITED as an absence, not as something it could not read", () => {
@@ -262,14 +288,14 @@ describe("cwdUsersUnder", () => {
        between the listing and the read. */
     const proc = fakeProc({ 700: { start: 1 } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", found: [], ambient: 0, unplaceable: [] });
     expect(composeInUse({ kind: "unlocked" }, scan).kind).toBe("idle");
   });
 
   it("ignores other users' processes — 575 of the box's 910 are not ours to block on", () => {
-    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, uid: 0 } });
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, uid: 0, comm: "python3" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", found: [], ambient: 0, unplaceable: [] });
   });
 
   it("does not match a sibling directory whose name starts with the tree's", () => {
@@ -288,7 +314,7 @@ describe("cwdUsersUnder", () => {
 /* -------------------------------------------------------------- composition -- */
 
 describe("composeInUse", () => {
-  const clear: CwdScan = { kind: "checked", found: [], opaque: 0 };
+  const clear: CwdScan = { kind: "checked", found: [], ambient: 0, unplaceable: [] };
   const stale: OwnerStanding = { kind: "stale", owner: { session: "demo", pid: 1, start: 1 }, why: "pid 1 is gone" };
 
   it("is idle only when BOTH signals are conclusively clear", () => {
@@ -303,13 +329,13 @@ describe("composeInUse", () => {
   });
 
   it("an active signal outranks an unknown one", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], opaque: 3 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], ambient: 3, unplaceable: [] };
     const verdict = composeInUse({ kind: "unrecognised", reason: "x" }, busy);
     expect(verdict.kind).toBe("in-use");
   });
 
   it("names the pid and the command, so the refusal can be acted on", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], opaque: 0 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], ambient: 0, unplaceable: [] };
     const verdict = composeInUse(stale, busy);
     if (verdict.kind !== "in-use") throw new Error("expected in-use");
     expect(verdict.reasons.join(" ")).toContain("pid 7");

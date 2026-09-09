@@ -500,6 +500,106 @@ describe("relock", () => {
   });
 });
 
+describe("the ghost path", () => {
+  it("does NOT delete a worktree that was moved back before the removal ran", () => {
+    /* The race dropping `--force` did not close, reproduced by GPT Sol: plain
+       `git worktree remove` on a registered path removes *whatever is there*, and
+       the ORIGINAL tree restored at that path is valid, so git accepts it and
+       deletes it — taking an ignored only-copy file and any detached commit named
+       only by that tree's HEAD reflog. `git worktree prune` asks the other
+       question — is the registration STILL stale — and a restored tree is not. */
+    const wt = landedWorktree("worktree-comes-back");
+    writeFileSync(path.join(wt, "only-copy.json"), "{}");
+    renameSync(wt, `${wt}-away`);
+    /* Classified while it is genuinely absent... */
+    const entries = listWorktrees(primary);
+    expect(entries.find((e) => e.path === wt)?.present).toBe(false);
+    /* ...and back before the removal acts. */
+    renameSync(`${wt}-away`, wt);
+
+    const out = removeWorktree(primary, "worktree-comes-back", LONG_AGO);
+
+    expect(existsSync(path.join(wt, "only-copy.json"))).toBe(true);
+    expect(out.ok).toBe(false);
+  });
+
+  it("control: a genuinely absent registration is cleared", () => {
+    const wt = landedWorktree("worktree-really-gone");
+    rmSync(wt, { recursive: true, force: true });
+
+    const out = removeWorktree(primary, "worktree-really-gone", LONG_AGO);
+    expect(out.ok).toBe(true);
+    expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(false);
+  });
+
+  it("clears an absent registration that is still LOCKED", () => {
+    /* `prune` exempts locked entries by design — the note in worktree-admin.ts
+       says that is how they reached sixteen — and a real Claude worktree is
+       always locked, so without unlocking first the command could not clear the
+       ghosts it will actually meet. Unlocking a registration whose directory is
+       gone cannot lose anything. */
+    const wt = landedWorktree("worktree-locked-ghost");
+    git(["worktree", "lock", "--reason", "claude session x (pid 999999 start 1)", wt], primary);
+    rmSync(wt, { recursive: true, force: true });
+
+    const out = removeWorktree(primary, "worktree-locked-ghost", LONG_AGO);
+    expect(out.ok).toBe(true);
+    expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(false);
+    /* And its branch is not this command's to judge. */
+    expect(git(["rev-parse", "--verify", "refs/heads/worktree-locked-ghost"], primary)).not.toBe("");
+  });
+});
+
+describe("branch deletion, when somebody else took the branch", () => {
+  it("REFUSES to delete a branch a worktree has checked out, even at the proved tip", () => {
+    /* No A→B→A needed, and the tip CAS cannot see it: `update-ref -d` does not
+       refuse a checked-out branch the way `git branch -D` does. Reproduced by GPT
+       Sol — the peer was left with a symbolic HEAD pointing at a missing ref and a
+       tree reporting "No commits yet".
+       Tested at `proveAndDeleteBranch` rather than through `removeWorktree`,
+       because the race is a peer creating the worktree AFTER the target was
+       resolved as an orphan, and that interleaving cannot be arranged in one
+       process — resolution would simply find the peer's tree. This is the guard
+       itself, at the point where it has to hold. */
+    const wt = landedWorktree("worktree-taken");
+    const trunk = git(["rev-parse", "origin/dev"], primary);
+    expect(git(["rev-parse", "refs/heads/worktree-taken"], primary)).not.toBe("");
+
+    const steps: string[] = [];
+    const ok = proveAndDeleteBranch(primary, "worktree-taken", trunk, steps, false);
+
+    expect(ok).toBe(false);
+    expect(steps.join("\n")).toContain("checked out");
+    expect(git(["rev-parse", "--verify", "refs/heads/worktree-taken"], primary)).not.toBe("");
+    expect(existsSync(path.join(wt, "worktree-taken.txt"))).toBe(true);
+  });
+
+  it("control: the same branch, once no worktree holds it, is deleted", () => {
+    const wt = landedWorktree("worktree-released");
+    const trunk = git(["rev-parse", "origin/dev"], primary);
+    git(["worktree", "remove", wt], primary);
+
+    const steps: string[] = [];
+    expect(proveAndDeleteBranch(primary, "worktree-released", trunk, steps, false)).toBe(true);
+    const check = spawnSync("git", ["rev-parse", "--verify", "refs/heads/worktree-released"], { cwd: primary });
+    expect(check.status).not.toBe(0);
+  });
+});
+
+describe("lookupRef, via the paths that use it", () => {
+  it("does not turn a failed read into 'nothing to delete'", () => {
+    /* `tryGit` conflated "no such ref" with "could not ask", so a transient
+       failure printed a success line over a branch still sitting there. Arranged
+       by pointing the lookup at a directory that is not a repository at all. */
+    const notARepo = path.join(root, "not-a-repo");
+    mkdirSync(notARepo);
+    const steps: string[] = [];
+    const ok = proveAndDeleteBranch(notARepo, "anything", "0".repeat(40), steps, false);
+    expect(ok).toBe(false);
+    expect(steps.join("\n")).not.toContain("nothing to delete");
+  });
+});
+
 describe("gitRemoveWorktree", () => {
   it("clears an ABSENT registration without any --force at all", () => {
     /* Measured, and it is what lets the ghost path drop `--force --force`: a

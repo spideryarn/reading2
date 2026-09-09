@@ -27,7 +27,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export const MODES = ["sessions", "messages", "health", "overseer"] as const;
+export const MODES = ["sessions", "messages", "health", "overseer", "deploys"] as const;
 
 export type Mode = (typeof MODES)[number];
 
@@ -36,6 +36,7 @@ export const MODE_LABELS: Record<Mode, string> = {
   messages: "Recent messages",
   health: "Box health",
   overseer: "Overseer",
+  deploys: "Deploys",
 };
 
 /** Everything the fragment says. `params` is plain, so React can compare it. */

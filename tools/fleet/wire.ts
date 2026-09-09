@@ -1933,3 +1933,288 @@ export type FeedPayload =
     }
   /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */
   | { schema: 1; kind: "unreadable"; why: string };
+
+/* ------------------------------------------------------------------ *
+ * The Deploys tab: what shipped to production, and how stale the record is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The three headings a deploy's reader-facing entries appear under.
+ *
+ * A type rather than the `as const` array, which is a runtime value and belongs
+ * in `deploys.ts` — this file may not hold one. docs/project/changelog.md
+ * § The file has the reasoning for three rather than four: there is no section
+ * for engineering, because a change a reader would notice is a headline change
+ * whatever it took to build.
+ */
+export type DeploySection = "headline" | "enhancement" | "fix";
+
+/** One thing a reader would notice, as the changelog pipeline wrote it. */
+export type DeployEntry = {
+  section: DeploySection;
+  title: string;
+  body: string;
+  /** Where in the app, in the pipeline's words. Null when it named nowhere. */
+  where: string | null;
+  /** Full 40-character shas. The panel renders them as links into the repository. */
+  commits: string[];
+};
+
+/**
+ * One production deploy, as `src/web/changelog-versions.ndjson` has it.
+ *
+ * **Declared here rather than in `deploys.ts` because both ends read it**, and
+ * this file's whole existence is the four fields that reached the browser and
+ * were dropped by a client holding its own unrelated copy of a type. The reader
+ * and the panel import this one.
+ */
+export type DeployVersion = {
+  /** The deploy's timestamp, UTC. It is also the version's id. */
+  version: string;
+  /** Which release this is, counted from the OLDEST line — the number `/changelog` shows. */
+  release: number;
+  deploymentId: string;
+  sha: string;
+  previousSha: string | null;
+  /**
+   * How many commits this deploy shipped, or null when the line does not say.
+   *
+   * **A NON-MERGE COUNT** — the changelog pipeline drops merge commits, because
+   * every one of them here is a `Merge remote-tracking branch 'origin/dev'`
+   * carrying no change of its own. Anything drawn beside it must be counted the
+   * same way or the two are not comparable. **Null is not zero**: a line that
+   * has forgotten what it shipped has not shipped nothing.
+   */
+  commitCount: number | null;
+  /**
+   * Nothing a reader would notice. The common case, and not a fault.
+   *
+   * **Only ever true when `changelogReadable` is** — a deploy whose changelog
+   * could not be read is not a quiet one, and saying so was the bug GPT Sol
+   * found on 2026-09-09.
+   */
+  invisible: boolean;
+  /**
+   * **Whether "what changed" could be read at all**, as distinct from there
+   * being nothing.
+   *
+   * False when `entries` is absent, is not an array, or held nothing readable
+   * on a line that does not claim to be quiet. The panel must draw this as
+   * *we could not read what changed*, never as *nothing changed*: the two look
+   * identical and mean opposite things, and one of them is a headline feature
+   * rendered as an empty deploy.
+   */
+  changelogReadable: boolean;
+  /** Entries on this line that would not parse. Counted, never hidden. */
+  unreadableEntries: number;
+  /** When the changelog job wrote this line — **not** when the deploy happened. */
+  generatedAt: string | null;
+  entries: DeployEntry[];
+};
+
+/**
+ * The three git readings, taken together as one snapshot.
+ *
+ * **One shape rather than three fields, because they must describe one tip.**
+ * `origin/main` is mutable between processes — a dozen agents fetch all night —
+ * so three independently-resolved calls can answer about three different
+ * commits, and the result is a reading of nothing. GPT Sol's P2 finding 6.
+ */
+export type GitSnapshot = {
+  main: MainRef;
+  ancestry: AncestryReading;
+  commitsSince: CountReading;
+};
+
+/**
+ * Production's tip, as the dashboard's checkout last heard it.
+ *
+ * `lastFetchAtMs` is the age of **the view, not of the commit**. The dashboard
+ * never fetches — see `tools/fleet/git-probe.ts` — so a ref nobody has updated
+ * in a week looks exactly like a week with no deploys unless the page can tell
+ * the two apart.
+ */
+export type MainRef =
+  | { kind: "ref"; sha: string; committedAt: string; lastFetchAtMs: number | null }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * Whether the newest recorded deploy is behind production's tip.
+ *
+ * **Three arms, and the third is why this is not a boolean.** `not-ancestor`
+ * means a rollback or a deploy from somebody's working directory; `unknown`
+ * means we could not ask. Collapsed into one `false`, a git that would not run
+ * renders as a rollback that never happened.
+ */
+export type AncestryReading =
+  | { kind: "ancestor" }
+  | { kind: "not-ancestor" }
+  | { kind: "unknown"; why: string };
+
+/**
+ * How many commits separate the newest recorded deploy from production's tip.
+ *
+ * Non-merge, to match `DeployVersion.commitCount`. **`unknown` rather than a
+ * fallback of `0`**: every failure of this question has a plausible, reassuring
+ * wrong answer, and "0 commits behind" is the most reassuring possible way to
+ * say we have no idea.
+ */
+export type CountReading = { kind: "count"; commits: number } | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/deploys`.
+ *
+ * **`deploys` with an empty `versions` and `unreadable` are different claims** —
+ * *we read the record and it is empty* against *we could not read it* — and the
+ * page must never draw them the same way. Same discipline as the health chart's
+ * blank day, and the same reason: the collapsed version is a confident sentence
+ * about production that nobody checked.
+ *
+ * On `commitsSince`, read `routes-deploys.ts` before writing a sentence about
+ * the number. **It is not undeployed work.** Everything on `main` has shipped or
+ * is shipping, since `main` is written only by `npm run deploy`; the number
+ * lumps together deploys the changelog job has not recorded yet and a tip that
+ * has not been deployed, and nothing on this box can separate those without a
+ * Vercel token.
+ */
+export type DeploysPayload =
+  | {
+      schema: 1;
+      kind: "deploys";
+      /** Newest first, at most `limit` of them. */
+      versions: DeployVersion[];
+      /** How many the record holds altogether, so "show more" knows there is more. */
+      total: number;
+      /** What was served, after clamping — so the page can say if it got less. */
+      limit: number;
+      /** A sentence per line of the record that would not parse. Never merely counted. */
+      unreadable: string[];
+      /** Non-blank lines in the record, parsed or not. The denominator. */
+      recordLines: number;
+      /** When the changelog job last wrote a line. **Not** when anything deployed. */
+      lastGeneratedAt: string | null;
+      /** The newest deploy the record knows about, or null for an empty record. */
+      newestRecordedSha: string | null;
+      /**
+       * The git readings, as **one snapshot of one tip**.
+       *
+       * Nested rather than spread across three sibling fields, so it is not
+       * possible to build a payload whose `ancestry` and `commitsSince` were
+       * measured against different commits. GitSnapshot says why that is a real
+       * risk here rather than a theoretical one.
+       */
+      git: GitSnapshot;
+      /** The server's clock, so the page can age the record against it. */
+      servedAtMs: number;
+    }
+  | { schema: 1; kind: "unreadable"; why: string };
+
+/* ------------------------------------------------------------------ *
+ * Starting a session from the web UI, and telling the Overseer about it.
+ *
+ * The FOURTH endpoint to move behind this file, and it moved because of a bug
+ * rather than for tidiness. `LaunchRecord` was declared twice — in
+ * `routes-new.ts` and again in `web/src/new-session-client.ts` — related by
+ * nothing but hope, exactly like `QueueView` before it. A cross-family review
+ * found that a launch which reached `started` could carry no notification state
+ * at all, with no way to tell "not attempted" from "nobody wired it up", and
+ * fixing that needs a discriminated union. The union changes the shape on the
+ * wire, and changing the shape while the declaration is written twice is
+ * invisible to the compiler: `parseLaunch` reads `v["state"]` as a raw string,
+ * so a rename returns `null` for every record and the panel silently renders
+ * nothing. Shaped exactly like docs/postmortems/260908b.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What became of the one line the dashboard sends the Overseer when a session
+ * is started from the web UI.
+ *
+ * **There is no "sent".** Nothing on this box can observe reception —
+ * `sendMessage` types keystrokes at a pane, and whether the agent read them,
+ * whether the Enter landed, and whether the text concatenated with something
+ * half-typed are all outside what we can see. So the success arm is
+ * `submitted`, which claims exactly what happened, and every failure carries the
+ * `Delivery` word that path already returns.
+ *
+ * The four not-a-send arms are four different facts, and the union exists so
+ * the launch record cannot flatten them into "not sent": nobody holds the role,
+ * which is what a box looks like after a reboot and is a real answer; the role
+ * is contested, which is a fault to report and never a pick; we could not
+ * establish who holds it or could not address them; and we found the holder and
+ * the send would not go.
+ */
+export type NotifyOutcomeView =
+  | { kind: "submitted"; to: string; paneId: string }
+  | { kind: "no-holder" }
+  | { kind: "contested"; names: readonly string[] }
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
+  | { kind: "unknown"; to: string; why: string };
+
+/**
+ * Where a launch's notification has got to.
+ *
+ * `pending` is a real state and is set **before** the send is attempted, so a
+ * notification can never delay the launch result — the page says a session
+ * started the moment it started, and fills this in afterwards.
+ */
+export type NotifyState = { kind: "pending" } | NotifyOutcomeView;
+
+/**
+ * **THE DISCRIMINANT AND ITS NOTIFICATION, IN ONE FIELD, AND THE NESTING IS THE
+ * POINT.**
+ *
+ * A union on a top-level `state` would be the obvious shape and it cannot be
+ * used here: `routes-new.ts` mutates its record in place, and that record's
+ * OBJECT IDENTITY is load-bearing — `launch()` ends with
+ * `if (inFlight === record)`, a reference comparison an earlier review put there
+ * so that two launches being live at once is loud rather than silent. Moving a
+ * record between arms of a top-level union means replacing the object, which
+ * breaks that check.
+ *
+ * Nesting the discriminant under one field keeps the identity — `record.progress
+ * = {…}` is a single assignment — while still making the bad state
+ * unrepresentable: a `starting` launch cannot carry an outcome, and a `started`
+ * one cannot carry nothing.
+ */
+export type LaunchProgress =
+  | { state: "starting"; notification: { kind: "not-attempted" } }
+  | { state: "started"; notification: NotifyState }
+  /** A launch that never started has nothing to tell anyone about. */
+  | { state: "failed"; notification: { kind: "not-applicable" } };
+
+/** One attempt, from the moment it is accepted to whatever became of it. */
+export type LaunchRecordView = {
+  /** Ours, not the box's — the handle the client polls with. */
+  id: string;
+  progress: LaunchProgress;
+  /** The tmux session name: what the caller asked for, or the opaque one minted for them. */
+  name: string | null;
+  /** What was ASKED for. In repo mode the box may choose another — `startedDir`. */
+  dir: string;
+  /** `repo` is gjd-remote's verified origin resolution; `dir` is the `-d` escape hatch. */
+  resolution: "repo" | "dir" | null;
+  /** The directory the box says it actually started in, once it has said so. */
+  startedDir: string | null;
+  /** The prompt's size. **Never the prompt.** */
+  promptBytes: number;
+  requestedAt: string;
+  finishedAt: string | null;
+  /** Why it failed, in a sentence for a person. */
+  error: string | null;
+  /** A failure that MAY have started something — a timeout, a launcher that vanished. */
+  maybeStarted: boolean;
+  /** Anything true but awkward — a start whose name could not be read back. */
+  note: string | null;
+};
+
+/** Everything the client needs to draw the button's state. */
+export type NewSessionStatusView = {
+  ok: true;
+  /** A launch is in flight; a second POST would be refused. */
+  busy: boolean;
+  /** Milliseconds until a POST would be accepted; 0 when it would be now. */
+  retryAfterMs: number;
+  /** Newest first, capped — this is a live view, not a history. */
+  launches: readonly LaunchRecordView[];
+};

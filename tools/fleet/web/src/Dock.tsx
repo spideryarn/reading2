@@ -20,7 +20,7 @@
  * nothing here needs touching — `MODES` in mode.ts is the list, and the bar
  * measures its own fit (fit.ts).
  */
-import { Gauge, ListChecks, MessagesSquare, Network, RefreshCw, type LucideIcon } from "lucide-react";
+import { Gauge, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -46,6 +46,7 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
   messages: MessagesSquare,
   health: Gauge,
   overseer: Network,
+  deploys: Rocket,
 };
 
 const MODE_TIPS: Record<Mode, Tip> = {
@@ -73,6 +74,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Overseer",
     what: "What this tool is meant to become: a coordinator agent rather than a person with a mouse.",
     how: "It is a roadmap, not a feature. Nothing on that panel is live, and it says so.",
+  },
+  deploys: {
+    head: "Deploys",
+    what: "Every production deploy there is a written record of, newest first: when it shipped, what a reader would have noticed, and the commits behind it.",
+    /* The non-obvious half is that this is a FILE rather than a live reading —
+       and it points at where the staleness is stated rather than promising a
+       freshness here, which is `usage-limits-tab`'s note: a tooltip that says
+       "only as fresh as the last run" invites the question the header already
+       answers with a number. */
+    how: "The record is a committed file, not a call to Vercel — this box has no token for one — so the first line of the tab says how far behind main it has fallen.",
   },
 };
 
