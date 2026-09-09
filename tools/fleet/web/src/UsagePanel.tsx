@@ -669,15 +669,26 @@ function Reading({
         Cached headroom
       </h3>
       <div data-slot="usage-headroom" className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
-        {summary.cache.kind === "attributed" && summary.cache.windows.length > 0
-          ? summary.cache.windows.map((window) => (
-              <WindowStatCard key={window.window} window={window} asOf={asOf} skew={skew} />
-            ))
+        {summary.cache.kind === "attributed"
+          ? summary.cache.windows
+              .filter((window) => window.kind !== "unknown")
+              .map((window) => <WindowStatCard key={window.window} window={window} asOf={asOf} skew={skew} />)
           : null}
-        {summary.cache.kind === "attributed" && summary.cache.windows.length === 0 ? (
+        {summary.cache.kind === "attributed" && summary.cache.windows.every((w) => w.kind === "unknown") ? (
+          /* Every entry unusable reads the same to a reader as none at all: the
+             answer is that there is no headroom figure here. The entries
+             themselves are still listed below, so this is a summary and not a
+             deletion. */
           <StatCard
             label="Headroom"
-            value={{ kind: "absent", state: "unknown", why: "The cache carried no windows at all." }}
+            value={{
+              kind: "absent",
+              state: "unknown",
+              why:
+                summary.cache.windows.length === 0
+                  ? "The cache carried no windows at all."
+                  : "No window in the cache carried a usable number.",
+            }}
             tone="unknown"
           />
         ) : null}
@@ -723,6 +734,43 @@ function Reading({
           />
         ) : null}
       </div>
+
+      {/* **THE ENTRIES THAT NEVER CARRIED A NUMBER, AS A COUNT.**
+          `~/.claude.json`'s cache is a blob and not all of it is headroom:
+          measured on the live box, `nimbus_quill`, `spend` and
+          `member_dashboard_available` sit alongside `five_hour` and
+          `seven_day`, each with no `resets_at` and so no way to check whether
+          it describes anything. Drawn as full cards they took most of the first
+          screenful at 390px with five near-identical lines apiece — three
+          violet cards where a red wall used to be, which is a quieter version
+          of the same disease.
+
+          **Summarised, never dropped**, and the same partition `Incidents`
+          makes one section below for the same reason: none of these is a thing
+          to act on, and a count with the entries one tap away says so without
+          claiming they do not exist. The count is on the face, so an absence
+          cannot become invisible by being folded — what is behind the
+          disclosure is which entries, not whether there were any. */}
+      {summary.cache.kind === "attributed" &&
+      summary.cache.windows.some((w) => w.kind === "unknown") &&
+      !summary.cache.windows.every((w) => w.kind === "unknown") ? (
+        <details data-slot="usage-unusable" className="tw:mt-2">
+          <summary className="tw:cursor-pointer tw:text-note tw:text-ink-faint">
+            {summary.cache.windows.filter((w) => w.kind === "unknown").length} more cache{" "}
+            {summary.cache.windows.filter((w) => w.kind === "unknown").length === 1 ? "entry" : "entries"} carried no
+            usable number
+          </summary>
+          <ul className="tw:mt-1 tw:space-y-1 tw:text-note tw:text-ink-faint">
+            {summary.cache.windows
+              .filter((w) => w.kind === "unknown")
+              .map((window) => (
+                <li key={window.window}>
+                  <span className="tw:font-mono">{window.window}</span> — withheld: {window.why}
+                </li>
+              ))}
+          </ul>
+        </details>
+      ) : null}
 
       {/* ------------------------------------------------------- 3 · WHY --
           The producer's reasons stay on the page rather than going into a

@@ -102,13 +102,29 @@ they routinely name the cause outright before anybody has argued about taste.
 
 - [ ] **Count the distinct font sizes actually rendered**, and how often each occurs. A page whose
       sizes all sit within a few pixels of each other has no dominant element and *cannot* be
-      scanned, whatever else is done to it. Count the weights too.
+      scanned, whatever else is done to it. Count the weights too. **The diagnostic is the spread,
+      not the count** — fixing this usually makes the number of distinct sizes go *up*, because a
+      scale is a set of deliberately separated steps and what you started with was a cluster. A
+      redesign that reduced the count by flattening everything to one size would score better on the
+      tally and be worse.
 - [ ] **Count the distinct text colours, by frequency.** If the quietest colour is the most common
       one, nothing on the page is quiet: the reader's eye has nothing to land on, so it lands on
       whatever happens to be accented instead.
 - [ ] **Full page height at the narrowest supported width**, in CSS pixels, and the count of
       interactive elements on it. Both are proxies for how much the screen is asking of somebody
       holding a phone.
+- [ ] **Count the interactive elements by tabbing, not by selector**, on any page with a disclosure.
+      A `querySelectorAll` of buttons and links counts everything inside a *closed* `<details>`, and
+      the obvious filters do not save you: `content-visibility` clears neither `offsetParent` nor
+      `getClientRects()`, so "visible" checks return the same inflated number with more confidence.
+      Press Tab a few hundred times and count what actually receives focus. Measured on one page,
+      **both numbers from that same page after the change**: the selector said 171, the tab cycle
+      said 34.
+- [ ] **Do not compare a before taken one way with an after taken the other.** The trap sits right
+      next to the rule above: once you switch method for the "after", the improvement you report is
+      part real and part instrument. Either re-measure the "before" the same way, or say in the same
+      breath which number came from which method — otherwise the next person to re-measure finds a
+      figure that does not match and cannot tell which half to distrust.
 - [ ] **Does it scroll horizontally?** `scrollWidth > clientWidth` at the narrow width is a bug
       almost every time.
 - [ ] **The squint test.** Blur the screenshot until you cannot read words. What is still visible is
@@ -250,6 +266,11 @@ The sources genuinely disagree, and **the task decides it, not the width**:
       ([NN/g](https://www.nngroup.com/videos/progressive-disclosure/))
 - [ ] **Filters and sort are zoom, not new information.** If a filter reveals something that was not
       derivable from the overview, the overview is lying by omission.
+- [ ] **De-duplicate down the column before you hide along the row.** The bigger win is usually
+      moving what repeats on every row up onto a group heading — a date, a repo, an owner — not
+      folding away what is unique to each. Measured on one list: what turned a two-line row into a
+      one-line row was the date moving to the day heading, not the disclosure that had just been
+      added. Hiding the unique part costs a tap; removing the repeated part costs nothing.
 
 Folklore flag: "30–50% faster with progressive disclosure" circulates widely and traces to a
 secondhand citation. Do not quote it as a number.

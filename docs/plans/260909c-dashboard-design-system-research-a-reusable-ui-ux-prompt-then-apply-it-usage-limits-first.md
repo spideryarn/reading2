@@ -159,6 +159,16 @@ wrong at 390px and here does not. **Usage limits is not the tallest tab — it i
 complaint is not about length, and a plan that set out to shorten it would be answering a question
 Greg did not ask.
 
+**Correction to the interactive-element column, 2026-09-09.** Every figure in it is a
+`querySelectorAll` count and therefore **an over-count on any tab with a disclosure** — session
+`deploys-ui` measured a page where the selector said 171 and a real 250-press Tab cycle said 34.
+The obvious rescue does not work: `content-visibility` on a closed `<details>` clears neither
+`offsetParent` nor `getClientRects()`, so a "visible" filter returns the same wrong number with more
+confidence. Deploys is the tab most affected, being almost entirely disclosures now; the figures
+above stand as a *relative* signal between tabs measured the same way, and nowhere else. The rule and
+its sibling — do not compare a before taken one way with an after taken the other — are in
+[design-a-screen.md § Measure](../reusable/design-a-screen.md).
+
 #### Reading the Usage tab off the pixels, not off the DOM
 
 Mine, from `usage-390-full.png`, having looked at it rather than at a measurement of it:
@@ -364,6 +374,48 @@ The general form, which is now the last item in
 words appear cannot see how a screen reads.** Both of these were a green suite and a wrong picture,
 and the only instrument that found them was a screenshot looked at by someone asking whether the
 answer was where it should be.
+
+**And a third, from the same instrument, after the first two were fixed.** With the alarm colour
+corrected the tab still gave most of its first screenful to three cards saying nearly the same five
+lines: `nimbus_quill`, `spend` and `member_dashboard_available` — entries that sit in
+`~/.claude.json`'s blob alongside the real windows, carry no `resets_at`, and are not headroom at
+all. A violet wall instead of a red one is the same disease. They are now folded into a disclosure,
+**count on the face and entries one tap behind**, which is the partition `Incidents` already makes
+one section below and for the same stated reason: none of them is a thing to act on.
+
+Whether that fold is a legitimate summary or the redesign quietly demoting an honest absence is the
+question this plan is least sure of, and it is the one the code review is asked to challenge hardest.
+
+#### What the rewrite actually moved, at 390px
+
+| | Before | After |
+|---|---|---|
+| Page height | 1,922px | **1,478px** (−23%) |
+| Where the headroom number is | 13px, third block, fourth screenful | **22px, first screenful** |
+| Distinct font sizes | 7 | 8 |
+| Distinct text colours | 6 | 7 |
+| Horizontal overflow | none | none |
+
+**The size and colour counts going UP is the point, not a regression.** A scale is a set of
+deliberately separated steps; what was there before was a cluster, and flattening a page to fewer
+sizes would score better on the tally and read worse. The diagnostic was always the spread. That
+clarification is now in the checklist, because the tally is exactly the kind of number a later agent
+would optimise in the wrong direction.
+
+Above the fold on a phone, in order: the verdict, `CACHED HEADROOM`, both window cards — one reading
+`42% left · 58% used · resets in 5d 23h`, the other `Unknown` because its cached number describes a
+window that reset 182 minutes ago — then the fold, then *Why*. Before, the first screenful was three
+paragraphs of provenance.
+
+#### Two things left deliberately undecided until the code review answers
+
+- **`windowStat`'s tone thresholds** — `left <= 10` alarm, `<= 25` needs — are numbers I invented.
+  A nearly-full window really is closer to blocking, so this is arithmetic rather than judgement;
+  but the producer already computes `approaching` with rules of its own, and a card that re-derives
+  a severity is the *second interpretation of one measurement* this file's header forbids. Leaning:
+  keep the colour, take the thresholds from the producer if it will give them, drop them if not.
+- **`Cached headroom` as a heading** over a group that can contain a `Withheld` entry, which is by
+  definition not headroom.
 - [ ] Decide the three-zone timestamps. They are deliberate — Greg moves between London and Athens —
       but they are a large fraction of the tab's height, and the ten-second test says a wall-clock
       instant in three zones changes belief rather than action for every line except the *next
