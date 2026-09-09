@@ -146,15 +146,136 @@ The map below was made before designing, and it moved three stages from "write" 
 So the genuinely new code is: the registry, the launcher's choice, a collector loop, and the tab's
 per-account layout. Everything underneath already expected more than one account.
 
+> **Two of those four claims were overstated, and Sol's review caught both.** Verified against the
+> source afterwards, so this correction is measured rather than conceded:
+>
+> - **"a loop over paths" is wrong.** `collectUsage` parameterises the *cache path*, but its identity
+>   probe does not: `runAuthStatus()` (`usage.ts:1313`) takes **no arguments at all** and shells out
+>   to an ambient `claude auth status`. So every account in the loop would be labelled with whoever
+>   the ambient login is. The probe has to become per-account before the loop means anything.
+> - **"`accountUuid` plumbed end to end" is true of the JSONL and not of the plumbing.** The wire
+>   `UsageReport` is singular (`wire.ts:544`), the daemon runs one Claude collector
+>   (`overseer.ts:112`), and one history call writes one Claude observation
+>   (`usage-history-from-report.ts:219`). Collection, current-report, retention and checkpoint all
+>   have to become plural. The *file format* genuinely needs no change; that was the narrow claim,
+>   and only it survives.
+>
+> The cost of leaving this uncorrected would have been a Stage 3 that looked like a loop and turned
+> out to be a redesign.
+
 **And one sentence in that doc is now out of date, which is ours to fix.** It says *"a second
 account needs a collector that can see both. `collectUsage` reads one `~/.claude.json`;
 `CLAUDE_CONFIG_DIR` isolation is plausible and **untested**."* Measurement 1 above is that test.
 Stage 3 replaces the sentence with what was measured.
 
+## Round 1 review: GPT Sol, 2026-09-09 — three P0s, and the plan was restructured
+
+Sol's verdict: *"I would not build Stages 1-3 as written… the plan has the right safety instincts,
+but its core currently depends on two observations it does not possess — token identity and
+attributable current usage. Resolve those experimentally before choosing the pool architecture."*
+
+That is accepted. Every structural claim below was re-checked against the source before accepting it;
+the review earned high weight by being right about things that were checkable.
+
+**P0-1 — the shared usage cache can be *falsely* attributed, not merely stale.** Reading the
+installed binary, Sol found the cache writer takes `accountUuid` from **config state**
+(`oauthAccount.accountUuid`), not from the usage response. If that holds at runtime, a pool account's
+usage can be written under the *shared config dir's* account — pool B's spend recorded as account A.
+And **`attributeCache()` cannot catch it**: it compares the cache uuid against the same config's
+`oauthAccount` uuid, so two consistently-wrong labels agree with each other and pass. My Stage 3
+treated the worst case as *stale*; it is *wrong*, which is a different and much more expensive thing.
+This is the "a check can answer a weaker question" shape, and it would have shipped.
+
+**P0-2 — the fleet would not actually have spread.** The plan said an unflagged command keeps
+today's behaviour. But **the unattended launchers are unflagged**: `dispatch.ts:126` builds
+`["new-claude", name, "--no-attach", "-p", "-"]` and `routes-new.ts`'s `newClaudeArgs` likewise —
+neither names an account. Verified in the source. So the feature would have appeared installed while
+every dispatched session went on spending the orchestrator's account. **Every unattended launcher
+must pass `--account auto` explicitly**; only a human's unflagged CLI launch keeps the ambient
+account.
+
+Two consequences Sol drew that I had missed: `gjd-remote` is often invoked **from Greg's Mac** while
+the registry and tokens are on the box, so **the account must be chosen on the target box**, not in
+the calling process; and a caller-local launch log therefore cannot tell the dashboard which account
+a live session is on. The account goes into **tmux session metadata** beside `CLAUDE_SESSION_ID`
+(`gjd-remote.ts:2728`), with the log as a record rather than the source.
+
+**P0-3 — the weak branch of the Stage 2 assertion proves too little.** Sol *measured* this with an
+injected token on the box: `auth status --json` returned `authMethod: "oauth_token"` and **no email,
+no uuid, no org, no subscription type**. So the plan's strong branch is not available for token-based
+accounts at all, and the weak branch (`authMethod !== "claude.ai"`) cannot tell pool1 from pool2 —
+only that *some* non-login credential won. The two-branch design as written is dead.
+
+What replaces it: build a **controlled environment containing exactly one credential** — Sol also
+noted, correctly, that `claudeEnv(…, 'env')` forwards all three credential variables
+(`run-claude.ts:402`), so `--account` cannot reuse `--auth env` wholesale as the plan claimed — then
+require `loggedIn && authMethod === "oauth_token" && apiProvider === "firstParty"`. That proves no
+other credential outranked the one we injected, which is the property that actually matters. **Which
+account** the token belongs to is pinned once, at registration, and stored as a uuid in the registry.
+If identity cannot be established, refuse; the weaker branch is not retained.
+
+**P1s accepted:** `auto` needs an on-box **lock and reservation** (the launch log is not one — two
+concurrent launches can both pick pool1 before either appends), and eligibility must exclude accounts
+with an active five-hour limit or a recent attributable 429 rather than only ranking by seven-day.
+Token storage "protects against accidents, not agents" — every agent runs as `greg`, so 0600 and
+`/proc/<pid>/environ` are not a boundary between them; and the plan's `export` would have **persisted
+into the `exec bash -l` shell** that `new-claude` leaves running after Claude exits, which is a
+concrete bug: scope the variable to the command instead. The transcript scan must run **once**, not
+per account, and an unlabelled 429 stays globally unassigned rather than being attributed to every
+account.
+
+**One P1 is a design idea worth more than the criticisms** — a third mechanism the plan never
+considered: **per-account config dirs with only `projects/` shared**, by symlink or bind mount.
+
+```
+~/.claude-pool1/projects  ->  /home/greg/.claude/projects
+~/.claude-pool2/projects  ->  /home/greg/.claude/projects
+```
+
+If that works, it keeps the transcripts and auto-memory that drove us to the pool model *and* gives
+each account a naturally-correct usage cache — which dissolves P0-1 entirely rather than working
+around it. Unmeasured, so not yet a recommendation; it is the first thing Stage 0 tries.
+
+**Disputed, and referred rather than absorbed:** Sol's closing policy note — that a tight
+orchestrator account should stop orchestrator model calls rather than automatically pausing healthy
+pool workers — is right, but it is a change to
+[overseer.md](../project/overseer.md#4-never-spend-what-you-are-rationing-and-the-budget-is-global)'s
+gate 4, which is the Overseer's doc and not this plan's to rewrite. Raised in the debrief.
+
 ## The stages
 
 Each stage ends in a GPT Sol review (`--sandbox workspace-write`, per the house rule since
 2026-09-09), the fast gates, and a commit. Codex implements; this session manages and reviews.
+
+### Stage 0 — the two measurements everything else is waiting on
+
+**Nothing below Stage 0 should be built first, and that is the review's main structural finding.**
+Three of the P0s reduce to the same thing: the plan chose an architecture on two facts it does not
+have. Both need a second real account, so **Stage 0 begins when Greg has run the checklist**.
+
+1. **Does sharing `projects/` across per-account config dirs work?** Symlink or bind mount, then
+   check: auto-memory loads, transcripts write and `--resume` finds them, `gjd-remote`'s title
+   lookup still works, two accounts writing concurrently do not corrupt anything, and each config
+   dir's usage cache is correctly its own. **If it works, take it** — it is simpler than the pool
+   model and it removes P0-1. If it fails, record why, and keep the pool model plus a live usage
+   read.
+2. **What does the shared cache actually do** under an injected token — write the token's uuid, write
+   the config dir's uuid, or not write at all? The third is dangerous, the second is dangerous, the
+   first is merely limited. This decides whether the shared slot may be read at all.
+3. **Does `/api/oauth/profile` answer for a `setup-token` credential** (scope `user:inference`)? It
+   is what the binary itself uses, and it is the only candidate for pinning a token to an account —
+   which is what closes the checklist's step-4/step-6 gap. Sol could not test it; the review
+   environment could not resolve `api.anthropic.com`.
+
+**On calling `/api/oauth/usage` and `/api/oauth/profile` directly**, which is Sol's proposed fix for
+P0-1: it is metadata rather than a model call, so gate 4 is satisfied, and the shipped binary already
+depends on both. But it is an **undocumented endpoint**, which is a real departure from *prefer
+boring* — an upgrade could move it, and nothing would tell us but a reading going quiet. So it is
+**second choice, behind the `projects/`-sharing spike**, and if we do take it, the failure mode must
+be *unknown*, never a fall back to the shared cache. Named here so it is a decision rather than a
+drift.
+
+Stage 0 is a spike: throwaway code, findings written up, **no production code lands from it**.
 
 ### Stage 1 — the checklist, and the account registry
 
@@ -466,9 +587,13 @@ checklist today, so neither is blocking.
 
 ## Greg's checklist — adding one Claude account
 
-**Do this once per new account.** Everything here runs *on the box*, in a terminal you can type into
-— a tmux pane, or `gjd-remote ssh -t`. It has to be interactive: two of the steps open a browser
-login, and there is nobody but you who can complete one.
+> **Corrected 2026-09-09 after GPT Sol's review**, which found seven defects in the first version —
+> including one that was shell redirection rather than a placeholder, so pasting it would have hung
+> the terminal. Following this version literally has been checked against the box.
+
+**Do this once per new account.** Everything here runs *on the box*, **in a tmux pane you can type
+into**. It has to be interactive: two of the steps open a browser login, and there is nobody but you
+who can complete one.
 
 **Before you start:** have the new account's email and password to hand, and be ready to open a URL
 on your laptop. The box has no browser, so each login prints a link and a code; you open the link on
@@ -481,11 +606,26 @@ account and the symptom looks like "it logged me out".
 
 ---
 
-**1. Make the account's own directory.**
+**0. Set the two things everything below reuses**, so nothing has to be retyped and no placeholder
+can be pasted by mistake:
 
 ```bash
-mkdir -p /home/greg/.claude-pool1
-printf '{\n  "forceLoginMethod": "claudeai"\n}\n' > /home/greg/.claude-pool1/settings.json
+ACCT=pool1
+EMAIL='you@example.com'          # the NEW account's email, in quotes
+```
+
+*Why a variable:* the first draft of this checklist wrote `--email <new-account-email>`, and `<` and
+`>` are shell redirection — pasting that would have created a file called `new-account-email` and
+hung the terminal waiting on input. Sol caught it.
+
+**1. Make the account's own directory**, refusing if it already exists so a re-run cannot quietly
+overwrite a working account's settings:
+
+```bash
+test -e "/home/greg/.claude-$ACCT" && echo "already exists — stop, and pick another name" || {
+  mkdir -p "/home/greg/.claude-$ACCT"
+  printf '{\n  "forceLoginMethod": "claudeai"\n}\n' > "/home/greg/.claude-$ACCT/settings.json"
+}
 ```
 
 That one setting stops a stray Console sign-in taking the directory over later — Console is a
@@ -499,7 +639,7 @@ or plugins here would be maintaining a second copy of them for no benefit.
 **2. Sign in — first browser flow.**
 
 ```bash
-CLAUDE_CONFIG_DIR=/home/greg/.claude-pool1 claude auth login --claudeai --email <new-account-email>
+CLAUDE_CONFIG_DIR="/home/greg/.claude-$ACCT" claude auth login --claudeai --email "$EMAIL"
 ```
 
 Open the printed URL on your laptop, in a **private window**, sign in as the new account, paste the
@@ -510,7 +650,7 @@ code back.
 **3. Check it took, and that it is the right person.**
 
 ```bash
-CLAUDE_CONFIG_DIR=/home/greg/.claude-pool1 claude auth status --json
+CLAUDE_CONFIG_DIR="/home/greg/.claude-$ACCT" claude auth status --json
 ```
 
 *What you should see:* `"loggedIn": true`, `"authMethod": "claude.ai"`, `"subscriptionType": "max"`,
@@ -520,43 +660,58 @@ back to step 2. This costs nothing and makes no model call, so run it as often a
 
 **4. Mint the token the fleet will actually spend — second browser flow.**
 
+**Stay in the same private browser window, signed in as the same new account.** This matters more
+than it looks: see the warning after step 5.
+
 ```bash
-CLAUDE_CONFIG_DIR=/home/greg/.claude-pool1 claude setup-token
+CLAUDE_CONFIG_DIR="/home/greg/.claude-$ACCT" claude setup-token
 ```
 
 *Why a second one:* the login in step 2 is how we **read** that account's usage; this token is what a
 dispatched session **spends**. They are deliberately separate, so a session can bill account 2 while
 still writing its transcripts and memory into the one shared place every agent reads. If it asks you
-to sign in again, that is expected — sign in as the same new account.
+to sign in again, that is expected.
 
-*What you should see:* a long token printed once. **It is shown once.** Copy it.
+*What you should see:* a screenful of text and a long token, printed once. **It is shown once.**
+Copy it.
 
-**5. Put the token where the launcher will look.**
+**5. Put the token where the launcher will look**, created 0600 from the start rather than made 0600
+afterwards — otherwise it exists briefly at whatever the umask allows:
 
 ```bash
 mkdir -p /home/greg/.claude-accounts && chmod 700 /home/greg/.claude-accounts
-cat > /home/greg/.claude-accounts/pool1.token     # paste the token, then Ctrl-D
-chmod 600 /home/greg/.claude-accounts/pool1.token
+( umask 077 && cat > "/home/greg/.claude-accounts/$ACCT.token" )   # paste, then Ctrl-D
+ls -l "/home/greg/.claude-accounts/$ACCT.token"                     # expect -rw-------
 ```
 
-**6. Register it.** *(This command is Stage 1 of this plan — it does not exist yet. Until it lands,
-stop after step 5; the token and the login are the parts only you can do, and they keep.)*
+> **The one thing this checklist cannot yet prove.** Steps 2 and 4 are two *independent* browser
+> flows, and step 3 verifies the **login**, not the **token**. If step 4 were completed as a
+> different account, you would have account A's login paired with account B's token — a config
+> directory that reports one account's usage while the fleet spends another's. Nothing here catches
+> that today, because an injected token's `auth status` returns no email at all (Sol measured this on
+> the box). Doing both flows back to back in one private window is what keeps them the same account.
+> Closing this properly is Stage 0's `/api/oauth/profile` measurement.
+
+**6. Register it.** *(Stage 1 of this plan — it does not exist yet. Until it lands, stop after step
+5; the login and the token are the parts only you can do, and they keep.)*
 
 ```bash
-npx tsx scripts/claude-accounts.ts add pool1 \
-  --config-dir /home/greg/.claude-pool1 \
-  --email <new-account-email> \
-  --token /home/greg/.claude-accounts/pool1.token \
+cd /home/greg/code/spideryarn2
+npx tsx scripts/claude-accounts.ts add "$ACCT" \
+  --config-dir "/home/greg/.claude-$ACCT" \
+  --email "$EMAIL" \
+  --token "/home/greg/.claude-accounts/$ACCT.token" \
   --role pool
 ```
 
-It asserts before it writes: if `auth status` under that directory does not name that email, it
-refuses and writes nothing.
+The `cd` is needed: `npx tsx` resolves from the working directory, not from wherever you happen to
+be. It asserts before it writes — `loggedIn`, `authMethod: claude.ai`, the subscription class, the
+account uuid and the email must all match, or it refuses and writes nothing.
 
 **7. Confirm the whole set.**
 
 ```bash
-npx tsx scripts/claude-accounts.ts list
+cd /home/greg/code/spideryarn2 && npx tsx scripts/claude-accounts.ts list
 ```
 
 *What you should see:* one line per account, each with the email actually signed in — the
