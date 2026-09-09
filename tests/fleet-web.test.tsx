@@ -126,7 +126,7 @@ import { statePayload } from "../tools/fleet/state";
    payloads from an OLDER server; what the annotation buys is that every field
    they do name is a field the server really sends, spelled the way it spells
    it. A fixture that is deliberately malformed says so — see `malformed`. */
-import type { FleetState as FleetStateWire } from "../tools/fleet/wire";
+import type { Action as ActionWire, FleetState as FleetStateWire } from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -5739,7 +5739,7 @@ const CONTINUE_WIRE = {
   text: "Carry on with the task you were given. Before you do, say in one sentence what you are resuming.",
   form: "prose",
   needsConfirm: false,
-};
+} satisfies ActionWire;
 
 const COMPACT_WIRE = {
   effect: "spoken",
@@ -5750,7 +5750,7 @@ const COMPACT_WIRE = {
   text: "/compact Keep the original brief, the plan doc and where you are in it.",
   form: "slash-command",
   needsConfirm: true,
-};
+} satisfies ActionWire;
 
 const REMOVE_WORKTREE_WIRE = {
   effect: "enacted",
@@ -5760,7 +5760,7 @@ const REMOVE_WORKTREE_WIRE = {
   summary: "Delete this agent's working tree, after the check that git cannot do.",
   needsConfirm: true,
   gate: "npm run worktree:check must exit 0 inside the tree first. git status is not that check.",
-};
+} satisfies ActionWire;
 
 const KILL_SUITES_WIRE = {
   effect: "enacted",
@@ -5770,7 +5770,7 @@ const KILL_SUITES_WIRE = {
   summary: "SIGTERM every vitest runner on the box.",
   needsConfirm: true,
   gate: "Each pid must satisfy the vitest-runner rule and none of the standing refusals.",
-};
+} satisfies ActionWire;
 
 const BROADCAST_WIRE = {
   effect: "broadcast",
@@ -5780,7 +5780,12 @@ const BROADCAST_WIRE = {
   summary: "Tell every steerable session the box is loaded, each with its own resume time.",
   needsConfirm: true,
   stagger: { minMinutes: 5, windowMinutes: 60 },
-};
+} satisfies ActionWire;
+
+/** A parser test's explicit escape hatch for bytes the server could not produce. */
+function malformedAction(over: Record<string, unknown>): Record<string, unknown> {
+  return over;
+}
 
 /**
  * One queue, as the catalogue route serialises it.
@@ -6049,7 +6054,7 @@ describe("the action buttons, which are the server's vocabulary", () => {
   });
 
   it("names an action it cannot classify, and refuses to offer it as a button", async () => {
-    const strange = { id: "reboot-the-box", scope: "session", label: "Reboot", effect: "detonate" };
+    const strange = malformedAction({ id: "reboot-the-box", scope: "session", label: "Reboot", effect: "detonate" });
     openWith([CONTINUE_WIRE, strange]);
     await act(async () => {});
     expect(container.textContent).toContain("reboot-the-box");
@@ -7348,7 +7353,7 @@ describe("the bodies these buttons post, which are pure functions of the row", (
 
 describe("what comes off the actions wire", () => {
   it("refuses an entry with no id, since an id is what a press posts back", () => {
-    expect(parseAction({ effect: "spoken", label: "No id" })).toBeNull();
+    expect(parseAction(malformedAction({ effect: "spoken", label: "No id" }))).toBeNull();
     expect(parseAction(CONTINUE_WIRE)?.id).toBe("continue");
   });
 
@@ -7405,7 +7410,7 @@ describe("what comes off the actions wire", () => {
   });
 
   it("counts an entry it cannot classify without losing the catalogue around it", () => {
-    const read = parseActionsFeed({ actions: { session: [CONTINUE_WIRE, { id: "mystery" }], box: [] }, queues: [] });
+    const read = parseActionsFeed({ actions: { session: [CONTINUE_WIRE, malformedAction({ id: "mystery" })], box: [] }, queues: [] });
     expect(read?.catalogue).toEqual({ kind: "read" });
     expect(read?.actions.map((a) => a.id)).toEqual(["continue", "mystery"]);
   });

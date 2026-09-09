@@ -73,6 +73,9 @@
    these types reaches `node:child_process` transitively, and this project has no
    node types. See wire.ts's header. */
 import type {
+  ActionScope as ActionScopeWire,
+  BroadcastAction as BroadcastActionWire,
+  EnactedAction as EnactedActionWire,
   HoldBasis,
   HoldOutcome,
   HoldReleaseGesture,
@@ -82,6 +85,7 @@ import type {
   QuarantineHoldView,
   QueuedItemView as QueuedItemViewWire,
   QueueView as QueueViewWire,
+  SpokenAction as SpokenActionWire,
   UncertainSendOrigin,
   UncertainSendReading,
 } from "../../wire.js";
@@ -115,7 +119,7 @@ export const RELEASE_HOLD_URL = "api/actions/hold/release";
  * ------------------------------------------------------------------ */
 
 /** Where an action is offered. Anything else parses to `unrecognised`. */
-export type ActionScope = "session" | "box";
+export type ActionScope = ActionScopeWire;
 
 /**
  * One entry of the catalogue.
@@ -126,38 +130,34 @@ export type ActionScope = "session" | "box";
  * reason, and cannot be pressed. Rendering it as a button would mean offering a
  * tap whose consequences nothing on screen can describe.
  */
+export type ClientSpokenAction = Omit<
+  SpokenActionWire,
+  /* Re-typed: an id is parsed from somebody else's JSON, so a newer server's
+     spoken action remains usable rather than becoming a type lie. */
+  "id"
+  /* Declined at the boundary: none. Every remaining field is carried whole. */
+> & { id: string };
+
+export type ClientEnactedAction = Omit<
+  EnactedActionWire,
+  /* Re-typed: a newer server's id must still be named on this page. */
+  "id"
+  /* Declined at the boundary: none. Every remaining field is carried whole. */
+> & { id: string };
+
+export type ClientBroadcastAction = Omit<
+  BroadcastActionWire,
+  /* Re-typed: `id` is read from JSON, and `stagger` becomes null when an older
+     server made no claim about it or this page cannot read the claim. */
+  | "id"
+  | "stagger"
+  /* Declined at the boundary: none. Every remaining field is carried whole. */
+> & { id: string; stagger: { minMinutes: number; windowMinutes: number } | null };
+
 export type ClientAction =
-  | {
-      effect: "spoken";
-      id: string;
-      scope: ActionScope;
-      label: string;
-      summary: string;
-      needsConfirm: boolean;
-      /** The exact words that go to the agent. These are the product; never paraphrase them. */
-      text: string;
-      form: "prose" | "slash-command";
-    }
-  | {
-      effect: "enacted";
-      id: string;
-      scope: ActionScope;
-      label: string;
-      summary: string;
-      /** Always true on this arm, as on the server's. */
-      needsConfirm: true;
-      /** The named gate that must pass first, in prose, for the confirmation. */
-      gate: string;
-    }
-  | {
-      effect: "broadcast";
-      id: string;
-      scope: ActionScope;
-      label: string;
-      summary: string;
-      needsConfirm: true;
-      stagger: { minMinutes: number; windowMinutes: number } | null;
-    }
+  | ClientSpokenAction
+  | ClientEnactedAction
+  | ClientBroadcastAction
   | {
       effect: "unrecognised";
       id: string;
@@ -209,7 +209,7 @@ export function parseAction(v: unknown): ClientAction | null {
 
   if (effect === "spoken") {
     const text = str(v["text"]);
-    if (text === null || scope === null) {
+    if (text === null || scope !== "session") {
       return {
         effect: "unrecognised",
         id,
@@ -219,7 +219,7 @@ export function parseAction(v: unknown): ClientAction | null {
         why:
           text === null
             ? "the server called this a spoken action and sent no words for it, so there is nothing to show you before you send it"
-            : `the server sent no scope this page understands for ${JSON.stringify(id)}`,
+            : `the server sent ${scope === null ? "no scope this page understands" : JSON.stringify(scope)} for ${JSON.stringify(id)}, but a spoken action must be addressed to one session`,
       };
     }
     const form = v["form"] === "slash-command" ? "slash-command" : "prose";
@@ -244,8 +244,15 @@ export function parseAction(v: unknown): ClientAction | null {
   }
 
   if (effect === "broadcast") {
-    if (scope === null) {
-      return { effect: "unrecognised", id, scope, label, summary, why: `the server sent no scope this page understands for ${JSON.stringify(id)}` };
+    if (scope !== "box") {
+      return {
+        effect: "unrecognised",
+        id,
+        scope,
+        label,
+        summary,
+        why: `the server sent ${scope === null ? "no scope this page understands" : JSON.stringify(scope)} for ${JSON.stringify(id)}, but a broadcast must be addressed to the box`,
+      };
     }
     const stagger = isRecord(v["stagger"]) ? v["stagger"] : null;
     const min = stagger !== null && typeof stagger["minMinutes"] === "number" ? stagger["minMinutes"] : null;
