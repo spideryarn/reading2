@@ -260,6 +260,46 @@ function filesUnder(dir: string): string[] {
   return out;
 }
 
+/** Why one top-level statement makes the shared browser wire unsafe. */
+function wireViolations(src: string, file = "tools/fleet/wire.ts"): string[] {
+  const tree = parseOrFail(src, file);
+  if (tree === null) return [`${file}: could not parse`];
+  const violations: string[] = [];
+  for (const statement of tree.program.body) {
+    if (statement.type === "TSTypeAliasDeclaration" || statement.type === "TSInterfaceDeclaration") continue;
+    if (statement.type === "ExportNamedDeclaration") {
+      if (statement.source !== null) {
+        violations.push(`${file}: a type export may not import from another module`);
+        continue;
+      }
+      if (statement.declaration?.type === "TSTypeAliasDeclaration" || statement.declaration?.type === "TSInterfaceDeclaration") {
+        continue;
+      }
+      if (
+        statement.declaration === null &&
+        statement.exportKind === "type" &&
+        statement.specifiers.every((specifier) => specifier.type === "ExportSpecifier" && specifier.exportKind === "type")
+      ) {
+        continue;
+      }
+    }
+    violations.push(`${file}: ${statement.type} is a runtime declaration, import, or value export`);
+  }
+  return violations;
+}
+
+describe("the shared fleet wire is a types-only, import-free leaf", () => {
+  it("allows only types and type-only exports", () => {
+    expect(wireViolations(readFileSync(path.join(TOOLS, "fleet/wire.ts"), "utf8"))).toEqual([]);
+  });
+
+  it("rejects a runtime constant, a plain import, and an enum", () => {
+    expect(wireViolations("export type Good = string; const runtime = 1;", "const.ts")).toHaveLength(1);
+    expect(wireViolations('import { thing } from "./thing.js"; export type Good = string;', "import.ts")).toHaveLength(1);
+    expect(wireViolations("export enum Bad { Value }", "enum.ts")).toHaveLength(1);
+  });
+});
+
 /** Every file the box utilities reach, transitively, as repo-relative paths. */
 function fleetClosure(): Set<string> {
   const seen = new Set<string>();

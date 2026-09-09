@@ -126,7 +126,7 @@ import { statePayload } from "../tools/fleet/state";
    payloads from an OLDER server; what the annotation buys is that every field
    they do name is a field the server really sends, spelled the way it spells
    it. A fixture that is deliberately malformed says so — see `malformed`. */
-import type { FleetState as FleetStateWire } from "../tools/fleet/wire";
+import type { Action as ActionWire, FleetState as FleetStateWire } from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -5739,7 +5739,7 @@ const CONTINUE_WIRE = {
   text: "Carry on with the task you were given. Before you do, say in one sentence what you are resuming.",
   form: "prose",
   needsConfirm: false,
-};
+} satisfies ActionWire;
 
 const COMPACT_WIRE = {
   effect: "spoken",
@@ -5750,7 +5750,7 @@ const COMPACT_WIRE = {
   text: "/compact Keep the original brief, the plan doc and where you are in it.",
   form: "slash-command",
   needsConfirm: true,
-};
+} satisfies ActionWire;
 
 const REMOVE_WORKTREE_WIRE = {
   effect: "enacted",
@@ -5760,7 +5760,7 @@ const REMOVE_WORKTREE_WIRE = {
   summary: "Delete this agent's working tree, after the check that git cannot do.",
   needsConfirm: true,
   gate: "npm run worktree:check must exit 0 inside the tree first. git status is not that check.",
-};
+} satisfies ActionWire;
 
 const KILL_SUITES_WIRE = {
   effect: "enacted",
@@ -5770,7 +5770,7 @@ const KILL_SUITES_WIRE = {
   summary: "SIGTERM every vitest runner on the box.",
   needsConfirm: true,
   gate: "Each pid must satisfy the vitest-runner rule and none of the standing refusals.",
-};
+} satisfies ActionWire;
 
 const BROADCAST_WIRE = {
   effect: "broadcast",
@@ -5780,7 +5780,12 @@ const BROADCAST_WIRE = {
   summary: "Tell every steerable session the box is loaded, each with its own resume time.",
   needsConfirm: true,
   stagger: { minMinutes: 5, windowMinutes: 60 },
-};
+} satisfies ActionWire;
+
+/** A parser test's explicit escape hatch for bytes the server could not produce. */
+function malformedAction(over: Record<string, unknown>): Record<string, unknown> {
+  return over;
+}
 
 /**
  * One queue, as the catalogue route serialises it.
@@ -5943,6 +5948,17 @@ describe("the action buttons, which are the server's vocabulary", () => {
     expect(container.textContent).toContain("Other");
   });
 
+  it("names and explains a broadcast sent to a session, without offering it", async () => {
+    const wrongScope = { ...BROADCAST_WIRE, scope: "session" };
+    const rec = openWith([wrongScope]);
+    await act(async () => {});
+
+    expect(container.textContent).toContain("resource-broadcast");
+    expect(container.textContent).toContain("broadcast must be addressed to the box");
+    expect(buttonLabels()).not.toContain("Broadcast: ease off, staggered");
+    expect(rec.calls.filter((call) => call.op === "run")).toEqual([]);
+  });
+
   it("has no hand-written list: a server offering nothing offers no buttons", async () => {
     openWith([]);
     await act(async () => {});
@@ -6049,7 +6065,7 @@ describe("the action buttons, which are the server's vocabulary", () => {
   });
 
   it("names an action it cannot classify, and refuses to offer it as a button", async () => {
-    const strange = { id: "reboot-the-box", scope: "session", label: "Reboot", effect: "detonate" };
+    const strange = malformedAction({ id: "reboot-the-box", scope: "session", label: "Reboot", effect: "detonate" });
     openWith([CONTINUE_WIRE, strange]);
     await act(async () => {});
     expect(container.textContent).toContain("reboot-the-box");
@@ -6625,6 +6641,19 @@ describe("the box, which says what it would do before it does it", () => {
     await act(async () => {});
 
     expect(container.textContent).not.toContain("This server will not act");
+  });
+
+  it("names and explains a spoken action sent to the box, without offering it", async () => {
+    const wrongScope = { ...CONTINUE_WIRE, scope: "box" };
+    const rec = openBox([wrongScope]);
+    await act(async () => {});
+
+    expect(container.textContent).toContain("continue");
+    expect(container.textContent).toContain("spoken action must be addressed to one session");
+    const named = [...container.querySelectorAll<HTMLButtonElement>("button")].filter((button) => button.textContent === "Continue");
+    expect(named).toHaveLength(1);
+    expect(named[0]?.disabled).toBe(true);
+    expect(rec.calls.filter((call) => call.op === "box")).toEqual([]);
   });
 
   it("asks what it would do, and does not do it, on the first press", async () => {
@@ -7348,7 +7377,7 @@ describe("the bodies these buttons post, which are pure functions of the row", (
 
 describe("what comes off the actions wire", () => {
   it("refuses an entry with no id, since an id is what a press posts back", () => {
-    expect(parseAction({ effect: "spoken", label: "No id" })).toBeNull();
+    expect(parseAction(malformedAction({ effect: "spoken", label: "No id" }))).toBeNull();
     expect(parseAction(CONTINUE_WIRE)?.id).toBe("continue");
   });
 
@@ -7360,6 +7389,27 @@ describe("what comes off the actions wire", () => {
 
   it("reads a spoken action with no words as one it cannot offer", () => {
     expect(parseAction({ ...CONTINUE_WIRE, text: undefined })?.effect).toBe("unrecognised");
+  });
+
+  it("refuses a spoken action addressed to the box", () => {
+    const spokenAtBox = parseAction({ ...CONTINUE_WIRE, scope: "box" });
+
+    expect(spokenAtBox).toMatchObject({ effect: "unrecognised", id: "continue", scope: "box", label: "Continue" });
+    expect(spokenAtBox?.effect === "unrecognised" ? spokenAtBox.why : "").toContain("spoken action must be addressed to one session");
+  });
+
+  it("refuses a broadcast addressed to one session", () => {
+    const broadcastAtSession = parseAction({ ...BROADCAST_WIRE, scope: "session" });
+
+    expect(broadcastAtSession).toMatchObject({
+      effect: "unrecognised",
+      id: "resource-broadcast",
+      scope: "session",
+      label: "Broadcast: ease off, staggered",
+    });
+    expect(broadcastAtSession?.effect === "unrecognised" ? broadcastAtSession.why : "").toContain(
+      "broadcast must be addressed to the box",
+    );
   });
 
   it("keeps needsConfirm true unless the server said false", () => {
@@ -7405,7 +7455,7 @@ describe("what comes off the actions wire", () => {
   });
 
   it("counts an entry it cannot classify without losing the catalogue around it", () => {
-    const read = parseActionsFeed({ actions: { session: [CONTINUE_WIRE, { id: "mystery" }], box: [] }, queues: [] });
+    const read = parseActionsFeed({ actions: { session: [CONTINUE_WIRE, malformedAction({ id: "mystery" })], box: [] }, queues: [] });
     expect(read?.catalogue).toEqual({ kind: "read" });
     expect(read?.actions.map((a) => a.id)).toEqual(["continue", "mystery"]);
   });

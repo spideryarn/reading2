@@ -26,6 +26,7 @@ import {
   CLI_STATE_FILE,
   CLI_STATE_LOCK_FILE,
   CLI_STATE_SCHEMA,
+  isCanonicalInstant,
   updateCliState,
   EMPTY_CLI_STATE,
   addMine,
@@ -122,10 +123,31 @@ describe("an unreadable state file is not an empty one", () => {
     expect(readCliState(root).kind).toBe("unusable");
   });
 
-  test("missing keys are empty lists, because a first write need not carry both", () => {
-    const root = tempRoot();
-    put(root, "{}");
-    expect(readCliState(root)).toEqual({ kind: "read", state: { mine: [], paused: [] } });
+  test("A NULL FIELD IS NOT AN EMPTY ONE — the fail-open this file existed to prevent", () => {
+    // GPT Sol's P0 on Stage 1, and the sharpest finding of the review: `?? []`
+    // turned `{"mine": null}` into valid empty state, so `mine list` said
+    // "nothing is being looked after" and the next `mine add` replaced the
+    // malformed file. The module's whole guarantee, defeated by the one line
+    // that did not think of itself as a parse.
+    //
+    // MUTATION: put `?? []` back on either field and this goes red.
+    for (const text of ['{"mine": null, "paused": null}', '{"mine": [], "paused": null}', '{"mine": null, "paused": []}']) {
+      const root = tempRoot();
+      put(root, text);
+      expect(readCliState(root).kind, text).toBe("unusable");
+    }
+  });
+
+  test("a missing key is unusable too — there is no writer that omits one", () => {
+    // This test used to assert the opposite ("a first write need not carry
+    // both") and was wrong: `writeCliState` takes a complete CliState and always
+    // writes both arrays, so a file missing one was never legitimate. A test
+    // asserting the lenient behaviour is how a hole gets a certificate.
+    for (const text of ["{}", '{"mine": []}', '{"paused": []}']) {
+      const root = tempRoot();
+      put(root, text);
+      expect(readCliState(root).kind, text).toBe("unusable");
+    }
   });
 });
 
@@ -434,6 +456,27 @@ describe("the pure edits", () => {
     expect(out.was?.at).toBe("2026-09-09T08:00:00.000Z");
     expect(out.state.paused).toEqual([]);
     expect(recordResume(out.state, "agent-one").was).toBeUndefined();
+  });
+
+  test("AN OFFSET TIMESTAMP SORTS WRONG, so it is refused rather than stored", () => {
+    // GPT Sol's P2. `Date.parse` accepts `2026-09-09T09:00:00+02:00`, which is
+    // 07:00Z — chronologically BEFORE `2026-09-09T08:00:00.000Z` — and sorts
+    // AFTER it as a string. overseer.md § The tick says "resume oldest-first
+    // after the reset", so the wrong order here wakes the fleet in the wrong
+    // order and nothing looks broken.
+    //
+    // MUTATION: relax `isCanonicalInstant` back to `!Number.isNaN(Date.parse(s))`
+    // and both halves of this go red.
+    expect(isCanonicalInstant("2026-09-09T08:00:00.000Z")).toBe(true);
+    for (const bad of ["2026-09-09T09:00:00+02:00", "2026-09-09", "2026-09-09T08:00:00Z", "Wed, 09 Sep 2026 08:00:00 GMT"]) {
+      expect(isCanonicalInstant(bad), bad).toBe(false);
+    }
+    expect(() =>
+      recordPause(EMPTY_CLI_STATE, { session: "agent-one", at: "2026-09-09T09:00:00+02:00", door: "steer", why: "" }),
+    ).toThrow();
+    const root = tempRoot();
+    put(root, JSON.stringify({ mine: [], paused: [{ session: "agent-one", at: "2026-09-09T09:00:00+02:00", door: "steer", why: "" }] }));
+    expect(readCliState(root).kind).toBe("unusable");
   });
 
   test("the paused list stays in the order it will be resumed in — oldest first", () => {

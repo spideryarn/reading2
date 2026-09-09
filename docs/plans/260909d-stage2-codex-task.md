@@ -44,12 +44,40 @@ python3 -c '<read ~/.claude.json .cachedUsageUtilization and print five_hour and
 
 ## What to build
 
+### The plan review's corrections — apply these, they are not optional
+
+GPT Sol reviewed this plan (`docs/plans/260909d-plan-review-sol-r1.md`, read it). Four of its
+findings change this stage:
+
+- **Do not import `statusLines` from `scripts/overseer.ts`.** That file now imports Commander, the
+  daemon, the scheduler, the attention pass and the usage-history wiring — and it will import your
+  `cli-tick.ts`, so importing it back is a cycle. **Extract the status rendering and its small
+  dependencies into a leaf `tools/overseer/status-cli.ts`**, and have both `scripts/overseer.ts` and
+  your tick import that. Move, do not copy: two renderings of one measurement is how a page and a
+  terminal come to disagree.
+- **Reuse the existing message client core.** `tools/fleet/web/src/messages-client.ts` already does
+  the `%24` encoding and the four-arm response parsing. Extract a platform-neutral core both it and
+  the CLI can use, rather than writing an unrelated second one. If the extraction turns out to drag
+  browser-only code with it, say so in your answer and write the CLI one — but look first.
+- **`mine` is an annotation, not a filter.** `tick` lists **every** session in the register; `mine`
+  decides only whose *last turn* is fetched. And the tick must **name the sessions it did not
+  fetch**, so an omission is visible. A positive allowlist whose omissions look like a quiet fleet is
+  the failure this avoids.
+- **`tick` must print who holds the Overseer claim**, and say so loudly when it is somebody else or
+  nobody. `docs/project/overseer.md`'s first instruction is "check you hold the claim before anything
+  else". `statusLines` already renders a claim line from `readOverseerClaim`; make sure the tick
+  carries it and does not bury it.
+
+Also: `collectHealth()` has several five-second command timeouts in its worst case. Consider what the
+cheap tick actually needs and pass options accordingly; say what you chose.
+
 ### `overseer last <session> [--turns N]`
 
 `GET {fleetUrl}/api/messages?id=%24<n>` returns a session's recent turns. Put the HTTP + rendering in
 a new module `tools/overseer/cli-messages.ts` (pure functions plus one fetch, split the way
 `tools/fleet/health.ts` and `tools/fleet/pause.ts` are split: every parse/choose function pure and
-testable, one function that touches the network).
+testable, one function that touches the network) — after checking whether
+`tools/fleet/web/src/messages-client.ts` can supply the core, per the correction above.
 
 Three traps, all recorded in `docs/project/overseer.md` § "Things that will catch you":
 
@@ -143,8 +171,14 @@ green. Report the exact commands you ran and their output.
 - `scripts/overseer.ts` (add to `Parsed`, `buildProgram`, `runParsed`; do not restructure Stage 1)
 - `tools/overseer/cli-messages.ts` (new)
 - `tools/overseer/cli-tick.ts` (new)
+- `tools/overseer/status-cli.ts` (new — the leaf you extract `statusLines` and friends into)
 - `tests/overseer-cli-tick.test.ts` (new)
+- `tests/overseer-cli.test.ts` (only to repoint its imports at the extracted leaf)
 - `tests/fixtures/` — a new subdirectory for your fixtures if you need one
+
+**A live peer is about to edit `usageLines()` and the `usage` command in `scripts/overseer.ts`**
+(session `codex-usage`). Do not touch either. Your additions there are a new `Parsed` arm, two new
+`buildProgram` commands and two new `runParsed` cases.
 
 Other agents are live in `tools/fleet/` and `tools/overseer/` right now. If you believe you need a
 file outside this set, **stop and say so in your answer** instead of editing it.

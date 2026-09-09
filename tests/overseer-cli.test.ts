@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../scripts/overseer.js";
+import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../tools/overseer/status-cli.js";
 import type { SessionEvent } from "../tools/overseer/diff.js";
 import {
   CHECKPOINT_FILE,
