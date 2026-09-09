@@ -3003,13 +3003,13 @@ function recordingActions(
       calls.push({ op: "releaseHold", arg: `${holdId}@${version}`, second: gesture });
       return { ok: true, kind: "hold-released", gesture, repeat: false };
     },
-    boxPreview: async (actionId, rows) => {
-      calls.push({ op: "box", arg: actionId, second: true, rows: rows.map((r) => r.id).join(",") });
+    boxPreview: async (action, rows) => {
+      calls.push({ op: "box", arg: action.id, second: true, rows: rows.map((r) => r.id).join(",") });
       /* `effect: null` is *this answer described no per-row effect*, which is
          what an empty `result` means. It is REQUIRED rather than optional for
          `delivery`'s reason: a fixture that could omit it would let the
          renderer pick a default, and picking a default is the defect. */
-      return previewOutcome(actionId, rows);
+      return previewOutcome(action.id, rows);
     },
     boxConfirm: async (preview) => {
       const rows = preview.material.kind === "broadcast" ? preview.material.recipients.map((recipient) => recipient.sessionId).join(",") : "";
@@ -6886,7 +6886,7 @@ describe("the box, which says what it would do before it does it", () => {
       ],
     };
     openBox([BROADCAST_WIRE], {
-      boxPreview: async (actionId) => previewOutcome(actionId, [steerable({ id: "$1" })]),
+      boxPreview: async (action) => previewOutcome(action.id, [steerable({ id: "$1" })]),
       boxConfirm: async (preview) => ({
         ok: true,
         op: "broadcast",
@@ -7946,7 +7946,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
     const client = makeActionsApi(fetchImpl);
     const rec = recordingActions(() => actionsWire({ actions }), {
-      boxPreview: (actionId, rows) => client.boxPreview(actionId, rows),
+      boxPreview: (action, rows) => client.boxPreview(action, rows),
       boxConfirm: (preview) => client.boxConfirm(preview),
     });
     window.location.hash = "#health";
@@ -8132,7 +8132,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   });
 
   it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
-    const outcome = await makeActionsApi(unreadableBody()).boxPreview("kill-test-suites", []);
+    const outcome = await makeActionsApi(unreadableBody()).boxPreview({ id: "kill-test-suites", effect: "enacted" }, []);
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
     expect(outcome.delivery.kind).toBe("unknown");

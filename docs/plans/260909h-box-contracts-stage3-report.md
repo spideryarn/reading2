@@ -15,7 +15,7 @@ Tests:
 - Full `npm test` could not start because local Postgres on port 54362 was unavailable.
 - Scoped lint only reported existing issues in the large touched files.
 
-One underspecified point: `boxPreview(actionId, rows)` does not receive the catalogue effect needed to validate expected material/op. I conservatively mapped the three current box action IDs; unknown IDs never receive a confirmable envelope.
+The review resolved the underspecified action classification by passing the catalogue's `{ id, effect }` to `boxPreview`. Preview inputs, expected operations, and material kinds now derive from `effect`; a new broadcast id therefore carries recipients and can produce a confirmation without another client-side id list.
 
 Files I changed:
 

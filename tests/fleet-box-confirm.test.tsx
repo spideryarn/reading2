@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
 import { makeActionsApi, parseActionsFeed, type ActionsApi, type BoxOutcome } from "../tools/fleet/web/src/actions-client";
 import type { FleetActionPreview } from "../tools/fleet/wire";
+import type { FleetRow } from "../tools/fleet/web/src/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,6 +45,8 @@ const BROADCAST = {
   stagger: { minMinutes: 5, windowMinutes: 60 },
 };
 
+const NEXT_BROADCAST = { ...BROADCAST, id: "incident-broadcast", label: "Broadcast incident update" };
+
 function feed(actions: unknown[]) {
   const parsed = parseActionsFeed({ actions: { session: [], box: actions }, queues: [] });
   if (parsed === null) throw new Error("the action fixture did not parse");
@@ -79,7 +82,20 @@ function broadcastAnswer(over: Record<string, unknown> = {}): Record<string, unk
     op: "broadcast-preview",
     action: "resource-broadcast",
     dryRun: true,
-    result: { sample: "Greg says: pause for 5 minutes, then continue.", recipients: [] },
+    result: {
+      total: 1,
+      sample: "Greg says: pause for 5 minutes, then continue.",
+      recipients: [
+        {
+          paneId: "%1",
+          sessionId: "$1",
+          minutes: 5,
+          outcome: "would-send",
+          code: null,
+          why: "it is at a prompt and would be told to pause for this long",
+        },
+      ],
+    },
     preview: {
       schema: "fleet-action-preview/1",
       previewId: "box-a-p2",
@@ -110,8 +126,18 @@ function apiAnswer(answer: Record<string, unknown>): ActionsApi {
   return makeActionsApi(fetcher);
 }
 
-function renderActions(actions: unknown[], api: ActionsApi): void {
-  act(() => root.render(<BoxActions feed={feed(actions)} api={api} asked={true} error={null} onChanged={() => {}} rows={[]} />));
+function fleetRow(id: string, paneId: string | null, claudeSessionId: string | null): FleetRow {
+  return {
+    id,
+    paneId,
+    claudeSessionId,
+    panePid: 2001,
+    rawStatus: { kind: "idle" },
+  } as FleetRow;
+}
+
+function renderActions(actions: unknown[], api: ActionsApi, rows: readonly FleetRow[] = []): void {
+  act(() => root.render(<BoxActions feed={feed(actions)} api={api} asked={true} error={null} onChanged={() => {}} rows={rows} />));
 }
 
 function button(label: string): HTMLButtonElement | null {
@@ -129,6 +155,27 @@ function expectNoConfirm(): void {
 }
 
 describe("only a complete, agreeing receipt becomes a confirmation", () => {
+  it("derives a new action's preview body and receipt kind from its known effect", async () => {
+    const answer = broadcastAnswer({ action: NEXT_BROADCAST.id });
+    (answer.preview as Record<string, unknown>).actionId = NEXT_BROADCAST.id;
+    const posted: Record<string, unknown>[] = [];
+    const fetcher = (async (_url: string, init?: RequestInit) => {
+      posted.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return { status: 200, json: async () => answer } as Response;
+    }) as typeof fetch;
+    const row = fleetRow("$next", "%next", "217e181a-155b-435a-b95b-e74220678d1a");
+
+    renderActions([NEXT_BROADCAST], makeActionsApi(fetcher), [row]);
+    await press("Broadcast incident update");
+
+    expect(posted[0]).toMatchObject({
+      actionId: NEXT_BROADCAST.id,
+      mode: "dry-run",
+      recipients: [{ paneId: row.paneId, sessionId: row.id }],
+    });
+    expect(button("Yes — Broadcast incident update")).not.toBeNull();
+  });
+
   it("offers no executable confirm for an older answer with no envelope", async () => {
     const answer = killAnswer();
     delete answer.preview;
@@ -170,6 +217,38 @@ describe("only a complete, agreeing receipt becomes a confirmation", () => {
     expectNoConfirm();
   });
 
+  it("rejects a result whose displayed recipients disagree with the receipt", async () => {
+    const answer = broadcastAnswer();
+    const result = answer.result as { recipients: Record<string, unknown>[] };
+    const first = result.recipients[0];
+    if (first === undefined) throw new Error("the fixture has no displayed recipient");
+    first.paneId = "%somebody-else";
+    renderActions([BROADCAST], apiAnswer(answer));
+    await press("Broadcast: ease off, staggered");
+    expectNoConfirm();
+  });
+
+  it("submits the parsed JSON value even if the response object is mutated later", async () => {
+    const answer = broadcastAnswer();
+    const posted: Record<string, unknown>[] = [];
+    const fetcher = (async (_url: string, init?: RequestInit) => {
+      if (init?.body !== undefined) posted.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return { status: 200, json: async () => answer } as Response;
+    }) as typeof fetch;
+    const api = makeActionsApi(fetcher);
+    const outcome = await api.boxPreview({ id: "resource-broadcast", effect: "broadcast" }, []);
+    if (!outcome.ok || outcome.preview === null) throw new Error("the fixture did not produce a parsed receipt");
+    const rawMaterial = (answer.preview as Record<string, unknown>).material as Record<string, unknown>;
+    const rawRecipient = (rawMaterial.recipients as Record<string, unknown>[])[0];
+    if (rawRecipient === undefined) throw new Error("the fixture has no recipient");
+    rawRecipient.minutes = 99;
+
+    await api.boxConfirm(outcome.preview);
+
+    const sentMaterial = posted[1]?.material as { recipients?: { minutes?: number }[] } | undefined;
+    expect(sentMaterial?.recipients?.[0]?.minutes).toBe(5);
+  });
+
   it.each([
     [KILL, "Kill test suites", killAnswer({ op: "ran" })],
     [BROADCAST, "Broadcast: ease off, staggered", broadcastAnswer({ op: "dry-run" })],
@@ -180,8 +259,29 @@ describe("only a complete, agreeing receipt becomes a confirmation", () => {
   });
 });
 
-function parsedPreview(answer: Record<string, unknown>, actionId: string): Promise<BoxOutcome> {
-  return makeActionsApi((async () => ({ status: 200, json: async () => answer }) as Response) as typeof fetch).boxPreview(actionId, []);
+it("keeps the preview press's omitted-row count when the fleet rows refresh", async () => {
+  const actionFeed = feed([BROADCAST]);
+  const api = apiAnswer(broadcastAnswer());
+  const reviewed = [
+    fleetRow("$1", "%1", "117e181a-155b-435a-b95b-e74220678d1a"),
+    fleetRow("$shell", null, null),
+  ];
+  act(() => root.render(<BoxActions feed={actionFeed} api={api} asked={true} error={null} onChanged={() => {}} rows={reviewed} />));
+  await press("Broadcast: ease off, staggered");
+  expect(container.textContent).toContain("1 of the 2 sessions on this page has no pane or no conversation id");
+
+  const refreshed = [
+    fleetRow("$1", "%1", "117e181a-155b-435a-b95b-e74220678d1a"),
+    fleetRow("$2", "%2", "217e181a-155b-435a-b95b-e74220678d1a"),
+    fleetRow("$3", "%3", "317e181a-155b-435a-b95b-e74220678d1a"),
+  ];
+  act(() => root.render(<BoxActions feed={actionFeed} api={api} asked={true} error={null} onChanged={() => {}} rows={refreshed} />));
+
+  expect(container.textContent).toContain("1 of the 2 sessions on this page has no pane or no conversation id");
+});
+
+function parsedPreview(answer: Record<string, unknown>, action: { id: string; effect: "enacted" | "broadcast" }): Promise<BoxOutcome> {
+  return makeActionsApi((async () => ({ status: 200, json: async () => answer }) as Response) as typeof fetch).boxPreview(action, []);
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -196,7 +296,7 @@ it("discards an older preview response and confirms only the newer envelope", as
   const ordinary = makeActionsApi();
   const api: ActionsApi = {
     ...ordinary,
-    boxPreview: (actionId) => actionId === "kill-test-suites" ? a.promise : b.promise,
+    boxPreview: (action) => action.effect === "enacted" ? a.promise : b.promise,
     boxConfirm: async (preview) => {
       confirmed.push(preview);
       return { ok: true, op: "broadcast", action: preview.actionId, dryRun: false, dryRunStated: true, preview: null, result: {}, why: null, effect: null };
@@ -211,14 +311,52 @@ it("discards an older preview response and confirms only the newer envelope", as
     broadcast.click();
   });
 
-  await act(async () => b.resolve(await parsedPreview(broadcastAnswer(), "resource-broadcast")));
+  await act(async () => b.resolve(await parsedPreview(broadcastAnswer(), { id: "resource-broadcast", effect: "broadcast" })));
   expect(container.textContent).toContain("Confirm: Broadcast: ease off, staggered");
-  await act(async () => a.resolve(await parsedPreview(killAnswer(), "kill-test-suites")));
+  await act(async () => a.resolve(await parsedPreview(killAnswer(), { id: "kill-test-suites", effect: "enacted" })));
   expect(container.textContent).toContain("Confirm: Broadcast: ease off, staggered");
   expect(container.textContent).not.toContain("Confirm: Kill test suites");
 
   await press("Yes — Broadcast: ease off, staggered");
   expect(confirmed.map((preview) => preview.previewId)).toEqual(["box-a-p2"]);
+});
+
+it("discards an older confirm response after a newer preview press", async () => {
+  const nextPreview = deferred<BoxOutcome>();
+  const oldConfirm = deferred<BoxOutcome>();
+  const killPreview = await parsedPreview(killAnswer(), { id: "kill-test-suites", effect: "enacted" });
+  const api: ActionsApi = {
+    ...makeActionsApi(),
+    boxPreview: (action) => action.effect === "enacted" ? Promise.resolve(killPreview) : nextPreview.promise,
+    boxConfirm: () => oldConfirm.promise,
+  };
+  renderActions([KILL, BROADCAST], api);
+  await press("Kill test suites");
+  const confirm = button("Yes — Kill test suites");
+  const broadcast = button("Broadcast: ease off, staggered");
+  if (confirm === null || broadcast === null) throw new Error("the confirm and newer action were not both rendered");
+
+  act(() => {
+    confirm.click();
+    broadcast.click();
+  });
+  await act(async () => nextPreview.resolve(await parsedPreview(broadcastAnswer(), { id: "resource-broadcast", effect: "broadcast" })));
+  expect(button("Yes — Broadcast: ease off, staggered")).not.toBeNull();
+
+  await act(async () => oldConfirm.resolve({
+    ok: true,
+    op: "ran",
+    action: "kill-test-suites",
+    dryRun: false,
+    dryRunStated: true,
+    preview: null,
+    result: {},
+    why: null,
+    effect: null,
+  }));
+
+  expect(button("Yes — Broadcast: ease off, staggered")).not.toBeNull();
+  expect(container.textContent).not.toContain("Done.");
 });
 
 it("shows every confirmable and excluded process, with explicit counts and reasons", async () => {
@@ -232,6 +370,11 @@ it("shows every confirmable and excluded process, with explicit counts and reaso
       { pid: 5003, why: "the pid changed process while the preview was being built" },
     ],
   };
+  const result = answer.result as { candidates: Record<string, unknown>[] };
+  result.candidates.push(
+    { pid: 5002, comm: "node", args: "node vitest", rule: "vitest-runner", why: "argv names vitest" },
+    { pid: 5003, comm: "node", args: "node vitest", rule: "vitest-runner", why: "argv names vitest" },
+  );
   renderActions([KILL], apiAnswer(answer));
   await press("Kill test suites");
 
@@ -256,4 +399,32 @@ it("shows the broadcast's recipients, promised pauses, sampled sentence, and exa
   expect(container.textContent).toContain("pause for 5 minutes");
   expect(container.textContent).toContain("Greg says: pause for 5 minutes, then continue.");
   expect(button("Yes — Broadcast: ease off, staggered")).not.toBeNull();
+});
+
+it("shows addressable broadcast recipients that the preview excluded, with their reasons", async () => {
+  const answer = broadcastAnswer();
+  const preview = answer.preview as { material: { recipients: Record<string, unknown>[] } };
+  preview.material.recipients.push({
+    paneId: "%2",
+    sessionId: "$2",
+    claudeSessionId: "217e181a-155b-435a-b95b-e74220678d1a",
+    panePid: 2002,
+    status: { kind: "working" },
+    minutes: null,
+  });
+  const result = answer.result as { recipients: Record<string, unknown>[] };
+  result.recipients.push({
+    paneId: "%2",
+    sessionId: "$2",
+    minutes: null,
+    outcome: "held",
+    code: null,
+    why: "it is working, so the broadcast would not interrupt it",
+  });
+  renderActions([BROADCAST], apiAnswer(answer));
+  await press("Broadcast: ease off, staggered");
+
+  expect(container.textContent).toContain("1 excluded recipient");
+  expect(container.textContent).toContain("$2");
+  expect(container.textContent).toContain("it is working, so the broadcast would not interrupt it");
 });

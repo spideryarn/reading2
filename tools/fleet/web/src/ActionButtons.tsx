@@ -1728,7 +1728,12 @@ const NO_ROWS: readonly FleetRow[] = [];
  * send the rows the page is showing`, which is the true state of that caller
  * rather than a false success. Both dashboard panels pass the fleet rows.
  */
-type BoxConfirmation = { generation: number; action: ClientAction; outcome: BoxOutcome | null };
+type BoxConfirmation = {
+  generation: number;
+  action: ClientAction;
+  outcome: BoxOutcome | null;
+  rows: { total: number; unaddressable: number };
+};
 
 function resultRecord(outcome: Extract<BoxOutcome, { ok: true }>): Record<string, unknown> | null {
   return typeof outcome.result === "object" && outcome.result !== null && !Array.isArray(outcome.result)
@@ -1794,7 +1799,14 @@ function PreviewMaterial({ outcome }: { outcome: Extract<BoxOutcome, { ok: true 
     );
   }
 
-  const recipients = envelope.material.recipients.filter((recipient) => recipient.minutes !== null);
+  const rawOutcomes = result?.["recipients"];
+  const outcomes = Array.isArray(rawOutcomes) ? rawOutcomes : [];
+  const recipientRows = envelope.material.recipients.map((recipient, index) => ({
+    recipient,
+    outcome: typeof outcomes[index] === "object" && outcomes[index] !== null ? outcomes[index] as Record<string, unknown> : null,
+  }));
+  const recipients = recipientRows.filter(({ recipient }) => recipient.minutes !== null);
+  const excluded = recipientRows.filter(({ recipient }) => recipient.minutes === null);
   const sample = typeof result?.["sample"] === "string" && result["sample"] !== "" ? result["sample"] : null;
   return (
     <>
@@ -1802,7 +1814,7 @@ function PreviewMaterial({ outcome }: { outcome: Extract<BoxOutcome, { ok: true 
         {recipients.length} {recipients.length === 1 ? "recipient" : "recipients"}
       </p>
       <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink">
-        {recipients.map((recipient) => (
+        {recipients.map(({ recipient }) => (
           <li key={recipient.paneId} className="tw:rounded tw:border tw:border-rule tw:p-2">
             <Mono>{recipient.sessionId}</Mono>
             <span className="tw:px-1">·</span>
@@ -1812,6 +1824,21 @@ function PreviewMaterial({ outcome }: { outcome: Extract<BoxOutcome, { ok: true 
           </li>
         ))}
       </ul>
+      <p className="tw:mt-2 tw:font-medium tw:text-ink">
+        {excluded.length} excluded {excluded.length === 1 ? "recipient" : "recipients"}
+      </p>
+      {excluded.length === 0 ? null : (
+        <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink-soft">
+          {excluded.map(({ recipient, outcome }) => (
+            <li key={recipient.paneId}>
+              <Mono>{recipient.sessionId}</Mono>
+              <span className="tw:px-1">·</span>
+              <Mono>{recipient.paneId}</Mono>
+              {` — ${typeof outcome?.["why"] === "string" ? outcome["why"] : "the server did not state why it was left out"}`}
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="tw:mt-2 tw:text-[12px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">Exact sentence sampled by the server</p>
       {sample === null ? (
         <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">The server did not state the sentence, so there is no Confirm below.</p>
@@ -1856,20 +1883,20 @@ export function BoxActions({
      because not all of them are: `addressableRows` drops the ones with nowhere
      to send to, and the difference is the sentence below. */
   const onScreen = rows ?? NO_ROWS;
-  /* Counted from the SAME function the body builder uses, so the sentence and
-     the request cannot disagree about who was left out. */
-  const unaddressable = onScreen.length - addressableRows(onScreen).length;
-
   const press = useCallback(
     async (action: ClientAction): Promise<void> => {
+      if (action.effect !== "enacted" && action.effect !== "broadcast") return;
       const mine = generation.current + 1;
       generation.current = mine;
-      setPending({ generation: mine, action, outcome: null });
+      /* Frozen beside the action and receipt: a state poll while the preview is
+         open must not rewrite the denominator the person reviewed. */
+      const pressedRows = { total: onScreen.length, unaddressable: onScreen.length - addressableRows(onScreen).length };
+      setPending({ generation: mine, action, outcome: null, rows: pressedRows });
       setDone(null);
       setBusy(true);
-      const outcome = await api.boxPreview(action.id, onScreen);
+      const outcome = await api.boxPreview(action, onScreen);
       if (generation.current !== mine) return;
-      setPending({ generation: mine, action, outcome });
+      setPending({ generation: mine, action, outcome, rows: pressedRows });
       setBusy(false);
     },
     [api, onScreen],
@@ -1878,9 +1905,11 @@ export function BoxActions({
   const commit = useCallback(
     async (selection: BoxConfirmation, envelope: FleetActionPreview): Promise<void> => {
       if (selection.generation !== generation.current) return;
-      generation.current += 1;
+      const mine = generation.current + 1;
+      generation.current = mine;
       setBusy(true);
       const result = await api.boxConfirm(envelope);
+      if (generation.current !== mine) return;
       setDone(result);
       setPending(null);
       setBusy(false);
@@ -1891,6 +1920,7 @@ export function BoxActions({
 
   const pendingAction = pending?.action ?? null;
   const preview = pending?.outcome ?? null;
+  const pressedRows = pending?.rows ?? { total: 0, unaddressable: 0 };
 
   if (actions.length === 0) {
     return (
@@ -1971,11 +2001,11 @@ export function BoxActions({
                   the page and the request is the defect this stage exists to
                   close, one layer up, so the count is on screen rather than
                   inferred from a preview that is short. */}
-              {unaddressable === 0 ? null : (
+              {pressedRows.unaddressable === 0 ? null : (
                 <p className="tw:mt-1 tw:text-ink-faint">
-                  {unaddressable} of the {onScreen.length} sessions on this page {unaddressable === 1 ? "has" : "have"} no
-                  pane or no conversation id, so there is nowhere to send to and {unaddressable === 1 ? "it is" : "they are"}{" "}
-                  left out of the {onScreen.length - unaddressable} below.
+                  {pressedRows.unaddressable} of the {pressedRows.total} sessions on this page {pressedRows.unaddressable === 1 ? "has" : "have"} no
+                  pane or no conversation id, so there is nowhere to send to and {pressedRows.unaddressable === 1 ? "it is" : "they are"}{" "}
+                  left out of the {pressedRows.total - pressedRows.unaddressable} below.
                 </p>
               )}
             </>

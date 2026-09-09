@@ -1375,7 +1375,7 @@ describe("POST /api/actions/box — killing", () => {
     // only one that runs the real client parse over the real response.
     const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    const outcome = await makeActionsApi(browserFetch(routes)).boxPreview({ id: "kill-test-suites", effect: "enacted" }, NO_ROWS_NEEDED);
     expect(outcome.ok).toBe(true);
     const shown = outcome.ok ? outcome.result : null;
     // Written as "what a person would read off the panel" rather than as a
@@ -1399,7 +1399,7 @@ describe("POST /api/actions/box — killing", () => {
     const { io, ran } = fakeIo({ procs: [...suites] });
     const { routes } = harness({ io });
     const api = makeActionsApi(browserFetch(routes));
-    const preview = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    const preview = await api.boxPreview({ id: "kill-test-suites", effect: "enacted" }, NO_ROWS_NEEDED);
     if (!preview.ok || preview.preview === null) throw new Error("the dry run carried no confirmable preview");
     const outcome = await api.boxConfirm(preview.preview);
 
@@ -1539,7 +1539,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
    * button stayed dead.
    *
    * `true`, because the first press is the dry run: `ActionButtons` calls
-   * `api.boxPreview(action.id, rows)` for the preview and only offers Confirm
+   * `api.boxPreview(action, rows)` for the preview and only offers Confirm
    * once that has come back.
    */
   it("carries the rows the page is showing into the request, so the route has somebody to speak to", async () => {
@@ -1549,7 +1549,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       pageRow({ id: "$2", paneId: "%2", rawStatus: { kind: "working" } }),
       pageRow({ id: "$3", paneId: "%3", rawStatus: { kind: "needs-you" } }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview({ id: "resource-broadcast", effect: "broadcast" }, rows);
 
     expect(preview.ok).toBe(true);
     /* SOMEBODY WAS SELECTED, read through the real client parse rather than off
@@ -1594,7 +1594,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
         rawStatus: { kind: "idle" },
       }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview({ id: "resource-broadcast", effect: "broadcast" }, rows);
 
     expect(preview.ok).toBe(true);
     const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
@@ -1632,7 +1632,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       pageRow({ id: "$3", paneId: null }),
       pageRow({ id: "$4", paneId: "%4" }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview({ id: "resource-broadcast", effect: "broadcast" }, rows);
 
     expect(preview.ok).toBe(true);
     const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
@@ -1653,7 +1653,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
        `addressableRows` drops, and inventing a pid to fill the hole would be
        the client signing its name to a check it did not make. */
     const rows = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2", panePid: null })];
-    const body = boxActionBody("resource-broadcast", rows);
+    const body = boxActionBody({ id: "resource-broadcast", effect: "broadcast" }, rows);
 
     expect(body.recipients).toEqual([
       { paneId: "%1", sessionId: "$1", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" } },
@@ -2936,7 +2936,7 @@ describe("a box action confirms the preview it was given, and nothing else", () 
     const { routes } = harness({ io });
     const api = makeActionsApi(browserFetch(routes));
 
-    const preview = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    const preview = await api.boxPreview({ id: "kill-test-suites", effect: "enacted" }, NO_ROWS_NEEDED);
     expect(preview.ok).toBe(true);
     expect(ran).toEqual([]);
     /* THE ENVELOPE IS WHAT THE SECOND PRESS CARRIES. Read off the parsed
@@ -2968,7 +2968,7 @@ describe("a box action confirms the preview it was given, and nothing else", () 
     const api = makeActionsApi(browserFetch(routes));
 
     const reviewed = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2" })];
-    const preview = await api.boxPreview("resource-broadcast", reviewed);
+    const preview = await api.boxPreview({ id: "resource-broadcast", effect: "broadcast" }, reviewed);
     expect(preview.ok).toBe(true);
     expect(sent).toEqual([]);
 
@@ -2998,11 +2998,11 @@ describe("a box action confirms the preview it was given, and nothing else", () 
     const { routes } = harness({ io });
     const api = makeActionsApi(browserFetch(routes));
 
-    const kill = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    const kill = await api.boxPreview({ id: "kill-test-suites", effect: "enacted" }, NO_ROWS_NEEDED);
     expect(kill.ok && kill.op).toBe("dry-run");
     expect(kill.ok && kill.action).toBe("kill-test-suites");
 
-    const cast = await api.boxPreview("resource-broadcast", [pageRow({ id: "$1", paneId: "%1" })]);
+    const cast = await api.boxPreview({ id: "resource-broadcast", effect: "broadcast" }, [pageRow({ id: "$1", paneId: "%1" })]);
     expect(cast.ok && cast.op).toBe("broadcast-preview");
     expect(cast.ok && cast.action).toBe("resource-broadcast");
   });
