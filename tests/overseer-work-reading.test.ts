@@ -40,8 +40,18 @@ describe("safe command evidence", () => {
     ["codex exec --model gpt-5.6-sol -c approval_policy=never", "codex exec"],
     ["claude --print --model haiku -- Reply with pong", "claude"],
     ["codex exec --prompt a prompt containing spaces and a secret", "codex exec"],
+    ["python customer-secret-token", "python"],
+    ["node customer-secret-token", "node"],
+    ["node /srv/app/node_modules/.bin/vitest run --config secret", "vitest run"],
+    ["codex customer-secret-token", "codex"],
+    ["toString customer-secret-token", "toString"],
     ["bash", "bash"],
   ])("reduces %s", (command, expected) => expect(safeCommand(command)).toBe(expected));
+
+  test.each(["", "   ", "/", "/tmp/customer-secret-token exec"])(
+    "explains that %j has no safe command instead of publishing an empty string",
+    (command) => expect(safeCommand(command)).toBe("command unavailable"),
+  );
 });
 
 describe("converting work readings", () => {
@@ -115,6 +125,19 @@ describe("the pid-reuse backstop", () => {
     expect(work.kind).toBe("work");
   });
 
+  test("cannot claim no work when the pane start is unavailable and reuse cannot be checked", () => {
+    const reading: ProcessTableReading = {
+      read: true,
+      rows: [
+        { pid: 100, ppid: 1, command: "bash pane", started: { known: false } },
+        { pid: 200, ppid: 100, command: "ordinary-child", started: { known: true, atMs: NOW_MS - 4_000 } },
+      ],
+      atMs: NOW_MS + 30_000,
+    };
+    const work = paneWorkOf({ reading: classifyPaneWork(100, reading), sourceCollectedAtMs: NOW_MS });
+    expect(work).toMatchObject({ kind: "cannot-tell", cause: "pane-start-unavailable" });
+  });
+
   test("records the uncaught case: a reused pid older than the inventory is walked", () => {
     // Known limitation: age can reject only a process born in the gap. Closing
     // this case needs the process table sampled in the same pass that reads the
@@ -131,10 +154,33 @@ describe("scanning every pane from one table", () => {
       rows: freshFixture("session-new-before").snapshot.rows,
       reading: { read: false, why: "ps could not see /proc" },
       sourceCollectedAt: "2026-09-09T11:59:30.000Z",
+      sourceCollectedAtMs: Date.UTC(2026, 8, 9, 11, 59, 30),
       attemptedAt: "2026-09-09T12:00:00.000Z",
     });
     expect(work).toMatchObject({ kind: "probe-failed", why: "ps could not see /proc" });
     expect(work).not.toHaveProperty("panes");
+  });
+
+  test("uses the parser's millisecond clock for the reuse guard instead of reparsing its display string", () => {
+    const fixture = freshFixture("session-new-before").snapshot;
+    const row = fixture.rows[0];
+    if (row === undefined) throw new Error("fixture has no row");
+    const work = scanPaneWork({
+      rows: [{ ...row, panePid: 100 }],
+      reading: {
+        read: true,
+        rows: [{ pid: 100, ppid: 1, command: "bash pane", started: { known: true, atMs: NOW_MS + 3_000 } }],
+        atMs: NOW_MS + 30_000,
+      },
+      // The mismatch is constructed to discriminate which member the helper
+      // uses. Production receives this pair from one strict parser.
+      sourceCollectedAt: new Date(NOW_MS + 10_000).toISOString(),
+      sourceCollectedAtMs: NOW_MS,
+      attemptedAt: new Date(NOW_MS + 30_000).toISOString(),
+    });
+    expect(work.kind).toBe("scan");
+    if (work.kind !== "scan") return;
+    expect(work.panes[0]?.work).toMatchObject({ kind: "cannot-tell", cause: "pane-younger-than-inventory" });
   });
 });
 

@@ -1411,10 +1411,12 @@ export type PaneWork =
   | { kind: "cannot-tell"; cause: string; why: string }
   /** Looked under the pane and found no recognised work. `inspected` is how many processes the walk
    *  examined, so "a bare pane" and "twenty-five processes, none recognised" stay different facts —
-   *  the second is how a missing recogniser announces itself. */
-  | { kind: "none"; inspected: number; paneCommand: string; paneStartedAt: string | null }
+   *  the second is how a missing recogniser announces itself. `paneStartedAt` is required on both
+   *  measured arms because without it the delayed scan cannot apply even its limited pid-reuse
+   *  backstop; an unavailable start is `cannot-tell`, never `none`. */
+  | { kind: "none"; inspected: number; paneCommand: string; paneStartedAt: string }
   /** Found some. `jobs` is non-empty by construction on the producing side. */
-  | { kind: "work"; jobs: readonly PaneJob[]; inspected: number; paneCommand: string; paneStartedAt: string | null };
+  | { kind: "work"; jobs: readonly PaneJob[]; inspected: number; paneCommand: string; paneStartedAt: string };
 
 /** One pane's reading, tagged with the Overseer's own session key so it can be joined to a register
  *  entry — the same key, written by the same daemon into the same file at the same instant. */

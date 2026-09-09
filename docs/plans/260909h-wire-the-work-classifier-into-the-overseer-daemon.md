@@ -266,6 +266,45 @@ that it **discriminates**: `classifyPaneWork(process.pid, …)` returns `no-chil
 spawned and `child-work` matching the spawned pid immediately after. A control that would pass
 either way is not a control.
 
+### Round 2: GPT Sol on the stage 1-2 code
+
+`--sandbox workspace-write`, so it fixed what it found inside the stage and reported the rest.
+**Refused the candidate on two established P1s**, both real, both fixed:
+
+- **F9 (P1, established) — arbitrary argv could be persisted as a "safe subcommand".** The rule I
+  wrote in the brief was *keep the first argument if it is a bare word*, and
+  `safeCommand("python customer-secret-token")` therefore returned the secret. **This is the same
+  class the redactor was deleted for**, reintroduced one level down by the thing that replaced it,
+  and it is worth naming: a rule about the SHAPE of an argument cannot tell a subcommand from a
+  positional secret, because there is no shape difference. The fix is a closed allowlist —
+  `codex` may keep `exec`/`e`/`review`, `vitest` may keep `run`, and nothing else keeps anything.
+  Checked by hand afterwards on the real captured command lines: `codex exec` survives,
+  `bash /home/greg/deploy.sh --api-key=sk-live-abc123` becomes `bash`.
+- **F11 (P1, established) — a conversion exception escaped the probe's containment and killed the
+  fold.** The `try` was around `probe()` and not around `scanPaneWork`, so a reading with a `NaN`
+  `atMs` threw `RangeError: Invalid time value` **before the first durable write**. That is
+  invariant 2 — the daemon's crash semantics — broken by an enrichment, which is exactly what the
+  containment was for. The conversion is part of the instrument and is now inside it.
+- **F10 (P1, reasoned)** — a pane whose own start could not be read bypassed the reuse backstop and
+  could still produce `none`. `paneStartedAt` is now required on both measured arms, and an
+  unavailable start is `cannot-tell` with its own cause. A positive finding is discarded there too,
+  deliberately: without the pane's start there is no evidence the tree belongs to this session.
+- **F13 (P2)** — the cadence test asserted the probe TOTAL over two inventories, which passes for a
+  2-then-0 distribution. It counts per inventory now and requires `[1, 1]`. My brief asked for an
+  exact number and got an exact number of the wrong thing.
+- **F12, F14, F15, F16** — duplicate pane keys in a stored scan are now refused; an unresolvable
+  command is the phrase `command unavailable` rather than `""`; `sourceCollectedAtMs` is passed from
+  the clock that already carries it rather than re-parsed; and the tolerance comment now says what is
+  actually closed.
+
+**On the bounded question** — *is the `REUSE_TOLERANCE_MS` sentence accurate?* — the answer was no,
+and that is F16. What the backstop closes is derived pane starts **more than two seconds** after the
+inventory. The first two seconds, and any reuse by a process older than the inventory, remain open.
+The comment says that now instead of claiming the daemon-created gap.
+
+**Gates after the fixes:** 298 tests green across nine suites, `npm run typecheck` clean on all four
+projects, lint clean bar the pre-existing `daemon.ts:602` warning.
+
 ### Stage 3 — the projection and the browser
 
 - [ ] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when

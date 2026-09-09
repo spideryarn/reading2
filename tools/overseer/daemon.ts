@@ -1197,12 +1197,26 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
       };
     }
-    work = scanPaneWork({
-      rows: observed.rows,
-      reading,
-      sourceCollectedAt: observed.clock.at,
-      attemptedAt: at,
-    });
+    try {
+      work = scanPaneWork({
+        rows: observed.rows,
+        reading,
+        sourceCollectedAt: observed.clock.at,
+        sourceCollectedAtMs: observed.clock.atMs,
+        attemptedAt: at,
+      });
+    } catch (cause) {
+      // CONVERSION IS PART OF THE INSTRUMENT. Containing only `probe()` leaves
+      // a malformed or future reading able to throw from timestamp conversion
+      // and stop the fold before its first durable write. That is still
+      // "cannot tell", never a reason for the Overseer itself to stop.
+      work = {
+        kind: "probe-failed",
+        why: `the work scan threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+        attemptedAt: at,
+        sourceCollectedAt: observed.clock.at,
+      };
+    }
 
     // WITH NO BASELINE, THE DIFF CANNOT CLOSE ANYTHING OUT. `diff(null, next)`
     // is every row as `session-seen` and nothing else, so a session that ended

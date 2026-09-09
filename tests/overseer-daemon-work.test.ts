@@ -1,5 +1,5 @@
 /** The daemon takes one work reading only for inventories it will checkpoint. */
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { runOverseer, type DaemonOptions } from "../tools/overseer/daemon.js";
 import { identityOf, sessionKey } from "../tools/overseer/diff.js";
 import { parseObservation, type JsonValue } from "../tools/overseer/observation.js";
-import { CHECKPOINT_FILE } from "../tools/overseer/store.js";
+import { CHECKPOINT_FILE, LOCK_FILE } from "../tools/overseer/store.js";
 import { parseProcessTable, type ProcessTableReading } from "../tools/overseer/work.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { editableFixture, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -61,7 +61,12 @@ function capturedReading(atMs: number): ProcessTableReading {
 async function run(
   root: string,
   script: () => AsyncGenerator<SourceMessage>,
-  input: { clock: ReturnType<typeof fakeClock>; probe: NonNullable<DaemonOptions["probe"]>; tickMs?: number },
+  input: {
+    clock: ReturnType<typeof fakeClock>;
+    probe: NonNullable<DaemonOptions["probe"]>;
+    tickMs?: number;
+    outcome?: "stopped" | "lock-lost";
+  },
 ): Promise<void> {
   const controller = new AbortController();
   const outcome = await runOverseer({
@@ -74,7 +79,7 @@ async function run(
     source: () => script(),
     probe: input.probe,
   });
-  expect(outcome.kind).toBe("stopped");
+  expect(outcome.kind).toBe(input.outcome ?? "stopped");
 }
 
 function current(root: string): Record<string, unknown> {
@@ -85,16 +90,19 @@ describe("probe cadence", () => {
   test("exactly one probe runs for each inventory that reaches a checkpoint", async () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T02:48:40.000Z");
-    let probes = 0;
+    let inventory = 0;
+    const probes = [0, 0];
     await run(
       root,
       async function* () {
+        inventory = 0;
         yield payload(rawFixture("session-new-before"));
+        inventory = 1;
         yield payload(rawFixture("session-new-after"));
       },
-      { clock, probe: () => { probes += 1; return capturedReading(clock.ms()); } },
+      { clock, probe: () => { probes[inventory] = (probes[inventory] ?? 0) + 1; return capturedReading(clock.ms()); } },
     );
-    expect(probes).toBe(2);
+    expect(probes).toEqual([1, 1]);
   });
 
   test("duplicates, rejected payloads, held diffs and heartbeat ticks do not probe", async () => {
@@ -167,6 +175,22 @@ describe("published work evidence", () => {
     expect(current(root).work).toMatchObject({ kind: "probe-failed", why: expect.stringContaining("ps wrapper exploded") });
   });
 
+  test("a reading that throws during conversion is contained and the fold still checkpoints why", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const table = capturedReading(clock.ms());
+    if (!table.read) throw new Error("unreachable");
+    await run(root, async function* () { yield payload(rawFixture("session-new-before")); }, {
+      clock,
+      probe: () => ({ ...table, atMs: Number.NaN }),
+    });
+    expect(current(root).work).toMatchObject({
+      kind: "probe-failed",
+      why: expect.stringContaining("work scan threw"),
+    });
+    expect(current(root).work).not.toHaveProperty("panes");
+  });
+
   test("a pane absent from the table is cannot-tell, not none", async () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T02:48:40.000Z");
@@ -209,5 +233,48 @@ describe("published work evidence", () => {
     expect(sourceCollectedAt).not.toBe(clock.now().toISOString());
     await run(root, async function* () { yield payload(json); }, { clock, probe: () => capturedReading(clock.ms()) });
     expect(current(root).work).toMatchObject({ sourceCollectedAt });
+  });
+
+  test("a lock loss after probing cannot publish that reading against the older checkpoint", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const first = parseObservation(rawFixture("session-new-before"));
+    if (!first.ok || !first.value.clock.collected) throw new Error("fixture has no collection clock");
+    let probes = 0;
+
+    await run(
+      root,
+      async function* () {
+        yield payload(rawFixture("session-new-before"));
+        yield payload(rawFixture("session-new-after"));
+      },
+      {
+        clock,
+        outcome: "lock-lost",
+        probe: () => {
+          probes += 1;
+          if (probes === 2) {
+            const lock = join(root, LOCK_FILE);
+            unlinkSync(lock);
+            writeFileSync(
+              lock,
+              `${JSON.stringify({
+                pid: process.pid,
+                instanceId: "competitor",
+                hostname: "box",
+                startedAt: clock.now().toISOString(),
+              })}\n`,
+            );
+          }
+          return capturedReading(clock.ms());
+        },
+      },
+    );
+
+    expect(probes).toBe(2);
+    expect(current(root)).toMatchObject({
+      lastGoodSnapshotAt: first.value.clock.at,
+      work: { sourceCollectedAt: first.value.clock.at },
+    });
   });
 });

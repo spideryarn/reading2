@@ -2221,10 +2221,13 @@ function parseWork(u: unknown, writtenAt: string): OverseerWork {
   const rawPanes = u["panes"];
   if (!Array.isArray(rawPanes)) return bad("panes is not an array");
   const panes: { key: string; work: PaneWork }[] = [];
+  const seen = new Set<string>();
   for (const [index, rawPane] of rawPanes.entries()) {
     if (!isRecord(rawPane)) return bad(`panes[${index}] is not an object`);
     const key = rawPane["key"];
     if (typeof key !== "string") return bad(`panes[${index}].key is not a string`);
+    if (seen.has(key)) return bad(`panes has ${key} twice`);
+    seen.add(key);
     const work = parsePaneWork(rawPane["work"]);
     if (!work.ok) return bad(`panes[${index}].work: ${work.reason}`);
     panes.push({ key, work: work.value });
@@ -2250,9 +2253,7 @@ function parsePaneWork(u: unknown): ParseResult<PaneWork> {
   const paneStartedAt = u["paneStartedAt"];
   if (!isNonNegativeInteger(inspected)) return { ok: false, reason: "inspected is not a count" };
   if (typeof paneCommand !== "string") return { ok: false, reason: "paneCommand is not a string" };
-  if (paneStartedAt !== null && !isIsoTimestamp(paneStartedAt)) {
-    return { ok: false, reason: "paneStartedAt is not an ISO timestamp or null" };
-  }
+  if (!isIsoTimestamp(paneStartedAt)) return { ok: false, reason: "paneStartedAt is not an ISO timestamp" };
   if (kind === "none") return { ok: true, value: { kind, inspected, paneCommand, paneStartedAt } };
   const rawJobs = u["jobs"];
   if (!Array.isArray(rawJobs) || rawJobs.length === 0) {

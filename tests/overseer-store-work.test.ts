@@ -147,6 +147,55 @@ describe("malformed stored work degrades and never becomes an empty scan", () =>
     ["a scan with a bad scannedAt", { ...SCAN, scannedAt: "today" }],
     ["a scan with no sourceCollectedAt", { kind: "scan", scannedAt: SCAN.scannedAt, panes: [] }],
     [
+      "a confident none with no pane start for the reuse check",
+      {
+        ...SCAN,
+        panes: [
+          {
+            key: "$1 none",
+            work: { kind: "none", inspected: 0, paneCommand: "bash", paneStartedAt: null },
+          },
+        ],
+      },
+    ],
+    [
+      "a scan with the same session key twice",
+      {
+        ...SCAN,
+        panes: [
+          {
+            key: "$1 duplicate",
+            work: {
+              kind: "none",
+              inspected: 0,
+              paneCommand: "bash",
+              paneStartedAt: "2026-09-09T09:00:00.000Z",
+            },
+          },
+          {
+            key: "$1 duplicate",
+            work: {
+              kind: "work",
+              inspected: 1,
+              paneCommand: "bash",
+              paneStartedAt: "2026-09-09T09:00:00.000Z",
+              jobs: [
+                {
+                  recogniser: "codex-exec",
+                  label: "GPT review",
+                  startedAt: null,
+                  ranForMs: null,
+                  pid: 3,
+                  depth: 1,
+                  command: "codex exec",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+    [
       "a pane with an unknown work kind",
       { ...SCAN, panes: [{ key: "$1 none", work: { kind: "mystery", why: "unknown" } }] },
     ],
@@ -157,7 +206,13 @@ describe("malformed stored work degrades and never becomes an empty scan", () =>
         panes: [
           {
             key: "$1 none",
-            work: { kind: "work", jobs: [], inspected: 1, paneCommand: "bash", paneStartedAt: null },
+            work: {
+              kind: "work",
+              jobs: [],
+              inspected: 1,
+              paneCommand: "bash",
+              paneStartedAt: "2026-09-09T09:00:00.000Z",
+            },
           },
         ],
       },
@@ -173,7 +228,7 @@ describe("malformed stored work degrades and never becomes an empty scan", () =>
               kind: "work",
               inspected: 1,
               paneCommand: "bash",
-              paneStartedAt: null,
+              paneStartedAt: "2026-09-09T09:00:00.000Z",
               jobs: [{ recogniser: "codex-exec", label: "GPT review", startedAt: null, ranForMs: null, pid: 3.5, depth: 1, command: "codex exec" }],
             },
           },
@@ -191,7 +246,7 @@ describe("malformed stored work degrades and never becomes an empty scan", () =>
               kind: "work",
               inspected: 1,
               paneCommand: "bash",
-              paneStartedAt: null,
+              paneStartedAt: "2026-09-09T09:00:00.000Z",
               jobs: [{ recogniser: "codex-exec", label: "GPT review", startedAt: null, ranForMs: -1, pid: 3, depth: 1, command: "codex exec" }],
             },
           },

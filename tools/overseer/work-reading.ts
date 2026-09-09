@@ -4,6 +4,7 @@ import { identityOf, sessionKey } from "./diff.js";
 import type { ObservedRow } from "./observation.js";
 import {
   classifyPaneWork,
+  recogniseCommand,
   resolveExecutable,
   type ChildJob,
   type ProcessStart,
@@ -13,14 +14,21 @@ import {
 
 /**
  * `ps etimes` counts whole seconds, so a derived start can appear about one
- * second after a simultaneous collection. Two seconds rejects the gap this
- * daemon itself creates without treating that imprecision as pid reuse.
+ * second after a simultaneous collection. Beyond two seconds, a process born
+ * after the inventory is rejected; a start within the tolerance is accepted
+ * because it is indistinguishable from `etimes` imprecision.
  *
  * This is only a backstop: a reused pid belonging to a process born before the
- * inventory still passes. Closing the race requires sampling the process table
- * in the same collection pass that reads the pane pids.
+ * inventory, or within the tolerance after it, still passes. Closing the whole
+ * race requires sampling the process table in the same collection pass that
+ * reads the pane pids.
  */
 export const REUSE_TOLERANCE_MS = 2_000;
+
+const SAFE_LEADING_SUBCOMMANDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["codex", new Set(["exec", "e", "review"])],
+  ["vitest", new Set(["run"])],
+]);
 
 /**
  * Keep only the executable and a safe leading subcommand.
@@ -32,11 +40,18 @@ export const REUSE_TOLERANCE_MS = 2_000;
  */
 export function safeCommand(command: string): string {
   const resolved = resolveExecutable(command);
-  if (resolved === null) return "";
-  const first = resolved.args.trim().split(/\s+/, 1)[0];
-  return first !== undefined && /^[A-Za-z][A-Za-z0-9._-]*$/.test(first)
-    ? `${resolved.name} ${first}`
+  if (resolved === null) return "command unavailable";
+  const rawExecutable = command.trim().split(/\s+/, 1)[0];
+  if (rawExecutable === undefined) return "command unavailable";
+  const recognised = recogniseCommand(command);
+  const name = recognised === null
+    ? rawExecutable.slice(rawExecutable.lastIndexOf("/") + 1)
     : resolved.name;
+  if (name === "") return "command unavailable";
+  const first = resolved.args.trim().split(/\s+/, 1)[0];
+  return recognised !== null && first !== undefined && SAFE_LEADING_SUBCOMMANDS.get(name)?.has(first) === true
+    ? `${name} ${first}`
+    : name;
 }
 
 function iso(start: ProcessStart): string | null {
@@ -64,7 +79,15 @@ export function paneWorkOf(input: {
   const { reading, sourceCollectedAtMs } = input;
   if (reading.kind === "cannot-tell") return reading;
 
-  if (reading.paneStarted.known && reading.paneStarted.atMs > sourceCollectedAtMs + REUSE_TOLERANCE_MS) {
+  if (!reading.paneStarted.known) {
+    return {
+      kind: "cannot-tell",
+      cause: "pane-start-unavailable",
+      why: "the pane process start was unavailable, so this scan cannot check whether the inventory's pid was reused",
+    };
+  }
+
+  if (reading.paneStarted.atMs > sourceCollectedAtMs + REUSE_TOLERANCE_MS) {
     return {
       kind: "cannot-tell",
       cause: "pane-younger-than-inventory",
@@ -75,7 +98,7 @@ export function paneWorkOf(input: {
   }
 
   const paneCommand = safeCommand(reading.paneCommand);
-  const paneStartedAt = iso(reading.paneStarted);
+  const paneStartedAt = new Date(reading.paneStarted.atMs).toISOString();
   if (reading.kind === "no-child-work") {
     return { kind: "none", inspected: reading.inspected, paneCommand, paneStartedAt };
   }
@@ -93,14 +116,15 @@ export function scanPaneWork(input: {
   rows: readonly ObservedRow[];
   reading: ProcessTableReading;
   sourceCollectedAt: string;
+  /** The already-validated milliseconds paired with `sourceCollectedAt`. */
+  sourceCollectedAtMs: number;
   /** Used only for the `probe-failed` arm's `attemptedAt`; a successful scan takes its clock from
    *  the reading itself. */
   attemptedAt: string;
 }): OverseerWork {
-  const { rows, reading, sourceCollectedAt, attemptedAt } = input;
+  const { rows, reading, sourceCollectedAt, sourceCollectedAtMs, attemptedAt } = input;
   if (!reading.read) return { kind: "probe-failed", why: reading.why, attemptedAt, sourceCollectedAt };
 
-  const sourceCollectedAtMs = Date.parse(sourceCollectedAt);
   return {
     kind: "scan",
     scannedAt: new Date(reading.atMs).toISOString(),
