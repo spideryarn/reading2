@@ -36,6 +36,7 @@ import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
+import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
@@ -150,6 +151,18 @@ const retention = makeHealthRetention({
 });
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
+
+/**
+ * The Deploys tab's record and its probe.
+ *
+ * Cheap enough to build unconditionally: it opens nothing at startup and spawns
+ * anything only per request. The composition is in deploys-wiring.ts rather than
+ * here for the reason health-wiring.ts states at length — a test that assembles
+ * its own route proves the route works, and stays green if this file mounts a
+ * different one.
+ */
+const deploys = makeDeploys();
+for (const line of deploys.lines.log) console.log(line);
 
 /**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
@@ -352,6 +365,12 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  // The most recent production deploys, for the Deploys tab. Read-only twice
+  // over: it reads one committed file and asks three read-only questions of the
+  // checkout. It never fetches, never calls Vercel — this box has no token —
+  // and cannot deploy anything. routes-deploys.ts says why for each.
+  if (deploys.route.handle(req, res)) return;
 
   // Recent messages for one session, for the detail pane.
   //

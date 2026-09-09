@@ -962,11 +962,72 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * `speaker` is sent for the same reason `sessionActionBody` sends one: a
  * broadcast is rendered with the sender's name in front of it, and an absent
  * field means the weaker claim.
+ *
+ * `recipients` IS WHO THE BROADCAST IS FOR, AND WITHOUT IT THERE IS NOBODY.
+ * This body had no such field until 2026-09-09, so `broadcastRoute` refused
+ * every press on its first line — `a broadcast needs recipients` — before it
+ * selected anybody, and the button had never once reached a session. The rule
+ * it refuses on is deliberate and is the route's to keep: a broadcast must act
+ * on **the list the person was actually looking at**, not on a list the server
+ * re-fetches behind them, so the caller has to say what it saw.
+ *
+ * So these are the rows the page is showing, mapped through the SAME
+ * `steerTargetBody` the session path uses: the identifiers and the server's own
+ * `rawStatus` object, copied off the snapshot and not re-read. The discipline is
+ * `cancelBody`'s and `clearBody`'s — a stale-but-honest claim, checked at the
+ * far end — and rebuilding or refreshing the list here would defeat the point,
+ * because a claim the client refreshed to make true is a claim about nothing.
+ * The status in particular must be `rawStatus` rather than the parsed
+ * `row.status`: see steer-client.ts § `SteerTargetBody`.
+ *
+ * An enacted kill reads `pids` rather than this field and has the same gap;
+ * that is the preview envelope's to close, not this function's.
  */
-export type BoxActionBody = { actionId: string; mode: "dry-run" | "run"; confirm: boolean; speaker: "greg" };
+export type BoxActionBody = {
+  actionId: string;
+  mode: "dry-run" | "run";
+  confirm: boolean;
+  speaker: "greg";
+  recipients: SteerTargetBody[];
+};
 
-export function boxActionBody(actionId: string, dryRun: boolean): BoxActionBody {
-  return { actionId, mode: dryRun ? "dry-run" : "run", confirm: !dryRun, speaker: GREG };
+/**
+ * The rows that are ADDRESSES, which is not all of them — and sending the rest
+ * cost the fix its first evening.
+ *
+ * `parseTarget` requires a `paneId` and a `claudeSessionId` on every recipient
+ * and **refuses the whole request over any one that lacks either**, which is
+ * right for a route: an unaddressable target is a caller bug, not a delivery
+ * outcome. A real fleet always holds a few — a shell, and a session too old to
+ * have pinned a conversation id — so a body carrying the page's rows entirely
+ * raw was answered `400 a recipient is not addressable` by the running server
+ * on 2026-09-09, with 23 rows in it. One shell on the box and the broadcast
+ * still reached nobody.
+ *
+ * This is NOT the client second-guessing the server's selection rule. Which
+ * rows may be SPOKEN TO stays entirely the route's: a working session, a shell,
+ * a session at a dialog are all sent, and come back `held` or `blocked` with
+ * the reason. What is dropped here is only what steer-client.ts already calls
+ * unsteerable-by-construction — *a null `claudeSessionId` means the row cannot
+ * be steered at all* — because it is not a claim about a session, it is a row
+ * with nowhere to send anything.
+ *
+ * And the narrowing is not silent: `BoxActions` counts what this drops and says
+ * so under the confirmation, because a denominator that quietly shrank would be
+ * this whole stage's own defect one layer up.
+ */
+export function addressableRows(rows: readonly FleetRow[]): FleetRow[] {
+  return rows.filter((row) => row.paneId !== null && row.claudeSessionId !== null);
+}
+
+export function boxActionBody(actionId: string, dryRun: boolean, rows: readonly FleetRow[]): BoxActionBody {
+  return {
+    actionId,
+    mode: dryRun ? "dry-run" : "run",
+    confirm: !dryRun,
+    speaker: GREG,
+    recipients: addressableRows(rows).map(steerTargetBody),
+  };
 }
 
 /**
@@ -1342,7 +1403,13 @@ export type ActionsApi = {
    * `releaseHoldBody`. Safe to call twice with the same arguments.
    */
   releaseHold: (holdId: string, version: number, gesture: HoldReleaseGesture) => Promise<ActionOutcome>;
-  box: (actionId: string, dryRun: boolean) => Promise<BoxOutcome>;
+  /**
+   * A box-wide action. **`rows` is required, and it is the fix for a button
+   * that could not reach anybody** — see `boxActionBody`. It is the list the
+   * page is showing, verbatim; a caller with nothing on screen passes an empty
+   * array and gets the server's refusal, which is the true answer.
+   */
+  box: (actionId: string, dryRun: boolean, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
 };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
@@ -1540,8 +1607,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
     releaseHold: (holdId, version, gesture) => send(RELEASE_HOLD_URL, releaseHoldBody(holdId, version, gesture)),
 
-    async box(actionId, dryRun): Promise<BoxOutcome> {
-      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun), fetchImpl);
+    async box(actionId, dryRun, rows): Promise<BoxOutcome> {
+      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun, rows), fetchImpl);
       if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
       const { response, parsed } = posted;
       if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
@@ -1575,5 +1642,5 @@ export const httpActionsApi: ActionsApi = {
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
   releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
-  box: (actionId, dryRun) => makeActionsApi().box(actionId, dryRun),
+  box: (actionId, dryRun, rows) => makeActionsApi().box(actionId, dryRun, rows),
 };

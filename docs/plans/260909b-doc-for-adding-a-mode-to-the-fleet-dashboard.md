@@ -72,6 +72,24 @@ written into the doc as a known cost and goes to the Overseer in the debrief.
 the artefact or the gesture. Answered from the three tips already in the file plus
 [tooltips.md](../project/tooltips.md)'s rule, not from Greg — flagged as such in the debrief.
 
+**One error the doc shipped with, and its correction.** The first version said a clean merge is not
+evidence but *"the `Record` types are"*. That is false for the case that matters most: `Mode` is
+`(typeof MODES)[number]`, so a merge dropping a mode from the array **and** its three maps typechecks
+perfectly and the tab is simply gone. Typecheck catches a *half*-added mode, never a fully removed
+one. Found by `deploys-tab` and GPT Sol on 2026-09-09, after the doc had landed on `dev`; the fix is
+an explicit `expect(MODES).toContain("yours")`, now the first of the four assertions the doc asks
+for. The Overseer's quoted ruling carries the same overstatement and is left verbatim with the
+correction stated after it — a quote is not ours to silently repair.
+
+**And a second, in the rule the doc borrowed from `deploys-tab`.** "Test against the real committed
+file" was quoted from a check that asserted *one version per non-blank line*; Sol showed that passes
+while the two readers disagree about every field. The doc now says to compare the readers field by
+field — and states the thing that makes that possible, that `fleet-imports.test.ts` walks the graph
+rooted at `tools/` rather than `tests/`, so a **test-only** import of the product parser is legal.
+
+Both are the same class: an assertion that looks sufficient, is cheap to write, and cannot go red in
+the case it was written for. Which is [silent-success.md](../reusable/silent-success.md), again.
+
 ### Stage 2 — Sol review, then land
 
 - [ ] `npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high` on the doc plus the diff.
