@@ -38,8 +38,14 @@ import { describeRuleOutcome } from "../tools/overseer/rules.js";
 import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import { escapeName } from "./gjd-remote-tmux.js";
-import type { AttentionList } from "../tools/fleet/wire.js";
+import type { AttentionList, StoredUsage } from "../tools/fleet/wire.js";
 import { type OverseerClaim, claimFromSnapshot, describeClaim } from "../tools/fleet/overseer-claim.js";
+/* THE DASHBOARD'S GROUPING AND THE DASHBOARD'S CLOCKS, imported rather than
+   restated. `tools/overseer/` already depends on `tools/fleet/` — that is the
+   allowed direction of the seam — and two renderings of one measurement is how
+   a page and a terminal come to disagree about how many things happened. */
+import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
+import { zonedLine } from "../tools/fleet/zones.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { reconcileArming } from "../tools/overseer/arming.js";
 import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
@@ -203,6 +209,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "session-execution-changed": true,
   "job-occurrence-reserved": true,
   "job-occurrence-started": true,
   "job-occurrence-finished": true,
@@ -270,6 +277,16 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
     case "session-pane-replaced":
       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
+    // THE PANE DID NOT MOVE, so this line has to say what did. The conversation
+    // verdict is on it because `conflicting` is the loudest thing this log can
+    // print: the pane is running a conversation nobody addressed.
+    case "session-execution-changed":
+      return (
+        `${when}  ${event.previousToken === null ? "run seen " : "new run  "}  ${event.identity.tmuxId} — ${event.previousToken ?? "none recorded"} → ${event.token}` +
+        (event.conversation.kind === "conflicting"
+          ? `, now conversation ${event.conversation.observed} rather than the claimed ${event.conversation.claimed}`
+          : `, conversation ${event.conversation.kind}`)
+      );
     // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
     // carries the job, the instant and the definition hash, so one line of this
     // log is enough to find every other line about the same run.
@@ -419,6 +436,23 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
     }
   }
 
+  // CAN THIS ACCOUNT AFFORD MORE WORK, ON ITS OWN LINE AND ALWAYS PRESENT.
+  //
+  // A stopped fleet with no explanation and a rate-limited account look
+  // identical on the register above: every session sits at a prompt doing
+  // nothing. This is the line that tells them apart, and it is here rather than
+  // under `overseer usage` because that command takes a fresh 30-45 second scan
+  // and this one reads what the daemon already wrote.
+  if (checkpoint === null) {
+    lines.push(
+      read.kind === "unusable"
+        ? "usage       unknown — the last usage reading is in the checkpoint this build cannot parse"
+        : "usage       unknown — no daemon has written a checkpoint to this store yet",
+    );
+  } else {
+    lines.push(...usageStatusLines(checkpoint.usage, nowMs));
+  }
+
   // WHO THE OVERSEER IS, ON ITS OWN LINE AND ALWAYS PRESENT. The box is meant
   // to have exactly one, the claim dies with the tmux server, and nothing else
   // on this page would notice — a daemon can be perfectly alive with no session
@@ -464,6 +498,67 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
   if (recent.length > 0) {
     lines.push("", "overseer   ");
     for (const note of recent) lines.push(`            ${note.at.slice(11, 19)}  ${describeNote(note)}`);
+  }
+  return lines;
+}
+
+/**
+ * The stored usage reading, in two or three lines on the status page.
+ *
+ * **The reading's own clock, not the checkpoint's.** They are routinely hours
+ * apart: a full scan is 30-45 seconds over ~2.9 GB and does not always finish,
+ * and `chooseUsage` deliberately republishes an earlier pass's report when a
+ * fresh one falls over. A status page dating this by `writtenAt` would show a
+ * two-hour-old reading as thirty seconds old — the stale-reading-that-looks-
+ * current failure the whole subsystem exists to refuse.
+ *
+ * **And an incident whose window has passed is history**, judged here against
+ * `nowMs` rather than repeated out of the verdict, which was true when it was
+ * taken. The plan's own words: *a post-reset old 429 is history*.
+ */
+function usageStatusLines(usage: StoredUsage, nowMs: number): string[] {
+  if (usage.kind === "none") {
+    // ORDINARY, NOT BROKEN: `--no-usage`, or a daemon that has not reached its
+    // first 300-second usage tick. Said as such so nobody inspects a good file.
+    return [`usage       none — ${usage.why}`];
+  }
+  const report = usage.report;
+  const account =
+    report.account.kind === "value"
+      ? `${report.account.email ?? "?"} (${report.account.rateLimitTier ?? "tier ?"})`
+      : report.account.kind === "logged-out"
+        ? "NOT LOGGED IN"
+        : `account unknown — ${report.account.why}`;
+  const lines = [
+    `usage       ${report.verdict.level.toUpperCase()} — ${account}, read ${describeAge(nowMs - Date.parse(report.collectedAt))} ago at ${when(report.collectedAt)}`,
+  ];
+  if (report.rateLimits.kind === "hits") {
+    const incidents = groupUsageIncidents(report.rateLimits.hits);
+    // **"NOT RESET" IS NOT "IN FORCE", and the status page may not upgrade one
+    // to the other.** The verdict on the line above is the only thing that says
+    // this account is blocked, because only it has the cache attribution:
+    // swapping subscriptions with `/login` leaves the previous account's
+    // rejections in the transcripts, and an unexpired 429 from an account Greg
+    // has left is indistinguishable here. Against the live store on 2026-09-08
+    // an earlier draft printed IN FORCE seven_day under a verdict of UNKNOWN.
+    const unreset = incidents.filter((i) => Date.parse(i.resetsAt) > nowMs);
+    for (const incident of unreset) {
+      const sessions = incident.conversations.length;
+      lines.push(
+        `            NOT RESET ${incident.window}: ${sessions} ${sessions === 1 ? "conversation" : "conversations"}, ` +
+          `${incident.rejections} rejected, resets ${when(incident.resetsAt)}`,
+      );
+    }
+    // The rest as a count. Nine incidents, eight of them days old, is what the
+    // real store holds — and printed as nine lines the one that matters is the
+    // second line of a wall. `overseer usage` lists them all.
+    const history = incidents.length - unreset.length;
+    if (history > 0) {
+      lines.push(`            ${history} earlier window(s) already reset in the scanned range — see \`overseer usage\``);
+    }
+  } else if (report.rateLimits.kind === "unknown") {
+    // NOT "no limits hit". The scan could not size its own absence.
+    lines.push(`            rejections unknown — ${report.rateLimits.why}`);
   }
   return lines;
 }
@@ -622,10 +717,10 @@ function usageLines(report: UsageReport): string[] {
     // went wrong in one day. `fetchedAtMs` is a field all the way from
     // `~/.claude.json`, so the absolute form costs nothing and cannot drift.
     out.push(
-      `cache     fetched ${new Date(report.cache.fetchedAtMs).toISOString()} (${Math.round(report.cache.ageMs / 60_000)} min before this reading), account ${report.cache.accountUuid ?? "?"}`,
+      `cache     fetched ${whenEpoch(report.cache.fetchedAtMs)} (${Math.round(report.cache.ageMs / 60_000)} min before this reading), account ${report.cache.accountUuid ?? "?"}`,
     );
     for (const w of report.cache.windows) {
-      if (w.kind === "value") out.push(`          ${w.window}: ${w.utilizationPercent}% used, resets ${w.resetsAt}`);
+      if (w.kind === "value") out.push(`          ${w.window}: ${w.utilizationPercent}% used, resets ${when(w.resetsAt)}`);
       else if (w.kind === "expired") out.push(`          ${w.window}: EXPIRED — ${w.why}`);
       else out.push(`          ${w.window}: unknown — ${w.why}`);
     }
@@ -639,14 +734,27 @@ function usageLines(report: UsageReport): string[] {
       `${c.truncatedByLimit ? ", TRUNCATED by --max-transcripts" : ""}`,
   );
   switch (report.rateLimits.kind) {
-    case "hits":
-      for (const h of report.rateLimits.hits.slice(0, 10)) {
+    case "hits": {
+      // **ONE WINDOW, ONE INCIDENT** — the same grouping the dashboard draws,
+      // out of the same function, because two renderings of one measurement is
+      // how the two ends come to disagree about how many things happened. The
+      // old form printed one line per rejection and truncated at ten, which on
+      // the 27 rejections measured on 2026-09-08 was seventeen invisible lines
+      // all repeating one reset instant.
+      const incidents = groupUsageIncidents(report.rateLimits.hits);
+      for (const incident of incidents) {
+        const sessions = incident.conversations.length;
         out.push(
-          `429       ${h.hitAt ?? "?"}  ${h.window}  resets ${new Date(h.resetsAtMs).toISOString()}  conversation ${h.claudeSessionId ?? "?"}`,
+          `429       ${incident.window}  resets ${when(incident.resetsAt)}  ` +
+            `${sessions} ${sessions === 1 ? "conversation" : "conversations"}, ${incident.rejections} rejected` +
+            `${incident.unidentifiedRejections > 0 ? ` (${incident.unidentifiedRejections} unattributed)` : ""}`,
         );
+        if (incident.firstHitAt !== null) {
+          out.push(`          first ${when(incident.firstHitAt)}${incident.lastHitAt === null ? "" : `, last ${when(incident.lastHitAt)}`}`);
+        }
       }
-      if (report.rateLimits.hits.length > 10) out.push(`          (${report.rateLimits.hits.length - 10} more)`);
       break;
+    }
     case "none":
       out.push("429       none in the scanned window — believable only against the `scanned` line above");
       break;
@@ -658,8 +766,43 @@ function usageLines(report: UsageReport): string[] {
       throw new Error(String(never));
     }
   }
-  out.push(`took      ${report.tookMs}ms, at ${report.collectedAt}`);
+  out.push(`took      ${report.tookMs}ms, at ${when(report.collectedAt)}`);
   return out;
+}
+
+/**
+ * **AN INSTANT, IN UTC, LONDON AND ATHENS** — every timestamp this command
+ * prints, so it reads the same wherever Greg is.
+ *
+ * > include timezone because I'm bouncing between London/Athens
+ * >
+ * > — Greg, 2026-09-08
+ *
+ * `tools/fleet/zones.ts` is the formatter and the argument; this is the one
+ * place the CLI reaches for it, so a line that cannot be read says so rather
+ * than printing `Invalid Date`.
+ */
+function when(iso: string): string {
+  return zonedLine(iso) ?? `${iso} (a time this tool cannot read)`;
+}
+
+/**
+ * The same, from an epoch millisecond that came out of `~/.claude.json`.
+ *
+ * **`when(new Date(ms).toISOString())` IS NOT THIS, and the difference took
+ * down `overseer status`.** The argument is evaluated first, so a `fetchedAtMs`
+ * of `1e100` — finite, and the producer's parsers only check finiteness —
+ * throws `RangeError: Invalid time value` before `when` can contain anything.
+ * Reproduced by GPT Sol in round two, 2026-09-09: `overseer usage` exited 1
+ * while `overseer usage --json` happily printed the malformed value.
+ *
+ * The range is ECMAScript's own ±8.64e15. Out of it, the number is printed as
+ * the raw thing it is rather than as a time, which is the honest rendering of a
+ * field nobody can turn into an instant.
+ */
+function whenEpoch(ms: number): string {
+  if (!Number.isFinite(ms) || Math.abs(ms) > 8.64e15) return `${ms} (not an instant this tool can read)`;
+  return when(new Date(ms).toISOString());
 }
 
 const HELP = [

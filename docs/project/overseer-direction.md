@@ -439,13 +439,14 @@ holds.
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
 file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
-shape. Five files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+shape. Six files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
 
 | file | what it is | who may read it |
 |---|---|---|
-| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, and the session register | anyone, any time |
+| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, the session register, the attention inbox and the last usage reading | anyone, any time |
 | `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
 | `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
+| `attention.json` | the attention pass's memory (schema 1; keys `epoch`, `waits`, `verdicts`): when each session was first seen asking each question, and the cached model verdict per `tailFingerprint` | the daemon only |
 | `last-snapshot.json` | the differ's baseline — the last snapshot seen, so a restart emits changes rather than re-announcing the fleet | the daemon only |
 | `overseer.lock` | the single-writer claim | the daemon only |
 
@@ -454,6 +455,12 @@ shape. Five files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
 daemon's private working state rather than part of the seam, which is why it was easy to leave out
 and why it is listed anyway: a reader deciding what `~/.overseer` contains should not have to discover
 a fifth file by running `ls`.
+
+**And it said "five files" until 2026-09-08 evening, when `attention.json` turned out to be the sixth**
+— found by the Baseline census of plan [260908f](../plans/260908f-overseer-and-fleet-improvement-roadmap.md).
+Same class as the omission above and the same cure: it is the attention pass's private memory rather
+than part of the seam, so nothing outside the daemon reads it, and it is listed for exactly the reason
+`last-snapshot.json` is.
 
 **Reads are lock-free and writers are single**, which is what makes this a seam rather than a
 coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
@@ -1438,6 +1445,35 @@ excerpts off the lock screen.
 **A18 independently confirms Fable on confidence**: ranking by self-reported confidence promotes
 exactly the confident mistakes you most want caught. Rank by consequence and reversibility; treat
 confidence as an annotation until it has been measured.
+
+### Two fan-out loops, and which one should absorb the other
+
+Since 2026-09-09 there are two ways this tool says something to many sessions at once, and that is a
+temporary state with a named direction rather than a drift.
+[260909b](../plans/260909b-messaging-the-overseer-and-broadcasting-to-all-agents-from-the-dashboard.md)
+§ D4 has it in full; the two things to know before touching either:
+
+**The generic one should absorb the special one.** `resource-broadcast` is a fan-out whose text
+varies by recipient index; free text is the same fan-out with a constant renderer. So the end state
+is one loop taking a `render(index, total) => string`, with `broadcastRoute` in `routes-actions.ts`
+calling `routes-broadcast.ts`'s and not the reverse. `fanOut` already takes that callback so the
+extraction is a move. Agreed with `claude-agents-dashboard`, and Sol's verdict on it: *"Let the
+existing, reviewed ease-off loop guide the extraction, while the new route supplies the second real
+caller that proves the abstraction."*
+
+**The shared thing is the mechanics, never the authority.** Iteration, the deadline, the yield,
+per-recipient outcome collection and the quarantine belong below; who may speak, the `Speaker`
+prefix, `renderMessage`'s slash rule, the confirm/dry-run envelope, the enable flag **and the
+cooldown** stay at the caller. The two cooldowns are not one number: the ease-off one prevents
+conflicting resume times, a free-text one prevents interrupting the fleet twice, and a loop that
+owned "the cooldown" would hand the next caller whichever policy it happened to have. In one
+sentence, from the session that owns the other loop:
+
+> A general fan-out is a good abstraction and an excellent place to accidentally launder authority.
+> Keep the loop ignorant of who is allowed to say what; give it strings that are already rendered and
+> already permitted.
+>
+> — session `claude-agents-dashboard`, 2026-09-09
 
 ### Later, and deliberately not now
 

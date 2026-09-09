@@ -306,7 +306,7 @@ file contents when the mutation is a reversion.
 tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
 mutations caught. 1,479 tests green across 36 files, typecheck 0.
 
-### ✅ Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09)
+### 🟢 Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09; three P0s found by review, all fixed the same day — U1 became Stage 4b)
 
 #### Read `drain.ts` before briefing this, because it is more careful than this plan said
 
@@ -393,6 +393,191 @@ twin and keeps the row.
 — including the two that matter most: `FleetQueues` filtering to `items.length > 0` again, and the
 abandon copy claiming the message was not delivered. 811 fleet tests green across 12 files before the
 last two additions; typecheck exit 0.
+
+#### The review found the stage's central claim is true of one producer out of three
+
+The hardest review of the plan so far. **The commit's own subject — *"A session that may be holding
+half a sentence is not handed the next one"* — is true of the queued path and false of the other
+two.**
+
+**U2 (P0): the hold is recorded by three producers and enforced by one.** Only
+`SteeringQueue.next()` consults the book (`queue.ts:910`). Direct steering never checks whether the
+target is held before calling the transport (`routes-steer.ts:1105`), and broadcast selects
+recipients on `drainGate` alone (`routes-actions.ts:2063`) and sends at `:2188`. So a held session
+can still receive a direct steer or a broadcast, which contradicts what the page tells the operator,
+and repeating an `unknown` direct send can duplicate keystrokes. **The fix is one mandatory send
+coordinator immediately before the synchronous transport call**, with all four paths through it, and
+a test per path that seeds a hold and asserts the injected transport was never called.
+
+**U6 (P2 by severity, worst by consequence): the guarantee this stage advertised does not exist.**
+Changing `shared ??=` to `shared =` (`quarantine.ts:512`) gives the action queue and the direct-steer
+route **different books** — so direct uncertainty is recorded where the drain never looks — and the
+suite stays green. Every producer test injects its own book; nothing joins the two real mounted
+compositions. **This disproves the claim that a missing future producer makes a test red**, which
+was written into the Stage 4 commit message and repeated to two peer sessions as a reason they could
+rely on the suite. Retracted to both. The tests enumerate today's producers; they do not require
+tomorrow's.
+
+**U3 (P0): the malformed-wire hold is half closed, and the remaining half is worse than the
+original.** `holdUnreadable` keeps the row, but both gestures are withheld and the copy tells the
+operator to *"clear it from the server"* — **there is no such interface**. A hold with a readable
+`id` and `version` is unclearable if `why` is missing, because `parseHold` rejects the whole object
+on one bad field. Parse the release *address* independently of the descriptive fields: if `id` and
+`version` read, keep both gestures and show a generic warning. **An instruction to do something
+impossible is worse than a missing row**, because the missing row at least looked broken.
+
+**U4 (P1): `uncertain` is collapsed back to `refused` one file later.** `deliverOne` returns
+`kind: "refused"` (`drain.ts:442`) and the operator log prints `refused=N` (`:640`). The browser copy
+is honest; the drain result and the log still use the exact word this stage removed.
+
+**U5 (P2): my correction to the brief was itself too broad.** A generation-less hold is skipped
+forever, so the "one refresh cycle" window can become indefinite. Record the first generation
+observed after such a hold opens and supersede on the next distinct one — kept separate from
+`tmuxGeneration`, because it is not a claim about the generation at opening.
+
+**U1 (P0) is not a fix, it is a stage** — see below. A restart erases every hold while the tmux
+server, and therefore the uncertain input buffer, stays alive.
+
+**What the review confirmed rather than found:** one open hold per session is the right model once
+U2 lands, because there is one input buffer and sends are synchronous; versioning correctly protects
+stale releases; open holds are never evicted; both gestures and supersession send no keystrokes;
+there is no fourth keystroke path today and dry-run does not reach the transport; and a client that
+stops polling does not lose an active hold.
+
+#### The fix round, 2026-09-09 — the transport is not handed out any more
+
+**U2 could not be repaired by adding two checks**, because two checks that everybody must remember
+is the thing that failed. So the transport left the producers: `sendMessage` and `answerQuestion` are
+now private to a new leaf, `tools/fleet/send-coordinator.ts`, and `SteerDeps`, `ActionDeps` and
+`DrainDeps` each carry a `SendCoordinator` and nothing callable beside it. The book is consulted on
+the line above the transport call, inside that file, and **a producer cannot get past it because
+there is nothing else to call.**
+
+Enforced rather than described, because "you cannot write that" is a claim about a compiler and a
+module graph, and neither can go red under `npm test`:
+
+- `tests/fleet-compile-guards.test.ts` — a `@ts-expect-error` per dependency type. Put a transport
+  back on one and the directive goes unused and `npm run typecheck` fails.
+- `tests/fleet-imports.test.ts` — a Babel walk over all of `tools/`: only `steer.ts` and
+  `send-coordinator.ts` may import the transport as a **value**. That closes the door the type check
+  cannot see — a new producer taking no transport and simply importing one.
+
+**Four paths, four tests, and each asserts the TRANSPORT WAS NOT REACHED** rather than that a
+refusal came back: a route that answered 409 and typed anyway would pass the weaker assertion, and
+typing anyway is the whole failure. Direct message and direct answer answer `409 session-held`; a
+broadcast reports that recipient `held` **and goes on to the others**, because refusing the whole
+fan-out over one hold is a different bug of the same size; the drain stops at `next()` with the item
+still in the queue and unleased.
+
+**U6's own mutation now goes red.** `tests/fleet-send-composition.test.ts` asks the question every
+producer test is structurally unable to ask — *is it the same object?* — by identity across both real
+compositions, and end to end by driving an ambiguous **direct** send through the real steering route
+and reading the hold back out of the real action catalogue. `makeActionRoutes` also **throws** if its
+queue and its coordinator are looking at two different books, so the split cannot come up half-right.
+
+**U3**: the release *address* is parsed on its own. `id` and `version` read ⇒ both gestures stay and a
+missing sentence becomes a generic warning; only an unreadable address withholds them, and that copy
+now names the terminal (which exists) and says plainly that there is nothing to press here. The line
+telling the operator to *"clear it from the server"* is gone — there is no such interface, and an
+instruction to do something impossible is worse than the missing row.
+
+**U4**: `DrainOutcome`'s arm and the operator log are `uncertain`; the transport's `code` stays beside
+it as **evidence** of why the send stopped, which is a different claim from how far it got.
+
+**U5**: a hold opened before any generation was known records the first one seen **afterwards** on
+`firstSeenGeneration` — its own field, because it is not a claim about the moment of the send — and
+the next distinct one supersedes it. The window is one refresh cycle again rather than indefinite.
+
+**A FIFTH PRODUCER LANDED WHILE THIS WAS BEING WRITTEN, AND THE GUARD CAUGHT IT.** `POST
+/api/broadcast` (`tools/fleet/routes-broadcast.ts`) was merged from another session holding
+`sendMessage` on its own deps, so it could type into a session the page was drawing as held — and
+`tests/fleet-imports.test.ts` went red on it rather than anybody noticing. It now takes a
+`SendCoordinator` like the rest, a held recipient gets its own scheduling arm (`kind: "held"`, its
+own count, and the hold's own sentence — never a refusal claiming `delivery: "none"`, which would
+say a send was attempted that was never made), and the rest of the fan-out still goes out. 2026-09-09.
+
+**Done:** 1,776 fleet tests green across 45 files; typecheck exit 0; nine mutations, nine caught,
+including `shared ??=` → `shared =`, which the review demonstrated the whole suite could sleep
+through. U1 is untouched and is Stage 4b.
+
+#### Three judgements the implementer asked for, and the rule one of them refines
+
+**An unreachable arm that REFUSES is not an unreachable arm that CLAIMS.** The drain's `held` arm
+cannot fire today — `next()` refuses first — and the implementer asked whether to cut it, since this
+plan has already cut two unreachable arms. **Keep it**, and the distinction matters enough to state,
+because the rule as written would have removed it:
+
+- `reception observed`, `not-attempted` and `planCompleted` were cut because each **asserted a fact
+  about the world that nothing could establish**. Shipping one means the type promising a
+  distinction the system cannot make, and a reader believing it.
+- The drain's `held` arm **claims nothing**. It declines to act. An unreachable *defensive* branch
+  costs a little code and buys a floor under a path where being wrong means a keystroke nobody can
+  recall.
+
+So: **cut an unreachable arm that makes a claim; keep an unreachable arm that refuses to act — and
+say in the code which of the two it is.** This one leaves the lease open rather than settling, so if
+it ever does fire, a person decides rather than the code guessing.
+
+**The stagger keeps its numbering when a recipient is held.** Renumbering around whoever happens to
+be held would make everybody else's resume times depend on the holds, which is a worse property than
+a gap in the sequence.
+
+**`makeActionRoutes` throwing on a book mismatch stays**, and it was the closest call. It is a new
+way for the dashboard to fail to start, and this is the tier where that matters most — the thing you
+reach for when other things are broken. It stays because the mismatch can only be introduced by
+editing composition code, so it fails immediately and every time rather than lying dormant, and
+because of the asymmetry: **a dashboard that refuses to start is visible; a dashboard running with
+its quarantine silently disabled is not** — and the second is precisely the failure this stage
+exists to prevent. Logging and carrying on would reproduce U6 as a runtime behaviour after removing
+it as a compile-time one.
+
+#### A hole a peer found by reading the header, before it was built
+
+**The coordinator's guarantee is process-local, and all three enforcements are too.** A child
+process — a spawned script, a worker, anything with its own module graph — calls
+`sharedSendCoordinator()` and gets a **fresh, empty book**, so `holding()` answers `null` for every
+session on the box and a send goes into a pane that may be holding half a sentence.
+
+The import walk cannot see it (the child legitimately holds a coordinator), the compile guard cannot
+(the types are right), and the composition test cannot (it asserts one book **within one process**,
+which is the failure it was written for). Written into `send-coordinator.ts` at the point of
+temptation rather than guarded, because the guard would have to be a durable store — which is this
+stage, below.
+
+**Found by `dashboard-titles-descriptions-detail`, which had been asked to build exactly that** and
+abandoned it after reading the header's insistence that the check and the call are adjacent with
+nothing between them. It reasoned from the header to the consequence without having been present for
+the bug — which is the argument for writing the reason down rather than only enforcing it, and the
+clearest evidence tonight that a comment can do work a test cannot.
+
+### Stage 4b — a hold must survive the process that recorded it
+
+**U1, and it is the one finding that needs new machinery rather than a repair.** The quarantine book
+is in memory. A dashboard restart constructs an empty one, `next()` then sees no hold, and
+**keystrokes are admitted again with nobody told** — while the tmux server, and therefore the
+half-typed sentence, is still there. The release route already states that holds do not survive a
+restart (`routes-actions.ts:1832`), so the behaviour is documented and still wrong: what is lost is
+not a convenience, it is the only record that a session may be holding text.
+
+This is deliberately **not** folded into Stage 4's fix round. It is a durable store where there was
+none, and the plan's own rejected-options section says instance-scoped memory is enough *for
+receipts* — that argument does not transfer, because a receipt's job ends with the process and a
+hold's does not.
+
+- [ ] A small append-only ledger, JSONL, in the shape the roadmap's storage contract already allows
+      — no new store type, no SQLite. Write the unresolved attempt **before** the send; remove it
+      only on a definitive success or a proven `none`.
+- [ ] On startup, reload unresolved attempts as holds **before mounting any send route**, so there
+      is no window in which the server can be asked to type while it is still reading.
+- [ ] Accept rehydrated ids from the previous process rather than refusing them as foreign — which
+      is a direct tension with Stage 2's instance-prefixing, and the resolution has to be written
+      down rather than discovered: a queue id names volatile state and should die with it; a hold id
+      names a fact about the *world* that outlived the process.
+- [ ] Prove it by restarting: open a hold, restart the server, assert the session is still held and
+      both gestures still work.
+
+**Done:** a hold survives a restart, or the operator is told it did not — and the second is not
+acceptable as the design, only as the failure mode.
 
 ### Stage 5 — request ids and receipts
 

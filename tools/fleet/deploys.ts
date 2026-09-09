@@ -84,6 +84,21 @@ export type DeployRead = {
   unreadable: string[];
   /** Non-blank lines seen, parsed or not. The denominator for any claim about the file. */
   lines: number;
+  /**
+   * **Whether the LAST non-blank line of the file parsed.**
+   *
+   * Its own field because a corrupt last line is a different situation from a
+   * corrupt middle one, and only this one poisons the header. The file is
+   * append-only, so its last line is the newest deploy; if it fails,
+   * `newestDeploy()` returns the one before it, and everything downstream then
+   * calls that "the newest recorded deploy" and measures a distance from it —
+   * confidently, and about the wrong deploy. GPT Sol's P1 finding 4, 2026-09-09,
+   * and the tests only covered a corrupt OLDEST line, which costs nothing.
+   *
+   * False on an empty file too: there is no newest line, so nothing may claim to
+   * be it.
+   */
+  newestLineRead: boolean;
 };
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -242,6 +257,10 @@ export function readDeploys(text: string): DeployRead {
   const versions: DeployVersion[] = [];
   const unreadable: string[] = [];
   let release = 0;
+  /* Set on every non-blank line and therefore describing the LAST one when the
+     loop ends. The file is append-only, so that line is the newest deploy —
+     see `DeployRead.newestLineRead`. */
+  let newestLineRead = false;
 
   for (const [i, line] of text.split("\n").entries()) {
     if (line.trim() === "") continue;
@@ -252,15 +271,21 @@ export function readDeploys(text: string): DeployRead {
       raw = JSON.parse(line);
     } catch (err) {
       unreadable.push(`${where}: does not parse (${(err as Error).message.slice(0, 60)})`);
+      newestLineRead = false;
       continue;
     }
     const read = readVersion(raw, release, where);
-    if (typeof read === "string") unreadable.push(read);
-    else versions.push(read);
+    if (typeof read === "string") {
+      unreadable.push(read);
+      newestLineRead = false;
+    } else {
+      versions.push(read);
+      newestLineRead = true;
+    }
   }
 
   versions.reverse();
-  return { versions, unreadable, lines: release };
+  return { versions, unreadable, lines: release, newestLineRead };
 }
 
 /**

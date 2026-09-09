@@ -33,7 +33,6 @@
  */
 import { INSTANCE_TOKEN, serverInstanceId } from "./instance.js";
 import type {
-  HoldOutcome,
   HoldReleaseGesture,
   QuarantineHoldView,
   UncertainSendOrigin,
@@ -345,6 +344,11 @@ export class QuarantineBook {
       claudeSessionId: evidence.claudeSessionId,
       serverInstanceId: this.serverInstanceId,
       tmuxGeneration: this.generation,
+      // NOTHING HAS BEEN SEEN AFTER THIS HOLD YET, by definition. It stays null
+      // for ever on a hold that knew its generation at opening: that hold has a
+      // claim about the world already, and this field is only the repair for
+      // one that has none. See `QuarantineHoldView.firstSeenGeneration`.
+      firstSeenGeneration: null,
       openedAt: at,
       lastSendAt: at,
       incidents: 1,
@@ -439,29 +443,69 @@ export class QuarantineBook {
    * generation a hold was opened without. `noteGeneration` in queue.ts makes
    * the same distinction and for the same reason: "we had not been told" is not
    * evidence that anything restarted.
+   *
+   * **AND A HOLD THAT KNEW NO GENERATION IS NOT SKIPPED FOR EVER**, which is
+   * where this landed the first time. Saying *no later change proves anything
+   * about it* is true of the first observation and false of the second: two
+   * different tmux servers seen after the hold opened means one replaced the
+   * other, whichever of them the send went to. So the first is recorded on
+   * `firstSeenGeneration` — a fact about what happened AFTER, deliberately not
+   * written into `tmuxGeneration`, which is a claim about the moment of the
+   * send — and the next distinct one supersedes. Without it the "one refresh
+   * cycle" window was indefinite.
    */
   noteGeneration(tmuxServerPid: number): number {
-    const was = this.generation;
     this.generation = tmuxServerPid;
-    if (was === null || was === tmuxServerPid) return 0;
     const at = this.now();
     let superseded = 0;
     for (const holds of this.bySession.values()) {
       const open = holds.open;
-      // A hold with no generation on it was opened before this server had been
-      // told which tmux server it was reading. That is a gap in our knowledge
-      // rather than evidence about the pane, so it keeps holding.
-      if (open === null || open.tmuxGeneration === null || open.tmuxGeneration === tmuxServerPid) continue;
-      const outcome: HoldOutcome = {
-        kind: "superseded",
-        at,
-        was: open.tmuxGeneration,
-        now: tmuxServerPid,
-        what:
-          `the tmux server was ${open.tmuxGeneration} when this was opened and is ${tmuxServerPid} now — ` +
-          "every pane went with it, so whatever was in that input box is gone and there is nothing left to hold back.",
-      };
-      this.close({ ...open, outcome });
+      if (open === null) continue;
+
+      // The ordinary case: the hold knows which tmux server it was opened
+      // against, and this is a different one.
+      if (open.tmuxGeneration !== null) {
+        if (open.tmuxGeneration === tmuxServerPid) continue;
+        this.close({
+          ...open,
+          outcome: {
+            kind: "superseded",
+            at,
+            was: open.tmuxGeneration,
+            now: tmuxServerPid,
+            what:
+              `the tmux server was ${open.tmuxGeneration} when this was opened and is ${tmuxServerPid} now — ` +
+              "every pane went with it, so whatever was in that input box is gone and there is nothing left to hold back.",
+          },
+        });
+        superseded += 1;
+        continue;
+      }
+
+      // Opened before this server had been told anything. The FIRST thing we
+      // hear afterwards is recorded and nothing else: it may well be the same
+      // tmux server the send went to, so it is not evidence of a restart.
+      if (open.firstSeenGeneration === null) {
+        holds.open = { ...open, firstSeenGeneration: tmuxServerPid };
+        continue;
+      }
+      if (open.firstSeenGeneration === tmuxServerPid) continue;
+      // The SECOND, and it is different. Whichever server the send went to, one
+      // of these two replaced the other, and every pane went with it.
+      this.close({
+        ...open,
+        outcome: {
+          kind: "superseded",
+          at,
+          was: open.firstSeenGeneration,
+          now: tmuxServerPid,
+          what:
+            "this dashboard had not been told which tmux server it was reading when this was opened, so it cannot " +
+            `say which one the send went to — but it has seen ${open.firstSeenGeneration} and then ${tmuxServerPid} ` +
+            "since, and one of those replaced the other. Every pane went with it, so whatever was in that input box " +
+            "is gone and there is nothing left to hold back.",
+        },
+      });
       superseded += 1;
     }
     return superseded;

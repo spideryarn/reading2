@@ -29,15 +29,22 @@
  * heartbeat advances**, because that pair is the whole diagnosis. A dead daemon
  * and a deaf one produce different sentences here.
  *
- * ## What is still not here, and is said rather than mocked
+ * ## The box to send the Overseer a message, which arrived on 2026-09-09
  *
- * **A box to send the Overseer a message.** A daemon existing is not an agent
- * that can receive one: nothing in `tools/overseer/` reads an inbox, and there
- * is no route that would accept such a message. A textarea over that would be
- * the most expensive lie this tool can tell — a page quietly swallowing
- * instructions into nothing. One sentence says so; the Sessions tab is where a
- * sentence reaches an agent today, and the broadcast below is how it reaches
- * all of them.
+ * This section used to say there was none, and that a textarea over a daemon
+ * with no inbox would be *"the most expensive lie this tool can tell — a page
+ * quietly swallowing instructions into nothing"*. **That half is still true and
+ * is why the new card says what it says.** What was wrong was the conclusion:
+ * a daemon existing is indeed not an agent that can receive a message, but the
+ * **Overseer is not only a daemon**. It is a Claude session in a tmux pane,
+ * reachable by the same steer path as every other row on the Sessions tab.
+ *
+ * So `MessageOverseerCard` addresses the *session* — resolved from the claim
+ * rather than picked — and its copy keeps the daemon caveat, because a card
+ * that blurred the two would teach somebody that the checkpoint writer has an
+ * inbox. Greg, 2026-09-08: *"there should be a way to send messages directly to
+ * the Overseer in the Overseer tab, and also to broadcast to all agents"*.
+ * docs/plans/260909b-messaging-the-overseer-and-broadcasting-to-all-agents-from-the-dashboard.md.
  *
  * ## The history is history, and is not joined to anything
  *
@@ -51,10 +58,21 @@
 import type { ReactNode } from "react";
 
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
+import { BroadcastCard } from "./BroadcastCard";
+import { MessageOverseerCard } from "./MessageOverseerCard";
 import { Explain } from "./Tooltip";
-import type { FleetRow, OverseerScheduler, OverseerSessionHistory, OverseerStatus, OverseerView } from "./types";
+import type {
+  ClockSkew,
+  FleetRow,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerView,
+  UsageView,
+} from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, cx } from "./ui";
+import { UsageCard } from "./UsagePanel";
 import { formatDuration } from "./view";
 
 /**
@@ -468,18 +486,37 @@ export function OverseerStatusCard({
 export function OverseerPanel({
   actions,
   rows,
+  unreadableRows,
   overseer,
+  usage,
   now,
   receivedAt,
+  skew,
 }: {
   actions: ActionsUi;
   rows: readonly FleetRow[];
+  /**
+   * How many rows in this payload could not be read, **or `null` when no
+   * collection has finished** — which is not the same as zero and must not be
+   * flattened into it.
+   *
+   * Both cards below refuse while it is non-zero, for two different reasons: a
+   * dropped row can be the one holding the Overseer claim or a second claimant,
+   * and it is also a session that would silently miss a broadcast labelled
+   * *every agent*. `null` refuses too — see each card — because "we have not
+   * looked" is not "we looked and found none".
+   */
+  unreadableRows: number | null;
   /** The Overseer's own state, `not-asked` from a server that does not report it, or `null` before any payload. */
   overseer: OverseerView | null;
+  /** What the last usage pass found about the account, or `null` before any payload. */
+  usage: UsageView | null;
   /** The page's one clock. Every age on screen agrees because they all read this. */
   now: number;
   /** When this browser received the payload, by its own clock — the anchor. */
   receivedAt: number | null;
+  /** For the usage card only, which is the one that draws wall-clock times. See `UsageCard`. */
+  skew: ClockSkew;
 }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
@@ -493,6 +530,12 @@ export function OverseerPanel({
       {/* FIRST, because it is the answer to "can I trust the rest of this
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
+
+      {/* SECOND, and beside the status card rather than on a tab of its own:
+          *is anything watching* and *can the account afford more work* are the
+          two questions you ask before reading anything else here, and the
+          second is the one that explains a fleet of sessions sitting idle. */}
+      <UsageCard usage={usage} now={now} receivedAt={receivedAt} skew={skew} />
 
       <Card className="tw:p-4">
         <h2 className="tw:font-medium">Everything queued, across the fleet</h2>
@@ -511,28 +554,37 @@ export function OverseerPanel({
       </Card>
 
       {/* The same component Box Health draws. One implementation of "say this
-          to everybody", per the plan. */}
+          to everybody", per the plan.
+
+          `rows` IS WHAT MAKES THE BROADCAST REACH ANYBODY. The route refuses a
+          fleet-wide message that names no recipients, on purpose — it must act
+          on the list the person was looking at — and this tab is the one that
+          has that list. See `boxActionBody`. Passed straight through, never
+          re-read. */}
       <BoxActionsCard
         feed={actions.feed}
         api={actions.api}
         asked={actions.asked}
         error={actions.error}
         onChanged={actions.refresh}
+        rows={rows}
       />
 
-      {/* **A DAEMON IS NOT A RECIPIENT.** The Overseer writes a checkpoint;
-          nothing in it reads an inbox, and there is no route that would accept a
-          message addressed to it. One sentence, because a caveat earns its place
-          only if it changes what you do on this screen — and this one does: it
-          sends you to the Sessions tab. */}
-      <Card className="tw:mt-3 tw:p-4">
-        <h2 className="tw:font-medium">There is still nothing here to send a message to.</h2>
-        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          The Overseer publishes what it sees; nothing on this box reads a message addressed to it. To say something to
-          one agent, use its session on the Sessions tab; to say something to all of them, the broadcast above is the
-          real thing.
-        </p>
-      </Card>
+      {/* **A DAEMON IS NOT A RECIPIENT — AND THE OVERSEER IS NOT ONLY A
+          DAEMON.** This slot used to hold a card saying there was nothing here
+          to send a message to. It was right about `tools/overseer/`, which
+          publishes a checkpoint and reads no inbox, and wrong about the session:
+          the Overseer is a Claude agent in a pane, reachable by the same steer
+          path as everything else. The card below keeps both halves — see its
+          header, and docs/plans/260909b-…. */}
+      <MessageOverseerCard rows={rows} unreadableRows={unreadableRows} />
+
+      {/* The other half of what Greg asked for on 2026-09-08. Beside the
+          ease-off broadcast rather than replacing it: that one says a reviewed
+          sentence with a staggered pause in it, this one says whatever you type.
+          routes-broadcast.ts § the header says why they are two loops today and
+          which way the dependency should run when they become one. */}
+      <BroadcastCard rows={rows} unreadableRows={unreadableRows} />
     </div>
   );
 }

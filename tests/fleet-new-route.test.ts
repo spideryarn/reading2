@@ -50,6 +50,7 @@ import {
   type RunRequest,
   type RunResult,
 } from "../tools/fleet/routes-new.js";
+import type { NotifyOutcomeView } from "../tools/fleet/wire.js";
 
 /* ---------------------------------------------------------------- *
  * A server, faked at the two seams that matter: HTTP and the box.
@@ -110,11 +111,18 @@ type Fake = {
   health: { level: "ok" | "strained" | "critical" | "unknown" };
   post: (body: unknown, headers?: Record<string, string>) => Promise<FakeRes>;
   get: () => Promise<FakeRes>;
+  /** What the route asked the Overseer to be told, in order. */
+  notified: { sessionName: string | null; startedDir: string | null; origin: string | null; prompt: string }[];
+  /** What the notifier answers next. */
+  notifyAnswer: { value: NotifyOutcomeView | Error };
 };
 
 function fake(overrides: Parameters<typeof createNewSessionRoutes>[0] = {}): Fake {
   const runs: RunRequest[] = [];
   const logs: string[] = [];
+  const notified: { sessionName: string | null; startedDir: string | null; origin: string | null; prompt: string }[] =
+    [];
+  const notifyAnswer: { value: NotifyOutcomeView | Error } = { value: { kind: "no-holder" } };
   const health = { level: "ok" as "ok" | "strained" | "critical" | "unknown" };
   let clock = 1_700_000_000_000;
   let settle: ((r: RunResult) => void) | null = null;
@@ -130,6 +138,20 @@ function fake(overrides: Parameters<typeof createNewSessionRoutes>[0] = {}): Fak
     healthLevel: () => health.level,
     now: () => clock,
     log: (line) => logs.push(line),
+    /* Records what it was told and answers however the test says. The DEFAULT
+       is `no-holder` rather than `submitted`, deliberately: a fixture that
+       succeeds by default makes every unrelated test assert a successful
+       notification it never thought about, and the arm that matters most here
+       is the one where nothing was sent. */
+    notifyOverseer: async (input) => {
+      notified.push(input);
+      /* An Error rather than an outcome makes it REJECT, so the arm where the
+         notifier breaks its own no-throw promise is reachable here. That arm
+         exists because a promise is not a guarantee, and a launch that really
+         happened must not be lost to it. */
+      if (notifyAnswer.value instanceof Error) throw notifyAnswer.value;
+      return notifyAnswer.value;
+    },
   };
 
   const routes = createNewSessionRoutes({
@@ -147,6 +169,8 @@ function fake(overrides: Parameters<typeof createNewSessionRoutes>[0] = {}): Fak
     runs,
     logs,
     health,
+    notified,
+    notifyAnswer,
     tick: (ms) => {
       clock += ms;
     },
@@ -213,7 +237,7 @@ describe("a valid request runs gjd-remote new-claude, with the prompt on stdin",
   it("reports starting, then started with the name it was launched under", async () => {
     const f = fake();
     const accepted = await f.post({ prompt: "hello", name: "wf-new-hello" });
-    expect(accepted.json().launch.state).toBe("starting");
+    expect(accepted.json().launch.progress.state).toBe("starting");
     expect(accepted.json().launch.name).toBe("wf-new-hello");
 
     await f.finish({
@@ -223,7 +247,7 @@ describe("a valid request runs gjd-remote new-claude, with the prompt on stdin",
 
     const state = (await f.get()).json();
     expect(state.busy).toBe(false);
-    expect(state.launches[0].state).toBe("started");
+    expect(state.launches[0].progress.state).toBe("started");
     expect(state.launches[0].name).toBe("wf-new-hello");
     expect(state.launches[0].startedDir).toBe("/home/greg/code/spideryarn2");
     expect(state.launches[0].error).toBeNull();
@@ -461,6 +485,7 @@ describe("the directory is a path this box may start an agent in", () => {
         healthLevel: () => "ok",
         now: () => 1,
         log: () => {},
+        notifyOverseer: async () => ({ kind: "no-holder" }),
       },
     });
     const { res, out } = makeRes();
@@ -614,7 +639,7 @@ describe("one at a time, then a cooldown", () => {
     await f.finish({ code: 1, stderr: "boom\n" });
     const state = (await f.get()).json();
     expect(state.busy).toBe(false);
-    expect(state.launches[0].state).toBe("failed");
+    expect(state.launches[0].progress.state).toBe("failed");
   });
 
   it("refuses outright when the box says it is critical, and runs nothing", async () => {
@@ -723,7 +748,7 @@ describe("a repo launch goes through gjd-remote's setup admission, not around it
       stdout: "gjd-remote new-claude web-1 → greg@1.2.3.4:/home/greg/code/spideryarn2\n✓ started 'web-1'\n",
     });
     const rec = f.routes.launches()[0]!;
-    expect(rec.state).toBe("started");
+    expect(rec.progress.state).toBe("started");
     expect(rec.dir).toBe("/home/greg/code/spideryarn2/.claude/worktrees/x");
     expect(rec.startedDir).toBe("/home/greg/code/spideryarn2");
     expect(rec.note).toMatch(/not \/home\/greg\/code\/spideryarn2\/\.claude\/worktrees\/x/);
@@ -762,7 +787,7 @@ describe("a launch that failed says so, and says whether something may still exi
     await f.finish({ code: 1, stderr: "✗ session 'x' already exists — 'gjd-remote resume x'\n" });
 
     const rec: LaunchRecord = (await f.get()).json().launches[0];
-    expect(rec.state).toBe("failed");
+    expect(rec.progress.state).toBe("failed");
     expect(rec.error).toContain("already exists");
     expect(rec.finishedAt).not.toBeNull();
   });
@@ -827,6 +852,7 @@ describe("a launch that failed says so, and says whether something may still exi
         healthLevel: () => "ok",
         now: () => 1,
         log: () => {},
+        notifyOverseer: async () => ({ kind: "no-holder" }),
       },
     });
     const { res, out } = makeRes();
@@ -836,7 +862,7 @@ describe("a launch that failed says so, and says whether something may still exi
     await Promise.resolve();
     await Promise.resolve();
     const rec = routes.launches()[0]!;
-    expect(rec.state).toBe("failed");
+    expect(rec.progress.state).toBe("failed");
     expect(rec.error).toMatch(/the pipe broke/);
     expect(runs).toHaveLength(1);
   });
@@ -889,9 +915,13 @@ describe("the launch record survives JSON, which is how the client sees it", () 
         "requestedAt",
         "resolution",
         "startedDir",
-        "state",
+        "progress",
       ].sort(),
     );
+    /* The discriminant and its notification travel together under one key --
+       see LaunchProgress in wire.ts for why nesting rather than two top-level
+       fields, which is about the record's object identity surviving mutation. */
+    expect(Object.keys(rec.progress).sort()).toEqual(["notification", "state"]);
     expect(JSON.stringify(rec)).not.toContain("secret");
     expect(rec.promptBytes).toBe(13);
   });
@@ -928,8 +958,123 @@ describe("no import side effects", () => {
           healthLevel: forbidden("healthLevel"),
           now: forbidden("now"),
           log: forbidden("log"),
+          notifyOverseer: forbidden("notifyOverseer"),
         },
       }),
     ).not.toThrow();
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * Telling the Overseer, and the record saying what became of it.
+ * ---------------------------------------------------------------- */
+
+describe("the Overseer notification, and where its outcome lands", () => {
+  /** Start one launch, let it succeed, and let the notification settle. */
+  async function started(f: Fake): Promise<void> {
+    await f.post({ prompt: "do the thing\nand then the other thing", name: "wf-x" });
+    await f.finish({
+      stdout: "gjd-remote new-claude wf-x → greg@1.2.3.4:/home/greg/code/spideryarn2\n✓ started 'wf-x'\n",
+    });
+    // The notification is a further await inside `launch`, after the record has
+    // already been written — which is the point of it being last.
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it("tells the Overseer once, with the name, the directory and the origin", async () => {
+    const f = fake();
+    await started(f);
+
+    expect(f.notified).toHaveLength(1);
+    expect(f.notified[0]?.sessionName).toBe("wf-x");
+    expect(f.notified[0]?.startedDir).toBe("/home/greg/code/spideryarn2");
+    /* From `checkRequest`, not from the body: the caller cannot choose it, and
+       with no authentication it is the closest this route has to knowing who. */
+    expect(f.notified[0]?.origin).toBe("http://127.0.0.1:8787");
+  });
+
+  it("puts the outcome on the record, where the page can read it", async () => {
+    const f = fake();
+    f.notifyAnswer.value = { kind: "submitted", to: "Overseer", paneId: "%42" };
+    await started(f);
+
+    const rec = (await f.get()).json().launches[0];
+    expect(rec.progress.state).toBe("started");
+    expect(rec.progress.notification).toEqual({ kind: "submitted", to: "Overseer", paneId: "%42" });
+  });
+
+  /**
+   * The reason the union exists. `pending` is set BEFORE the attempt so a
+   * launch result never waits on a notification — but a `pending` that survives
+   * is a state with no cause, and this is the assertion that goes red if the
+   * call is ever removed or its result dropped on the floor.
+   */
+  it("does not leave the record saying pending once the attempt is over", async () => {
+    const f = fake();
+    await started(f);
+
+    const rec = (await f.get()).json().launches[0];
+    expect(rec.progress.notification.kind).not.toBe("pending");
+    expect(rec.progress.notification.kind).toBe("no-holder");
+  });
+
+  it("keeps the launch when nobody holds the overseer role", async () => {
+    const f = fake();
+    f.notifyAnswer.value = { kind: "no-holder" };
+    await started(f);
+
+    const rec = (await f.get()).json().launches[0];
+    /* The session started. That is the news, and it is true whatever became of
+       the notification — an absent Overseer is not a failed launch. */
+    expect(rec.progress.state).toBe("started");
+    expect(rec.name).toBe("wf-x");
+    expect(rec.progress.notification.kind).toBe("no-holder");
+  });
+
+  it("reports a refusal with its code and the delivery word, never as a success", async () => {
+    const f = fake();
+    f.notifyAnswer.value = {
+      kind: "refused",
+      to: "Overseer",
+      code: "input-not-empty",
+      why: "the box already holds text",
+      delivery: "none",
+    };
+    await started(f);
+
+    const rec = (await f.get()).json().launches[0];
+    expect(rec.progress.notification).toMatchObject({ kind: "refused", code: "input-not-empty", delivery: "none" });
+    /* Nothing on this box can observe reception, so the word is never used. */
+    expect(JSON.stringify(rec.progress.notification)).not.toContain('"sent"');
+  });
+
+  /**
+   * `notifyOverseer` promises not to throw, and a promise is not a guarantee.
+   * An unanticipated failure must not cost a launch that actually happened.
+   */
+  it("keeps the launch when telling the Overseer throws", async () => {
+    const f = fake();
+    f.notifyAnswer.value = new Error("the child process died");
+    await started(f);
+
+    const rec = (await f.get()).json().launches[0];
+    expect(rec.progress.state).toBe("started");
+    expect(rec.name).toBe("wf-x");
+    expect(rec.progress.notification.kind).toBe("cannot-tell");
+    expect(rec.progress.notification.why).toContain("the child process died");
+  });
+
+  it("never puts the prompt in the launch record, notification or not", async () => {
+    const f = fake();
+    f.notifyAnswer.value = { kind: "submitted", to: "Overseer", paneId: "%42" };
+    await started(f);
+
+    /* Paired with a positive, per this file's own rule: the absence below means
+       nothing unless the mechanism it guards is demonstrably alive. */
+    const rec = (await f.get()).json().launches[0];
+    expect(rec.promptBytes).toBeGreaterThan(0);
+    expect(f.notified[0]?.prompt).toContain("the other thing");
+    expect(JSON.stringify(rec)).not.toContain("the other thing");
   });
 });

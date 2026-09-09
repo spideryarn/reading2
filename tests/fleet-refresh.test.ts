@@ -29,6 +29,7 @@ import { SteeringQueue } from "../tools/fleet/queue.js";
 import { collectionStillRunning, refreshOnce, singleFlightCollect, type RefreshDeps } from "../tools/fleet/refresh.js";
 import { makeActionRoutes, type ActionDeps, type ActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
+import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 
@@ -62,6 +63,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     /* The arm the collector produces before `readPauses` has run. Not `none`:
        a fixture is in no position to claim we looked everywhere. */
     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    // Required on a row and not what this file is about: a fixture is not a box
+    // whose process table anybody probed.
+    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
     status: IDLE,
     paneId: PANE,
     panePid: PANE_PID,
@@ -89,10 +93,18 @@ function actionRoutes(): { routes: ActionRoutes; sent: Sent[]; queue: SteeringQu
   const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
   const routes = makeActionRoutes({
     queue,
-    sendMessage: (target, text, declaredStatus) => {
-      sent.push({ target, text, declaredStatus });
-      return SENT_OK;
-    },
+    // THE TRANSPORT INSIDE THE COORDINATOR, over the queue's OWN book — the
+    // routes refuse to build if the two disagree. `send-coordinator.ts`.
+    send: makeSendCoordinator({
+      book: queue.quarantineBook(),
+      sendMessage: (target, text, declaredStatus) => {
+        sent.push({ target, text, declaredStatus });
+        return SENT_OK;
+      },
+      answerQuestion: () => {
+        throw new Error("the refresh loop never answers a dialog");
+      },
+    }),
     now: () => clock,
     limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     log: () => {},

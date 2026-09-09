@@ -68,6 +68,7 @@ import {
   nonBlank,
   projectAttention,
 } from "./attention.js";
+import { projectUsage } from "./usage-feed.js";
 import type {
   AttentionFeed,
   OverseerHeartbeat,
@@ -75,6 +76,7 @@ import type {
   OverseerScheduler,
   OverseerSessionHistory,
   OverseerStatusFeed,
+  UsageFeed,
 } from "./wire.js";
 
 /**
@@ -217,39 +219,58 @@ function project(json: unknown): OverseerStatusFeed {
 }
 
 /**
- * Both projections out of ONE read of the file.
+ * All three projections out of ONE read of the file.
  *
  * **The sharing is a correctness property, not a saving.** The checkpoint is
  * replaced by atomic rename, so two separate reads can land either side of a
  * write and the page would then print *the inbox was scanned at X* beside *the
  * Overseer last wrote at Y* out of two different versions of the file — and the
  * relationship between those two numbers is the whole of what the card claims.
- * One read, two projections, each with its own compatibility policy.
+ * One read, three projections, each with its own compatibility policy.
+ *
+ * **`usage` joined them on 2026-09-08 and made the argument stronger rather
+ * than merely longer.** The usage card's central sentence is *the Overseer
+ * wrote thirty seconds ago and this headroom reading is two hours old* — the
+ * two clocks in one line, which cannot be assembled honestly out of two reads.
+ * `tools/fleet/usage-feed.ts` § the edge that did not exist.
  *
  * `root` is for tests; production resolves it the way the Overseer does.
- * **Never throws**, because `loadCheckpoint` does not and neither projection
+ * **Never throws**, because `loadCheckpoint` does not and no projection
  * touches anything but the value it is handed.
  */
-export type CheckpointFeeds = { attention: AttentionFeed; overseer: OverseerStatusFeed };
+export type CheckpointFeeds = { attention: AttentionFeed; overseer: OverseerStatusFeed; usage: UsageFeed };
 
 export function readCheckpointFeeds(root?: string): CheckpointFeeds {
   const load = loadCheckpoint(root);
   switch (load.kind) {
     case "absent":
-      return { attention: { kind: "checkpoint-absent" }, overseer: { kind: "checkpoint-absent" } };
+      return {
+        attention: { kind: "checkpoint-absent" },
+        overseer: { kind: "checkpoint-absent" },
+        usage: { kind: "checkpoint-absent" },
+      };
     case "unreadable":
       return {
         attention: { kind: "checkpoint-unreadable", why: load.why },
         overseer: { kind: "checkpoint-unreadable", why: load.why },
+        usage: { kind: "checkpoint-unreadable", why: load.why },
       };
     case "json":
-      return { attention: projectAttention(load.json), overseer: projectOverseerStatus(load.json) };
+      return {
+        attention: projectAttention(load.json),
+        overseer: projectOverseerStatus(load.json),
+        usage: projectUsage(load.json),
+      };
     default: {
       /* Unreachable; returns rather than throws, for the reason `readAttention`
          does. The assignment is what makes a fourth arm a compile error. */
       const never: never = load;
       const why = `the checkpoint reader returned ${JSON.stringify(never)}`;
-      return { attention: { kind: "checkpoint-unreadable", why }, overseer: { kind: "checkpoint-unreadable", why } };
+      return {
+        attention: { kind: "checkpoint-unreadable", why },
+        overseer: { kind: "checkpoint-unreadable", why },
+        usage: { kind: "checkpoint-unreadable", why },
+      };
     }
   }
 }

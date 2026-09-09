@@ -30,8 +30,30 @@ import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue, type UnsentFailure } from "../tools/fleet/queue.js";
 import { drainSharedQueues, handleActionRequest, makeActionRoutes, type ActionDeps } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
+import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
+
+/**
+ * A coordinator over a named book, with a fake transport.
+ *
+ * **THE TRANSPORT IS INJECTED ONE LEVEL DOWN NOW**, inside the coordinator,
+ * because nothing above it may hold one: the coordinator's check on the line
+ * above the transport call is what stops a producer typing into a session that
+ * is already held, and a producer that could reach `sendMessage` directly could
+ * skip it. Every call site here passes `queue.quarantineBook()`, so the book the
+ * drain consults and the book the transport is guarded by are the same object —
+ * which is the join the whole of Stage 4 turns on.
+ */
+function sends(book: SendCoordinatorDeps["book"], sendMessage: SendCoordinatorDeps["sendMessage"]): SendCoordinator {
+  return makeSendCoordinator({
+    book,
+    sendMessage,
+    answerQuestion: () => {
+      throw new Error("the drain never answers a dialog");
+    },
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Fixtures. Fictional ids, distinct from every other test file's.
@@ -75,6 +97,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     /* The arm the collector produces before `readPauses` has run. Not `none`:
        a fixture is in no position to claim we looked everywhere. */
     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    // Required on a row and not what this file is about: a fixture is not a box
+    // whose process table anybody probed.
+    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
     status: IDLE,
     paneId: PANE_A,
     panePid: PANE_PID,
@@ -145,10 +170,10 @@ function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) 
     // ONE PER HARNESS, which is one per test: a cursor shared between tests
     // would make a pass's starting row depend on which tests ran before it.
     cursor: createDrainCursor(),
-    sendMessage: (target, text, declaredStatus) => {
+    send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
       sent.push({ target, text, declaredStatus });
       return typeof over.result === "function" ? over.result(target, text) : (over.result ?? SENT_OK);
-    },
+    }),
     log: (line) => logs.push(line),
     now: () => clock,
   };
@@ -224,12 +249,13 @@ describe("the route and the drain share one queue", () => {
     // queue nothing asked. Only a test that crosses the seam can see that.
     const sent: Sent[] = [];
     let clock = 1_000_000;
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
-      sendMessage: (target, text, declaredStatus) => {
+      queue,
+      send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
-      },
+      }),
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -272,12 +298,13 @@ describe("the route and the drain share one queue", () => {
     // would pass a route test and still be typed bare twenty minutes later.
     const sent: Sent[] = [];
     let clock = 1_000_000;
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
-      sendMessage: (target, text, declaredStatus) => {
+      queue,
+      send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
-      },
+      }),
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -642,9 +669,14 @@ describe("drainOnce fails honestly", () => {
 
       expect(sent, delivery).toHaveLength(1);
       expect(queue.size(SESSION_A), delivery).toBe(0);
-      const refused = result.outcomes[0];
-      expect(refused?.kind, delivery).toBe("refused");
-      expect(refused?.kind === "refused" && refused.code).toBe("not-at-input");
+      /* `uncertain`, NOT `refused`. The word is the assertion: this item may
+         well have been delivered, and *refused* is what the page and the log
+         used to say about it — the opposite fact. The transport's `code` stays
+         beside it as EVIDENCE of why the send stopped, which is a different
+         claim from how far it got. */
+      const uncertain = result.outcomes[0];
+      expect(uncertain?.kind, delivery).toBe("uncertain");
+      expect(uncertain?.kind === "uncertain" && uncertain.code).toBe("not-at-input");
 
       drainOnce(snap([row()]), deps);
       expect(sent, delivery).toHaveLength(1);
@@ -730,6 +762,29 @@ describe("drainOnce fails honestly", () => {
     expect(line).toContain("delivered=1");
     expect(line).not.toContain("secret");
   });
+
+  it("counts an ambiguous send as `uncertain` in the operator's log, never as `refused`", () => {
+    /* **THE WORD, IN THE LAST PLACE IT SURVIVED.** The queue settles these
+       `uncertain` and the browser copy is careful about it — and this line went
+       on printing `refused=1` over an item that may well have been delivered.
+       It is the line somebody reads a week later, so it is exactly where the
+       misleading word does the most damage. */
+    const { deps, queue } = harness({
+      result: { ...REFUSED, delivery: "partial", sent: [["send-keys", "-t", PANE_A, "-l", "--", "…"]] },
+    });
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "have a look at the logs", "greg");
+
+    const result = drainOnce(snap([row()]), deps);
+    const line = summariseDrain(result);
+
+    expect(result.quarantined).toBe(1);
+    expect(line).toContain("uncertain=1");
+    expect(line).not.toMatch(/\brefused=/);
+    // The transport's code survives as EVIDENCE beside it, which is a different
+    // claim from how far the send got.
+    expect(line).toContain("not-at-input");
+    expect(line).toContain("may have landed — session held");
+  });
 });
 
 /* ================================================================== *
@@ -769,11 +824,11 @@ describe("drainOnce is bounded", () => {
     const deps: DrainDeps = {
       queue,
       cursor: createDrainCursor(),
-      sendMessage: (_t, text) => {
+      send: sends(queue.quarantineBook(), (_t, text) => {
         sent.push(text);
         clock += DRAIN_BUDGET_MS + 1;
         return SENT_OK;
-      },
+      }),
       log: () => {},
       now: () => clock,
     };
@@ -922,9 +977,10 @@ describe("an enacted action cannot be queued", () => {
 
   it("is refused by the route with a code the page can act on", async () => {
     let clock = 1_000_000;
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
-      sendMessage: () => SENT_OK,
+      queue,
+      send: sends(queue.quarantineBook(), () => SENT_OK),
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},

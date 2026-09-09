@@ -77,6 +77,7 @@ import { RawValue } from "./RawValue";
 import { Explain } from "./Tooltip";
 import {
   actingWarning,
+  addressableRows,
   boxActions,
   isHolding,
   queueFor,
@@ -1221,8 +1222,19 @@ function QuarantineNotice({
       </p>
       {/* THE SERVER'S OWN SENTENCE. It knows which of the four readings this
           was and what was being sent; a sentence rebuilt here from `reading`
-          would be a second opinion, and the more confident of the two. */}
-      <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink">{hold.why}</p>
+          would be a second opinion, and the more confident of the two.
+
+          **AND WHEN IT DID NOT READ, THE HOLD IS STILL DRAWN AND STILL
+          RELEASABLE.** A missing sentence used to make the whole hold
+          unparseable, which took both gestures away over the one field a person
+          can most easily do without. The generic line below says less; it does
+          not say less accurately. */}
+      <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink">
+        {hold.why ??
+          "This server did not send a sentence this page can read, so nothing here can say what happened. What is " +
+            "known is that it is holding: nothing else will be delivered to this session until somebody says what is " +
+            "actually in its input box."}
+      </p>
       {hold.incidents !== null && hold.incidents > 1 ? (
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
           {hold.incidents} sends to this session have ended this way. The sentence above is the most recent.
@@ -1362,15 +1374,26 @@ export function SessionQueue({
   const heldPart = holding ? (
     <QuarantineNotice hold={hold} busy={busy} onRelease={(g) => void release(g)} />
   ) : queue?.holdUnreadable === true ? (
-    /* A HOLD THIS PAGE COULD NOT READ. Drawn rather than dropped for
+    /* A HOLD THIS PAGE CANNOT ADDRESS. Drawn rather than dropped for
        `itemsUnreadable`'s reason one field along: a hold that parses to nothing
        looks exactly like no hold, and on a queue with no items the whole row —
        and both gestures with it — would vanish. There is no button here,
-       because a release needs an id and a version this page does not have. */
+       because a release needs an id and a version this page does not have.
+
+       **THE COPY NAMES ONLY THINGS THAT EXIST.** It used to end "clear it from
+       the server if the page stays like this", and there is no such interface —
+       an instruction to do something impossible is worse than the missing row,
+       because the missing row at least looked broken. So this says what is
+       known, points at the one thing that does exist (the terminal, which
+       answers the actual question — what is in that input box), and then says
+       plainly that there is nothing to press here. */
     <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-alarm-ink">
-      This server says this session is held back after a send it could not account for, and sent that in a
-      shape this page cannot read — so nothing here can say why, and neither gesture can be offered. Look at
-      the terminal, and clear it from the server if the page stays like this.
+      This server says this session is held back after a send it could not account for, and sent that in a shape
+      this page cannot read — so nothing here can say why, and neither gesture can be offered, because a release
+      needs an id and a version that did not arrive. Look at the terminal —{" "}
+      <Mono>gjd-remote resume</Mono> — to find out what is actually in that input box.{" "}
+      <strong>There is nothing you can do about the hold itself from this page.</strong> Reloading is worth one
+      try, in case the server has since sent one this page can read.
     </p>
   ) : null;
   const card = outcome === null ? null : <ActionOutcomeCard outcome={outcome} onRefresh={onChanged} />;
@@ -1638,6 +1661,12 @@ export function FleetQueues({
  * ------------------------------------------------------------------ */
 
 /**
+ * "This panel was given no rows", as one object rather than a fresh `[]` per
+ * render — otherwise the memoised callbacks below rebuild on every pass.
+ */
+const NO_ROWS: readonly FleetRow[] = [];
+
+/**
  * What a box action would do, before it does it.
  *
  * **The dry run is not a nicety, it is the confirmation.** *"Kill what is
@@ -1655,6 +1684,26 @@ export function FleetQueues({
  * And `dryRun` is read off the ANSWER. A server that ignored the flag would
  * otherwise be reported here as having answered a question when it had killed
  * seventeen processes.
+ *
+ * ## `rows`, and why a broadcast cannot be sent without them
+ *
+ * A broadcast speaks to sessions, and the route will not choose them for us:
+ * it refuses a request that names nobody, deliberately, because a fleet-wide
+ * message must go to **the list the person was looking at** rather than to
+ * whatever the server happens to find when it reads tmux again. Until
+ * 2026-09-09 this panel sent no list at all, so every press was refused before
+ * recipient selection and the button had never reached a single session.
+ *
+ * So the rows go down verbatim — `boxActionBody` maps them through
+ * `steerTargetBody`, unmodified and un-refreshed — and both presses send the
+ * same list, so the confirmed request speaks to exactly what the preview
+ * described.
+ *
+ * **Optional, and the absence is not silent.** A panel that does not know the
+ * fleet — Box Health is one; its own caller has no rows to give it — passes
+ * none, and the server answers `a broadcast needs recipients: send the rows the
+ * page is showing`, which is the true state of that panel rather than a false
+ * success. Give it rows and the same button works; the Overseer tab does.
  */
 export function BoxActions({
   feed,
@@ -1662,12 +1711,15 @@ export function BoxActions({
   asked,
   error,
   onChanged,
+  rows,
 }: {
   feed: ActionsFeed | null;
   api: ActionsApi;
   asked: boolean;
   error: string | null;
   onChanged: () => void;
+  /** The rows this page is showing, verbatim. See the header. */
+  rows?: readonly FleetRow[];
 }): ReactNode {
   const [pending, setPending] = useState<ClientAction | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1676,29 +1728,39 @@ export function BoxActions({
 
   const actions = boxActions(feed);
 
+  /* THE SAME LIST FOR BOTH PRESSES, and it is this page's snapshot rather than
+     a fresh reading — the discipline `cancelBody` and the tmux claims in
+     routes-steer.ts follow. `onScreen` rather than `recipients`, because not
+     all of them are: `addressableRows` drops the ones with nowhere to send to,
+     and the difference is the sentence below. */
+  const onScreen = rows ?? NO_ROWS;
+  /* Counted from the SAME function the body builder uses, so the sentence and
+     the request cannot disagree about who was left out. */
+  const unaddressable = onScreen.length - addressableRows(onScreen).length;
+
   const press = useCallback(
     async (action: ClientAction): Promise<void> => {
       setPending(action);
       setPreview(null);
       setDone(null);
       setBusy(true);
-      setPreview(await api.box(action.id, true));
+      setPreview(await api.box(action.id, true, onScreen));
       setBusy(false);
     },
-    [api],
+    [api, onScreen],
   );
 
   const commit = useCallback(
     async (action: ClientAction): Promise<void> => {
       setBusy(true);
-      const result = await api.box(action.id, false);
+      const result = await api.box(action.id, false, onScreen);
       setDone(result);
       setPending(null);
       setPreview(null);
       setBusy(false);
       onChanged();
     },
-    [api, onChanged],
+    [api, onChanged, onScreen],
   );
 
   if (actions.length === 0) {
@@ -1765,13 +1827,29 @@ export function BoxActions({
             </>
           ) : null}
           {pending.effect === "broadcast" ? (
-            <p className="tw:mt-1 tw:text-ink-soft">
-              A sentence to every steerable session, each asked to pause for a different length of time
-              {pending.stagger === null
-                ? ", though the server did not say how they are spread"
-                : ` — between ${pending.stagger.minMinutes} and ${pending.stagger.windowMinutes} minutes`}
-              . Nothing here can prove an agent read it, let alone obeyed it.
-            </p>
+            <>
+              <p className="tw:mt-1 tw:text-ink-soft">
+                A sentence to every steerable session, each asked to pause for a different length of time
+                {pending.stagger === null
+                  ? ", though the server did not say how they are spread"
+                  : ` — between ${pending.stagger.minMinutes} and ${pending.stagger.windowMinutes} minutes`}
+                . Nothing here can prove an agent read it, let alone obeyed it.
+              </p>
+              {/* THE ROWS THAT ARE NOT ADDRESSES, SAID OUT LOUD. `boxActionBody`
+                  drops a row with no pane or no conversation id, because the
+                  route refuses the whole request over one and a real fleet
+                  always holds a few. A denominator that quietly shrank between
+                  the page and the request is the defect this stage exists to
+                  close, one layer up, so the count is on screen rather than
+                  inferred from a preview that is short. */}
+              {unaddressable === 0 ? null : (
+                <p className="tw:mt-1 tw:text-ink-faint">
+                  {unaddressable} of the {onScreen.length} sessions on this page {unaddressable === 1 ? "has" : "have"} no
+                  pane or no conversation id, so there is nowhere to send to and {unaddressable === 1 ? "it is" : "they are"}{" "}
+                  left out of the {onScreen.length - unaddressable} below.
+                </p>
+              )}
+            </>
           ) : null}
 
           <div className="tw:mt-2 tw:rounded-md tw:border tw:border-rule tw:p-2.5">

@@ -437,15 +437,21 @@ export type QueueView = Omit<
    */
   quarantine: HoldView | null;
   /**
-   * **The server sent a hold this page could not read.**
+   * **The server sent a hold this page cannot even ADDRESS.**
    *
    * `itemsUnreadable`'s twin, and it is here for a sharper version of the same
    * reason. A malformed `quarantine` object parses to `null`, and `null` is
    * also what "nothing is held" looks like — so on a queue with no items the
    * whole row would disappear, and with it both gestures. **That is the one
    * failure this stage is most against: a hold nothing can see is a hold
-   * nothing can clear.** So a hold that would not parse keeps the row on the
-   * page and says the session is stopped and this page cannot say why.
+   * nothing can clear.** So a hold that would not parse keeps the row.
+   *
+   * **IT IS NARROWER THAN IT WAS, DELIBERATELY.** It used to fire when any of
+   * `id`, `version` or `why` failed to read, which withheld both gestures from
+   * a hold that could perfectly well have been released — a missing sentence
+   * cost a person the only way out. Now only the release address counts: if
+   * `id` and `version` read, the hold is drawn with both gestures and a generic
+   * warning, and this stays false.
    */
   holdUnreadable: boolean;
 };
@@ -462,6 +468,7 @@ export type QueueView = Omit<
 export type HoldView = Omit<
   QuarantineHoldView,
   /* Re-typed below, each to `| null`. */
+  | "why"
   | "reading"
   | "origin"
   | "outcome"
@@ -487,8 +494,20 @@ export type HoldView = Omit<
    * clearing a hold whose reason nobody has read.
    */
   version: number;
-  /** The server's sentence. This is what a person decides from. */
-  why: string;
+  /**
+   * The server's sentence — what a person decides from — or **null when it did
+   * not read**.
+   *
+   * `| null` since the review of Stage 4, and the nullability is the fix rather
+   * than a loosening. `why` used to be load-bearing in the parse: one bad
+   * descriptive field rejected the whole object, so a hold with a perfectly
+   * readable `id` and `version` became **unclearable**, both gestures withheld
+   * over a missing sentence. The address and the description are now parsed
+   * separately: if the page can address the hold it can release it, and a
+   * missing sentence is answered with a generic warning rather than with the
+   * removal of the only way out.
+   */
+  why: string | null;
   /** What was read about the most recent send, or null when the server did not say. */
   reading: UncertainSendReading | null;
   /** Which send path it came down, or null when the server did not say. */
@@ -499,6 +518,8 @@ export type HoldView = Omit<
   lastSendAt: number | null;
   /** The tmux server it was opened against, or null. */
   tmuxGeneration: number | null;
+  /** The first tmux server seen after it opened, or null. `wire.ts` says why. */
+  firstSeenGeneration: number | null;
   /** Where the hold has got to, or null when the server did not say. */
   outcome: HoldOutcome | null;
 };
@@ -611,26 +632,34 @@ export function parseQueueItem(v: unknown): QueueItemView | null {
 }
 
 /**
- * One hold, as the server sends it — or null when this page cannot read it.
+ * One hold, as the server sends it — or null when this page cannot **address**
+ * it.
  *
- * `id`, `version` and `why` are the load-bearing three and an absent one makes
- * the whole thing unreadable: without an id there is nothing to release, without
- * a version the release would be built from a reading nobody can name, and
- * without the sentence there is nothing for a person to decide from. Everything
- * else folds to `null` — no claim — the way `stale` and `speaker` do.
+ * **THE RELEASE ADDRESS IS PARSED ON ITS OWN, AND ONLY IT IS LOAD-BEARING.**
+ * `id` and `version` are what a release is built from: without an id there is
+ * nothing to name, and without a version the release would be built from a
+ * reading nobody can pin, which is what stops a phone that has been in a pocket
+ * clearing a hold that has since absorbed another incident. Everything else —
+ * `why` included — folds to `null`, meaning *no claim*, the way `stale` and
+ * `speaker` do.
+ *
+ * **`why` USED TO BE LOAD-BEARING HERE AND THAT WAS THE BUG.** One bad
+ * descriptive field rejected the whole object, so a hold this page could
+ * perfectly well have released became one it drew as unreadable and offered no
+ * way out of. A missing sentence is a reason to warn; it is never a reason to
+ * take away the only gestures that end a hold.
  */
 export function parseHold(v: unknown): HoldView | null {
   if (!isRecord(v)) return null;
   const id = str(v["id"]);
-  const why = str(v["why"]);
   const version = finite(v["version"]);
-  if (id === null || why === null || version === null) return null;
+  if (id === null || version === null) return null;
   const reading = v["reading"];
   const origin = v["origin"];
   return {
     id,
     version,
-    why,
+    why: str(v["why"]),
     reading:
       reading === "partial" || reading === "unknown" || reading === "threw" || reading === "none-contradicted"
         ? reading
@@ -640,6 +669,7 @@ export function parseHold(v: unknown): HoldView | null {
     openedAt: millis(v["openedAt"]),
     lastSendAt: millis(v["lastSendAt"]),
     tmuxGeneration: finite(v["tmuxGeneration"]),
+    firstSeenGeneration: finite(v["firstSeenGeneration"]),
     outcome: parseHoldOutcome(v["outcome"]),
   };
 }
@@ -701,10 +731,12 @@ export function parseQueue(v: unknown): QueueView | null {
     unreadableItems,
     itemsUnreadable,
     quarantine: hold,
-    /* PRESENT AND UNREADABLE, not merely absent. `null` and `undefined` are the
-       server saying there is no hold (or an older server saying nothing); an
-       object that would not parse is a hold this page cannot draw, and the row
-       has to survive so the gestures can be reached. */
+    /* PRESENT AND UNADDRESSABLE, not merely absent. `null` and `undefined` are
+       the server saying there is no hold (or an older server saying nothing); an
+       object whose id or version would not parse is a hold this page cannot
+       release, and the row has to survive so that at least the FACT of it is on
+       screen. Anything less than that — a bad `why`, an unknown `reading` — is
+       drawn with both gestures and a warning. */
     holdUnreadable: rawHold !== null && rawHold !== undefined && hold === null,
   };
 }
@@ -962,11 +994,72 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * `speaker` is sent for the same reason `sessionActionBody` sends one: a
  * broadcast is rendered with the sender's name in front of it, and an absent
  * field means the weaker claim.
+ *
+ * `recipients` IS WHO THE BROADCAST IS FOR, AND WITHOUT IT THERE IS NOBODY.
+ * This body had no such field until 2026-09-09, so `broadcastRoute` refused
+ * every press on its first line — `a broadcast needs recipients` — before it
+ * selected anybody, and the button had never once reached a session. The rule
+ * it refuses on is deliberate and is the route's to keep: a broadcast must act
+ * on **the list the person was actually looking at**, not on a list the server
+ * re-fetches behind them, so the caller has to say what it saw.
+ *
+ * So these are the rows the page is showing, mapped through the SAME
+ * `steerTargetBody` the session path uses: the identifiers and the server's own
+ * `rawStatus` object, copied off the snapshot and not re-read. The discipline is
+ * `cancelBody`'s and `clearBody`'s — a stale-but-honest claim, checked at the
+ * far end — and rebuilding or refreshing the list here would defeat the point,
+ * because a claim the client refreshed to make true is a claim about nothing.
+ * The status in particular must be `rawStatus` rather than the parsed
+ * `row.status`: see steer-client.ts § `SteerTargetBody`.
+ *
+ * An enacted kill reads `pids` rather than this field and has the same gap;
+ * that is the preview envelope's to close, not this function's.
  */
-export type BoxActionBody = { actionId: string; mode: "dry-run" | "run"; confirm: boolean; speaker: "greg" };
+export type BoxActionBody = {
+  actionId: string;
+  mode: "dry-run" | "run";
+  confirm: boolean;
+  speaker: "greg";
+  recipients: SteerTargetBody[];
+};
 
-export function boxActionBody(actionId: string, dryRun: boolean): BoxActionBody {
-  return { actionId, mode: dryRun ? "dry-run" : "run", confirm: !dryRun, speaker: GREG };
+/**
+ * The rows that are ADDRESSES, which is not all of them — and sending the rest
+ * cost the fix its first evening.
+ *
+ * `parseTarget` requires a `paneId` and a `claudeSessionId` on every recipient
+ * and **refuses the whole request over any one that lacks either**, which is
+ * right for a route: an unaddressable target is a caller bug, not a delivery
+ * outcome. A real fleet always holds a few — a shell, and a session too old to
+ * have pinned a conversation id — so a body carrying the page's rows entirely
+ * raw was answered `400 a recipient is not addressable` by the running server
+ * on 2026-09-09, with 23 rows in it. One shell on the box and the broadcast
+ * still reached nobody.
+ *
+ * This is NOT the client second-guessing the server's selection rule. Which
+ * rows may be SPOKEN TO stays entirely the route's: a working session, a shell,
+ * a session at a dialog are all sent, and come back `held` or `blocked` with
+ * the reason. What is dropped here is only what steer-client.ts already calls
+ * unsteerable-by-construction — *a null `claudeSessionId` means the row cannot
+ * be steered at all* — because it is not a claim about a session, it is a row
+ * with nowhere to send anything.
+ *
+ * And the narrowing is not silent: `BoxActions` counts what this drops and says
+ * so under the confirmation, because a denominator that quietly shrank would be
+ * this whole stage's own defect one layer up.
+ */
+export function addressableRows(rows: readonly FleetRow[]): FleetRow[] {
+  return rows.filter((row) => row.paneId !== null && row.claudeSessionId !== null);
+}
+
+export function boxActionBody(actionId: string, dryRun: boolean, rows: readonly FleetRow[]): BoxActionBody {
+  return {
+    actionId,
+    mode: dryRun ? "dry-run" : "run",
+    confirm: !dryRun,
+    speaker: GREG,
+    recipients: addressableRows(rows).map(steerTargetBody),
+  };
 }
 
 /**
@@ -1342,7 +1435,13 @@ export type ActionsApi = {
    * `releaseHoldBody`. Safe to call twice with the same arguments.
    */
   releaseHold: (holdId: string, version: number, gesture: HoldReleaseGesture) => Promise<ActionOutcome>;
-  box: (actionId: string, dryRun: boolean) => Promise<BoxOutcome>;
+  /**
+   * A box-wide action. **`rows` is required, and it is the fix for a button
+   * that could not reach anybody** — see `boxActionBody`. It is the list the
+   * page is showing, verbatim; a caller with nothing on screen passes an empty
+   * array and gets the server's refusal, which is the true answer.
+   */
+  box: (actionId: string, dryRun: boolean, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
 };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
@@ -1540,8 +1639,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
     releaseHold: (holdId, version, gesture) => send(RELEASE_HOLD_URL, releaseHoldBody(holdId, version, gesture)),
 
-    async box(actionId, dryRun): Promise<BoxOutcome> {
-      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun), fetchImpl);
+    async box(actionId, dryRun, rows): Promise<BoxOutcome> {
+      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun, rows), fetchImpl);
       if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
       const { response, parsed } = posted;
       if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
@@ -1575,5 +1674,5 @@ export const httpActionsApi: ActionsApi = {
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
   releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
-  box: (actionId, dryRun) => makeActionsApi().box(actionId, dryRun),
+  box: (actionId, dryRun, rows) => makeActionsApi().box(actionId, dryRun, rows),
 };
