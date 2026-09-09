@@ -477,6 +477,9 @@ export function App({
               view={questions}
               rows={rows}
               answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
+              queueApi={queueApi}
+              refreshNonce={refreshNonce}
+              onOpenQueue={() => go("ideas")}
               onSelect={(id) => go("sessions", { sel: id, selpid: null })}
               steer={steer}
               now={now}

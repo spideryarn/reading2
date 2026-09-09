@@ -33,6 +33,14 @@ than inheriting a yes. The client copy must fail the same way.
 predicate and comment it as a deliberate mirror, naming `steer.ts § steerableStatus` as the
 authority, so the next person to add a status knows there are two places.
 
+**ONE PREDICATE, TWO CONSUMERS — this is the part that closes the class rather than the instance.**
+The same admissibility rule is currently written in *three* places: `classifyGate`/`steerableStatus`
+on the server (authoritative), `resolveDialogReference` in `types.ts` (as a gap check), and
+`canAnswer` in the panel (as a control gate). QM2-01 is what that costs — the panel's copy drifted
+from the other two. Export **one** predicate and have both client sites call it, so a fourth
+condition cannot be added to one and missed by the other. The reviewer asked for this in those words
+and it is the right shape.
+
 ## QM2-02 (P1) — the card key has no question identity
 
 Reproduced: answer dialog A successfully; a later snapshot puts dialog B on the **same row with the
@@ -103,6 +111,39 @@ there, it is misleading.
 Draw it only when at least one **`dialog`** item is present — the arm that would otherwise carry
 buttons. `dialog-unaddressable` already states its own reason on the card.
 
+## QM2-06 (P2) — the freshness thresholds are copied across the boundary, not shared
+
+**Not from the review — found here afterwards, by asking the question the review's own findings
+raise.** A peer session put it well on 2026-09-09: *"if your stage moved any check across a boundary,
+that is the shape worth re-reading before you call it done."* QM2-01 is one instance. This is
+another, and it is quieter.
+
+`tools/fleet/questions.ts` names three thresholds:
+
+```ts
+const FLEET_STALE_CADENCES = 2.5;
+const CHECKPOINT_STALE_MS = 5 * 60_000;
+const SCAN_STALE_MS = 6 * 60_000;
+```
+
+`questionsAtTime` in `tools/fleet/web/src/types.ts` re-applies the same rule against the browser's
+clock — correctly, and that re-application is the whole point of the selector — but with the numbers
+written as **bare literals**: `(state.refreshMs ?? 60_000) * 2.5`, `5 * 60_000`, `6 * 60_000`.
+
+**They agree today; I checked.** Nothing would notice if they stopped. A server threshold widened
+without the client's would make the browser call `partial` a view the server called `complete` — or,
+in the dangerous direction, hold `complete` open past the server's own deadline.
+
+The `wire.ts` rule (types only, no runtime values) is what pushed these into being copied, and it
+does **not** force it: `types.ts` already imports runtime values from four `tools/fleet/*.ts` modules
+(`attempt-clock.js`, `execution-token.js`, `overseer-claim.js`, `usage-absence.js`), so a browser-safe
+module with no node imports is both feasible and precedented.
+
+Give the three constants **one home** that both sides import, and say in its comment why it is not in
+`wire.ts`. Do not move `isStale`/`questionClockStale` themselves — they differ deliberately (the
+server's refuses an unusable deadline, which is a defence the client does not need) and merging them
+would be a second, larger change smuggled in behind this one.
+
 ## Tests — every fix gets one, each watched RED first
 
 In `tests/fleet-questions-panel.test.tsx` and, for QM2-03, wherever the client-parser cases live
@@ -119,6 +160,9 @@ In `tests/fleet-questions-panel.test.tsx` and, for QM2-03, wherever the client-p
 - QM2-04: as described above.
 - QM2-05: a hold plus an empty list, and a hold plus a prose-only list — neither shows the notice; a
   hold plus a dialog item does.
+- QM2-06: a test that **imports the shared constants and asserts both sides use them**, so a future
+  edit to one has to be an edit to both. A test that merely re-states the numbers would agree with a
+  drift rather than catch it — it must reference the shared home, not a literal.
 
 **Report which you watched fail, and what each proved.** For QM2-03 say explicitly that you watched
 the *no-false-positive* test pass on realistic payloads.

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../tools/fleet/web/src/App";
 import { QuestionsPanel } from "../tools/fleet/web/src/QuestionsPanel";
 import type { ActionsApi } from "../tools/fleet/web/src/actions-client";
+import type { QueueApi, QueueView } from "../tools/fleet/web/src/queue-client";
 import { makeSteerApi, type SteerApi, type SteerOutcome } from "../tools/fleet/web/src/steer-client";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import {
@@ -170,6 +171,33 @@ function manualTransport(): { transport: Transport; push: (state: FleetState) =>
   };
 }
 
+function queueView(needsGreg = 0): Extract<QueueView, { kind: "queue" }> {
+  return {
+    schema: 1,
+    kind: "queue",
+    version: "1.ev-1",
+    rows: [],
+    settled: [],
+    settledWithheld: 0,
+    depth: { dispatchable: 0, needsGreg, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 0, dropped: 0 },
+    throughput: {
+      windows: [
+        { days: 7, dispatched: 0, done: 0 },
+        { days: 30, dispatched: 0, done: 0 },
+      ],
+      dispatchesEver: 0,
+      completionsEver: 0,
+      duration: { kind: "not-enough", why: "nothing has been through this queue yet" },
+    },
+    problems: [],
+    path: "/tmp/fake/queue.jsonl",
+  };
+}
+
+function queueApi(view: QueueView): QueueApi {
+  return { fetch: () => Promise.resolve(view) };
+}
+
 const UNUSED_ACTIONS: ActionsApi = {
   feed: async () => ({ ok: false, why: "not part of this fixture" }),
   run: async () => { throw new Error("unused"); },
@@ -206,13 +234,24 @@ function apiReturning(outcome: SteerOutcome): { api: SteerApi; calls: { row: Fle
 function drawPanel(
   view: QuestionsView | null,
   rows: readonly FleetRow[] = [],
-  over: { answeringEnabled?: AnsweringReading; steer?: SteerApi; onSelect?: (id: string) => void; now?: number } = {},
+  over: {
+    answeringEnabled?: AnsweringReading;
+    steer?: SteerApi;
+    queueApi?: QueueApi;
+    refreshNonce?: number;
+    onOpenQueue?: () => void;
+    onSelect?: (id: string) => void;
+    now?: number;
+  } = {},
 ): void {
   act(() => root.render(
     <QuestionsPanel
       view={view}
       rows={rows}
       answeringEnabled={over.answeringEnabled ?? { kind: "enabled" }}
+      queueApi={over.queueApi ?? queueApi(queueView())}
+      refreshNonce={over.refreshNonce ?? 0}
+      onOpenQueue={over.onOpenQueue ?? (() => {})}
       onSelect={over.onSelect ?? (() => {})}
       now={over.now ?? NOW}
       {...(over.steer === undefined ? {} : { steer: over.steer })}
@@ -220,11 +259,12 @@ function drawPanel(
   ));
 }
 
-function mountApp(transport: Transport, steer?: SteerApi): void {
+function mountApp(transport: Transport, steer?: SteerApi, queue: QueueApi = queueApi(queueView())): void {
   act(() => root.render(
     <App
       transport={transport}
       actionsApi={UNUSED_ACTIONS}
+      queueApi={queue}
       actionsPollMs={3_600_000}
       {...(steer === undefined ? {} : { steer })}
     />,
@@ -286,10 +326,24 @@ describe("the six registrations", () => {
     expect(window.location.hash).toBe("#questions");
     expect(host.textContent).toContain("No Questions payload has arrived yet");
   });
+
+  it("shows the queued count and opens the Queued ideas tab through App", async () => {
+    window.location.hash = "#questions";
+    const feed = manualTransport();
+    mountApp(feed.transport, undefined, queueApi(queueView(2)));
+    await act(async () => {});
+
+    expect(host.textContent).toContain("2 queued ideas are waiting on you.");
+    const open = [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("Open Queued ideas"));
+    expect(open).toBeDefined();
+    act(() => open?.click());
+    expect(window.location.hash).toBe("#ideas");
+  });
 });
 
 describe("which empty answer the view has earned", () => {
-  it("keeps not-observed, partial and complete empty views distinct", () => {
+  it("keeps not-observed, partial and complete empty views distinct", async () => {
     drawPanel({ kind: "not-observed", gaps: [{ kind: "collection-not-observed" }] });
     expect(host.textContent).toContain("Questions were not observed");
     expect(host.textContent).not.toContain("Nothing needs you");
@@ -300,7 +354,140 @@ describe("which empty answer the view has earned", () => {
     expect((host.textContent ?? "").toLowerCase()).not.toContain("nothing needs you");
 
     drawPanel({ kind: "complete", items: [] });
+    await act(async () => {});
     expect(host.textContent).toContain("Nothing needs you.");
+  });
+
+  it("says Nothing needs you only after a readable empty queue", async () => {
+    drawPanel({ kind: "complete", items: [] }, [], { queueApi: queueApi(queueView()) });
+    await act(async () => {});
+    expect(host.textContent).toContain("Nothing needs you.");
+    expect(host.textContent).toContain("The queue was read and nothing in it is waiting on you.");
+  });
+
+  it("does not reassure while the queued ideas are still being read", () => {
+    drawPanel(
+      { kind: "complete", items: [] },
+      [],
+      { queueApi: { fetch: () => new Promise(() => {}) } },
+    );
+    expect(host.textContent).toContain("Sessions were observed and found quiet, but queued ideas could not be checked");
+    expect(host.textContent).toContain("the queued ideas are still being read");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+  });
+
+  it("does not reassure when this browser got no queue answer", async () => {
+    drawPanel(
+      { kind: "complete", items: [] },
+      [],
+      { queueApi: queueApi({ kind: "no-answer", why: "the phone lost the reply" }) },
+    );
+    await act(async () => {});
+    expect(host.textContent).toContain("Sessions were observed and found quiet, but queued ideas could not be checked");
+    expect(host.textContent).toContain("the phone lost the reply");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+  });
+
+  it("does not reassure when the server could not read the queue file", async () => {
+    drawPanel(
+      { kind: "complete", items: [] },
+      [],
+      { queueApi: queueApi({ schema: 1, kind: "unreadable", why: "line 4 is malformed" }) },
+    );
+    await act(async () => {});
+    expect(host.textContent).toContain("Sessions were observed and found quiet, but queued ideas could not be checked");
+    expect(host.textContent).toContain("line 4 is malformed");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+  });
+
+  it("does not reassure when no queue file has been written", async () => {
+    drawPanel(
+      { kind: "complete", items: [] },
+      [],
+      { queueApi: queueApi({ schema: 1, kind: "never-written", why: "no queue file has been written yet" }) },
+    );
+    await act(async () => {});
+    expect(host.textContent).toContain("Sessions were observed and found quiet, but queued ideas could not be checked");
+    expect(host.textContent).toContain("no queue file has been written yet");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+  });
+});
+
+describe("the queued ideas pointer", () => {
+  it("gives all six readings their own sentence", async () => {
+    const cases: { api: QueueApi; sentence: string; settles: boolean }[] = [
+      {
+        api: { fetch: () => new Promise(() => {}) },
+        sentence: "The queued ideas are still being read.",
+        settles: false,
+      },
+      {
+        api: queueApi(queueView(2)),
+        sentence: "2 queued ideas are waiting on you. Open Queued ideas.",
+        settles: true,
+      },
+      {
+        api: queueApi(queueView()),
+        sentence: "The queue was read and nothing in it is waiting on you.",
+        settles: true,
+      },
+      {
+        api: queueApi({ schema: 1, kind: "never-written", why: "no queue file has been written yet" }),
+        sentence: "No queue file exists yet. This is ordinary, but it is not an empty queue: no queue file has been written yet.",
+        settles: true,
+      },
+      {
+        api: queueApi({ schema: 1, kind: "unreadable", why: "line 4 is malformed" }),
+        sentence: "The server could not read the queue file: line 4 is malformed.",
+        settles: true,
+      },
+      {
+        api: queueApi({ kind: "no-answer", why: "the phone lost the reply" }),
+        sentence: "This browser never got an answer from the queue: the phone lost the reply.",
+        settles: true,
+      },
+    ];
+    const seen: string[] = [];
+
+    for (const current of cases) {
+      drawPanel({ kind: "not-observed", gaps: [{ kind: "collection-not-observed" }] }, [], { queueApi: current.api });
+      if (current.settles) await act(async () => {});
+      const pointer = host.querySelector<HTMLElement>("[data-queue-pointer]");
+      expect(pointer).toBe(host.querySelector("section")?.lastElementChild);
+      const sentence = pointer?.textContent ?? "";
+      expect(sentence).toBe(current.sentence);
+      seen.push(sentence);
+    }
+
+    expect(new Set(seen).size).toBe(cases.length);
+  });
+
+  it("reads once on entry, ignores payload pushes, and reads again for refreshNonce", async () => {
+    let calls = 0;
+    const api: QueueApi = {
+      fetch: () => {
+        calls += 1;
+        return Promise.resolve(queueView());
+      },
+    };
+    drawPanel({ kind: "complete", items: [] }, [], { queueApi: api, refreshNonce: 0 });
+    await act(async () => {});
+    expect(calls).toBe(1);
+
+    drawPanel({ kind: "partial", items: [], gaps: [{ kind: "questions-not-reported" }] }, [], { queueApi: api, refreshNonce: 0 });
+    await act(async () => {});
+    expect(calls).toBe(1);
+
+    drawPanel({ kind: "partial", items: [], gaps: [{ kind: "questions-not-reported" }] }, [], { queueApi: api, refreshNonce: 1 });
+    await act(async () => {});
+    expect(calls).toBe(2);
+  });
+
+  it("uses the injected seam without reaching fetch", async () => {
+    const network = vi.spyOn(globalThis, "fetch");
+    drawPanel({ kind: "complete", items: [] }, [], { queueApi: queueApi(queueView()) });
+    await act(async () => {});
+    expect(network).not.toHaveBeenCalled();
   });
 });
 
@@ -539,6 +726,7 @@ describe("freshness belongs to App's ticking clock", () => {
     mountApp(feed.transport);
     const complete = read({ rows: [], questions: { kind: "complete", items: [] } });
     act(() => feed.push(complete));
+    await act(async () => {});
     expect(host.textContent).toContain("Nothing needs you.");
 
     await act(async () => vi.advanceTimersByTimeAsync(3 * 60_000));

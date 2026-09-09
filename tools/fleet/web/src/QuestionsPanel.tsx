@@ -4,11 +4,12 @@
  * return. Prose stays observational because its address does not identify the
  * execution which wrote the excerpt.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import { QuestionCard } from "./SessionParts";
 import { SteerReceipt } from "./SteerReceipt";
+import { httpQueueApi, type QueueApi, type QueueView } from "./queue-client";
 import { httpSteerApi, sentTarget, type SentTarget, type SteerApi, type SteerOutcome } from "./steer-client";
 import type {
   AnsweringReading,
@@ -389,16 +390,108 @@ function QuestionItems({ items, rows, answeringEnabled, onSelect, steer, now }: 
   );
 }
 
-export function QuestionsPanel({ view, rows, answeringEnabled, onSelect, steer = httpSteerApi, now }: {
+function QueuePointer({ view, onOpenQueue, sessionsQuiet }: {
+  view: QueueView;
+  onOpenQueue: () => void;
+  sessionsQuiet: boolean;
+}): ReactNode {
+  let sentence: ReactNode;
+  switch (view.kind) {
+    case "loading":
+      sentence = sessionsQuiet
+        ? <>Sessions were observed and found quiet, but queued ideas could not be checked: the queued ideas are still being read.</>
+        : <>The queued ideas are still being read.</>;
+      break;
+    case "queue": {
+      const count = view.depth.needsGreg;
+      sentence = count === 0 ? (
+        <>The queue was read and nothing in it is waiting on you.</>
+      ) : (
+        <>
+          {count} queued {count === 1 ? "idea is" : "ideas are"} waiting on you.{" "}
+          <button type="button" className="tw:font-semibold tw:text-accent" onClick={onOpenQueue}>
+            Open Queued ideas.
+          </button>
+        </>
+      );
+      break;
+    }
+    case "never-written":
+      sentence = sessionsQuiet ? (
+        <>Sessions were observed and found quiet, but queued ideas could not be checked: no queue file exists yet. This is ordinary, but it is not an empty queue: {view.why}.</>
+      ) : (
+        <>No queue file exists yet. This is ordinary, but it is not an empty queue: {view.why}.</>
+      );
+      break;
+    case "unreadable":
+      sentence = sessionsQuiet ? (
+        <>Sessions were observed and found quiet, but queued ideas could not be checked: the server could not read the queue file: {view.why}.</>
+      ) : (
+        <>The server could not read the queue file: {view.why}.</>
+      );
+      break;
+    case "no-answer":
+      sentence = sessionsQuiet ? (
+        <>Sessions were observed and found quiet, but queued ideas could not be checked: this browser never got an answer from the queue: {view.why}.</>
+      ) : (
+        <>This browser never got an answer from the queue: {view.why}.</>
+      );
+      break;
+    default: {
+      const never: never = view;
+      sentence = JSON.stringify(never);
+    }
+  }
+
+  return (
+    <aside data-queue-pointer className="tw:mt-4 tw:rounded-lg tw:border tw:border-line tw:p-3 tw:text-[13px] tw:text-ink-soft">
+      {sentence}
+    </aside>
+  );
+}
+
+export function QuestionsPanel({
+  view,
+  rows,
+  answeringEnabled,
+  onSelect,
+  queueApi = httpQueueApi,
+  refreshNonce = 0,
+  onOpenQueue,
+  steer = httpSteerApi,
+  now,
+}: {
   /** Already time-adjusted by the caller; null means no payload has arrived. */
   view: QuestionsView | null;
   rows: readonly FleetRow[];
   answeringEnabled: AnsweringReading;
   onSelect: (sessionId: string) => void;
+  /** Read on entry, outside the pushed fleet-state collection loop. */
+  queueApi?: QueueApi;
+  /** Bumped by the dock's Refresh so this on-demand reading is not left behind. */
+  refreshNonce?: number;
+  onOpenQueue: () => void;
   /** The action seam. Tests inject it; the browser gets the real typed client. */
   steer?: SteerApi;
   now: number;
 }): ReactNode {
+  const [queue, setQueue] = useState<QueueView>({ kind: "loading" });
+
+  /* A pushed session payload must not turn this on-demand read into another
+     collection-loop request. Only entering the tab or asking the whole page
+     to refresh crosses the queue seam. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
+  useEffect(() => {
+    let live = true;
+    void queueApi.fetch().then((next) => {
+      if (live) setQueue(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [queueApi, refreshNonce]);
+
+  const sessionsQuiet = view?.kind === "complete" && view.items.length === 0;
   let body: ReactNode;
   if (view === null) {
     body = (
@@ -427,7 +520,11 @@ export function QuestionsPanel({ view, rows, answeringEnabled, onSelect, steer =
         break;
       case "complete":
         body = view.items.length === 0 ? (
-          <p className="tw:mt-3 tw:px-1 tw:text-[13px] tw:text-ink-soft">Nothing needs you.</p>
+          queue.kind === "queue" && queue.depth.needsGreg === 0 ? (
+            <p className="tw:mt-3 tw:px-1 tw:text-[13px] tw:text-ink-soft">Nothing needs you.</p>
+          ) : queue.kind === "queue" ? (
+            <p className="tw:mt-3 tw:px-1 tw:text-[13px] tw:text-ink-soft">Sessions were observed and found quiet.</p>
+          ) : null
         ) : (
           <QuestionItems items={view.items} rows={rows} answeringEnabled={answeringEnabled} onSelect={onSelect} steer={steer} now={now} />
         );
@@ -454,6 +551,7 @@ export function QuestionsPanel({ view, rows, answeringEnabled, onSelect, steer =
           cards have no buttons; with no view there are no cards. */}
       {view === null ? null : <AnsweringNotice reading={answeringEnabled} />}
       {body}
+      <QueuePointer view={queue} onOpenQueue={onOpenQueue} sessionsQuiet={sessionsQuiet} />
     </section>
   );
 }
