@@ -123,6 +123,24 @@ export function cliStatePath(storeRoot: string): string {
   return join(storeRoot, CLI_STATE_FILE);
 }
 
+/**
+ * **Canonical `toISOString()` form, or it is not an instant we will store.**
+ *
+ * `Date.parse` is not this check and cannot be: it accepts RFC dates, date-only
+ * strings and offset timestamps. GPT Sol's P2 on this file — `recordPause` sorts
+ * the stored strings lexicographically, so `2026-09-09T09:00:00+02:00` is
+ * chronologically *before* `2026-09-09T08:00:00.000Z` and sorts *after* it, and
+ * "resume oldest-first after the reset" quietly resumes them in the wrong order.
+ *
+ * Requiring the canonical form makes the lexicographic sort correct by
+ * construction rather than by luck, which is cheaper than normalising on read
+ * and impossible to forget at a new call site.
+ */
+export function isCanonicalInstant(s: string): boolean {
+  const ms = Date.parse(s);
+  return !Number.isNaN(ms) && new Date(ms).toISOString() === s;
+}
+
 /** A session name this CLI will accept, or why not. `null` when it is fine. */
 export function whyNotASessionName(name: string): string | null {
   if (name.length === 0) return "a session name cannot be empty";
@@ -143,8 +161,11 @@ function parsePauseRecord(raw: unknown): PauseRecord | string {
     return `a paused entry has no usable session name: ${JSON.stringify(session)}`;
   }
   const at = o["at"];
-  if (typeof at !== "string" || Number.isNaN(Date.parse(at))) {
-    return `paused entry for ${session} has no readable instant: ${JSON.stringify(at)}`;
+  if (typeof at !== "string" || !isCanonicalInstant(at)) {
+    return (
+      `paused entry for ${session} has no canonical UTC instant: ${JSON.stringify(at)} — ` +
+      "it must be exactly what new Date().toISOString() produces, because these are sorted as strings"
+    );
   }
   const door = o["door"];
   if (door !== "steer" && door !== "elsewhere") {
@@ -176,8 +197,21 @@ export function parseCliState(raw: unknown): { kind: "read"; state: CliState } |
         "a newer Overseer wrote it, so read it with that build rather than letting this one guess",
     };
   }
-  const rawMine = o["mine"] ?? [];
-  if (!Array.isArray(rawMine)) return { kind: "unusable", why: `${CLI_STATE_FILE}: "mine" is not an array` };
+  // BOTH KEYS ARE REQUIRED, AND `?? []` WAS A FAIL-OPEN. GPT Sol's P0 on this
+  // file: `{"mine": null, "paused": null}` went through nullish defaulting and
+  // came out as valid empty state, so `mine list` said "nothing is being looked
+  // after" and the next `mine add` replaced the malformed file — which is
+  // precisely the substitution the whole module is built to refuse, arriving
+  // through the one line that did not think of itself as a parse.
+  //
+  // There is no writer that omits a field: `writeCliState` takes a complete
+  // `CliState` and writes both arrays. So "missing" cannot be a legitimate file
+  // and does not need a lenient arm. A test used to assert `{}` was fine, which
+  // is how a hole gets a certificate.
+  if (!Object.hasOwn(o, "mine")) return { kind: "unusable", why: `${CLI_STATE_FILE}: no "mine" key — this build writes both keys always` };
+  if (!Object.hasOwn(o, "paused")) return { kind: "unusable", why: `${CLI_STATE_FILE}: no "paused" key — this build writes both keys always` };
+  const rawMine = o["mine"];
+  if (!Array.isArray(rawMine)) return { kind: "unusable", why: `${CLI_STATE_FILE}: "mine" is ${JSON.stringify(rawMine)}, not an array` };
   const mine: string[] = [];
   for (const entry of rawMine) {
     if (typeof entry !== "string") return { kind: "unusable", why: `${CLI_STATE_FILE}: "mine" holds ${JSON.stringify(entry)}, which is not a name` };
@@ -185,8 +219,8 @@ export function parseCliState(raw: unknown): { kind: "read"; state: CliState } |
     if (why !== null) return { kind: "unusable", why: `${CLI_STATE_FILE}: ${why}` };
     if (!mine.includes(entry)) mine.push(entry);
   }
-  const rawPaused = o["paused"] ?? [];
-  if (!Array.isArray(rawPaused)) return { kind: "unusable", why: `${CLI_STATE_FILE}: "paused" is not an array` };
+  const rawPaused = o["paused"];
+  if (!Array.isArray(rawPaused)) return { kind: "unusable", why: `${CLI_STATE_FILE}: "paused" is ${JSON.stringify(rawPaused)}, not an array` };
   const paused: PauseRecord[] = [];
   for (const entry of rawPaused) {
     const parsed = parsePauseRecord(entry);
@@ -320,6 +354,13 @@ export function removeMine(state: CliState, name: string): { state: CliState; ch
  * `resume --check` report it twice.
  */
 export function recordPause(state: CliState, record: PauseRecord): CliState {
+  // The sort below is lexicographic on `at`, which is only chronological if
+  // every instant is in canonical UTC form. Checked here as well as on read, so
+  // a caller cannot introduce an offset timestamp that reads back fine and
+  // orders wrong — `isCanonicalInstant` says why that matters.
+  if (!isCanonicalInstant(record.at)) {
+    throw new Error(`a pause instant must be canonical UTC (new Date().toISOString()), got ${JSON.stringify(record.at)}`);
+  }
   const paused = state.paused.filter((p) => p.session !== record.session);
   return { ...state, paused: [...paused, record].sort((a, b) => a.at.localeCompare(b.at)) };
 }

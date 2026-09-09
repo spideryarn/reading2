@@ -255,8 +255,12 @@ mid-stage; Stages 2–4 go to Codex. Four things the plan did not know:
    selected nothing; `reconcile-jobs --why ''` got past the emptiness check only because the check
    was there — Commander's `requiredOption` cannot refuse a value it was given, so that check stays
    in the command body and a test names the seam.
-4. **A group command gets no usage row of its own** — `mine` is not runnable, `mine add <name>` is.
-   `usageRows` recurses to the leaves.
+4. ~~**A group command gets no usage row of its own** — `mine` is not runnable, `mine add <name>` is.~~
+   **This was wrong, and Sol's code review caught it.** `mine` *is* runnable: its default subcommand
+   is `list`, and this branch's own parser test asserts that bare `mine` works. So `usageRows`
+   recursing to the leaves makes the generated help omit a supported spelling — in the one file
+   whose entire claim is that generated help cannot drift from the parser. The fix is to render the
+   default-child spelling, `overseer mine [list]`.
 
 Sol's plan review (below) had not returned when this stage finished; its findings are applied to
 Stages 2–4 and, where they bear on Stage 1, in a follow-up commit.
@@ -296,6 +300,45 @@ Applied after the plan review, before Stage 2:
 Mutation checked: pointing the lock at a per-process path makes the final state
 `['agent-a','agent-b']` instead of `['agent-a','agent-b','agent-c']` — `agent-c` silently gone.
 
+### Stage 1b — the Stage-1 code review's findings
+
+[260909d-stage1-code-review-sol-r1.md](260909d-stage1-code-review-sol-r1.md). Done:
+
+- [x] **P0 — a malformed known field became valid empty state.** `o["mine"] ?? []` meant
+      `{"mine": null, "paused": null}` parsed as a legitimate empty list: `mine list` said *nothing
+      is being looked after* and the next `mine add` replaced the malformed file. **The module's
+      central guarantee, defeated by the one line that did not think of itself as a parse** — and a
+      test of mine (*"missing keys are empty lists, because a first write need not carry both"*)
+      had certified it, while no writer that omits a field exists. Both keys are now required and
+      `null` is `unusable`; that test now asserts the opposite.
+- [x] **P2 — the pause instant did not enforce its own stated contract.** `Date.parse` accepts
+      offsets, so `2026-09-09T09:00:00+02:00` (07:00Z) sorted *after* `2026-09-09T08:00:00.000Z`
+      under the lexicographic sort, and *"resume oldest-first after the reset"* would have woken the
+      fleet in the wrong order with nothing looking wrong. Canonical `toISOString()` form is now
+      required on read and on `recordPause`.
+
+Mutation checked, both: restoring `?? []`, and relaxing `isCanonicalInstant` to
+`!Number.isNaN(Date.parse(s))`, each turn their test red.
+
+Still open, and they live in `scripts/overseer.ts` which a Codex run holds while Stage 2 is built:
+
+- [ ] **`usage --help` exits 1 as an unknown option.** `.helpOption(false)` is inherited at
+      creation, so every subcommand's `--help` is an unknown option. Re-enabling help alone is not
+      enough: `exitOverride` then throws a `CommanderError` with `exitCode === 0` and code
+      `commander.helpDisplayed`, which the current catch would still turn into an error. Keep stdout
+      and stderr captures separate and classify on `CommanderError.exitCode`/`code`.
+- [ ] **`overseer mine [list]` is missing from the generated help** — see the correction above.
+- [ ] **`reconcile-jobs` lost its safety-specific refusal.** An absent `--why` used to print four
+      lines telling the operator to look at the log and `gjd-remote ls` before clearing a hold that
+      exists because nobody can tell whether a job already ran; it now prints Commander's generic
+      *required option not specified*. Worse: **deleting the `why.trim()` check leaves the new suite
+      green**, because the blank-reason test only asserts that parsing succeeds. That is a hole in a
+      test I wrote about a seam I had explicitly noticed.
+- [ ] **P2 — `NAME_RULE` is imported from an HTTP route module.** Not dangerous today (no
+      import-time effects, and the seam test guards the other direction), but the session-name
+      grammar should be a dependency-free leaf that both the route and the CLI use. `tools/fleet/`
+      is not this session's file set.
+
 ### Stages 3 and 4 — stopped before building
 
 See [What is not built, and why](#what-is-not-built-and-why). `closeout` is blocked on a question for
@@ -330,15 +373,57 @@ work away"* gate. Sol's answer is right and I withdraw the argument:
 `docs/project/overseer.md` § gate 3 names *"branch or tag deletion"* without an exception, and the
 brief said *never delete a branch*.
 
+**And the waiver is narrower still than "the owner may."** `shouldWaiveFloor` is
+`live.authorised && live.inUse.kind === "idle"`
+([`worktree-remove.ts:362`](../../scripts/worktree-remove.ts)) — so an **inconclusive** liveness
+check costs the waiver *even when the owner is the one asking*. That is deliberate (an `unknown` that
+failed open would fail open for exactly the caller most in a hurry), and it means the obvious
+work-around is not a complete fix either. Read out of the source by session `codex-usage` on
+2026-09-09 and confirmed here; `MIN_IDLE_HOURS` is reachable only through `RemoveOptions.minIdleHours`
+and the CLI parses just `--branch` and `--dry-run`, so no flag reaches it.
+
 **What would unblock it — a question for Greg, in one piece:**
 
-*Today, a finished agent's worktree can only be removed by the agent itself (which is gone) or by
-waiting 24 hours (during which nine worktrees accumulated in one night and none could be removed).
-The Overseer would like to remove them when it has read the debrief and proved the work landed. Two
-ways: (a) let the Overseer pass a flag to `worktree:remove` that waives the floor when it attests it
-read the debrief, keeping the branch; or (b) have the Overseer tell the finished agent to run
-`npm run worktree:remove` on itself as its last act, which needs no new authority at all. (b) is
-simpler and is what I would do; its cost is that an agent that has already exited cannot be told.*
+*Background: every agent works in its own git worktree, a throwaway copy of the repo. When it
+finishes, somebody has to delete that copy. Today only two things can: the agent itself, while it is
+still running; or anybody at all, once the directory has been untouched for 24 hours. That floor
+exists because "nothing is running in it" is not the same fact as "the work is finished", and
+deleting a worktree destroys the only copy of anything not committed.*
+
+*The problem: the Overseer reads an agent's final debrief a few minutes after it stops, which is
+exactly when it knows the work is done and exactly when it may not act. Nine worktrees accumulated in
+one night and none could be removed.*
+
+*Three ways, and none is free:*
+
+*(a) **Let the Overseer waive the floor when it attests it read the debrief** — a flag on
+`worktree:remove` recording who attested and why. Cost: the attestation is a self-declaration, so the
+protection becomes a governance rule rather than a mechanical one — the same trade the queue's
+`--by greg` already makes. Keeps the branch either way.*
+
+*(b) **Have each agent remove its own worktree as its last act**, on the Overseer's say-so. Cost: it
+needs no new authority at all, but it only works while the agent is alive — an agent that has already
+exited, crashed or been killed cannot be told, and those are a good share of the cases. It also does
+not always work: if the liveness check is inconclusive the owner loses the waiver too.*
+
+*(c) **Leave it as it is** and let worktrees sit for a day. Cost: disk, and a `git worktree list`
+nobody can read — but nothing is ever lost.*
+
+**Two measured facts that make (c) less bad than it sounds, and one catch-22 that does not exist.**
+The floor is counted from `lastActivityAt`, the latest of the HEAD reflog, the branch reflog and the
+admin directory's mtime — so it is **24 hours from the tree's last git write, not from when the
+session ended**. For an agent that commits as it goes and then spends two hours on review rounds,
+the clock started at the last commit. And the obvious catch-22 — the Overseer is *required* to run
+`npm run worktree:check` first, so if checking touched the admin directory it would reset the very
+clock it is waiting on, putting removal permanently out of reach — **does not happen**: measured on
+this worktree, admin-dir mtime `1788941260` before `npm run worktree:check` and byte-identical
+after. So the check is free to poll as often as a tick likes. Found and measured by session
+`codex-usage`, reproduced here independently. Recorded because a plausible failure that did not
+reproduce is the thing most likely to be re-suspected by the next person.
+
+*I would ask for (a), because (b) fails in exactly the cases where a worktree gets stranded and (c)
+is what we have now. But it converts a mechanical protection into a recorded promise, and that is
+your call rather than mine.*
 
 Until that is answered, the honest command is **`overseer closeout check <session> --sha <sha>`**,
 which verifies and reports and destroys nothing. That is Sol's recommendation and it is small; it is
