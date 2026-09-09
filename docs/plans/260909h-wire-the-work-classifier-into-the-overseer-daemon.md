@@ -442,6 +442,30 @@ Three things worth having written down:
    a state that happens to be absent — so it is a reason to stop worrying now and a reason to look
    again once the daemon has been running this code for a day.
 
+### What only the full suite found: the register now refuses a keyless entry
+
+Three failures in `tests/fleet-decisions-view.test.ts`, and **none of the focused runs could have
+seen them** — that file was not in any of my scoped lists, which is the argument for the 26-minute
+gate rather than a formality.
+
+The cause is a real widening, not a fixture nit. `projectRegister` now reads each entry's `key`,
+because that is the join a pane's work reading hangs on, and it **refuses the whole register** when
+one is missing. `decisions-view.ts` builds on `projectOverseerStatus`, so its own view degraded to
+`checkpoint-unavailable` — a wide blast radius from one field.
+
+**Kept rather than softened, and the alternative is worth stating.** The forgiving version — treat a
+missing `key` as *no work join for this entry* — would give that entry `work: null`, which the card
+renders as *the scan carried no reading for this session*. That is a specific claim, and a producer
+that had stopped writing keys would make it about every session at once: an unmeasured absence
+dressed as a measurement, which is the one thing this stage exists to refuse. Refusing the register
+is loud and wrong-in-the-safe-direction; the forgiving version is quiet and wrong.
+
+**And it is safe against a real artefact, checked rather than reasoned.** `key` has been a required
+field of `RegisterEntry` since the register existed, and the live `~/.overseer/current.json` — written
+by the *old* daemon, before any of this — carries one on all 19 entries. The fixtures that broke were
+synthetic register entries that had never been realistic; they now carry a key, with a comment saying
+why it is not decoration.
+
 ### Stage 4 — gates, review, docs
 
 - [x] `npm test`, `npm run typecheck`, lint on touched files.
