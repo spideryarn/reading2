@@ -330,9 +330,13 @@ should call it rather than growing a second way:
 
 Prefer a **narrow operational action** over a conversational one wherever both would work. *Defer new
 jobs, reduce monitoring frequency, deduplicate alerts, restart a dead service* are safe because their
-consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard or daemon to deploy what the primary now holds is also
-yours, once you have read the steering queue (`GET /api/actions`), because a restart discards it —
-Greg approved, 2026-09-08 — but the classifier may still refuse the command, and then it is Greg's.
+consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard to deploy what the primary now holds is yours, and
+`npx tsx scripts/fleet-restart.ts restart` is how: it reads the steering queue for you and refuses if
+anything is in it, holds included — Greg approved the restart 2026-09-08, and the classifier accepted
+that command unattended on 2026-09-09. `check` is the same thing without the restart. A hand-typed
+`sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
+refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
+*Prove the relaunch before you stop a process*.
 
 ### Dispatching agents
 
