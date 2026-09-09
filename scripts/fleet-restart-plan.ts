@@ -159,7 +159,12 @@ export function readUnit(show: Record<string, string>): UnitRead {
   // uncertainty stopping the other four from ever running.
   const controlGroup = show.ControlGroup ?? "";
 
-  const mainPid = Number(show.MainPID ?? "0");
+  // ABSENT AND ZERO ARE DIFFERENT. `MainPID=0` is systemd saying "no process",
+  // which is a fact; a missing key is systemd saying nothing, and defaulting it
+  // to 0 would let `judgeReplaced(0, newPid)` pass without ever having had a
+  // before-reading to compare. GPT Sol, 2026-09-09.
+  if (show.MainPID === undefined) return { ok: false, why: `systemctl show printed no MainPID for ${UNIT} — without it nothing can tell a replaced process from an untouched one` };
+  const mainPid = Number(show.MainPID);
   if (!Number.isInteger(mainPid) || mainPid < 0) return { ok: false, why: `systemctl show printed MainPID=${show.MainPID} for ${UNIT}, which is not a pid` };
 
   // Absent on some systemd versions, and its absence must not read as zero
@@ -194,13 +199,23 @@ export function parseEnvironment(value: string): Record<string, string> {
   const out: Record<string, string> = {};
   const tokens = value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
   for (const token of tokens) {
-    const at = token.indexOf("=");
+    // **THE WHOLE ASSIGNMENT MAY BE QUOTED, not just the value.** systemd
+    // prints `Environment="FLEET_PORT=8787"` as readily as `FLEET_PORT="8787"`,
+    // and the first version split on the `=` inside the quotes and produced the
+    // key `"FLEET_PORT` — so a declared port silently became the default. GPT
+    // Sol, 2026-09-09.
+    const bare = unquote(token);
+    const at = bare.indexOf("=");
     if (at <= 0) continue;
-    const raw = token.slice(at + 1);
-    const unquoted = (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")) ? raw.slice(1, -1) : raw;
-    out[token.slice(0, at)] = unquoted;
+    out[bare.slice(0, at)] = unquote(bare.slice(at + 1));
   }
   return out;
+}
+
+function unquote(text: string): string {
+  const t = text.trim();
+  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) return t.slice(1, -1);
+  return t;
 }
 
 export type PortRead = { ok: true; port: number; source: string } | { ok: false; why: string };
@@ -236,16 +251,34 @@ export function resolvePort(env: Record<string, string>): PortRead {
  * bundle is caught by comparing two statements rather than a statement and a
  * heuristic.
  */
-export function bundleRef(html: string): string | null {
-  return html.match(/index-[A-Za-z0-9_-]+\.js/)?.[0] ?? null;
+export type BundleRead = { kind: "one"; name: string } | { kind: "none" } | { kind: "several"; names: string[] };
+
+/**
+ * **A `src=` attribute, and exactly one of them.** The first version matched the
+ * first `index-*.js` substring anywhere in the body, so a page reading
+ * `<!-- index-NEW.js --><script src="index-OLD.js">` matched a freshly built
+ * `index-NEW.js` and passed while loading the old bundle. Vite's output is too
+ * simple for that today, which is precisely why it would have gone unnoticed.
+ * More than one distinct reference is `several` rather than a coin-toss between
+ * them. GPT Sol, 2026-09-09.
+ */
+export function bundleRef(html: string): BundleRead {
+  const names = [...html.matchAll(/\bsrc\s*=\s*["']?[^"'>]*?(index-[A-Za-z0-9_-]+\.js)/g)].map((m) => m[1] as string);
+  const distinct = [...new Set(names)];
+  const only = distinct[0];
+  if (only === undefined) return { kind: "none" };
+  if (distinct.length > 1) return { kind: "several", names: distinct };
+  return { kind: "one", name: only };
 }
 
-export function judgeBundle(built: string | null, served: string | null): Check {
+export function judgeBundle(built: BundleRead, served: BundleRead): Check {
   const name = "bundle";
-  if (built === null) return { name, verdict: "unknown", detail: `${DIST_INDEX} names no index-*.js — cannot tell what the build produced` };
-  if (served === null) return { name, verdict: "unknown", detail: "the served page names no index-*.js — cannot tell what is being served" };
-  if (built !== served) return { name, verdict: "fail", detail: `serving ${served}, but the build produced ${built} — the page is stale` };
-  return { name, verdict: "pass", detail: `${served}, which is what ${DIST_INDEX} names` };
+  const cannot = (which: string, read: BundleRead) =>
+    read.kind === "none" ? `${which} loads no index-*.js` : `${which} loads ${(read as { names: string[] }).names.join(" and ")} — this cannot say which is the bundle`;
+  if (built.kind !== "one") return { name, verdict: "unknown", detail: `${cannot(DIST_INDEX, built)}, so there is nothing to compare the served page against` };
+  if (served.kind !== "one") return { name, verdict: "unknown", detail: cannot("the served page", served) };
+  if (built.name !== served.name) return { name, verdict: "fail", detail: `serving ${served.name}, but the build produced ${built.name} — the page is stale` };
+  return { name, verdict: "pass", detail: `${served.name}, which is what ${DIST_INDEX} loads` };
 }
 
 /* ------------------------------------------------------------------ *
@@ -281,28 +314,38 @@ export function parseListeners(ss: string): Listener[] {
  * when the cgroup cannot be read the answer is `unknown` and not a pass — the
  * HTTP check alone would happily confirm a stranger.
  */
+/**
+ * **`127.0.0.1` exactly, and every owner of it.** Two versions of this were
+ * wrong in the same way and it is worth naming the shape: each proved ownership
+ * of *a* socket rather than of *the* socket the HTTP check talks to.
+ *
+ *  - The first accepted any socket on the port, so the unit on its tailnet
+ *    address satisfied ownership while a stranger on loopback answered the HTTP.
+ *  - The second grouped `127.0.0.1` with `[::1]` and passed if *any* of them was
+ *    ours — so the unit on `[::1]:8787` satisfied ownership while a stranger on
+ *    `127.0.0.1:8787` answered the HTTP, which is the same bug one layer in.
+ *
+ * `io.http` asks `http://127.0.0.1:<port>/` and nothing else, so that is the
+ * only address this may look at, and if more than one process holds it they all
+ * have to be ours. Both found by GPT Sol, 2026-09-09.
+ */
 export function judgeListener(listeners: Listener[], port: number, cgroupPids: number[] | null, name = "listener"): Check {
-  // **THE LOOPBACK SOCKET SPECIFICALLY, because that is the one the HTTP check
-  // asks.** The unit binds 127.0.0.1 *and* a tailnet address, so "some socket on
-  // this port belongs to the cgroup" can be true of the tailnet one while a
-  // stray process owns loopback — and then the ownership check and the HTTP
-  // check are describing two different servers, both passing. GPT Sol, 2026-09-09.
-  const loopback = listeners.filter((l) => l.port === port && (l.address === "127.0.0.1" || l.address === "[::1]"));
+  const loopback = listeners.filter((l) => l.port === port && l.address === "127.0.0.1");
   if (loopback.length === 0) {
     const elsewhere = listeners.filter((l) => l.port === port);
     if (elsewhere.length === 0) return { name, verdict: "fail", detail: `nothing is listening on ${port}` };
-    return { name, verdict: "fail", detail: `nothing is listening on 127.0.0.1:${port}, though something holds ${elsewhere.map((l) => l.address).join(", ")}:${port}` };
+    return { name, verdict: "fail", detail: `nothing is listening on 127.0.0.1:${port}, though something holds ${elsewhere.map((l) => `${l.address}:${l.port}`).join(", ")}` };
   }
 
   if (cgroupPids === null) return { name, verdict: "unknown", detail: `127.0.0.1:${port} is held, but the unit's cgroup could not be read, so it cannot be shown to be ours` };
 
-  const inCgroup = new Set(cgroupPids);
-  const ours = loopback.filter((l) => l.pids.some((p) => inCgroup.has(p)));
-  if (ours.length > 0) return { name, verdict: "pass", detail: `127.0.0.1:${port} is held by pid ${ours[0]?.pids.join(",")}, which is in ${UNIT}'s cgroup` };
-
   const seen = loopback.flatMap((l) => l.pids);
   if (seen.length === 0) return { name, verdict: "unknown", detail: `127.0.0.1:${port} is held but ss showed no pid for it — cannot show it is ours` };
-  return { name, verdict: "fail", detail: `127.0.0.1:${port} is held by pid ${seen.join(",")}, which is NOT in ${UNIT}'s cgroup — a different server has the port` };
+
+  const inCgroup = new Set(cgroupPids);
+  const strangers = [...new Set(seen)].filter((p) => !inCgroup.has(p));
+  if (strangers.length > 0) return { name, verdict: "fail", detail: `127.0.0.1:${port} is held by pid ${strangers.join(",")}, which is NOT in ${UNIT}'s cgroup — a different server has the address this check talks to` };
+  return { name, verdict: "pass", detail: `127.0.0.1:${port} is held by pid ${[...new Set(seen)].join(",")}, all in ${UNIT}'s cgroup` };
 }
 
 /**
@@ -321,12 +364,24 @@ export function judgePortIsFree(listeners: Listener[], port: number, cgroupPids:
   return check;
 }
 
-/** `cgroup.procs`, one pid per line. */
-export function parseCgroupProcs(text: string): number[] {
-  return text
-    .split("\n")
-    .map((l) => Number(l.trim()))
-    .filter((n) => Number.isInteger(n) && n > 0);
+/**
+ * `cgroup.procs`, one pid per line — or null if any line is not one.
+ *
+ * **Null rather than "the pids I could read".** A partial parse that happened to
+ * contain the pid holding the port would pass an ownership check on evidence it
+ * had already admitted was damaged; null makes the caller say `unknown`. GPT
+ * Sol, 2026-09-09.
+ */
+export function parseCgroupProcs(text: string): number[] | null {
+  const pids: number[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    const pid = Number(trimmed);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    pids.push(pid);
+  }
+  return pids;
 }
 
 /* ------------------------------------------------------------------ *
@@ -371,7 +426,14 @@ export type QueueRead = { ok: true; items: QueuedSummary[]; holds: HoldSummary[]
  */
 export function summariseQueues(body: unknown): QueueRead {
   if (typeof body !== "object" || body === null) return { ok: false, why: "GET /api/actions did not return an object" };
-  const queues = (body as { queues?: unknown }).queues;
+  // THE ENVELOPE, not only the payload. An error-shaped 200 carrying `queues: []`
+  // — a proxy's page, a route that changed, a different server on the port —
+  // would otherwise read as "the queue is empty". GPT Sol, 2026-09-09.
+  const envelope = body as { ok?: unknown; op?: unknown; queues?: unknown };
+  if (envelope.ok !== true || envelope.op !== "catalogue") {
+    return { ok: false, why: `GET /api/actions answered with ok=${JSON.stringify(envelope.ok)} op=${JSON.stringify(envelope.op)} rather than the action catalogue — this is not the dashboard's queue` };
+  }
+  const queues = envelope.queues;
   if (!Array.isArray(queues)) return { ok: false, why: "GET /api/actions returned no `queues` array — the dashboard's shape has changed and this cannot say what would be discarded" };
 
   const items: QueuedSummary[] = [];
@@ -382,7 +444,14 @@ export function summariseQueues(body: unknown): QueueRead {
     if (!("quarantine" in (q ?? {}))) return { ok: false, why: "a queue in GET /api/actions has no `quarantine` field — this build cannot see steering holds, and a restart erases them" };
     for (const item of q.items) items.push(summariseItem(item));
     const hold = q.quarantine;
-    if (hold !== null && typeof hold === "object") holds.push(summariseHold(hold, q.sessionId));
+    // OBJECT OR NULL, and nothing else counts as "no hold". `quarantine: false`
+    // or a string would otherwise fall through the object test and be read as
+    // an absence — the exact substitution this parser exists to refuse. GPT
+    // Sol, 2026-09-09.
+    if (hold !== null && (typeof hold !== "object" || Array.isArray(hold))) {
+      return { ok: false, why: `a queue's \`quarantine\` is ${JSON.stringify(hold)}, which is neither a hold nor null — this cannot say whether a steering hold would be erased` };
+    }
+    if (hold !== null) holds.push(summariseHold(hold, q.sessionId));
   }
   return { ok: true, items, holds };
 }
@@ -463,7 +532,7 @@ export function judgeQueue(serviceUp: boolean, read: QueueRead, discard: boolean
  * ------------------------------------------------------------------ */
 
 export type GitRead =
-  | { ok: true; head: string; fetchedDev: string; behind: number; ahead: number; branch: string; dirtyFleetFiles: string[] }
+  | { ok: true; head: string; fetchedDev: string; behind: number; ahead: number; branch: string; dirtyFleetFiles: string[]; dirtySrcFiles: string[] }
   | { ok: false; why: string };
 
 /**
@@ -501,20 +570,53 @@ export function judgeBranch(read: GitRead): Check {
 }
 
 /**
- * Uncommitted changes **to the files this unit builds**, and only those.
+ * The paths `ExecStartPre`'s `npm run build:fleet` reads, as far as they can be
+ * named without resolving an import graph.
  *
- * A blanket clean-tree rule was the reviewer's suggestion and would be right on
- * a machine with one owner. This one is shared by a dozen agents and is never
- * clean — the working tree carries other people's half-finished work all night.
- * So the line is drawn at blast radius instead: `ExecStartPre` runs
- * `build:fleet`, so a modified file under `tools/fleet/` is what would actually
- * go live half-written. Everything else is reported and does not block.
+ * **`tools/fleet` alone was wrong**, and the plan's rationale for it — "that is
+ * the blast radius" — was wrong with it: `vite.fleet.config.ts` decides the
+ * root and the output directory, `package.json` carries the script and the
+ * dependency versions, and `tools/fleet/web/src` imports four files out of
+ * `src/` directly. GPT Sol, 2026-09-09.
+ */
+export const FLEET_BUILD_INPUTS = ["tools/fleet", "vite.fleet.config.ts", "package.json", "package-lock.json"] as const;
+
+/**
+ * Uncommitted work in what the build reads.
+ *
+ * A blanket clean-tree rule was the reviewer's first suggestion and would be
+ * right on a machine with one owner. This primary is shared by a dozen agents
+ * and is never clean — it carries other people's half-finished work all night,
+ * so a rule that refused on any dirt would refuse every time and be turned off
+ * within a day. The line is drawn at the build's own inputs instead.
+ *
+ * **What this still does not cover, said out loud rather than implied:** the
+ * transitive closure through `src/`. The fleet client imports
+ * `src/dictation-limits.ts`, `src/web/transcriber.ts`, `src/web/useDictation.ts`
+ * and `src/web/useDictationField.ts`, and whatever those import in turn.
+ * Resolving that properly means walking the import graph at check time;
+ * `dirtySrcFiles` is reported beside this check instead, unjudged, so an
+ * operator can see it rather than being told a clean bill this cannot honestly
+ * give.
  */
 export function judgeDirty(read: GitRead): Check {
-  const name = "fleet files clean";
+  const name = "build inputs clean";
   if (!read.ok) return { name, verdict: "unknown", detail: read.why };
-  if (read.dirtyFleetFiles.length === 0) return { name, verdict: "pass", detail: "no uncommitted changes under tools/fleet/" };
-  return { name, verdict: "fail", detail: `uncommitted changes under tools/fleet/ would be built and served half-written: ${read.dirtyFleetFiles.slice(0, 6).join(", ")}${read.dirtyFleetFiles.length > 6 ? ` and ${read.dirtyFleetFiles.length - 6} more` : ""}` };
+  const listed = (files: string[]) => `${files.slice(0, 6).join(", ")}${files.length > 6 ? ` and ${files.length - 6} more` : ""}`;
+  if (read.dirtyFleetFiles.length === 0) return { name, verdict: "pass", detail: `nothing uncommitted in ${FLEET_BUILD_INPUTS.join(", ")}` };
+  return { name, verdict: "fail", detail: `uncommitted work the build would compile and serve half-written: ${listed(read.dirtyFleetFiles)}` };
+}
+
+/** Dirty `src/` files, reported and judged by nothing — see `judgeDirty` on why this cannot be a verdict. */
+export function srcDirtNote(read: GitRead): Check {
+  const name = "src/ dirt";
+  if (!read.ok) return { name, verdict: "skipped", detail: "git could not be read" };
+  if (read.dirtySrcFiles.length === 0) return { name, verdict: "pass", detail: "none" };
+  return {
+    name,
+    verdict: "skipped",
+    detail: `${read.dirtySrcFiles.length} uncommitted file(s) under src/. The fleet client imports four files from there directly, and this does not resolve the closure — so this is FYI, not a verdict: ${read.dirtySrcFiles.slice(0, 4).join(", ")}${read.dirtySrcFiles.length > 4 ? " …" : ""}`,
+  };
 }
 
 function short(sha: string): string {
@@ -629,6 +731,13 @@ export function judgeOverseerClaim(before: string | null, after: string | null, 
   const name = "overseer claim";
   const was = claimState(before);
   if (was === "unreadable") return { name, verdict: "unknown", detail: "`overseer status` could not be read before the restart, so its effect on the Overseer's claim is unknown" };
+  // **`cannot-tell` BEFORE IS NOT "no claim to lose".** The first version
+  // returned `skipped` for every pre-state except `holder`, so `Overseer unknown
+  // — the snapshot is stale` read as an absence, no post-restart reading was
+  // taken at all, and a claim that really did exist could be lost at exit 0 —
+  // contradicting the rule two lines down that a `cannot-tell` after is
+  // blocking. GPT Sol, 2026-09-09.
+  if (was === "cannot-tell") return { name, verdict: "unknown", detail: `the Overseer's claim could not be established BEFORE the restart (${oneLine(before ?? "", 60)}), so there is no before-state to compare against` };
   if (was !== "holder") return { name, verdict: "skipped", detail: `no claim to lose before the restart — ${oneLine(before ?? "", 80)}` };
 
   switch (claimState(after)) {

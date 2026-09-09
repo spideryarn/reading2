@@ -141,6 +141,17 @@ describe("the port", () => {
   it("unquotes a systemd-quoted value", () => {
     expect(parseEnvironment('A=1 B="two words" C=3')).toEqual({ A: "1", B: "two words", C: "3" });
   });
+
+  /**
+   * systemd quotes the WHOLE assignment as readily as the value. The first
+   * version split on the `=` inside the quotes and produced the key
+   * `"FLEET_PORT` — so a declared port silently became the default, and every
+   * check afterwards described a port the service was not on. GPT Sol, 2026-09-09.
+   */
+  it("reads a port declared as a whole quoted assignment", () => {
+    expect(parseEnvironment('HOME=/home/greg "FLEET_PORT=9999"')).toMatchObject({ FLEET_PORT: "9999" });
+    expect(resolvePort(parseEnvironment('"FLEET_PORT=9999"'))).toMatchObject({ ok: true, port: 9999 });
+  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -162,8 +173,27 @@ describe("the bundle", () => {
   });
 
   it("is unknown, never a pass, when either side names no bundle", () => {
-    expect(judgeBundle(null, bundleRef(html("index-a.js"))).verdict).toBe("unknown");
-    expect(judgeBundle(bundleRef(html("index-a.js")), null).verdict).toBe("unknown");
+    expect(judgeBundle({ kind: "none" }, bundleRef(html("index-a.js"))).verdict).toBe("unknown");
+    expect(judgeBundle(bundleRef(html("index-a.js")), { kind: "none" }).verdict).toBe("unknown");
+  });
+
+  /**
+   * The first version matched the first `index-*.js` substring ANYWHERE in the
+   * body, so a page whose comment named the new bundle and whose script tag
+   * loaded the old one passed. Vite's output is too simple for that today,
+   * which is exactly why it would have gone unnoticed. GPT Sol, 2026-09-09.
+   */
+  it("reads the script the page loads, not a mention of one", () => {
+    const misleading = '<!-- built from index-NEW.js --><script type="module" src="/assets/index-OLD.js"></script>';
+    expect(bundleRef(misleading)).toEqual({ kind: "one", name: "index-OLD.js" });
+    expect(judgeBundle(bundleRef(html("index-NEW.js")), bundleRef(misleading)).verdict).toBe("fail");
+  });
+
+  /** Two different bundles loaded is not a coin toss between them. */
+  it("is unknown when the page loads more than one index-*.js", () => {
+    const two = '<script src="/assets/index-a.js"></script><script src="/assets/index-b.js"></script>';
+    expect(bundleRef(two).kind).toBe("several");
+    expect(judgeBundle(bundleRef(html("index-a.js")), bundleRef(two)).verdict).toBe("unknown");
   });
 });
 
@@ -252,6 +282,37 @@ describe("the listener", () => {
 
   it("refuses a leftover process of our own when systemd thinks the unit is stopped", () => {
     expect(judgePortIsFree(parseListeners(SS), 8787, [4095050], false).verdict).toBe("fail");
+  });
+
+  /**
+   * THE SAME BUG ONE LAYER IN. The first fix grouped `127.0.0.1` with `[::1]`
+   * and passed if *any* of the group was ours — so the unit on `[::1]:8787`
+   * satisfied ownership while a stranger on `127.0.0.1:8787` answered the HTTP
+   * check, which only ever asks the IPv4 address. GPT Sol, 2026-09-09.
+   */
+  it("is not satisfied by our own IPv6 socket while a stranger holds IPv4", () => {
+    const split = [
+      'LISTEN 0 511 127.0.0.1:8787 0.0.0.0:* users:(("stranger",pid=777,fd=3))',
+      'LISTEN 0 511 [::1]:8787 [::]:* users:(("node-MainThread",pid=4095050,fd=48))',
+    ].join("\n");
+    const check = judgeListener(parseListeners(split), 8787, [4095037, 4095050]);
+    expect(check.verdict).toBe("fail");
+    expect(check.detail).toContain("777");
+  });
+
+  /** If several processes hold the address the HTTP goes to, all of them have to be ours. */
+  it("fails when only some of the loopback owners are in the cgroup", () => {
+    const both = [
+      'LISTEN 0 511 127.0.0.1:8787 0.0.0.0:* users:(("node",pid=4095050,fd=46))',
+      'LISTEN 0 511 127.0.0.1:8787 0.0.0.0:* users:(("stranger",pid=777,fd=3))',
+    ].join("\n");
+    expect(judgeListener(parseListeners(both), 8787, [4095050]).verdict).toBe("fail");
+  });
+
+  /** A partial parse that happens to contain the right pid is not evidence. */
+  it("reads a damaged cgroup.procs as unreadable, not as the pids it could parse", () => {
+    expect(parseCgroupProcs("4095037\nnot-a-pid\n4095050\n")).toBeNull();
+    expect(parseCgroupProcs("4095037\n0\n")).toBeNull();
   });
 });
 
@@ -351,7 +412,28 @@ describe("the steering queue", () => {
   });
 
   it("is unknown when the wire carries no quarantine field for it to look at", () => {
-    expect(summariseQueues({ queues: [{ items: [] }] }).ok).toBe(false);
+    expect(summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [] }] }).ok).toBe(false);
+  });
+
+  /**
+   * `quarantine: false` fell through the `typeof === "object"` test and was
+   * counted as no hold — the exact substitution this parser exists to refuse.
+   * GPT Sol, 2026-09-09.
+   */
+  it("is unknown for a quarantine value that is neither a hold nor null", () => {
+    expect(summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [], quarantine: false }] }).ok).toBe(false);
+    expect(summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [], quarantine: "held" }] }).ok).toBe(false);
+  });
+
+  /**
+   * THE ENVELOPE. An error-shaped 200 carrying `queues: []` — a proxy's page, a
+   * route that moved, a different server on the port — would otherwise read as
+   * "the queue is empty" and clear the way for a restart.
+   */
+  it("does not read an error-shaped 200 with no queues as an empty queue", () => {
+    expect(summariseQueues({ ok: false, error: "nope", queues: [] }).ok).toBe(false);
+    expect(summariseQueues({ ok: true, op: "something-else", queues: [] }).ok).toBe(false);
+    expect(summariseQueues({ queues: [] }).ok).toBe(false);
   });
 
   /**
@@ -371,7 +453,7 @@ describe("the steering queue", () => {
   });
 
   it("does not print `undefined` for an item shaped in a way it does not know", () => {
-    const read = summariseQueues({ queues: [{ items: [{}], quarantine: null }] });
+    const read = summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [{}], quarantine: null }] });
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.items[0]?.what).toContain("unrecognised");
@@ -482,6 +564,21 @@ describe("after the restart", () => {
     expect(check.detail).toContain("re-collected");
   });
 
+  /**
+   * `cannot-tell` BEFORE is not "no claim to lose". The first version returned
+   * `skipped` for every pre-state except `holder`, so a stale snapshot read as
+   * an absence, no post-restart reading was taken at all, and a claim that
+   * really existed could be lost at exit 0 — contradicting the rule directly
+   * beside it that a `cannot-tell` after is blocking. GPT Sol, 2026-09-09.
+   */
+  it("does not read an unestablished claim before the restart as nothing to lose", () => {
+    const stale = "overseer    Overseer unknown — the snapshot is stale";
+    const check = judgeOverseerClaim(stale, "overseer    no Overseer session", 0);
+    expect(check.verdict).not.toBe("skipped");
+    expect(check.verdict).toBe("unknown");
+    expect(check.detail).toContain("BEFORE");
+  });
+
   it("names the four things the overseer line can be saying", () => {
     expect(claimState("overseer    Overseer: Overseer")).toBe("holder");
     expect(claimState("overseer    no Overseer session")).toBe("none");
@@ -555,7 +652,13 @@ type World = {
   /** The `overseer` line, once per `overseer status` call; the last one repeats. */
   claimLines?: string[];
   branch?: string;
+  /** `git status --porcelain` lines, so `XY path`. */
   dirtyFleet?: string[];
+  dirtySrc?: string[];
+  /** Non-zero makes `ss` fail, the way it does with no permission. */
+  ssStatus?: number;
+  /** From this `systemctl show` call onwards (1-based), the command fails. */
+  showFailsAfter?: number;
 };
 
 function fakeIo(world: World): { io: Io; argv: string[][]; lines: string[] } {
@@ -564,18 +667,23 @@ function fakeIo(world: World): { io: Io; argv: string[][]; lines: string[] } {
   const shows = [...world.show];
   const claims = [...(world.claimLines ?? ["overseer    Overseer: Overseer"])];
   let clock = 1_000_000;
+  let showCalls = 0;
   const io: Io = {
     run(command) {
       argv.push(command);
       const [head, ...rest] = command;
-      if (head === "systemctl" && rest[0] === "show") return { status: 0, stdout: shows.length > 1 ? (shows.shift() as string) : (shows[0] as string), stderr: "" };
+      if (head === "systemctl" && rest[0] === "show") {
+        showCalls += 1;
+        if (world.showFailsAfter !== undefined && showCalls > world.showFailsAfter) return { status: 1, stdout: "", stderr: "Failed to get properties: Connection timed out" };
+        return { status: 0, stdout: shows.length > 1 ? (shows.shift() as string) : (shows[0] as string), stderr: "" };
+      }
       if (head === "sudo") return { status: world.restartStatus ?? 0, stdout: "", stderr: world.restartStatus ? "sudo: a password is required" : "" };
-      if (head === "ss") return { status: 0, stdout: world.ss ?? SS, stderr: "" };
+      if (head === "ss") return { status: world.ssStatus ?? 0, stdout: world.ssStatus ? "" : (world.ss ?? SS), stderr: world.ssStatus ? "ss: no permission" : "" };
       if (head === "git" && rest[2] === "fetch") return { status: 0, stdout: "", stderr: "" };
       if (head === "git" && rest[2] === "rev-parse" && rest[3] === "--abbrev-ref") return { status: 0, stdout: `${world.branch ?? "dev"}\n`, stderr: "" };
       if (head === "git" && rest[2] === "rev-parse") return { status: 0, stdout: `${rest[3]}-sha\n`, stderr: "" };
       if (head === "git" && rest[2] === "rev-list") return { status: 0, stdout: `${world.gitCounts ?? "0\t0"}\n`, stderr: "" };
-      if (head === "git" && rest[2] === "diff") return { status: 0, stdout: (world.dirtyFleet ?? []).join("\n"), stderr: "" };
+      if (head === "git" && rest[2] === "status") return { status: 0, stdout: ((rest.includes("src") ? world.dirtySrc : world.dirtyFleet) ?? []).join("\n"), stderr: "" };
       if (head?.endsWith("tsx")) return { status: 0, stdout: `${claims.length > 1 ? (claims.shift() as string) : (claims[0] as string)}\n`, stderr: "" };
       return { status: 0, stdout: "", stderr: "" };
     },
@@ -646,10 +754,39 @@ describe("the real main against a fake world", () => {
     expect(argv.some((a) => a[0] === "sudo")).toBe(false);
   });
 
-  it("refuses half-edited files under tools/fleet/, which ExecStartPre would build", async () => {
-    const { io, lines } = fakeIo({ show: [SHOW_OK], dirtyFleet: ["tools/fleet/server.ts"] });
+  it("refuses half-edited files the build reads, which ExecStartPre would compile", async () => {
+    const { io, lines } = fakeIo({ show: [SHOW_OK], dirtyFleet: [" M tools/fleet/server.ts"] });
     expect(await main(["restart"], io)).toBe(EXIT_REFUSED);
     expect(lines.join("\n")).toContain("tools/fleet/server.ts");
+  });
+
+  /**
+   * The queue is read TWICE, and the second read is the last act before the
+   * `sudo`. It does not close the race — an instruction arriving in the
+   * microseconds after that response is still lost — but everything between the
+   * two reads is time somebody's instruction could have gone missing without
+   * being printed, and that used to include rendering and printing the whole
+   * report. GPT Sol raised this twice; closing it properly needs an atomic
+   * quiesce in the dashboard.
+   */
+  it("refuses when an instruction arrives between the check and the restart", async () => {
+    let calls = 0;
+    const { io, argv, lines } = fakeIo({ show: [SHOW_OK, SHOW_AFTER] });
+    const wrapped: Io = {
+      ...io,
+      http: async (url, ms) => {
+        if (url.endsWith("/api/actions")) {
+          calls += 1;
+          return { status: 200, body: JSON.stringify(body(calls === 1 ? [] : [item("q9")])), why: "" };
+        }
+        return io.http(url, ms);
+      },
+    };
+    expect(await main(["restart"], wrapped)).toBe(EXIT_REFUSED);
+    expect(argv.some((a) => a[0] === "sudo")).toBe(false);
+    const out = lines.join("\n");
+    expect(out).toContain("changed between the check above and the restart");
+    expect(out).toContain("q9");
   });
 
   /** The queue is a snapshot of something another process may change; read it as late as possible. */
@@ -700,6 +837,38 @@ describe("the real main against a fake world", () => {
     expect(lines.join("\n")).toContain("a password is required");
   });
 
+  /**
+   * TWO WAYS TO PRINT `all clear` WITHOUT HAVING LOOKED, both from discarding a
+   * command's exit status. The final `systemctl show` failing left `after` at
+   * the first sample, so `judgeStable(200, 0, 200, 0)` passed on an observation
+   * that never happened — and the second look is the entire check. GPT Sol,
+   * 2026-09-09.
+   */
+  it("does not pass the stability check on an observation that never happened", async () => {
+    const { io, lines } = fakeIo({ show: [SHOW_OK, SHOW_AFTER], showFailsAfter: 2 });
+    expect(await main(["restart"], io)).toBe(EXIT_UNVERIFIED);
+    const out = lines.join("\n");
+    // The PREFLIGHT legitimately says "all clear" — the postflight must not.
+    const postflight = out.slice(out.indexOf(", after"));
+    expect(postflight).not.toContain("all clear");
+    expect(postflight).toContain("the second look is the whole of this check");
+    expect(postflight).toContain("THIS IS THE READING FROM BEFORE THE WAIT");
+    // EVERY judgment that reads the unit, not only the stability one. A first
+    // pass at this test asserted the stability line alone, and a deliberate
+    // mutation showed that `active`, `process replaced` and `not crash-looping`
+    // could all go on reporting the stale sample with the test still green.
+    for (const check of ["active", "process replaced", "not crash-looping", "stable"]) {
+      expect(postflight, `${check} should be unknown when the final systemctl show failed`).toMatch(new RegExp(`\\?\\s+${check}\\b`));
+    }
+  });
+
+  /** And an `ss` that failed and printed nothing must not read as "nothing else holds the port". */
+  it("does not read a failed ss as a free port or as proof of ownership", async () => {
+    const { io, lines } = fakeIo({ show: [SHOW_OK, SHOW_AFTER], ssStatus: 1 });
+    expect(await main(["restart"], io)).toBe(EXIT_REFUSED);
+    expect(lines.join("\n")).toContain("ss failed");
+  });
+
   /** A crash loop that has come back up once looks exactly like a healthy service. */
   it("exits 4 when the process is replaced again during the stability window", async () => {
     const flapped = SHOW_OK.replace("MainPID=4095037", "MainPID=4300000").replace("NRestarts=0", "NRestarts=1");
@@ -738,6 +907,34 @@ describe("the real main against a fake world", () => {
     });
     expect(await main(["restart"], io)).toBe(EXIT_OK);
     expect(lines.join("\n")).not.toContain("does not now");
+  });
+
+  /**
+   * THE WAIT THAT UNDID THE STABILITY WINDOW. Systemd and HTTP used to be
+   * sampled *before* the claim wait, which can be sixty seconds — so the
+   * process could die and be replaced during it, and the ownership check would
+   * describe the new pid while every other judgment described the old one, all
+   * passing. Every wait now happens before the final sample. GPT Sol, 2026-09-09.
+   */
+  it("takes its final readings after the claim wait, not before it", async () => {
+    const seen: string[] = [];
+    const blind = "overseer    Overseer unknown — the dashboard has never completed a collection";
+    const { io } = fakeIo({
+      show: [SHOW_OK, SHOW_AFTER],
+      claimLines: ["overseer    Overseer: Overseer", blind, "overseer    Overseer: Overseer"],
+    });
+    const wrapped: Io = {
+      ...io,
+      run: (argvIn, cwd) => {
+        seen.push(argvIn[0]?.endsWith("tsx") ? "overseer-status" : (argvIn[0] as string));
+        return io.run(argvIn, cwd);
+      },
+    };
+    await main(["restart"], wrapped);
+    // The last `overseer-status` must come before the last `ss`, which is the
+    // reading ownership is judged on.
+    expect(seen.lastIndexOf("overseer-status")).toBeLessThan(seen.lastIndexOf("ss"));
+    expect(seen.lastIndexOf("overseer-status")).toBeLessThan(seen.lastIndexOf("systemctl"));
   });
 
   /** And a claim that never comes back is `unknown`, so a permanently blinded daemon still shows. */

@@ -55,6 +55,7 @@ import {
   type Check,
   DIST_INDEX,
   EXIT_OK,
+  FLEET_BUILD_INPUTS,
   EXIT_REFUSED,
   EXIT_RESTART_FAILED,
   EXIT_UNEXPECTED,
@@ -84,7 +85,9 @@ import {
   renderQueueItems,
   renderReport,
   resolvePort,
+  srcDirtNote,
   summariseQueues,
+  type Listener,
   type GitRead,
   type QueueRead,
   type UnitFacts,
@@ -219,10 +222,14 @@ function readGit(io: Io, workDir: string): GitRead {
   }
   const branch = io.run(["git", "-C", workDir, "rev-parse", "--abbrev-ref", "HEAD"]);
   if (branch.status !== 0) return { ok: false, why: `could not read the branch in ${workDir}: ${oneLine(branch.stderr)}` };
-  // Tracked modifications only, and only under the directory ExecStartPre
-  // builds — see `judgeDirty`. `--` keeps the pathspec unambiguous.
-  const dirty = io.run(["git", "-C", workDir, "diff", "--name-only", "HEAD", "--", "tools/fleet"]);
+  // **`status --porcelain`, not `diff --name-only`.** A diff sees tracked
+  // modifications only, so a brand-new untracked `tools/fleet/whatever.ts` —
+  // exactly what a half-finished feature looks like — was invisible to the check
+  // meant to catch half-finished features. GPT Sol, 2026-09-09.
+  const dirty = io.run(["git", "-C", workDir, "status", "--porcelain", "--", ...FLEET_BUILD_INPUTS]);
   if (dirty.status !== 0) return { ok: false, why: `could not read uncommitted changes in ${workDir}: ${oneLine(dirty.stderr)}` };
+  const dirtySrc = io.run(["git", "-C", workDir, "status", "--porcelain", "--", "src"]);
+  if (dirtySrc.status !== 0) return { ok: false, why: `could not read uncommitted changes under src/ in ${workDir}: ${oneLine(dirtySrc.stderr)}` };
   return {
     ok: true,
     head: head.stdout.trim(),
@@ -230,8 +237,18 @@ function readGit(io: Io, workDir: string): GitRead {
     behind,
     ahead,
     branch: branch.stdout.trim(),
-    dirtyFleetFiles: dirty.stdout.split("\n").map((l) => l.trim()).filter((l) => l !== ""),
+    dirtyFleetFiles: porcelainPaths(dirty.stdout),
+    dirtySrcFiles: porcelainPaths(dirtySrc.stdout),
   };
+}
+
+/** `XY <path>`, or `XY <old> -> <new>` for a rename; we want the path it is now. */
+function porcelainPaths(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.slice(3).trim())
+    .filter((path) => path !== "")
+    .map((path) => path.split(" -> ").at(-1) as string);
 }
 
 async function readQueue(io: Io, port: number): Promise<QueueRead> {
@@ -264,6 +281,21 @@ function readCgroupPids(io: Io, controlGroup: string): number[] | null {
   if (controlGroup === "") return null;
   const text = io.readFile(path.join("/sys/fs/cgroup", controlGroup, "cgroup.procs"));
   return text === null ? null : parseCgroupProcs(text);
+}
+
+/**
+ * The listening sockets, or null if `ss` did not succeed.
+ *
+ * Null rather than the partial stdout: a non-zero `ss` that printed some of its
+ * table would otherwise be enough to prove ownership, and — worse, before a
+ * restart — an `ss` that failed and printed nothing read as *"nothing else
+ * holds the port"*. That is a refusal turned into a pass by a command that did
+ * not run. GPT Sol, 2026-09-09.
+ */
+function readListeners(io: Io): { listeners: Listener[] | null; why: string } {
+  const ran = io.run(["ss", "-ltnpH"]);
+  if (ran.status !== 0) return { listeners: null, why: oneLine(ran.stderr) || `ss exited ${ran.status}` };
+  return { listeners: parseListeners(ran.stdout), why: "" };
 }
 
 function oneLine(text: string): string {
@@ -305,6 +337,38 @@ function parseArgs(argv: string[]): Args | { say: string; code: number } {
   return { mode, discard };
 }
 
+/**
+ * The facts nothing else can be measured without, or a sentence saying why the
+ * run stops here.
+ *
+ * These are separated from the checks below because they are not verdicts: a
+ * `WorkingDirectory` this cannot read is not a *failing* check, it is the
+ * absence of the thing every later check would be about — and the alternative
+ * to refusing is a confident BUNDLE MATCH concerning a directory the unit does
+ * not serve.
+ */
+type Ground = { facts: UnitFacts; port: number; portSource: string; builtIndex: string };
+
+function ground(io: Io): Ground | { refuse: string } {
+  const shown = showUnit(io);
+  if (shown.status !== 0) return { refuse: `systemctl show ${UNIT} failed: ${oneLine(shown.stderr)}` };
+  const unit = readUnit(parseShow(shown.stdout));
+  if (!unit.ok) return { refuse: unit.why };
+
+  const port = resolvePort(unit.facts.environment);
+  if (!port.ok) return { refuse: port.why };
+
+  // The bundle PATH, not the bundle: `ExecStartPre` rebuilds `dist/` on every
+  // start, so a checkout that has never been built is an ordinary state and not
+  // a refusal. What would not be ordinary is a WorkingDirectory that is not a
+  // checkout of this repo at all — then every later comparison would be against
+  // somebody else's files.
+  const webDir = path.join(unit.facts.workDir, "tools/fleet/web");
+  if (!io.exists(webDir)) return { refuse: `${UNIT}'s WorkingDirectory is ${unit.facts.workDir}, which has no tools/fleet/web — cannot confirm which bundle it serves` };
+
+  return { facts: unit.facts, port: port.port, portSource: port.source, builtIndex: path.join(unit.facts.workDir, DIST_INDEX) };
+}
+
 export async function main(argv: string[], io: Io = realIo): Promise<number> {
   const args = parseArgs(argv);
   if ("say" in args) {
@@ -313,36 +377,13 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
   }
   const { mode, discard } = args;
 
-  /* --- the unit, and the two facts everything else is measured against --- */
-  const shown = showUnit(io);
-  if (shown.status !== 0) {
-    io.out(`REFUSED: systemctl show ${UNIT} failed: ${oneLine(shown.stderr)}`);
+  const base = ground(io);
+  if ("refuse" in base) {
+    io.out(`REFUSED: ${base.refuse}`);
     return EXIT_REFUSED;
   }
-  const unit = readUnit(parseShow(shown.stdout));
-  if (!unit.ok) {
-    io.out(`REFUSED: ${unit.why}`);
-    return EXIT_REFUSED;
-  }
-  const facts = unit.facts;
-
-  const port = resolvePort(facts.environment);
-  if (!port.ok) {
-    io.out(`REFUSED: ${port.why}`);
-    return EXIT_REFUSED;
-  }
-
-  // The bundle PATH, not the bundle: `ExecStartPre` rebuilds `dist/` on every
-  // start, so a checkout that has never been built is an ordinary state and not
-  // a refusal. What would not be ordinary is a WorkingDirectory that is not a
-  // checkout of this repo at all — then every later comparison would be against
-  // somebody else's files.
-  const webDir = path.join(facts.workDir, "tools/fleet/web");
-  if (!io.exists(webDir)) {
-    io.out(`REFUSED: ${UNIT}'s WorkingDirectory is ${facts.workDir}, which has no ${path.relative(facts.workDir, webDir)} — cannot confirm which bundle it serves`);
-    return EXIT_REFUSED;
-  }
-  const builtIndex = path.join(facts.workDir, DIST_INDEX);
+  const { facts, builtIndex } = base;
+  const port = { port: base.port, source: base.portSource };
 
   // **`inactive` and `failed` are the only two states with no queue to lose.**
   // The first version asked `activeState === "active"` and treated everything
@@ -353,7 +394,7 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
   const serviceUp = facts.activeState !== "inactive" && facts.activeState !== "failed";
   const overseerBefore = readOverseerClaim(io, facts.workDir);
   const git = readGit(io, facts.workDir);
-  const listenersBefore = parseListeners(io.run(["ss", "-ltnpH"]).stdout);
+  const before = readListeners(io);
 
   // LAST, deliberately. This is a snapshot of something another process is
   // free to change, and everything above it takes seconds — a `git fetch` over
@@ -368,10 +409,13 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
     { name: "unit", verdict: "pass", detail: `${UNIT} loaded from ${facts.fragmentPath}, ${facts.activeState} (${facts.subState}), WorkingDirectory ${facts.workDir}` },
     { name: "port", verdict: "pass", detail: `${port.port}, from ${port.source}` },
     { name: "bundle path", verdict: "pass", detail: builtBundleNote(io, builtIndex) },
-    judgePortIsFree(listenersBefore, port.port, readCgroupPids(io, facts.controlGroup), serviceUp),
+    before.listeners === null
+      ? { name: "port not a stranger's", verdict: "unknown", detail: `ss failed (${before.why}), so it cannot be shown that nothing else holds ${port.port}` }
+      : judgePortIsFree(before.listeners, port.port, readCgroupPids(io, facts.controlGroup), serviceUp),
     judgeBranch(git),
     judgeBehind(git),
     judgeDirty(git),
+    srcDirtNote(git),
     judgeQueue(serviceUp, queue, discard),
   ];
 
@@ -391,6 +435,21 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
   }
 
   /* --- the one thing this script is for --- */
+
+  // **THE SECOND LOOK, WITH NOTHING BETWEEN IT AND THE `sudo`.** The queue is a
+  // snapshot of something other processes write to, and everything above —
+  // rendering the report, printing it — takes time. This re-reads it as the last
+  // act before the restart and refuses if anything arrived in the meantime.
+  //
+  // It does not close the race and is not claimed to: an instruction enqueued in
+  // the microseconds after this response is still lost silently. Nothing a
+  // *restarter* can do from outside closes it; that needs an atomic quiesce in
+  // the dashboard — one call that stops accepting steering, returns the state,
+  // and lets the caller restart knowing nothing arrived. That is `tools/fleet/`
+  // and is written up in the plan as a follow-up for its owner. Raised twice by
+  // GPT Sol, 2026-09-09, and it was right both times.
+  if (serviceUp && !discard && (await somethingArrived(io, port.port))) return EXIT_REFUSED;
+
   io.out("");
   io.out(`restarting ${UNIT} …`);
   const restarted = io.run(["sudo", "-n", "systemctl", "restart", UNIT]);
@@ -407,6 +466,17 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
   for (const line of renderReport(`fleet-restart restart — ${UNIT}, after`, checks)) io.out(line);
   if (failed) return EXIT_RESTART_FAILED;
   return checks.some(blocks) ? EXIT_UNVERIFIED : EXIT_OK;
+}
+
+/** The second queue read's verdict, printed here so the caller stays one decision wide. */
+async function somethingArrived(io: Io, port: number): Promise<boolean> {
+  const again = await readQueue(io, port);
+  const arrived = judgeQueue(true, again, false);
+  if (!blocks(arrived)) return false;
+  for (const line of renderQueueItems(again, io.now())) io.out(line);
+  io.out("");
+  io.out(`REFUSED — nothing was restarted. The steering queue changed between the check above and the restart: ${arrived.detail}`);
+  return true;
 }
 
 /**
@@ -433,27 +503,51 @@ async function verify(io: Io, ctx: { before: UnitFacts; port: number; builtIndex
     await io.sleep(POLL_MS);
   }
 
-  // The stability window: hold still past RestartSec and ask again. See
-  // `judgeStable` — one healthy instant is what a crash loop is made of.
+  // The first healthy sample, kept as the baseline for the stability window.
+  const firstSeenAt = io.now();
   const pidAtStart = after.mainPid;
   const restartsAtStart = after.restarts;
+
+  // **EVERY WAIT HAPPENS BEFORE THE FINAL SAMPLE, and the ordering is the whole
+  // point.** The first version sampled systemd and HTTP, then waited up to sixty
+  // seconds for the Overseer daemon, then read `ss` — so the process could die
+  // and be replaced during that wait, and ownership would describe the new pid
+  // while every other judgment described the old one. All passing. That is the
+  // "observations from two different servers" class the stability window was
+  // added to remove, reintroduced by the check that came after it. GPT Sol,
+  // 2026-09-09.
+  //
+  // The window is therefore at least STABILITY_MS and, when the claim is being
+  // waited on, considerably more — which only makes the check stronger, so it
+  // reports the time it actually measured rather than the constant.
   await io.sleep(STABILITY_MS);
-  const settled = readUnit(parseShow(showUnit(io).stdout));
+  const claim = await settledClaim(io, ctx.before.workDir, ctx.overseerBefore);
+
+  const settledShow = showUnit(io);
+  const settled = settledShow.status === 0 ? readUnit(parseShow(settledShow.stdout)) : ({ ok: false, why: `systemctl show failed: ${oneLine(settledShow.stderr)}` } as const);
+  // **A FAILED FINAL READ IS NOT THE EARLIER READING.** Leaving `after` at the
+  // first sample made `judgeStable(200, 0, 200, 0)` pass on an observation that
+  // never happened — the second look is the entire check. GPT Sol, 2026-09-09.
   if (settled.ok) after = settled.facts;
   http = await io.http(`http://127.0.0.1:${ctx.port}/`, 5_000);
+  const windowMs = io.now() - firstSeenAt;
 
-  const claim = await settledClaim(io, ctx.before.workDir, ctx.overseerBefore);
-  const listeners = parseListeners(io.run(["ss", "-ltnpH"]).stdout);
+  const { listeners, why: ssWhy } = readListeners(io);
+
   return [
-    judgeActive(after),
-    judgeReplaced(ctx.before.mainPid, after.mainPid),
-    judgeFlapping(ctx.before.restarts, after.restarts),
-    judgeStable(pidAtStart, restartsAtStart, after.mainPid, after.restarts, STABILITY_MS),
-    judgeListener(listeners, ctx.port, readCgroupPids(io, after.controlGroup)),
+    settled.ok ? judgeActive(after) : { name: "active", verdict: "unknown", detail: `the unit could not be read after the wait — ${settled.why}` },
+    settled.ok ? judgeReplaced(ctx.before.mainPid, after.mainPid) : { name: "process replaced", verdict: "unknown", detail: "the unit could not be read after the wait" },
+    settled.ok ? judgeFlapping(ctx.before.restarts, after.restarts) : { name: "not crash-looping", verdict: "unknown", detail: "the unit could not be read after the wait" },
+    settled.ok
+      ? judgeStable(pidAtStart, restartsAtStart, after.mainPid, after.restarts, windowMs)
+      : { name: "stable", verdict: "unknown", detail: `nothing was observed after the ${Math.round(windowMs / 1000)}s window — the second look is the whole of this check, and it did not happen` },
+    listeners === null
+      ? { name: "listener", verdict: "unknown", detail: `ss failed (${ssWhy}), so nothing can be shown to own the port` }
+      : judgeListener(listeners, ctx.port, readCgroupPids(io, after.controlGroup)),
     judgeHttp(http.status, http.why, ctx.port),
     judgeBundle(bundleRef(io.readFile(ctx.builtIndex) ?? ""), bundleRef(http.body)),
     judgeOverseerClaim(ctx.overseerBefore, claim.line, claim.waitedMs),
-    resultLine(after),
+    resultLine(after, settled.ok),
   ];
 }
 
@@ -465,8 +559,12 @@ async function verify(io: Io, ctx: { before: UnitFacts; port: number; builtIndex
  * `ExecStartPre` build from a port collision from a missing tailnet address,
  * none of which "HTTP never answered" distinguishes.
  */
-function resultLine(after: UnitFacts): Check {
-  return { name: "systemd says", verdict: "pass", detail: `${after.activeState} (${after.subState}), Result=${after.result || "(none)"}, ExecMainStatus=${after.execMainStatus || "(none)"}, NRestarts=${Number.isNaN(after.restarts) ? "(none)" : after.restarts}` };
+function resultLine(after: UnitFacts, fresh: boolean): Check {
+  const facts = `${after.activeState} (${after.subState}), Result=${after.result || "(none)"}, ExecMainStatus=${after.execMainStatus || "(none)"}, NRestarts=${Number.isNaN(after.restarts) ? "(none)" : after.restarts}`;
+  // Dated, because a stale reading presented as a current one is the failure
+  // this whole file is about — the judgments above go `unknown` when the final
+  // read fails, and this line must not quietly go on sounding current.
+  return { name: "systemd says", verdict: "pass", detail: fresh ? facts : `${facts} — BUT THIS IS THE READING FROM BEFORE THE WAIT; the final systemctl show failed` };
 }
 
 /**
@@ -488,7 +586,9 @@ async function settledClaim(io: Io, workDir: string, before: string | null): Pro
 
 function builtBundleNote(io: Io, builtIndex: string): string {
   const built = bundleRef(io.readFile(builtIndex) ?? "");
-  return built === null ? `${builtIndex} — not built yet; the unit's ExecStartPre builds it on start` : `${builtIndex} currently names ${built}`;
+  if (built.kind === "one") return `${builtIndex} currently loads ${built.name}`;
+  if (built.kind === "several") return `${builtIndex} loads ${built.names.join(" and ")}`;
+  return `${builtIndex} — not built yet; the unit's ExecStartPre builds it on start`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

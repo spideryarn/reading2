@@ -142,8 +142,9 @@ stops matching the constant here.
 - [x] `npm test`, `npm run typecheck`, lint the touched files
 - [x] GPT Sol review of the code + raw test output
 
-Status: written and green (75 tests in `tests/a-restart-that-could-not-check-itself.test.ts`), plan
-reviewed by GPT Sol and the findings applied — see § "What Sol changed".
+Status: written and green (88 tests in `tests/a-restart-that-could-not-check-itself.test.ts`), typecheck
+and lint clean. Two rounds of GPT Sol review, on the plan and then on the code, both applied — see
+§ "What Sol changed".
 
 ### Stage 2 — the classifier experiment
 
@@ -239,6 +240,33 @@ Every finding, and what happened to it:
 | P2 | The plan pointed at a *"What Sol changed"* section that did not exist | **taken** — you are reading it |
 | P1 | "All clear" is misleading for a dead-but-restartable service | **taken.** `check` says so explicitly when the service is down |
 | — | Require a completely clean tree | **not taken.** This primary is shared by a dozen agents and is never clean; a blanket rule would refuse every time. The line is drawn at blast radius instead — `ExecStartPre` runs `build:fleet`, so uncommitted work under `tools/fleet/` blocks and everything else does not |
+
+### Round two, on the code
+
+Sol reviewed the built code (2026-09-09 07:44 UTC) and opened with *"The code is not ready for the
+live classifier experiment… one still-open P0 and five P1 paths, including two ways to print `all
+clear` without completing the claimed verification."* It confirmed the round-one fixes had landed and
+then found six more. All taken:
+
+| # | finding | what changed |
+|---|---|---|
+| P1 | **A failed final `systemctl show` became a passing stability check.** The command's exit status was discarded, so `after` stayed at the first sample and `judgeStable(200,0,200,0)` passed on an observation that never happened — with everything else green, exit 0 | every judgment that reads the unit goes `unknown` when the final read fails, and the `systemd says` line stamps itself as stale rather than sounding current |
+| P1 | **The same defect in `ss`**, both before and after: a non-zero `ss` with partial stdout could prove ownership, and a *failed, empty* preflight `ss` was converted into "nothing else holds the port" — a refusal turned into a pass by a command that did not run | `readListeners` returns null on non-zero, and both callers say `unknown` |
+| P1 | **A crash during the claim wait escaped the stability window.** systemd and HTTP were sampled, then up to 60s of waiting for the Overseer daemon, then `ss` — so the process could die and be replaced in between, and ownership would describe the new pid while every other judgment described the old one. All passing. The same "two servers" class the window was added to remove | every wait now happens *before* the final sample, and the window reports the time it actually measured rather than the constant |
+| P1 | **A pre-restart `cannot-tell` claim read as "no claim to lose"**, no post-reading was taken, and a claim that did exist could be lost at exit 0 — contradicting the rule beside it | `cannot-tell` before is `unknown`, and blocks |
+| P1 | **The loopback fix still permitted the two-server pass**, one layer in: grouping `127.0.0.1` with `[::1]` and passing if *any* was ours let the unit's IPv6 socket satisfy ownership while a stranger on IPv4 answered the HTTP | `127.0.0.1` exactly, and *every* owner of it must be ours |
+| P1 | **"Fleet files clean" did not cover what `build:fleet` builds**, and the plan's rationale for it was factually wrong | widened to `FLEET_BUILD_INPUTS` (`tools/fleet`, `vite.fleet.config.ts`, `package.json`, `package-lock.json`), switched from `diff --name-only` to `status --porcelain` so untracked files count, and dirty `src/` files are reported unjudged with the closure named as unresolved |
+| P2 | `quarantine: false` fell through the object test and counted as no hold | object-or-null, anything else is `unknown` |
+| P2 | The envelope was unvalidated, so an error-shaped 200 carrying `queues: []` read as an empty queue | `ok === true && op === "catalogue"` required |
+| P2 | `bundleRef` matched the first `index-*.js` **anywhere**, so a comment naming the new bundle passed while a script tag loaded the old one | matches a `src=` attribute, and two distinct references are `unknown` rather than a coin toss |
+| P2 | An absent `MainPID` became 0, so `judgeReplaced(0, new)` could pass with no before-reading; `parseCgroupProcs` returned the pids it could parse from a damaged file; `parseEnvironment` mis-split a whole-assignment-quoted `"FLEET_PORT=9999"` into the key `"FLEET_PORT`, silently falling back to 8787 | absent `MainPID` refuses; `parseCgroupProcs` returns null; `parseEnvironment` unquotes the assignment first |
+| P0 | **The queue race is still open** | narrowed as far as is possible from outside: a *second* read, as the last act before the `sudo`, refusing if anything arrived. The residual window is microseconds and is stated in the code rather than implied |
+
+**And Sol was right about the tests**: *"the tests miss every failure above"*. Each fix above carries
+a case that fails without it. One of them was found by the mutation pass rather than by writing it:
+the first version of the failed-`show` test asserted only the stability line, and a deliberate
+mutation showed `active`, `process replaced` and `not crash-looping` could all go on reporting the
+stale sample with the suite still green. That test now checks all four.
 
 **Follow-up for whoever owns `tools/fleet/`** (not this stage, and not this agent's files): the only
 way to close the queue race properly is an atomic quiesce — one call that stops accepting new
