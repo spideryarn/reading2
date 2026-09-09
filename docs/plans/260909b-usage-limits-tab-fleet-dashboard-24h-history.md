@@ -235,9 +235,16 @@ No store. The first thing anybody can see, and a safe stopping point by Sol's ow
 - [ ] Merge `origin/dev`; confirm the usage card has landed (it was at `d2e37fe4` on
       `origin/worktree-260908f-usage-visibility` — cite `dev` once it is there, since that branch is
       a safety copy its author will delete)
-- [ ] Extend `tests/fleet-web.test.tsx`: the fourth mode exists, is labelled, mounts the panel, **and
-      `UsageCard` survives being mounted twice off one feed** — no module-level state, no id
-      collisions. Test it; do not assume it.
+- [ ] Extend `tests/fleet-web.test.tsx`:
+  - [ ] **`expect(MODES).toContain("usage")` — and this is the only assertion that matters.**
+        `Mode` is *derived from* `MODES`, so a merge that drops a whole mode **and** its three map
+        entries typechecks perfectly clean and the tab is simply gone. Typecheck catches a
+        *half*-added mode, not a *removed* one. Four sessions were adding tabs on 2026-09-09 and I
+        told two of them typecheck had them covered; it does not. Corrected rule:
+        `docs/project/fleet-dashboard-modes.md` at `396aeeab`.
+  - [ ] the mode is labelled and mounts the panel
+  - [ ] **`UsageCard` survives being mounted twice off one feed** — no module-level state, no id
+        collisions. Test it; do not assume it.
 - [ ] `mode.ts` — `"usage"` into `MODES` and `MODE_LABELS`
 - [ ] `Dock.tsx` — `MODE_ICONS.usage` and `MODE_TIPS.usage`
   - **The tip never opens on a phone**: `Dock.tsx` passes `mouseOnly`, so a tap switches the tab and
