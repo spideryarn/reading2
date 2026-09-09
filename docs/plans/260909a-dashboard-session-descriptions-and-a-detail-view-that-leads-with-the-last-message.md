@@ -929,3 +929,54 @@ draws every arm. Mutation-checked at both ends: dropping the notification result
 tests, and removing the line from the card reds all five panel tests.
 
 488 tests across five suites, typecheck clean.
+
+## Stages A–C landed, 2026-09-09 ~05:20
+
+Six commits, each a save point: the forward reader, the describer, the store, the pass, the join, and
+the render plus the server wiring.
+
+**The pieces, and the one sentence each that is worth keeping:**
+
+- **`readOpeningMessages`** (`transcript.ts`) — every other reader in that file seeks from EOF, which
+  answers *what is this session doing now*. A description of what a session is *for* needs its
+  opening, and a description built from the tail re-keys on every turn, turning "one call per session"
+  into one per turn. It is **cheaper** than the backwards reader: one chunk from byte 0, no seeking.
+- **`describe.ts`** — the prompt, the parse and the budget. **An empty string is never a description**
+  (Greg's rule, and not hypothetical: a model that answered a different question returns the right
+  *shape* with empty strings in it). The prompt forbids claiming the work is finished, because `idle`
+  means the agent stopped generating and ten of fifteen sessions waiting on Greg showed as idle.
+- **`describe-store.ts`** — the memory, keyed on `session + conversation + execution token`. The token
+  is in the **key**, so a re-used pane misses and describes itself: the stale record is *unreachable*
+  rather than merely unrendered.
+- **`describe-pass.ts`** — the gate. Only a `verified` execution with a `verified` conversation gets
+  described, which is the P1 from the plan review. **Two balance identities rather than one**: the
+  first draft had a single check fudged with an inequality, which is a check that cannot fail.
+- **`collect.ts`** — `readDescriptions` beside `readPauses`, which **reads a file and nothing else**.
+  The join is server-side because matching a description to a row needs the token and the verified
+  conversation id, and a client doing that would be a second hand-written copy of the identity rule.
+- **`SessionsPanel.tsx`** — the heading falls through *own title → generated (marked) → tmux name*,
+  and **a title that merely repeats the session name is not a title** (F4). Launching with a name
+  writes it as the session's own title, so most of this fleet carries one that duplicates the line
+  below it; treating that as already-titled would have made the generated title unreachable for
+  exactly the sessions that need it.
+
+**What a reader sees before the restart, and it is the normal case:** no description on any row, and
+headings falling back to the tmux name. Every row carries `not-yet-described` until the dashboard and
+daemon are restarted onto execution readings, and until then the pass reads no transcripts and makes
+no model calls at all. A row with no description draws **no line**, not an empty one — an empty line
+reads as a session with nothing to say, which is a different fact.
+
+### The mistake worth recording
+
+**I pushed a red typecheck to `dev` and it was the trap I had documented four hours earlier.** Two
+commits carried a type-invalid test file — a `HarnessKind` that does not exist, and four literals
+spreading a verified reading over an `unknown` one — because I verified them with
+`npx tsc --noEmit -p tsconfig.json`, **which does not cover `tests/`**. That is the fourth entry in
+[typechecking.md § Four ways to report it clean while it is red](../project/typechecking.md), which I
+wrote into that file the same night after two other sessions nearly shipped broken compile-time guards
+the same way. Vitest ran 16 tests green through it the whole time.
+
+So that entry now has **three instances and the third is the author of the entry**. The incentive is
+the thing to name: the narrow invocation is ~15 s against ~2 minutes, which is exactly what makes the
+class recur. Found by `queued-ideas-mode` after merging, relayed by the Overseer, green again at
+`9a332ab9`.
