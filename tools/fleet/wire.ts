@@ -1648,3 +1648,201 @@ export type QuarantineHoldView = {
   why: string;
   outcome: HoldOutcome;
 };
+
+/* ------------------------------------------------------------------ *
+ * The cross-agent feed — `GET /api/feed`.
+ *
+ * Greg, 2026-09-08: *"add a 'Recent messages' tab with a rolling window of the
+ * last N messages across all agents (making it easy to filter)"*.
+ *
+ * The per-session route (`/api/messages?id=`) answers *is this row telling me
+ * the truth?* This one answers *what is the fleet saying* — and the difference
+ * is not only scope. **The reader of this feed was never watching these
+ * sessions**, so a message that is wrong, misattributed or missing has nothing
+ * on screen to contradict it. Every type below that looks like defensive
+ * bookkeeping is there for that reason, and the reasoning is in
+ * docs/plans/260909b-recent-messages-tab-a-rolling-window-across-all-agents.md.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Who said it, on the wire.
+ *
+ * **A structural copy of `TurnSpeaker` in tools/fleet/transcript.ts**, which
+ * this file may not import — the header above says why no import may ever
+ * appear here, and transcript.ts reaches `node:fs`.
+ *
+ * The copy is kept honest in the direction that matters **for free, by an
+ * ordinary assignment**: `routes-recent-feed.ts` assigns a `TurnSpeaker` into
+ * this field, so an arm added to the reader and not to this union is a compile
+ * error at the point of use. No guard, no ceremony, nothing to remember. The
+ * other direction — an arm here the reader never produces — is harmless,
+ * because the browser's parser rounds a speaker it does not know to
+ * `unrecognised` rather than to `assistant`.
+ */
+export type FeedSpeaker =
+  | "human"
+  | "assistant"
+  | "peer"
+  | "notification"
+  | "compact-summary"
+  | "injected"
+  | "api-error"
+  | "system";
+
+/** One tool call, as a label. Structural copy of `ToolCallSummary`, same argument. */
+export type FeedToolCall = { name: string; detail: string | null };
+
+/**
+ * **HOW MUCH THE FEED IS ENTITLED TO CLAIM ABOUT WHO SAID THIS.**
+ *
+ * `CLAUDE_SESSION_ID` is pinned into a tmux session's environment when the pane
+ * is created and is never updated (transcript.ts says so at length). So a pane
+ * that has been re-used — the agent exited and somebody started a fresh
+ * `claude`, or resumed a different conversation — still names the FIRST
+ * conversation, and the reader will faithfully return that conversation's
+ * turns. They are real messages, well formed, correctly attributed, about this
+ * repo, and **not the conversation the row is about**.
+ *
+ * The per-session view can leave that to the reader's own judgement, because
+ * somebody looking at one session usually knows what it was doing. **This feed
+ * cannot**, so the claim is carried explicitly beside every message rather than
+ * asserted by putting a session's name next to some text.
+ *
+ * `verified` REQUIRES `FleetRow.execution` (session
+ * 260908f-roadmap-exec-identity), which is not on `dev` yet — so today this
+ * route never returns it. That is deliberate: an arm nothing can currently
+ * produce is better than a `verified` that means "we did not check".
+ */
+export type FeedAttribution =
+  /** The live pane's conversation id was checked and matches. Needs `FleetRow.execution`. */
+  | { kind: "verified" }
+  /** A pinned id, nothing contradicting it, and nothing confirming it either. The ordinary case. */
+  | { kind: "claimed-only"; why: string }
+  /** Something positively disagrees — e.g. a transcript untouched for hours against a `working` row. */
+  | { kind: "suspect"; why: string };
+
+/** One message in the feed, with the session it was read for attached to it. */
+export type FeedMessage = {
+  /** tmux's SESSION handle, `$1643` — the address, and what the session filter matches on. */
+  sessionId: string;
+  /** For reading. Renames happen, so this is the name at read time, not an identity. */
+  sessionName: string;
+  sessionTitle: string | null;
+  /** See `FeedAttribution`. Never omitted, because its absence would read as confidence. */
+  attribution: FeedAttribution;
+  speaker: FeedSpeaker;
+  /**
+   * ISO, on **the box's clock**, exactly as the transcript wrote it — never
+   * shifted to the browser's. messages-client.ts § `MessageTurn.at` has the
+   * full argument; the short version is that shifting it would assert an
+   * absolute instant nothing happened at.
+   *
+   * Null is in the type and was **not** observed in 955 sampled turns. See
+   * `FeedPayload.undated` for what happens to one if it ever appears.
+   */
+  at: string | null;
+  /** Plain, untrusted, possibly truncated, **never markup**. */
+  text: string;
+  truncated: boolean;
+  fullChars: number;
+  toolCalls: FeedToolCall[];
+  /** The record's own uuid, for a React key that survives a refresh. */
+  uuid: string | null;
+};
+
+/**
+ * What happened when we tried to read one session — carried for **every** row
+ * in the snapshot, including the ones with nothing to read.
+ *
+ * Nine of 21 rows on the box tonight are shells and scheduled sessions still
+ * running `sleep`; they answer `no-claude-session-id`. A feed that listed only
+ * the sessions it could read would show a fleet of twelve and look complete
+ * doing it.
+ */
+export type FeedSessionRead =
+  | {
+      kind: "read";
+      /** How many turns this session contributed to the merge, before the global trim. */
+      turns: number;
+      /**
+       * **WHETHER THIS SESSION'S NEWEST `limit` TURNS WERE ALL ACTUALLY READ.**
+       *
+       * False means the byte budget stopped the walk before the requested
+       * number of turns — so this session may have said more than the feed
+       * shows. A short answer and a quiet agent look identical on screen, which
+       * is the silent-success failure this feature is most exposed to. See
+       * `FeedPayload.mayBeMissing` for when it actually matters.
+       */
+      complete: boolean;
+      /** The transcript's own mtime, ISO, box clock. The one check on the hazard above. */
+      lastModified: string;
+      bytesRead: number;
+      fileBytes: number;
+      /** Tool results the reader skipped, so "silent between two messages" is never implied. */
+      toolResultsSkipped: number;
+    }
+  /** No transcript to read. `reason` is the reader's typed code, `why` its sentence. */
+  | { kind: "not-found"; reason: string; why: string }
+  /** There was a file and it could not be read. */
+  | { kind: "unreadable"; path: string | null; why: string };
+
+/** One session in the feed's own census of the fleet. */
+export type FeedSession = {
+  sessionId: string;
+  name: string;
+  title: string | null;
+  read: FeedSessionRead;
+};
+
+export type FeedPayload =
+  | {
+      schema: 1;
+      kind: "feed";
+      /** What was asked for, after clamping — so the page can say it got less than it typed. */
+      limit: number;
+      /**
+       * **NEWEST FIRST**, which is the opposite of `/api/messages`, and the
+       * inversion is done here, once, rather than in every client.
+       *
+       * Stated this loudly because the sibling route returns turns newest LAST
+       * and a reader arriving from messages-client.ts will assume the same here.
+       * Doing it server-side means the ordering has one home and one test.
+       */
+      messages: FeedMessage[];
+      /**
+       * Messages with no timestamp, which cannot be placed in a global ordering.
+       *
+       * **Not dropped** — a feed that silently omits messages is the one thing
+       * this must not be — and **not interleaved at a guessed position**, which
+       * would assert an ordering nothing supports. Zero of 955 sampled turns
+       * needed this. If it is ever non-empty, that is the signal to design
+       * something better rather than evidence that this was enough.
+       */
+      undated: FeedMessage[];
+      /** Every row in the snapshot, readable or not. See `FeedSessionRead`. */
+      sessions: FeedSession[];
+      /**
+       * The sessions whose incompleteness **actually costs this feed
+       * something**, by name, for the page to print.
+       *
+       * Not simply every `complete: false` session: if a session was cut short
+       * but its oldest returned message is already older than the feed's
+       * cutoff, then everything of its that belongs in this window was read,
+       * and warning about it would be noise. A warning that is usually wrong is
+       * one nobody reads. The condition is computed in routes-recent-feed.ts
+       * and is the one piece of arithmetic here worth a test of its own.
+       */
+      mayBeMissing: string[];
+      /**
+       * When the snapshot these rows came from was collected, and when this
+       * answer was built.
+       *
+       * Both, because they answer different questions: a session that started
+       * after `collectedAt` **is not in this feed at all**, and nothing else
+       * here would say so.
+       */
+      collectedAt: string | null;
+      servedAt: string;
+    }
+  /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */
+  | { schema: 1; kind: "unreadable"; why: string };

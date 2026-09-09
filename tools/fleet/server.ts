@@ -43,6 +43,7 @@ import { readCheckpointFeeds } from "./overseer-status.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
+import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
@@ -150,6 +151,14 @@ const retention = makeHealthRetention({
 });
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
+
+/**
+ * The cross-agent feed. **The snapshot is passed as a function, not a value** —
+ * it is replaced wholesale by every collection, and a route holding the one it
+ * was built with would serve the fleet as it was at startup for ever. Same
+ * reason the actions routes take it that way below.
+ */
+const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
 
 /**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
@@ -352,6 +361,13 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  // The last N messages across EVERY session, for the Recent messages tab.
+  // Read-only, and deliberately not on the collection loop: it is a fan-out of
+  // byte-bounded tail reads (~250 ms and ~10 MB of page cache for the whole
+  // fleet, measured), asked for only when somebody is looking at that tab.
+  // Everything it decides lives in routes-recent-feed.ts.
+  if (feedRoute.handle(req, res)) return;
 
   // Recent messages for one session, for the detail pane.
   //
