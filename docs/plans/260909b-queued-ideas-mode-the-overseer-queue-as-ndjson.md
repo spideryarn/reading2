@@ -151,6 +151,12 @@ Keys already taken in `MODES` by sessions in flight tonight: `usage`, `messages`
 (`sessions`, `health`, `overseer`), so all four are unlanded and this must merge before it counts
 entries.
 
+**Read [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) before Stage 1's client
+work** — it landed on `dev` at 01:03 UTC on 2026-09-09, after this skeleton was written, and it is
+the checklist for exactly this: four registrations across two files, of which the type system catches
+three, plus **the mount in `App.tsx`, which is the fifth place and the one nothing checks**. That
+last one is the failure this plan would otherwise have found by opening the page.
+
 ## What was verified rather than assumed, at `15e2d48b`
 
 - `MODES` on `origin/dev` is `["sessions", "health", "overseer"]` — the four new keys are all still
