@@ -6,6 +6,12 @@
 `GET /api/usage/history` was run against that store and returned four samples with the recorder not
 overdue.
 
+**GPT Sol's code review (`260909b-usage-limits-code-review-sol-r1.md`) found 13 P0s, twelve of which
+are fixed in `f7b40f88`** — the thirteenth (the double merge) was already closed in `2022c12e` before
+the review landed. One residue is recorded rather than hidden: H12's daemon-lock predicate is now
+re-asked on every append, but the production predicate is still `() => true`, so the check is
+structural until the daemon exposes real lock ownership.
+
 **Two things are outstanding and neither is code**: the browser check of the *chart* (the tab itself
 was browser-checked at Stage 1), and two `overseer-direction.md` edits that need Greg, prepared as a
 before/after in [260909b-seam-table-edit-for-greg.md](260909b-seam-table-edit-for-greg.md).
