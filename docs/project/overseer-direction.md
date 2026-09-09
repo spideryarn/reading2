@@ -1446,6 +1446,35 @@ excerpts off the lock screen.
 exactly the confident mistakes you most want caught. Rank by consequence and reversibility; treat
 confidence as an annotation until it has been measured.
 
+### Two fan-out loops, and which one should absorb the other
+
+Since 2026-09-09 there are two ways this tool says something to many sessions at once, and that is a
+temporary state with a named direction rather than a drift.
+[260909b](../plans/260909b-messaging-the-overseer-and-broadcasting-to-all-agents-from-the-dashboard.md)
+§ D4 has it in full; the two things to know before touching either:
+
+**The generic one should absorb the special one.** `resource-broadcast` is a fan-out whose text
+varies by recipient index; free text is the same fan-out with a constant renderer. So the end state
+is one loop taking a `render(index, total) => string`, with `broadcastRoute` in `routes-actions.ts`
+calling `routes-broadcast.ts`'s and not the reverse. `fanOut` already takes that callback so the
+extraction is a move. Agreed with `claude-agents-dashboard`, and Sol's verdict on it: *"Let the
+existing, reviewed ease-off loop guide the extraction, while the new route supplies the second real
+caller that proves the abstraction."*
+
+**The shared thing is the mechanics, never the authority.** Iteration, the deadline, the yield,
+per-recipient outcome collection and the quarantine belong below; who may speak, the `Speaker`
+prefix, `renderMessage`'s slash rule, the confirm/dry-run envelope, the enable flag **and the
+cooldown** stay at the caller. The two cooldowns are not one number: the ease-off one prevents
+conflicting resume times, a free-text one prevents interrupting the fleet twice, and a loop that
+owned "the cooldown" would hand the next caller whichever policy it happened to have. In one
+sentence, from the session that owns the other loop:
+
+> A general fan-out is a good abstraction and an excellent place to accidentally launder authority.
+> Keep the loop ignorant of who is allowed to say what; give it strings that are already rendered and
+> already permitted.
+>
+> — session `claude-agents-dashboard`, 2026-09-09
+
 ### Later, and deliberately not now
 
 **A21 — narrow operational actions before conversational authority.** The earliest unattended actions

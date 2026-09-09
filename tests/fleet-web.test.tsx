@@ -153,6 +153,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
   return {
     paneId: null,
     name: over.id,
+    // Required on a row and not what this file is about — an old producer's
+    // shape, which is what `parseExecution` returns for a payload without one.
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
     title: null,
     repo: null,
     worktree: null,
@@ -359,6 +362,7 @@ function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = 
     recordLines: 74,
     lastGeneratedAt: "2026-09-08T07:06:51Z",
     newestRecordedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+    newestLineRead: true,
     git: healthyGit(),
     servedAtMs: 1_788_912_000_000,
     ...over,
@@ -807,6 +811,73 @@ describe("the modes", () => {
 });
 
 /**
+ * **The Usage limits tab.**
+ *
+ * The same three assertions as Deploys below, plus one this tab needs and the
+ * others do not: it draws the *same* `UsageCard` the Overseer tab draws, from
+ * the same field of the same payload. Mounted twice rather than copied, because
+ * two renderings of one reading is exactly the second interpretation the whole
+ * of tools/overseer/usage.ts exists to prevent.
+ */
+describe("the usage limits tab", () => {
+  it("is registered at all, which is the one thing the types cannot check", () => {
+    /* `Mode` is derived FROM `MODES`, so losing a whole mode and its four map
+       entries in a merge type-checks perfectly and the tab is simply gone. Four
+       sessions were adding modes on the night of 2026-09-08. */
+    expect(MODES).toContain("usage");
+    expect(MODE_LABELS.usage).toBe("Usage limits");
+  });
+
+  it("opens straight into it from the hash", async () => {
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("draws the panel when the button is pressed — the missing-mount test", async () => {
+    /* A mode registered in all four maps with no arm in App.tsx compiles, draws
+       a button, switches the hash, and shows an empty page. Nothing type-checks
+       that ternary. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Usage limits");
+    expect(button, "no Usage limits button in the bar").toBeDefined();
+
+    act(() => button?.click());
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe("#usage");
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("shows the SAME reading as the Overseer tab's card, from one payload", async () => {
+    /* The tab is a second mount of `UsageCard`, not a second renderer. If these
+       two ever diverge, one of them is inventing — and the reader has no way to
+       tell which. Checked on the text rather than the props, because the props
+       being equal is what a copy would also satisfy. */
+    const feed = manualTransport();
+    window.location.hash = "#usage";
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+    const onTab = container.textContent ?? "";
+
+    window.location.hash = "#overseer";
+    await act(async () => undefined);
+    const onOverseer = container.textContent ?? "";
+
+    const claim = "The payload arrived and carried no usage reading at all.";
+    expect(onTab).toContain(claim);
+    expect(onOverseer).toContain(claim);
+  });
+});
+
+/**
  * **The Deploys tab.**
  *
  * The three assertions docs/project/fleet-dashboard-modes.md § The test asks
@@ -935,13 +1006,13 @@ describe("the deploys tab", () => {
     expect(container.textContent).toContain("Nothing a reader would notice");
   });
 
-  it("shows a deploy that is not on main as the alarm it is, not as a shrug", async () => {
+  it("shows a DIVERGED deploy as the alarm it is, not as a shrug", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();
-    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "not-ancestor" } } })).api);
+    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "diverged" } } })).api);
     await act(async () => undefined);
 
-    expect(container.textContent).toContain("is not on main");
+    expect(container.textContent).toContain("not in this checkout\u2019s history of main at all");
     expect(container.textContent).toContain("rollback");
   });
 
@@ -980,12 +1051,36 @@ describe("the deploys tab", () => {
     await act(async () => undefined);
 
     expect(deploys.asked).toEqual([10]);
-    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
-    expect(more?.textContent).toContain("73 older deploys");
+    const more = (): HTMLButtonElement | undefined =>
+      [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more()?.textContent).toContain("73 older deploys");
 
-    act(() => more?.click());
+    act(() => more()?.click());
     await act(async () => undefined);
-    expect(deploys.asked).toEqual([10, 60]);
+    expect(deploys.asked).toEqual([10, 70]);
+
+    /* **Pressed twice, because once was not a test of paging.** `showMore` used
+       to `setLimit(MORE_PAGE)` — a jump to 60 that then did nothing on every
+       later press, while the button stayed visible offering more. One press
+       could not see it, and the fake returning one row whatever the limit
+       hid it as well. GPT Sol, 2026-09-09. */
+    act(() => more()?.click());
+    await act(async () => undefined);
+    expect(deploys.asked).toEqual([10, 70, 130]);
+  });
+
+  it("stops asking for more once the record is exhausted", async () => {
+    /* The button must disappear rather than sit there doing nothing — which is
+       what "show more" looked like after the jump-to-60 bug. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    mount(feed.transport, recordingDeploys(() => deploysView({ total: one.versions.length })).api);
+    await act(async () => undefined);
+
+    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more, "no more to show, so no button").toBeUndefined();
   });
 
   it("answers the dock's Refresh button, which claims to refresh the page", async () => {
@@ -1034,6 +1129,25 @@ describe("the deploys tab", () => {
        being silently omitted. */
     expect(container.textContent).toContain("Release 74");
     expect(container.textContent).toContain("at an unreadable time");
+  });
+
+  it("does not cry corruption at an older server that never reported it", async () => {
+    /* **A false alarm invented by version skew.** `newestLineRead` arrived after
+       the schema number did, so an older schema-1 server sends a payload without
+       it — and a cast makes that `undefined`, which is falsy, which announced
+       that the record's newest line was corrupt when nothing was wrong. Absence
+       here means "an older server never looked", not "the line is bad".
+       GPT Sol's F8. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const full = deploysView();
+    if (full.kind !== "deploys") throw new Error("unreachable");
+    const { newestLineRead: _dropped, ...withoutTheField } = full;
+    mount(feed.transport, recordingDeploys(() => withoutTheField as DeploysView).api);
+    await act(async () => undefined);
+
+    expect(container.textContent).not.toContain("newest line could not be read");
+    expect(container.textContent).toContain("Release 74");
   });
 
   it("counts the lines it could not read rather than showing a quietly short list", async () => {
@@ -2433,7 +2547,12 @@ describe("master and detail", () => {
 
     // Before: the list, and no detail.
     expect(container.textContent).toContain("the one I tapped");
-    expect(container.textContent).not.toContain("Recent messages");
+    /* **SCOPED TO `main`, BECAUSE THE DOCK NOW SAYS THESE WORDS TOO.** The
+       cross-agent feed's tab is also called "Recent messages", so a whole-page
+       search for that phrase finds the button at the bottom of the screen and
+       this assertion stops meaning "the detail pane is closed". `main` is the
+       panel area; the dock is a `nav` beside it. */
+    expect(container.querySelector("main")?.textContent).not.toContain("Recent messages");
 
     openSession("the one I tapped");
 
@@ -6566,7 +6685,7 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("still waiting");
   });
 
-  it("offers the broadcast, and refuses to draw a box that would swallow a message", async () => {
+  it("offers the broadcast, and a message box that names who it would reach", async () => {
     const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
     window.location.hash = "#overseer";
     const feed = manualTransport();
@@ -6575,13 +6694,36 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     await act(async () => {});
 
     expect(buttonLabels()).toContain("Broadcast: ease off, staggered");
-    // The wording changed on 2026-09-08 with the Overseer status card: the old
-    // sentence's premise was that no Overseer process existed, and one does. The
-    // refusal is unchanged and is the point — a daemon that publishes a
-    // checkpoint is still not an agent that can receive a message.
-    expect(container.textContent).toContain("There is still nothing here to send a message to.");
-    // A refusal with a way forward, not a shrug.
-    expect(container.textContent).toContain("the broadcast above is the real thing");
+
+    /* **THE HISTORY OF THIS ASSERTION IS THE POINT, so it is written down
+       rather than replaced silently.**
+
+       Until 2026-09-09 this tab carried a card headed *"There is still nothing
+       here to send a message to."*, and this test pinned it. That card was right
+       about the daemon — `tools/overseer/` publishes a checkpoint and reads no
+       inbox — and **wrong about the session**: the Overseer is a Claude agent in
+       a tmux pane, reachable by the same steer path as every other row. So the
+       refusal was replaced by a card that addresses the session and keeps the
+       daemon caveat (`MessageOverseerCard.tsx`, docs/plans/260909b-…).
+
+       What is asserted here is the HOP `App.tsx` makes and nothing else covers:
+       the panel gets `rows`, and the card resolves the claim off them. These
+       rows are empty, so the honest answer is *nobody holds it* — which is a
+       real state after a reboot, not a rendering gap, and drawing an input over
+       it would be the swallowed-message failure the old card existed to avoid.
+       tests/fleet-overseer-message.test.tsx drives all four claim arms. */
+    expect(container.textContent).toContain("Message the Overseer");
+    expect(container.textContent).toContain("There is no Overseer session.");
+    // The daemon caveat survived the replacement.
+    expect(container.textContent).toContain("does not reach the daemon");
+    /* And no box that would swallow words into nothing. **Scoped by label, not
+       by tag**: the tab grew a second textarea when the broadcast card landed
+       beside this one, and a bare `querySelector("textarea")` then asserted
+       something about whichever card React rendered first — which is not a
+       thing this test ever meant to be about. */
+    expect(container.querySelector('textarea[aria-label="Message the Overseer"]')).toBeNull();
+    // The broadcast's own box IS here, and is a different control entirely.
+    expect(container.querySelector('textarea[aria-label="Broadcast to all agents"]')).not.toBeNull();
   });
 
   it("hands the broadcast the rows the tab is showing, which is what makes it reach anybody", async () => {

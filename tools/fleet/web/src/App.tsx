@@ -21,11 +21,21 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { AttentionPanel } from "./AttentionPanel";
 import { DeploysPanel } from "./DeploysPanel";
 import { Dock } from "./Dock";
+import { FeedPanel } from "./FeedPanel";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { UsageCard } from "./UsagePanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import {
+  FILTER_KEYS,
+  filtersFromParams,
+  httpFeedApi,
+  limitFromParams,
+  paramsFromFilters,
+  type FeedApi,
+} from "./feed-client";
 import { httpDeploysApi, type DeploysApi } from "./deploys-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
@@ -50,7 +60,8 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
-  deploysApi = httpDeploysApi(),
+  feedApi = httpFeedApi,
+  deploysApi = httpDeploysApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -72,6 +83,13 @@ export function App({
    * this page measures and the times that chart prints.
    */
   historyApi?: HistoryApi;
+  /**
+   * The cross-agent feed. Injected like the rest, and — like `messagesApi` —
+   * deliberately NOT wrapped in a hook here: it is asked for when the tab is
+   * open rather than polled, so there is no shared feed for this page to hold.
+   * FeedPanel.tsx says why.
+   */
+  feedApi?: FeedApi;
   /**
    * The deploy record. Injected here as well as defaulted in `DeploysPanel`, so
    * that no test in this file can reach `fetch` by accident — a suite that
@@ -108,7 +126,7 @@ export function App({
      died. An age that only moves when data arrives is an age that freezes at
      the exact moment it matters. */
   const now = useNow();
-  const { mode, params, chooseMode, setParam } = useHashState();
+  const { mode, params, chooseMode, setParam, setParams } = useHashState();
   /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
      presents it as the page's refresh control, and until 2026-09-09 it called
      `feed.refresh()` only — so on a panel with its own route, pressing it did
@@ -210,6 +228,34 @@ export function App({
             />
           </>
         ) : null}
+        {mode === "messages" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            {/* **THE REGISTRATION NOTHING CATCHES.** The four `Record<Mode, …>`
+                maps make a half-added mode a compile error; this arm does not,
+                because it is a ternary rather than an exhaustive switch. A mode
+                registered everywhere but here draws a button, switches the
+                hash, and shows an empty page. `tests/fleet-feed-panel.test.tsx`
+                asserts this tab renders its panel, which is the only thing that
+                would notice. */}
+            <FeedPanel
+              api={feedApi}
+              limit={limitFromParams(params)}
+              onLimit={(next) => setParam(FILTER_KEYS.limit, next === 50 ? null : String(next))}
+              /* The filters live in the hash for the reason the mode does: this
+                 page is reloaded whenever iOS reclaims the tab, and a filter
+                 that resets every time is one nobody sets. */
+              filters={filtersFromParams(params)}
+              onFilters={(next) => {
+                /* **ONE WRITE, NOT FOUR.** `setParam` closes over the params it
+                   was built with, so four sequential calls all start from the
+                   same snapshot and only the last survives — which silently
+                   dropped every filter but `hideToolCalls`. mode.ts §
+                   `setParams`. */
+                setParams(paramsFromFilters(next));
+              }}
+            />
+          </div>
+        ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <HealthPanel
@@ -226,11 +272,40 @@ export function App({
             />
           </div>
         ) : null}
+        {/* **The same `UsageCard` the Overseer tab draws, mounted a second time
+            rather than copied.** If this tab and that card could disagree, one
+            of them would be a second interpretation of the same bytes — and the
+            whole point of the reading rules in tools/overseer/usage.ts is that
+            there is one. The history chart lands beneath it in a later stage;
+            until then this tab is the card with room around it. */}
+        {mode === "usage" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <UsageCard
+              usage={feed.state === null ? null : feed.state.usage}
+              now={now}
+              receivedAt={feed.receivedAt}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+          </div>
+        ) : null}
         {mode === "overseer" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <OverseerPanel
               actions={actions}
               rows={rows}
+              /* **A PAYLOAD WITH DROPPED ROWS CANNOT SETTLE THE OVERSEER CLAIM,
+                 AND CANNOT BACK A CONTROL LABELLED "ALL AGENTS".** Both cards
+                 refuse while this is non-zero.
+
+                 **`null` BEFORE A COLLECTION, NOT `0`.** This was `?? 0`, and
+                 GPT Sol was right that it is exactly the defect this branch
+                 keeps removing: zero is a MEASUREMENT — *we read every row and
+                 dropped none* — and before the first payload nothing has been
+                 read at all. It prevented a send either way, so nothing was
+                 misdelivered; it was still an unmeasured claim wearing a
+                 measured claim's clothes. MessageOverseerCard.tsx § the one
+                 completeness clause. */
+              unreadableRows={feed.state === null ? null : feed.state.unreadableRows}
               /* **`null` BEFORE THE FIRST PAYLOAD, and the payload's own arm
                  after it.** Not `?? { kind: "not-asked" }`, which was here for a
                  review round and collapsed two different silences: *nothing has

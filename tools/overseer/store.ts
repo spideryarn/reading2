@@ -105,7 +105,8 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-import type { AttentionItem, AttentionList, StoredUsage } from "../fleet/wire.js";
+import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
+import type { AttentionItem, AttentionList, ConversationReading, StoredUsage } from "../fleet/wire.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -145,6 +146,7 @@ import {
   type LockHolder,
   type LockRefusal,
 } from "./lock.js";
+import { parseExecution } from "./observation.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
 
 /**
@@ -370,6 +372,40 @@ export type RegisterEntry = {
    * `13m` rows that are the whole story.
    */
   readonly statusSince: StatusSince;
+  /**
+   * **THE LAST RUN THIS SESSION WAS VERIFIED TO BE, and whether we can still
+   * see one.**
+   *
+   * The register's other identities (`tmuxId`, `paneId`, `panePid`,
+   * `claimedConversationId`) all survive a claude exiting and another starting
+   * in the same pane, which is why `OverseerRegister` in wire.ts says in as many
+   * words that this register may not be joined onto a fleet row: *"the
+   * generation tuple can stay fixed while the process inside it is replaced, so
+   * 'blocked for at least 20 minutes' said against a row needs continuity
+   * evidence this build does not have."* This is that evidence.
+   *
+   * **STICKY, AND NULL UNTIL SOMETHING IS VERIFIED.** It moves on a first
+   * sighting and on a proven change, and on nothing else — so a collection whose
+   * `ps` failed leaves it exactly where it was, and `verified(A) → unknown →
+   * verified(A)` stays one unbroken run rather than becoming two. Overwriting it
+   * with every reading would make *we could not look* indistinguishable from
+   * *it was replaced*, which is the mistake `session-pane-replaced` makes with a
+   * null pid and has a long comment about.
+   *
+   * `since` is when this run was first recorded here, which is a FLOOR on how
+   * long it has been running — the same kind of number as `statusSince`'s
+   * `lower-bound` arm, and it must be drawn as one. And it is not a claim that
+   * the run is alive: `lastSeenAlive` and the checkpoint's snapshot clock are
+   * the fields that speak to that.
+   *
+   * **NO SCHEMA BUMP**, by this file's own rule: a reader that ignores it draws
+   * no continuity and is poorer rather than wrong — unlike schema 2's
+   * `statusSince`, where a consumer written against schema 1 would have
+   * rendered a floor as a reading. A checkpoint written before this field
+   * parses to `null`, which says *we have never verified a run for this
+   * session*, and that is true of it.
+   */
+  readonly verifiedExecution: { readonly token: string; readonly since: string } | null;
 };
 
 /**
@@ -940,6 +976,12 @@ function parseRow(u: unknown): ParseResult<ObservedRow> {
     value: {
       id: u["id"],
       name,
+      // TOTAL, LIKE `parseAttempt`, and it is the one field on a row this
+      // reader will not refuse over. A `session-seen` written before the field
+      // existed comes back as `unknown`/`not-reported` rather than failing the
+      // event and, with it, the fold of the whole log. There is no path from a
+      // missing field to `verified`; `observation.ts` owns the rule.
+      execution: parseExecution(u["execution"]),
       title,
       repo,
       worktree,
@@ -964,6 +1006,79 @@ function parseIdentity(u: unknown): ParseResult<SessionIdentity> {
   return { ok: true, value: { tmuxId: u["tmuxId"], claimedConversationId: claimed } };
 }
 
+/** The common half of every session event: whatever `parseEvent` has already checked. */
+type SessionEventCommon = { at: string; key: SessionKey; identity: SessionIdentity; tmuxServerPid: number | null };
+
+/**
+ * `session-execution-changed`, off the log.
+ *
+ * Its own function rather than a case body, because it is four checks and the
+ * `parseEvent` switch is already the longest thing in this file.
+ *
+ * **`token` IS REQUIRED AND WELL-FORMED; `previousToken` MAY BE NULL AND MAY
+ * NOT EQUAL IT.** Null is the first-sighting arm — a session the register had
+ * never verified — and an event whose two sides are equal is not a change and
+ * is one this module never wrote. Both tokens go through
+ * {@link isExecutionTokenText}, so "malformed present values are refused" is a
+ * property of the parser rather than of the writer's good manners; accepting
+ * any non-empty string was GPT Sol's P2-4b.
+ */
+function parseExecutionChanged(u: Record<string, unknown>, common: SessionEventCommon): ParseResult<OverseerEvent> {
+  const rawPrevious = u["previousToken"];
+  const token = u["token"];
+  if (rawPrevious !== null && !isExecutionTokenText(rawPrevious)) {
+    return { ok: false, reason: "previousToken is neither null nor an execution token" };
+  }
+  const previousToken = rawPrevious as string | null;
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "token is not an execution token" };
+  if (previousToken === token) {
+    return { ok: false, reason: "previousToken and token are equal, which is not a change" };
+  }
+  const conversation = parseConversationReading(u["conversation"]);
+  if (!conversation.ok) return { ok: false, reason: conversation.reason };
+  return {
+    ok: true,
+    value: { kind: "session-execution-changed", ...common, previousToken, token, conversation: conversation.value },
+  };
+}
+
+/**
+ * One conversation verdict off the log.
+ *
+ * STRICT, unlike `observation.ts`'s reader of the same type. That one parses a
+ * live payload from a producer that may be older than the field, so it degrades
+ * to `unknown` rather than refusing a snapshot. This parses the Overseer's own
+ * append-only log, where every line was written by this module: a line that
+ * does not read is a file somebody edited or a bug here, and both should be
+ * refused loudly rather than rounded to a shrug.
+ */
+function parseConversationReading(u: unknown): ParseResult<ConversationReading> {
+  if (!isRecord(u)) return { ok: false, reason: "conversation is not an object" };
+  const kind = u["kind"];
+  if (kind === "not-claimed") return { ok: true, value: { kind: "not-claimed" } };
+  if (kind === "verified") {
+    const id = u["id"];
+    if (typeof id !== "string" || id === "") return { ok: false, reason: "conversation.id is not a conversation id" };
+    return { ok: true, value: { kind: "verified", id } };
+  }
+  if (kind === "conflicting") {
+    const claimed = u["claimed"];
+    const observed = u["observed"];
+    if (typeof claimed !== "string" || typeof observed !== "string") {
+      return { ok: false, reason: "conversation.claimed and conversation.observed are not both strings" };
+    }
+    return { ok: true, value: { kind: "conflicting", claimed, observed } };
+  }
+  if (kind === "unverifiable") {
+    const claimed = u["claimed"];
+    const why = u["why"];
+    if (typeof claimed !== "string") return { ok: false, reason: "conversation.claimed is not a string" };
+    if (typeof why !== "string") return { ok: false, reason: "conversation.why is not a string" };
+    return { ok: true, value: { kind: "unverifiable", claimed, why } };
+  }
+  return { ok: false, reason: `conversation.kind ${JSON.stringify(kind)} is not a conversation reading` };
+}
+
 /** Every event kind, as a total map so a new arm in diff.ts fails to compile here rather than parsing as junk. */
 const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-seen": true,
@@ -973,6 +1088,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "session-execution-changed": true,
   "job-occurrence-reserved": true,
   "job-occurrence-started": true,
   "job-occurrence-finished": true,
@@ -1528,6 +1644,8 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
         value: { kind: "session-pane-replaced", ...common, previousPaneId, previousPanePid, paneId, panePid },
       };
     }
+    case "session-execution-changed":
+      return parseExecutionChanged(u, common);
     case "session-wait-restarted": {
       const previousDeadline = u["previousDeadline"];
       const deadline = u["deadline"];
@@ -1637,6 +1755,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
     return { ok: false, reason: "lastStatusKey is not a status key" };
   }
+  const verifiedExecution = parseVerifiedExecution(u["verifiedExecution"]);
+  if (!verifiedExecution.ok) return { ok: false, reason: verifiedExecution.reason };
   return {
     ok: true,
     value: {
@@ -1654,8 +1774,39 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
       lastSeenAlive,
       lastStatusKey: lastStatusKey as StatusKey,
       statusSince: statusSince.value,
+      verifiedExecution: verifiedExecution.value,
     },
   };
+}
+
+/**
+ * The last verified run, off a checkpoint.
+ *
+ * **AN ABSENT FIELD IS `null`, AND THAT IS THE ONE PLACE THIS PARSER IS
+ * FORGIVING.** Everything else in `parseRegisterEntry` fails the whole
+ * checkpoint, because a malformed field means a file somebody edited. This one
+ * is different for one reason and one only: a checkpoint written by the daemon
+ * that was running before this field existed has no `verifiedExecution`, and
+ * refusing it would throw away the register on the first restart after the
+ * deploy — the register being the thing there is no second copy of.
+ *
+ * **A PRESENT-BUT-WRONG FIELD STILL FAILS.** Absent is an old writer; malformed
+ * is a broken one, and the two must not share an outcome. And `null` here means
+ * *no run has been verified for this session*, which cannot be mistaken for a
+ * verified one however it is read.
+ */
+function parseVerifiedExecution(u: unknown): ParseResult<RegisterEntry["verifiedExecution"]> {
+  if (u === undefined || u === null) return { ok: true, value: null };
+  if (!isRecord(u)) return { ok: false, reason: "verifiedExecution is not an object or null" };
+  // THE REAL SHAPE, not merely non-empty. Accepting any string made the claim
+  // "a present-but-malformed value fails whole" false for every value except
+  // `""` — GPT Sol's P2-4b — and this is the register, so a token that parses
+  // and means nothing would be compared against real ones for ever.
+  const token = u["token"];
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "verifiedExecution.token is not an execution token" };
+  const since = u["since"];
+  if (!isIsoTimestamp(since)) return { ok: false, reason: "verifiedExecution.since is not an ISO timestamp" };
+  return { ok: true, value: { token, since } };
 }
 
 /**
@@ -2224,6 +2375,39 @@ export function foldEvents(
         }
         break;
       }
+      case "session-execution-changed": {
+        const was = into.get(event.key);
+        if (was !== undefined) {
+          into.set(event.key, {
+            ...was,
+            verifiedExecution: { token: event.token, since: event.at },
+            lastSeenAlive: event.at,
+            // **THE AGE RESETS ON EVERY ARM, INCLUDING A FIRST SIGHTING**, and
+            // the version that did not was GPT Sol's second-round P1.
+            //
+            // It read: a null `previousToken` is the one-time migration case, so
+            // preserve the age rather than wiping every duration on the box at
+            // deploy. That is true of the migration and **false of the other
+            // case null covers** — a session registered while its execution was
+            // unknown, whose harness was replaced during the blind interval, and
+            // whose first verified reading is therefore already the NEW run. One
+            // null cannot carry both decisions, and preserving the age there
+            // hands run B the age of run A: the original failure class, narrowed
+            // to sessions we could not see for a while.
+            //
+            // So it resets unconditionally. What that costs is real and is a
+            // one-off: on the first collection after this ships, every session
+            // learns its token and its measured age becomes a floor. What it
+            // buys is that `statusSince` after this stage means *how long THIS
+            // RUN has been in this state*, with no arm where it silently means
+            // something else. The measured age we would have kept was a fact
+            // about the SESSION, and this field stopped being about the session
+            // the moment execution identity existed.
+            statusSince: { kind: "lower-bound", at: event.at },
+          });
+        }
+        break;
+      }
       // THE SCHEDULER'S ARMS, NAMED AND DECIDED RATHER THAN DEFAULTED. The
       // register is sessions and an occurrence is not one, so nothing happens
       // here — and it says so, because a `default:` would absorb them and would
@@ -2268,6 +2452,11 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     // process can know. Minting `"observed"` here is the 13m bug, and it is one
     // word away at all times.
     statusSince: { kind: "lower-bound", at },
+    // A FLOOR TOO, and for exactly the same reason: this run was already going
+    // when we first saw it, so `since` is when the register learned about it
+    // rather than when the process started. The token itself is exact; the
+    // clock beside it is not.
+    verifiedExecution: row.execution.kind === "verified" ? { token: executionTokenText(row.execution.token), since: at } : null,
   };
 }
 
@@ -2332,6 +2521,13 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField> 
  *  - `clock` — the store's own bookkeeping, written by every arm and by none of
  *    the row material. `statusSince` in particular belongs to the STATUS: a
  *    rename that reset it would turn forty minutes of waiting into none.
+ *  - `execution` — `session-execution-changed`, and a first sighting. Its own
+ *    class rather than folded into `pane`, because the whole point of the field
+ *    is that a run can be replaced while the pane is not: sharing an owner with
+ *    `paneId`/`panePid` would say the opposite of what it is for. It is the one
+ *    field whose arm ALSO writes a `clock` field — `statusSince` back to a
+ *    floor, because a new run has not been in its state for its predecessor's
+ *    hours.
  */
 export const ENTRY_FIELD_OWNERS = {
   key: "identity",
@@ -2348,7 +2544,8 @@ export const ENTRY_FIELD_OWNERS = {
   lastSeenAlive: "clock",
   lastStatusKey: "clock",
   statusSince: "clock",
-} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock">;
+  verifiedExecution: "execution",
+} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock" | "execution">;
 
 export function describeOpening(opening: StoreOpening): string {
   const repair = opening.repair.torn

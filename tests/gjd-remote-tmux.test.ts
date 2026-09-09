@@ -809,6 +809,26 @@ describe("buildSessionScript", () => {
   const script = buildSessionScript({ agents: true });
 
   /**
+   * The script with its whole-line comments removed.
+   *
+   * **The breadth below is deliberate and is kept**: the check is for the word
+   * anywhere, not for `tmux display`, because reaching for `display` again to
+   * fetch one more field is how the original bug would come back and a narrow
+   * check would not see it. What the breadth cannot do is tell a COMMAND from
+   * PROSE — and on 2026-09-09 it stopped the build over the word "displayed"
+   * in an explanatory comment, on a script that calls `display` nowhere.
+   *
+   * So the prose is removed and the paranoia is not. Whole-line comments only:
+   * an inline `#` is left alone, so nothing can hide an invocation behind one.
+   */
+  const NEWLINE = String.fromCharCode(10);
+  const executableLines = (text: string): string =>
+    text
+      .split(NEWLINE)
+      .filter((line) => !/^\s*#/.test(line))
+      .join(NEWLINE);
+
+  /**
    * The original bug was asking for the stats per session with `tmux display -p
    * -t "=$name"`. `display` takes a target *pane*, and the `=` exact-match
    * prefix is only honoured on the session part when a colon follows — so tmux
@@ -821,7 +841,7 @@ describe("buildSessionScript", () => {
    * again to fetch one more field is exactly how this would come back.
    */
   it("never asks display for anything", () => {
-    expect(script).not.toContain("display");
+    expect(executableLines(script)).not.toContain("display");
   });
 
   it("gets everything tmux knows from a single untargeted listing", () => {
