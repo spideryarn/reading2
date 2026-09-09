@@ -1,9 +1,23 @@
 # A deterministic worktree removal command, and a ban on hand-typed branch deletion
 
-**Status as of 2026-09-08: reviewed by GPT Sol, revised, being built.** Evidence: no `worktree:remove`
-key in `package.json`, no `scripts/worktree-remove.ts`. The review is
-[260908k-…-review-sol.md](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion-review-sol.md);
-its verdict on the first draft was *"not ready to build"*, and § [What the review changed](#what-the-review-changed) says what moved.
+**Status as of 2026-09-09: built and on `dev`.** Evidence: `worktree:remove` in `package.json`,
+`scripts/worktree-remove.ts` and `scripts/worktree-inuse.ts` exist, and the command has been run
+against real worktrees on the box. **Three GPT Sol reviews, and each one changed the design** — the
+plan ([review-sol](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion-review-sol.md),
+*"not ready to build"*), the code
+([code-review-sol](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion-code-review-sol.md),
+*"not safe to land as written"*), and the fix round
+([verify-sol](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion-verify-sol.md),
+*"still not safe to land"*). Sections
+[What the review changed](#what-the-review-changed) and
+[And what the review of the code changed](#and-what-the-review-of-the-code-changed) say what moved and
+what was answered back.
+
+**The single most useful thing in this file, if you read nothing else:** twice, fixing one of Sol's
+findings created a worse one. Told the landed proof must be *retaken*, I moved it after the
+destructive call. Told a present-and-prunable registration was force-deleted, I dropped `--force` —
+which protected an unrelated replacement directory and not the case that actually loses files. **A
+fix round is where bugs come from, and it needs its own review, not a re-run of the tests.**
 
 Greg asked for this at 2026-09-08 23:30:
 
@@ -395,6 +409,32 @@ the final reflog read and the `update-ref -d` compare-and-swap. Closing it needs
 an otherwise synchronous script. The exposure is a peer moving a branch away and back, twice, in two
 adjacent process spawns, on a branch whose worktree has just been removed. Named in
 `deleteRefIfUnmoved`'s docstring rather than left for the next reader to find.
+
+## And what the review of the *fix round* changed
+
+The third review's verdict was *"still not safe to land"*, and five of its seven findings were real.
+**Two of them existed only because of the previous round's fixes**, which is the lesson this plan is
+worth reading for.
+
+| # | Finding | What changed |
+|---|---|---|
+| 1 | **dropping `--force` closed the wrong race** — a plain removal on a registered path removes *whatever is there*, so a ghost whose original tree is moved back is found valid and deleted | ghosts go through `git worktree prune`, which asks whether the registration is *still* stale, and which cannot delete a file at all |
+| 2 | the HEAD-reflog proof is a snapshot | not narrowed; the **claim** is weakened to "the tip and the reflogs that still exist" |
+| 3 | **the ambient-daemon pushback was wrong** | `AMBIENT_OPAQUE_COMMS` names the four; anything else opaque is a blocker |
+| 4 | `update-ref -d` does not refuse a **checked-out** branch the way `branch -D` does | `checkedOutSomewhere` immediately before the delete |
+| 5 | the hook missed quoted and escaped flags; the carry mis-handled backslash parity | preceding class takes quotes and backslashes; carry continues only on an **odd** count |
+| 6 | a **locked** ghost could not be cleared at all | `pruneGhost` unlocks first, because prune exempts locked entries by design |
+| 7 | `refExists` conflated "absent" with "could not ask" | `lookupRef` is three-valued |
+
+**Finding 3 is the one worth dwelling on.** I had argued from a census — 208 same-uid processes, six
+permanently opaque, all daemons — that opaque implies harmless. Sol did not argue back; it built the
+counter-example: a same-uid `python3` that chdir'd into a worktree and called
+`prctl(PR_SET_DUMPABLE, 0)`, whose cwd then read as unreadable while genuinely being the worktree.
+*"The six ambient daemons prove that blocking every opaque PID is operationally unusable; they do not
+prove every opaque PID is a daemon."* A census can only ever tell you what is there, and the question
+was what **could** be. Both halves are now true at once because the known set is named and the
+unknown blocks — the shape [worktree-check.ts](../../scripts/worktree-check.ts) already uses for
+gitignored paths.
 
 ## Stages
 

@@ -291,11 +291,17 @@ npm run worktree:remove -- --branch <name> --dry-run
 `git branch -d` and `-D` are refused by [`.claude/hooks/protect-shared-tree.sh`](../../.claude/hooks/protect-shared-tree.sh),
 the `PreToolUse` hook that already bans one git verb — and the ban is only fair because this command
 does the job the hand-typed sequence was doing. It re-runs every guard below, unlocks, removes with
-no `--force` so git's own refusal still stands, and **deletes the branch on a proof that every commit
-it has ever pointed at is on `origin/dev`** — the tip and every reflog entry, retaken after the
-worktree is gone, with `git update-ref -d <ref> <expected-oid>` so a branch that moved under it is
-left alone. The script deletes through Node rather than through a shell, so it is out of the hook's
-reach without needing an exemption.
+no `--force` so git's own refusal still stands, and **deletes the branch only on a proof that every
+commit named by its tip and by the reflogs that still exist is on `origin/dev`** — including this
+worktree's own HEAD reflog, which is read *before* the removal because the removal deletes it. The
+deletion itself is `git update-ref -d <ref> <expected-oid>`, so a branch that moved under it is left
+alone, and it refuses outright if a worktree has that branch checked out. The script deletes through
+Node rather than through a shell, so it is out of the hook's reach without needing an exemption.
+
+**"Every commit it ever pointed at" is what this would like to promise and cannot.** With
+`core.logAllRefUpdates=false`, or after a reflog expires, the record of a branch's excursions is
+simply gone, and no amount of care reconstructs it. What the command actually checks is the tip and
+the reflogs it can read, and it says which — a failed read is a refusal, not an empty history.
 
 **Its own session may remove a tree the moment it is done; nobody else may, for 24 hours.** That is
 not a courtesy, it is the one thing `/proc` can prove. `claude --worktree` writes the owning session's
@@ -505,16 +511,20 @@ primary's vantage point or would be wrong inside a single tree:
   `prunable gitdir file points to non-existent location` over a directory full of somebody's files.
   It is now `UNKNOWN`, and names the fix, `git worktree repair <path>`.
 
-  **And `worktree:remove` passes no `--force`, on any path, ever.** That is the part that actually
-  protects files, and it took two rounds to see why. The classification fix above closes nothing on
-  its own: measured, `--force --force` refuses a present-and-prunable path anyway, because git's
-  validator wants `<path>/.git` and that is exactly what is missing there. The case that *does* lose
-  files is a **genuine ghost whose directory comes back** between the listing and the removal — GPT
-  Sol reproduced it, `--force --force` exit 0, directory gone. A classification taken a moment earlier
-  cannot see that, and no amount of re-checking closes a race. What closes it is asking git to
-  revalidate at the moment it acts, which is what removing the force does — and measured, a plain
-  `git worktree remove` clears an absent registration on its own, so nothing here needed the force in
-  the first place.
+  **And `worktree:remove` clears a ghost with `git worktree prune`, not with a removal.** That is the
+  part that actually protects files, and it took three rounds to get right. Dropping `--force` was not
+  enough: a plain `git worktree remove` on a registered path removes *whatever is there*, so a ghost
+  whose **original** worktree is moved back before the call is found valid, accepted, and deleted —
+  GPT Sol reproduced that, losing an ignored only-copy file and a detached commit named only by that
+  tree's HEAD reflog. No force involved. Dropping force protected an *unrelated* replacement
+  directory and not the case that matters.
+
+  `prune` asks the other question — **is this registration still stale?** — and a restored worktree is
+  not. Measured: move the directory back and `git worktree prune -v` reports nothing and leaves it
+  alone. It is also the one operation here that cannot delete a file at all, which is why running it
+  unscoped is acceptable where a bulk *removal* would not be. Locked entries are unlocked first,
+  because prune exempts them by design and a real Claude worktree is always locked — and unlocking a
+  registration whose directory is gone cannot lose anything.
 - **You are standing in it.**
 - **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
   is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals

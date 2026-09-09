@@ -8768,3 +8768,260 @@ describe("resolution and startedDir — what new-session actually did", () => {
     expect(text).not.toContain("Started with");
   });
 });
+
+/**
+ * THE CONVERSATION MOVED TO THE TOP, AND THE ORDER IS THE FEATURE.
+ *
+ * Greg, 2026-09-09: *"show the most recent message (perhaps with a summary if
+ * idle) prominently near the top, with the input-box and command-lists
+ * underneath, with a button to click to open up the previous messages"*.
+ *
+ * **Every one of these passed before the change, which is why they are here.**
+ * The existing "recent messages, on the page" block asserts what is rendered
+ * and never where, so the section could have been anywhere on the page — or
+ * back at the bottom — without a single test noticing. Order is the whole of
+ * what Greg asked for, so order is what is pinned.
+ */
+describe("the newest message first, and the rest behind a disclosure", async () => {
+  /** The headings this page draws, in the order the DOM has them. */
+  function headings(): string[] {
+    return [...container.querySelectorAll("h3")].map((h) => (h.textContent ?? "").trim());
+  }
+
+  /**
+   * The conversation's own disclosure, found by what its summary SAYS.
+   *
+   * Not `querySelector("details")`: Rename and Where it is are `<details>` too
+   * and share the class, so the first match is whichever happens to be highest
+   * on the page. A test that asserted "not inside the disclosure" against the
+   * Rename block would pass for a reason that has nothing to do with the claim.
+   */
+  function disclosure(): HTMLDetailsElement | null {
+    return (
+      [...container.querySelectorAll("details")].find((d) => {
+        const summary = d.querySelector("summary")?.textContent ?? "";
+        return summary.includes("earlier message") || summary.includes("Where this came from");
+      }) ?? null
+    );
+  }
+
+  async function openWithTurns(turns: Record<string, unknown>[]): Promise<void> {
+    const { api } = recordingMessages(() => messagesWire({ turns }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "one" })] })));
+    openSession("one");
+    await act(async () => {});
+  }
+
+  it("puts the latest message above the composer and the buttons", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "first thing" }), turnWire({ uuid: "b", text: "last thing" })]);
+    const order = headings();
+    const latest = order.indexOf("Latest message");
+    const say = order.indexOf("Say something to it");
+    const ask = order.findIndex((h) => h.startsWith("Ask it to"));
+    expect(latest).toBeGreaterThanOrEqual(0);
+    expect(say).toBeGreaterThan(latest);
+    expect(ask).toBeGreaterThan(latest);
+  });
+
+  /** The loud band is the reason the page exists and outranks what was said. */
+  it("keeps what it needs from you above the latest message", async () => {
+    const { api } = recordingMessages(() => messagesWire({ turns: [turnWire()] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() =>
+      feed.push(
+        state({ rows: [steerable({ id: "$1", title: "one", status: { kind: "needs-you" }, question: question() })] }),
+      ),
+    );
+    openSession("one");
+    await act(async () => {});
+    const order = headings();
+    expect(order.indexOf("What it needs from you")).toBeLessThan(order.indexOf("Latest message"));
+  });
+
+  it("shows only the newest turn outside the disclosure", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "an older thing" }), turnWire({ uuid: "b", text: "the newest thing" })]);
+    const details = disclosure();
+    const outside = [...container.querySelectorAll(".transcript-turn")].filter((t) => !details?.contains(t));
+    expect(outside).toHaveLength(1);
+    expect(outside[0]?.textContent).toContain("the newest thing");
+    expect(outside[0]?.textContent).not.toContain("an older thing");
+  });
+
+  it("puts the earlier turns inside a disclosure that says how many", async () => {
+    await openWithTurns([
+      turnWire({ uuid: "a", text: "older one" }),
+      turnWire({ uuid: "b", text: "older two" }),
+      turnWire({ uuid: "c", text: "newest" }),
+    ]);
+    const summaries = [...container.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    const mine = summaries.find((s) => s.includes("earlier message"));
+    expect(mine).toContain("2 earlier messages");
+  });
+
+  it("says so rather than counting to one when the newest turn is the only one", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "the only thing said" })]);
+    const summaries = [...container.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    expect(summaries.some((s) => s.includes("Where this came from"))).toBe(true);
+    expect(summaries.some((s) => s.includes("earlier message"))).toBe(false);
+  });
+
+  /**
+   * THE HALF THAT WOULD HAVE BEEN A SILENT REGRESSION.
+   *
+   * A transcript we could not read has no newest turn. If the refusal had
+   * stayed downstairs with the provenance, the top of the page would render
+   * NOTHING and read as a session that has said nothing — which is the failure
+   * this whole page is written against, arriving through a layout change.
+   */
+  it("renders a refusal at the top, not inside the disclosure", async () => {
+    const { api } = recordingMessages(() => ({
+      kind: "not-found",
+      reason: "no-transcript",
+      why: "nothing on disk names this conversation",
+    }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "one" })] })));
+    openSession("one");
+    await act(async () => {});
+    const details = disclosure();
+    const text = container.textContent ?? "";
+    expect(text).toContain("There is no transcript to read for this session.");
+    expect(details?.textContent ?? "").not.toContain("There is no transcript to read");
+  });
+});
+
+/**
+ * WHAT THE TOP OF THE PAGE MAY AND MAY NOT CLAIM.
+ *
+ * Six findings from a cross-family review of the first version of the split
+ * (F13-F18), and they are one mistake with six faces: the conversation moved to
+ * the top of the page, where a sentence reads as the session's current state,
+ * and it went on saying things that had only ever been true of a footnote.
+ *
+ * **`container.textContent` cannot answer any of these, which is the point.**
+ * jsdom includes the descendants of a CLOSED `<details>` in `textContent`, so
+ * every "is the warning on the page" assertion passes whether the reader can
+ * see the warning or not. These use containment against the disclosure element
+ * instead — the F17 finding, and the reason the earlier stale tests could not
+ * have caught a regression that pushed the warning back inside.
+ */
+describe("the caveats that have to be readable without opening anything", () => {
+  function disclosure(): HTMLDetailsElement | null {
+    return (
+      [...container.querySelectorAll("details")].find((d) => {
+        const summary = d.querySelector("summary")?.textContent ?? "";
+        return summary.includes("earlier message") || summary.includes("Where this came from");
+      }) ?? null
+    );
+  }
+
+  /** Text the reader can see without opening the conversation's disclosure. */
+  function visibleText(): string {
+    const hidden = disclosure();
+    return [...container.querySelectorAll("p, li, div")]
+      .filter((el) => (hidden === null || !hidden.contains(el)) && el.children.length === 0)
+      .map((el) => el.textContent ?? "")
+      .join(" ");
+  }
+
+  async function open(reply: Record<string, unknown>, over: Partial<Row> = {}): Promise<void> {
+    const feed = manualTransport();
+    const { api } = recordingMessages(() => reply);
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "one", ...over })] })));
+    openSession("one");
+    await act(async () => {});
+  }
+
+  /** F17: the stale warning must be outside the disclosure, not merely present. */
+  it("shows the stale-transcript warning without the reader opening anything", async () => {
+    await open(
+      messagesWire({
+        turns: [turnWire({ uuid: "a", text: "something" })],
+        lastModified: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      }),
+      { status: { kind: "working" } },
+    );
+
+    const warning = [...container.querySelectorAll("p")].find((p) =>
+      (p.textContent ?? "").includes("This may not be this session's conversation."),
+    );
+    expect(warning, "the stale warning should be on the page").toBeTruthy();
+    expect(disclosure()?.contains(warning as Node) ?? false).toBe(false);
+  });
+
+  /**
+   * F13. `reachedStartOfFile: false` says outright that the read did not reach
+   * the beginning, so an empty turn list is not evidence of silence — and the
+   * first version said "a session that has not spoken yet" anyway.
+   */
+  it("does not claim silence from an empty read that never reached the start of the file", async () => {
+    await open(messagesWire({ turns: [], reachedStartOfFile: false }));
+
+    const text = visibleText();
+    expect(text).not.toContain("has not spoken yet");
+    expect(text).toContain("did not reach the beginning");
+  });
+
+  it("does claim silence when the read DID reach the start and found nothing", async () => {
+    await open(messagesWire({ turns: [], reachedStartOfFile: true }));
+    expect(visibleText()).toContain("has not spoken yet");
+  });
+
+  /**
+   * F14. `parseRecentMessages` drops a turn it cannot read and keeps only a
+   * COUNT — the position is lost — so the last readable turn may not be the
+   * last turn, and the page must not present it as one without saying so.
+   */
+  it("warns beside the turn that a newer one may be missing", async () => {
+    await open(
+      messagesWire({
+        turns: [turnWire({ uuid: "a", text: "the last readable thing" }), null],
+      }),
+    );
+
+    const text = visibleText();
+    expect(text).toContain("could not read");
+    expect(text).toContain("may be newer");
+  });
+
+  it("says no turns COULD be read, rather than that there are none, when every turn was unreadable", async () => {
+    await open(messagesWire({ turns: [null, null], reachedStartOfFile: true }));
+
+    const text = visibleText();
+    expect(text).toContain("No turns could be read");
+    expect(text).not.toContain("has not spoken yet");
+  });
+
+  /**
+   * F15. Which file is live changes what you DO — steering on this message may
+   * answer a different conversation — so it cannot live behind a disclosure.
+   */
+  it("warns beside the turn when more than one file carries this conversation id", async () => {
+    await open(messagesWire({ turns: [turnWire({ uuid: "a" })], copies: 2 }));
+
+    const text = visibleText();
+    expect(text).toContain("2 files carry this conversation id");
+    expect(text).toContain("may reach a different conversation");
+  });
+
+  /** F16: an empty slice has two causes that mean opposite things. */
+  it("does not tell the disclosure there is a message above when nothing was read", async () => {
+    await open(messagesWire({ turns: [], reachedStartOfFile: true }));
+
+    const inside = disclosure()?.textContent ?? "";
+    expect(inside).toContain("No turns were read");
+    expect(inside).not.toContain("the message above is the only turn read");
+  });
+
+  it("still says the message above is the only one when exactly one turn was read", async () => {
+    await open(messagesWire({ turns: [turnWire({ uuid: "a" })] }));
+
+    const inside = disclosure()?.textContent ?? "";
+    expect(inside).toContain("the message above is the only turn read");
+  });
+});

@@ -1,14 +1,16 @@
 /**
- * `npm run worktree:sweep` — which worktrees have landed their work, and the
- * removal of one that has.
- *
- * Two halves, deliberately separate:
+ * `npm run worktree:sweep` — **which** worktrees have landed their work.
  *
  * ```
  * npm run worktree:sweep                              # classify. Reads. Deletes nothing.
- * npm run worktree:sweep -- remove --branch <name>    # one worktree, every guard re-run
- * npm run worktree:sweep -- remove --branch <name> --dry-run
+ * npm run worktree:remove -- --branch <name>          # and this removes one
  * ```
+ *
+ * **The removal is `scripts/worktree-remove.ts` since 2026-09-09**, and
+ * `removeOne` below is a thin forward to it. There were two implementations, and
+ * each had guards the other lacked — the shape whose disagreements are invisible
+ * by construction, which is the same argument this header already makes for why
+ * this file keeps no `dirty` or `merged` check of its own.
  *
  * ## The shape is borrowed, and so is the reason for the awkward bit
  *
@@ -76,16 +78,18 @@
  * becomes `trunk: unknown` for every tree, which `blockers()` already treats as
  * unsafe, so failing closed survives the optimisation.
  *
- * ## Where the independent check is
+ * ## What the age floor is actually for
  *
- * Removal unlocks the worktree and then runs a plain `git worktree remove`, with
- * no `--force`, so **git refuses a dirty tree on its own terms** rather than
- * agreeing with a check that shares our assumptions.
+ * **It belongs to this report, not to a removal.** Its job is to stop the list
+ * below handing a third party a paste-ready command that would delete a peer's
+ * five-minute-old tree — so a clean, landed, too-young tree prints as `young`
+ * rather than `REMOVABLE`, with no command offered. Print them as one word and
+ * `REMOVABLE` quietly comes to mean "old enough to advertise" rather than "the
+ * removal command would accept it".
  *
- * Its limit, because an overstated backstop is worse than none: git refuses on
- * modified and untracked files, **not on ignored ones**. For the case that costs
- * the most — a pipeline run in a gitignored `data/` — `blockers()` is the only
- * guard, and this second pair of eyes is blind.
+ * On a deliberate, singular, explicitly-named removal the floor was never the
+ * right guard, and `worktree:remove` applies it only to a third party — the tree's
+ * own session proves ownership out of the worktree lock and is let past.
  */
 
 import { spawnSync } from "node:child_process";
