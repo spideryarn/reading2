@@ -56,6 +56,23 @@ export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completion
 export const MAX_MATERIAL_CHARS = 4000;
 
 /**
+ * THE EXACT BYTES THE MODEL WILL SEE.
+ *
+ * **Bounded here, once, before anything fingerprints or calls** — which is F23
+ * from the third review, and it was a real inconsistency rather than tidiness.
+ * The pass used to fingerprint the whole opening while `describeOne` sent only
+ * its first `MAX_MATERIAL_CHARS`, so two openings differing only past the cap
+ * were two cache entries and two paid calls with **byte-identical** requests.
+ * That happens naturally while a session's first turns are still growing.
+ *
+ * A cache key must hash exactly what determines the answer, so the canonical
+ * form is computed once and is what gets hashed, planned and sent.
+ */
+export function canonicalMaterial(text: string): string {
+  return text.slice(0, MAX_MATERIAL_CHARS);
+}
+
+/**
  * What the model said about one session.
  *
  * `title` is a **display** title and never renames anything: the tmux name is the
@@ -77,7 +94,24 @@ export type Described = {
  */
 export type DescribeVerdict =
   | { kind: "described"; described: Described }
-  | { kind: "cannot-tell"; why: string };
+  | {
+      kind: "cannot-tell";
+      why: string;
+      /**
+       * **Whether asking again could ever give a different answer** — F21.
+       *
+       * `true` means the opening itself does not say what the session is for, or
+       * the model answered in a shape this build cannot read. Asking again costs
+       * money and returns the same thing, so it is remembered.
+       *
+       * `false` means the gateway did: a 429, a dead socket, a timeout. **A
+       * failure is a reason to look again, never a fact to remember** — a 429
+       * filed permanently would go on reporting "we could not describe this" long
+       * after the condition cleared. Same rule `attention-classify.ts` states
+       * about its own `unreadable`.
+       */
+      permanent: boolean;
+    };
 
 /** The material one call is made from, and the key it is filed under. */
 export type MaterialToDescribe = {
@@ -184,30 +218,41 @@ export const MAX_DESCRIPTION_CHARS = 240;
  */
 export function parseDescribed(raw: string): DescribeVerdict {
   const text = stripFence(raw).trim();
-  if (text === "") return { kind: "cannot-tell", why: "the model returned nothing" };
+  if (text === "") return { kind: "cannot-tell", why: "the model returned nothing", permanent: false };
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return { kind: "cannot-tell", why: `not JSON: ${JSON.stringify(text.slice(0, 120))}` };
+    return { kind: "cannot-tell", why: `not JSON: ${JSON.stringify(text.slice(0, 120))}` , permanent: true };
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return { kind: "cannot-tell", why: `not a JSON object: ${JSON.stringify(text.slice(0, 120))}` };
+    return { kind: "cannot-tell", why: `not a JSON object: ${JSON.stringify(text.slice(0, 120))}` , permanent: true };
   }
   const o = parsed as Record<string, unknown>;
 
   if (o["known"] === false) {
-    return { kind: "cannot-tell", why: str(o["why"])?.trim() || "the opening does not say what this session is for" };
+    /* THE PERMANENT ONE. The model read the opening and it does not say what
+       the session is for; a later pass reads the same opening. */
+    return {
+      kind: "cannot-tell",
+      why: str(o["why"])?.trim() || "the opening does not say what this session is for",
+      permanent: true,
+    };
   }
   if (o["known"] !== true) {
-    return { kind: "cannot-tell", why: `\`known\` was ${JSON.stringify(o["known"])}, which is neither true nor false` };
+    return {
+      kind: "cannot-tell",
+      why: `\`known\` was ${JSON.stringify(o["known"])}, which is neither true nor false`,
+      permanent: true,
+    };
   }
 
   const title = str(o["title"])?.trim() ?? "";
   const description = str(o["description"])?.trim() ?? "";
-  if (title === "") return { kind: "cannot-tell", why: "it claims to know and gave no title" };
-  if (description === "") return { kind: "cannot-tell", why: "it claims to know and gave no description" };
+  if (title === "") return { kind: "cannot-tell", why: "it claims to know and gave no title", permanent: true };
+  if (description === "")
+    return { kind: "cannot-tell", why: "it claims to know and gave no description", permanent: true };
 
   return {
     kind: "described",
@@ -251,7 +296,10 @@ export async function describeOne(
   material: string,
   options: DescriberOptions,
 ): Promise<{ verdict: DescribeVerdict; calls: number }> {
-  const { system, user } = buildDescribePrompt(material.slice(0, MAX_MATERIAL_CHARS));
+  /* Already canonical from the pass; re-bounded so a careless caller cannot
+     post a whole transcript. Idempotent, so it does not change the bytes the
+     fingerprint was taken over. */
+  const { system, user } = buildDescribePrompt(canonicalMaterial(material));
   const doFetch = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
@@ -277,7 +325,14 @@ export async function describeOne(
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       return {
-        verdict: { kind: "cannot-tell", why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
+        verdict: {
+          kind: "cannot-tell",
+          why: `the gateway returned ${res.status}: ${body.slice(0, 200)}`,
+          /* The gateway, not the opening. A 429 lasts a second; remembering
+             one would report the same false silence for as long as that
+             session said nothing new. */
+          permanent: false,
+        },
         calls: 1,
       };
     }
@@ -285,7 +340,7 @@ export async function describeOne(
     return { verdict: parseDescribed(json.choices?.[0]?.message?.content ?? ""), calls: 1 };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
-    return { verdict: { kind: "cannot-tell", why: `the call failed: ${why}` }, calls: 1 };
+    return { verdict: { kind: "cannot-tell", why: `the call failed: ${why}`, permanent: false }, calls: 1 };
   } finally {
     clearTimeout(timer);
   }
