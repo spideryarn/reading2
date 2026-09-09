@@ -63,7 +63,7 @@ import {
   type Banner,
 } from "../tools/fleet/readiness-parse.js";
 import { openReadinessStore, procStartToken, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
-import { stampTree } from "../tools/fleet/readiness-git.js";
+import { gitEnv, stampTree } from "../tools/fleet/readiness-git.js";
 import {
   CHECK_KINDS,
   SCRIPT_FOR_KIND,
@@ -150,6 +150,19 @@ function scriptBodies(root: string): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+/**
+ * The environment `npm run <check>` is launched with: this process's own, minus
+ * git's inherited location overrides, plus the one-run admission token.
+ *
+ * The scrub is here as well as in the loop that usually starts this wrapper
+ * because **this script is also run by hand**, from a shell whose environment
+ * nobody audited. Relying on the caller to have scrubbed is how the loop's own
+ * check spawn came to be the one that was missed — GPT Sol's F1, 2026-09-09.
+ */
+export function checkChildEnv(admissionToken: string): NodeJS.ProcessEnv {
+  return { ...gitEnv(process.env), [READINESS_ADMISSION_TOKEN_ENV]: admissionToken };
 }
 
 async function main(): Promise<void> {
@@ -252,7 +265,7 @@ async function main(): Promise<void> {
   const stderrAdmissionRefusal = makeAdmissionRefusalCapture(admissionToken);
   const child = spawn("npm", ["run", script], {
     cwd: root,
-    env: { ...process.env, [READINESS_ADMISSION_TOKEN_ENV]: admissionToken },
+    env: checkChildEnv(admissionToken),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
