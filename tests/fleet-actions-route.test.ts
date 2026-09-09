@@ -2443,3 +2443,115 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     expect(await headingFor(recorded)).toBe("It would go to 3 of 5 rows.");
   });
 });
+
+/* ================================================================== *
+ * Box contracts — the preview envelope, and the two buttons reaching
+ * the inputs the server acts on.
+ *
+ * docs/plans/260909h-box-contracts-kill-and-broadcast-reach-the-inputs-the-server-needs.md
+ *
+ * **EVERY ASSERTION HERE IS ABOUT WHAT REACHED A SEAM.** `ran` is the argv the
+ * box was handed; `sent` is who the delivery module was asked to speak to. A
+ * 200 is not evidence — the two defects this block exists for both answered
+ * 200 for months: a confirmed kill that signalled nothing, and a confirmed
+ * broadcast that spoke to a list nobody had read.
+ * ================================================================== */
+
+describe("a box action confirms the preview it was given, and nothing else", () => {
+  const suites = [
+    proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+  ];
+
+  /**
+   * **THE KILL BUTTON HAS NEVER ONCE SIGNALLED A PROCESS**, and this is the
+   * test that says so in the only terms that matter.
+   *
+   * `boxActionBody` built `{actionId, mode, confirm, speaker, recipients}` and
+   * no candidate list of any kind, so `killRoute`'s both-lists intersection —
+   * *the fresh scan authorises and the shown list bounds* — was always empty,
+   * and every confirmed kill came back `nothing-to-kill`. That refusal is
+   * honest about its own rule and completely misleading about what happened:
+   * the list the person confirmed was never sent.
+   *
+   * A test asserting that refusal stood in this file and passed for a day
+   * (§ "asks for a real run in the field this route reads"). It was true and it
+   * was not enough — the same shape as the broadcast's own dead evening. So the
+   * assertion here is `ran`, not the code.
+   */
+  it("signals exactly the processes the preview listed, through the browser's own request builder", async () => {
+    const { io, ran } = fakeIo({ procs: suites });
+    const { routes } = harness({ io });
+    const api = makeActionsApi(browserFetch(routes));
+
+    const preview = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    expect(preview.ok).toBe(true);
+    expect(ran).toEqual([]);
+    /* THE ENVELOPE IS WHAT THE SECOND PRESS CARRIES. Read off the parsed
+       outcome rather than off the raw body, because the panel can only confirm
+       what the client parse actually handed it. */
+    const envelope = preview.ok ? preview.preview : null;
+    expect(envelope?.material.kind).toBe("kill");
+    expect(envelope?.material.kind === "kill" ? envelope.material.candidates.map((c) => c.pid) : null).toEqual([5001, 5002]);
+
+    const done = await api.boxConfirm(envelope as NonNullable<typeof envelope>);
+    expect(done.ok).toBe(true);
+    expect(done.ok && done.dryRun).toBe(false);
+    /* WHAT THE BOX WAS ACTUALLY ASKED TO DO — one step per pid, and the pids
+       are the previewed ones. */
+    expect(ran.flatMap((x) => x.argv.filter((a) => a === "5001" || a === "5002"))).toEqual(["5001", "5002"]);
+  });
+
+  /**
+   * **THE LIST THE PERSON READ, NOT THE LIST THE PAGE IS SHOWING NOW.**
+   *
+   * `BoxActions` passed `rows` — a live prop that re-renders on every snapshot
+   * poll — to both presses, so the confirmed request described whatever the
+   * fleet looked like at the instant of the second tap. Between reading a
+   * preview on a phone and pressing yes, sessions start, finish and change
+   * status; the effect that then went out was one nobody had reviewed.
+   */
+  it("speaks to the recipients the preview described, even when the page has moved on", async () => {
+    const { routes, sent } = harness();
+    const api = makeActionsApi(browserFetch(routes));
+
+    const reviewed = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2" })];
+    const preview = await api.boxPreview("resource-broadcast", reviewed);
+    expect(preview.ok).toBe(true);
+    expect(sent).toEqual([]);
+
+    const envelope = preview.ok ? preview.preview : null;
+    /* THE FLEET MOVES between the two presses — one of the reviewed pair is
+       gone and a stranger has appeared. The ordinary case on a box running ~35
+       agents, not a contrived one. Nothing about this new list may reach the
+       route, and the only way to prove that is to make the confirm unable to
+       take one. */
+    const done = await api.boxConfirm(envelope as NonNullable<typeof envelope>);
+    expect(done.ok).toBe(true);
+    // Exactly the reviewed panes, in the reviewed order. %7 was never read.
+    expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%2"]);
+  });
+
+  /**
+   * `op` AND `action` ARE FACTS THE SERVER SENT AND THE CLIENT THREW AWAY.
+   *
+   * Four distinct words come back — `dry-run`, `ran`, `broadcast-preview`,
+   * `broadcast` — and `makeActionsApi().box` read `dryRun`, `result` and `why`
+   * and dropped the rest. So the page could not tell a kill preview from a
+   * broadcast preview except by sniffing the shape of `result`, which is what
+   * `parseBoxEffect` does: a guess, where the server had sent a fact.
+   */
+  it("keeps the operation and the action the server named", async () => {
+    const { io } = fakeIo({ procs: suites });
+    const { routes } = harness({ io });
+    const api = makeActionsApi(browserFetch(routes));
+
+    const kill = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    expect(kill.ok && kill.op).toBe("dry-run");
+    expect(kill.ok && kill.action).toBe("kill-test-suites");
+
+    const cast = await api.boxPreview("resource-broadcast", [pageRow({ id: "$1", paneId: "%1" })]);
+    expect(cast.ok && cast.op).toBe("broadcast-preview");
+    expect(cast.ok && cast.action).toBe("resource-broadcast");
+  });
+});
