@@ -182,10 +182,41 @@ Doing this myself: it is a paragraph and a hex string.
 
 ## Stage 2 — the periodic runner
 
-**Status: not started.**
+**Status: complete, left uncommitted for Greg's review.** Codex implemented the pure decision, the
+locked tmux-hosted loop and the bounded per-run logs on 2026-09-09. The focused tests were written
+first: the file went red with exit 1 before the decision module existed, and the 2c outcome assertion
+went red again with exit 1 while exit 1 still had no refusal override. The required focused test and
+project typecheck now pass. The Stage 2c trace held with one wording correction: `decideAdmission`
+returns the refusal and `vitest.config.ts` throws it; from there `check.ts` exits 1 and the wrapper did
+record `fail`. The repair latches the refusal while output streams past, because a full check can push
+that sentence out of the wrapper's bounded head and tail.
 
 `scripts/readiness-loop.ts`, plus `tools/fleet/readiness-loop.ts` for the pure decisions so they can
 be tested without a box. Implemented by Codex (`gpt-5.6-sol`), reviewed and gated by me.
+
+**Two things I changed on review, both found by running it rather than reading it.**
+
+**`npm run check` has an undeclared prerequisite, and without it the runner records a permanent false
+red.** `tests/fleet-decisions-route.test.ts` reads `tools/fleet/web/dist`; `check`'s build step is
+`build:client && build:api`, and `build:fleet` is in neither. So it fails in any checkout where
+nobody ran that by hand — which a machine-made worktree never does. Measured: it failed in the
+runner's first recorded check and passed immediately after `npm run build:fleet`. The loop now builds
+it when absent (the output is gitignored, so the tree stays clean — checked, not assumed). **The real
+repair is a step in `check.ts`**, which every checkout would get; that is not this work's file, and it
+is the same class `check.ts`'s own header says it fixed once for `api-dist`.
+
+**One bad tick used to end the loop for good.** `tick` throws on a failed `npm ci` or an unreadable
+diff, and that reached the outer `catch`, which returns — so one transient failure stopped the runner
+for every later commit, leaving the tab ageing into `unknown` with nothing to say why. A periodic
+runner that stops on its first hiccup is worse than none, because its output is indistinguishable
+from one that is merely idle. A throw is now logged and the loop waits for the next tick; the lock and
+the worktree setup stay fatal, because those say the box cannot host a runner at all.
+
+**And one thing I checked and did *not* change.** The health gate skips unless `computeVerdict` is
+`ok`, and its `activelySwapping` arm fires on `si > 0 || so > 0` — *any* page movement — which looked
+like it would block the runner permanently on a box this busy. Sampled eight times over a minute:
+seven `ok`, one `strained` at `si 4 KB/s`. So it costs an occasional tick and the next one ten minutes
+later runs. Left alone, and the number written down so the next reader does not have to re-measure it.
 
 ### 2a — the decision, pure
 
@@ -216,24 +247,24 @@ suite is roughly five of them, so a "three suites" gate written on that number r
 busier than the box is. The two readings above are the box's own opinion of whether a suite fits, and
 they are the ones that were actually load-bearing on 2026-09-08.
 
-- [ ] `tests/readiness-loop.test.ts`: one case per skip clause, red first, plus the one that runs.
-- [ ] A test that a `fail` record for the sha means skip, not retry.
+- [x] `tests/readiness-loop.test.ts`: one case per skip clause, red first, plus the one that runs.
+- [x] A test that a `fail` record for the sha means skip, not retry.
 
 ### 2b — the loop, and its worktree
 
-- [ ] `.claude/worktrees/readiness-checks`, on a branch that only ever fast-forwards, created by the
+- [x] `.claude/worktrees/readiness-checks`, on a branch that only ever fast-forwards, created by the
       runner if absent (`git worktree add` then `scripts/worktree-setup.ts` — reuse, not a second
       recipe). **Never `checkout --`, `reset --hard`, `clean` or a branch switch**, per AGENTS.md:
       the tree is advanced with `git merge --ff-only origin/dev` and nothing else.
-- [ ] If that merge does not fast-forward, or the tree is not clean, the loop **skips and says so**
+- [x] If that merge does not fast-forward, or the tree is not clean, the loop **skips and says so**
       rather than forcing it. A dirty runner worktree is a thing to look at, not to erase.
-- [ ] `git fetch origin dev` each tick, in that worktree. Additive, and it is what makes "on dev"
+- [x] `git fetch origin dev` each tick, in that worktree. Additive, and it is what makes "on dev"
       about something newer than the last time somebody happened to fetch.
-- [ ] Tick every 10 minutes; a run takes ~26, so the loop is idle most of the time and this only
+- [x] Tick every 10 minutes; a run takes ~26, so the loop is idle most of the time and this only
       decides how soon a new dev head is noticed.
-- [ ] One line per tick to stdout — the sha, the decision, the reason — so the tmux log is a legible
+- [x] One line per tick to stdout — the sha, the decision, the reason — so the tmux log is a legible
       record of why nothing ran, which is the state it will be in most of the time.
-- [ ] The check is run by spawning `scripts/readiness-run.ts check` **in the runner worktree**, which
+- [x] The check is run by spawning `scripts/readiness-run.ts check` **in the runner worktree**, which
       is what makes the record about that tree: `readiness-run.ts` stamps the checkout it belongs to,
       not `cwd`.
 
@@ -245,10 +276,10 @@ so `outcomeFromExit` records **`fail`** — and the tab would then say dev is re
 busy. The refusal even prints `NO TESTS RAN AND NOTHING WAS VERIFIED`, which is the sentence
 `readiness-run.ts` most needs to read and currently does not.
 
-- [ ] `readiness-parse.ts` learns that banner; a run carrying it is recorded `void` with the box's own
+- [x] `readiness-parse.ts` learns that banner; a run carrying it is recorded `void` with the box's own
       words as `why`, whatever its exit code. Red first, against a captured fixture of the real
       refusal text.
-- [ ] Named as the one change outside "what a record needs" that this work makes, because a record
+- [x] Named as the one change outside "what a record needs" that this work makes, because a record
       that says *the tests failed* when no test ran is the same lie the whole feature exists to
       refuse.
 

@@ -52,7 +52,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { footerRequired, joinEnds, parseBanner, parseOutput, scopeOf, type Banner } from "../tools/fleet/readiness-parse.js";
+import {
+  footerRequired,
+  joinEnds,
+  makeAdmissionRefusalCapture,
+  outcomeAfterAdmissionRefusal,
+  parseBanner,
+  parseOutput,
+  scopeOf,
+  type Banner,
+} from "../tools/fleet/readiness-parse.js";
 import { openReadinessStore, procStartToken, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
 import { stampTree } from "../tools/fleet/readiness-git.js";
 import {
@@ -232,6 +241,13 @@ async function main(): Promise<void> {
   }
 
   const capture = makeCapture();
+  /* A full check runs Vitest in the middle, so its refusal can be pushed out of
+     both bounded output windows by later advisories. Latch the sentence while
+     it passes rather than pretending the retained fragment is the whole log. */
+  /* Keep the streams separate. A line split across two stderr chunks must not
+     have an unrelated stdout chunk spliced into its middle by arrival order. */
+  const stdoutAdmissionRefusal = makeAdmissionRefusalCapture();
+  const stderrAdmissionRefusal = makeAdmissionRefusalCapture();
   const child = spawn("npm", ["run", script], {
     cwd: root,
     env: process.env,
@@ -246,10 +262,12 @@ async function main(): Promise<void> {
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (c: string) => {
     capture.push(c);
+    stdoutAdmissionRefusal.push(c);
     process.stdout.write(c);
   });
   child.stderr.on("data", (c: string) => {
     capture.push(c);
+    stderrAdmissionRefusal.push(c);
     process.stderr.write(c);
   });
 
@@ -303,6 +321,14 @@ async function main(): Promise<void> {
         "conclusion has not been shown to have reached one";
     }
   }
+
+  /* `check.ts` exits 1 because its test gate did not run. That is a correct
+     process status and not a failing tree: the admission banner says no test
+     reached a verdict, so its own words outrank every numeric exit. */
+  ({ outcome, why } = outcomeAfterAdmissionRefusal(
+    { outcome, why },
+    stdoutAdmissionRefusal.why() ?? stderrAdmissionRefusal.why(),
+  ));
 
   const finished: FinishedRecord = {
     ...common,

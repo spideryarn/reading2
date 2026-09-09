@@ -28,7 +28,16 @@
  * prints none, which is the case this is for; what it cannot do is prove a run
  * finished that did not.
  */
-import { CHECK_KINDS, SCRIPT_FOR_KIND, type CheckKind, type CheckStep, type Counts, type Scope, type TestTally } from "./readiness.js";
+import {
+  CHECK_KINDS,
+  SCRIPT_FOR_KIND,
+  type CheckKind,
+  type CheckStep,
+  type Counts,
+  type Outcome,
+  type Scope,
+  type TestTally,
+} from "./readiness.js";
 
 /**
  * Strip ANSI. Vitest colours everything, and a colourised `✓` will not match a
@@ -41,6 +50,61 @@ import { CHECK_KINDS, SCRIPT_FOR_KIND, type CheckKind, type CheckStep, type Coun
 export function stripAnsi(text: string): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
   return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+}
+
+/* ------------------------------------------------------------------ *
+ * A check the box refused to start.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The sentence `vitest-admission.ts` prints when no test was allowed to run.
+ * Its words, rather than the outer exit status, are the evidence: `check.ts`
+ * quite properly exits 1 because a gate did not run, but that status is not a
+ * verdict about the tree.
+ */
+export function parseAdmissionRefusal(text: string): string | null {
+  const line = stripAnsi(text)
+    .split(/\r?\n/)
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("NO TESTS RAN AND NOTHING WAS VERIFIED —"));
+  return line ?? null;
+}
+
+/**
+ * Give an admission refusal precedence over the ordinary exit classification.
+ * Exit 1 still belongs on the record as the observed process status, but it no
+ * longer gets to say the tree failed when the output says no test ran.
+ */
+export function outcomeAfterAdmissionRefusal(
+  fallback: { outcome: Outcome; why: string | null },
+  refusalWhy: string | null,
+): { outcome: Outcome; why: string | null } {
+  return refusalWhy === null ? fallback : { outcome: "void", why: refusalWhy };
+}
+
+/**
+ * Find an admission refusal while output streams past, including when its line
+ * crosses a chunk boundary. The wrapper cannot wait and search its retained
+ * head and tail: in a full `check`, Vitest runs in the middle and later noisy
+ * advisories can push this one load-bearing sentence out of both windows.
+ */
+export function makeAdmissionRefusalCapture(): {
+  push(chunk: string): void;
+  why(): string | null;
+} {
+  let tail = "";
+  let found: string | null = null;
+  return {
+    push(chunk) {
+      if (found !== null) return;
+      const joined = tail + chunk;
+      found = parseAdmissionRefusal(joined);
+      /* Longer than either refusal line, and bounded independently of how long
+         the check runs. It exists only to bridge a line split between chunks. */
+      tail = joined.slice(-512);
+    },
+    why: () => found,
+  };
 }
 
 /**
