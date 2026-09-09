@@ -44,6 +44,8 @@ import {
   parseStartedDir,
   parseStartedName,
   stripAnsi,
+  configureNewSessionNotifier,
+  newSessionRoutes,
   webProvisionalName,
   type LaunchRecord,
   type NewSessionIo,
@@ -996,12 +998,12 @@ describe("the Overseer notification, and where its outcome lands", () => {
 
   it("puts the outcome on the record, where the page can read it", async () => {
     const f = fake();
-    f.notifyAnswer.value = { kind: "submitted", to: "Overseer", paneId: "%42" };
+    f.notifyAnswer.value = { kind: "queued", to: "Overseer", position: 3 };
     await started(f);
 
     const rec = (await f.get()).json().launches[0];
     expect(rec.progress.state).toBe("started");
-    expect(rec.progress.notification).toEqual({ kind: "submitted", to: "Overseer", paneId: "%42" });
+    expect(rec.progress.notification).toEqual({ kind: "queued", to: "Overseer", position: 3 });
   });
 
   /**
@@ -1032,19 +1034,18 @@ describe("the Overseer notification, and where its outcome lands", () => {
     expect(rec.progress.notification.kind).toBe("no-holder");
   });
 
-  it("reports a refusal with its code and the delivery word, never as a success", async () => {
+  it("reports the queue own refusal rule, never as a success", async () => {
     const f = fake();
     f.notifyAnswer.value = {
-      kind: "refused",
+      kind: "not-queued",
       to: "Overseer",
-      code: "input-not-empty",
-      why: "the box already holds text",
-      delivery: "none",
+      rule: "session-queue-full",
+      why: "eight already waiting",
     };
     await started(f);
 
     const rec = (await f.get()).json().launches[0];
-    expect(rec.progress.notification).toMatchObject({ kind: "refused", code: "input-not-empty", delivery: "none" });
+    expect(rec.progress.notification).toMatchObject({ kind: "not-queued", rule: "session-queue-full" });
     /* Nothing on this box can observe reception, so the word is never used. */
     expect(JSON.stringify(rec.progress.notification)).not.toContain('"sent"');
   });
@@ -1067,7 +1068,7 @@ describe("the Overseer notification, and where its outcome lands", () => {
 
   it("never puts the prompt in the launch record, notification or not", async () => {
     const f = fake();
-    f.notifyAnswer.value = { kind: "submitted", to: "Overseer", paneId: "%42" };
+    f.notifyAnswer.value = { kind: "queued", to: "Overseer", position: 3 };
     await started(f);
 
     /* Paired with a positive, per this file's own rule: the absence below means
@@ -1076,5 +1077,34 @@ describe("the Overseer notification, and where its outcome lands", () => {
     expect(rec.promptBytes).toBeGreaterThan(0);
     expect(f.notified[0]?.prompt).toContain("the other thing");
     expect(JSON.stringify(rec)).not.toContain("the other thing");
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * The one piece of module state: who tells the Overseer.
+ * ---------------------------------------------------------------- */
+
+/**
+ * **This block builds the SHARED routes and must stay last in the file.**
+ * `newSessionRoutes()` memoises, and once it has run `configureNewSessionNotifier`
+ * refuses — which is the behaviour under test, and would break any later test
+ * that wanted to configure it. Nothing above calls the singleton; every other
+ * test in this file builds its own with `createNewSessionRoutes`.
+ */
+describe("configuring the notifier, which happens once at startup", () => {
+  it("freezes the configuration when the shared routes are built, and then refuses", () => {
+    configureNewSessionNotifier(async () => ({ kind: "no-holder" }));
+
+    const routes = newSessionRoutes();
+    expect(routes).toBe(newSessionRoutes());
+
+    /**
+     * THE REFUSAL IS THE POINT. Configuring after the routes exist would set a
+     * notifier nothing would ever call, and every launch would report
+     * `cannot-tell` — a true sentence about broken wiring that reads exactly
+     * like a box with no Overseer. Silent lateness is the failure this whole
+     * file is written against, so it throws rather than missing its moment.
+     */
+    expect(() => configureNewSessionNotifier(async () => ({ kind: "no-holder" }))).toThrow(/already exist/);
   });
 });

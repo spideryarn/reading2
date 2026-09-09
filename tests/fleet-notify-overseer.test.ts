@@ -1,15 +1,15 @@
 /**
  * Telling the Overseer a session was started from the web UI.
  *
- * **Nothing here touches tmux, a pane or a gateway.** `send` is injected, and
+ * **Nothing here touches tmux, a pane or a queue.** The enqueue is injected, and
  * the claim and the rows are handed in by the caller that read them from one
  * snapshot — so every arm of `NotifyOutcome`, including the ones that are hard
  * to provoke on a real box, is reachable here.
  *
- * The arms that matter most are the ones that are NOT a send: nobody holding
- * the role, two sessions holding it, and a holder we cannot address. Each is a
- * different fact, and the point of the union is that the launch record cannot
- * flatten them into "not sent".
+ * The arms that matter most are the ones that are NOT a delivery: nobody holding
+ * the role, two sessions holding it, a holder we cannot address, and a queue that
+ * would not take the message. Each is a different fact, and the point of the
+ * union is that the launch record cannot flatten them into "not sent".
  */
 import { describe, expect, it } from "vitest";
 
@@ -37,17 +37,17 @@ function row(over: Partial<AddressableRow> = {}): AddressableRow {
   };
 }
 
-/** A `send` that records what it was given and answers however the test says. */
-function recordingSend(
-  answer: Awaited<ReturnType<NotifyDeps["send"]>> | Error = { ok: true },
-): { send: NotifyDeps["send"]; sent: { text: string; paneId: string }[] } {
-  const sent: { text: string; paneId: string }[] = [];
-  const send: NotifyDeps["send"] = async (target, text) => {
-    sent.push({ text, paneId: target.paneId });
-    if (answer instanceof Error) throw answer;
+/** An enqueue that records what it was given and answers however the test says. */
+function recordingEnqueue(answer: ReturnType<NotifyDeps["enqueue"]> = { ok: true, position: 1 }): {
+  enqueue: NotifyDeps["enqueue"];
+  queued: { sessionId: string; text: string; speaker: string }[];
+} {
+  const queued: { sessionId: string; text: string; speaker: string }[] = [];
+  const enqueue: NotifyDeps["enqueue"] = (target, text, speaker) => {
+    queued.push({ sessionId: target.sessionId, text, speaker });
     return answer;
   };
-  return { send, sent };
+  return { enqueue, queued };
 }
 
 const LINE = "A new session was started from the web UI at 100.92.255.119: fb2p-thing.";
@@ -58,7 +58,7 @@ const LINE = "A new session was started from the web UI at 100.92.255.119: fb2p-
  * `SPEAKER_PREFIX` is private to actions.ts, and exporting it so a test could
  * read it would create a second way to know one string — the twin this whole
  * area keeps repairing. Asking the real function what it prepends is both
- * cheaper and stronger: if the prefix changes, this follows it, and if
+ * cheaper and stronger: if the prefix changes this follows it, and if
  * `renderMessage` stops prefixing at all, every assertion below fails.
  */
 function prefixOf(speaker: "greg" | "overseer" | "dashboard"): string {
@@ -67,44 +67,49 @@ function prefixOf(speaker: "greg" | "overseer" | "dashboard"): string {
   return rendered.text.slice(0, -1);
 }
 
-describe("who the notification goes to, and the four ways it does not go", () => {
-  it("submits to the holder, and says submitted rather than sent", async () => {
-    const { send, sent } = recordingSend();
-    const outcome = await notifyOverseer({ claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], send }, LINE);
+describe("who the notification goes to, and the four ways it does not", () => {
+  it("queues it for the holder, and claims no more than that", async () => {
+    const { enqueue, queued } = recordingEnqueue({ ok: true, position: 3 });
+    const outcome = await notifyOverseer(
+      { claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], enqueue },
+      LINE,
+    );
 
-    expect(outcome).toEqual({ kind: "submitted", to: "Overseer", paneId: "%42" });
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.paneId).toBe("%42");
-    /* The word this codebase is not allowed to use about keystrokes. */
-    expect(describeNotify(outcome)).not.toMatch(/\bsent\b/);
-    expect(describeNotify(outcome)).toContain("submitted");
+    expect(outcome).toEqual({ kind: "queued", to: "Overseer", position: 3 });
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.sessionId).toBe("$7");
+    /* Nothing here can say the Overseer was told, and the words must not either. */
+    const said = describeNotify(outcome);
+    expect(said).not.toMatch(/\bsent\b/);
+    expect(said).not.toMatch(/\bdelivered\b/);
+    expect(said).toContain("queued");
   });
 
-  it("sends nothing when nobody holds the role, and that is an answer rather than a failure", async () => {
-    const { send, sent } = recordingSend();
-    const outcome = await notifyOverseer({ claim: { kind: "none" }, rows: [row()], send }, LINE);
+  it("queues nothing when nobody holds the role, and that is an answer rather than a failure", async () => {
+    const { enqueue, queued } = recordingEnqueue();
+    const outcome = await notifyOverseer({ claim: { kind: "none" }, rows: [row()], enqueue }, LINE);
 
     expect(outcome).toEqual({ kind: "no-holder" });
-    expect(sent).toEqual([]);
+    expect(queued).toEqual([]);
   });
 
   /** Picking one would make this code the arbiter of a question it cannot answer. */
   it("refuses to choose when the role is contested", async () => {
-    const { send, sent } = recordingSend();
+    const { enqueue, queued } = recordingEnqueue();
     const outcome = await notifyOverseer(
-      { claim: { kind: "contested", names: ["Overseer", "overseer-2"] }, rows: [row()], send },
+      { claim: { kind: "contested", names: ["Overseer", "overseer-2"] }, rows: [row()], enqueue },
       LINE,
     );
 
     expect(outcome).toEqual({ kind: "contested", names: ["Overseer", "overseer-2"] });
-    expect(sent).toEqual([]);
+    expect(queued).toEqual([]);
     expect(describeNotify(outcome)).toContain("overseer-2");
   });
 
   it("keeps cannot-tell separate from no-holder", async () => {
-    const { send } = recordingSend();
+    const { enqueue } = recordingEnqueue();
     const outcome = await notifyOverseer(
-      { claim: { kind: "cannot-tell", why: "the snapshot was 4m old" }, rows: [], send },
+      { claim: { kind: "cannot-tell", why: "the snapshot was 4m old" }, rows: [], enqueue },
       LINE,
     );
 
@@ -115,66 +120,72 @@ describe("who the notification goes to, and the four ways it does not go", () =>
   });
 
   it("cannot tell when the claim names a session that is not in the snapshot it came from", async () => {
-    const { send, sent } = recordingSend();
+    const { enqueue, queued } = recordingEnqueue();
     const outcome = await notifyOverseer(
-      { claim: { kind: "one", name: "Overseer", id: "$99" }, rows: [row({ id: "$7" })], send },
+      { claim: { kind: "one", name: "Overseer", id: "$99" }, rows: [row({ id: "$7" })], enqueue },
       LINE,
     );
 
     expect(outcome.kind).toBe("cannot-tell");
-    expect(sent).toEqual([]);
+    expect(queued).toEqual([]);
   });
 
-  it("cannot tell when the holder has no pane to address", async () => {
-    const { send, sent } = recordingSend();
+  it("cannot tell when the holder has no conversation id to address", async () => {
+    const { enqueue, queued } = recordingEnqueue();
     const outcome = await notifyOverseer(
-      { claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row({ paneId: null })], send },
+      { claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row({ claudeSessionId: null })], enqueue },
       LINE,
     );
 
     expect(outcome.kind).toBe("cannot-tell");
-    if (outcome.kind === "cannot-tell") expect(outcome.why).toContain("pane");
-    expect(sent).toEqual([]);
-  });
-
-  it("carries the refusal code and the delivery word through", async () => {
-    const { send } = recordingSend({ ok: false, code: "input-not-empty", why: "the box already holds text", delivery: "none" });
-    const outcome = await notifyOverseer({ claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], send }, LINE);
-
-    expect(outcome).toMatchObject({ kind: "refused", code: "input-not-empty", delivery: "none" });
-    expect(describeNotify(outcome)).toContain("none");
+    expect(queued).toEqual([]);
   });
 
   /**
-   * A throw after the send began cannot distinguish "nothing happened" from
-   * "half of it did", so it is `unknown` and never `refused`. Calling it a
-   * refusal is the one claim this code is never allowed to make.
+   * `rule` travels rather than being flattened. A full queue is a fact about
+   * THIS recipient; `bad-text` is a fact about the MESSAGE and would fail
+   * identically for anyone. A record that could not tell them apart could render
+   * neither honestly — the lossy-join half of 260908b.
    */
-  it("says unknown, not refused, when the send throws", async () => {
-    const { send } = recordingSend(new Error("the child process died"));
-    const outcome = await notifyOverseer({ claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], send }, LINE);
+  it("carries the queue's own refusal rule through to the record", async () => {
+    const { enqueue } = recordingEnqueue({ ok: false, rule: "session-queue-full", why: "eight already waiting" });
+    const outcome = await notifyOverseer(
+      { claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], enqueue },
+      LINE,
+    );
 
-    expect(outcome.kind).toBe("unknown");
-    expect(describeNotify(outcome)).toContain("not known");
+    expect(outcome).toMatchObject({ kind: "not-queued", to: "Overseer", rule: "session-queue-full" });
+    expect(describeNotify(outcome)).toContain("session-queue-full");
   });
 });
 
-describe("what the notification says, and what it may not", () => {
-  it("goes as the dashboard, which is neither Greg nor the Overseer", async () => {
-    const { send, sent } = recordingSend();
-    await notifyOverseer({ claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], send }, LINE);
+describe("what reaches the queue, and what must not", () => {
+  /**
+   * **THE RAW LINE, NOT A RENDERED ONE.** `enqueueMessage` applies
+   * `renderMessage` itself and `drain.ts` renders again at delivery, so handing
+   * over an already-prefixed string prefixes it twice — which reads as clumsy
+   * rather than as a bug and fails nothing. This is the assertion that stops it
+   * being reintroduced by somebody tidying the composition into one place.
+   */
+  it("hands the queue raw text and the speaker, never a pre-rendered string", async () => {
+    const { enqueue, queued } = recordingEnqueue();
+    await notifyOverseer({ claim: { kind: "one", name: "Overseer", id: "$7" }, rows: [row()], enqueue }, LINE);
 
-    const text = sent[0]?.text ?? "";
-    expect(NOTIFY_SPEAKER).toBe("dashboard");
-    expect(text.startsWith(prefixOf("dashboard"))).toBe(true);
+    const text = queued[0]?.text ?? "";
+    expect(text).toBe(LINE);
+    expect(text).not.toContain(prefixOf("dashboard"));
     expect(text).not.toContain(prefixOf("greg"));
     expect(text).not.toContain(prefixOf("overseer"));
+    /* And the attribution is not lost by staying out of it — the speaker travels
+       and the queue is where it is applied. */
+    expect(queued[0]?.speaker).toBe("dashboard");
+    expect(NOTIFY_SPEAKER).toBe("dashboard");
   });
 
   /**
    * `renderMessage` refuses a leading slash from any speaker but Greg, so a
-   * composed notice that began with one would be unsendable. The prefix is what
-   * keeps that from happening; this asserts it rather than trusting it.
+   * composed notice beginning with one would be refused at enqueue. Our own
+   * words come first, which is what keeps that from happening.
    */
   it("never begins with a slash, even when the prompt does", () => {
     const line = notifyLine({
@@ -183,9 +194,8 @@ describe("what the notification says, and what it may not", () => {
       dir: null,
       promptFirstLine: promptExcerpt("/compact and then keep going"),
     });
-    const composed = `${prefixOf("dashboard")}${line}`;
-    expect(composed.startsWith("/")).toBe(false);
     expect(line.startsWith("/")).toBe(false);
+    expect(`${prefixOf("dashboard")}${line}`.startsWith("/")).toBe(false);
   });
 
   it("is one line, because a newline would submit it early", () => {

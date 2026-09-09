@@ -879,3 +879,53 @@ Measured on the live box after that landed: 26 sessions, 26 verified, 0 unknown,
 whole pass costing 236 ms. **But every row reads `unknown`/`not-reported` until the Overseer restarts
 the dashboard and the daemon**, so `cannot-tell` remains the normal case for a while and its copy
 should read as informative rather than broken.
+
+## Stage D landed — and the child process was replaced, not built
+
+**The instruction changed under the work, which is the interesting part.** The Overseer asked for the
+send in a child process with one total deadline (Sol's F7). Between that instruction and the work,
+**`send-coordinator.ts` landed**, and it makes the child process the wrong answer:
+
+- `sendMessage` and `answerQuestion` are now **private to that file**, enforced by
+  `tests/fleet-imports.test.ts`, and every producer goes through one coordinator whose whole point is
+  that the quarantine check and the transport call are adjacent with nothing between them.
+- **A child process carries its own quarantine book.** `holding()` would answer `null` for the entire
+  box, so the notice could type a second sentence into a session already held behind half of one.
+  Duplicate keystrokes are the one thing that neighbourhood forbids. The child process traded a P1 for
+  a worse one.
+- Its owner confirmed and documented the hole at `176258e3`: **none of the three existing guards can
+  see it.** The import walk checks who may hold the transport, and a child would legitimately hold a
+  coordinator; the compile guard checks dependency types, which would be correct; and the composition
+  test asserts one book across two compositions *within one process*. A child-process send defeats the
+  quarantine while passing everything.
+
+**Queueing dissolves F7 rather than mitigating it.** `enqueueSharedMessage` — which also landed since
+this plan was written; there was no in-process entry point when it was surveyed — makes **no tmux
+calls**, so nothing blocks the event loop at all. The drain then delivers on the refresh loop through
+the coordinator, with the hold check in-process where it belongs. It is also what Greg named:
+*"route it through the existing steer machinery (`queue.ts`/`drain.ts` deliver keystrokes to a pane)
+rather than a new sender"*.
+
+**What that costs, stated rather than buried.** The role holder is resolved at enqueue and delivery is
+up to ~73 s later, so if the role changes hands in between the note reaches the **former** Overseer —
+F8, unsolved. Accepted, on the arm's own rule: this is a **report**, nobody is being asked for
+anything, so a misroute delivers a stale fact to a peer rather than an instruction to the wrong agent.
+**The moment anything sent under the `dashboard` speaker is an instruction, that reasoning collapses
+along with the prefix**, which is the same reason the arm splits rather than softens. Overseer's
+decision, logged.
+
+**Two things the coordinator's docstrings caught that no test would have.** The transport must not be
+reached from a child — reasoned from the header by someone who was not present for the bug it
+describes. And **the queue takes the RAW line**: `enqueueMessage` renders and `drain.ts` renders again
+at delivery, so a pre-rendered string is prefixed twice — which fails no test, trips no type, and
+reads as clumsy rather than broken. There is now an assertion that the string reaching the queue
+carries no prefix, which cannot be read past.
+
+**Joined end to end**, which is what F10 asked for: `server.ts` binds the notifier through
+`configureNewSessionNotifier` (which **throws** if called after the routes exist, because a notifier
+configured too late would report `cannot-tell` for every launch — a true sentence about broken wiring
+that reads exactly like a box with no Overseer); the launch record carries the outcome; and the card
+draws every arm. Mutation-checked at both ends: dropping the notification result reds four route
+tests, and removing the line from the card reds all five panel tests.
+
+488 tests across five suites, typecheck clean.
