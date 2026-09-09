@@ -221,6 +221,41 @@ passed it.
 **Two of my own tests broke, and broke for the right change** — they asserted on phrases from the
 copy the review improved. They read the sentence out of the exported map now.
 
+### Round two, and the thing worth taking from it
+
+*Status: done. `logs/tooltips/review2-answer.md`, exit 0.*
+
+Round two was aimed at the obvious risk: **the replacement sentences were new claims, written by the
+same process that produced the six wrong ones.** It found eight more, and it was right about each:
+the `human` card called four peer messages "machinery"; the conversation card said *a shell has none*
+when the environment claim outlives the claude that left the shell behind; `contested` does not in
+fact survive a *stale* reading, only a short one; `ready` is worn by every dispatchable item rather
+than the next one, and `why` explains a verdict rather than being it; an `added` event naming an
+unknown id is how every item begins rather than a fault; and the queue's HTTP route is GET-only, so
+calling it one of three write entrances was wrong.
+
+**That is the finding, and it is about method rather than about tooltips.** One review round removed
+six confident errors and left eight more, in copy I had just rewritten *specifically* to remove
+confident errors — and every replacement sentence read, to me, as carefully sourced. A rule that
+says *quote the source* does not survive contact with a source that is long, that is in two places,
+or that disagrees with itself. What caught them was an adversarial reader with the code open, twice;
+nothing I did to the process between rounds would have.
+
+Two smaller ones worth keeping:
+
+- **`codeOnly` still does not achieve the trade it claims**, and the comment now says so instead of
+  claiming it. Blanking comments but not strings means a `/*` inside a string blanks everything to
+  the next `*/` — the same class of silent miss, in the other direction. It is a tripwire, not a
+  proof; the real fix is an AST walk.
+- **Two assertions were satisfied by text that was already there.** The badge and id tests passed on
+  the `sr-only` sentences, so deleting the two visible rows that were the whole point of the P1 fix
+  would not have failed anything. A test now opens the row and reads the visible `<dd>`s.
+
+And one thing checked rather than assumed: `expect(text).toContain(badgeTip(label).how)` is **not**
+vacuous for taking both sides from one map — it proves the current entry is wired into the DOM, and
+survives a copy edit. It does not prove the sentence is true, which is what the review rounds are
+for, and it does not prove a sighted reader can reach it, which is what the new test is for.
+
 ### What this pass learned, that the plan did not know
 
 **Adding an explanation is not a read-only act on the DOM.** Three of the four things that went
