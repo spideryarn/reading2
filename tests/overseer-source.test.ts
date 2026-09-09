@@ -54,11 +54,39 @@ function fakeFleet(options: {
   hangState?: boolean;
   /** Serve the stream's headers and then never send a byte, heartbeat included. */
   silentStream?: boolean;
+  /**
+   * Refuse the stream with an error status and then **never finish the body**.
+   *
+   * The trap: `fetch` resolves on the headers, so the reader sees `!ok` and
+   * goes to drain the body — and a body that never ends never drains. This is
+   * the shape a reverse proxy in trouble produces, and it parks the Overseer's
+   * only loop before the poll fallback has been reached.
+   */
+  streamErrorHangingBody?: boolean;
+  /** The same trap one route over: an error status on the poll, body unfinished. */
+  stateErrorHangingBody?: boolean;
+  /** Stream bytes for ever without ever terminating a frame. */
+  streamNeverTerminatesFrame?: boolean;
 }): Promise<Fleet> {
   const subscribers = new Set<ServerResponse>();
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
     if (url.startsWith("/api/live")) {
+      if (options.streamErrorHangingBody === true) {
+        res.writeHead(503, { "content-type": "text/plain" });
+        res.flushHeaders();
+        res.write("upstream is having a bad time");
+        return; // and never `end()`
+      }
+      if (options.streamNeverTerminatesFrame === true) {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.flushHeaders();
+        res.write("event: snapshot\ndata: ");
+        const timer = setInterval(() => res.write("x".repeat(2048)), 1);
+        timer.unref();
+        req.on("close", () => clearInterval(timer));
+        return;
+      }
       if (options.silentStream === true) {
         res.writeHead(200, { "content-type": "text/event-stream" });
         res.flushHeaders();
@@ -80,6 +108,12 @@ function fakeFleet(options: {
     }
     if (url.startsWith("/api/state")) {
       if (options.hangState === true) return;
+      if (options.stateErrorHangingBody === true) {
+        res.writeHead(502, { "content-type": "text/html" });
+        res.flushHeaders();
+        res.write("<html><body>bad gateway");
+        return; // and never `end()`
+      }
       const { status, body } = options.state();
       res.writeHead(status, { "content-type": "application/json" });
       res.end(body);
@@ -88,7 +122,12 @@ function fakeFleet(options: {
     res.writeHead(404).end();
   });
   servers.push(server);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // WITHOUT THIS THE HELPER HANGS FOR EVER ON A BIND FAILURE, which is what a
+    // sandbox that denies loopback binding does (`EPERM`) — the suite then
+    // looks like it is running rather than like it cannot run. Found when GPT
+    // Sol could not execute these tests, 2026-09-08.
+    server.on("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       if (address === null || typeof address === "string") throw new Error("no port");
@@ -126,6 +165,8 @@ async function take(
     streamRetryAfterMs?: number;
     pollTimeoutMs?: number;
     streamSilenceMs?: number;
+    maxPollBytes?: number;
+    maxFrameChars?: number;
   } = {},
 ): Promise<SourceMessage[]> {
   const controller = new AbortController();
@@ -139,6 +180,11 @@ async function take(
       streamRetryAfterMs: options.streamRetryAfterMs ?? 80,
       pollTimeoutMs: options.pollTimeoutMs ?? 2_000,
       streamSilenceMs: options.streamSilenceMs ?? 2_000,
+      // Spread rather than assigned: `exactOptionalPropertyTypes` is on, so an
+      // explicit `undefined` is not the same as an absent key — which is the
+      // point, since absent is what makes the module use its own default.
+      ...(options.maxPollBytes === undefined ? {} : { maxPollBytes: options.maxPollBytes }),
+      ...(options.maxFrameChars === undefined ? {} : { maxFrameChars: options.maxFrameChars }),
     })) {
       got.push(message);
       options.onMessage?.(message);
@@ -326,5 +372,152 @@ describe("when the dashboard is not there at all", () => {
     const fleet = await fakeFleet({ state: () => ({ status: 200, body: "<html>login</html>" }), stream: "404" });
     const got = await take(fleet, 2, { pollIntervalMs: 10 });
     expect(got.some((m) => m.kind === "unreadable" && m.via === "poll")).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Bounded bodies.
+ *
+ * **The Overseer has one loop and no local fallback** (overseer-direction.md
+ * § Two tenses: when the dashboard is down it has nothing at all), so anything
+ * that can park this generator indefinitely is the difference between *a dead
+ * dashboard is a fact we record* and *a silence we sit in*. Every test here is
+ * about a server that answers enough to get past `fetch` and then stops.
+ * E-stream in docs/plans/260908f-….
+ * ------------------------------------------------------------------ */
+describe("bounded bodies — a body that never ends must not trap the loop", () => {
+  test("an error status on the stream with an unfinished body does not block the poll fallback", async () => {
+    const fleet = await fakeFleet({ state: () => ({ status: 200, body: STATE_BODY }), streamErrorHangingBody: true });
+
+    const startedAt = Date.now();
+    const got = await take(fleet, 2, { pollIntervalMs: 10, streamRetryAfterMs: 5_000 });
+    const elapsed = Date.now() - startedAt;
+
+    expect(got[0]).toMatchObject({ kind: "stream-closed" });
+    expect((got[0] as { why: string }).why).toContain("503");
+    // THE POINT: the fallback was reached at all. Before the fix this sat in
+    // `response.text()` on a body nobody was going to finish, and the only
+    // thing that ever came back was the test's own abort.
+    expect(got[1]).toMatchObject({ kind: "payload", via: "poll" });
+    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  test("an error status on the poll with an unfinished body fails fast rather than burning the whole timeout", async () => {
+    const fleet = await fakeFleet({
+      state: () => ({ status: 502, body: "" }),
+      stream: "404",
+      stateErrorHangingBody: true,
+    });
+
+    const startedAt = Date.now();
+    const got = await take(fleet, 2, { pollIntervalMs: 10, pollTimeoutMs: 3_000 });
+    const elapsed = Date.now() - startedAt;
+
+    expect(got[1]).toMatchObject({ kind: "poll-failed" });
+    expect((got[1] as { why: string }).why).toContain("502");
+    // The status line is the whole answer; there is no reason to wait 3s for a
+    // body we are not going to read.
+    expect(elapsed).toBeLessThan(1_500);
+  });
+
+  test("a poll body larger than the bound is refused rather than buffered", async () => {
+    const huge = `{"rows":[],"filler":"${"x".repeat(200_000)}"}`;
+    const fleet = await fakeFleet({ state: () => ({ status: 200, body: huge }), stream: "404" });
+
+    const got = await take(fleet, 2, { pollIntervalMs: 10, maxPollBytes: 50_000 });
+
+    expect(got[1]).toMatchObject({ kind: "poll-failed" });
+    expect((got[1] as { why: string }).why).toMatch(/50000 bytes/);
+  });
+
+  test("a poll body under the bound still arrives intact", async () => {
+    const fleet = await fakeFleet({ state: () => ({ status: 200, body: STATE_BODY }), stream: "404" });
+    const got = await take(fleet, 2, { pollIntervalMs: 10, maxPollBytes: 50_000 });
+    expect(got[1]).toMatchObject({ kind: "payload", via: "poll", json: JSON.parse(STATE_BODY) });
+  });
+
+  test("a stream that never terminates a frame is closed instead of growing a buffer", async () => {
+    const fleet = await fakeFleet({
+      state: () => ({ status: 200, body: STATE_BODY }),
+      streamNeverTerminatesFrame: true,
+    });
+
+    const got = await take(fleet, 2, { pollIntervalMs: 10, streamRetryAfterMs: 5_000, maxFrameChars: 20_000 });
+
+    expect(got[0]).toMatchObject({ kind: "stream-opened" });
+    expect(got[1]).toMatchObject({ kind: "stream-closed" });
+    expect((got[1] as { why: string }).why).toMatch(/20000 characters/);
+  });
+});
+
+describe("sseFrames — the incomplete-frame bound", () => {
+  test("keeps a partial frame until it is closed, and refuses one that never closes", () => {
+    const parser = sseFrames(64);
+    expect(parser.push("event: snapshot\ndata: ")).toEqual([]);
+    // Still under the bound, still patiently waiting.
+    expect(parser.push("{\"a\":1}")).toEqual([]);
+    expect(parser.push("\n\n")).toEqual([{ event: "snapshot", data: '{"a":1}' }]);
+
+    // And now one that never closes.
+    expect(() => parser.push(`data: ${"x".repeat(200)}`)).toThrow(/64 characters/);
+  });
+
+  test("the bound is on the INCOMPLETE tail, not on the traffic through it", () => {
+    const parser = sseFrames(64);
+    for (let i = 0; i < 500; i += 1) {
+      expect(parser.push(`event: ping\ndata: ${i}\n\n`)).toHaveLength(1);
+    }
+  });
+
+  test("several complete frames in ONE chunk are not an overflow, however many there are", () => {
+    /* **THE TEST THE FIRST DRAFT DID NOT HAVE, and the reason it was wrong.**
+       Every other test here pushes one frame per `push`, so a bound checked
+       against the whole appended chunk looked correct. A real stream does not
+       do that: a heartbeat and a snapshot land in one TCP segment all the time.
+       GPT Sol, 2026-09-08 — four small valid frames, 136 characters, under a
+       64-character limit, and the parser threw. */
+    const parser = sseFrames(64);
+    const chunk = [0, 1, 2, 3].map((i) => `event: ping\ndata: ${i}\n\n`).join("");
+    expect(chunk.length).toBeGreaterThan(64);
+    expect(parser.push(chunk)).toHaveLength(4);
+
+    // And the parser is still usable afterwards, with its bound intact.
+    expect(() => parser.push(`data: ${"x".repeat(200)}`)).toThrow(/64 characters/);
+  });
+
+  test("one frame longer than the bound is refused even though it is complete", () => {
+    const parser = sseFrames(64);
+    expect(() => parser.push(`data: ${"x".repeat(200)}\n\n`)).toThrow(/64 characters/);
+  });
+
+  test("the SAME BYTES are judged the same however TCP splits them", () => {
+    /* **PACKETIZATION IS NOT SOMETHING A PRODUCER CONTROLS**, so it must not
+       decide whether a stream is called broken. A frame whose body is exactly
+       the limit passed when its terminator arrived in the same chunk and threw
+       when the first `\n` arrived without the second, because the half-received
+       terminator counted against the body. GPT Sol probed it at an
+       eight-character limit, 2026-09-08. */
+    const body = "data: xx"; // exactly 8 characters
+    expect(body.length).toBe(8);
+
+    // All in one chunk: accepted.
+    expect(sseFrames(8).push(`${body}\n\n`)).toEqual([{ event: "message", data: "xx" }]);
+
+    // Split across the terminator: must also be accepted.
+    const split = sseFrames(8);
+    expect(split.push(`${body}\n`)).toEqual([]);
+    expect(split.push("\n")).toEqual([{ event: "message", data: "xx" }]);
+
+    // And the same for CRLF, where three of the four characters can be pending.
+    const crlf = sseFrames(8);
+    expect(crlf.push(`${body}\r\n\r`)).toEqual([]);
+    expect(crlf.push("\n")).toEqual([{ event: "message", data: "xx" }]);
+  });
+
+  test("a body genuinely over the bound is still refused, terminator or not", () => {
+    // One character past the limit, with nothing that could be a terminator.
+    expect(() => sseFrames(8).push("data: xxx")).toThrow(/8 characters/);
+    // And with a full terminator's worth of slack claimed, still refused.
+    expect(() => sseFrames(8).push("data: xxxxx\r\n\r")).toThrow(/8 characters/);
   });
 });

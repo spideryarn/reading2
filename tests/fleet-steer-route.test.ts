@@ -23,6 +23,8 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 import { classifyGate, fingerprintMaterial, type PaneOption } from "../tools/fleet/pane.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
+import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 import {
@@ -168,19 +170,41 @@ const OK: SteerResult = {
 };
 
 /** The route, with the delivery module replaced by a recorder. */
-function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<SteerDeps> = {}) {
+function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<SteerDeps> & { book?: QuarantineBook } = {}) {
   const calls: Call[] = [];
   const logs: string[] = [];
   const give = (): SteerResult => (typeof result === "function" ? result() : result);
+  /**
+   * ITS OWN BOOK, NEVER THE PROCESS-SHARED ONE.
+   *
+   * `realSteerDeps()` reaches for `sharedSendCoordinator()`, which is built over
+   * `sharedQuarantineBook()` — a module-level singleton, and a module-level
+   * singleton written to by every test in a file is the shape that makes a suite
+   * pass alone and fail in a batch. What this file needs is that a `partial`
+   * fixture here cannot leak a hold into another test's world; the tests that DO
+   * read the book take it back from the harness.
+   */
+  const { book: given, ...rest } = over;
+  const book = given ?? new QuarantineBook({ now: () => 1_700_000_000_000, serverInstanceId: "1a2b3c4d" });
   const routes = makeSteerRoutes({
-    sendMessage: (target, text, declaredStatus) => {
-      calls.push({ op: "message", target, text, declaredStatus });
-      return give();
-    },
-    answerQuestion: (target, seen, optionIndex, declaredStatus) => {
-      calls.push({ op: "answer", target, seen, optionIndex, declaredStatus });
-      return give();
-    },
+    /**
+     * **THE TRANSPORT IS INSIDE THE COORDINATOR NOW**, one level below the
+     * route, and the route has no other way to type at a pane. That is the
+     * whole repair: this route held `sendMessage` itself and never asked
+     * whether its target was held, so a message from the phone could land
+     * behind half a sentence the page was already warning about.
+     */
+    send: makeSendCoordinator({
+      book,
+      sendMessage: (target, text, declaredStatus) => {
+        calls.push({ op: "message", target, text, declaredStatus });
+        return give();
+      },
+      answerQuestion: (target, seen, optionIndex, declaredStatus) => {
+        calls.push({ op: "answer", target, seen, optionIndex, declaredStatus });
+        return give();
+      },
+    }),
     log: (line) => logs.push(line),
     // ON BY DEFAULT IN THE HARNESS, off by default in production — and the
     // asymmetry is deliberate rather than a convenience. These tests are about
@@ -189,9 +213,9 @@ function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<S
     // still reading as a test of answering. The gate itself has its own
     // describe block below, which drives both sides of it explicitly.
     answeringEnabled: () => true,
-    ...over,
+    ...rest,
   });
-  return { routes, calls, logs };
+  return { routes, calls, logs, book };
 }
 
 async function post(
@@ -328,8 +352,8 @@ describe("carrying the client's claims through", () => {
     }
     // The positive half, so this cannot pass by the file having been emptied:
     // it does still forward what the client claimed.
-    expect(src).toContain("deps.sendMessage(target,");
-    expect(src).toContain("deps.answerQuestion(target,");
+    expect(src).toContain("deps.send.message(target,");
+    expect(src).toContain("deps.send.answer(target,");
   });
 
   it("recomputes an option's consequence rather than trusting the client's", async () => {

@@ -96,6 +96,14 @@ listed here; the names under each are files in `docs/project/`.
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `overseer-queue.md` (the deferred work the Overseer may pick up in a lull, and what each waits on) ·
+  `fleet-dashboard-modes.md` (adding a tab to the dashboard: six places in three files, two of them
+  checked by nothing) ·
+  `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a
+  claim it has to earn) ·
+  `usage-history.md` (the last 24 hours of Claude's limits, which exist only because we write them
+  down, and the eight things that chart may not claim) ·
+  `readiness.md` (whether the commit dev is on is known to pass its checks — and the one command
+  that makes a run count, because a plain `npm test` records nothing) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
@@ -191,7 +199,13 @@ What we are not trading away is design: write code that will still be good to wo
 months. It loosens nothing in **Real data belongs to the reader** below.
 
 **Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
-doc, in a commit message.
+doc, in a commit message. **A question to Greg is not a question until he can understand it.** Greg,
+2026-09-09: *"Often I get asked a question and I don't understand what the question is asking, or the
+options, or how to choose between them."* So before the question itself: what the work is for, the
+background, and any jargon, in plain words; then each option explained fully and plainly — an ASCII
+diagram where shape matters, an example of what each would look like in use, what it costs and what
+it gives up; then what would make you pick one over the other. A bare "A, B or C?" with a one-line
+label each is the shape he cannot answer, and it will come back to you to be rewritten.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.

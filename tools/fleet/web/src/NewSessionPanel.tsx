@@ -52,19 +52,64 @@ export const POLL_MS = 3_000;
  * timeout has already given up on, so polling past that is a page quietly
  * fetching forever in a tab nobody is looking at. It stops and says so rather
  * than spinning: **a spinner with no end is a lie about there being progress.**
+ *
+ * **It is an ABSOLUTE deadline from the moment polling started, and it applies
+ * to the polls that never answered as much as to the ones that did.** Until
+ * 2026-09-08 the failure branch returned before reaching this line, so the one
+ * case the deadline is really for — the server gone, the tab left open — was
+ * the one case it did not cover.
+ *
+ * **And it is checked by the CLOCK, not by a poll finishing**, which is the
+ * second half of the same lesson and the one that survived the first fix. GPT
+ * Sol, 2026-09-08: a `poll()` whose promise never settles — the connection
+ * accepted, the proxy never answering — reaches no branch at all, so a deadline
+ * evaluated after `await` is a deadline that the exact failure it exists for
+ * can walk straight past. The interval now decides, and a poll in flight cannot
+ * hold the decision open. See `GaveUp` for what the two endings may claim.
  */
 export const POLL_GIVE_UP_MS = 4 * 60_000;
 
+/**
+ * Why the page stopped asking — and they are not the same sentence.
+ *
+ * `still-starting` means a usable status came back at some point and the launch
+ * had not settled: the server's own timeout has passed, so the honest next step
+ * is the session list. `no-answer` means nothing usable ever came back, and the
+ * only thing this page knows is its own ignorance — repeating the
+ * four-minutes-starting sentence there would be reporting an observation nobody
+ * made. Same discipline as `maybeStarted` above: the state a two-state design
+ * would have to lie about gets to say what it really is.
+ *
+ * **The discriminator is "did anything usable ever come back", not "did the LAST
+ * attempt fail"**, and that distinction is Sol's, 2026-09-08. Choosing the arm
+ * from the final poll alone meant that four minutes of healthy `busy: true`
+ * followed by one `ECONNRESET` printed *"for four minutes it could not reach the
+ * server at all"* — false about all but the last three seconds of it.
+ * `lastError` carries that final failure into the `still-starting` arm instead,
+ * where it is a footnote rather than the headline.
+ *
+ * **And this arm is `no-answer`, not `unreachable`, which was Sol's round 2.**
+ * `PollOutcome.ok` is false for an HTTP 500 and for a body that is not this API
+ * as well as for a dead socket (`new-session-client.ts`), so a panel claiming
+ * the server could not be REACHED and then quoting its 500 was contradicting
+ * itself inside one sentence. What this page can honestly report is whether it
+ * ever got an answer it could use. **A name that claims more than its evidence
+ * supports is the same bug as a sentence that does**, and it is easier to miss.
+ */
+type GaveUp =
+  | { kind: "still-starting"; lastError: string | null }
+  | { kind: "no-answer"; why: string };
+
 /** What a launch record means, in a sentence, and how loudly to say it. */
 function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | "idle"; head: string; body: string } {
-  if (record.state === "starting") {
+  if (record.progress.state === "starting") {
     return {
       tone: "work",
       head: "Starting…",
       body: "gjd-remote is bringing it up — six ssh round trips and a setup handshake, so tens of seconds. Nothing has succeeded yet.",
     };
   }
-  if (record.state === "started") {
+  if (record.progress.state === "started") {
     return {
       tone: "work",
       head: `Started${record.name === null ? "" : ` as ${record.name}`}.`,
@@ -82,6 +127,56 @@ function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | 
 }
 
 /**
+ * WHETHER THE OVERSEER WAS TOLD, AND WHAT "TOLD" HONESTLY MEANS HERE.
+ *
+ * Greg asked that starting a session from the web UI notify the Overseer. The
+ * dashboard does not type at a pane to do it — it hands one line to the shared
+ * steering queue, and the drain delivers it on a later refresh through the same
+ * coordinator every other producer uses. So the best case this can report is
+ * **queued**, and it says that rather than implying a delivery: what became of
+ * the keystrokes is the queue's story, and its own surface tells it.
+ *
+ * **Every arm is drawn, including the quiet ones.** Nobody holding the role is a
+ * real answer — it is what a box looks like after a reboot — and it is a
+ * different fact from not being able to tell who holds it. A card that showed
+ * only the happy case would leave a reader assuming the Overseer knows.
+ *
+ * `starting` and `failed` draw nothing: nothing has been attempted yet, and a
+ * launch that never started has nobody to tell.
+ */
+function NotifiedLine({ progress }: { progress: LaunchRecord["progress"] }): ReactNode {
+  if (progress.state !== "started") return null;
+  const n = progress.notification;
+
+  const said = ((): { text: string; tone: "soft" | "faint" | "unknown" } => {
+    switch (n.kind) {
+      case "pending":
+        return { text: "Telling the Overseer…", tone: "faint" };
+      case "queued":
+        return {
+          text: `Queued for ${n.to} — position ${n.position}. It goes out on a later refresh; this page cannot say whether it was read.`,
+          tone: "soft",
+        };
+      case "not-queued":
+        return { text: `Not queued for ${n.to} (${n.rule}): ${n.why}`, tone: "unknown" };
+      case "no-holder":
+        return { text: "Nobody holds the Overseer role, so nothing was queued.", tone: "unknown" };
+      case "contested":
+        return {
+          text: `${n.names.length} sessions claim the Overseer role (${n.names.join(", ")}), so nothing was queued.`,
+          tone: "unknown",
+        };
+      case "cannot-tell":
+        return { text: `Could not tell who to notify: ${n.why}`, tone: "unknown" };
+    }
+  })();
+
+  const colour =
+    said.tone === "unknown" ? "tw:text-unknown-ink" : said.tone === "faint" ? "tw:text-ink-faint" : "tw:text-ink-soft";
+  return <p className={cx("tw:mt-1 tw:text-[13px] tw:break-words", colour)}>{said.text}</p>;
+}
+
+/**
  * How to say "this went in through `-d`" without claiming it started.
  *
  * A `Record` over the closed `LaunchState` rather than a ternary, so that a
@@ -91,7 +186,7 @@ function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | 
  * covers both "refused" and "the answer was lost", neither of which may be
  * reported as a thing that happened.
  */
-const DASH_D_VERB: Record<LaunchRecord["state"], string> = {
+const DASH_D_VERB: Record<LaunchRecord["progress"]["state"], string> = {
   starting: "Using",
   started: "Started with",
   /* Not "attempted and did not start": `maybeStarted` says a Claude may well be
@@ -120,6 +215,8 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
       {record.note === null ? null : (
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-ink-soft">{record.note}</p>
       )}
+      <NotifiedLine progress={record.progress} />
+
       {/* **WHERE IT ACTUALLY STARTED, WHEN THAT IS NOT WHERE IT WAS ASKED TO.**
           The header above promises that "the record that comes back says which
           directory was used, which is the half that matters" — and until
@@ -154,7 +251,7 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
           each other about whether anything ran. GPT Sol's M4. */}
       {record.resolution === "dir" ? (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
-          {DASH_D_VERB[record.state]} <Mono>-d</Mono>: outside the repo's setup lock, and without
+          {DASH_D_VERB[record.progress.state]} <Mono>-d</Mono>: outside the repo's setup lock, and without
           reading its setup status.
         </p>
       ) : null}
@@ -175,7 +272,7 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
   const [refusal, setRefusal] = useState<string | null>(null);
   const [launches, setLaunches] = useState<LaunchRecord[]>([]);
   const [pollingSince, setPollingSince] = useState<number | null>(null);
-  const [gaveUp, setGaveUp] = useState(false);
+  const [gaveUp, setGaveUp] = useState<GaveUp | null>(null);
 
   /* The api in a ref so the polling effect depends on whether it is polling and
      not on the identity of its dependencies — a fresh `api` object per render
@@ -185,22 +282,95 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
 
   useEffect(() => {
     if (pollingSince === null) return;
+    /**
+     * Nothing more happens under this launch — the effect was torn down, or the
+     * launch settled, or we gave up. One flag rather than the three separate
+     * ones this had first: they were checked together everywhere, and Sol's
+     * round 2 was right that three names for one condition is three chances to
+     * check the wrong one.
+     */
     let stopped = false;
+    /**
+     * **ONE ASK AT A TIME.** A three-second interval over a request that takes
+     * longer than three seconds is not a poll, it is a queue — and against a
+     * route that has stopped answering it is an unbounded one. Sol's finding,
+     * 2026-09-08.
+     */
+    let inFlight = false;
+    /**
+     * Has a **usable status** ever come back — not merely a TCP connection.
+     *
+     * This was called `heard` and meant "the transport worked", which is not
+     * what `PollOutcome.ok` distinguishes: `new-session-client.ts` also answers
+     * `{ok: false}` for an HTTP 500 and for a body that is not this API. So four
+     * minutes of the dashboard answering 500 said *"could not reach the server
+     * at all (the server answered 500)"* — a sentence that contradicts itself in
+     * its own parenthesis. Sol's round 2, and the fix is the honest reading
+     * rather than a new field: what this page can truthfully report is whether
+     * it ever got an **answer it could use**, and the copy now says that.
+     */
+    let usable = false;
+    /** The most recent failure's own words, or null if the last ask answered. */
+    let lastError: string | null = null;
+
     const ask = async (): Promise<void> => {
-      const result = await apiRef.current.poll();
-      if (stopped || !result.ok) return;
-      setLaunches(result.feed.launches);
-      /* Stop when nothing is in flight. `busy` from the server rather than our
-         own idea of it: the slot is released by the launch, not by this page. */
-      if (!result.feed.busy && !result.feed.launches.some((l) => l.state === "starting")) {
-        setPollingSince(null);
-      } else if (Date.now() - pollingSince > POLL_GIVE_UP_MS) {
-        setPollingSince(null);
-        setGaveUp(true);
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        const result = await apiRef.current.poll();
+        if (stopped) return;
+        if (!result.ok) {
+          /* **The launches are left exactly as they are.** A failed ask is not
+             news about the launch, and the record carries the only id anybody
+             has for a Claude that may be running; clearing it here would lose
+             the thing the honest ending is about. Nor is anything retried: a
+             page that relaunches because discovery failed turns one press into
+             two agents on a box that has already met the OOM killer. */
+          lastError = result.why;
+          return;
+        }
+        usable = true;
+        lastError = null;
+        setLaunches(result.feed.launches);
+        /* Stop when nothing is in flight. `busy` from the server rather than
+           our own idea of it: the slot is released by the launch, not by this
+           page. **Settled beats expired** — a launch that finished on the last
+           ask is finished, not abandoned, and `stopped` here is what keeps the
+           tick below from overwriting that with a give-up. */
+        if (!result.feed.busy && !result.feed.launches.some((l) => l.progress.state === "starting")) {
+          stopped = true;
+          setPollingSince(null);
+        }
+      } finally {
+        inFlight = false;
       }
     };
+
+    const giveUp = (): void => {
+      if (stopped) return;
+      stopped = true;
+      setPollingSince(null);
+      setGaveUp(
+        usable
+          ? { kind: "still-starting", lastError }
+          : /* Nothing usable ever came back. `lastError` is null exactly when no
+               ask ever COMPLETED — the never-settling promise — and that
+               deserves its own words rather than an empty parenthesis. */
+            { kind: "no-answer", why: lastError ?? "no answer ever arrived" },
+      );
+    };
+
     void ask();
-    const timer = setInterval(() => void ask(), POLL_MS);
+    const timer = setInterval(() => {
+      /* The clock decides, before anything is asked. An ask still in flight is
+         abandoned with the rest of the effect: this page has stopped asking,
+         and the session list is the thing in a position to answer. */
+      if (Date.now() - pollingSince > POLL_GIVE_UP_MS) {
+        giveUp();
+        return;
+      }
+      void ask();
+    }, POLL_MS);
     return () => {
       stopped = true;
       clearInterval(timer);
@@ -265,12 +435,19 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     if (blocked.current) return;
     setBusy(true);
     setRefusal(null);
-    setGaveUp(false);
     const result = await apiRef.current.start(prompt);
     if (result.accepted) {
       setPrompt("");
       const launch = result.launch;
       if (launch !== null) setLaunches((old) => [launch, ...old.filter((l) => l.id !== launch.id)]);
+      /* **CLEARED ON ACCEPTANCE, NOT ON PRESSING THE BUTTON.** This used to sit
+         beside `setRefusal(null)` above, which threw away the previous launch's
+         warning before anybody knew whether a new one would replace it: press
+         Start again while the box is critical, get a 503, and the "stopped
+         asking about that launch" banner is gone while the launch it was about
+         is still on screen saying "Starting…". The warning belongs to a launch,
+         so only a launch may retire it. Sol's third finding, 2026-09-08. */
+      setGaveUp(null);
       setPollingSince(Date.now());
     } else {
       // Verbatim. The server knows about the cooldown, the box's health and the
@@ -349,13 +526,27 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
         </ul>
       )}
 
-      {gaveUp ? (
-        <p className="tw:mt-2 tw:text-[13px] tw:text-alarm-ink">
-          This page has stopped asking what became of that launch — it has been starting for four
-          minutes, which is longer than the server's own timeout. Whether a session exists is a
-          question for the list, not for this panel.
+      {/* **TWO ENDINGS, AND ONLY ONE OF THEM SAW ANYTHING.** See `GaveUp`. The
+          closing sentence is shared because it is the same advice either way —
+          the session list is the only thing in a position to answer. */}
+      {gaveUp === null ? null : (
+        <p className="tw:mt-2 tw:text-[13px] tw:break-words tw:text-alarm-ink">
+          {gaveUp.kind === "still-starting" ? (
+            <>
+              This page has stopped asking what became of that launch — it was still starting four
+              minutes on, which is longer than the server's own timeout.
+              {gaveUp.lastError === null ? null : ` The last attempt to ask failed: ${gaveUp.lastError}.`}
+            </>
+          ) : (
+            <>
+              This page has stopped asking what became of that launch — for four minutes it never got
+              a usable status answer ({gaveUp.why}), so it never found out whether one started.
+              Nothing was retried and nothing was started a second time.
+            </>
+          )}{" "}
+          Whether a session exists is a question for the list, not for this panel.
         </p>
-      ) : null}
+      )}
     </Card>
   );
 }

@@ -13,30 +13,38 @@
  * The plan claimed the store's three-write ordering already gave scheduled jobs
  * an identity, and GPT Sol's S5 showed it does not: those writes protect
  * *snapshot differencing*, and have no relationship with process creation. So a
- * run gets a **key** — `(job id, scheduled instant, authorised-definition hash)`
+ * run gets a **key** — `(job id, scheduled instant, authorised-behaviour hash)`
  * — recorded durably before anything is spawned, and every later fact about that
  * run is addressed by it.
  *
- * The **definition hash** is the third of those three for one reason: a job
- * definition edited after it was authorised must be *detectable*. An occurrence
- * whose hash does not match the definition in front of us is not the run we
- * authorised, so it cannot vouch for it, and an edited definition therefore
- * inherits no history.
+ * ## Two things a hash was doing, and only one of them was its job
  *
- * ## History separation is NOT authorisation, and reading it as one was a bug
+ * The behaviour hash used to do double duty: it identified which version of a
+ * job a run belonged to, AND `lastRunOf` used it to decide which runs counted
+ * toward the next one's cadence. Three findings, in order, are why it now does
+ * only the first.
  *
- * That property used to be the whole of the answer, and GPT Sol's C2 showed it
- * pointed the wrong way: a definition with no history reads as `never`, `due()`
- * calls `never` immediately due, and so **editing a job dispatched the edited
- * version at once** — the exact opposite of the runbook's *never act on a job
- * definition that changed after it was authorised*. "Being in the key is not
- * equivalent to comparing against an authorisation."
+ * **C2 — history separation is not authorisation.** A definition with no history
+ * reads as `never`, `due()` called `never` immediately due, and so **editing a
+ * job dispatched the edited version at once** — the exact opposite of the
+ * runbook's *never act on a job definition that changed after it was
+ * authorised*. "Being in the key is not equivalent to comparing against an
+ * authorisation." So the authorisation became a **separate, pinned fingerprint**
+ * carried beside the definition (`AuthorisedJob`), and a mismatch is its own
+ * state (`Authorisation`) that the scheduler refuses on, loudly, BEFORE it asks
+ * anything about the clock.
  *
- * So the authorisation is a **separate, pinned fingerprint** carried beside the
- * definition (`AuthorisedJob`), and a mismatch is its own state
- * (`Authorisation`) that the scheduler refuses on, loudly. The key keeps the
- * hash as well, because the two answer different questions: the key asks *which
- * run is this*, and the pin asks *may this run at all*.
+ * **S8-4 — and then the filter had nothing left to protect and one thing left to
+ * break.** With the gate in front of it, skipping old-hash occurrences bought no
+ * safety at all and cost this: a re-pin made every prior run vanish from the
+ * cadence calculation, so the job read as `never` and dispatched at once — over
+ * the top of a session the previous pin had launched minutes earlier, because an
+ * unsettled occurrence was hidden by the same filter. **Lineage is the job id
+ * now**, and the hash stays on the key for audit.
+ *
+ * **S8-1 — and the hash covers less than it used to.** Cadence, lease and
+ * first-run delay are `ScheduleConfig`'s, not `JobBehaviour`'s, so editing a
+ * schedule moves no pin. See `JobBehaviour` below and `schedules.ts`.
  *
  * ## The five states, and the one that matters
  *
@@ -72,6 +80,7 @@ import { createHash } from "node:crypto";
 
 import type { OverseerEvent } from "./diff.js";
 import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
+import type { ScheduleConfig } from "./schedules.js";
 
 /**
  * WHAT A JOB ACTUALLY IS, and it is in the fingerprint.
@@ -84,7 +93,7 @@ import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
  * **`rule` carries its whole configuration**, which is GPT Sol's SP-1: a
  * dispatcher that selected executable code by `definition.id` would leave the
  * authorised pin valid across a changed threshold or a changed action. The spec
- * is data, `definitionHash` hashes it, and a moved knob refuses the job.
+ * is data, `behaviourHash` hashes it, and a moved knob refuses the job.
  */
 export type JobWork =
   /** A Claude session, started by `SpawnJob`. What the standing jobs are. */
@@ -101,10 +110,10 @@ export type JobWork =
  * visible edit rather than something a future job falls through. The other half
  * is that the path supplies no `SpawnJob` at all — see `scheduler.ts`.
  */
-export type RuleJobDefinition = JobDefinition & { readonly work: Extract<JobWork, { kind: "rule" }> };
+export type RuleJobDefinition = JobDefinition & { readonly behaviour: { readonly work: Extract<JobWork, { kind: "rule" }> } };
 
 /** An authorised job whose work is a rule, by construction. */
-export type AuthorisedRuleJob = { readonly definition: RuleJobDefinition; readonly authorisedHash: DefinitionHash };
+export type AuthorisedRuleJob = { readonly definition: RuleJobDefinition; readonly authorisedHash: BehaviourHash };
 
 /**
  * The canonical form of a job's work.
@@ -127,7 +136,21 @@ function canonicalWork(work: JobWork): string {
 }
 
 /**
- * One scheduled job, as data.
+ * **WHAT A JOB DOES. This, and only this, is what gate 3 authorises.**
+ *
+ * The split from `ScheduleConfig` is GPT Sol's S8-1, and it is the reason
+ * `tools/overseer/schedules.ts` can be edited by hand without disarming
+ * anything. What lives here changes what the box does: the instruction it runs,
+ * the kind of work it is, and the documents that instruction leans on. What
+ * lives in the schedule changes only *when* — and when is not a thing an
+ * authorisation should be spent on.
+ *
+ * The old shape hashed cadence and lease as well, so editing a number refused
+ * the job until somebody re-pinned it; the plan's answer was a script that
+ * recomputed the pin from the WHOLE definition, which would have blessed a
+ * prompt edit riding beside a schedule edit. `scripts/overseer-pins.ts` forbids
+ * exactly that in its own header. Splitting is the better fix rather than merely
+ * the safer one: the fingerprint now identifies one thing instead of two.
  *
  * `what` is **the authorised instruction** — the prompt or command that will
  * actually be run — and it is in the hash for that reason: changing it changes
@@ -135,18 +158,9 @@ function canonicalWork(work: JobWork): string {
  * A job whose `what` was edited between authorisation and dispatch is a
  * different job, and the runbook's rule ("nothing dispatched that Greg did not
  * queue") has no meaning otherwise.
- *
- * `everyMs` is measured **from the end of the last run, not from a wall-clock
- * boundary** — the drift that buys is named as an accepted trade-off in
- * docs/project/overseer-direction.md § The scheduler, and it is what makes a job
- * due while the box was down simply run on the next tick.
  */
-export type JobDefinition = {
+export type JobBehaviour = {
   readonly id: string;
-  /** Interval from the last run's OUTCOME, not from its start. See `due`. */
-  readonly everyMs: number;
-  /** How long a run may be unsettled before it is `stuck`. The author's "if it takes longer than this, it is not coming back". */
-  readonly leaseMs: number;
   /** The authorised instruction. In the hash, because editing it is what the hash exists to detect. */
   readonly what: string;
   /**
@@ -176,6 +190,26 @@ export type JobDefinition = {
 };
 
 /**
+ * One scheduled job: what it does, and when.
+ *
+ * **Two fields rather than seven in a row, because the two halves have different
+ * owners.** `behaviour` is pinned by a person and refused when it moves;
+ * `schedule` is config a person edits freely. Flattening them would make that
+ * distinction a convention rather than a shape, and a convention is exactly what
+ * a hashing function forgets — GPT Sol's SC-4 one level up.
+ *
+ * `schedule.everyMs` is measured **from the end of the last run, not from a
+ * wall-clock boundary** — the drift that buys is named as an accepted trade-off
+ * in docs/project/overseer-direction.md § The scheduler, and it is what makes a
+ * job due while the box was down simply run on the next tick.
+ */
+export type JobDefinition = {
+  readonly behaviour: JobBehaviour;
+  /** WHEN it runs. Deliberately NOT hashed. `tools/overseer/schedules.ts` is where a person edits it. */
+  readonly schedule: ScheduleConfig;
+};
+
+/**
  * One document a job's instruction leans on, and the digest of its bytes at the
  * moment the definition was built.
  *
@@ -189,17 +223,17 @@ export type JobDocument = {
   readonly sha256: string;
 };
 
-/** A definition's fingerprint. Branded so a `jobId` cannot be passed where this belongs. */
-export type DefinitionHash = string & { readonly __brand: "overseer-definition-hash" };
+/** A BEHAVIOUR's fingerprint — never a schedule's. Branded so a `jobId` cannot be passed where this belongs. */
+export type BehaviourHash = string & { readonly __brand: "overseer-behaviour-hash" };
 
 /** An occurrence's address. Branded for the same reason, and readable on purpose: it is greppable in `events.jsonl`. */
 export type OccurrenceId = string & { readonly __brand: "overseer-occurrence-id" };
 
 /** How much of the sha256 is kept. Twelve hex characters is 48 bits — collision-proof at this scale, and short enough to read in a log line. */
-export const DEFINITION_HASH_LENGTH = 12;
+export const BEHAVIOUR_HASH_LENGTH = 12;
 
 /**
- * A stable fingerprint of the WHOLE definition.
+ * A stable fingerprint of a job's BEHAVIOUR — and of nothing else.
  *
  * Every field, named, in a fixed order, with lengths in front of the strings —
  * so `{id: "ab", what: "c"}` and `{id: "a", what: "bc"}` cannot hash the same,
@@ -207,33 +241,37 @@ export const DEFINITION_HASH_LENGTH = 12;
  * as the canonical form: its key order follows insertion order, so two objects
  * a reader would call identical can produce two hashes.
  *
- * Adding a field to `JobDefinition` without adding it to `DEFINITION_ENCODERS`
- * is the failure this is exposed to, and the mapped type there is what makes the
+ * **It takes a `JobBehaviour`, not a `JobDefinition`, and that is the S8-1 fix
+ * expressed as a type.** A schedule cannot leak back into the fingerprint by an
+ * absent-minded edit, because there is no schedule in scope here to leak.
+ *
+ * Adding a field to `JobBehaviour` without adding it to `BEHAVIOUR_ENCODERS` is
+ * the failure this is exposed to, and the mapped type there is what makes the
  * compiler say so.
  */
-export function definitionHash(definition: JobDefinition): DefinitionHash {
-  const canonical = JOB_DEFINITION_HASHED_FIELDS.map((field) => encodeDefinitionField(definition, field)).join("\n");
-  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, DEFINITION_HASH_LENGTH) as DefinitionHash;
+export function behaviourHash(behaviour: JobBehaviour): BehaviourHash {
+  const canonical = JOB_BEHAVIOUR_HASHED_FIELDS.map((field) => encodeBehaviourField(behaviour, field)).join("\n");
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, BEHAVIOUR_HASH_LENGTH) as BehaviourHash;
 }
 
 /**
  * HOW EACH FIELD IS ENCODED — one entry per field, and the compiler counts them.
  *
  * **A destructure would not.** This was `const { id, everyMs, … } = definition`,
- * and destructuring is not exhaustive in TypeScript: a seventh field on
- * `JobDefinition` compiles perfectly and never reaches the fingerprint that
- * authorises the job — GPT Sol's SC-4, and SP-1 by another route. A mapped type
- * over `keyof JobDefinition` cannot be satisfied by an object literal missing a
- * key, so **a new field is a compile error until somebody says how it is
- * hashed**.
+ * and destructuring is not exhaustive in TypeScript: a new field on the hashed
+ * type compiles perfectly and never reaches the fingerprint that authorises the
+ * job — GPT Sol's SC-4, and SP-1 by another route. A mapped type over
+ * `keyof JobBehaviour` cannot be satisfied by an object literal missing a key,
+ * so **a new field is a compile error until somebody says how it is hashed**.
  *
- * The declaration order is the encoding order and the bytes are unchanged from
- * the destructured version, deliberately: this refactor re-pinned nothing.
+ * **`everyMs` and `leaseMs` used to be here and are gone on purpose** (S8-1).
+ * They are `ScheduleConfig`'s now, they are not reachable from this function's
+ * argument, and `tests/overseer-jobs.test.ts` asserts that the hashed field set
+ * is exactly `keyof JobBehaviour` — so putting a clock knob back would take a
+ * type change and a red test rather than one line.
  */
-const DEFINITION_ENCODERS: { readonly [K in keyof JobDefinition]-?: (value: JobDefinition[K]) => string } = {
+const BEHAVIOUR_ENCODERS: { readonly [K in keyof JobBehaviour]-?: (value: JobBehaviour[K]) => string } = {
   id: (id) => `id:${id.length}:${id}`,
-  everyMs: (everyMs) => `everyMs:${everyMs}`,
-  leaseMs: (leaseMs) => `leaseMs:${leaseMs}`,
   what: (what) => `what:${what.length}:${what}`,
   // THE WORK, INCLUDING EVERY KNOB OF A RULE. GPT Sol's SP-1: without this a
   // rule's threshold or its chosen action could move while the pin that
@@ -254,15 +292,15 @@ const DEFINITION_ENCODERS: { readonly [K in keyof JobDefinition]-?: (value: JobD
  * The fields the fingerprint covers, in encoding order.
  *
  * Derived from the table rather than typed out, and exported so a test can hold
- * it against a `JobDefinition`'s own keys — which is what makes reverting to a
+ * it against a `JobBehaviour`'s own keys — which is what makes reverting to a
  * destructure a red test rather than a silent loss of coverage.
  */
-export const JOB_DEFINITION_HASHED_FIELDS = Object.keys(DEFINITION_ENCODERS) as readonly (keyof JobDefinition)[];
+export const JOB_BEHAVIOUR_HASHED_FIELDS = Object.keys(BEHAVIOUR_ENCODERS) as readonly (keyof JobBehaviour)[];
 
 /** One field, through its own encoder. The cast is the same known limitation `rules.ts` § encodeRuleField explains, and is sound for the same reason. */
-function encodeDefinitionField<K extends keyof JobDefinition>(definition: JobDefinition, field: K): string {
-  const encode = DEFINITION_ENCODERS[field] as (value: JobDefinition[K]) => string;
-  return encode(definition[field]);
+function encodeBehaviourField<K extends keyof JobBehaviour>(behaviour: JobBehaviour, field: K): string {
+  const encode = BEHAVIOUR_ENCODERS[field] as (value: JobBehaviour[K]) => string;
+  return encode(behaviour[field]);
 }
 
 /**
@@ -282,8 +320,8 @@ function encodeDefinitionField<K extends keyof JobDefinition>(definition: JobDef
  */
 export type AuthorisedJob = {
   readonly definition: JobDefinition;
-  /** What `definitionHash(definition)` must equal for this job to be dispatched at all. */
-  readonly authorisedHash: DefinitionHash;
+  /** What `behaviourHash(definition.behaviour)` must equal for this job to be dispatched at all. NOT a claim about the schedule. */
+  readonly authorisedHash: BehaviourHash;
 };
 
 /**
@@ -294,27 +332,27 @@ export type AuthorisedJob = {
  * now c3d4"*, and re-authorising means copying the second of those into the pin.
  */
 export type Authorisation =
-  | { readonly kind: "authorised"; readonly hash: DefinitionHash }
+  | { readonly kind: "authorised"; readonly hash: BehaviourHash }
   | {
       readonly kind: "unauthorised";
-      readonly authorised: DefinitionHash;
-      readonly found: DefinitionHash;
+      readonly authorised: BehaviourHash;
+      readonly found: BehaviourHash;
       readonly why: string;
     };
 
 export function authorisationOf(job: AuthorisedJob): Authorisation {
-  const found = definitionHash(job.definition);
+  const behaviour = job.definition.behaviour;
+  const found = behaviourHash(behaviour);
   if (found === job.authorisedHash) return { kind: "authorised", hash: found };
   return {
     kind: "unauthorised",
     authorised: job.authorisedHash,
     found,
     why:
-      `this definition was authorised as ${job.authorisedHash} and now fingerprints as ${found}` +
-      (job.definition.documents.length === 0
-        ? ""
-        : ` (its documents are ${job.definition.documents.map((document) => document.path).join(", ")})`) +
-      ", so it is not the job that was queued and it will not be dispatched until somebody re-pins it",
+      `this job's behaviour was authorised as ${job.authorisedHash} and now fingerprints as ${found}` +
+      (behaviour.documents.length === 0 ? "" : ` (its documents are ${behaviour.documents.map((document) => document.path).join(", ")})`) +
+      ", so it is not the job that was queued and it will not be dispatched until somebody re-pins it. " +
+      "A schedule edit cannot cause this: cadence, lease and first-run delay are not in the fingerprint",
   };
 }
 
@@ -341,14 +379,39 @@ export type OccurrenceHistory =
  * at one instant is one occurrence, which is the right answer.
  */
 export type OccurrenceKey = {
+  /**
+   * **THE LINEAGE, and it is the job id.**
+   *
+   * `lastRunOf` finds a job's previous run by this and by nothing else. It used
+   * to filter on the behaviour hash as well, and GPT Sol's S8-4 is what that
+   * cost: a re-pin made every prior occurrence vanish from the cadence
+   * calculation, `due()` read the result as `never`, and the job dispatched
+   * immediately — over the top of a session the old pin had launched minutes
+   * earlier.
+   *
+   * A synthetic lineage id was the obvious alternative and is a second copy of
+   * this fact. The job id already is the stable identity: it is what `prune`
+   * groups by, what the log is grepped by, and what a person calls the job.
+   *
+   * **What that gives up, named:** repurposing an id — same name, wholly new
+   * instruction — inherits the old job's cadence, so the new behaviour's first
+   * run can be up to one interval later than it would otherwise be. That is the
+   * safe direction, and the authorisation gate is what stops the new behaviour
+   * running at all before somebody pins it.
+   */
   readonly jobId: string;
   readonly scheduledAt: string;
-  readonly definitionHash: DefinitionHash;
+  /**
+   * The behaviour this run was authorised under, **for audit and for nothing
+   * else**. It is in the key so a reader can tell which version of a job a run
+   * belongs to; it is not consulted when deciding whether a job may run again.
+   */
+  readonly behaviourHash: BehaviourHash;
 };
 
 /** The key as one greppable string. `job@instant#hash`, in that order, so `grep '^job-id@'` works. */
 export function occurrenceId(key: OccurrenceKey): OccurrenceId {
-  return `${key.jobId}@${key.scheduledAt}#${key.definitionHash}` as OccurrenceId;
+  return `${key.jobId}@${key.scheduledAt}#${key.behaviourHash}` as OccurrenceId;
 }
 
 /**
@@ -360,6 +423,33 @@ export function occurrenceId(key: OccurrenceKey): OccurrenceId {
  * here at all: that is `unknown`.
  */
 export type JobOutcome = { readonly kind: "exited"; readonly code: number } | { readonly kind: "failed"; readonly why: string };
+
+/**
+ * What the runner says when it is asked to start a job.
+ *
+ * **It returns a result and does not throw**, and the two arms are different
+ * facts: `refused` means *this did not start and I know it* (a precondition
+ * failed, the binary is missing), which is a settled outcome. A throw is not in
+ * the contract, and when one happens anyway the scheduler records `unknown`
+ * rather than `refused` — because a function that broke its own contract is not
+ * evidence about whether a process exists.
+ *
+ * `done` settles when the work does. A promise that never settles is not an
+ * error here; it is the case the lease exists for.
+ *
+ * **It lives here rather than in `scheduler.ts` because BOTH starters answer in
+ * it** — the session dispatcher and the rule protocol — and the rule protocol is
+ * a pinned file that must not import the scheduler. A type in the module that
+ * already owns `JobOutcome` and `JobDefinition` is the shared leaf; the
+ * alternative was a second type meaning the same thing on the rule side, which
+ * is the twin-declaration failure this area keeps writing up.
+ */
+export type JobSpawn =
+  | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
+  | { readonly kind: "refused"; readonly why: string };
+
+/** How a session job is started. The rule protocol is the other starter, and it is not one of these — see `scheduler.ts` § `TickInput.spawn`. */
+export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
 
 /**
  * Why an `unknown` occurrence is unknown, and whether anybody wrote that down.
@@ -533,7 +623,31 @@ export type LastRun =
 export type Due =
   | { readonly kind: "due"; readonly sinceMs: number }
   | { readonly kind: "not-due"; readonly remainingMs: number }
-  | { readonly kind: "held"; readonly why: string };
+  | { readonly kind: "held"; readonly why: string }
+  /**
+   * **NEVER RUN, and not yet allowed to.** The job's whole history is still
+   * empty — `lastRunOf` says `never` and will go on saying it — and what defers
+   * it is the arming instant plus its own `initialDelayMs`.
+   *
+   * Its own arm rather than a `not-due`, because the sentence a reader needs is
+   * *"never run; first eligible at …"*, which a remaining-milliseconds count
+   * cannot say. See `arming.ts` for why the anchor is on disk.
+   */
+  | { readonly kind: "not-yet-eligible"; readonly firstEligibleAt: string; readonly remainingMs: number };
+
+/**
+ * **WHEN THIS SCHEDULER WAS ARMED — a scheduler-control fact, not an occurrence.**
+ *
+ * GPT Sol's S8-6. It is what `initialDelayMs` is measured from, and it is
+ * deliberately not a fabricated `finished` occurrence: the ledger's whole value
+ * is that a person can read it and believe it. `arming.ts` owns the durability;
+ * this type is the vocabulary, and it lives here because `due` is the only thing
+ * that consumes it.
+ *
+ * `unknown` fails closed: `due` holds every job on it rather than guessing an
+ * instant in either direction.
+ */
+export type Arming = { readonly kind: "armed"; readonly at: string } | { readonly kind: "unknown"; readonly why: string };
 
 /**
  * Has `everyMs` elapsed since the last run finished?
@@ -548,18 +662,35 @@ export type Due =
  * guard, and it is durable rather than in-memory. It cannot hold for ever
  * because a lease that has run out is `stuck` rather than `in-flight`, and
  * `lastRunOf` never reports a stuck occurrence as in flight.
+ *
+ * **It takes a `ScheduleConfig` rather than a whole definition**, which is the
+ * split saying something useful: whether a job is due is a question about the
+ * clock, and nothing about what the job does is in scope to influence it.
  */
-export function due(definition: JobDefinition, last: LastRun, nowMs: number): Due {
+export function due(schedule: ScheduleConfig, last: LastRun, nowMs: number, arming: Arming): Due {
   switch (last.kind) {
-    case "never":
-      return { kind: "due", sinceMs: 0 };
+    case "never": {
+      // NEVER RUN IS NOT AUTOMATICALLY DUE ANY MORE. Both standing jobs read
+      // `never` for ever until the first one lands, so arming used to mean two
+      // Claude sessions about thirty seconds later — as the first act of a
+      // mechanism nobody had watched work.
+      if (arming.kind === "unknown") {
+        return { kind: "held", why: `this job has never run and nothing can say when the scheduler was armed, so its first run cannot be dated: ${arming.why}` };
+      }
+      const firstEligibleMs = Date.parse(arming.at) + schedule.initialDelayMs;
+      if (Number.isNaN(firstEligibleMs)) {
+        return { kind: "held", why: `this job has never run and the recorded arming instant ${arming.at} is not readable, so its first run cannot be dated` };
+      }
+      if (nowMs >= firstEligibleMs) return { kind: "due", sinceMs: 0 };
+      return { kind: "not-yet-eligible", firstEligibleAt: new Date(firstEligibleMs).toISOString(), remainingMs: firstEligibleMs - nowMs };
+    }
     case "in-flight":
       return { kind: "held", why: `a run reserved at ${last.since} is still in flight (lease until ${last.leaseUntil})` };
     case "settled":
     case "unresolved": {
       const sinceMs = nowMs - Date.parse(last.at);
-      if (sinceMs >= definition.everyMs) return { kind: "due", sinceMs };
-      return { kind: "not-due", remainingMs: definition.everyMs - sinceMs };
+      if (sinceMs >= schedule.everyMs) return { kind: "due", sinceMs };
+      return { kind: "not-due", remainingMs: schedule.everyMs - sinceMs };
     }
     default: {
       const never: never = last;
@@ -579,21 +710,22 @@ export function due(definition: JobDefinition, last: LastRun, nowMs: number): Du
  * the S6 fix: the guard releases when the lease runs out, so the job's next
  * occurrence may be scheduled while the stuck one stays visible and unretried.
  */
-export function lastRunOf(index: OccurrenceIndex, definition: JobDefinition, nowMs: number): LastRun {
-  const hash = definitionHash(definition);
+export function lastRunOf(index: OccurrenceIndex, jobId: string, nowMs: number): LastRun {
   let newest: Occurrence | null = null;
   for (const occurrence of index.values()) {
-    if (occurrence.key.jobId !== definition.id) continue;
-    // AN EDITED DEFINITION IS A DIFFERENT JOB. Its old occurrences are still in
-    // the log and still visible; they just do not vouch for this one, so a job
-    // whose `what` was rewritten reads as never having run rather than as
-    // recently satisfied by a run of something else.
+    // **BY LINEAGE — THE JOB ID — AND NOT BY THE BEHAVIOUR HASH.** It used to
+    // skip any occurrence whose hash differed from the definition in front of
+    // it, on the reasoning that an edited definition should inherit no history.
+    // GPT Sol's S8-4 is what that actually bought: a re-pin made every prior run
+    // invisible, `due()` read the emptiness as `never`, and the job dispatched
+    // at once — including over the top of a session still in flight under the
+    // old pin, because an unsettled occurrence was hidden by the same filter.
     //
-    // **AND `never` HERE IS NOT A LICENCE TO RUN.** It used to be read as one,
-    // which is how an edit became an immediate unauthorised dispatch (C2). The
-    // scheduler asks `authorisationOf` BEFORE it asks this function anything,
-    // so an edited definition never reaches `due` at all.
-    if (occurrence.key.definitionHash !== hash) continue;
+    // The property the filter was protecting is now held by the authorisation
+    // gate, which `schedulerTick` asks BEFORE it asks this function anything: an
+    // edited behaviour does not reach the arithmetic at all (C2). The hash stays
+    // on the key for audit; it is not a lineage.
+    if (occurrence.key.jobId !== jobId) continue;
     if (newest === null || Date.parse(occurrence.key.scheduledAt) > Date.parse(newest.key.scheduledAt)) newest = occurrence;
   }
   if (newest === null) return { kind: "never" };
@@ -621,6 +753,51 @@ export function lastRunOf(index: OccurrenceIndex, definition: JobDefinition, now
 /** Every occurrence whose lease has run out — what the scheduler reports and what a reader of the checkpoint should see first. */
 export function stuckOccurrences(index: OccurrenceIndex, nowMs: number): readonly Occurrence[] {
   return [...index.values()].filter((occurrence) => leaseExpired(occurrence, nowMs));
+}
+
+/**
+ * **THE LAST TIME A CLAUDE SESSION WAS LAUNCHED ON THIS BOX, out of the durable
+ * ledger.**
+ *
+ * The input to the launch-spacing gate (GPT Sol's S8-5). Durable rather than
+ * in-memory for the reason the whole finding is about: a phase offset does not
+ * survive downtime, a restart, or a stuck occurrence rescheduling from its
+ * reservation, and an in-memory "last launch" would not survive the restart
+ * either. The ledger does.
+ *
+ * **`reservedAt`, not `startedAt` or `finishedAt`.** The reservation is the
+ * instant we committed to launching, it is written before anything is spawned,
+ * and every arm carries it. `finishedAt` would be wrong twice over: a run that
+ * never settles has none, and the outcome the ledger records for a session job is
+ * the short-lived `gjd-remote` launcher exiting, not the detached session ending
+ * (`dispatch.ts` § the launcher).
+ *
+ * **A `refused` occurrence does not count**, because nothing started — and
+ * `unknown` does, because something may have. Spacing is a rationing decision,
+ * so the uncertain case rations.
+ *
+ * **THE LIMITATION, NAMED: an occurrence does not record whether its job was a
+ * session**, so `sessionJobIds` has to come from the definitions this daemon
+ * currently holds. A session job REMOVED from the definitions between its launch
+ * and the next tick therefore stops rationing — its occurrence is still in the
+ * ledger and no longer recognised as a launch.
+ *
+ * That is accepted rather than overlooked. Closing it means putting the work
+ * kind on the reserved event and on every arm of `Occurrence`, which is a wire
+ * change and a checkpoint change to buy protection against a window that needs a
+ * code edit AND a deploy inside the separation interval. If a third session job
+ * ever arrives, or jobs become editable at runtime, revisit it — that is when
+ * the window stops needing a deploy to open.
+ */
+export function lastSessionLaunchOf(index: OccurrenceIndex, sessionJobIds: ReadonlySet<string>): { readonly kind: "none" } | { readonly kind: "at"; readonly at: string; readonly jobId: string } {
+  let newest: Occurrence | null = null;
+  for (const occurrence of index.values()) {
+    if (!sessionJobIds.has(occurrence.key.jobId)) continue;
+    if (occurrence.kind === "refused") continue;
+    if (newest === null || Date.parse(occurrence.reservedAt) > Date.parse(newest.reservedAt)) newest = occurrence;
+  }
+  if (newest === null) return { kind: "none" };
+  return { kind: "at", at: newest.reservedAt, jobId: newest.key.jobId };
 }
 
 /**
@@ -704,7 +881,7 @@ export function foldOccurrences(
         const key: OccurrenceKey = {
           jobId: event.jobId,
           scheduledAt: event.scheduledAt,
-          definitionHash: event.definitionHash,
+          behaviourHash: event.behaviourHash,
         };
         // THE DERIVATION, IN ONE PLACE. A reservation from another instance with
         // nothing after it is the shape Sol's table calls indistinguishable, so
@@ -811,6 +988,7 @@ export function foldOccurrences(
       case "session-wait-restarted":
       case "session-row-changed":
       case "session-pane-replaced":
+      case "session-execution-changed":
       // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
       // says nothing about that occurrence's lifecycle — the reservation, the
       // start and the finish around it are the job events above. Folding one

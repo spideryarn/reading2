@@ -219,30 +219,89 @@ export function Uptime({ row, now, className }: { row: FleetRow; now: number; cl
   );
 }
 
+/**
+ * **What each of the handles is, and why there are up to five of them.**
+ *
+ * This line is `bwj-quotes · $2705 · %2708` on every card on the page, and
+ * nothing anywhere said what a `$` or a `%` was. They are not interchangeable
+ * and the differences are load-bearing: `steer.ts` checks one of them before
+ * typing at a pane, and only one of the five survives an agent exiting and
+ * another starting in the same window. Every sentence below is quoted down from
+ * `types.ts` § `FleetRow`.
+ */
+export const HANDLE_TIPS = {
+  name: {
+    head: "The session's name",
+    what: "The word the session was launched under, and how a person refers to it — including when messaging it from another session.",
+    how: "Renameable and reusable, so it identifies a launch rather than a conversation: a name freed by a session that died can be worn by a different one an hour later.",
+  },
+  id: {
+    head: "tmux session handle",
+    what: "tmux's own address for the session — the `$` one. This is what the dashboard uses to ask about it or type at it.",
+    how: "Stable across renames, unlike the name beside it, which is why it and not the name is what a request carries. Meaningless without the tmux server it belongs to, so it is not a join key across boxes.",
+  },
+  pane: {
+    head: "tmux pane handle",
+    what: "The `%` one: the pane inside the session, which is the thing keystrokes are actually delivered to.",
+    how: "A different thing from the `$` beside it, and it can go missing — a row with no pane handle is one nothing can be typed at. It survives the pane being respawned, which is why it alone is not enough to prove what is in there now.",
+  },
+  pid: {
+    head: "The pane's process id",
+    what: "The pid of the shell in the pane, as tmux reported it.",
+    how: "Not an address — it is precisely the thing that changes when a pane is respawned under the same handle, which is the one way a pane's contents change identity without its `%` changing. It is compared before anything is typed; absent, that check is skipped rather than the row becoming unsteerable.",
+  },
+  conversation: {
+    head: "The conversation's id",
+    what: "The conversation uuid this tmux session was launched with, recorded in its environment. Not a tmux identifier, and not a reading of what is in the pane now.",
+    /* **This card used to say the opposite, and so does half of its source.**
+       `types.ts` § `claudeSessionId` calls it what distinguishes this agent
+       from its replacement; the paragraph immediately below it, added with
+       execution identity, says every identifier above `execution` survives a
+       claude exiting and another starting in the same pane, this one included,
+       because it is a launch claim written once. The second is the careful one.
+       GPT Sol caught the card repeating the first; the field comment itself
+       still needs reconciling by whoever owns it. */
+    how: "Written once and never rewritten, so it outlives the agent it names: it is still here after that claude has exited, and it does not tell you what is running in the pane now. Where it is missing at all, the dashboard refuses to steer rather than guessing.",
+  },
+} satisfies Record<string, Tip>;
+
 /** The tmux and Claude handles, as one wrapping line. Addresses, not names. */
 export function Handles({ row, full }: { row: FleetRow; full?: boolean }): ReactNode {
   const dot = <span className="tw:px-1 tw:text-ink-faint">·</span>;
   return (
     <p className="tw:mt-1">
-      <Mono>{row.name}</Mono>
+      {/* Each handle its own trigger rather than one card over the line: the
+          reader's question is about the `%` specifically, and a single card
+          would have to describe five things to answer one. */}
+      <Explain tip={HANDLE_TIPS.name} placement="bottom">
+        <Mono>{row.name}</Mono>
+      </Explain>
       {dot}
-      <Mono>{row.id}</Mono>
+      <Explain tip={HANDLE_TIPS.id} placement="bottom">
+        <Mono>{row.id}</Mono>
+      </Explain>
       {row.paneId !== null ? (
         <>
           {dot}
-          <Mono>{row.paneId}</Mono>
+          <Explain tip={HANDLE_TIPS.pane} placement="bottom">
+            <Mono>{row.paneId}</Mono>
+          </Explain>
         </>
       ) : null}
       {full === true && row.panePid !== null ? (
         <>
           {dot}
-          <Mono>pid {row.panePid}</Mono>
+          <Explain tip={HANDLE_TIPS.pid} placement="bottom">
+            <Mono>pid {row.panePid}</Mono>
+          </Explain>
         </>
       ) : null}
       {full === true && row.claudeSessionId !== null ? (
         <>
           {dot}
-          <Mono>{row.claudeSessionId}</Mono>
+          <Explain tip={HANDLE_TIPS.conversation} placement="bottom">
+            <Mono>{row.claudeSessionId}</Mono>
+          </Explain>
         </>
       ) : null}
     </p>

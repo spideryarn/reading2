@@ -7,6 +7,15 @@
  */
 
 import { REPO_UNKNOWN, isRepoValue } from "./gjd-remote-repo.js";
+/* THE ONE IMPORT OUT OF `scripts/`, and it is a leaf module with no imports of
+   its own — see the re-export below, and `tools/fleet/overseer-claim.ts` for
+   why the Overseer's vocabulary has to be reachable from three places at once. */
+import {
+  OVERSEER_ROLE,
+  type OverseerClaim,
+  type SessionRole,
+  overseerClaim as wireOverseerClaim,
+} from "../tools/fleet/overseer-claim.js";
 
 export type Session = {
   /**
@@ -48,6 +57,13 @@ export type Session = {
   /** Which repo this session is for, and how much of that we are allowed to
    *  believe. See `SessionMeta`. */
   meta: SessionMeta;
+  /**
+   * Whether this session is the Overseer — see `SessionRole`.
+   *
+   * Separate from `meta` because it is set and unset while the session runs,
+   * whereas everything in `meta` is pinned at launch and is all-or-nothing.
+   */
+  role: SessionRole;
 };
 
 /**
@@ -67,6 +83,67 @@ export const META = {
 
 /** The only metadata version this reader was written against. */
 export const METADATA_VERSION = "1";
+
+/**
+ * **WHICH ROLE A SESSION HOLDS** — deliberately NOT a fifth member of `META`.
+ *
+ * `META` means *the versioned quartet*: four variables pinned at launch, never
+ * changed afterwards, and all-or-nothing (`legacy` is all four absent). Callers
+ * and tests already read `META` as that set. This one is set and unset while the
+ * session runs, on sessions of any vintage, so putting it in there would blur
+ * the one thing that type is for — and it does not bump `METADATA_VERSION`,
+ * which would fail the whole listing for every session alive on the box. GPT
+ * Sol, reviewing the plan for
+ * docs/plans/260908j-mark-one-session-as-the-overseer.md.
+ *
+ * It is read on its own, the way `CLAUDE_SESSION_ID` and `GJD_PROVISIONAL` are.
+ */
+export const SESSION_ROLE_ENV = "GJD_ROLE";
+
+/**
+ * What the role field says when the session's environment could not be read at
+ * all — a session that died between `tmux ls` and the lookup, or a server that
+ * went away underneath us.
+ *
+ * `?` and not an empty field, because an empty field is a session that holds no
+ * role, and those two must never be the same bytes. It is safe as a sentinel
+ * because every other value in that field is base64, which has no `?` in its
+ * alphabet. Same shape as `SessionProc`'s own `?`.
+ */
+export const ROLE_UNREADABLE = "?";
+
+/**
+ * **THE OVERSEER'S CLAIM.** The vocabulary is not declared here.
+ *
+ * The Overseer is one permanent session supervising all the others
+ * (docs/project/overseer.md). Until 2026-09-08 the only thing that made a
+ * session the Overseer was its own belief that it was, which is a fact no other
+ * program could read and two sessions could hold at once. A string in a
+ * session's tmux environment is now the claim, and THIS file is what reads it
+ * off the box — but the words, and the rule for what a listing of them adds up
+ * to, live in [`tools/fleet/overseer-claim.ts`](../tools/fleet/overseer-claim.ts).
+ *
+ * **Imported rather than restated, and that is deliberate after GPT Sol's P0-2
+ * on the plan:** three consumers on two sides of a compilation boundary have to
+ * agree about what *one known holder plus one unreadable row* means, and the
+ * first draft of that rule was already written two different ways in one
+ * afternoon. That module has no imports at all, so it is equally reachable from
+ * here, from the dashboard's node side, and from the browser bundle.
+ */
+export {
+  OVERSEER_ROLE,
+  type OverseerClaim,
+  type SessionRole,
+} from "../tools/fleet/overseer-claim.js";
+
+/**
+ * What a role value is allowed to look like: a short lower-case token.
+ *
+ * Narrow on purpose. The value is interpolated into a shell command by
+ * `setRoleCommand` and printed into a table, and it arrives from a tmux
+ * environment variable, which anybody on the box can set to anything by hand.
+ */
+const ROLE_TOKEN = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**
  * What was started in the session, as the launcher knew it — not as the process
@@ -337,15 +414,24 @@ export const ROW_COUNT = "GJDROWS";
  * pinned into its tmux environment at launch, its name, and the latest title
  * Claude has given the conversation.
  *
- * SIX `show-environment` CALLS PER SESSION, and the four newest are the repo
- * metadata (`META`). They are four more round trips to the local tmux server
- * per row — a few milliseconds each, against the ~1.85s the whole script takes
- * on a box with a dozen sessions — and they are separate calls rather than one
- * dump of the session environment because a variable read by name cannot be
- * mis-attributed to the wrong row by a parse. `pane_current_path` would have
- * cost nothing at all and is not an option: a shell that has `cd`'d elsewhere,
- * or a session started with `--dir ~`, would be attributed to whatever repo is
- * under the cursor.
+ * SEVEN `show-environment` CALLS PER SESSION: the two oldest, the repo metadata
+ * (`META`'s four), and one DUMP of the session environment for the Overseer
+ * claim. They are round trips to the local tmux server per row — a few
+ * milliseconds each, against the ~1.85s the whole script takes on a box with a
+ * dozen sessions.
+ *
+ * The six are separate BY-NAME calls rather than one dump because a variable
+ * read by name cannot be mis-attributed to the wrong row by a parse. **The
+ * seventh is a dump precisely because it needs what by-name cannot give**:
+ * `show-environment -t X VAR` exits 1 both for a variable that is not set and
+ * for a session that is not there, so a by-name read of the claim cannot tell
+ * *this session holds no role* from *this session could not be asked*. The dump
+ * exits 0 iff the session is still there, which separates them. It is still one
+ * session's own environment, so nothing can be mis-attributed across rows.
+ *
+ * `pane_current_path` would have cost nothing at all and is not an option: a
+ * shell that has `cd`'d elsewhere, or a session started with `--dir ~`, would be
+ * attributed to whatever repo is under the cursor.
  *
  * A variable tmux has never been given prints nothing here, and that is what
  * every session started before this existed looks like — see `SessionMeta`,
@@ -509,6 +595,37 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
       mkind=$(tmux show-environment -t "$sid" ${META.kind} 2>/dev/null | cut -d= -f2-)
       mrepo=$(tmux show-environment -t "$sid" ${META.repo} 2>/dev/null | cut -d= -f2-)
       mdir=$(tmux show-environment -t "$sid" ${META.dir} 2>/dev/null | cut -d= -f2-)
+      # THE ROLE IS THE ONE FIELD THAT DISTINGUISHES *ABSENT* FROM *UNASKABLE*,
+      # and it takes two tmux calls to do it. GPT Sol's P0-1, twice.
+      #
+      # \`show-environment -t X VAR\` exits 1 both when the variable is not set and
+      # when the session has gone, so its status alone cannot tell "this session
+      # holds no claim" from "this session could not be asked" — and the first is
+      # a fact while the second is an absence. So a failed read asks
+      # \`has-session\`, AFTERWARDS rather than before: a session that died between
+      # the two makes has-session fail too, which is the answer we want. That is
+      # a second round trip for every session that holds no role, which is nearly
+      # all of them — a few milliseconds against the ~1.85s the script takes.
+      #
+      # THE OUTPUT SHAPE IS VALIDATED, not just the status. A value containing a
+      # newline prints as several lines that look exactly like several variables
+      # — verified on a disposable socket — so anything but exactly one line
+      # beginning \`VAR=\` is a role we could not read. An earlier version read the
+      # whole session environment and grepped it, which was worse twice over: it
+      # accepted \`overseer\\njunk\` as a claim, and another variable whose value
+      # contained a \`GJD_ROLE=\` line could answer for this one.
+      if renv=$(tmux show-environment -t "$sid" ${SESSION_ROLE_ENV} 2>/dev/null); then
+        rval=\${renv#${SESSION_ROLE_ENV}=}
+        if [ "$(printf '%s' "$renv" | grep -c '')" -eq 1 ] && [ "$rval" != "$renv" ]; then
+          mrole=$(printf '%s' "$rval" | base64 -w0)
+        else
+          mrole='${ROLE_UNREADABLE}'
+        fi
+      elif tmux has-session -t "$sid" 2>/dev/null; then
+        mrole=''
+      else
+        mrole='${ROLE_UNREADABLE}'
+      fi
       mine=$(printf '%s\\n' "$panes" | awk -v s="$sid" '$1==s { print $2 }')
       if [ -z "$snap" ] || [ -z "$mine" ]; then
         proc='?'
@@ -674,14 +791,53 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
           }')
         case "$proc" in claude|none|busy|wait:[1-9]*) ;; *) proc='?' ;; esac
       fi
+      # TWO KINDS OF TITLE RECORD, AND READING ONLY ONE OF THEM HID MOST OF THEM.
+      # Claude Code writes an aiTitle record when it generates a title itself,
+      # and a customTitle record when a person or a launcher chose one. Until
+      # 2026-09-09 this read aiTitle alone, so every session launched by
+      # gjd-remote with a name -- which is most of the fleet -- displayed as
+      # untitled for its whole life. Measured on the box that morning: of 8 live
+      # Claude sessions, 3 had an aiTitle and 8 had one or the other. Nothing in
+      # this repo writes either record; the harness does.
+      #
+      # A CHOSEN TITLE WINS OUTRIGHT, AND "MOST RECENT" WOULD BE WRONG. The
+      # harness emits the two AS A PAIR, customTitle first and aiTitle
+      # immediately after, and it goes on doing so every time it re-titles -- so
+      # the last record of either kind is always the generated one, and a rule
+      # that took it would discard the chosen name every time. Census over every
+      # transcript under ~/.claude/projects on 2026-09-09: 70 files carry a
+      # customTitle, 3 of those also carry an aiTitle, and in all 3 the last
+      # title record is the aiTitle. One of the 3 is the Overseer's own session,
+      # where Greg had set "Overseer" and the page kept showing "Overseer and
+      # fleet improvement roadmap".
+      #
+      # ONE READ OF THE FILE, because this grep is the dominant cost of a whole
+      # collection -- gjd-remote ls takes 10-12s almost entirely here, over
+      # multi-MB transcripts. The matches are then filtered twice, which is free
+      # because there are a few dozen of them.
+      #
+      # WHAT THIS DOES NOT FIX, so nobody re-reports it as a bug: renaming a
+      # TMUX SESSION writes nothing to the transcript. The tmux name is a
+      # separate fact, carried on Session.name, and the page decides how to
+      # show it.
+      #
+      # cut -f4 reads the value under either key: splitting on the quote gives
+      # ["", key, ":", value], whichever key it was.
+      #
+      # NO BACKTICKS IN THIS COMMENT. The whole script is a TypeScript template
+      # literal, so one would end it and the file would not parse.
       title=""
       if [ -n "$id" ]; then
         f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
-        [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
+        if [ -n "$f" ]; then
+          titles=$(grep -oE '"(aiTitle|customTitle)":"[^"]*"' "$f" 2>/dev/null)
+          title=$(printf '%s\n' "$titles" | grep '"customTitle"' | tail -1 | cut -d'"' -f4)
+          [ -z "$title" ] && title=$(printf '%s\n' "$titles" | tail -1 | cut -d'"' -f4)
+        fi
       fi
-      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
+      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
         "$id" "$proc" "$(printf '%s' "$name" | base64 -w0)" "$(printf '%s' "$title" | base64 -w0)" \\
-        "$mver" "$mkind" "$mrepo" "$(printf '%s' "$mdir" | base64 -w0)"
+        "$mver" "$mkind" "$mrepo" "$(printf '%s' "$mdir" | base64 -w0)" "$mrole"
     done
     echo ${SESSION_SENTINEL}`;
 }
@@ -809,15 +965,16 @@ const NOT_A_RECORD: ParsedSessionLine = { ok: false, why: null };
  */
 export function parseSessionLine(line: string): ParsedSessionLine {
   const parts = line.split("|");
-  // Exactly thirteen: id, created, attached, windows, provisional, claude id,
-  // wait remaining, name, title, and the four metadata fields. Not "at least
-  // thirteen" — a fourteenth field means the record is not the one this function
-  // was written against, and guessing which is which is how the last two bugs
-  // happened. No free-text field can contribute a separator: the name, the title
-  // and the directory all arrive base64-encoded.
-  if (parts.length !== 13) return NOT_A_RECORD;
-  const [sid, created, attached, windows, prov, claudeId, procField, nameB64, titleB64, mv, mk, mr, mdB64] =
+  // Exactly fourteen: id, created, attached, windows, provisional, claude id,
+  // wait remaining, name, title, the four metadata fields, and the role. Not "at
+  // least fourteen" — a fifteenth field means the record is not the one this
+  // function was written against, and guessing which is which is how the last
+  // two bugs happened. No free-text field can contribute a separator: the name,
+  // the title, the directory and the role all arrive base64-encoded.
+  if (parts.length !== 14) return NOT_A_RECORD;
+  const [sid, created, attached, windows, prov, claudeId, procField, nameB64, titleB64, mv, mk, mr, mdB64, roleB64] =
     parts as [
+      string,
       string,
       string,
       string,
@@ -884,6 +1041,25 @@ export function parseSessionLine(line: string): ParsedSessionLine {
   const meta = parseMeta({ version: mv, kind: mk, repo: mr, dirB64: mdB64 }, name);
   if (!meta.ok) return meta;
 
+  // THREE OUTCOMES FOR THE ROLE FIELD, and the middle one is the whole reason
+  // the script dumps the environment rather than asking by name:
+  //
+  //  - the sentinel — the session's environment could not be read at all, so we
+  //    do not know whether it holds a claim;
+  //  - undecodable bytes — a broken line, the way an undecodable name is: the
+  //    script always base64s this field, so anything else did not come from the
+  //    script;
+  //  - anything else — a value, which `parseRole` judges without ever failing
+  //    the listing over a word it does not know.
+  let role: SessionRole;
+  if (roleB64 === ROLE_UNREADABLE) {
+    role = { kind: "cannot-tell", why: "this session's environment could not be read, so its role is unknown" };
+  } else {
+    const roleValue = decode(roleB64);
+    if (roleValue === null) return NOT_A_RECORD;
+    role = parseRole(roleValue);
+  }
+
   return {
     ok: true,
     session: {
@@ -899,7 +1075,35 @@ export function parseSessionLine(line: string): ParsedSessionLine {
       claudeId: claudeId === "" ? null : claudeId,
       proc,
       meta: meta.meta,
+      role,
     },
+  };
+}
+
+/**
+ * One role value into a `SessionRole`. **Never fails the listing.**
+ *
+ * That is the difference between this and `parseMeta` next door, and it is
+ * deliberate. A metadata version this reader does not know means the launcher
+ * and the reader disagree about the record's shape, so nothing in it can be
+ * trusted. A role it does not know means somebody claimed a role — the record is
+ * fine, one word in it is new. Refusing the listing over that would take down
+ * `ls`, `resume` and `kill` for the whole box, and would do it to whoever is
+ * running the older copy of `gjd-remote`, who is exactly the person least able
+ * to work out why.
+ *
+ * The three non-`none` arms all mean *this session is not the Overseer* unless
+ * the value is `OVERSEER_ROLE` exactly, so nothing here can mint a claim.
+ */
+export function parseRole(value: string): SessionRole {
+  if (value === "") return { kind: "none" };
+  if (value === OVERSEER_ROLE) return { kind: "overseer" };
+  if (ROLE_TOKEN.test(value)) return { kind: "other", name: value };
+  return {
+    kind: "cannot-tell",
+    // The value is not quoted back: it is somebody's environment variable and
+    // this string is printed into a terminal. Its length is the actionable part.
+    why: `${SESSION_ROLE_ENV} is set to something this reader cannot make sense of (${value.length} characters)`,
   };
 }
 
@@ -962,6 +1166,153 @@ function parseMeta(
 export function sessionRepo(s: Session): { text: string; known: boolean } {
   if (s.meta.version === "legacy" || s.meta.repo === REPO_UNKNOWN) return { text: "(unknown)", known: false };
   return { text: s.meta.repo, known: true };
+}
+
+/* ------------------------------------------------------------------ *
+ * The Overseer's claim.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Who holds the Overseer claim, across a whole listing.
+ *
+ * **Defined once, in [`tools/fleet/overseer-claim.ts`](../tools/fleet/overseer-claim.ts)**,
+ * so the terminal and the dashboard cannot disagree about what one holder plus
+ * one unreadable row means. This is the thin adaptor from `Session` to the rows
+ * that module works on.
+ */
+export function overseerClaim(list: readonly Session[]): OverseerClaim {
+  return wireOverseerClaim(list.map((s) => ({ id: s.id, name: s.name, role: s.role })));
+}
+
+/**
+ * What `claim-overseer` and `release-overseer` should do, decided before
+ * anything is written.
+ *
+ * A separate function from the command that carries it out so the decision can
+ * be tested against a listing, and so that the refusal — the whole point of the
+ * verb — is not buried in a CLI.
+ */
+export type RoleChange =
+  | { kind: "claim"; id: string; name: string }
+  | { kind: "release"; id: string; name: string }
+  | { kind: "already-yours" }
+  | { kind: "refused"; why: string };
+
+/**
+ * **THE CONTRACT IS EVENTUAL DETECTION, NOT MUTUAL EXCLUSION**, and the
+ * difference is worth being exact about (GPT Sol's P1-1).
+ *
+ * The decision is made against a listing read a moment ago and carried out by a
+ * second tmux call, so this sequence is reachable and this function does not
+ * prevent it: A and B both read no holder; A sets its role; A re-reads and is
+ * satisfied; B sets its role; the box is now contested. The re-read after a
+ * write is not a lock — it narrows the window and catches the ordinary case, and
+ * what actually holds the line is that **every reader reports two holders as a
+ * fault rather than picking one**, so a double claim is visible on the next quiet
+ * read rather than silently deciding which session the scheduler prods.
+ *
+ * That is accepted rather than fixed. A real mutex means a lock file with an
+ * owner pid and a liveness check — the machinery this whole design exists to
+ * avoid — for a verb a person runs about once a week.
+ */
+export function decideClaim(list: readonly Session[], target: string): RoleChange {
+  const found = resolveSession(list, target);
+  if (!found.ok) return { kind: "refused", why: found.why };
+
+  const claim = overseerClaim(list);
+  switch (claim.kind) {
+    case "one":
+      return claim.id === found.session.id
+        ? { kind: "already-yours" }
+        : {
+            kind: "refused",
+            why:
+              `${printableName(claim.name)} already holds the Overseer claim.` +
+              `\n  There is no --force. Release it there first: gjd-remote release-overseer ${printableName(claim.name)}` +
+              `\n  (or kill that session — the claim dies with it).`,
+          };
+    case "contested":
+      return {
+        kind: "refused",
+        why:
+          `${claim.names.length} sessions already claim to be the Overseer: ${claim.names.join(", ")}` +
+          `\n  Release all but one before claiming.`,
+      };
+    case "cannot-tell":
+      // Deliberately not "claim anyway". The unreadable role might be on the
+      // target itself, and overwriting a value nobody has looked at is how a
+      // claim silently replaces something it did not understand.
+      return { kind: "refused", why: `${claim.why}\n  Look at those sessions before claiming.` };
+    case "none":
+      return { kind: "claim", id: found.session.id, name: found.session.name };
+    default: {
+      const never: never = claim;
+      return never;
+    }
+  }
+}
+
+/**
+ * Releasing a session that does not hold the claim is a refusal, never a silent
+ * success — it is otherwise indistinguishable from having released it.
+ *
+ * **It does NOT refuse a contested box, and the postcondition is about the
+ * TARGET.** If two sessions both claim the role, releasing one is the repair,
+ * and demanding that the box end up with zero holders would refuse the very
+ * operation that fixes it — or, worse, call a good release a failure because
+ * the other claimant is still there. GPT Sol's P1-2. So `decideClaim` asks about
+ * the whole box, because a claim is about being the only one, and this one asks
+ * only about the session in front of it.
+ */
+export function decideRelease(list: readonly Session[], target: string): RoleChange {
+  const found = resolveSession(list, target);
+  if (!found.ok) return { kind: "refused", why: found.why };
+  if (found.session.role.kind !== "overseer") {
+    return {
+      kind: "refused",
+      why: `${printableName(found.session.name)} does not hold the Overseer claim, so there was nothing to release.`,
+    };
+  }
+  return { kind: "release", id: found.session.id, name: found.session.name };
+}
+
+/**
+ * Did a release actually take? **Asked of the target, and `cannot-tell` is not a
+ * yes.**
+ *
+ * The first version asked `role.kind !== "overseer"`, which a target whose role
+ * could not be read satisfies — so the command printed a green success without
+ * knowing whether anything had happened. GPT Sol, second review. There are
+ * exactly two ways for a release to have worked:
+ *
+ *  - the session is no longer in the listing, because dying releases the claim;
+ *  - it is there and its role is now, positively, `none`.
+ *
+ * A role we could not read is neither, and `other` is not either — a release
+ * that turned the role into some other word did not do what was asked.
+ */
+export function releaseSucceeded(list: readonly Session[], id: string): boolean {
+  const target = list.find((s) => s.id === id);
+  return target === undefined || target.role.kind === "none";
+}
+
+/**
+ * The one tmux command that writes or removes a claim.
+ *
+ * THE ID IS QUOTED because tmux's own handles look like shell positional
+ * parameters: an unquoted `$2514` expands to the empty string, and the command
+ * then addresses whatever session tmux considers current — the same trap
+ * `gjd-remote`'s kill path has a comment about.
+ *
+ * Throws rather than returning a refusal on a bad id: every caller gets its id
+ * from a parsed listing, so a value that is not tmux's shape is a programming
+ * error and not a thing a person did.
+ */
+export function setRoleCommand(sessionId: string, role: string | null): string {
+  if (!TMUX_ID.test(sessionId)) throw new Error(`not a tmux session id: ${sessionId}`);
+  if (role === null) return `tmux set-environment -u -t '${sessionId}' ${SESSION_ROLE_ENV}`;
+  if (!ROLE_TOKEN.test(role)) throw new Error(`not a role token: ${role}`);
+  return `tmux set-environment -t '${sessionId}' ${SESSION_ROLE_ENV} '${role}'`;
 }
 
 /**

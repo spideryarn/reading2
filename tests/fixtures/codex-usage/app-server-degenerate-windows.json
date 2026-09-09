@@ -1,0 +1,108 @@
+{
+  "_comment": [
+    "SYNTHETIC, unlike its two siblings in this directory — hand-built to hold the arms the live",
+    "account does not currently produce. Every field shape here is legal per the app-server's own",
+    "JSON Schema (codex app-server generate-json-schema), which is where each was taken from.",
+    "",
+    "What each bucket is for:",
+    "  no-duration     `windowDurationMins: null` — schema-legal. The window cannot be named, so it",
+    "                  must come back as a named unknown and NEVER be guessed from its position.",
+    "  no-reset        `resetsAt: null` — schema-legal. A percentage with no reset instant is a",
+    "                  number nothing can validate; it must not be plotted or reported as a value.",
+    "  reversed        primary is the five-hour window and secondary the weekly, as the live",
+    "                  `codex_bengalfox` bucket really is. Mapping primary -> five_hour would read",
+    "                  the weekly window as five-hourly on the bucket that bills our work.",
+    "  limited         `rateLimitReachedType` set and 100% used — the state the Overseer must act on.",
+    "  unknown-window  a duration matching no name this build knows (42 minutes). Named, not dropped,",
+    "                  and not plotted from its unvalidated percentage."
+  ],
+  "id": 2,
+  "result": {
+    "accountId": null,
+    "rateLimitResetCredits": null,
+    "rateLimitUpsell": null,
+    "rateLimits": {
+      "credits": null,
+      "individualLimit": null,
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "pro",
+      "primary": {
+        "resetsAt": null,
+        "usedPercent": 61,
+        "windowDurationMins": null
+      },
+      "rateLimitReachedType": null,
+      "secondary": null,
+      "spendControlReached": null
+    },
+    "rateLimitsByLimitId": {
+      "no-duration": {
+        "limitId": "no-duration",
+        "limitName": null,
+        "planType": "pro",
+        "primary": {
+          "resetsAt": 1789435399,
+          "usedPercent": 61,
+          "windowDurationMins": null
+        },
+        "secondary": null
+      },
+      "no-reset": {
+        "limitId": "no-reset",
+        "limitName": null,
+        "planType": "pro",
+        "primary": {
+          "resetsAt": null,
+          "usedPercent": 61,
+          "windowDurationMins": 10080
+        },
+        "secondary": null
+      },
+      "reversed": {
+        "limitId": "reversed",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "planType": "pro",
+        "primary": {
+          "resetsAt": 1788958779,
+          "usedPercent": 3,
+          "windowDurationMins": 300
+        },
+        "secondary": {
+          "resetsAt": 1789545579,
+          "usedPercent": 88,
+          "windowDurationMins": 10080
+        }
+      },
+      "limited": {
+        "credits": {
+          "balance": "0",
+          "hasCredits": false,
+          "unlimited": false
+        },
+        "limitId": "limited",
+        "limitName": null,
+        "planType": "pro",
+        "primary": {
+          "resetsAt": 1789435399,
+          "usedPercent": 100,
+          "windowDurationMins": 10080
+        },
+        "rateLimitReachedType": "rate_limit_reached",
+        "secondary": null,
+        "spendControlReached": false
+      },
+      "unknown-window": {
+        "limitId": "unknown-window",
+        "limitName": null,
+        "planType": "unknown",
+        "primary": {
+          "resetsAt": 1789435399,
+          "usedPercent": 7,
+          "windowDurationMins": 42
+        },
+        "secondary": null
+      }
+    }
+  }
+}

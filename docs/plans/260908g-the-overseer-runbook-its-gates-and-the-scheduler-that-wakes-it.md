@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **3a done, 2026-09-08 evening; Sol's code review answered the same night.** The protocol and rule 2 are built, fired against the live specimen, and green. 3b–3d not started. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted, then reviewed the code and raised four more — four fixed, three deferred onto 3d. The acting rule is still last, now behind **five** named preconditions. |
+| **3** — the three deterministic rules | **3a and 3b done, 2026-09-08 night, both Sol-reviewed.** Two of the three rules run: rule 2 (wedged work) and rule 1 (launch-mode drift), both observe-only, both fired against real specimens, 305 tests green. The protocol has its own pinned file. **3c and 3d not started** — 3c is the review surface, and 3d, the only rule that would *act*, is behind **five** named preconditions and a decision of Greg's. Fable arbitrated how much each rule may act; Sol blocked the plan with four P0s and the code with four more. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -595,7 +595,11 @@ gates cannot happen without Greg anyway.
   append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
   (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
   and never killing. See § What 3a landed below.
-- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+- **3b — the protocol's own file, then rule 1. DONE, 2026-09-08.** Two commits. The first moves the
+  rule protocol out of `scheduler.ts` into `rule-protocol.ts` and pins that instead, because pinning
+  the whole scheduler made every rule's authorisation hostage to a log sentence. The second is rule
+  1: small, observe-only, reading the raw payload rather than widening `ObservedRow`. See § What 3b
+  part 1 landed and § What 3b part 2 landed.
 - **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
   fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
   nice-to-have.**
@@ -914,6 +918,66 @@ even the one case. And Greg's instruction — leave it standing as a test case �
 events rather than followed, so **a future demonstration needs a new specimen**, which is a thing to
 make deliberately rather than wait for.
 
+#### Stage 3b, and the two things it settled against this plan
+
+Landed 2026-09-08 night: `tools/overseer/rule-protocol.ts` holds everything deciding *whether and how
+a rule acts*, `RULE_SOURCES` pins that instead of `scheduler.ts`, and rule 1 fired for real against a
+deliberately-made specimen. 7 files / 305 tests, typecheck 0, verified after the merge.
+
+**The pin test asserts both directions and checks each is non-vacuous first**, which is the detail
+that makes it worth anything: a test proving only that the protocol *is* covered would also pass if
+`RULE_SOURCES` named the whole repository. Confirmed live — rewording `describeReport` and editing
+`sweep` leave the pin current; weakening the disposition switch takes it stale. That is exactly the
+pair Stage 3b existed to produce.
+
+**This plan was wrong about the second HTTP request, and the argument that settles it is not the one
+I would have used.** I wrote that the rules should read the daemon's held payload because *"no second
+HTTP client"*; the implementer did a `GET` instead and is right. The constraint that section actually
+cares about — do not widen `ObservedRow`, do not open `observation.ts` — is untouched, and **a second
+*mechanism* for looking at the fleet is worse than a second *request* to a route that serves a cached
+string.** Sol then demolished the implementer's own best argument for it and agreed with the verdict
+anyway: a held payload's `servedAt` is **frozen**, so it would look permanently fresh, and the
+staleness threshold only means anything because a `GET` re-serves it.
+
+**And the fingerprint covers less than 3a implied**, self-reported rather than found: `rule-protocol.ts`
+does not itself `fsync` — unpinned `store.ts` does, so deleting `fsyncSync` leaves every pin current —
+and `scheduler.ts` can still change *whether and how often* a rule runs even though it no longer
+decides *what* a rule does. `rule-jobs.ts` now states that boundary under *What the fingerprint does
+NOT cover* rather than implying a stronger one. **The pin is a guard on the decision, not on the
+whole causal chain**, and a plan that let it read as the latter would be worse than one admitting it.
+
+#### Counting four arms buys nothing if the decision has two
+
+Sol's review of 3b found the same failure twice, one level in from where the implementer was looking,
+and it is the sharpest instance of the day's theme because the *mutations were already there*.
+
+**F1.** Rule 1 preserved all four `PaneAutoMode` arms in its counts — and then returned `nothing` when
+a session was unreadable, which settles as `nothing-to-do`. So the four counts survived in prose while
+**the discriminant every consumer branches on collapsed `cannot-tell` into the healthy answer.** Nine
+mutations had been written against this code and all nine lived inside the counting rather than the
+deciding. Now three-valued.
+
+**F2.** The observer trusted rows out of a payload whose own collection had failed — **which is
+exactly the payload my own outage produced an hour earlier** — and the fixture omitted the `error`
+field entirely, so no test over it could ever have caught the case. The dashboard serves its last-good
+rows after a failed collection, so those rows are real, plausible, and describe a box that may have
+moved on.
+
+Both changed what the rule *decides*, not what it reports. **A mutation suite can be thorough about
+the wrong half**, and "seventeen mutations, all caught" is compatible with none of them touching the
+branch that matters.
+
+#### The guard against damaging the box could have damaged the box
+
+The specimen-maker was written *because* a hand-made specimen had just blinded the fleet. Its `stop`
+verb passed a bare `-t <name>` to tmux — **which resolves by prefix, not exact match** — so on a box
+carrying twenty-odd sessions it could have killed a stranger whose name merely started the same way.
+Fixed with tmux's `=` exact-match prefix.
+
+Worth keeping because of where it sits: the fix for one blast-radius mistake carried another, in the
+same file, aimed at the same box. **The instinct that writes a guard is not the instinct that checks
+the guard's own target resolution**, and nothing about `-t foo` looks dangerous.
+
 #### SP-11, and a number I sent to somebody else
 
 Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
@@ -1014,6 +1078,125 @@ agrees with itself is a fixture** — the same animal as a test that shares an a
 it checks, and a sharper statement of it, because the ancestry join was not weak. It answered a
 different question competently.
 
+#### The first real series, and it does not support the claim I made from one reading
+
+147 samples, 20:56–22:09 on 2026-09-08, 30 seconds apart.
+
+```
+samples where NO agent was reachable:  0 of 147
+reachable fraction of agents:          min 0.12   max 0.86   mean 0.59
+agents 4–8, working 1–7, load ratio1 0.04–0.55, oracle_unknown 0 throughout
+```
+
+**The sharpest thing I said did not reproduce once.** *"At the limit it does not degrade, it
+refuses"* — the `total === 0` branch — is structurally real and was **never reached**, including
+during a stretch at load ratio 0.55 with seven of eight agents working. And the mean reachable
+fraction is **0.59**, so most agents usually *are* reachable, which makes the original *"3 of 15"*
+a bad moment reported as a condition — twice over, since the denominator was wrong as well.
+
+The bad case is real but it is a **tail**: the worst sample was 1 of 8 reachable, at 22:07.
+
+**And the cheap fix lands in the middle, which neither party predicted.** Of the 33 samples with a
+positive oracle reading, the server's `background-work` agreed in **17** and did not in **16** — so
+it catches roughly half. Cheap and *partly* useful. Whether half of a tail case justifies crossing a
+refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
+is that it does not obviously.
+
+**The confound I reported was not one, and how I got it wrong is the day's own error again.** I said
+`joins_disagree` was 1 early and 0 later, and wondered whether a fix had landed in the window. The
+owner checked: no fix landed, `readShellState` is unchanged, and that item was never built. Then the
+data: **the disagreements never stopped.** The last is at 22:11:09 — the most recent sample — and
+there are fourteen separate bursts across the whole 73 minutes. I had looked at the last three lines
+of the file and reported a tail as a trend, which is the truncated-grep-becomes-an-exhaustive-list
+mistake in a new costume.
+
+The useful half came out of the same check. The identity
+`joins_disagree == working_but_at_prompt − server_bg_work` holds in **150 of 151** samples, so a
+disagreement is exactly *"an at-prompt row in plain `idle`"* — which is precisely what the
+`readShellState` diagnosis predicts. Their one-line cause is confirmed numerically, from data that
+did not assume it.
+
+#### The tail has a cause, and it argues the other way
+
+Asked whether the 1-of-8 sample coincided with anything nameable. It does, and reporting it matters
+because it cuts against the case I had been making against myself:
+
+```
+21:26  agents=4  reachable=3  working=1  ratio1=0.11     0.75 reachable
+21:46  agents=6  reachable=2  working=4  ratio1=0.12
+22:06  agents=8  reachable=2  working=6  ratio1=0.55
+22:11  agents=8  reachable=1  working=7  ratio1=0.56     0.12 reachable
+```
+
+**All 18 samples at or below 25% reachable are at 7 or 8 agents.** Reachability falls monotonically
+as the fleet fills, and the low period is the box getting busy — partly with agents this very job
+dispatched. So the bad case is **load-dependent, not random**: it appears exactly when a resource
+broadcast would matter.
+
+That means *"0 of 147 with nothing reachable"* and *"mean 0.59"* are both true and both dominated by
+an idle box. **The conditional picture at eight agents is much worse than the unconditional one**,
+and reporting only the unconditional number was one-sided in the other direction.
+
+**What is deliberately not concluded.** The obvious next sentence — *at the 20–35 agents this box is
+designed for, the bad case is the normal case* — is an unearned extrapolation from a range of four to
+eight, and that is the mistake this plan has spent all day catching rather than committing. It is a
+hypothesis with an obvious test, which is whether the overnight run reaches those counts at all.
+
+#### Nobody had measured the number the whole premise rests on
+
+The dashboard's owner offered a fact against their own stage: that four-to-eight agents was *"all of
+today"*, so eight is the high-water mark rather than a low sample, and the box may simply never reach
+the busy regime. **It is wrong, and checking it re-opened the question instead of closing it.**
+
+Reconstructed from `~/.overseer/events.jsonl` — 599 events, 0 unreadable, spanning 08:32 to 21:11 —
+by maintaining a live set across `session-seen`, `tmux-session-gone` and `session-replaced`:
+
+```
+PEAK live tmux sessions: 33, at 12:35:06
+  of which shells: 15, status-unknown: 0   =>  18 AGENTS at peak
+and it is not a spike: the reconstruction sat at 20+ sessions for much of the day
+```
+
+**The box ran eighteen agents this lunchtime.** The sampler's four-to-eight is not all of today, it
+is the quietest 73 minutes of it — measurement began at 20:56, hours after the peak. So the series is
+unrepresentative in the direction that weakens the finding, which is the third time today an
+instrument of mine has been biased against its own case.
+
+What it settles and what it does not: it kills *"the box may never get there"* — eighteen is within a
+factor of two of the 20–35 this design assumes, so **the premise is nearly met already**. It does
+*not* show reachability is bad at eighteen, because there is no sample there; the sampler did not
+exist at 12:35. The hypothesis stays unearned. What changed is that the regime is **reachable rather
+than imaginary**, so the overnight run can actually test it.
+
+Caveats, because this is a reconstruction and not a census: `session-seen` fires on change rather than
+every tick, so the live set inherits any gap in the log; the log covers today only; and the
+agent/shell split uses `status.kind !== "shell"`, which agreed with an independent hand count at
+20:25 (8 agents, 7 shells, 15 rows) — one cross-check, not a validation.
+
+**The thing worth taking away is not the number, it is that nobody had it.** Eighteen concurrent
+agents is the quantity this entire plan is written around, and this is the first time it has been
+measured. Several pages above were argued about a four-to-eight box while planning for a 20–35 one.
+
+Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
+from very quiet to busy inside it, so this is **one transition rather than a representative day**;
+and the sampler reads the snapshot the dashboard publishes, so an interval when the dashboard was
+restarting is *missing* rather than recorded as bad.
+
+**Why this is in the plan rather than only in a message.** The instrument was built to decide
+somebody else's stage, and it has now argued against the finding that motivated it. That is the
+outcome the series was for, and a plan that recorded only the readings supporting the work would be
+the same defect as a check that shares an assumption with its code.
+
+> **AND NONE OF IT BORE ON THE QUESTION, as of 2026-09-09.** A third session read the request builder
+> against the route it posts to and found that `boxActionBody` never sets `recipients`, so
+> `broadcastRoute` refuses on `recipients.length === 0` **two steps upstream of `drainGate`**. The
+> broadcast reaches nobody, at any load, and never has. Every number above is real and every
+> correction above went the honest way, and the whole argument was about the selectivity of a filter
+> that never runs. Third instance of
+> [260908h](../postmortems/260908h-the-plan-and-the-instrument-described-different-systems.md) in one
+> day, and the worst. **What survives is the reachability series itself** — it governs the drain,
+> which does run, and it carries the only measurement of peak agent concurrency anyone has.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
@@ -1096,6 +1279,256 @@ survive, and rule 2 must act rather than propose. Today n=1. **The events rule 2
 rate gets measured**, so the observation is not merely a record, it is the instrument that decides
 the next version.
 
+#### What 3b part 1 landed: the protocol has its own file, and the pin follows it
+
+`tools/overseer/rule-protocol.ts` now holds the whole of what decides *whether and how a rule
+acts* — `startRule`'s disposition switch, `runProposingRule` and `runActingRule`, the shared
+`intend` (append-fsync-then-act), `settleRule`, and the fail-closed `record`. `scheduler.ts`'s rule
+arm is now one line: a call into it. `RULE_SOURCES` swapped `tools/overseer/scheduler.ts` for
+`tools/overseer/rule-protocol.ts`; `JobSpawn` and `SpawnJob` moved to `jobs.ts`, which already owns
+`JobOutcome`, so the pinned file need not import the unpinned one.
+
+**Re-pinned: `6a62bed1e623` → `95485a7dbe6f`.** Nothing the rule decides changed and no knob in the
+spec moved — one document in the list was swapped for another, and two of the three files had their
+prose corrected to name the new one.
+
+**The pair, demonstrated rather than asserted.** A test that only proves *editing the protocol
+disarms the rules* would also pass if `RULE_SOURCES` named the whole repository, so
+`tests/overseer-rules.test.ts` § "what a rule's pin covers, and what it deliberately does not"
+asserts both directions over a real temporary checkout that is really edited, and checks each is
+non-vacuous first (`describeReport` and `sweep` are confirmed to be in `scheduler.ts`; the ordering
+and the disposition switch are confirmed to be in `rule-protocol.ts`). Both were watched red before
+the move — the first on its assertion, the second because the file did not yet exist.
+
+Then the same three mutations against the live tree, with `npx tsx scripts/overseer-pins.ts` as the
+oracle:
+
+| mutation | pin |
+| --- | --- |
+| `describeReport`'s `dispatched` sentence reworded | **unchanged** — the false trip is gone |
+| `sweep`'s signature edited | **unchanged** |
+| `startRule`'s `switch (spec.disposition)` weakened to `as string` | **stale**, `95485a7dbe6f` → `9342726da4d6` |
+
+**And a near-miss worth more than the result.** The first attempt at mutation one used `sed`, and
+the `grep -c` that was meant to prove the edit had landed answered `0` because its pattern was wrong
+— so for one command I had "the mutation did nothing AND the pin is current", which is exactly the
+shape of the no-op mutation 3a shipped. What saved it was checking the file with `cat -A` rather
+than believing the grep. **The mutation harness now asserts on the file's own bytes before and
+after, and prints its sha256**; a mutation check whose landing is verified by a second fallible
+pattern is two chances to be told nothing.
+
+**What the split does NOT fix, said out loud.** The three pinned files are still shared by every
+rule, so adding rule 1 in part 2 re-pinned rule 2: `rules.ts` holds both rules' arithmetic and
+`rule-work.ts` both observers. It is a far smaller version of the problem — rules change rarely,
+log sentences change constantly — and the note is at `RULE_SOURCES`. Splitting the per-rule halves
+into per-rule files is the move if a third rule makes it bite.
+
+#### What 3b part 2 landed: rule 1, observing only, and the specimen that blinded the fleet
+
+`RuleId` is a union; `RuleSpec`, `RuleObservation` and `RuleFinding` are unions with one arm per
+rule; `decideRule` dispatches and `store.ts` parses each finding by its own `kind`. The shipped job
+is `launch-mode`, every fifteen minutes, `disposition: "propose"`, pinned `a648c4bfbe4c` —
+and `wedged-work` re-pinned `95485a7dbe6f` → `a3dcfd98b110`, because the three pinned files are
+shared.
+
+**Two knobs, both hashed.** `minSessions: 1` — the firing condition is data inside the fingerprint
+rather than a literal in an `if`, which is the whole of SP-1. `maxCollectionAgeSeconds: 300` — rule
+1 reads a cached payload rather than commanding a fresh look, so it can be handed a reading from
+before the thing it is checking, and past that age the answer is `cannot-tell` rather than a clean
+bill. Measured the same evening: `/api/state` served collections between 4s and 113s old.
+
+**Where I disagree with the plan, and it is the section above this one.** § "The Overseer sees less
+of the fleet than the fleet sends" says the resolution is that the daemon already holds the raw
+payload, so rule 1 should read that and open no second HTTP client. I took the GET instead, and the
+constraint that section actually cares about is untouched: nothing here widens `ObservedRow` or
+opens `observation.ts`, and the modes are read by this stage's own narrow parser with its own
+unknown arms. Three reasons. Reading the daemon's held payload is *more* plumbing, not less —
+`daemon.ts`, `scripts/overseer.ts` and `rule-work.ts` all have to learn about a mutable holder.
+It makes rule 1 blind exactly when the Overseer's own transport is down, which is when the box is
+least well. And, decisively, **it gives the rules two different ways to look at the fleet where one
+already works**: rule 2 asks the dashboard over HTTP from `rule-work.ts`, and a second mechanism for
+rule 1 is the "second way to do the same thing" this repo keeps paying for. `/api/state` serves a
+cached string and does not make the box collect — `source.ts`'s own fallback poller hits it every 15
+seconds, against rule 1's once every 15 minutes.
+
+**A specimen was made, the rule fired against it, and it is gone.** A tmux session launched exactly
+as `gjd-remote new-claude` launches one, minus `--permission-mode auto` — which is precisely the
+regression this rule alarms on. Its pane read `⏸ manual mode on`; the collector at 21:47:19Z put
+`{"kind":"not-auto","mode":"manual mode"}` on row `$2543`; and the SHIPPED job, through the real
+observer, the real protocol and a real store, wrote a `rule-intended` that round-tripped out of a
+second store with **5 events replayed, 0 unreadable**:
+
+```
+relaunch 1 of 9 agent session(s) that did not come up in auto mode and will stall at the next
+unapprovable call — needs a person: a running session cannot be switched into auto mode, so the only
+remedy is kill-and-relaunch. specimen-3b-launch-mode ($2543, manual mode). 0 more could not be read.
+```
+
+with `auto: 8, notAuto: 1, cannotTell: 0, notApplicable: 8, rows: 17, collectionAgeSeconds: 16`. The
+session was killed immediately afterwards and `gjd-remote ls` confirmed healthy.
+
+**And that first specimen blinded every reader of the fleet for ten minutes.** I created the tmux
+session by hand with `GJD_REPO=spideryarn2`, which is neither an `owner/name` slug nor the sanctioned
+literal `unknown`. `parseMeta` in `scripts/gjd-remote-tmux.ts` fails the **entire listing** on one
+malformed row rather than dropping that row — deliberately, because a partial session list is read as
+permission by every caller:
+
+> has GJD_REPO='spideryarn2', which is neither an owner/name slug nor 'unknown'
+
+From **21:37:12Z to 21:47:19Z** by the dashboard's own clocks, `gjd-remote ls` printed nothing, the
+collector failed with that sentence, and `overseer status` said *"Overseer unknown — the dashboard's
+last collection failed"* — another agent's freshly landed guard working exactly as designed.
+**Fourteen healthy sessions were invisible to every reader of the fleet.** The collector had already
+backed off, so its last failed attempt was 21:42:12, and it recovered on its own next cycle without
+anything being restarted. Another session noticed and told the Overseer, which repaired it in place
+with `tmux set-environment` rather than killing the specimen, so the reading above survived.
+
+Four things follow, and the first is the one worth keeping:
+
+- **The test specimen for the rule that watches the fleet blinded every reader of the fleet,
+  including the dashboard and the Overseer's own status.** Same shape as the dependency already
+  recorded — rule 2 goes blind when the dashboard is down — but sharper, because here the thing that
+  broke observability was the test of the thing meant to restore it. **The blast radius of one
+  malformed session is every consumer of the listing.**
+- **`parseMeta`'s fail-whole behaviour is not being changed.** It is shared machinery and the choice
+  is reasoned. What is written down here is its cost, where the next person launching a specimen will
+  meet it. The general lesson — the single collector is a deliberate purchase and this is its blast
+  radius — is the Overseer's own note in
+  [overseer-direction.md](../project/overseer-direction.md) § Two tenses.
+- **The guard is code now, not a habit:
+  [`scripts/overseer-launch-mode-specimen.ts`](../../scripts/overseer-launch-mode-specimen.ts).**
+  `start` builds the session with the whole metadata quartet, then runs `gjd-remote ls` and **kills
+  the specimen and exits non-zero** if the listing will not run — printing what the reader said,
+  because the reader is what has the reason. It refuses a listing that succeeds *without* the
+  specimen in it too: that is not evidence the specimen is fine, it is evidence the check could not
+  have seen a problem with it. The runner is injected so both refusals are exercised in
+  `tests/overseer-rules.test.ts`; the only way to exercise them for real is to blind the fleet again.
+  The reasoning is not about this incident — a rule whose specimens are anomalous sessions will keep
+  producing anomalous sessions, and the fleet's readers are strict by design, so this recurs every
+  time anybody tests rule 1. Stage 3b is the first of those times, not the only one.
+- **It labels the specimen `GJD_REPO=unknown`, not `spideryarn/reading2`.** Both are accepted.
+  `unknown` is the honest one: the specimen is not doing that repo's work, it exists to be an
+  anomaly, and borrowing the repo would put it in that repo's listings and counts. `REPO_UNKNOWN` is
+  imported rather than typed, so the sanctioned value cannot drift from the one the reader accepts.
+
+The script was then run end to end on its own account: `start` → pane reads `⏸ manual mode on`,
+`gjd-remote ls` lists it as `(unknown) · idle` → `stop`. Two things it turned up that a reading of it
+would not have. `claude` with **no** `--permission-mode` flag at all came up in *auto* mode in this
+checkout, so "just leave the flag off" makes a healthy session and a demonstration that proves
+nothing — the script passes `--permission-mode default` explicitly. And `tmux has-session` writes
+*"can't find session"* to stderr on the ordinary absent case, which read as an error from a script
+whose whole job is to be trusted about whether it broke something.
+
+**Mutation check: nine mutations, every one caught, and each flips a value rather than setting one.**
+Beside the pin test — which fires on any source edit and is therefore not evidence about behaviour —
+each was caught by at least one behavioural test.
+
+| mutation | caught by |
+| --- | --- |
+| `cannot-tell` counted as `auto` | 3 tests, incl. the round trip |
+| `cannot-tell` counted as `not-auto` | 4 tests, incl. the unrecognised-arm one |
+| an unrecognised wire arm read as `not-auto` | "AN ARM THIS BUILD DOES NOT KNOW IS `cannot-tell`" |
+| `minSessions` ignored | "THE THRESHOLD IS REAL" |
+| `maxCollectionAgeSeconds` ignored | 2 tests, incl. the durable `refused` |
+| never-collected read as a clean bill | "A DASHBOARD THAT HAS NEVER COLLECTED…" |
+| shells counted as agent sessions | 3 tests |
+| the launch-mode finding given no parser | the round trip |
+| `cannotTell` parsed back as `0` | the round trip |
+
+**One hole found by adding the second rule, and it had been open since 3a.** `store.ts`'s
+`const RULE_IDS = new Set(["wedged-work"] satisfies RuleId[])` checks that its members ARE rule ids
+and says nothing about whether they are ALL of them — the same not-exhaustive hole as the destructure
+SC-4 was about, in a different costume, and the only moment it could have been found is the moment a
+second id existed. It is a `Record<RuleId, true>` now. The same reasoning made `RULE_SPEC_ENCODERS`
+one table per arm: `keyof RuleSpec` over a union is only the fields the arms SHARE, so the single
+mapped table 3a shipped would have silently stopped covering every threshold the moment there were
+two rules.
+
+**What is still not true.** Rule 1 has no reversible action and never will have one: you cannot type
+`/permission-mode auto` into a running session and an unattended process may not answer its dialog, so
+`disposition: "propose"` here is not a placeholder for 3d. And the events it writes reach nobody yet —
+3c is the review surface, and until it lands a proposal is a line in a JSONL file. That is the same
+sentence this plan already writes about rule 2, and it is the reason 3c is a gate rather than a
+nice-to-have.
+
+#### The code review of 3b, and the two findings that were the same mistake one level in
+
+GPT Sol, 2026-09-08, on the two commits together. Blocked, no P0, four P1s, and the two best of them
+say the same thing: **counting the arms separately buys nothing if the thing downstream branches on
+has fewer arms than the count.** All six were taken; the answer is
+`docs/plans/260908g-stage3b-code-review-sol.md`.
+
+**F1 (P1) — `cannot-tell` collapsed into a durable `nothing-to-do`.** With one unreadable agent
+session and no known drift, `decideLaunchMode` returned `nothing`, which settles as `nothing-to-do`
+— whose discriminant says *the rule looked and there is nothing wrong*. The four counts survived in
+the prose and the field every consumer reads had collapsed them. **This is the exact failure rule 1
+exists to prevent, one level further in than I was looking**, and my own mutation check could not
+see it because every mutation I wrote was inside the counting, not the deciding. The decision is
+three-valued now: propose if the known drift meets the threshold; `cannot-tell` if the unreadable
+ones *could* have carried it; `nothing` only when neither is true. `notApplicable` stays outside the
+arithmetic.
+
+**F2 (P1) — the observer trusted rows from a payload that says its own collection failed.**
+`refresh.ts` keeps a failed collection's error **beside the previous snapshot**, so `/api/state` goes
+on serving the sessions it last managed to see with a non-null `error`. `admissible.ts` refuses such
+a payload for the daemon's pipeline; `fleetStateObserver` never read the field. Sol reproduced a
+proposal to relaunch a stale session. It is now `cannot-see`, and `error` must be **present and
+null** — a producer that stopped sending it is one we cannot ask.
+
+**And that is the outage I caused, read back at me.** From 21:37Z to 21:47Z this box served exactly
+that payload — old rows, `error` set — and my rule would have proposed on them for the first five
+minutes, until the staleness threshold caught up. The test fixture omitted `error` entirely, so it
+could never have exercised the case.
+
+**F3 (P1) — the fingerprint claim was stronger than the mechanism.** Two sentences of mine were
+false. `rule-protocol.ts` does not fsync: it trusts `RuleLog.append`, and the `fsyncSync` is in
+unpinned `store.ts`, so **deleting it leaves every pin current** and the test that reads the intent
+back through a second descriptor proves process-visible bytes rather than crash durability. And
+`scheduler.ts` still owns the authorisation gate, the lease, the sweep and the reservation, so an
+edit there can change *whether* a rule runs and *how often* — including permitting overlap — without
+moving a rule's fingerprint; my comment claimed no edit to that file could change "whether or how a
+rule acts". A self-verifying pin cannot protect its whole verifier, so the boundary is stated
+instead: `rule-jobs.ts` § **What the fingerprint does NOT cover** names all three gaps (durability,
+lifecycle, and `"safe-to-kill"`'s meaning, which was already a 3d precondition) and says closing one
+means extracting a small stable module — worth doing the day something acts, not while both rules
+can only propose.
+
+**F4 (P1) — the specimen-maker could kill a stranger.** tmux resolves a bare `-t name` by exact
+match **and then by prefix**, so with the specimen absent and an `overseer-launch-mode-specimen-old`
+on the box, `has-session` says yes and `stop` kills the other session. This repo has been bitten by
+it before (`tests/gjd-remote-tmux.test.ts`). Every target is `=name` now; `has-session` treats only
+exit status 1 as absent rather than swallowing "no tmux server" as "no session"; and the listing
+check parses the row's first field instead of `String.includes`, which the longer name also
+satisfied. **A guard written to stop me damaging the box could itself have damaged the box.**
+
+**F5 (P2) — an event could contradict itself.** `ruleId` and `finding.kind` were each checked and
+never checked against each other, so a line claiming `ruleId: "launch-mode"` with a `wedged-work`
+finding parsed perfectly and came back as a launch-mode run carrying another rule's arithmetic. The
+parser refuses the pair now. The type-level version — job id correlated with spec kind — is not
+built; the durable half is the one that matters, because nothing in the process can produce the bad
+shape and only the disk can.
+
+**F6 (P2) — the encoder tables prove presence, not that a value is hashed.**
+`newKnob: () => "newKnob:"` compiles, appears in `RULE_SPEC_HASHED_FIELDS`, and passes the
+label-order test, while every later change to that knob leaves the hash where it was. There is now a
+derived test that perturbs every non-discriminant field of both shipped specs and requires the
+canonical form to move. Sol's related catch in the same family: `parseRuleOutcome`'s `switch` on a
+raw string was not compiler-linked to `RuleOutcome["kind"]`, and the `KillPolicy` check was two
+literals — both are keyed tables now, like `RULE_IDS`. **Three instances of one shape in one
+review**, and the shape is *a guard that enumerates today's cases without asking the compiler
+whether they are all of them*.
+
+**One correction of mine that Sol improved.** I argued the GET beats reading the daemon's held
+payload partly on availability. He is right that this is overstated — if `/api/state` is unreachable
+the direct observer fails while a previously accepted payload might still be usable — and he named a
+better argument I had missed: **a held SSE payload's `servedAt` is frozen, so it would look
+permanently fresh** unless age plumbing were added, whereas a GET recomposes it. The staleness
+threshold is only meaningful because the reading is re-served. Verdict unchanged, reasoning replaced.
+
+Re-pinned: `wedged-work` `a3dcfd98b110` → `bebaeb2561c0`, `launch-mode` `a648c4bfbe4c` →
+`898a5c1ab3f1`. Eight further mutations, all caught; the specimen-maker was re-run start-to-stop
+against the real box afterwards.
+
 ### Stage 4 — the deferral queue
 
 Work the box cannot take now is written to the queue with its dispatch intent, and drained when
@@ -1171,6 +1604,285 @@ removed it.
   ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)),
   and it hands an unattended timer the ability to restart services. That is Greg's call, not a
   detail to slip into a stage about scheduling.
+
+### Stage 8 — the schedules become config, and arming becomes durable
+
+**Greg answered the two open questions on 2026-09-08 night**, and the second is this stage.
+
+On the blocking one — may an unattended rule assert `confirm: true`? — *"Probably no for now"*. So
+propose-only stands, 3d does not flip a disposition to `act`, and the five preconditions on 3d are
+joined by a sixth that is simply *he said no*.
+
+On arming, verbatim:
+
+> Yes, I'm thinking get-ready-to-deploy every 6h, and feedback-sweep every 3h (perhaps offset so they
+> don't bump into each other). Ideally these would be written in some config somewhere that would be
+> easy to edit, with an idempotent script to update them.
+>
+> — Greg, 2026-09-08
+
+#### Four things this needs, and the second is the one nobody would guess
+
+1. **The two schedules move out of code into one small config file.** Today they are
+   `GET_READY_TO_DEPLOY_EVERY_MS = 3h` and `FEEDBACK_SWEEP_EVERY_MS = 12h` in
+   `standing-jobs.ts`. Greg wants 6h and 3h, so **both change**, and both are constants in a
+   TypeScript module — which is not what *"config somewhere that would be easy to edit"* means.
+
+2. **The idempotent script is not a convenience. It is required by the authorisation design, and
+   this is the finding.** `everyMs` is a hashed field of `JobDefinition`, so **editing a schedule
+   changes the job's fingerprint and the job is refused until it is re-pinned.** That is gate 3
+   working exactly as intended — a changed definition must not run unattended on its old
+   authorisation — but it means a hand-edited config file arms nothing and fails *closed and
+   silently* to anyone who does not know why.
+
+   So the script Greg asked for is the mechanism that makes his config file work at all: read the
+   file, recompute the hashes, write the pins, print what changed and what did not. **It is what
+   turns "edit a number" from a thing that quietly disables a job into a thing that works.** Worth
+   saying in the doc, because a reader who edits the schedule and skips the script will get a daemon
+   that refuses both jobs and says why only in a log line.
+
+3. **The offset.** 6h and 3h coincide every six hours whatever the phase, so avoiding the collision
+   needs an explicit offset rather than luck. The scheduler measures `everyMs` **from the end of the
+   last run**, so once separated they stay separated, modulo the drift that choice already accepts
+   and documents. The simplest version is one `offsetMs` per job in the same config file, and its
+   imprecision should be named rather than hidden: this staggers *starts*, and a job that overruns
+   its offset will still overlap the other.
+
+4. **Arming has to survive a reboot, and today it cannot.** The Baseline census found it and I
+   verified it: `infra/hetzner/systemd/overseer.service` sets `HOME`, `OVERSEER_STORE_DIR` and
+   `OVERSEER_FLEET_URL`, and **neither sets `OVERSEER_JOBS_ENABLED` nor reads an `EnvironmentFile`**.
+   So exporting the variable in a shell arms nothing under the unit, and the daemon running tonight
+   is a tmux job rather than the unit anyway.
+
+   The unit is checked in **twice** — the file, and a heredoc in `provision.sh` — with
+   `tests/systemd-units.test.ts` comparing the bytes, so the change is three edits or it is a test
+   failure.
+
+   **The choice to name rather than inherit:** `Environment="OVERSEER_JOBS_ENABLED=1"` in the unit
+   makes arming a tracked change in the repo, which matches *a change to the box is a change to a
+   file*. `EnvironmentFile=-/etc/overseer.env` would let Greg arm and disarm without a deploy, at the
+   cost of the box's real arming state living in an untracked file — which is precisely the kind of
+   fact that goes stale invisibly. **Default to the unit**, and say so.
+
+#### The first run after arming, and why the obvious trick is forbidden
+
+Neither standing job has ever run, so both are immediately due and **both would fire about thirty
+seconds after arming** — two Claude sessions at once, as the first act of a mechanism nobody has
+watched work. Greg's default, via the Overseer, is to defer to the schedule.
+
+**The obvious implementation is to write a synthetic `finished` occurrence at arming time so the
+jobs look recently run. That must not be done.** The occurrence ledger's entire value is that a
+person can read it and believe it; a fabricated run in it is worse than an early dispatch, and it is
+the same failure as an instrument reporting a frozen snapshot as a live reading — which this job did
+to itself twice tonight. The deferral belongs in an honestly named field that says what it is.
+
+#### Gate 4 is unbuilt, and here is why that is tolerable *for this*
+
+The runbook says gate 4 becomes load-bearing the moment the scheduler is armed, and it is still
+unbuilt. That stands as a general statement and is not being waved away.
+
+But **these two jobs are bounded by their own schedules**: 6h and 3h is at most twelve model sessions
+a day, fixed, whatever the fleet does. The schedule *is* the budget. Gate 4's real subject is
+something that dispatches on a **condition** rather than a clock — thirty-six sessions producing
+thirty-six reviews a minute — and neither of these can do that. So arming these two is safe without
+Stage 7, and Stage 7 becomes load-bearing at the first condition-triggered dispatch, which is 3d and
+which Greg has just said no to.
+
+#### The review blocked all of that, and it was right — GPT Sol, 2026-09-09
+
+Third Sol review of this job, third block. Three P0s, four P1s, one P2, all accepted; verbatim in
+[260908g-stage8-plan-review-sol.md](260908g-stage8-plan-review-sol.md).
+
+**S8-1 — the idempotent script defeats gate 3, and my own tool says so.** Recomputing a pin from the
+*whole* definition means a schedule edit riding beside a prompt or document change **blesses both**.
+`scripts/overseer-pins.ts`, which I wrote during Stage 3a, has this in its header:
+
+> **This does not re-pin anything.** It prints, and a person decides. […] an authorisation the
+> authorised party can write is not one, and a script that edited the literal would be exactly that.
+
+I planned the script that sentence forbids, ten hours later, in the same repository, and Sol found it
+by reading the tool rather than the plan. **The right answer was already written down by me and I did
+not read it.**
+
+**And the fix is better than the thing it replaces**, which is why this is not merely a save: split
+`JobBehaviour` from `ScheduleConfig`. The **instruction, the work kind and the documents** are what
+gate 3 is about — they are what the job *does* — and stay hashed and hand-pinned. **Cadence, phase
+and first-eligibility come out of the fingerprint entirely**, because they change *when* a job runs,
+not *what* it does. Then Greg's config file works the way he expected it to: edit a number, no
+re-pin, no refusal. The paragraph above claiming the script was *"required by the authorisation
+design"* was true only of a design that should not exist.
+
+**S8-2 — "the schedule is the budget" is the exact argument gate 4 rules out.** I asked for the
+hardest look here because I suspected it was comfortable, and it is. Twelve is a ceiling on session
+*launches*, not model calls; those sessions run for hours and call repeatedly; attention, routing and
+recovery draw on the same subscription; and re-pinning resets cadence, so even the launch ceiling is
+not invariant. Gate 4 expressly rejects each component keeping *"a locally sensible number"*.
+
+**So this stage cannot reinterpret gate 4 on its own.** Either the smallest honest shared reservation
+is built first, or **Greg amends the gate having been shown this** — and that is a question for him,
+not a judgement call, because he wrote the gate and he has just asked for the arming that runs into
+it. It is asked below.
+
+**S8-3 — the handoff commands would have restarted the old, disarmed unit and looked successful.**
+`systemctl daemon-reload` rereads `/etc/systemd/system/overseer.service`; it does not copy the
+checked-in file there. Only `provision.sh`'s `install_unit()` does. And a `restart` before the tmux
+daemon is stopped loses the store lock and can burn the unit's ten-start limit. **This is exactly the
+failure I asked Sol to hunt for** — a person believing the jobs are scheduled when they are not — and
+it was sitting in my own command list.
+
+The remaining findings, folded in: **S8-4**, re-pinning discards cadence (SC-3 again, and Stage 8
+walks the unsafe path deliberately); **S8-5**, a one-shot offset does not survive — after downtime
+both jobs are overdue in the same tick, a stuck occurrence reschedules from its reservation, and the
+recorded outcome is the *launcher* exiting rather than the session finishing, so the real invariant is
+**a durable minimum separation between launches**, not a phase; **S8-6**, `notBefore` needs a genuine
+`armedAt` anchor outside the ledger, or every restart postpones the first run for ever; **S8-7**, the
+`ARMED` headline comes from the environment flag alone, so status can say `ARMED` while both jobs are
+unauthorised or failed to build; **S8-8**, arming belongs in `EnvironmentFile=/etc/overseer.env`
+(no `-`), provisioned once disarmed and never overwritten, because hardcoding it in the unit makes
+every restart a re-arm and a repo edit the only way to disarm at 3am.
+
+Config format, settled: a **TypeScript module**, not JSON — comments, `hours(6)`, `satisfies` to
+enforce exactly the two job ids, `StandingJobId` derived from its keys, and both interval constants
+deleted from `standing-jobs.ts` so there is one home for the fact.
+
+#### Stage 8 restructured: 8a lands, 8b waits for Greg
+
+- **8a — the split, the config, and honest activation.** `JobBehaviour` / `ScheduleConfig`, the TS
+  config module, cadence out of the fingerprint, occurrence lineage separated from the behaviour hash
+  (S8-4), the launch-spacing gate (S8-5), `armedAt` (S8-6), an `ARMED` headline that is a fact about
+  the loaded definitions rather than about an environment variable (S8-7), the unit reading
+  `EnvironmentFile` (S8-8), and **one idempotent activation command** that installs the unit, stops
+  the tmux daemon, restarts, waits for a fresh checkpoint and **exits non-zero unless both jobs are
+  genuinely eligible** (S8-3). Every part of this is worth having whether or not anything is ever
+  armed, and none of it arms anything.
+- **8b — arming.** Blocked on Greg's answer to the gate 4 question, and on the minimal reservation if
+  that is the answer.
+
+#### Done when
+
+8a: the config module exists and Greg can edit a number in it with no re-pin and no refusal; the
+behaviour pin still requires a person; the activation command is idempotent and fails loudly rather
+than quietly; `tests/systemd-units.test.ts` is green against both copies of the unit; and
+`overseer status` cannot say `ARMED` about a job that cannot run.
+
+8b: not started. **No paid work is armed by this stage** — `EnvironmentFile` ships with an explicitly
+disarmed value, and the commands that arm it are Greg's.
+
+> **"Arms nothing" is true of the code and false of the command, and the implementer was right to
+> say so.** `overseer-activate.ts --apply --disarm` **stops the running tmux Overseer and hands the
+> box to systemd.** That is a real change to how the box runs — disruptive rather than inert — even
+> though it starts no job and spends nothing. The sentence above used to read *"nothing is armed by
+> this stage"*, which a person skim-reading before a `sudo` would take as *"this is safe to run
+> without thinking"*. It is safe, but it is not nothing, and the difference is exactly the kind a
+> handoff note must not blur. **Dry run is the default for this reason; run it first.**
+
+#### `leaseMs` stays outside, and the fear that put the question was arithmetic I had not done
+
+The implementer moved `leaseMs` out of the fingerprint alongside cadence — further than Sol's S8-1
+asked — and flagged it for me to overrule. My instinct was to pull it back: *shortening a lease
+releases a job whose session is still running, so a second starts beside the first.* Fable arbitrated
+and **the instinct is wrong, for a reason two functions away that neither of us had checked.**
+
+`lastRunOf` turns a stuck occurrence into `{kind: "unresolved", at: reservedAt}`, and `due` then
+measures `everyMs` from that `at` exactly as it does for a settled run (`jobs.ts:690–693`, verified
+by me rather than taken on trust). So a stuck job's next launch is at
+`reservedAt + max(leaseMs, everyMs)`. **Shortening the lease below the cadence is a no-op on launch
+timing.** All it does is surface the `stuck` report sooner, which is the direction you want.
+
+And in the ordinary path the lease is never consulted at all: the launcher exits within seconds and
+the occurrence settles then, so the six-hour session that follows is invisible to the ledger. What
+actually decides whether two sessions coexist is **`everyMs` against how long a session really
+runs** — and that knob is outside the fingerprint too, on Sol's own instruction. Hashing the lease
+would have put a ceremony on a knob that guards nothing while the one carrying the real exposure
+stayed free: **a guard describing coverage it does not provide**, which is the shape gate 4's NOT
+BUILT note exists to warn about.
+
+**Two comments in `schedules.ts` were false and are corrected** — `ScheduleConfig.leaseMs` claiming a
+shortened lease lets a second session start, and `MINIMUM_LEASE_MS` claiming its floor guards
+overlap. Both were written in good faith by an implementer inheriting my framing, which is exactly
+how an unchecked claim becomes a source comment. The floor's only honest job is refusing `0`;
+**`MAXIMUM_LEASE_MS` is the bound that matters**, because a 24-hour lease on a 3-hour job hides a
+hung launcher for a day.
+
+**The one thing worth acting on**, and it is not the lease: `FEEDBACK_SWEEP_PROMPT` tells its session
+to check `gjd-remote ls` for its own claim prefix before doing anything, and
+`GET_READY_TO_DEPLOY_PROMPT` has no such self-check. That is where the real duplicate-session guard
+lives, it is pinned, and adding it is a one-line change that correctly costs a re-pin. Left for 8b or
+later rather than slipped in here.
+
+#### 8a as built, 2026-09-09
+
+All six pieces landed. What is worth knowing that the sections above do not already say:
+
+- **`JobDefinition` is now two fields**, `behaviour` and `schedule`. `behaviourHash` takes a
+  `JobBehaviour` and cannot reach a schedule, so the split is a type rather than a discipline —
+  adding a clock knob to the fingerprint is a compile error in `BEHAVIOUR_ENCODERS`, which is where
+  the mutation check started.
+- **All four pins moved once, in this commit, and never again for a schedule.** Cadence and lease
+  leaving the fingerprint changed the bytes hashed while changing nothing either job does. From here
+  `npx tsx scripts/overseer-pins.ts` prints no drift when `schedules.ts` is edited.
+- **`tools/overseer/schedules.ts` is the file Greg edits.** `hours(6)` and `hours(3)` as asked, plus
+  a `leaseMs` and an `initialDelayMs` per job, and `LAUNCH_SEPARATION_MS`. `validateSchedules` is
+  what replaced the re-pin as the guard on a bad number: a config that fails it builds **no jobs at
+  all**, so a typo disarms rather than dispatching.
+- **Occurrence lineage is the job id.** A synthetic lineage identifier would have been a second copy
+  of a fact the job id already carries. The cost is named in `OccurrenceKey`: repurposing an id
+  inherits the old job's cadence, which is the safe direction.
+- **The wire field `definitionHash` became `behaviourHash`**, with the store's parser reading either,
+  because a rename that made the existing ledger unparseable would hold every job.
+- **`StoredScheduler` gained a `blocked` arm** — switched on, and not one loaded job can run. That is
+  the state that used to print `ARMED`.
+
+**Two things I got wrong on the way, and one is still a live judgement call.**
+
+`leaseMs` left the fingerprint with the cadence, which **Sol did not ask for** — S8-1 names cadence,
+phase and first eligibility. The argument for moving it is that a deadline for disbelieving a run is
+a clock fact and belongs with the other clock facts; the cost is that shortening it releases a job
+whose session is still running, so a second one starts beside the first, and that is now a
+one-integer edit with no re-pin. The floor is `MINIMUM_LEASE_MS = hours(1)`. **If that reads badly,
+the alternative is putting `leaseMs` back on `JobBehaviour` and paying a re-pin every time somebody
+retunes it** — say so and it moves.
+
+And the floors were nearly decoration. `MINIMUM_EVERY_MS` was fifteen minutes for the first hour of
+this stage, which is what you write when you are producing bounds rather than costing them: two jobs
+at fifteen minutes is 192 Claude sessions a day against the twelve Greg asked for. Sol's instruction
+was *"protect abusive schedule values through validation"*, and a floor that permits sixteen times
+the intended rate protects nothing. It is `hours(1)` now — worst case 48, still bad, at least the
+same order as the intent. **It is not a budget.** Gate 4's shared reservation is where the real
+ceiling belongs, and until that exists this number is the only thing between a mistyped `hours(6)`
+and a day's subscription.
+
+**One thing for Greg to decide.** [overseer.md](../project/overseer.md) § gate 3 forbids *"acting on
+a job definition that changed after it was authorised"*. That is still exactly right about the
+behaviour and is now silent about the schedule, which a reader could take either way. It is a rule,
+so it was not edited without asking. The proposed wording is *"acting on a job's **instruction or its
+documents** after they were authorised"*, which says what the mechanism now enforces.
+
+#### The commands, for Greg. Dry run first.
+
+Every one of these is safe to read before it is run, and the first three change nothing.
+
+```
+# 1. From the PRIMARY checkout on the box, on a dev that has this commit:
+cd ~/code/spideryarn2 && git pull
+npx tsx scripts/overseer-pins.ts            # expect no drift
+npx tsx scripts/overseer-activate.ts        # DRY RUN: prints the plan, changes nothing
+
+# 2. Install the unit and leave the scheduler disarmed. This is the whole of 8a.
+#    --disarm creates /etc/overseer.env with OVERSEER_JOBS_ENABLED=0 if it does not exist.
+sudo npx tsx scripts/overseer-activate.ts --apply --disarm
+
+# 3. Check what it says about itself.
+npx tsx scripts/overseer.ts status          # scheduler line should read OFF, not BLOCKED
+```
+
+**Step 2 stops the tmux Overseer.** It has to: a systemd start beside a live tmux daemon loses the
+store lock and can burn the unit's ten-start limit. The command waits for the lock to be released and
+refuses to restart systemd until it is.
+
+**Arming is 8b and is not in this list.** When it happens it is
+`sudo npx tsx scripts/overseer-activate.ts --apply --arm`, and it is blocked on the gate 4 question
+above — not on anything technical.
 
 ## Deliberately not in this job
 

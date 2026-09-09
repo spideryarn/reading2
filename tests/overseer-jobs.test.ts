@@ -30,11 +30,11 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import type { JobEvent, OverseerEvent } from "../tools/overseer/diff.js";
 import {
-  JOB_DEFINITION_HASHED_FIELDS,
+  JOB_BEHAVIOUR_HASHED_FIELDS,
   UNKNOWN_RETENTION,
   adoptOccurrence,
   authorisationOf,
-  definitionHash,
+  behaviourHash,
   due,
   foldOccurrences,
   lastRunOf,
@@ -42,20 +42,15 @@ import {
   occurrenceId,
   standingOf,
   stuckOccurrences,
+  type Arming,
   type AuthorisedJob,
+  type JobBehaviour,
   type JobDefinition,
   type Occurrence,
   type OccurrenceId,
 } from "../tools/overseer/jobs.js";
-import {
-  describeReport,
-  schedulerTick,
-  type JobSpawn,
-  type LostRecord,
-  type OccurrenceLog,
-  type SchedulerReport,
-  type SpawnJob,
-} from "../tools/overseer/scheduler.js";
+import type { JobSpawn, SpawnJob } from "../tools/overseer/jobs.js";
+import { describeReport, schedulerTick, type LostRecord, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
 import {
   EVENTS_FILE,
   LOCK_FILE,
@@ -115,13 +110,43 @@ function kindsIn(root: string): string[] {
 }
 
 const JOB: JobDefinition = {
-  id: "get-ready-to-deploy",
-  everyMs: 60_000,
-  leaseMs: 120_000,
-  what: "npm run get-ready-to-deploy",
-  documents: [],
-  work: { kind: "session" },
+  behaviour: {
+    id: "get-ready-to-deploy",
+    what: "npm run get-ready-to-deploy",
+    documents: [],
+    work: { kind: "session" },
+  },
+  // `initialDelayMs: 0`, TOGETHER WITH `ARMED` BELOW, IS WHAT REPRODUCES THE OLD
+  // "a job that has never run is due" BEHAVIOUR. Since 2026-09-09 a never-run
+  // job is deferred until the arming instant plus this delay (GPT Sol's S8-6),
+  // and none of the tests in this file are about that deferral — they are about
+  // crash windows, the lease and the pin. The `due()` block below asserts the
+  // deferral itself, with a delay of its own.
+  schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
 };
+
+/**
+ * WHEN THIS SCHEDULER WAS ARMED, for every test here that is not about arming.
+ *
+ * Hours before the earliest clock any test in this file starts at, so
+ * `armedAt + initialDelayMs` is always already past and a never-run job is due
+ * at once — which is exactly what `due` said unconditionally before the delay
+ * existed.
+ */
+const ARMED: Arming = { kind: "armed", at: "2026-09-08T08:00:00.000Z" };
+
+/**
+ * THE MINIMUM GAP BETWEEN TWO SESSION LAUNCHES, switched off.
+ *
+ * Zero rather than a number, because nothing in this file is about spacing and a
+ * live gate would hold the second dispatch in every test that has two.
+ */
+const NO_SPACING = 0;
+
+/** The same job with one behaviour field moved. Two levels of spread is what the behaviour/schedule split costs a call site, so it lives here once. */
+function withBehaviour(overrides: Partial<JobBehaviour>): JobDefinition {
+  return { ...JOB, behaviour: { ...JOB.behaviour, ...overrides } };
+}
 
 /**
  * A job pinned to its own current fingerprint, which is what "authorised" means
@@ -133,7 +158,7 @@ const JOB: JobDefinition = {
  * there rather than being hidden here.
  */
 function authorised(definition: JobDefinition): AuthorisedJob {
-  return { definition, authorisedHash: definitionHash(definition) };
+  return { definition, authorisedHash: behaviourHash(definition.behaviour) };
 }
 
 /** A spawn that succeeds and whose work settles when the test says so. */
@@ -163,33 +188,64 @@ async function settle(): Promise<void> {
 }
 
 function tick(store: OccurrenceLog, spawn: SpawnJob, now: () => Date, definitions: readonly JobDefinition[] = [JOB]): readonly SchedulerReport[] {
-  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now });
+  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now, arming: ARMED, launchSeparationMs: NO_SPACING });
 }
 
 function reportKinds(reports: readonly SchedulerReport[]): string[] {
   return reports.map((report) => report.kind);
 }
 
-describe("a definition's fingerprint", () => {
-  test("is stable, and moves when any field of the definition moves", () => {
-    expect(definitionHash(JOB)).toBe(definitionHash({ ...JOB }));
-    expect(definitionHash({ ...JOB, what: `${JOB.what} --force` })).not.toBe(definitionHash(JOB));
-    expect(definitionHash({ ...JOB, everyMs: 61_000 })).not.toBe(definitionHash(JOB));
-    expect(definitionHash({ ...JOB, leaseMs: 1 })).not.toBe(definitionHash(JOB));
-    expect(definitionHash({ ...JOB, id: "other" })).not.toBe(definitionHash(JOB));
+describe("a behaviour's fingerprint", () => {
+  test("moves when the BEHAVIOUR moves, and does NOT move when the schedule does", () => {
+    // BOTH DIRECTIONS, AND THE SECOND IS THE POINT OF THE 2026-09-09 SPLIT
+    // (GPT Sol's S8-1). This test used to assert `everyMs: 61_000` moved the
+    // hash; that is now false by design, because a cadence edit changes *when* a
+    // job runs and not *what* it does, and making a person re-pin for it was
+    // what pushed the plan towards a script that recomputed pins — an
+    // authorisation the authorised party can write.
+    expect(behaviourHash(JOB.behaviour)).toBe(behaviourHash({ ...JOB.behaviour }));
+
+    // MOVING ANY HASHED FIELD MOVES IT. One assertion per field of
+    // `JobBehaviour`; the test below is what keeps that list honest when a fifth
+    // field arrives.
+    expect(behaviourHash(withBehaviour({ what: `${JOB.behaviour.what} --force` }).behaviour)).not.toBe(behaviourHash(JOB.behaviour));
+    expect(behaviourHash(withBehaviour({ id: "other" }).behaviour)).not.toBe(behaviourHash(JOB.behaviour));
+    expect(behaviourHash(withBehaviour({ documents: [{ path: "docs/project/overseer.md", sha256: "aaaa" }] }).behaviour)).not.toBe(
+      behaviourHash(JOB.behaviour),
+    );
+    expect(
+      behaviourHash(
+        withBehaviour({ work: { kind: "rule", rule: { kind: "launch-mode", minSessions: 1, maxCollectionAgeSeconds: 300, disposition: "propose" } } })
+          .behaviour,
+      ),
+    ).not.toBe(behaviourHash(JOB.behaviour));
+
+    // AND MOVING A CLOCK KNOB DOES NOT. Asserted rather than left as a comment,
+    // because "editing schedules.ts re-pins nothing" is the whole of what Greg
+    // asked for, and a fingerprint that quietly reached back over a schedule
+    // would take it away again with nothing going red.
+    const rescheduled: JobDefinition = { ...JOB, schedule: { everyMs: 61_000, leaseMs: 1_000, initialDelayMs: 90_000 } };
+    expect(behaviourHash(rescheduled.behaviour)).toBe(behaviourHash(JOB.behaviour));
+    // The consequence a person actually meets: the pin still authorises it.
+    expect(authorisationOf({ definition: rescheduled, authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
   });
 
   test("THE FIELD LIST IS THE TYPE'S OWN, so a field added later cannot sit outside the fingerprint", () => {
     // GPT Sol's SC-4. The assertions above name today's fields by hand, and the
     // destructure they were written against is not exhaustive in TypeScript — so
-    // a seventh field on `JobDefinition` would compile perfectly and never reach
+    // a fifth field on `JobBehaviour` would compile perfectly and never reach
     // the hash that authorises the job.
     //
-    // `JOB_DEFINITION_HASHED_FIELDS` is derived from the encoder table rather
+    // `JOB_BEHAVIOUR_HASHED_FIELDS` is derived from the encoder table rather
     // than typed out here, so reverting to a destructure deletes the table and
     // takes this test with it; and a new field is a compile error in the table
     // before it is ever a red line here.
-    expect([...JOB_DEFINITION_HASHED_FIELDS].sort()).toEqual(Object.keys(JOB).sort());
+    //
+    // **It is held against the BEHAVIOUR's keys, not the definition's**, which
+    // is the split expressed as an assertion: a clock knob put back into
+    // `JobBehaviour` would have to be hashed, and one left in `ScheduleConfig`
+    // is out of this test's reach entirely.
+    expect([...JOB_BEHAVIOUR_HASHED_FIELDS].sort()).toEqual(Object.keys(JOB.behaviour).sort());
   });
 
   test("cannot be fooled by a field that contains the canonical form's own separators", () => {
@@ -199,55 +255,87 @@ describe("a definition's fingerprint", () => {
     // left it green, and mutation testing said so.
     //
     // These two are a REAL collision without the prefixes: `what` is a prompt
-    // and prompts have newlines in them, so a definition whose id carries the
+    // and prompts have newlines in them, so a behaviour whose id carries the
     // rest of the canonical form inside it hashes the same as the honest one.
     // Two different authorised instructions with one fingerprint is exactly the
     // edit the hash exists to detect.
-    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [], work: { kind: "session" } });
-    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [], work: { kind: "session" } });
+    //
+    // The crafted strings name `what` rather than the `everyMs`/`leaseMs` they
+    // used to, because those left the fingerprint on 2026-09-09 — a collision
+    // test has to be built out of the labels the canonical form actually emits,
+    // or it stops being one. Checked by hand against the encoders: without the
+    // `:${length}:` prefixes both sides canonicalise to the identical string
+    // `id:x\nwhat:y\nwhat:z\nwork:session\ndocuments:0`.
+    const a = behaviourHash({ id: "x\nwhat:y", what: "z", documents: [], work: { kind: "session" } });
+    const b = behaviourHash({ id: "x", what: "y\nwhat:z", documents: [], work: { kind: "session" } });
     expect(a).not.toBe(b);
   });
 
-  test("an edited definition inherits no history — AND THAT IS NOT WHAT STOPS IT RUNNING", async () => {
-    // THIS TEST USED TO STOP AT THE FIRST HALF, and GPT Sol's C2 was that the
-    // half it stopped at is the unsafe one: a job with no history reads as
-    // `never`, `due()` calls `never` immediately due, so an edit dispatched the
-    // edited version AT ONCE — the exact opposite of the runbook's "never act on
-    // a job definition that changed after it was authorised".
+  test("an edited definition INHERITS its predecessor's cadence — and the pin is what stops it running", async () => {
+    // TWO REVIEWS ARE STACKED IN THIS TEST AND THEY POINT OPPOSITE WAYS, so both
+    // are written down.
     //
-    // So both halves, and the second is the one that matters: history
-    // separation, then the gate that actually refuses.
+    // It began life asserting only that an edited definition inherited no
+    // history, and GPT Sol's C2 was that this is the UNSAFE half: a job with no
+    // history reads as `never`, `due()` calls `never` immediately due, so an
+    // edit dispatched the edited version AT ONCE — the exact opposite of the
+    // runbook's "never act on a job definition that changed after it was
+    // authorised". The answer was the pin, checked before the arithmetic.
+    //
+    // On 2026-09-09 the first half went, deliberately: S8-4 showed the hash
+    // filter in `lastRunOf` cost more than it bought. A re-pin — which a person
+    // does on purpose, having read the change — made every prior occurrence
+    // vanish from the cadence calculation, so the job read as `never` and
+    // dispatched immediately, potentially over the top of a live session the old
+    // pin had launched minutes earlier. **Occurrence lineage is now the job id
+    // and nothing else**, so an edited definition does inherit its
+    // predecessor's cadence.
+    //
+    // What the test proves now is the pair that is actually load-bearing: the
+    // cadence is inherited (so no re-pin can turn into an instant dispatch), AND
+    // the pin still refuses the edited behaviour outright. The second half is
+    // the one that matters and it is unchanged.
     const index = new Map<OccurrenceId, Occurrence>();
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T10:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T10:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     index.set(occurrenceId(key), {
       kind: "finished",
       id: occurrenceId(key),
       key,
       reservedAt: "2026-09-08T10:00:00.000Z",
       instanceId: "i1",
-      what: JOB.what,
+      what: JOB.behaviour.what,
       finishedAt: "2026-09-08T10:00:05.000Z",
       outcome: { kind: "exited", code: 0 },
     });
-    const edited: JobDefinition = { ...JOB, what: "rm -rf /" };
-    expect(lastRunOf(index, JOB, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("settled");
-    expect(lastRunOf(index, edited, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("never");
-    // AND `never` IS DUE. Stated here rather than left implicit, because this is
-    // the step the old test walked past: without the pin, the two lines above
-    // are a dispatch rather than a defence.
-    expect(due(edited, { kind: "never" }, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("due");
+    const edited: JobDefinition = withBehaviour({ what: "rm -rf /" });
+    const at = Date.parse("2026-09-08T10:00:10.000Z");
+    // SAME ID, SO SAME LINEAGE. The run above is the last run of both of them,
+    // and the edited behaviour's fingerprint — which is on the occurrence's key
+    // for audit — is not consulted.
+    expect(edited.behaviour.id).toBe(JOB.behaviour.id);
+    expect(behaviourHash(edited.behaviour)).not.toBe(behaviourHash(JOB.behaviour));
+    expect(lastRunOf(index, JOB.behaviour.id, at).kind).toBe("settled");
+    expect(lastRunOf(index, edited.behaviour.id, at).kind).toBe("settled");
+    // AND THAT READS AS NOT-DUE, ten seconds into a sixty-second interval —
+    // which is the whole of what S8-4 bought. Under the old hash filter this
+    // line was `due`, and a re-pin was therefore an immediate launch.
+    expect(due(edited.schedule, lastRunOf(index, edited.behaviour.id, at), at, ARMED).kind).toBe("not-due");
 
-    // THE GATE. The pin still names the definition that was authorised, so the
-    // edited one is refused and nothing is spawned and nothing is written down.
+    // THE GATE, and it is the half that matters. The pin still names the
+    // behaviour that was authorised, so the edited one is refused, nothing is
+    // spawned and nothing is written down — and this would hold even if the
+    // cadence said the job were due.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T10:00:10.000Z");
     const store = mustOpen(root, clock.now);
     const runner = spawnRecorder();
     const reports = schedulerTick({
-      definitions: [{ definition: edited, authorisedHash: definitionHash(JOB) }],
+      definitions: [{ definition: edited, authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn: runner.spawn,
       now: clock.now,
+      arming: ARMED,
+      launchSeparationMs: NO_SPACING,
     });
     expect(reportKinds(reports)).toEqual(["unauthorised"]);
     expect(runner.calls).toEqual([]);
@@ -257,14 +345,14 @@ describe("a definition's fingerprint", () => {
   });
 
   test("the pin says both hashes, because re-authorising means copying the second one", () => {
-    const edited: JobDefinition = { ...JOB, what: "rm -rf /" };
-    const verdict = authorisationOf({ definition: edited, authorisedHash: definitionHash(JOB) });
+    const edited: JobDefinition = withBehaviour({ what: "rm -rf /" });
+    const verdict = authorisationOf({ definition: edited, authorisedHash: behaviourHash(JOB.behaviour) });
     expect(verdict.kind).toBe("unauthorised");
     if (verdict.kind !== "unauthorised") return;
-    expect(verdict.authorised).toBe(definitionHash(JOB));
-    expect(verdict.found).toBe(definitionHash(edited));
-    expect(verdict.why).toContain(definitionHash(edited));
-    expect(authorisationOf({ definition: JOB, authorisedHash: definitionHash(JOB) }).kind).toBe("authorised");
+    expect(verdict.authorised).toBe(behaviourHash(JOB.behaviour));
+    expect(verdict.found).toBe(behaviourHash(edited.behaviour));
+    expect(verdict.why).toContain(behaviourHash(edited.behaviour));
+    expect(authorisationOf({ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
   });
 
   test("editing the DOCUMENT a job points at moves the fingerprint, even though the instruction is unchanged", () => {
@@ -272,26 +360,69 @@ describe("a definition's fingerprint", () => {
     // editing a doc could otherwise enlarge what you may do unattended." A
     // fingerprint over the prompt alone covers the pointer and not the thing
     // pointed at, so this is the case that makes the pin worth having at all.
-    const before: JobDefinition = { ...JOB, documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "aaaa" }] };
-    const after: JobDefinition = { ...JOB, documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "bbbb" }] };
-    expect(before.what).toBe(after.what);
-    expect(definitionHash(before)).not.toBe(definitionHash(after));
-    expect(authorisationOf({ definition: after, authorisedHash: definitionHash(before) }).kind).toBe("unauthorised");
+    const before: JobDefinition = withBehaviour({ documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "aaaa" }] });
+    const after: JobDefinition = withBehaviour({ documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "bbbb" }] });
+    expect(before.behaviour.what).toBe(after.behaviour.what);
+    expect(behaviourHash(before.behaviour)).not.toBe(behaviourHash(after.behaviour));
+    expect(authorisationOf({ definition: after, authorisedHash: behaviourHash(before.behaviour) }).kind).toBe("unauthorised");
     // And the count is in the canonical form, so a second document is a
     // different job rather than a longer string that happens to concatenate.
-    expect(definitionHash({ ...JOB, documents: [] })).not.toBe(definitionHash(before));
+    expect(behaviourHash(withBehaviour({ documents: [] }).behaviour)).not.toBe(behaviourHash(before.behaviour));
   });
 });
 
 describe("due(), which is state-based on purpose", () => {
   const now = Date.parse("2026-09-08T12:00:00.000Z");
 
-  test("a job that has never run is due", () => {
-    expect(due(JOB, { kind: "never" }, now)).toEqual({ kind: "due", sinceMs: 0 });
+  /**
+   * **ARMING IS ONLY CONSULTED FOR A JOB THAT HAS NEVER RUN**, so every test
+   * below whose job HAS history passes the unreadable arm on purpose.
+   *
+   * `unknown` is what would hold the job if it were reached, so this is a live
+   * assertion rather than a placeholder: a `due` that started consulting arming
+   * on a job with history would turn each of those tests red instead of leaving
+   * them quietly passing on an instant nobody checked.
+   */
+  const ARMING_IRRELEVANT: Arming = { kind: "unknown", why: "this job has run before, so nothing here should reach the arming instant" };
+
+  test("a job that has never run is due ONCE ITS FIRST-RUN DELAY IS PAST", () => {
+    // This used to read "a job that has never run is due", full stop, and that
+    // is what arming meant in practice: both standing jobs read `never` for
+    // ever until the first one lands, so switching the scheduler on started two
+    // paid Claude sessions about thirty seconds later, as the opening act of a
+    // mechanism nobody had watched work (GPT Sol's S8-6).
+    //
+    // `JOB` carries `initialDelayMs: 0` and `ARMED` is hours in the past, so
+    // this line is the OLD behaviour, deliberately reproduced — the tests below
+    // that are not about arming all lean on it.
+    expect(due(JOB.schedule, { kind: "never" }, now, ARMED)).toEqual({ kind: "due", sinceMs: 0 });
+  });
+
+  test("and NOT before it, which is what stops arming being an immediate launch", () => {
+    // The half the arm exists for. Thirty minutes of delay against an arming
+    // instant ten minutes ago: not due, and the answer says WHEN rather than
+    // merely how long, because "never run; first eligible at 12:20" is the
+    // sentence a person watching a freshly armed box needs.
+    const schedule = { ...JOB.schedule, initialDelayMs: 30 * 60_000 };
+    const armed: Arming = { kind: "armed", at: new Date(now - 10 * 60_000).toISOString() };
+    expect(due(schedule, { kind: "never" }, now, armed)).toEqual({
+      kind: "not-yet-eligible",
+      firstEligibleAt: new Date(now + 20 * 60_000).toISOString(),
+      remainingMs: 20 * 60_000,
+    });
+  });
+
+  test("a never-run job is HELD, not run, when nothing can say when the scheduler was armed", () => {
+    // FAIL CLOSED. The anchor is a durable fact and it can be missing; guessing
+    // one in either direction is either a launch nobody asked for or a job that
+    // never runs, so `due` declines to guess and says why.
+    const verdict = due(JOB.schedule, { kind: "never" }, now, { kind: "unknown", why: "the arming file could not be read" });
+    expect(verdict.kind).toBe("held");
+    expect(verdict.kind === "held" && verdict.why).toContain("the arming file could not be read");
   });
 
   test("a job that finished a moment ago is not, and says how long is left", () => {
-    const verdict = due(JOB, { kind: "settled", at: new Date(now - 20_000).toISOString() }, now);
+    const verdict = due(JOB.schedule, { kind: "settled", at: new Date(now - 20_000).toISOString() }, now, ARMING_IRRELEVANT);
     expect(verdict).toEqual({ kind: "not-due", remainingMs: 40_000 });
   });
 
@@ -299,15 +430,16 @@ describe("due(), which is state-based on purpose", () => {
     // The argument for hand-rolling rather than cron, which skips silently, or
     // `systemd Persistent=true`, which catches up exactly once. Three hours of
     // downtime does not become three runs and does not become none.
-    const verdict = due(JOB, { kind: "settled", at: new Date(now - 3 * 3600_000).toISOString() }, now);
+    const verdict = due(JOB.schedule, { kind: "settled", at: new Date(now - 3 * 3600_000).toISOString() }, now, ARMING_IRRELEVANT);
     expect(verdict.kind).toBe("due");
   });
 
   test("a run in flight holds the job whatever the interval says", () => {
     const verdict = due(
-      JOB,
+      JOB.schedule,
       { kind: "in-flight", since: new Date(now - 3600_000).toISOString(), leaseUntil: new Date(now + 60_000).toISOString() },
       now,
+      ARMING_IRRELEVANT,
     );
     expect(verdict.kind).toBe("held");
   });
@@ -317,14 +449,15 @@ describe("due(), which is state-based on purpose", () => {
     // be a permanent hold, because one crash would then be a job that never runs
     // again — with a green heartbeat over it.
     const stale = { kind: "unresolved", at: new Date(now - 3600_000).toISOString(), why: "…" } as const;
-    expect(due(JOB, stale, now).kind).toBe("due");
+    expect(due(JOB.schedule, stale, now, ARMING_IRRELEVANT).kind).toBe("due");
     const recent = { kind: "unresolved", at: new Date(now - 1_000).toISOString(), why: "…" } as const;
-    expect(due(JOB, recent, now).kind).toBe("not-due");
+    expect(due(JOB.schedule, recent, now, ARMING_IRRELEVANT).kind).toBe("not-due");
   });
+
 });
 
 describe("the lease", () => {
-  const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+  const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
   const started: Occurrence = {
     kind: "started",
     id: occurrenceId(key),
@@ -332,7 +465,7 @@ describe("the lease", () => {
     reservedAt: "2026-09-08T12:00:00.000Z",
     instanceId: "i1",
     leaseUntil: "2026-09-08T12:02:00.000Z",
-    what: JOB.what,
+    what: JOB.behaviour.what,
     startedAt: "2026-09-08T12:00:00.100Z",
     pid: 4242,
   };
@@ -357,7 +490,7 @@ describe("the lease", () => {
       key,
       reservedAt: started.reservedAt,
       instanceId: "i1",
-      what: JOB.what,
+      what: JOB.behaviour.what,
       finishedAt: "2026-09-08T12:00:30.000Z",
       outcome: { kind: "exited", code: 0 },
     };
@@ -367,8 +500,8 @@ describe("the lease", () => {
 
   test("a stuck run is NOT reported as in flight, which is the whole of the S6 fix", () => {
     const index = new Map([[started.id, started]]);
-    expect(lastRunOf(index, JOB, Date.parse("2026-09-08T12:01:00.000Z")).kind).toBe("in-flight");
-    expect(lastRunOf(index, JOB, Date.parse("2026-09-08T12:03:00.000Z")).kind).toBe("unresolved");
+    expect(lastRunOf(index, JOB.behaviour.id, Date.parse("2026-09-08T12:01:00.000Z")).kind).toBe("in-flight");
+    expect(lastRunOf(index, JOB.behaviour.id, Date.parse("2026-09-08T12:03:00.000Z")).kind).toBe("unresolved");
   });
 });
 
@@ -421,7 +554,7 @@ describe("failing closed", () => {
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const runner = spawnRecorder({ settle: "never" });
-    const reports = tick(store, runner.spawn, clock.now, [JOB, { ...JOB, what: "something else entirely" }]);
+    const reports = tick(store, runner.spawn, clock.now, [JOB, withBehaviour({ what: "something else entirely" })]);
     expect(reportKinds(reports)).toEqual(["dispatched", "not-dispatched"]);
     expect(runner.calls).toHaveLength(1);
   });
@@ -479,17 +612,17 @@ describe("the crash windows, one test per row of the review's table", () => {
     const rootTwo = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const storeTwo = mustOpen(rootTwo, clock.now);
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     const reservation: JobEvent = {
       kind: "job-occurrence-reserved",
       at: "2026-09-08T12:00:00.000Z",
       jobId: key.jobId,
       scheduledAt: key.scheduledAt,
-      definitionHash: key.definitionHash,
+      behaviourHash: key.behaviourHash,
       occurrenceId: occurrenceId(key),
       instanceId: storeTwo.instanceId,
       leaseUntil: "2026-09-08T12:02:00.000Z",
-      what: JOB.what,
+      what: JOB.behaviour.what,
     };
     expect(storeTwo.append([reservation]).ok).toBe(true);
     closeStore(storeTwo);
@@ -545,7 +678,7 @@ describe("the crash windows, one test per row of the review's table", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     const abandoned = occurrenceId(key);
     first.append([
       {
@@ -553,11 +686,11 @@ describe("the crash windows, one test per row of the review's table", () => {
         at: "2026-09-08T12:00:00.000Z",
         jobId: key.jobId,
         scheduledAt: key.scheduledAt,
-        definitionHash: key.definitionHash,
+        behaviourHash: key.behaviourHash,
         occurrenceId: abandoned,
         instanceId: first.instanceId,
         leaseUntil: "2026-09-08T12:02:00.000Z",
-        what: JOB.what,
+        what: JOB.behaviour.what,
       },
     ]);
     closeStore(first);
@@ -763,18 +896,18 @@ describe("what the runner says", () => {
 });
 
 describe("the fold", () => {
-  const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+  const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
   const id = occurrenceId(key);
   const reservation: JobEvent = {
     kind: "job-occurrence-reserved",
     at: "2026-09-08T12:00:00.000Z",
     jobId: key.jobId,
     scheduledAt: key.scheduledAt,
-    definitionHash: key.definitionHash,
+    behaviourHash: key.behaviourHash,
     occurrenceId: id,
     instanceId: "instance-a",
     leaseUntil: "2026-09-08T12:02:00.000Z",
-    what: JOB.what,
+    what: JOB.behaviour.what,
   };
 
   test("reads OUR OWN reservation as in flight and somebody else's as unknown", () => {
@@ -810,18 +943,18 @@ describe("the fold", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     first.append([
       {
         kind: "job-occurrence-reserved",
         at: "2026-09-08T12:00:00.000Z",
         jobId: key.jobId,
         scheduledAt: key.scheduledAt,
-        definitionHash: key.definitionHash,
+        behaviourHash: key.behaviourHash,
         occurrenceId: occurrenceId(key),
         instanceId: first.instanceId,
         leaseUntil: "2026-09-08T12:02:00.000Z",
-        what: JOB.what,
+        what: JOB.behaviour.what,
       },
     ]);
     // The checkpoint AFTER the append, so its cursor covers the event and the
@@ -853,9 +986,9 @@ describe("the fold", () => {
     const events: JobEvent[] = [];
     for (let n = 0; n < 5; n += 1) {
       const at = new Date(Date.parse("2026-09-08T12:00:00.000Z") + n * 60_000).toISOString();
-      const k = { jobId: JOB.id, scheduledAt: at, definitionHash: definitionHash(JOB) };
+      const k = { jobId: JOB.behaviour.id, scheduledAt: at, behaviourHash: behaviourHash(JOB.behaviour) };
       const oid = occurrenceId(k);
-      events.push({ kind: "job-occurrence-reserved", at, jobId: k.jobId, scheduledAt: at, definitionHash: k.definitionHash, occurrenceId: oid, instanceId: "instance-a", leaseUntil: at, what: JOB.what });
+      events.push({ kind: "job-occurrence-reserved", at, jobId: k.jobId, scheduledAt: at, behaviourHash: k.behaviourHash, occurrenceId: oid, instanceId: "instance-a", leaseUntil: at, what: JOB.behaviour.what });
       events.push({ kind: "job-occurrence-finished", at, occurrenceId: oid, outcome: { kind: "exited", code: 0 } });
     }
     foldOccurrences(events, index, "instance-a");
@@ -868,8 +1001,8 @@ describe("the fold", () => {
     const events: JobEvent[] = [];
     for (let n = 0; n < UNKNOWN_RETENTION + 10; n += 1) {
       const at = new Date(Date.parse("2026-09-08T12:00:00.000Z") + n * 60_000).toISOString();
-      const k = { jobId: JOB.id, scheduledAt: at, definitionHash: definitionHash(JOB) };
-      events.push({ kind: "job-occurrence-reserved", at, jobId: k.jobId, scheduledAt: at, definitionHash: k.definitionHash, occurrenceId: occurrenceId(k), instanceId: "somebody-else", leaseUntil: at, what: JOB.what });
+      const k = { jobId: JOB.behaviour.id, scheduledAt: at, behaviourHash: behaviourHash(JOB.behaviour) };
+      events.push({ kind: "job-occurrence-reserved", at, jobId: k.jobId, scheduledAt: at, behaviourHash: k.behaviourHash, occurrenceId: occurrenceId(k), instanceId: "somebody-else", leaseUntil: at, what: JOB.behaviour.what });
     }
     foldOccurrences(events, index, "instance-a");
     expect(index.size).toBe(UNKNOWN_RETENTION);
@@ -887,7 +1020,7 @@ describe("the log as a corruption boundary", () => {
     // that into a cold start with a sentence, which is the loud outcome.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     writeFileSync(
       join(root, EVENTS_FILE),
       `${JSON.stringify({
@@ -895,11 +1028,11 @@ describe("the log as a corruption boundary", () => {
         at: "2026-09-08T12:00:00.000Z",
         jobId: key.jobId,
         scheduledAt: key.scheduledAt,
-        definitionHash: key.definitionHash,
+        behaviourHash: key.behaviourHash,
         occurrenceId: "somebody-elses-idea-of-a-name",
         instanceId: "instance-a",
         leaseUntil: "2026-09-08T12:02:00.000Z",
-        what: JOB.what,
+        what: JOB.behaviour.what,
       })}\n`,
     );
     const store = mustOpen(root, clock.now);
@@ -933,18 +1066,18 @@ describe("the log as a corruption boundary", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T11:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T11:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     first.append([
       {
         kind: "job-occurrence-reserved",
         at: "2026-09-08T11:00:00.000Z",
         jobId: key.jobId,
         scheduledAt: key.scheduledAt,
-        definitionHash: key.definitionHash,
+        behaviourHash: key.behaviourHash,
         occurrenceId: occurrenceId(key),
         instanceId: first.instanceId,
         leaseUntil: "2026-09-08T11:02:00.000Z",
-        what: JOB.what,
+        what: JOB.behaviour.what,
       },
       { kind: "job-occurrence-finished", at: "2026-09-08T11:00:30.000Z", occurrenceId: occurrenceId(key), outcome: { kind: "exited", code: 0 } },
     ]);
@@ -1035,18 +1168,18 @@ describe("the log as a corruption boundary", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T11:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T11:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     first.append([
       {
         kind: "job-occurrence-reserved",
         at: "2026-09-08T11:00:00.000Z",
         jobId: key.jobId,
         scheduledAt: key.scheduledAt,
-        definitionHash: key.definitionHash,
+        behaviourHash: key.behaviourHash,
         occurrenceId: occurrenceId(key),
         instanceId: first.instanceId,
         leaseUntil: "2026-09-08T11:02:00.000Z",
-        what: JOB.what,
+        what: JOB.behaviour.what,
       },
     ]);
     first.checkpoint({ lastGoodSnapshotAt: null, tick: true });
@@ -1134,10 +1267,12 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const runner = spawnRecorder();
     const lost: LostRecord[] = [];
     const reports = schedulerTick({
-      definitions: [{ definition: JOB, authorisedHash: definitionHash(JOB) }],
+      definitions: [{ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn: runner.spawn,
       now: clock.now,
+      arming: ARMED,
+      launchSeparationMs: NO_SPACING,
       onLostRecord: (record) => lost.push(record),
     });
     expect(reportKinds(reports)).toEqual(["dispatched"]);
@@ -1170,10 +1305,12 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     });
     const lost: LostRecord[] = [];
     schedulerTick({
-      definitions: [{ definition: JOB, authorisedHash: definitionHash(JOB) }],
+      definitions: [{ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn,
       now: clock.now,
+      arming: ARMED,
+      launchSeparationMs: NO_SPACING,
       onLostRecord: (record) => lost.push(record),
     });
     rejecters[0]?.(new Error("the child exploded"));
@@ -1200,26 +1337,30 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
 
 describe("the log a person reads", () => {
   test("every report kind has a line, and the alarming ones shout", () => {
-    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
+    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
     const id = occurrenceId(key);
     // A RECORD KEYED BY THE KIND, not an array — so the COMPILER is what says
     // "every kind", rather than this test's name saying it while a list quietly
     // falls behind the union. Three arms were added by the review's C2, C3 and
     // C5 and an array would have gone on passing without them.
     const each: Record<SchedulerReport["kind"], SchedulerReport> = {
-      dispatched: { kind: "dispatched", jobId: JOB.id, occurrenceId: id, pid: 1 },
-      refused: { kind: "refused", jobId: JOB.id, occurrenceId: id, why: "no" },
-      "not-dispatched": { kind: "not-dispatched", jobId: JOB.id, why: "no" },
-      held: { kind: "held", jobId: JOB.id, why: "no" },
-      waiting: { kind: "waiting", jobId: JOB.id, remainingMs: 1000 },
-      unauthorised: { kind: "unauthorised", jobId: JOB.id, why: "the pin says otherwise" },
-      "history-lost": { kind: "history-lost", jobId: JOB.id, why: "the log had a hole in it" },
-      unrecorded: { kind: "unrecorded", jobId: JOB.id, occurrenceId: id, fact: "finished", why: "no" },
-      stuck: { kind: "stuck", jobId: JOB.id, occurrenceId: id, overdueMs: 1000, why: "no" },
-      unaccounted: { kind: "unaccounted", jobId: JOB.id, occurrenceId: id, why: "no" },
+      dispatched: { kind: "dispatched", jobId: JOB.behaviour.id, occurrenceId: id, pid: 1 },
+      refused: { kind: "refused", jobId: JOB.behaviour.id, occurrenceId: id, why: "no" },
+      "not-dispatched": { kind: "not-dispatched", jobId: JOB.behaviour.id, why: "no" },
+      held: { kind: "held", jobId: JOB.behaviour.id, why: "no" },
+      waiting: { kind: "waiting", jobId: JOB.behaviour.id, remainingMs: 1000 },
+      // The two arms the schedule split added, and the record's key type is what
+      // made adding them here compulsory rather than optional.
+      "not-yet-eligible": { kind: "not-yet-eligible", jobId: JOB.behaviour.id, firstEligibleAt: "2026-09-08T12:30:00.000Z", remainingMs: 1000 },
+      "spacing-held": { kind: "spacing-held", jobId: JOB.behaviour.id, remainingMs: 1000, why: "a session started a moment ago" },
+      unauthorised: { kind: "unauthorised", jobId: JOB.behaviour.id, why: "the pin says otherwise" },
+      "history-lost": { kind: "history-lost", jobId: JOB.behaviour.id, why: "the log had a hole in it" },
+      unrecorded: { kind: "unrecorded", jobId: JOB.behaviour.id, occurrenceId: id, fact: "finished", why: "no" },
+      stuck: { kind: "stuck", jobId: JOB.behaviour.id, occurrenceId: id, overdueMs: 1000, why: "no" },
+      unaccounted: { kind: "unaccounted", jobId: JOB.behaviour.id, occurrenceId: id, why: "no" },
     };
     const lines = Object.values(each).map(describeReport);
-    for (const line of lines) expect(line).toContain(JOB.id);
+    for (const line of lines) expect(line).toContain(JOB.behaviour.id);
     // Distinct sentences, for the reason the watchdog's four states are: a
     // reader tailing the log has nothing but the words.
     expect(new Set(lines).size).toBe(lines.length);

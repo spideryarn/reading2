@@ -60,7 +60,18 @@ import { descendsFrom } from "./steer.js";
    buttons from what this file describes and cannot import a module that reaches
    node:child_process. Re-exported so every existing `from "./actions.js"`
    import keeps working. */
-import type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
+import type {
+  Action as WireAction,
+  ActionId as WireActionId,
+  ActionScope as WireActionScope,
+  BroadcastAction as WireBroadcastAction,
+  BroadcastActionId as WireBroadcastActionId,
+  EnactedAction as WireEnactedAction,
+  EnactedActionId as WireEnactedActionId,
+  Speaker,
+  SpokenAction,
+  Stagger as WireStagger,
+} from "./wire.js";
 
 export type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
 
@@ -68,83 +79,16 @@ export type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
  * The vocabulary.
  * ------------------------------------------------------------------ */
 
-/** Where the action appears, and what it is addressed to. */
-export type ActionScope =
-  /** One session. Needs a `SteerTarget` or a worktree. */
-  | "session"
-  /** The box. Needs no session, and affects everybody. */
-  | "box";
-
 /* `SpokenActionId` and `SpokenAction` are in wire.ts and re-exported above. */
 
-export type EnactedActionId = "remove-worktree" | "kill-session" | "kill-test-suites" | "kill-safe-processes";
-
-export type BroadcastActionId = "resource-broadcast";
-
-export type ActionId = SpokenActionId | EnactedActionId | BroadcastActionId;
-
-/**
- * An effect outside the conversation: a directory deleted, a process signalled.
- *
- * There is no `text` on this arm and there never should be. The catalogue entry
- * is a DESCRIPTOR — the argv depends on which worktree, which session, which
- * pids, none of which is known until the moment of use — so the commands come
- * from the `plan*` functions below, which take those inputs and can refuse.
- */
-export type EnactedAction = {
-  effect: "enacted";
-  id: EnactedActionId;
-  scope: ActionScope;
-  label: string;
-  summary: string;
-  /**
-   * Literal `true`. An enacted action is never one-tap: each of the four
-   * either deletes work, kills somebody's agent, or throws away a running test
-   * suite. Typed as the literal so that adding a one-tap enacted action is a
-   * compile error and therefore a decision.
-   */
-  needsConfirm: true;
-  /**
-   * The named gate that must pass before the effect, in prose, for the
-   * confirmation dialog. The machine-readable form is the first `Step` of the
-   * plan; this is what the person reads before they press yes.
-   */
-  gate: string;
-};
-
-/**
- * One sentence to every steerable session, each with its own resume time.
- *
- * Greg's word is **staggered**, and the direction doc says why in one line:
- * thirty-six agents told to pause for an hour all resume in the same second,
- * and the box falls over at the far end instead of the near one. So there is
- * no `text` here either — `renderBroadcast` produces a different sentence per
- * recipient, and the stagger is a parameter of the action rather than a
- * convention in whoever calls it.
- */
-export type BroadcastAction = {
-  effect: "broadcast";
-  id: BroadcastActionId;
-  scope: "box";
-  label: string;
-  summary: string;
-  needsConfirm: true;
-  stagger: Stagger;
-};
-
-export type Action = SpokenAction | EnactedAction | BroadcastAction;
-
-/**
- * How the pause is spread across the fleet.
- *
- * `minMinutes` is not zero and must not be: a recipient told to pause for zero
- * minutes has not paused, and with an evenly spread window somebody always
- * draws the bottom of it. `windowMinutes` is Greg's "up to an hour".
- */
-export type Stagger = {
-  minMinutes: number;
-  windowMinutes: number;
-};
+export type ActionScope = WireActionScope;
+export type EnactedActionId = WireEnactedActionId;
+export type BroadcastActionId = WireBroadcastActionId;
+export type ActionId = WireActionId;
+export type EnactedAction = WireEnactedAction;
+export type BroadcastAction = WireBroadcastAction;
+export type Action = WireAction;
+export type Stagger = WireStagger;
 
 /* ------------------------------------------------------------------ *
  * The words.
@@ -522,6 +466,13 @@ export function boxActions(): readonly Action[] {
 const SPEAKER_PREFIX: Record<Speaker, string> = {
   greg: "[Greg, via the fleet dashboard] ",
   overseer: "[The Overseer — an automated coordinator, NOT Greg. Weigh this as a suggestion from a peer, and push back if it is wrong for what you are doing.] ",
+  // Wording agreed with the session that RECEIVES it, 2026-09-09. It says that
+  // nothing is being asked, because unlike the two above, nothing is. See
+  // `Speaker` in wire.ts for why this is a third arm rather than a reuse, and
+  // for the rule that it splits rather than softens if it ever carries an
+  // instruction.
+  dashboard:
+    "[The fleet dashboard, reporting an event. Nobody is asking you for anything: a person started a new session from the web UI, and this is the record of it.] ",
 };
 
 /** What actually goes to `sendMessage` for a spoken action. */

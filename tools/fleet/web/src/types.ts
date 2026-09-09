@@ -33,6 +33,9 @@
  * module exists to prevent.
  */
 import { readAttemptClock, type AttemptClock } from "../../attempt-clock.js";
+import { isAddressableHarness } from "../../execution-token.js";
+import { overseerClaim, parseRole, type SessionRole } from "../../overseer-claim.js";
+import { absenceGapReason } from "../../usage-absence.js";
 import type {
   AttentionAnswerability,
   AttentionEvidence,
@@ -40,9 +43,27 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  ConversationReading,
+  ExecutionReading,
+  SessionDescription,
+  ExecutionUnknownCause,
   FleetState as FleetStateWire,
+  HarnessKind,
+  OverseerHeartbeat,
+  OverseerRegister,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerStatusFeed,
   Pause,
   PauseUnknownCause,
+  ScanCoverage,
+  UsageAccount,
+  UsageFeed,
+  UsageIncident,
+  UsageLevel,
+  UsageSummary,
+  UsageWindowCard,
 } from "../../wire.js";
 
 export type { AttemptClock };
@@ -54,8 +75,21 @@ export type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  OverseerHeartbeat,
+  OverseerRegister,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerStatusFeed,
   Pause,
   PauseUnknownCause,
+  ScanCoverage,
+  UsageAccount,
+  UsageFeed,
+  UsageIncident,
+  UsageLevel,
+  UsageSummary,
+  UsageWindowCard,
 };
 
 export type FleetStatus =
@@ -194,6 +228,19 @@ export type FleetPermissionMode =
  */
 export type SessionMeta = { version: "legacy" } | { version: 1; kind: string | null; repo: string | null; dir: string | null };
 
+/**
+ * Whether a session is the Overseer — the box's one supervising session
+ * (docs/project/overseer.md).
+ *
+ * **NOT RESTATED HERE.** `tools/fleet/overseer-claim.ts` is a leaf module with
+ * no imports, so this project can compile it — the same escape `attempt-clock.ts`
+ * takes, and it means the parse and the *who holds it* rule are one
+ * implementation rather than a twin the compiler could not relate. Re-exported
+ * so that a component reads its types from one place.
+ */
+export type { OverseerClaim, SessionRole } from "../../overseer-claim.js";
+export { overseerClaim, parseRole };
+
 /** One session. Flat, because it is rendered and it is JSON. */
 export type FleetRow = {
   /** tmux's SESSION handle, `$1643` — the address, and stable across renames. */
@@ -219,6 +266,8 @@ export type FleetRow = {
   pause: Pause;
   /** What the session recorded about itself. See `SessionMeta`. */
   meta: SessionMeta;
+  /** Whether this session is the Overseer. See `SessionRole`. */
+  role: SessionRole;
   /**
    * The pane's own pid, when tmux told us — `#{pane_pid}`.
    *
@@ -239,6 +288,31 @@ export type FleetRow = {
    * a null here means the row cannot be steered at all.
    */
   claudeSessionId: string | null;
+  /**
+   * **WHICH RUN IS IN THE PANE — and the only field on this row that can tell
+   * a fresh Claude from the one you were talking to.**
+   *
+   * Every identifier above survives a claude exiting and another starting in
+   * the same pane: `paneId` and `panePid` belong to the pane's shell, which
+   * never died, and `claudeSessionId` is the tmux environment's launch claim,
+   * written once and never rewritten. This is the reading that does not, and
+   * `ExecutionReading` in `wire.ts` says how it is derived.
+   *
+   * A page that keys anything to a session — a draft, a transcript heading, a
+   * measured age — compares this reading's token to the one it stored, and
+   * quarantines rather than continuing when they differ or when there is no
+   * reading. Never `verified` by default: a producer that predates this field
+   * parses to `unknown`/`not-reported`.
+   */
+  execution: ExecutionReading;
+  /**
+   * What this session is about, in a sentence — generated on the server and
+   * joined onto the row there, never matched up here.
+   *
+   * The join needs the execution token and the verified conversation id, and a
+   * client doing that would be a second hand-written copy of the identity rule.
+   */
+  description: SessionDescription;
   /**
    * **THE SERVER'S OWN `status` OBJECT, UNTOUCHED**, to be handed back verbatim
    * on a steering request. `status` above is the parse, and it is for drawing.
@@ -321,6 +395,15 @@ export type FleetState = Omit<
   | "answeringEnabled"
   | "refreshMs"
   | "attention"
+  /* Re-typed: widened by one arm for the same reason `attention` is — a field
+     that is PRESENT and unreadable is a fact about the payload, which the server
+     cannot report about itself. See `OverseerView`. */
+  | "overseer"
+  /* Re-typed: the same widening a third time, and see `parseUsage` for the one
+     way this feed differs from the two above it — none of its timestamps is
+     shifted onto the browser's clock, because they are rendered as wall-clock
+     times in three zones rather than as ages. */
+  | "usage"
   /* Re-typed too, and it was DECLINED for a day on reasoning that did not hold.
      The entry here used to say that `readAttemptClock` is a runtime value, so it
      could not live in wire.ts, so both sides could not share one — and therefore
@@ -378,6 +461,25 @@ export type FleetState = Omit<
    * server cannot report it and this page must. See `AttentionView`.
    */
   attention: AttentionView;
+  /**
+   * **IS SUPERVISION STILL WORKING?** — the Overseer's two clocks, its
+   * heartbeat, its scheduler line and the history it holds, or the reason there
+   * is no reading.
+   *
+   * Widened from the wire's `OverseerStatusFeed` by the same one arm
+   * `attention` is: a field that is present and will not parse is a fact about
+   * the payload rather than about the box. See `OverseerView`.
+   */
+  overseer: OverseerView;
+  /**
+   * **CAN THIS ACCOUNT AFFORD MORE WORK?** — the last usage pass's reading of
+   * the logged-in account, or the reason there is nothing to say.
+   *
+   * Widened by the same one arm as the two above it, and carrying its
+   * timestamps UNSHIFTED, which no other field here does — `parseUsage` says
+   * why, and `UsageCard` is the one component that applies the skew itself.
+   */
+  usage: UsageView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -602,7 +704,22 @@ export function shiftToBrowserClock(value: string | null, skew: ClockSkew): stri
   if (value === null || skew.kind === "unknown" || skew.ms === 0) return value;
   const at = Date.parse(value);
   if (!Number.isFinite(at)) return value;
-  return new Date(shiftMsToBrowserClock(at, skew)).toISOString();
+  const shifted = shiftMsToBrowserClock(at, skew);
+  /* **THE SHIFT CAN LEAVE THE RANGE `Date` CAN EXPRESS, AND THEN
+     `toISOString()` THROWS.** Both inputs are individually valid — a canonical
+     ISO instant near the ±8.64e15 boundary, and a skew measured from a
+     `servedAt` the server chose — and their difference is not. This function is
+     called from `parseFleetState`, so the throw takes down the parse of the
+     WHOLE payload: no rows, no inbox, no status, from one field at the edge of
+     the calendar. Reproduced by GPT Sol in round two, 2026-09-09.
+
+     Returning the value untouched is the behaviour this function already has
+     for anything it cannot move — see the paragraph above — so an unshiftable
+     instant degrades to an unshifted one rather than to nothing. That is the
+     safe direction: the reader sees a time that is a few milliseconds of skew
+     wrong at the far end of history, instead of an empty page. */
+  if (!Number.isFinite(shifted) || Math.abs(shifted) > 8.64e15) return value;
+  return new Date(shifted).toISOString();
 }
 
 /**
@@ -928,6 +1045,200 @@ export function parsePause(v: unknown, skew: ClockSkew): Pause {
 }
 
 /**
+ * **WHICH RUN IS IN THE PANE, off the wire — and an absent field is
+ * `not-reported`, never anything reassuring.**
+ *
+ * The same rule as `parsePause` above and for the same reason, but the stakes
+ * are higher by one step: a `pause` this page invents makes a badge wrong, and
+ * an `execution` this page invents makes a page go on writing into a
+ * conversation that has been replaced. So there is no arm here that a missing
+ * or malformed payload can reach except `unknown`, and every `unknown` carries
+ * the cause that says which kind of not-knowing it is.
+ *
+ * **`verified` IS CHECKED FIELD BY FIELD.** A token with a missing `startTicks`
+ * is not a token — it is the identity with the pid-reuse defence removed — so a
+ * half-shaped `verified` becomes `unknown`/`not-reported` rather than a
+ * `verified` with a hole in it.
+ */
+/**
+ * The harness names this build knows, as a `Record` over the closed union
+ * rather than an array: adding an arm to `HarnessKind` without adding it here
+ * stops the build, which is the same mechanism `HARNESS_CAPABILITIES` uses on
+ * the server. An unfamiliar name off the wire becomes `unknown`, which is the
+ * arm that refuses everything.
+ */
+const HARNESS_KINDS: Record<HarnessKind, true> = {
+  "claude-code": true,
+  "claude-headless": true,
+  "codex-batch": true,
+  "codex-interactive": true,
+  shell: true,
+  unknown: true,
+};
+
+/**
+ * What the server said this session is about.
+ *
+ * **An absent field is `not-yet-described`, not a blank.** A server too old to
+ * send one has made no claim, and a row drawing nothing would read as a session
+ * with nothing to say — which is a different fact and the one this whole feature
+ * exists to stop the page implying.
+ *
+ * **An empty string is refused on the way in.** Greg ruled that arm out by name;
+ * a model that answered a different question returns the right shape with empty
+ * strings in it, and a lenient parse here would put one on the page after the
+ * server's own parser had already turned it away.
+ */
+export function parseDescription(v: unknown): SessionDescription {
+  const notYet = (why: string): SessionDescription => ({ kind: "not-yet-described", why });
+  if (v === undefined || v === null) {
+    return notYet("this server does not generate descriptions yet");
+  }
+  if (!isRecord(v)) return notYet("the server sent a description that is not an object");
+
+  const kind = str(v["kind"]);
+  if (kind === "cannot-tell") {
+    return { kind: "cannot-tell", why: str(v["why"]) ?? "the server did not say why" };
+  }
+  if (kind === "not-yet-described") {
+    return notYet(str(v["why"]) ?? "this session has not been described yet");
+  }
+  if (kind !== "described") return notYet(`this build does not know the description kind ${JSON.stringify(kind)}`);
+
+  const title = str(v["title"])?.trim() ?? "";
+  const description = str(v["description"])?.trim() ?? "";
+  const describedAt = str(v["describedAt"]);
+  if (title === "" || description === "" || describedAt === null) {
+    return notYet("the server called this described and did not say what it is");
+  }
+  return { kind: "described", title, description, describedAt };
+}
+
+export function parseExecution(v: unknown): ExecutionReading {
+  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
+    kind: "unknown",
+    cause,
+    why,
+  });
+  if (v === undefined || v === null) {
+    return unread("this server does not report what is executing in each pane, so continuity cannot be established");
+  }
+  if (!isRecord(v)) return unread("the server sent an execution reading that is not an object");
+
+  const kind = str(v["kind"]);
+  if (kind === "unknown") {
+    return { kind: "unknown", cause: parseExecutionCause(v["cause"]), why: str(v["why"]) ?? "no reason was given" };
+  }
+  if (kind === "claimed-only") {
+    const conversation = parseConversation(v["conversation"]);
+    if (conversation === null) return unread("the server sent a claimed-only execution with no readable conversation reading");
+    return { kind: "claimed-only", conversation, why: str(v["why"]) ?? "no reason was given" };
+  }
+  if (kind === "verified") {
+    const token = v["token"];
+    const harness = str(v["harness"]);
+    const conversation = parseConversation(v["conversation"]);
+    if (!isRecord(token) || harness === null || conversation === null) {
+      return unread("the server sent a verified execution without a token, a harness and a conversation reading");
+    }
+    const boot = str(token["boot"]);
+    const pid = token["pid"];
+    const startTicks = token["startTicks"];
+    if (
+      boot === null ||
+      boot === "" ||
+      typeof pid !== "number" ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      typeof startTicks !== "number" ||
+      !Number.isSafeInteger(startTicks) ||
+      startTicks < 0
+    ) {
+      return unread("the server sent a verified execution whose token is not a boot id, a pid and a start tick");
+    }
+    return {
+      kind: "verified",
+      token: { boot, pid, startTicks },
+      // A harness kind this build has not heard of is kept rather than
+      // rejected: it is a label beside the token, and the token is the part
+      // anything acts on. `HARNESS_KINDS` below is what gates capabilities.
+      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
+      conversation,
+    };
+  }
+  return unread(
+    kind === null ? "the server sent an execution reading with no kind" : `this page does not know the execution reading ${JSON.stringify(kind)}`,
+  );
+}
+
+/**
+ * The reading, checked against the row it arrived on — the browser's copy of
+ * `coherentWith` in `tools/overseer/observation.ts`.
+ *
+ * Two independent readers of one wire type is this area's stated design, so the
+ * rule is stated twice on purpose. **The policy about which harnesses are
+ * addressable is NOT duplicated** — and until GPT Sol's round-2 follow-on this
+ * comment said that while the line below spelled `=== "claude-code"` inline,
+ * which made it false in the same breath. It calls `isAddressableHarness` now,
+ * and there is one definition for all three callers.
+ */
+function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
+  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
+  const observed = reading.conversation.id;
+  if (claimed !== null && observed === claimed && isAddressableHarness(reading.harness)) return reading;
+  const why =
+    claimed === null
+      ? `this row claims no conversation, so a report that it is running ${observed} agrees with nothing`
+      : observed !== claimed
+        ? `the server reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
+        : `the server reports a verified conversation on ${reading.harness}, which cannot hold one`;
+  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
+}
+
+/** One conversation verdict, or null when the payload does not carry one. */
+function parseConversation(v: unknown): ConversationReading | null {
+  if (!isRecord(v)) return null;
+  const kind = str(v["kind"]);
+  if (kind === "not-claimed") return { kind: "not-claimed" };
+  if (kind === "verified") {
+    const id = str(v["id"]);
+    return id === null || id === "" ? null : { kind: "verified", id };
+  }
+  if (kind === "conflicting") {
+    const claimed = str(v["claimed"]);
+    const observed = str(v["observed"]);
+    return claimed === null || observed === null ? null : { kind: "conflicting", claimed, observed };
+  }
+  if (kind === "unverifiable") {
+    const claimed = str(v["claimed"]);
+    return claimed === null ? null : { kind: "unverifiable", claimed, why: str(v["why"]) ?? "no reason was given" };
+  }
+  return null;
+}
+
+/**
+ * The named cause, or `not-reported` — which is the one that says the producer
+ * never offered a reading at all. Same fallback rule as `parsePauseCause`.
+ */
+const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
+  "not-probed": true,
+  "not-reported": true,
+  "no-pane-pid": true,
+  "process-table-unreadable": true,
+  "pane-tree-unreadable": true,
+  "platform-unsupported": true,
+  "boot-identity-unreadable": true,
+  "process-start-unreadable": true,
+  "process-changed-under-read": true,
+  "uptime-unreadable": true,
+};
+
+function parseExecutionCause(v: unknown): ExecutionUnknownCause {
+  const name = str(v);
+  return name !== null && Object.hasOwn(EXECUTION_CAUSES, name) ? (name as ExecutionUnknownCause) : "not-reported";
+}
+
+/**
  * The named cause, or the one that says we were never told.
  *
  * A cause this build has not heard of falls back rather than throwing: the
@@ -987,11 +1298,20 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
     permissionMode: parsePermissionMode(v["permissionMode"]),
     pause: parsePause(v["pause"], skew),
     meta: parseMeta(v["meta"]),
+    role: parseRole(v["role"]),
     panePid:
       typeof v["panePid"] === "number" && Number.isSafeInteger(v["panePid"]) && v["panePid"] > 0
         ? v["panePid"]
         : null,
     claudeSessionId: str(v["claudeSessionId"]),
+    /* CHECKED AGAINST ITS OWN ROW, not only against its own shape. A payload
+       asserting a verified conversation that the row does not claim, or one on
+       a harness that cannot hold a conversation, is downgraded to
+       `unverifiable` — the process reading survives, the claim about which
+       transcript it is writing does not. Same rule as `coherentWith` in
+       tools/overseer/observation.ts; GPT Sol's P2-4. */
+    execution: coherentWith(parseExecution(v["execution"]), str(v["claudeSessionId"])),
+    description: parseDescription(v["description"]),
     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
        kept so it can be serialised back exactly as it arrived. */
     rawStatus: v["status"] ?? null,
@@ -1295,6 +1615,764 @@ function parseAnswerability(raw: unknown): AttentionAnswerability | null {
   return null;
 }
 
+/* --------------------------------------------- is supervision working? -- */
+
+/**
+ * **THE SAME FIFTH STATE, for the same reason** — `AttentionView` above argues
+ * it in full. `OverseerStatusFeed`'s arms are all facts about the box; this one
+ * is a fact about the payload, so it cannot live on the shared type.
+ *
+ * It matters more here than it does for the inbox, because this is the card
+ * that says whether anything is watching. *This server did not look* draws
+ * nothing; *we looked and cannot read the answer* is a page and a server that
+ * have come apart, and every session on the box may be waiting with nothing
+ * watching while it is true.
+ */
+export type OverseerView = OverseerStatusFeed | { kind: "feed-unreadable"; why: string };
+
+/**
+ * **IS SUPERVISION STILL WORKING?, off the wire** — derived, never adopted.
+ *
+ * The fourth parser of this file's shapes and the third of this one, and the
+ * same argument holds: between `tools/fleet/overseer-status.ts` and here sit
+ * `JSON.stringify`, HTTP and a browser tab iOS may have kept alive across a
+ * deploy, so a page has to be able to read a payload from a server it is not
+ * the same age as.
+ *
+ * **Every timestamp is shifted onto this browser's clock** (`ClockSkew`), and
+ * the stakes are the card's whole claim: it decides whether to warn that the
+ * Overseer has stopped writing, or that it is writing but no longer hearing
+ * from the dashboard, by asking how old two of these are. A phone a few minutes
+ * fast would otherwise turn a healthy pair into an alarm, or — with the sign
+ * the other way — a dead daemon into a fresh one.
+ *
+ * **Absent is `not-asked`; present-but-wrong is `feed-unreadable`.** The field
+ * was added without a schema bump, so a server that predates it sends nothing —
+ * and unlike the inbox's arm of the same name, this one is drawn: the card is
+ * itself the evidence, so its absence would read as a page with nothing to
+ * report. `OverseerStatusCard`'s prop comment has the distinction.
+ */
+/**
+ * **THE CHECKPOINT SCHEMA THIS BUILD OF THE PAGE READS**, checked here as well
+ * as on the server.
+ *
+ * The server refuses an unknown version and sends `unsupported-schema`, so this
+ * looks redundant — and it is not, for the reason this whole file is a second
+ * parser: **the page can be older than the server it is talking to.** An iOS
+ * tab kept alive across a deploy holds this build; a newer server that had
+ * learned schema 3 would send it inside a `published` arm, and without this
+ * check the card would draw ages off fields whose meaning had moved. That is
+ * precisely the case where a wrong reading is worst — it looks like a healthy
+ * Overseer. GPT Sol's P1, 2026-09-08.
+ *
+ * The number is written twice, once here and once in `tools/fleet/attention.ts`
+ * as `KNOWN_SCHEMA`, because this file may not import a node module. Two
+ * declarations are the cost of two independent compatibility policies, which is
+ * the thing being bought.
+ */
+const KNOWN_CHECKPOINT_SCHEMA = 2;
+
+/**
+ * **THE LONGEST SOURCE DEADLINE THIS PAGE WILL BELIEVE**, in milliseconds.
+ *
+ * The daemon publishes the deadline it uses for *the collector has gone quiet*
+ * and the card prefers it over a constant, because the two ends drifted once
+ * already. But an unbounded number taken on trust is a way to make a dead
+ * source look healthy for ever: a `lastGoodSnapshotAt` from 2020 with a
+ * deadline of `1e300` renders as *supervision is running*. GPT Sol's P1.
+ *
+ * An hour is twelve times the daemon's documented normal (five missed 60-second
+ * collections), so anything past it is a bug or a hostile file rather than a
+ * cadence change. Beyond it the page falls back to its own deadline and says so
+ * — it does not fail the card, because the two clocks are still readable and
+ * still worth showing.
+ */
+const MAX_SOURCE_STALE_MS = 60 * 60_000;
+
+export function parseOverseer(raw: unknown, skew: ClockSkew): OverseerView {
+  /* Absent, and only absent. `null` is something a server chose to send. */
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): OverseerView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent an Overseer status that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "unsupported-schema": {
+      /* BOTH HALVES OR NEITHER. "This build cannot read the checkpoint" without
+         the two version numbers is a shrug; with them it is a thing somebody can
+         act on, which is the entire reason this arm is separate from the one
+         above it. */
+      const saw = nonBlank(raw["saw"]);
+      const known = raw["known"];
+      if (saw === null || typeof known !== "number" || !Number.isFinite(known)) {
+        return unreadable("the server refused the checkpoint's schema but did not say which versions were involved");
+      }
+      return { kind: "unsupported-schema", saw, known };
+    }
+    case "published": {
+      /* **THE VERSION FIRST, BEFORE ANY FIELD OF THE BODY IS READ.** A newer
+         server sending a schema this build has never read is the
+         old-tab-after-a-deploy case, and checking it afterwards meant a schema-3
+         status whose SHAPE had also changed failed the body parse first and came
+         back as a shrug — the diagnostic that names both versions is the one
+         thing a reader can act on. Reading the version out of a payload of an
+         unknown version is safe in the way reading its fields is not: it is the
+         field whose meaning cannot change. GPT Sol's P2 in round two. */
+      const body = raw["status"];
+      const schema = isRecord(body) ? body["schema"] : undefined;
+      if (typeof schema === "number" && schema !== KNOWN_CHECKPOINT_SCHEMA) {
+        return unreadable(
+          `the server read a checkpoint of schema ${schema} and this page reads schema ${KNOWN_CHECKPOINT_SCHEMA}`,
+        );
+      }
+      const status = parseOverseerStatus(body, skew);
+      if (status === null) return unreadable("the server published an Overseer status this page cannot read");
+      return { kind: "published", status };
+    }
+    default:
+      return unreadable(
+        `this page does not know the Overseer status ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
+/**
+ * The reading itself. `null` fails the arm — see `parseOverseer`.
+ *
+ * **The two clocks are all-or-nothing and the three parts are not**, which is
+ * the same split the server's projection makes and for the same reason: the
+ * card exists to put `writtenAt` and `lastGoodSnapshotAt` in one sentence, so a
+ * reading missing either is not a degraded card. The parts beside them each
+ * carry their own `unreadable` arm and reach it on their own.
+ */
+function parseOverseerStatus(raw: unknown, skew: ClockSkew): OverseerStatus | null {
+  if (!isRecord(raw)) return null;
+  const schema = raw["schema"];
+  if (typeof schema !== "number" || !Number.isFinite(schema)) return null;
+  const written = iso(raw["writtenAt"]);
+  if (written === null) return null;
+  const writtenAt = shiftToBrowserClock(written, skew) ?? written;
+  /* `null` IS A READING — the Overseer has accepted no snapshot at all — and
+     absent is not. `raw["lastGoodSnapshotAt"] === undefined` means a payload
+     this page cannot read, which fails the arm rather than manufacturing the
+     alarming answer. The server's projection makes the same distinction. */
+  const rawSource = raw["lastGoodSnapshotAt"];
+  let lastGoodSnapshotAt: string | null;
+  if (rawSource === null) {
+    lastGoodSnapshotAt = null;
+  } else {
+    const at = iso(rawSource);
+    if (at === null) return null;
+    lastGoodSnapshotAt = shiftToBrowserClock(at, skew) ?? at;
+  }
+  /* **A DURATION, NOT A TIMESTAMP** — nothing to skew-correct — and **an invalid
+     one is not a missing one.** Absent or null is a server that did not say and
+     the card falls back to its own deadline, naming it. A value that is there
+     and cannot be a deadline fails the whole reading, because the deadline is
+     part of the health judgement: without the ceiling AND this distinction, a
+     four-minute-old source with a deadline of `3_600_001` reads as *supervision
+     is running*. `MAX_SOURCE_STALE_MS`; GPT Sol's P1 in round two. */
+  const stale = raw["sourceStaleAfterMs"];
+  let sourceStaleAfterMs: number | null;
+  if (stale === undefined || stale === null) {
+    sourceStaleAfterMs = null;
+  } else if (typeof stale === "number" && Number.isFinite(stale) && stale > 0 && stale <= MAX_SOURCE_STALE_MS) {
+    sourceStaleAfterMs = stale;
+  } else {
+    return null;
+  }
+  return {
+    schema,
+    writtenAt,
+    lastGoodSnapshotAt,
+    sourceStaleAfterMs,
+    heartbeat: parseOverseerHeartbeat(raw["heartbeat"], skew),
+    scheduler: parseOverseerScheduler(raw["scheduler"], skew),
+    register: parseOverseerRegister(raw["register"], skew),
+  };
+}
+
+/** The daemon's own facts. A `lastTickAt` of `null` is a fresh start, not a stopped one. */
+function parseOverseerHeartbeat(raw: unknown, skew: ClockSkew): OverseerHeartbeat {
+  const bad = (why: string): OverseerHeartbeat => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no heartbeat this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the heartbeat and did not say why");
+  }
+  if (raw["kind"] !== "reading") return bad(`this page does not know the heartbeat ${JSON.stringify(raw["kind"] ?? null)}`);
+  const pid = count(raw["pid"]);
+  const instanceId = nonBlank(raw["instanceId"]);
+  const started = iso(raw["startedAt"]);
+  const ticks = count(raw["ticks"]);
+  if (pid === null || instanceId === null || started === null || ticks === null) {
+    return bad("the heartbeat arrived without a pid, an instance, a start time or a tick count");
+  }
+  const rawTick = raw["lastTickAt"];
+  let lastTickAt: string | null;
+  if (rawTick === null) {
+    lastTickAt = null;
+  } else {
+    const at = iso(rawTick);
+    if (at === null) return bad("the heartbeat's last tick is neither a timestamp nor null");
+    lastTickAt = shiftToBrowserClock(at, skew) ?? at;
+  }
+  return {
+    kind: "reading",
+    pid,
+    instanceId,
+    startedAt: shiftToBrowserClock(started, skew) ?? started,
+    lastTickAt,
+    ticks,
+  };
+}
+
+/**
+ * The scheduler line.
+ *
+ * **The default arm is why this is a function**, on this side too: 260908g may
+ * widen the discriminant, and a state this build has never seen must read as *I
+ * cannot tell* rather than borrow the mildest label on screen. The server
+ * already refuses one it does not know — this is the second door.
+ */
+function parseOverseerScheduler(raw: unknown, skew: ClockSkew): OverseerScheduler {
+  const bad = (why: string): OverseerScheduler => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no scheduler line this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the scheduler line and did not say why");
+  }
+  const why = nonBlank(raw["why"]);
+  const at = iso(raw["at"]);
+  if (why === null || at === null) return bad("the scheduler line arrived with no reason or no readable time");
+  const shifted = shiftToBrowserClock(at, skew) ?? at;
+  switch (raw["kind"]) {
+    case "armed":
+      return { kind: "armed", why, at: shifted };
+    case "off":
+      return { kind: "off", why, at: shifted };
+    case "not-said":
+      return { kind: "not-said", why, at: shifted };
+    default:
+      return bad(`this page does not know the scheduler state ${JSON.stringify(raw["kind"] ?? null)}`);
+  }
+}
+
+/**
+ * The Overseer's history of what has been running — **and one bad entry
+ * degrades the whole register**, for the reason the server's projection gives:
+ * the list claims *these are the ones that have waited longest*, which is a
+ * negative claim about everything not in it.
+ */
+function parseOverseerRegister(raw: unknown, skew: ClockSkew): OverseerRegister {
+  const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no register this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the register and did not say why");
+  }
+  if (raw["kind"] !== "read") return bad(`this page does not know the register ${JSON.stringify(raw["kind"] ?? null)}`);
+  const total = count(raw["total"]);
+  if (total === null) return bad("the register arrived without a count of what it holds");
+  const rawSessions = raw["sessions"];
+  if (!Array.isArray(rawSessions)) return bad("the register's sessions are not a list");
+  const sessions: OverseerSessionHistory[] = [];
+  for (const entry of rawSessions) {
+    const parsed = parseOverseerHistory(entry, skew);
+    if (parsed === null) return bad("an entry in the register is not one this page can read");
+    sessions.push(parsed);
+  }
+  /* MORE SHOWN THAN HELD IS CORRUPTION, not a reading: `sessions` is a capped
+     projection OF `total`, so it cannot be longer than it, and the card
+     subtracts one from the other to say how many are not shown. */
+  if (sessions.length > total) {
+    return bad(`the register shows ${sessions.length} sessions out of a register it says holds ${total}`);
+  }
+  return { kind: "read", total, sessions };
+}
+
+/** One remembered session. `≥` lives in the rendering; the arm lives here. */
+function parseOverseerHistory(raw: unknown, skew: ClockSkew): OverseerSessionHistory | null {
+  if (!isRecord(raw)) return null;
+  const name = nonBlank(raw["name"]);
+  const tmuxId = nonBlank(raw["tmuxId"]);
+  const status = nonBlank(raw["status"]);
+  if (name === null || tmuxId === null || status === null) return null;
+  const since = raw["since"];
+  if (!isRecord(since)) return null;
+  const at = iso(since["at"]);
+  if (at === null) return null;
+  if (since["kind"] !== "observed" && since["kind"] !== "lower-bound") return null;
+  return { name, tmuxId, status, since: { kind: since["kind"], at: shiftToBrowserClock(at, skew) ?? at } };
+}
+
+/* ------------------------------------ can this account afford more work? -- */
+
+/**
+ * **THE SAME FIFTH STATE ONE MORE TIME.** `AttentionView` argues it in full:
+ * the server's arms are all facts about the box, and *the server sent a usage
+ * reading this page cannot make sense of* is a fact about the payload, which
+ * the server cannot report about itself.
+ */
+export type UsageView = UsageFeed | { kind: "feed-unreadable"; why: string };
+
+/**
+ * **CAN THIS ACCOUNT AFFORD MORE WORK?, off the wire** — derived, never
+ * adopted, and the fifth parser of this file's shapes.
+ *
+ * ## NOTHING HERE IS SHIFTED ONTO THE BROWSER'S CLOCK, AND THAT IS THE ONE
+ * PLACE THIS FEED PARTS COMPANY WITH THE FOUR ABOVE IT
+ *
+ * Every other timestamp on this page exists to be turned into an AGE, and an
+ * age computed across two clocks is what had a phone three minutes fast holding
+ * the STALE banner on permanently — so `ClockSkew` is applied at this boundary
+ * and everything downstream is in browser terms.
+ *
+ * A reset instant is not an age. It is rendered as a WALL-CLOCK TIME, in UTC,
+ * London and Athens (`tools/fleet/zones.ts`, and Greg's *"I'm bouncing between
+ * London/Athens"*), and shifting it would print a time that is not the time the
+ * window actually resets — a page confidently saying *00:40 London* about an
+ * instant that is 00:43. The instant is the instant; only durations are
+ * relative to a clock.
+ *
+ * So these fields cross verbatim and **`UsageCard` applies the skew itself, at
+ * the point it computes a duration**, which is why that component takes the
+ * skew as a prop. The rule for this feed is one sentence: *the wire carries the
+ * box's own instants; the card converts when, and only when, it needs a
+ * length of time.*
+ *
+ * ## Otherwise the ordinary discipline
+ *
+ * **Absent is `not-asked`; present-but-wrong is `feed-unreadable`.** The field
+ * was added without a schema bump, so a server that predates it sends nothing,
+ * and drawing that as *nothing is limited* would be the most reassuring
+ * possible lie. Every arm the server can send is passed through with its own
+ * sentence intact — `no-report` above all, which is what a daemon started with
+ * `--no-usage` produces and which must not read as a broken file.
+ */
+export function parseUsage(raw: unknown): UsageView {
+  /* Absent, and only absent. `null` is something a server chose to send. */
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): UsageView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent a usage reading that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "unsupported-schema": {
+      /* BOTH HALVES OR NEITHER, for the reason `parseOverseer` gives: the two
+         version numbers are the only part of this arm anybody can act on. */
+      const saw = nonBlank(raw["saw"]);
+      const known = raw["known"];
+      if (saw === null || typeof known !== "number" || !Number.isFinite(known)) {
+        return unreadable("the server refused the checkpoint's schema but did not say which versions were involved");
+      }
+      return { kind: "unsupported-schema", saw, known };
+    }
+    case "no-report":
+    case "report-unreadable": {
+      /* TWO ARMS, ONE PARSE, AND THE DISTINCTION KEPT. *No pass has run* is
+         ordinary and *a report is there and cannot be read* is not, and the
+         card says different things about them — see `UsageFeed` in wire.ts.
+         The shapes are identical, which is why they share these six lines and
+         nothing else. */
+      const why = nonBlank(raw["why"]);
+      const at = iso(raw["at"]);
+      if (why === null || at === null) {
+        return unreadable("the server said there is no usable usage report but did not say why, or when it looked");
+      }
+      return raw["kind"] === "no-report" ? { kind: "no-report", why, at } : { kind: "report-unreadable", why, at };
+    }
+    case "published": {
+      const coordinatorWrittenAt = iso(raw["coordinatorWrittenAt"]);
+      if (coordinatorWrittenAt === null) {
+        return unreadable("the server published a usage reading with no readable checkpoint time");
+      }
+      const summary = parseUsageSummary(raw["summary"]);
+      if (summary === null) return unreadable("the server published a usage reading this page cannot read");
+      return { kind: "published", summary, coordinatorWrittenAt };
+    }
+    default:
+      return unreadable(
+        `this page does not know the usage reading ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
+/**
+ * The reading itself. `null` fails the arm — see `parseUsage`.
+ *
+ * **All or nothing, matching the server's own narrowing.** Half a usage card —
+ * windows with no verdict behind them, a verdict with no coverage under it — is
+ * a page making a claim it cannot support, and the sessions below are unaffected
+ * either way. The server's `parseSummary` degrades the same way and says so.
+ */
+function parseUsageSummary(raw: unknown): UsageSummary | null {
+  if (!isRecord(raw)) return null;
+  const collectedAt = iso(raw["collectedAt"]);
+  /* THE FIELD THAT MAKES THE REST HONEST — see wire.ts § `UsageSummary`. A
+     headroom number with no clock on it is the whole failure this subsystem
+     exists to refuse, so its absence fails the reading rather than borrowing
+     the checkpoint's clock, which is a different and much newer instant. */
+  if (collectedAt === null) return null;
+  const account = parseUsageAccount(raw["account"]);
+  if (account === null) return null;
+  const level = parseUsageLevel(raw["level"]);
+  if (level === null) return null;
+  const reasons = parseSentences(raw["reasons"]);
+  if (reasons === null) return null;
+  /* THE ACCOUNT IS PASSED IN, and it was not for a round: this parser required
+     the cache to name AN account and never checked it was THIS one, so a
+     payload pairing account B with an `attributed` cache belonging to account A
+     was accepted and drawn. The server cannot emit that today, which is exactly
+     why the header's claim to be a "second, independent" refusal has to be
+     true — an independent check that trusts the first one is not one.
+     GPT Sol's P1(1) in round two, 2026-09-09. */
+  const cache = parseUsageCache(raw["cache"], account);
+  if (cache === null) return null;
+  const limits = parseUsageLimits(raw["limits"]);
+  if (limits === null) return null;
+  /* `null` is the ordinary case: nothing is blocking. A value that is present
+     and is not a timestamp fails the reading — it is the field that says when
+     work can resume, and there is no safe way to read it as "never". */
+  const rawDueBack = raw["dueBackAt"];
+  const dueBackAt = rawDueBack === null || rawDueBack === undefined ? null : iso(rawDueBack);
+  if (rawDueBack !== null && rawDueBack !== undefined && dueBackAt === null) return null;
+  /* **BOTH HALVES OR NEITHER**, because they are two halves of one incident key
+     — wire.ts § `dueBackWindow`. An instant with no window matches every window
+     resetting at that instant, which is how one attributed limit puts an
+     attributed badge on a cluster the daemon could not attribute. */
+  const dueBackWindow = nonBlank(raw["dueBackWindow"]);
+  if ((dueBackAt === null) !== (dueBackWindow === null)) return null;
+  return { collectedAt, account, level, reasons, cache, limits, dueBackAt, dueBackWindow };
+}
+
+function parseUsageAccount(raw: unknown): UsageAccount | null {
+  if (!isRecord(raw)) return null;
+  switch (str(raw["kind"])) {
+    case "value":
+      return {
+        kind: "value",
+        email: nonBlank(raw["email"]),
+        orgId: nonBlank(raw["orgId"]),
+        orgName: nonBlank(raw["orgName"]),
+        subscriptionType: nonBlank(raw["subscriptionType"]),
+        accountUuid: nonBlank(raw["accountUuid"]),
+        rateLimitTier: nonBlank(raw["rateLimitTier"]),
+      };
+    case "logged-out":
+      /* NOT A FAILURE. `claude auth status` answered and the answer was that
+         nobody is logged in — the one thing on this card a person can fix. */
+      return { kind: "logged-out", projectsDirectory: nonBlank(raw["projectsDirectory"]) };
+    case "unknown": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: "unknown", why };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The four levels, and **an unknown one is not rounded down to `ok`**.
+ *
+ * The same rule `parseStatus` follows for a session state this build has never
+ * heard of: a fifth level added by a newer server must reach the page as *this
+ * build cannot read it*, because the reading a stale client is most likely to
+ * get wrong here is the reassuring one.
+ */
+function parseUsageLevel(raw: unknown): UsageLevel | null {
+  return raw === "ok" || raw === "approaching" || raw === "limited" || raw === "unknown" ? raw : null;
+}
+
+/** Sentences a person reads. A blank one is a hole under a heading — `nonBlank`'s own argument. */
+function parseSentences(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const entry of raw) {
+    const line = nonBlank(entry);
+    if (line === null) return null;
+    out.push(line);
+  }
+  return out;
+}
+
+/**
+ * The cache, in three arms — **and the browser will not manufacture the
+ * attributed one.**
+ *
+ * `attributed` is the only arm carrying percentages, and this parser can reach
+ * it only from a payload that already says `attributed` and names an account.
+ * A server that sent windows on any other arm has them dropped here rather than
+ * shown: after a `/login` swap `~/.claude.json` can hold the previous
+ * subscription's numbers, and a card naming account B over account A's *96%
+ * used* is somebody else's headroom reported as this one's. The server's
+ * `parseCache` makes the same refusal against the same rule
+ * (`attributeCache` in tools/overseer/usage.ts); this is the second, independent
+ * one, which is the whole point of there being two parsers.
+ */
+function parseUsageCache(raw: unknown, account: UsageAccount): UsageSummary["cache"] | null {
+  if (!isRecord(raw)) return null;
+  switch (str(raw["kind"])) {
+    case "unknown": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: "unknown", why };
+    }
+    case "unattributed": {
+      const why = nonBlank(raw["why"]);
+      if (why === null) return null;
+      /* Both may be genuinely absent: an unreadable account has no uuid to
+         name, and a cache with no fetch time is exactly why it is unattributed. */
+      const rawFetched = raw["fetchedAt"];
+      const fetchedAt = rawFetched === null || rawFetched === undefined ? null : iso(rawFetched);
+      if (rawFetched !== null && rawFetched !== undefined && fetchedAt === null) return null;
+      return { kind: "unattributed", why, fetchedAt, accountUuid: nonBlank(raw["accountUuid"]) };
+    }
+    case "attributed": {
+      const fetchedAt = iso(raw["fetchedAt"]);
+      /* NON-NULL BY CONSTRUCTION on this arm: attribution means both sides named
+         the same account, so a payload that claims it without naming one has
+         not been through that check and is not believed. */
+      const accountUuid = nonBlank(raw["accountUuid"]);
+      if (fetchedAt === null || accountUuid === null) return null;
+      /* **AND IT MUST BE THIS SUMMARY'S ACCOUNT.** The clause the server checks
+         and this side merely assumed. A percentage under the wrong name is the
+         P0 of this stage; a parser that takes the server's word for it has
+         moved the refusal rather than duplicated it. */
+      if (account.kind !== "value" || account.accountUuid === null || account.accountUuid !== accountUuid) return null;
+      const rawWindows = raw["windows"];
+      if (!Array.isArray(rawWindows)) return null;
+      const windows: UsageWindowCard[] = [];
+      for (const entry of rawWindows) {
+        const window = parseUsageWindowCard(entry);
+        /* ONE BAD WINDOW FAILS THE LIST. A card missing the one window that is
+           at 96% is worse than a card that says it cannot read the cache. */
+        if (window === null) return null;
+        windows.push(window);
+      }
+      return { kind: "attributed", fetchedAt, accountUuid, windows };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * One window. **The `expired` arm has no percentage and this parser will not
+ * grow one** — wire.ts § `UsageWindowCard` is the argument, and a second parser
+ * is exactly where a helpful `stalePercent` would reappear.
+ */
+function parseUsageWindowCard(raw: unknown): UsageWindowCard | null {
+  if (!isRecord(raw)) return null;
+  const window = nonBlank(raw["window"]);
+  if (window === null) return null;
+  switch (str(raw["kind"])) {
+    case "value": {
+      const utilizationPercent = raw["utilizationPercent"];
+      const resetsAt = iso(raw["resetsAt"]);
+      /* 0–100, the wire's own contract, checked on this side too — see the
+         server's `parseWindow`. A percentage outside it is a window this page
+         says it cannot read, not one it draws. */
+      if (typeof utilizationPercent !== "number" || !Number.isFinite(utilizationPercent) || resetsAt === null) {
+        return null;
+      }
+      if (utilizationPercent < 0 || utilizationPercent > 100) return null;
+      return { kind: "value", window, utilizationPercent, resetsAt };
+    }
+    case "expired": {
+      const resetsAt = iso(raw["resetsAt"]);
+      const why = nonBlank(raw["why"]);
+      return resetsAt === null || why === null ? null : { kind: "expired", window, resetsAt, why };
+    }
+    case "unknown": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: "unknown", window, why };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The incidents, and the coverage that is the only reason a zero means
+ * anything.
+ *
+ * **Every arm carries coverage, `unknown` included.** *No limits hit* and *the
+ * probe opened nothing* are the same sentence without it —
+ * docs/reusable/silent-success.md — and this parser refuses an arm that has
+ * lost it rather than drawing a calm account off a scan nobody can size.
+ */
+function parseUsageLimits(raw: unknown): UsageSummary["limits"] | null {
+  if (!isRecord(raw)) return null;
+  const coverage = parseScanCoverage(raw["coverage"]);
+  if (coverage === null) return null;
+  switch (str(raw["kind"])) {
+    case "none": {
+      /* **THE SECOND, INDEPENDENT REFUSAL.** A `none` whose own coverage cannot
+         support an absence renders as *nothing is blocking this account* over
+         *scanned 0 of 0 transcripts, 0 lines*. The server refuses it too; this
+         is the copy that protects a browser talking to a server it is not the
+         same age as. `absenceGapReason` is a leaf both import — one rule, two
+         call sites, and no third declaration of it. */
+      const gap = absenceGapReason(coverage);
+      if (gap !== null) {
+        return { kind: "unknown", why: `the scan reported no rejection, and its own coverage cannot support that: ${gap}`, coverage };
+      }
+      return { kind: "none", coverage };
+    }
+    case "unknown": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: "unknown", why, coverage };
+    }
+    case "incidents": {
+      const rawIncidents = raw["incidents"];
+      if (!Array.isArray(rawIncidents)) return null;
+      const incidents: UsageIncident[] = [];
+      const ids = new Set<string>();
+      for (const entry of rawIncidents) {
+        const incident = parseUsageIncident(entry);
+        if (incident === null) return null;
+        /* **IDS ARE REACT KEYS**, and two rows sharing one make React reconcile
+           them into each other — a row that silently takes another's content.
+           The grouper cannot emit a duplicate (one map entry, one id); a
+           payload that does is one this page says it cannot read. */
+        if (ids.has(incident.id)) return null;
+        ids.add(incident.id);
+        incidents.push(incident);
+      }
+      /* An `incidents` arm with nothing in it is a producer contradicting
+         itself, and the reading it produces on screen — a red heading over an
+         empty list — is the least actionable thing this card could draw. */
+      if (incidents.length === 0) return null;
+      return { kind: "incidents", incidents, coverage };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseUsageIncident(raw: unknown): UsageIncident | null {
+  if (!isRecord(raw)) return null;
+  const id = nonBlank(raw["id"]);
+  const window = nonBlank(raw["window"]);
+  const resetsAt = iso(raw["resetsAt"]);
+  const rejections = counted(raw["rejections"]);
+  const unidentifiedRejections = counted(raw["unidentifiedRejections"]);
+  if (id === null || window === null || resetsAt === null || rejections === null || unidentifiedRejections === null) {
+    return null;
+  }
+  const rawConversations = raw["conversations"];
+  if (!Array.isArray(rawConversations)) return null;
+  const conversations: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of rawConversations) {
+    const uuid = nonBlank(entry);
+    /* **DUPLICATES ARE REFUSED, NOT DEDUPLICATED.** The server's grouper emits a
+       deduplicated list, so a repeat means the payload did not come from it —
+       and silently collapsing one would make the row's own counts stop adding
+       up while it went on reading fine. */
+    if (uuid === null || seen.has(uuid)) return null;
+    seen.add(uuid);
+    conversations.push(uuid);
+  }
+  /* **THE COUNTS MUST BE ABLE TO ADD UP.** Every rejection is either attributed
+     to a conversation or counted as unattributed, so neither part may exceed the
+     whole and the named conversations cannot outnumber the rejections that named
+     them. The server's grouper cannot produce these states; a payload that does
+     is one this page should say it cannot read, not one it should draw
+     contradictory prose from. GPT Sol's P2(2), 2026-09-09. */
+  if (!Number.isInteger(rejections) || !Number.isInteger(unidentifiedRejections)) return null;
+  if (unidentifiedRejections > rejections) return null;
+  if (conversations.length > rejections - unidentifiedRejections) return null;
+  /* AN INCIDENT WITH NO REJECTIONS IS NOT AN INCIDENT. The grouper mints one
+     only from at least one hit, so a zero here is a payload that did not come
+     from it — and it renders as a window heading over "0 rejections", which is
+     prose that contradicts its own presence. */
+  if (rejections === 0) return null;
+  /* Both may be genuinely absent: a rejection whose transcript record carried
+     no timestamp of its own is real, and the incident is still worth drawing
+     without a window of time on it. */
+  const rawFirst = raw["firstHitAt"];
+  const rawLast = raw["lastHitAt"];
+  const firstHitAt = rawFirst === null || rawFirst === undefined ? null : iso(rawFirst);
+  const lastHitAt = rawLast === null || rawLast === undefined ? null : iso(rawLast);
+  if (rawFirst !== null && rawFirst !== undefined && firstHitAt === null) return null;
+  if (rawLast !== null && rawLast !== undefined && lastHitAt === null) return null;
+  return { id, window, resetsAt, conversations, rejections, unidentifiedRejections, firstHitAt, lastHitAt };
+}
+
+/**
+ * THE POSITIVE CONTROL, and **not one field of it is defaulted.**
+ *
+ * A `?? 0` on a counted field is how a scan that opened nothing arrives on
+ * screen reading as a scan that found nothing — the exact inversion the type
+ * exists to prevent. A missing field fails the coverage, which fails the whole
+ * reading, which is a card that says so.
+ */
+function parseScanCoverage(raw: unknown): ScanCoverage | null {
+  if (!isRecord(raw)) return null;
+  const transcriptsFound = counted(raw["transcriptsFound"]);
+  const transcriptsSelected = counted(raw["transcriptsSelected"]);
+  const transcriptsOpened = counted(raw["transcriptsOpened"]);
+  const transcriptsUnreadable = counted(raw["transcriptsUnreadable"]);
+  const linesScanned = counted(raw["linesScanned"]);
+  const candidateLines = counted(raw["candidateLines"]);
+  const linesParsed = counted(raw["linesParsed"]);
+  const malformedCandidates = counted(raw["malformedCandidates"]);
+  const quotaLimitsWithoutErrorSignal = counted(raw["quotaLimitsWithoutErrorSignal"]);
+  const tookMs = counted(raw["tookMs"]);
+  if (
+    transcriptsFound === null ||
+    transcriptsSelected === null ||
+    transcriptsOpened === null ||
+    transcriptsUnreadable === null ||
+    linesScanned === null ||
+    candidateLines === null ||
+    linesParsed === null ||
+    malformedCandidates === null ||
+    quotaLimitsWithoutErrorSignal === null ||
+    tookMs === null
+  ) {
+    return null;
+  }
+  const truncatedByLimit = raw["truncatedByLimit"];
+  if (typeof truncatedByLimit !== "boolean") return null;
+  const rawSince = raw["sinceMs"];
+  /* `null` is a real value: the scan applied no mtime window at all. */
+  if (rawSince !== null && (typeof rawSince !== "number" || !Number.isFinite(rawSince))) return null;
+  const rawWhy = raw["unreadableWhy"];
+  if (!Array.isArray(rawWhy)) return null;
+  const unreadableWhy: string[] = [];
+  for (const entry of rawWhy) {
+    if (typeof entry !== "string") return null;
+    unreadableWhy.push(entry);
+  }
+  return {
+    transcriptsFound,
+    transcriptsSelected,
+    transcriptsOpened,
+    transcriptsUnreadable,
+    unreadableWhy,
+    linesScanned,
+    candidateLines,
+    linesParsed,
+    malformedCandidates,
+    quotaLimitsWithoutErrorSignal,
+    truncatedByLimit,
+    sinceMs: rawSince === null ? null : rawSince,
+    tookMs,
+  };
+}
+
+/** A counted quantity: finite and non-negative. `-1` transcripts is a bug, not a reading. */
+function counted(raw: unknown): number | null {
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : null;
+}
+
 /**
  * Whether the payload could be read, and what to say if it could not.
  *
@@ -1419,6 +2497,19 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          went blank on it would have stopped saying what is running on the box,
          which is the more important half. */
       attention: parseAttention(raw["attention"], clockSkew),
+      /* **IS SUPERVISION STILL WORKING?** — the same join, one field along, and
+         it fails the same way: never throws, never fails the payload. A card
+         that cannot read the Overseer's status must leave the sessions below it
+         drawn, because a page that says nothing about what is running is worse
+         than one that says it cannot tell whether anything is watching. */
+      overseer: parseOverseer(raw["overseer"], clockSkew),
+      /* **THE THIRD PROJECTION OUT OF THE SAME CHECKPOINT READ**, and the one
+         that takes no `clockSkew`: its instants are drawn as wall-clock times
+         in three zones rather than as ages, so shifting them would print a
+         reset time that is not the reset time. `parseUsage` § NOTHING HERE IS
+         SHIFTED. Fails the same way as the two above it — never throws, never
+         fails the payload. */
+      usage: parseUsage(raw["usage"]),
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */

@@ -38,9 +38,17 @@
  *    reads it as zero. See `parseList`.
  *
  * So: parse **only the projection this tool needs** — `schema`, `writtenAt`,
- * `attention` — and ignore `register`, `cursor`, `heartbeat` and `usage`
- * entirely. They are not ours, and a field we do not read is a field that
- * cannot break us.
+ * `attention` — and ignore `cursor` and `usage` entirely. They are not ours,
+ * and a field we do not read is a field that cannot break us.
+ *
+ * **`heartbeat`, `register` and `scheduler` moved out of that sentence on
+ * 2026-09-08, into `overseer-status.ts` beside this file**, and the rule is
+ * unchanged rather than relaxed: that reader parses those three, arm by arm,
+ * with its own compatibility policy, and each of them degrades on its own
+ * rather than failing the file. What it shares with this one is the READ —
+ * `loadCheckpoint` below — because two reads of a file replaced by atomic
+ * rename can straddle a write, and the inbox and the clock beside it must come
+ * out of the same bytes.
  *
  * The TYPES still come from `wire.ts`, which both sides import, so a required
  * field added to `AttentionItem` is a compile error here as well as there. It
@@ -94,7 +102,7 @@ const CHECKPOINT_FILE = "current.json";
  * accepted anything would have done `Date.parse` on an object and drawn a blank
  * age instead of an error. **An unknown schema renders as *I cannot read this*.**
  */
-const KNOWN_SCHEMA = 2;
+export const KNOWN_SCHEMA = 2;
 
 /**
  * How large a checkpoint we are willing to read into this process.
@@ -124,6 +132,52 @@ const MAX_CHECKPOINT_BYTES = 4 * 1024 * 1024;
  * rule and the reason root resolution is inside the try/catch.
  */
 export function readAttention(root?: string): AttentionFeed {
+  const load = loadCheckpoint(root);
+  switch (load.kind) {
+    case "absent":
+      return { kind: "checkpoint-absent" };
+    case "unreadable":
+      return { kind: "checkpoint-unreadable", why: load.why };
+    case "json":
+      return projectAttention(load.json);
+    default: {
+      /* Unreachable, and it RETURNS rather than throws. A `never` check that
+         throws is still a throw on the one path this function promises never to
+         take — see § THIS FUNCTION MUST NOT THROW. The assignment is what makes
+         a fourth arm of `CheckpointLoad` a compile error here; the return is
+         what keeps the promise if one arrives at runtime anyway. */
+      const never: never = load;
+      return { kind: "checkpoint-unreadable", why: `the checkpoint reader returned ${JSON.stringify(never)}` };
+    }
+  }
+}
+
+/**
+ * The bytes, once, as JSON — or the reason there are none. **Never throws.**
+ *
+ * **Split out of `readAttention` so that two projections can share one read**,
+ * which is a correctness property and not a saving: `overseer-status.ts` draws
+ * the checkpoint's clocks and this file draws the inbox inside it, and two
+ * separate reads of a file replaced by atomic rename can land either side of a
+ * write. The page would then say *the inbox was scanned at X* beside *the
+ * Overseer last wrote at Y* out of two different files, and the pair is
+ * precisely what the card is for. `readCheckpointFeeds` in overseer-status.ts
+ * is the one composition, and **production goes through it and not through
+ * `readAttention`** — which stays as the inbox's own contract, drives
+ * tests/fleet-attention.test.ts, and is the thing to reach for if anything ever
+ * wants the inbox without the rest.
+ *
+ * The three arms are what the file system can tell us and nothing more: `json`
+ * carries whatever parsed, with no claim about its shape. Deciding what the
+ * shape means is each projection's own business, which is how the two get
+ * separate compatibility policies — the reason this reader exists at all.
+ */
+export type CheckpointLoad =
+  | { kind: "json"; json: unknown }
+  | { kind: "absent" }
+  | { kind: "unreadable"; why: string };
+
+export function loadCheckpoint(root?: string): CheckpointLoad {
   try {
     const dir = root ?? storeRoot();
     const path = join(dir, CHECKPOINT_FILE);
@@ -142,9 +196,9 @@ export function readAttention(root?: string): AttentionFeed {
       fd = openSync(path, "r");
     } catch (cause) {
       const code = errnoCode(cause);
-      if (code === "ENOENT") return { kind: "checkpoint-absent" };
+      if (code === "ENOENT") return { kind: "absent" };
       return {
-        kind: "checkpoint-unreadable",
+        kind: "unreadable",
         why: `${path} could not be opened: ${code ?? String(cause)}`,
       };
     }
@@ -155,10 +209,10 @@ export function readAttention(root?: string): AttentionFeed {
          descriptor — see MAX_CHECKPOINT_BYTES. A directory opens successfully
          on Linux, so this is also where "the path is not a file" is caught. */
       const stats = fstatSync(fd);
-      if (!stats.isFile()) return { kind: "checkpoint-unreadable", why: `${path} is not a file` };
+      if (!stats.isFile()) return { kind: "unreadable", why: `${path} is not a file` };
       if (stats.size > MAX_CHECKPOINT_BYTES) {
         return {
-          kind: "checkpoint-unreadable",
+          kind: "unreadable",
           why: `${path} is ${stats.size} bytes, over the ${MAX_CHECKPOINT_BYTES}-byte ceiling this reader will load`,
         };
       }
@@ -175,21 +229,21 @@ export function readAttention(root?: string): AttentionFeed {
         /* nothing to do about it here */
       }
     }
-    if (text.trim() === "") return { kind: "checkpoint-unreadable", why: `${path} is empty` };
+    if (text.trim() === "") return { kind: "unreadable", why: `${path} is empty` };
 
     let json: unknown;
     try {
       json = JSON.parse(text);
     } catch (cause) {
-      return { kind: "checkpoint-unreadable", why: `${path} is not JSON: ${String(cause)}` };
+      return { kind: "unreadable", why: `${path} is not JSON: ${String(cause)}` };
     }
-    return readProjection(json);
+    return { kind: "json", json };
   } catch (cause) {
     /* The outer net. A relative `OVERSEER_STORE_DIR`, a permissions change, an
        EIO — none of them may reach the refresh loop, because `publish()` is
        outside its try/catch and a throw there stops the dashboard updating
        while it goes on looking current. */
-    return { kind: "checkpoint-unreadable", why: `the inbox could not be read: ${String(cause)}` };
+    return { kind: "unreadable", why: `the checkpoint could not be read: ${String(cause)}` };
   }
 }
 
@@ -202,7 +256,7 @@ export function readAttention(root?: string): AttentionFeed {
  * two stores and two histories — and there is no sensible value to carry on
  * with. `readAttention` catches it and says so on the page.
  */
-function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
+export function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
   const override = env["OVERSEER_STORE_DIR"];
   if (override === undefined || override.trim() === "") return join(homedir(), ".overseer");
   const trimmed = override.trim();
@@ -232,18 +286,26 @@ function errnoCode(cause: unknown): string | null {
  * The projection: three fields out of a file that has eight.
  * ------------------------------------------------------------------ */
 
-function isRecord(u: unknown): u is Record<string, unknown> {
+/* **THE FOUR BELOW ARE EXPORTED FOR `overseer-status.ts` AND FOR NOTHING
+   ELSE.** There are copies of `nonBlank` and `iso` in store.ts and in
+   web/src/types.ts, each with a comment defending itself, and those defences
+   are about crossing a boundary: a different process, a different tool, a
+   different compatibility policy. `overseer-status.ts` is none of those — it is
+   the same reader of the same file, one directory along, sharing this file's
+   read — so a fifth copy there would be the simplified one nobody notices is
+   wrong. Same rule `lock.ts` came out of `store.ts` under. */
+export function isRecord(u: unknown): u is Record<string, unknown> {
   return typeof u === "object" && u !== null && !Array.isArray(u);
 }
 
 /** A timestamp that came from `toISOString()`, checked by round trip. */
-function iso(u: unknown): string | null {
+export function iso(u: unknown): string | null {
   if (typeof u !== "string") return null;
   const at = new Date(u);
   return Number.isNaN(at.getTime()) || at.toISOString() !== u ? null : u;
 }
 
-function count(u: unknown): number | null {
+export function count(u: unknown): number | null {
   return typeof u === "number" && Number.isInteger(u) && u >= 0 ? u : null;
 }
 
@@ -259,11 +321,18 @@ function count(u: unknown): number | null {
  * not cross. Whitespace counts as blank: it is indistinguishable on screen.
  * GPT Sol's C4, 2026-09-08. The same helper, same name, is in web/src/types.ts.
  */
-function nonBlank(u: unknown): string | null {
+export function nonBlank(u: unknown): string | null {
   return typeof u === "string" && u.trim() !== "" ? u : null;
 }
 
-function readProjection(json: unknown): AttentionFeed {
+/**
+ * The inbox out of a checkpoint that has already been read. **Never throws.**
+ *
+ * Exported so `overseer-status.ts` can project this and the clocks out of one
+ * `loadCheckpoint` — see that arm's comment. It takes parsed JSON rather than a
+ * path precisely so there is nothing left in it that can touch the disk.
+ */
+export function projectAttention(json: unknown): AttentionFeed {
   if (!isRecord(json)) return { kind: "checkpoint-unreadable", why: "the checkpoint is not a JSON object" };
   if (json["schema"] !== KNOWN_SCHEMA) {
     return {

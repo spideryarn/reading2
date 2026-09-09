@@ -31,7 +31,8 @@ import type { ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
 import { Button, cx } from "./ui";
-import type { FleetState } from "./types";
+import { type FleetState, overseerClaim } from "./types";
+import { COMPLETE, type ReadingCompleteness } from "../../overseer-claim.js";
 import { clockNote, collectedAge, formatDuration, tally } from "./view";
 
 /**
@@ -214,14 +215,93 @@ export function freshness(args: {
 }
 
 /** One count in the tally. Rendered only when it is non-zero. */
-function Count({ n, label, className }: { n: number; label: string; className?: string }): ReactNode {
+function Count({
+  n,
+  label,
+  className,
+  tip,
+}: {
+  n: number;
+  label: string;
+  className?: string;
+  tip: Tip;
+}): ReactNode {
   if (n === 0) return null;
   return (
-    <span className={cx("tw:whitespace-nowrap", className)}>
+    <Explain tip={tip} placement="bottom" className={cx("tw:whitespace-nowrap", className)}>
       <span className="tw:font-mono tw:font-semibold">{n}</span> {label}
-    </span>
+    </Explain>
   );
 }
+
+/**
+ * **What the four numbers in the masthead are counting.**
+ *
+ * They are the three triage bands plus `unknown`, and three of the four words
+ * appear nowhere else on the page: a row's own badge says `idle`, `shell`,
+ * `waiting 4m` or `no agent`, and **none of them says `quiet`**. So a reader
+ * cannot map the tally onto the list below it by looking, which is what makes
+ * this the first thing on the page worth a card.
+ *
+ * The bands are Greg's, out of overseer-direction.md, and `view.ts` § `tally`
+ * and § `triageBand` are where each of these sentences comes from.
+ */
+export const COUNT_TIPS: Record<"needsYou" | "working" | "quiet" | "unknown", Tip> = {
+  needsYou: {
+    head: "Need you",
+    what: "Sessions blocked on a person — a permission prompt, a question, a dialog waiting for an answer.",
+    how: "The first question this page is built to answer, which is why these sort to the top of the list whatever else is happening. Read off each session's own terminal, so it is a good guess rather than something the box reported.",
+  },
+  working: {
+    head: "Working",
+    what: "Sessions that are moving: an agent is mid-turn, with nothing waiting on anybody.",
+    how: "The second band, and the reason the list has three rather than seven — a screen with more ranks than that is one nobody reads the bottom of.",
+  },
+  quiet: {
+    head: "Quiet",
+    what: "Everything else, in one number: idle agents, sessions sleeping until a time, shells with no agent in them at all.",
+    /* **The word is this tally's own and appears on no row**, which is exactly
+       what a reader gets stuck on: they look for a `quiet` badge in the list and
+       there is none. Saying so is the whole value of this card. */
+    how: "A band rather than a status — no row anywhere on the page says “quiet”. The list spells out which kind each one is, because “sleeping until 4pm” and “nobody is home” are different things to find out at midnight.",
+  },
+  unknown: {
+    head: "Unknown",
+    what: "Sessions the box could not answer a question about at all. Counted beside the others rather than inside them.",
+    how: "One failed call turns every agent row unknown at once, and a masthead reading “0 need you” over eleven unanswerable rows is the exact lie this page is built not to tell. These are also inside the quiet band's list; the number is here so it cannot be missed.",
+  },
+};
+
+/** The four states the Overseer line can be in, and what each of them costs. */
+export const CLAIM_TIPS: Record<"one" | "none" | "contested" | "cannot-tell", Tip> = {
+  one: {
+    head: "The Overseer",
+    what: "The session supervising all the others. The box is meant to have exactly one, and this is it.",
+    how: "It is a claim the session makes in the tmux server's own environment, not a role anything grants — so this says which session believes it holds it, checked against a snapshot fresh enough to be worth believing.",
+  },
+  none: {
+    head: "No Overseer session",
+    what: "Nobody currently holds the claim. This is a real answer, not a blank.",
+    how: "What the box looks like after a reboot: the claim lives in the tmux server's memory and dies with it. It is only reached on a complete reading — anything uncertain says it cannot tell instead — and nothing else on this page would say it.",
+  },
+  contested: {
+    /* `contested` is two OR MORE, and the line beside this card prints the
+       actual number. A head that says "Two" can be false on the page that is
+       showing three. */
+    head: "More than one claimant",
+    what: "Two or more sessions say they are the Overseer. That is a fault to report.",
+    how: "Never resolved by picking one: choosing between claimants is how each of them goes on believing it holds the role. It survives rows that could not be read — those could only add claimants — but not a snapshot too old to describe now, which answers that it cannot tell instead.",
+  },
+  "cannot-tell": {
+    head: "Overseer unknown",
+    what: "This page will not answer the question, and says why rather than guessing.",
+    /* Not an either/or: ANY uncertainty forces this arm when there are fewer
+       than two known holders — a stale snapshot, a failed collection, no
+       collection yet, or a row whose role could not be read.
+       overseer-claim.ts § the truth table. */
+    how: "Any uncertainty at all forces it when fewer than two holders are known: a snapshot too old to describe now, a collection that has not finished or failed, rows dropped because they could not be read, or a row that is here but whose role could not be. One holder plus one row of any of those is not single ownership — that row could be a second claimant, and exactly one is the whole promise.",
+  },
+};
 
 /**
  * The width everything on the page agrees on.
@@ -232,6 +312,96 @@ function Count({ n, label, className }: { n: number; label: string; className?: 
  * element that meets the notch in landscape.
  */
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-[96rem] tw:px-[calc(0.75rem+var(--safe-left))]";
+
+/**
+ * How much of this payload the Overseer reading may lean on. See `OverseerLine`.
+ *
+ * `fresh.stale` already folds together the snapshot's age, a failed refresh and
+ * a lost connection, and it is the same reading the STALE banner is drawn from —
+ * so the two can never disagree, which they would if this recomputed staleness
+ * from the timestamps itself.
+ */
+function completeness(state: FleetState, fresh: Freshness): ReadingCompleteness {
+  if (fresh.stale) return { ok: false, scope: "moment", why: "this page's data is stale" };
+  if (state.error !== null) {
+    return { ok: false, scope: "moment", why: `the last collection failed (${state.error}), so these rows are not current` };
+  }
+  if (state.collectedAt === null) return { ok: false, scope: "rows", why: "no collection has finished yet" };
+  if (state.unreadableRows > 0) {
+    return { ok: false, scope: "rows", why: `${state.unreadableRows} session row(s) in this payload could not be read` };
+  }
+  return COMPLETE;
+}
+
+/**
+ * The Overseer line: which session holds the claim, or that none does.
+ *
+ * **FOUR STATES AND NONE OF THEM IS BLANK.** *No Overseer session* is not the
+ * absence of news — it is what the box looks like after a reboot, since the
+ * claim dies with the tmux server, and it is the state the scheduler that prods
+ * the Overseer has to be able to see. Two claimants is a fault and is drawn in
+ * the alarm colour: picking one of them is how two sessions both go on believing
+ * they are it.
+ */
+function OverseerLine({ state, fresh }: { state: FleetState; fresh: Freshness }): ReactNode {
+  /* **THE ROWS ARE NOT THE WHOLE STORY, AND NEITHER IS THE ROW COUNT.** Two
+     kinds of doubt reach this line, and `ReadingCompleteness` keeps them apart
+     because they are not equally bad:
+
+     `moment` — this page may not be describing NOW. A stale snapshot, a
+     collection that failed (whose rows are the last good ones, not current
+     ones), or a transport that has stopped. Nothing survives it, `contested`
+     included: two holders in an old snapshot do not prove two holders now, since
+     killing one is exactly what somebody would have done about it. The page can
+     otherwise say STALE and `Overseer: alpha` in the same breath about a session
+     that died an hour ago — GPT Sol, second review.
+
+     `rows` — the list is short: a payload from before the first collection has
+     no rows at all, which is not a box with no Overseer, and `parseFleetState`
+     DROPS rows it cannot read and counts them, any of which could be the
+     holder's. */
+  const claim = overseerClaim(state.rows, completeness(state, fresh));
+  switch (claim.kind) {
+    case "one":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-soft">
+          <Explain tip={CLAIM_TIPS.one} placement="bottom">
+            Overseer: <span className="tw:font-semibold tw:text-ink">{claim.name}</span>
+          </Explain>
+        </p>
+      );
+    case "none":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-faint">
+          <Explain tip={CLAIM_TIPS.none} placement="bottom">
+            no Overseer session
+          </Explain>
+        </p>
+      );
+    case "contested":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
+          <Explain tip={CLAIM_TIPS.contested} placement="bottom">
+            {claim.names.length} sessions claim to be the Overseer: {claim.names.join(", ")}
+          </Explain>
+        </p>
+      );
+    case "cannot-tell":
+      return (
+        /* The `why` is the page’s own sentence about THIS payload and stays
+           visible; the card is what the state means in general. */
+        <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
+          <Explain tip={CLAIM_TIPS["cannot-tell"]} placement="bottom">
+            Overseer unknown — {claim.why}
+          </Explain>
+        </p>
+      );
+    default: {
+      const never: never = claim;
+      return never;
+    }
+  }
+}
 
 export function Header({
   state,
@@ -272,10 +442,10 @@ export function Header({
               eleven unanswerable rows is exactly the lie this tool exists to
               avoid. */}
           <div className="tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-0.5 tw:text-[13px] tw:text-ink-soft">
-            <Count n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
-            <Count n={counts.working} label="working" className="tw:text-work-ink" />
-            <Count n={counts.other - counts.unknown} label="quiet" />
-            <Count n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
+            <Count tip={COUNT_TIPS.needsYou} n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
+            <Count tip={COUNT_TIPS.working} n={counts.working} label="working" className="tw:text-work-ink" />
+            <Count tip={COUNT_TIPS.quiet} n={counts.other - counts.unknown} label="quiet" />
+            <Count tip={COUNT_TIPS.unknown} n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
           </div>
 
           {/* The age, and the card that says what "stale" means and when we
@@ -294,6 +464,16 @@ export function Header({
             {fresh.stale ? `STALE — ${fresh.age}` : fresh.age}
           </Explain>
         </div>
+
+        {/* **WHO IS THE OVERSEER, INCLUDING WHEN NOBODY IS.** The box is meant
+            to have exactly one supervising session (docs/project/overseer.md),
+            and the claim lives in that session's tmux environment — so a reboot
+            leaves nobody holding it and nothing else on this page would say so.
+            *No Overseer session* is therefore the state this line exists for,
+            and it is drawn as loudly as the other three rather than as an empty
+            space. Suppressed only before the first payload arrives, where every
+            answer would be a guess. */}
+        {state === null ? null : <OverseerLine state={state} fresh={fresh} />}
 
         {/* Its own row rather than another item in the wrap above, so that on a
             phone it never lands between the tally and the age and pushes the

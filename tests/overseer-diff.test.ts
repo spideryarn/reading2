@@ -21,10 +21,21 @@ import {
   statusKey,
   waitDeadlineToleranceMs,
   type Baseline,
+  type KnownExecutions,
   type SessionEvent,
 } from "../tools/overseer/diff.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
 import { editableFixture, freshFixture, freshFrom, rowsOf, type FixtureName } from "./overseer-fixtures.js";
+
+/**
+ * A register that has verified no runs — which is what every case in this file
+ * is about, since none of them is testing execution identity.
+ *
+ * Named rather than an inline `new Map()` so that a reader can see it is a
+ * deliberate "nothing has been verified" and not a forgotten argument. The
+ * execution arm's own cases live in `tests/fleet-execution-identity.test.ts`.
+ */
+const NO_KNOWN_RUNS: KnownExecutions = new Map();
 
 /** A fixture with one field edited, back through the real parser. */
 function edited(name: FixtureName, edit: (payload: Record<string, JsonValue>) => void) {
@@ -43,7 +54,7 @@ function edited(name: FixtureName, edit: (payload: Record<string, JsonValue>) =>
  * everything.
  */
 function diffed(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): SessionEvent[] {
-  const outcome = diff(previous === null ? null : mustBaseline(previous), next);
+  const outcome = diff(previous === null ? null : mustBaseline(previous), next, NO_KNOWN_RUNS);
   if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
   return outcome.events;
 }
@@ -87,7 +98,7 @@ function chained(snapshots: readonly AdmissibleSnapshot[]): SessionEvent[][] {
   let baseline: Baseline | null = null;
   const batches: SessionEvent[][] = [];
   for (const snapshot of snapshots) {
-    const outcome = diff(baseline, snapshot);
+    const outcome = diff(baseline, snapshot, NO_KNOWN_RUNS);
     if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
     batches.push(outcome.events);
     baseline = outcome.baseline;
@@ -141,14 +152,14 @@ test("TYPE-LEVEL: the three forgeries the P0 and S2-07 turned on", () => {
     //    compiled. Now they are different types, and the only two things that
     //    mint the second both ask whether the snapshot can be placed in a world.
     // @ts-expect-error - `previous` is a Baseline: something diff() produced, never something admissible() did
-    diff(admitted, admitted);
+    diff(admitted, admitted, NO_KNOWN_RUNS);
 
     // 2. A SPREAD IS NOT AN ADMISSION. Every invariant `admissible()` checks —
     //    error-nullness above all — used to survive `{...snapshot, error:
     //    "boom"}` with the brand intact and no cast, so a failed collection
     //    could still be turned into a fleet's worth of false disappearances.
     // @ts-expect-error - a plain object cannot be an AdmissibleSnapshot, whatever fields it copies
-    diff(null, { ...admitted.snapshot, error: "boom" });
+    diff(null, { ...admitted.snapshot, error: "boom" }, NO_KNOWN_RUNS);
 
     // 3. AND NEITHER IS A MUTATION, which is the same hole reached without a
     //    spread: the accepted snapshot's own fields are readonly now.
@@ -418,7 +429,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     const after = edited("status-change-after", (p) => {
       p["tmuxServerPid"] = null;
     });
-    const outcome = diff(mustBaseline(before), after);
+    const outcome = diff(mustBaseline(before), after, NO_KNOWN_RUNS);
     expect(outcome.kind).toBe("held");
     if (outcome.kind !== "held") return;
     expect(outcome.why).toBe("generation-unreadable");
@@ -434,7 +445,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
       p["tmuxServerPid"] = null;
       p["rows"] = [];
     });
-    const outcome = diff(mustBaseline(before), drained);
+    const outcome = diff(mustBaseline(before), drained, NO_KNOWN_RUNS);
     expect(outcome.kind).toBe("diffed");
     // Six sessions were there and are not. That is evidence, and refusing it
     // would be refusing the truth at the moment it is most interesting.
@@ -461,7 +472,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
 
     // And the same snapshot is what `diff()` holds — one predicate, two
     // callers, checked here so they cannot drift into two.
-    expect(diff(mustBaseline(freshFixture("status-change-before")), unplaceable).kind).toBe("held");
+    expect(diff(mustBaseline(freshFixture("status-change-before")), unplaceable, NO_KNOWN_RUNS).kind).toBe("held");
 
     // The exemption travels with it: an empty fleet is placeable either way.
     const drained = edited("status-change-after", (p) => {
@@ -484,7 +495,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     // now a crash, which is the direction the bar asks for.
     const baseline = mustBaseline(freshFixture("status-change-before"));
     Object.assign(baseline.snapshot, { tmuxServerPid: null });
-    expect(() => diff(baseline, freshFixture("status-change-after"))).toThrow(/mutated after minting/);
+    expect(() => diff(baseline, freshFixture("status-change-after"), NO_KNOWN_RUNS)).toThrow(/mutated after minting/);
   });
 
   test("S2-01: a baseline recovered after a restart closes what ended while the daemon was down", () => {
@@ -494,7 +505,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     // `diff(null, …)`, which announces every session on the box as newly seen —
     // a history in which the fleet appears out of nothing at every restart.
     const restored = mustBaseline(freshFixture("session-gone-before"));
-    const outcome = diff(restored, freshFixture("session-gone-after"));
+    const outcome = diff(restored, freshFixture("session-gone-after"), NO_KNOWN_RUNS);
     expect(outcome.kind).toBe("diffed");
     if (outcome.kind !== "diffed") return;
     // One session ended and one began — not six arrivals.
@@ -524,7 +535,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     const events: SessionEvent[] = [];
     const holds: string[] = [];
     for (const next of [b, c]) {
-      const outcome = diff(baseline, next);
+      const outcome = diff(baseline, next, NO_KNOWN_RUNS);
       if (outcome.kind === "diffed") {
         events.push(...outcome.events);
         baseline = outcome.baseline;

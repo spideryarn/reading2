@@ -60,9 +60,28 @@ type Subscriber = {
   /** Set once so a subscriber already being torn down is never removed twice
    *  or written to after `res.end()` — see `removeSubscriber`. */
   closed: boolean;
+  /**
+   * A write returned `false` and no `drain` has arrived yet. **Nothing is
+   * written while this is set** — that is the whole memory bound.
+   */
+  waitingToDrain: boolean;
+  /** Destroys the subscriber if `drain` never comes. Cleared when it does. */
+  drainTimer: ReturnType<typeof setTimeout> | null;
 };
 
 const subscribers = new Set<Subscriber>();
+
+/**
+ * 30s for a socket to accept one frame it has already been handed.
+ *
+ * **Two heartbeats and half a collection.** A phone whose radio slept, or a
+ * laptop lid closed for ten seconds, is back inside this; a socket that has
+ * not moved a byte in thirty seconds is not coming back, and holding it costs
+ * a snapshot's worth of memory each. Long enough that no healthy client is
+ * ever punished, short enough that a wedged one is not held for a whole
+ * refresh cycle.
+ */
+export const DRAIN_DEADLINE_MS = 30_000;
 
 /** How many clients are currently connected. For `server.ts` to log and for the page to show. */
 export function subscriberCount(): number {
@@ -87,8 +106,8 @@ function frame(event: string, data: string): string {
  * `close` event hasn't fired yet — there is always a window) can throw
  * synchronously. That must not stop the broadcast loop for every other
  * subscriber, and must not reach the collector's refresh loop that called us.
- * Returns false when the write failed OR when `res.write` reports backpressure,
- * so the caller can decide what to do about a slow client (see `broadcast`).
+ * Returns `res.write`'s own answer, and **every caller must act on a false** —
+ * see `writeUnlessFull`.
  */
 function safeWrite(sub: Subscriber, data: string): boolean {
   if (sub.closed) return false;
@@ -98,40 +117,140 @@ function safeWrite(sub: Subscriber, data: string): boolean {
     // A synchronous throw from `write` means this socket is already dead.
     // Treat it exactly like a `close` event: remove it so it stops being
     // written to, and so it stops being counted as a live subscriber.
-    removeSubscriber(sub);
+    dropSubscriber(sub);
     return false;
   }
 }
 
+/**
+ * Write, unless this subscriber's buffer is already full — **the one place a
+ * `false` is acted on**, so no path writes a frame and ignores the answer.
+ *
+ * **`false` DOES NOT MEAN THE SOCKET IS DEAD, and an earlier draft of this
+ * file assumed it did.** A `ServerResponse` has a 16 KB high-water mark and a
+ * fleet snapshot is ~59 KB, so `write` returns `false` on the FIRST frame to a
+ * perfectly healthy client, every time. Destroying on that would have
+ * disconnected every subscriber — the Overseer daemon included, which would
+ * have recorded a real `sse-stream` degraded edge and dropped to polling for
+ * sixty seconds — on every collection, for ever. Measured by GPT Sol against a
+ * real `ServerResponse`: `writableLength: 60524` after one 59 KB write.
+ * 2026-09-08.
+ *
+ * So `false` means exactly what Node says it means: **stop writing until
+ * `drain`.** That alone is the memory bound — at most one frame is ever
+ * outstanding per subscriber, because the next broadcast writes nothing. What
+ * makes it a bound rather than a hope is `DRAIN_DEADLINE_MS`: a socket that
+ * never drains is destroyed, and a socket that drains is back in the fold with
+ * the next snapshot, which carries everything the skipped one did.
+ */
+function writeUnlessFull(sub: Subscriber, data: string): void {
+  if (sub.closed || sub.waitingToDrain) return;
+  if (safeWrite(sub, data)) return;
+  markFull(sub);
+}
+
+/**
+ * Stop writing to this subscriber until its buffer empties, and give it a
+ * deadline to do so.
+ *
+ * `once("drain")` rather than a poll, because that is the event Node emits for
+ * exactly this. A conforming writable cannot emit it before the synchronous
+ * `write` that returned `false` has returned and this listener is attached, so
+ * there is no window to miss it in. The timer is unref'd: a stalled subscriber
+ * must never be the reason this process stays up.
+ */
+function markFull(sub: Subscriber): void {
+  if (sub.closed || sub.waitingToDrain) return;
+  sub.waitingToDrain = true;
+  const timer = setTimeout(() => {
+    // Thirty seconds and the buffer has still not fallen below its high-water
+    // mark. (Not "not one byte moved" — `drain` is a threshold, not a byte
+    // counter, and the earlier comment here said the stronger thing.) Give up:
+    // the memory this is holding is worth more than the connection.
+    dropSubscriber(sub);
+  }, DRAIN_DEADLINE_MS);
+  timer.unref?.();
+  sub.drainTimer = timer;
+  sub.res.once("drain", () => {
+    if (sub.drainTimer !== null) clearTimeout(sub.drainTimer);
+    sub.drainTimer = null;
+    sub.waitingToDrain = false;
+  });
+}
+
+/** Forget a subscriber. For a socket that has ALREADY gone (a `close`/`error` event). */
 function removeSubscriber(sub: Subscriber): void {
   if (sub.closed) return;
   sub.closed = true;
+  if (sub.drainTimer !== null) clearTimeout(sub.drainTimer);
+  sub.drainTimer = null;
   subscribers.delete(sub);
 }
 
 /**
- * Backpressure decision: drop, don't queue.
+ * Forget a subscriber **and close its socket.** For one we are giving up on
+ * rather than one that left.
  *
- * `res.write` returning `false` means the socket's kernel buffer is full —
- * this client (probably a flaky phone connection) is not draining as fast as
- * we're producing. The alternatives are (a) buffer frames for it ourselves,
- * or (b) skip it and let the next broadcast — or its next reconnect — bring
- * it current. We do (b): a fleet snapshot is a *replaceable* state update,
- * not an event log a client must see every entry of, so an unboundedly
- * growing per-subscriber queue on a box that already hit load average 391
- * with the OOM killer firing (server.ts) is a strictly worse failure mode
- * than one client occasionally missing an intermediate frame. The client
- * self-heals: the next successful broadcast carries the latest snapshot, and
- * on reconnect `subscribe()` sends the current snapshot immediately (see
- * below), so a slow client is at worst stale, never wrong.
+ * `destroy()` and not `end()`: `end` writes a final chunk and waits for it to
+ * flush, and the whole reason we are here is a socket that is not flushing —
+ * so `end` on a wedged client is one more buffer nobody drains. `destroy`
+ * releases the memory now, and `EventSource` reconnects on its own.
  *
- * We do NOT disconnect a slow client just for one `false` — that would punish
- * a momentary stall on the same footing as a dead socket. It only gets
- * dropped from the set on an actual `close`/`error`, or on a thrown `write`.
+ * Guarded, because `destroy` on a half-dead socket can throw, and this is
+ * called from inside the refresh loop's broadcast.
+ */
+function dropSubscriber(sub: Subscriber): void {
+  removeSubscriber(sub);
+  try {
+    sub.res.destroy();
+  } catch {
+    // Already gone. There is nothing left to release.
+  }
+}
+
+/**
+ * Backpressure decision: **wait for `drain`; don't queue, and don't keep
+ * writing.**
+ *
+ * `res.write` returning `false` means Node has already buffered this frame in
+ * *our* process because the socket would not take it yet. Four policies:
+ *
+ *  (a) buffer frames for it ourselves — unbounded memory, obviously wrong;
+ *  (b) skip this frame, keep writing on every later broadcast;
+ *  (c) destroy it immediately;
+ *  (d) write nothing until `drain`, and destroy only if `drain` never comes.
+ *
+ * **This file has now been wrong in two directions, and both are recorded
+ * because the reasoning matters more than the answer.** It shipped (b), which
+ * is (a) wearing a disguise: the frame that returned `false` is already in
+ * memory, and writing the one after that, and the one after that, is unbounded
+ * growth per half-alive client. Measured: a wedged socket and 5,000 snapshots
+ * held **287.8 MB**, still climbing, on a box that has hit load average 391
+ * with the OOM killer firing (server.ts). E-stream, docs/plans/260908f-….
+ *
+ * Then it briefly became (c) — which is worse, because **`false` is the normal
+ * case here.** A `ServerResponse`'s high-water mark is 16 KB and a snapshot is
+ * ~59 KB, so the very first frame to a healthy client returns `false`. (c)
+ * would have destroyed every subscriber on every collection, the Overseer
+ * daemon included. Caught by GPT Sol before it landed, against a real
+ * `ServerResponse` rather than the test's double.
+ *
+ * So (d), which is the one that reads Node's contract literally: `false` means
+ * *stop until `drain`*, and says nothing at all about the socket's health. At
+ * most one frame is outstanding per subscriber; a drain puts it straight back;
+ * a subscriber that cannot drain inside `DRAIN_DEADLINE_MS` is destroyed, and
+ * `EventSource` reconnects into `subscribe`'s immediate cached snapshot.
+ *
+ * **`false` is not a dropped frame.** The bytes went into the buffer; what we
+ * refuse to do is keep filling a buffer nobody is emptying.
  */
 function broadcastFrame(data: string): void {
-  for (const sub of subscribers) {
-    safeWrite(sub, data);
+  // A copy, because a write can drop a subscriber (a throw, or the drain
+  // deadline firing) and delete from `subscribers` as we go. Node Sets tolerate
+  // deletion during iteration, but this loop is the one place a bug would be
+  // silent — a skipped subscriber just quietly stops updating.
+  for (const sub of [...subscribers]) {
+    writeUnlessFull(sub, data);
   }
 }
 
@@ -174,11 +293,14 @@ export function subscribe(req: IncomingMessage, res: ServerResponse, initialPayl
   // (and some proxies) treat "no bytes yet" as "not connected".
   if (typeof res.flushHeaders === "function") res.flushHeaders();
 
-  const sub: Subscriber = { res, closed: false };
+  const sub: Subscriber = { res, closed: false, waitingToDrain: false, drainTimer: null };
   subscribers.add(sub);
 
   if (initialPayloadJson !== null) {
-    safeWrite(sub, frame("snapshot", initialPayloadJson));
+    // Goes through the same gate as any other write, which matters more here
+    // than anywhere: a 59 KB snapshot into a fresh 16 KB buffer returns `false`
+    // EVERY TIME, and an earlier draft destroyed the connection on it.
+    writeUnlessFull(sub, frame("snapshot", initialPayloadJson));
   }
 
   const cleanup = (): void => removeSubscriber(sub);

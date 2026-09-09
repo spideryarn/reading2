@@ -1,8 +1,18 @@
 # Delivery receipts and honest outcomes for the fleet dashboard
 
-**Status:** planned 2026-09-08 22:15, reviewed and reordered 22:30. **Stage 1 landed**; stages 2-6
-specified and not started. Baseline `d9f4dcc4`, 692 fleet tests green, typecheck clean across 1,743
-files.
+**Status, 2026-09-09 10:20: all six stages built and on `dev`, plus Stage 4b and three unplanned
+repairs. Stage 5 is the one thing left** — it is specified and waits on another session's
+`SessionDetail` re-layout, because building receipt rendering into a layout about to be replaced is
+wasted work.
+
+Each stage went out for a cross-family review of the built code, and **four of the six came back
+with findings that changed them**; three needed a fix round. The reviews found three P0s in Stage 4
+alone, one of which said the stage's own commit subject was true of one producer out of three.
+
+Started from `d9f4dcc4`. Stage 6 and its fix round were implemented by GPT Terra from written
+briefs, at Greg's request to delegate implementation; the diffs were read, the guards mutated and
+the gates run here, which mattered — `npm run typecheck` is blocked by a sandbox restriction in that
+environment, and it is the only command that covers `tests/`.
 
 This is stage **v0.2c** of [260907e](260907e-agent-fleet-dashboard.md) — Astra's A11 — and the
 **Delivery uncertainty** stage of
@@ -155,31 +165,184 @@ so this was caught by the implementer reading past it rather than by me specifyi
 delivery, every refusal is reached before any keystroke, so the route sends nothing and the client
 reads `not-told`. Inventing a value at the route would have been the opposite of the point.
 
-### Stage 2 — a queue id minted by a dead process must not resolve in this one
+#### The code review found three P0s, and the first is this stage committing the class it closed
 
-Prefix every id with an injected `serverInstanceId`, and refuse an id carrying a different one with
-a **distinct** code, so the page can say *that was a previous server* rather than *no such item*.
-**All four routes, `clear` included** — it is not protected today (above). `stale-view` stays as the
-separate concurrent-drift guard; the two refusals answer different questions and must not merge.
-One instance id, reused later by request ids and preview identity (R14).
+Reviewed at `c0453d0c`. The narrow claim held — the only literal `"Nothing happened."` was the
+`none` arm, and every parse path had to produce `none` to reach it. **The semantics did not.**
 
-**Done:** an id from instance A does not resolve in instance B on any of the four routes, and the
-refusal names why; `stale-view` still fires for its own case.
+**S1: `"Nothing happened."` is stronger than `delivery: "none"`.** The server's `Delivery` type is
+*about keystrokes*: `none` means nothing left the box for the pane. It does not establish that an
+action did nothing to a queue, a worktree or a process. So reusing that vocabulary for
+`ActionOutcome`/`BoxOutcome` gave the **safe-looking arm** the power to make a false whole-action
+assertion — a lossy join, inside the stage built to fix one. Worse, the arm is **unreachable on the
+action path today** (no action route sends a delivery on failure), so it was an unreachable arm
+making the boldest claim.
 
-### Stage 3 — process and broadcast outcomes stop claiming more than they know
+Fixed by narrowing rather than by inventing an action-wide effect type, which needs a server
+contract that does not exist: `No keystrokes went out.` — and a comment on the arm saying it speaks
+only for keystrokes, is unreachable today, and must not be widened without that contract. **The
+comment is the real guard**: when Stage 3 adds whole-action effect, the temptation will be to reuse
+this arm rather than add one.
+
+**S2: the `partial` body asserted something the server contradicts.** `fire()` reaches `partial`
+down two roads and only one of them knows the remainder failed (`steer.ts:1253-1255`):
+
+    "Part of the sequence arrived" +
+      (mayHaveLanded(e) ? " and the rest cannot be accounted for" : " and the rest did not")
+
+The card said *the rest did not*, printed directly above that verbatim sentence. **I had already
+hand-edited this body once and changed the wrong half** — swapping "landed" for "took effect" while
+leaving the false clause. The rewrite asserts only what is true on both roads.
+
+**S3: two headings a reader cannot act on differently.** `parseDelivery` maps *absent field* and
+*present-but-unrecognised* both to `not-told`, so "the server did not say" is false when the server
+said `"half-ish"` and this page failed to understand it. The copy collapses to one shared constant;
+**the type keeps both arms**, because they are genuinely different facts and useful for diagnosis.
+
+**And my stated reason for that decision was false.** I wrote that the `code · HTTP nnn · from`
+footer "already exposes which one happened". It does not: it separates the client-side readings
+(`unreachable`, `not-json`) from a server refusal, but a server body carrying an unrecognised
+`delivery` and one carrying none produce an **identical** footer. The implementer checked and said
+so. That is not a reason to keep two headings — it is a second reason the heading must claim
+neither, and it is the version now written into the code.
+
+**S4: a surviving mutation that restored the exact bug.** Flipping the invalid-JSON branch from
+`unknown` to `none` left the suite green — the tests covered a thrown `fetch` but nothing drove the
+real client with a response whose `json()` rejects. Now covered on both the session and box paths.
+
+**Six mutations at the end, all caught.** The bodies had been materially underconstrained — only
+fragments of one were asserted, so the others "could be replaced with most false advice without
+failing the suite", which is exactly how S2's false sentence shipped. Each body now pins its
+load-bearing clause, plus a standing `not.toContain("the rest did not")`.
+
+**One repair the implementer made beyond the brief:** the box failure footer never rendered
+`HTTP nnn`, only the session card did — which made the new comment about the footer false *on the
+path with `kill` on it*.
+
+### ✅ Stage 2 — a queue id minted by a dead process must not resolve in this one (landed 2026-09-08)
+
+New leaf `tools/fleet/instance.ts`; ids become `<instance>-q<n>`; a new `other-instance` refusal
+(409) on all four routes, `clear` included, checked **before** both its empty check and its
+`stale-view` comparison. `stale-view` survives for its own case — deleting the `clear` guard failed
+with *expected `other-instance`, received `stale-view`*, which is the conflation this stage was
+warned about, caught by its own test.
+
+**I briefed this stage sceptically and the scepticism was wrong.** The brief asked whether the prefix
+changes any outcome at all, given the queue is volatile and empty after a restart — offering
+*"no, this only improves the message"* as an acceptable answer. It is not the answer:
+
+> **The volatility argument is the trap.** A restart does empty the queue — and then the *counter*
+> restarts too, so the very next enqueue re-issues `q1` to different work. Emptiness is a state that
+> lasts until the first tap, not a protection.
+
+Measured, not argued, by driving the real `cancelRoute`: a dead run's `q1` (a `pull`) posted at a
+fresh run **removed that run's `q1`, which was a `push`** — different work, queued by somebody else
+— and answered `200 {"ok":true,"op":"cancelled"}`.
+
+**And the window is reachable rather than theoretical**, which is the part that makes this worth
+building tonight. `useActions.ts:90` skips polling entirely while the tab is hidden — its own comment
+says *"Greg leaves this open on a phone"* — and a failed poll deliberately keeps the last good feed
+on screen, because *"a queue you cannot currently read is not an empty queue"*. So across a restart
+the phone goes on rendering the dead run's ids **with live buttons**, during exactly the window in
+which the new process is re-minting them.
+
+**Three arms, not a boolean**, and this was the implementer's call rather than the brief's:
+`idOrigin` returns `this-instance | other-instance | not-instance-qualified`. A garbled or legacy id
+is **not** evidence of a previous server, so it falls through to the existing `no-such-item` instead
+of earning a second confident sentence that might be false. The brief did not ask for that
+distinction and should have.
+
+**Done:** ✅ all four routes refuse a foreign id with a distinct code; `stale-view` still fires for
+its own case; the id stays opaque to the client (never rendered, only a React key and a callback
+argument). 194 tests green across six files, and the full fleet suite at 1,390.
+
+### ✅ Stage 3 — process and broadcast outcomes stop claiming more than they know (landed 2026-09-08, fixed 2026-09-09)
 
 The stage added on R4, and the one that makes "takes Delivery uncertainty whole" true.
 
-- `killRoute` labels intended pids `killed` regardless of `run.completed` (`:1670-1673`). Report
-  **attempted versus observed** separately; a command that exited is not an effect that happened.
-- Broadcast collapses throws, `partial` and `unknown` into `outcome: "refused"` (`:1798-1823`) —
-  the same Class B defect as Stage 1's, in the `ok: true` arm, so Stage 1's fix does not reach it.
-  Preserve delivery **per recipient** and render per-state counts.
+**The P0 that prompted it named the wrong mechanism, and I relayed it unchecked.** The review said
+`killRoute` mislabels pids *"even when `run.completed` is false"*. **`run.completed` is always true
+on that route**: `planKillProcesses` makes every step `best-effort`, and `judgeStep` maps
+`best-effort` to `passed`/`failed-ignored` and never to `failed`, so `runPlan` has no path to
+`completed: false` here. The defect was real and one level down: `killed: pids` was the list we
+*meant* to signal, while the per-step evidence — one `kill -TERM <pid>` per pid — sat discarded in
+`run.steps` of the same response. A kill of three pids where one had already exited answered
+`killed: [5001,5002,5003]` with the contradicting step outcome printed beside it.
 
-**Done:** a kill whose plan did not complete cannot render as a completed kill; a broadcast recipient
-whose send came back `partial` is not reported as refused; both are visible per recipient.
+The broadcast was worse than described: **four fates into two words.** The `ok: true` arm went to
+`"sent"` — itself an overclaim, since `SteerResult`'s success arm carries no delivery — the throw
+went to `"refused"`, and all three `Delivery` values went to `"refused"` as well.
 
-### Stage 4 — quarantine a session after an uncertain delivery
+**Three more collapses turned up by looking:** `PlanRun` had no denominator, so a three-step plan
+stopping at step 2 could only render *"2 of 2 steps ran"*; the dry-run preview also said `"sent"`,
+one word for a promise and a receipt; and `drain.ts` settles `partial`/`unknown` as `refused` —
+left for Stage 4, and see the note there, because only the *word* is wrong.
+
+#### The review of the built code, and the irony in it
+
+Three P0s, all sentences claiming more than the code knows — `not-established` rendered as *"the
+kill could not be run"* when two of its three causes did run; every plan step described as *"a
+command that exited"* when spawn failures and timeouts did not; and a broadcast throw described as
+happening *"partway through the send"* when the `try` surrounds the whole call and the test injects
+an immediate throw.
+
+**And the naming finding, which is the sharpest thing in the stage.** `KillReport.attempted` was
+the *targeted* list — so **a stage built to stop a kill reporting intent as outcome named its own
+field after the intent.** Renamed `targeted` throughout. Alongside it, `not-attempted` had **no
+production path** (every step is `best-effort`, so the plan cannot stop early) and `planCompleted`
+was always true: both **removed**, the same rule that cut `reception observed`. `killObservation`
+now takes a non-optional step and `killReport` asserts one step per targeted pid, throwing rather
+than answering 200 with fewer pids than were signalled — which is the defect the stage removed.
+
+**The missing guard was the important one.** A mutation changing the `signal-accepted` explanation
+to *"process killed"* left the suite green: nothing asserted the sentence `BoxEffectSummary`
+actually shows. It is now driven end-to-end — real route bytes, real client parse, real component —
+with each arm's ceiling pinned and the rendered list asserted against `/killed/i`, `/\bdead\b/i`,
+`/\bdied\b/i`, `/terminat/i`, `/no longer running/i`, `/shut down/i`. **Scoped to the summary
+list**, because a page-wide assertion would be a false guard: the raw dump underneath legitimately
+carries the server saying the `kill` *command* was killed for taking too long.
+
+#### A verification method that does not work, found here
+
+The implementer's mutation driver reverted by string replacement, and its leftover check was
+`git diff | grep`. **That cannot see a mutation which restores a line to its committed text**: when
+a fix changes a line from A to B, a mutation reverting B→A makes the file match `HEAD` exactly, so
+the diff is clean and the grep finds nothing. One sat applied through a whole subsequent run. The
+driver now snapshots and restores by `cp`, with a verifier that reads the *files* for every fixed
+string and refuses to start otherwise. Worth knowing beyond this stage: a diff is not a witness to
+file contents when the mutation is a reversion.
+
+**Done:** ✅ no rendered sentence claims a process died — *signal accepted* is the ceiling and it is
+tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
+mutations caught. 1,479 tests green across 36 files, typecheck 0.
+
+### 🟢 Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09; three P0s found by review, all fixed the same day — U1 became Stage 4b)
+
+#### Read `drain.ts` before briefing this, because it is more careful than this plan said
+
+Checked at `9e340ec5`, and it corrects this plan's own description. Stage 3 recorded
+`drain.ts`'s settling of `partial`/`unknown` as `refused` as *"the same Class B collapse, third
+file"*. **Half of that is wrong, and it is the half a brief would act on.**
+
+- **The behaviour is deliberate and right.** `drain.ts:371-373`: *"`partial` and `unknown` are the
+  ambiguous arms: something may be sitting in that agent's input box unsent. Those settle and are
+  gone, which is the never-retry rule doing its job."* Settling them is what stops an automatic
+  keystroke retry. **Do not change it.**
+- **The word is wrong.** `settle(row.id, item.id, "refused")` writes *refused* into the queue for an
+  item that may well have been delivered. That is the collapse, and it is only the label.
+- **A throw is already handled correctly and separately** (`:344-353`): the lease stays open, the
+  item shows as in-flight then `stuck`, and a person settles it with `abandoned`. Its comment ends
+  *"A later reader will be tempted to 'fix' this line; this is why it is not broken."* **Heed it.**
+- **`release()` on `delivery: "none"` must also survive untouched.** The commonest refusal is
+  `pane-is-asking` — the row said idle and the agent opened a dialog in the seconds since collection
+  — and settling that would destroy the person's instruction at the moment they most wanted it.
+
+So this stage adds an **honest settled state** (`uncertain`, distinct from both `refused` and
+`delivered`) plus the quarantine, and changes no branch of the existing control flow. That is a
+much smaller change than "fix the third instance of a collapse", and the smaller reading is the
+correct one.
+
+
 
 Sol confirmed `SteeringQueue.next()` as the enforcement seam, and found four things missing.
 
@@ -208,6 +371,296 @@ been sent yet"* (`:1177-1179`) is false in the presence of leased or held items 
 **Done:** a partial first message stops the second draining; the hold is visible with no items left;
 both release gestures work and neither sends anything; a tmux generation change releases it
 automatically and the old record survives as superseded.
+
+#### Built 2026-09-09 — and the brief's one wrong assumption was about the generation
+
+New leaf `tools/fleet/quarantine.ts`: a `QuarantineBook` of at most one open hold per session, plus a
+bounded three-deep history so a lost HTTP response can be answered twice. **It is its own file
+because `routes-steer.ts` cannot import `routes-actions.ts`** — that import already runs the other
+way, for the rate limiter — so the one thing all three producers write to had to live somewhere
+neither owns. `SteeringQueue` takes the book as a **required** `QueueOptions` field: a default would
+have built a private book for a queue whose sends are recorded in the shared one, and nothing would
+have gone wrong loudly. `serverInstanceId()` in instance.ts is now memoised, so the queue's ids and
+the book's carry the same run.
+
+`next()` gains a `quarantined` arm, consulted after the facts about the item and **before the gate**
+— it is the gate saying `now` that makes the check load-bearing. `quarantineLeased` is the one
+atomic method: settle `uncertain`, then hold, and it **throws** rather than answering if the settle
+fails, because reporting a session as held when it is not is the gap this stage closes.
+
+**Where the brief was wrong.** It says a proven tmux-generation change releases the hold — right —
+but a hold opened before this server had been told any generation is bound to none, and no later
+change proves anything about it. Those keep holding until a person releases them; the window is one
+refresh cycle wide and both gestures work throughout it. The test says so, and a mutation that
+supersedes them anyway is caught.
+
+**One gap found by trying to build an unclearable hold, and closed:** a malformed `quarantine` on the
+wire parses to `null`, which is also what *nothing is held* looks like — so on a queue with no items
+the row, and both gestures, would have disappeared. `QueueView.holdUnreadable` is `itemsUnreadable`'s
+twin and keeps the row.
+
+**Sixteen mutations, all caught**, snapshotted and restored by `cp` and verified by reading the files
+— including the two that matter most: `FleetQueues` filtering to `items.length > 0` again, and the
+abandon copy claiming the message was not delivered. 811 fleet tests green across 12 files before the
+last two additions; typecheck exit 0.
+
+#### The review found the stage's central claim is true of one producer out of three
+
+The hardest review of the plan so far. **The commit's own subject — *"A session that may be holding
+half a sentence is not handed the next one"* — is true of the queued path and false of the other
+two.**
+
+**U2 (P0): the hold is recorded by three producers and enforced by one.** Only
+`SteeringQueue.next()` consults the book (`queue.ts:910`). Direct steering never checks whether the
+target is held before calling the transport (`routes-steer.ts:1105`), and broadcast selects
+recipients on `drainGate` alone (`routes-actions.ts:2063`) and sends at `:2188`. So a held session
+can still receive a direct steer or a broadcast, which contradicts what the page tells the operator,
+and repeating an `unknown` direct send can duplicate keystrokes. **The fix is one mandatory send
+coordinator immediately before the synchronous transport call**, with all four paths through it, and
+a test per path that seeds a hold and asserts the injected transport was never called.
+
+**U6 (P2 by severity, worst by consequence): the guarantee this stage advertised does not exist.**
+Changing `shared ??=` to `shared =` (`quarantine.ts:512`) gives the action queue and the direct-steer
+route **different books** — so direct uncertainty is recorded where the drain never looks — and the
+suite stays green. Every producer test injects its own book; nothing joins the two real mounted
+compositions. **This disproves the claim that a missing future producer makes a test red**, which
+was written into the Stage 4 commit message and repeated to two peer sessions as a reason they could
+rely on the suite. Retracted to both. The tests enumerate today's producers; they do not require
+tomorrow's.
+
+**U3 (P0): the malformed-wire hold is half closed, and the remaining half is worse than the
+original.** `holdUnreadable` keeps the row, but both gestures are withheld and the copy tells the
+operator to *"clear it from the server"* — **there is no such interface**. A hold with a readable
+`id` and `version` is unclearable if `why` is missing, because `parseHold` rejects the whole object
+on one bad field. Parse the release *address* independently of the descriptive fields: if `id` and
+`version` read, keep both gestures and show a generic warning. **An instruction to do something
+impossible is worse than a missing row**, because the missing row at least looked broken.
+
+**U4 (P1): `uncertain` is collapsed back to `refused` one file later.** `deliverOne` returns
+`kind: "refused"` (`drain.ts:442`) and the operator log prints `refused=N` (`:640`). The browser copy
+is honest; the drain result and the log still use the exact word this stage removed.
+
+**U5 (P2): my correction to the brief was itself too broad.** A generation-less hold is skipped
+forever, so the "one refresh cycle" window can become indefinite. Record the first generation
+observed after such a hold opens and supersede on the next distinct one — kept separate from
+`tmuxGeneration`, because it is not a claim about the generation at opening.
+
+**U1 (P0) is not a fix, it is a stage** — see below. A restart erases every hold while the tmux
+server, and therefore the uncertain input buffer, stays alive.
+
+**What the review confirmed rather than found:** one open hold per session is the right model once
+U2 lands, because there is one input buffer and sends are synchronous; versioning correctly protects
+stale releases; open holds are never evicted; both gestures and supersession send no keystrokes;
+there is no fourth keystroke path today and dry-run does not reach the transport; and a client that
+stops polling does not lose an active hold.
+
+#### The fix round, 2026-09-09 — the transport is not handed out any more
+
+**U2 could not be repaired by adding two checks**, because two checks that everybody must remember
+is the thing that failed. So the transport left the producers: `sendMessage` and `answerQuestion` are
+now private to a new leaf, `tools/fleet/send-coordinator.ts`, and `SteerDeps`, `ActionDeps` and
+`DrainDeps` each carry a `SendCoordinator` and nothing callable beside it. The book is consulted on
+the line above the transport call, inside that file, and **a producer cannot get past it because
+there is nothing else to call.**
+
+Enforced rather than described, because "you cannot write that" is a claim about a compiler and a
+module graph, and neither can go red under `npm test`:
+
+- `tests/fleet-compile-guards.test.ts` — a `@ts-expect-error` per dependency type. Put a transport
+  back on one and the directive goes unused and `npm run typecheck` fails.
+- `tests/fleet-imports.test.ts` — a Babel walk over all of `tools/`: only `steer.ts` and
+  `send-coordinator.ts` may import the transport as a **value**. That closes the door the type check
+  cannot see — a new producer taking no transport and simply importing one.
+
+**Four paths, four tests, and each asserts the TRANSPORT WAS NOT REACHED** rather than that a
+refusal came back: a route that answered 409 and typed anyway would pass the weaker assertion, and
+typing anyway is the whole failure. Direct message and direct answer answer `409 session-held`; a
+broadcast reports that recipient `held` **and goes on to the others**, because refusing the whole
+fan-out over one hold is a different bug of the same size; the drain stops at `next()` with the item
+still in the queue and unleased.
+
+**U6's own mutation now goes red.** `tests/fleet-send-composition.test.ts` asks the question every
+producer test is structurally unable to ask — *is it the same object?* — by identity across both real
+compositions, and end to end by driving an ambiguous **direct** send through the real steering route
+and reading the hold back out of the real action catalogue. `makeActionRoutes` also **throws** if its
+queue and its coordinator are looking at two different books, so the split cannot come up half-right.
+
+**U3**: the release *address* is parsed on its own. `id` and `version` read ⇒ both gestures stay and a
+missing sentence becomes a generic warning; only an unreadable address withholds them, and that copy
+now names the terminal (which exists) and says plainly that there is nothing to press here. The line
+telling the operator to *"clear it from the server"* is gone — there is no such interface, and an
+instruction to do something impossible is worse than the missing row.
+
+**U4**: `DrainOutcome`'s arm and the operator log are `uncertain`; the transport's `code` stays beside
+it as **evidence** of why the send stopped, which is a different claim from how far it got.
+
+**U5**: a hold opened before any generation was known records the first one seen **afterwards** on
+`firstSeenGeneration` — its own field, because it is not a claim about the moment of the send — and
+the next distinct one supersedes it. The window is one refresh cycle again rather than indefinite.
+
+**A FIFTH PRODUCER LANDED WHILE THIS WAS BEING WRITTEN, AND THE GUARD CAUGHT IT.** `POST
+/api/broadcast` (`tools/fleet/routes-broadcast.ts`) was merged from another session holding
+`sendMessage` on its own deps, so it could type into a session the page was drawing as held — and
+`tests/fleet-imports.test.ts` went red on it rather than anybody noticing. It now takes a
+`SendCoordinator` like the rest, a held recipient gets its own scheduling arm (`kind: "held"`, its
+own count, and the hold's own sentence — never a refusal claiming `delivery: "none"`, which would
+say a send was attempted that was never made), and the rest of the fan-out still goes out. 2026-09-09.
+
+**Done:** 1,776 fleet tests green across 45 files; typecheck exit 0; nine mutations, nine caught,
+including `shared ??=` → `shared =`, which the review demonstrated the whole suite could sleep
+through. U1 is untouched and is Stage 4b.
+
+#### Three judgements the implementer asked for, and the rule one of them refines
+
+**An unreachable arm that REFUSES is not an unreachable arm that CLAIMS.** The drain's `held` arm
+cannot fire today — `next()` refuses first — and the implementer asked whether to cut it, since this
+plan has already cut two unreachable arms. **Keep it**, and the distinction matters enough to state,
+because the rule as written would have removed it:
+
+- `reception observed`, `not-attempted` and `planCompleted` were cut because each **asserted a fact
+  about the world that nothing could establish**. Shipping one means the type promising a
+  distinction the system cannot make, and a reader believing it.
+- The drain's `held` arm **claims nothing**. It declines to act. An unreachable *defensive* branch
+  costs a little code and buys a floor under a path where being wrong means a keystroke nobody can
+  recall.
+
+So: **cut an unreachable arm that makes a claim; keep an unreachable arm that refuses to act — and
+say in the code which of the two it is.** This one leaves the lease open rather than settling, so if
+it ever does fire, a person decides rather than the code guessing.
+
+**The stagger keeps its numbering when a recipient is held.** Renumbering around whoever happens to
+be held would make everybody else's resume times depend on the holds, which is a worse property than
+a gap in the sequence.
+
+**`makeActionRoutes` throwing on a book mismatch stays**, and it was the closest call. It is a new
+way for the dashboard to fail to start, and this is the tier where that matters most — the thing you
+reach for when other things are broken. It stays because the mismatch can only be introduced by
+editing composition code, so it fails immediately and every time rather than lying dormant, and
+because of the asymmetry: **a dashboard that refuses to start is visible; a dashboard running with
+its quarantine silently disabled is not** — and the second is precisely the failure this stage
+exists to prevent. Logging and carrying on would reproduce U6 as a runtime behaviour after removing
+it as a compile-time one.
+
+#### A hole a peer found by reading the header, before it was built
+
+**The coordinator's guarantee is process-local, and all three enforcements are too.** A child
+process — a spawned script, a worker, anything with its own module graph — calls
+`sharedSendCoordinator()` and gets a **fresh, empty book**, so `holding()` answers `null` for every
+session on the box and a send goes into a pane that may be holding half a sentence.
+
+The import walk cannot see it (the child legitimately holds a coordinator), the compile guard cannot
+(the types are right), and the composition test cannot (it asserts one book **within one process**,
+which is the failure it was written for). Written into `send-coordinator.ts` at the point of
+temptation rather than guarded, because the guard would have to be a durable store — which is this
+stage, below.
+
+**Found by `dashboard-titles-descriptions-detail`, which had been asked to build exactly that** and
+abandoned it after reading the header's insistence that the check and the call are adjacent with
+nothing between them. It reasoned from the header to the consequence without having been present for
+the bug — which is the argument for writing the reason down rather than only enforcing it, and the
+clearest evidence tonight that a comment can do work a test cannot.
+
+### 🟢 Stage 4b — a hold must survive the process that recorded it (built 2026-09-09)
+
+**U1, and it is the one finding that needs new machinery rather than a repair.** The quarantine book
+is in memory. A dashboard restart constructs an empty one, `next()` then sees no hold, and
+**keystrokes are admitted again with nobody told** — while the tmux server, and therefore the
+half-typed sentence, is still there. The release route already states that holds do not survive a
+restart (`routes-actions.ts:1832`), so the behaviour is documented and still wrong: what is lost is
+not a convenience, it is the only record that a session may be holding text.
+
+This is deliberately **not** folded into Stage 4's fix round. It is a durable store where there was
+none, and the plan's own rejected-options section says instance-scoped memory is enough *for
+receipts* — that argument does not transfer, because a receipt's job ends with the process and a
+hold's does not.
+
+- [x] A small append-only ledger, JSONL, in the shape the roadmap's storage contract already allows
+      — no new store type, no SQLite. Write the unresolved attempt **before** the send; remove it
+      only on a definitive success or a proven `none`.
+- [x] On startup, reload unresolved attempts as holds **before mounting any send route**, so there
+      is no window in which the server can be asked to type while it is still reading.
+- [x] Accept rehydrated ids from the previous process rather than refusing them as foreign — which
+      is a direct tension with Stage 2's instance-prefixing, and the resolution has to be written
+      down rather than discovered: a queue id names volatile state and should die with it; a hold id
+      names a fact about the *world* that outlived the process.
+- [x] Prove it by restarting: open a hold, restart the server, assert the session is still held and
+      both gestures still work.
+
+**Done:** a hold survives a restart, or the operator is told it did not — and the second is not
+acceptable as the design, only as the failure mode.
+
+#### Built 2026-09-09 — three records, and the one thing a rehydrated hold may not claim
+
+New leaf `tools/fleet/hold-ledger.ts`, writing `~/.fleet-holds/holds.jsonl` (`FLEET_HOLDS_DIR`
+overrides it, absolutely or not at all). **A third directory rather than a corner of an existing
+one**: `~/.overseer/` is the daemon's record of what it observed and `~/.fleet-health/` is the
+dashboard's record of the box, and a second writer beside either produces the failure `lock.ts`
+names — not corruption anybody can see, but a plausible history that never happened. The lock and
+the append discipline are `tools/overseer/lock.ts` and `jsonl.ts`, **imported, not copied**; both
+were already on the two-then-five list `tests/fleet-attention.test.ts` enforces, so the closure walk
+stayed green and no cycle was closed.
+
+**Three records, and the fold is "last record per session wins."** `attempt` is written on the line
+between the hold check and the transport call — the window between it and the send is the whole
+point of the file. `held` is written after an ambiguous answer, and is what lets a rehydrated hold
+say *what* was read and *when* it opened. `resolved` is the only thing that takes a session off the
+list: a definitive success, a proven `none`, a person's gesture, a proven generation change. **A
+throw is deliberately not on that list**, so the drain's open lease — which is memory and does not
+survive a restart either — is now backed by something that does. The fold is sound rather than
+convenient because the coordinator refuses before it records, so a session has at most one live
+attempt at a time.
+
+**What a rehydrated hold knows less, said in the type rather than in a comment.** `HoldBasis` has
+three arms and `openedAt`, `lastSendAt` and `reading` became nullable beside it, with exactly one
+arm producing each null. A `rehydrated-attempt` — the crash-inside-the-transport case — cannot say
+how far the send got or whether it was made at all, so it says none of it; a `rehydrated-hold` knows
+what the previous run wrote down and nothing after it, including whether somebody released it in the
+seconds before that run stopped. The union-per-arm shape was the better one in the abstract and was
+passed over for a concrete reason recorded in `wire.ts`: `HoldView` in the client already re-types
+every one of those to `| null`, so a wire union would be flattened back one file later and the
+flattening would be the second place to get it wrong.
+
+**Bounded by compaction**: the file is rewritten to its live records — one line per session with
+something unresolved, so a few kilobytes whatever the history — whenever it passes 256 KiB, through
+`jsonl.ts`'s `writeAtomically`. The first version of that test passed under a compaction that wrote
+an **empty file**, because the record it checked had been written after the last compaction; it now
+goes in first and is read back off the disk.
+
+**The Stage 2 tension is resolved in the route, at the point of temptation.** `POST
+/api/actions/hold/release` refuses a foreign id only when the book has nothing by that name, so the
+id the page was drawing before the restart still works — and the comment says why the inconsistency
+with queue ids is the point rather than an oversight. The old sentence *"Holds do not survive a
+restart"* is gone, since it is now false and a refusal explaining itself with a false rule sends
+somebody to look in the wrong place.
+
+**Three judgements worth recording.** (1) A ledger that will not open, is locked out, or cannot
+write **never stops a send**: failing closed would make a full disk a reason the one tool you reach
+for when things are broken cannot type, and failing open degrades to exactly the Stage 4 behaviour
+— every such failure is on `status()`, reaches the log at the moment it happens, and is not silent.
+(2) `openSharedQuarantine()` throws in exactly one case — the shared book was handed out before its
+ledger — which is Stage 4's `makeActionRoutes` argument unchanged, and `server.ts` calls it above
+`createServer` with a source guard keeping it there. (3) `writeHold` refuses to put an `openedAt` on
+disk for a hold that has none, rather than substituting the latest send's clock: a moment nothing
+observed, read back one restart later as a fact, is the exact class this plan has cut three arms
+under.
+
+**`send-coordinator.ts`'s header now says what changed and what did not.** A dashboard restart no
+longer forgets its holds; **a child process still must not send**, for three reasons it now lists —
+its book is a snapshot, it is read-only behind the parent's lock, and a child that never calls
+`openSharedQuarantine()` gets the empty book the header described before.
+
+**Sixteen mutations, sixteen caught** — after the first pass found one survivor, which was the
+compaction test above. Among them: rehydration made a no-op, the pre-send write removed, each of the
+four resolutions removed, a rehydrated hold given a fresh id, the release route refusing every
+foreign id again, a locked-out ledger writing anyway, the invented `openedAt`, and the startup
+building a private book instead of the shared one.
+
+**And the full suite earned its keep on the way past**: `tests/fixture-ids.test.ts` went red because
+the new ledger test had copied `fleet-quarantine.test.ts`'s conversation uuid, and one uuid declared
+by two files is a fixture the first teardown deletes out from under the second. Nothing in either
+file touches a database and the guard is still right — it cannot tell, and a shared id is one insert
+away from being a real one. 2,129 fleet tests green across 56 files, 19,040 across 926 in the whole
+suite; `npm run typecheck` exit 0.
 
 ### Stage 5 — request ids and receipts
 
@@ -239,7 +692,61 @@ Built only after the state machine is written down, which is what Sol refused th
 with a different body is refused before any effect; a repeat during an in-flight send does not start
 a second one; the capacity policy is stated in the code and tested at its boundary.
 
-### Stage 6 — the actions catalogue joins `wire.ts`
+### ✅ Stage 6 — the actions catalogue joins `wire.ts` (landed 2026-09-09)
+
+**The last hand-written twin is gone.** `ClientAction`'s comment used to say it
+"mirror[s] `Action` in tools/fleet/actions.ts" — related to the server declaration by that sentence
+and nothing else. `ActionScope`, `EnactedAction`, `BroadcastAction`, `Stagger`, `Action` and the
+three id unions now live in `wire.ts`, `actions.ts` aliases them, and the client derives via
+`Omit<Wire, …> & {…}` with each omission justified inline as *re-typed* or *declined*. The
+`unrecognised` arm stays — no server counterpart, and it is the point of a client type rather than a
+duplicate.
+
+**Verified by mutation in the session that committed it, not only where it was written.** A required
+field added to wire's `EnactedAction` fails the **client** arm:
+
+    tests/fleet-compile-guards.test.ts(114,11): error TS2322:
+    Type '{...}' is not assignable to type 'ClientEnactedAction'.
+
+That distinction is the stage: a guard that only caught the server re-stating itself would have
+passed every day the twin existed. The guard also refuses a field becoming *optional* —
+`EveryKeyRequired` with a `@ts-expect-error` on the negative — because the guarantee holds only for
+required, top-level, non-omitted fields, which an earlier stage found the hard way.
+
+**Implemented by GPT Terra from a written brief**, at Greg's request to delegate implementation and
+slow the burn rate. `npm run typecheck` was blocked by a sandbox IPC restriction in that
+environment, so the gate that decides the stage was run here. It found one thing the brief did not
+name: a malformed spoken or broadcast action with an impossible scope now becomes `unrecognised`,
+matching their shared literal scopes.
+
+688 tests green across eight suites; typecheck exit 0.
+
+#### The review found no P0s, and one correction to a claim rather than to the code
+
+**The guarantee is real**: for every required, top-level, non-omitted field, `Omit<Wire, …>` changes
+the *client* arm itself, so the failure lands on `ClientEnactedAction` and not only on a server
+fixture. What sits outside it, enumerated by the reviewer and worth keeping: optional fields, nested
+changes, widened union members, and same-typed mistakes. *"The catalogue is almost entirely required
+scalar data. `Stagger` is its only nested object and therefore the concrete weak point."*
+
+**The correction is to something this session asserted three times, including to another session.**
+*"`wire.ts` is types-only and import-free, and `tests/fleet-imports.test.ts` enforces it."* The rule
+is real. **The enforcement did not exist.** That suite checks the fleet's transitive `src/` and
+package dependencies and the leaf-module rule; it contains no assertion about `wire.ts`. A runtime
+`const` there, or a type import from another module, passed.
+
+**That is the fifth claim tonight about a property nothing measured** — after an outcome arm no code
+could produce, a flag that could only be true, a guarantee that a new producer would turn a test
+red, and a compile guard verified with a compiler that could not see it. The pattern is narrow
+enough to carry: **the claim is almost never wrong about the rule, it is wrong about whether
+anything checks the rule.** Both halves sound identical in a sentence and only one survives a
+mutation.
+
+The other four findings were P2/P3 and are fixed in the round below: `stagger` was still a
+hand-written structural twin (the defect this stage removed, surviving in the one nested object the
+catalogue has); `EveryKeyRequired` covered one arm of three; the scope tightening had no regression
+test and restoring `scope === null` was a mutation that left the suite green; and a comment still
+said the client arms "mirror" the server's.
 
 Narrowed on R12 and R15: the receipt, outcome and quarantine types went into `wire.ts` in their own
 stages, so this is catalogue hardening alone.

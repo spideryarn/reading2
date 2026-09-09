@@ -17,11 +17,14 @@
  */
 import { PassThrough } from "node:stream";
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { actionById, renderBroadcast, staggerMinutes, type BroadcastAction, type ProcRecord, type Step } from "../tools/fleet/actions.js";
 import {
   judgeStep,
+  killReport,
   makeActionRoutes,
   mergeProcs,
   parsePsArgs,
@@ -29,13 +32,40 @@ import {
   runPlan,
   type ActionDeps,
   type ActionIo,
+  type PlanRun,
   type StepRun,
 } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
-import { makeActionsApi } from "../tools/fleet/web/src/actions-client";
+/* THE REAL CARD, rendered to a string rather than into a DOM, so the route,
+   the client parse and the component a person actually reads can meet in one
+   test without this node-lane file acquiring jsdom. */
+import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
+import { boxActionBody, makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
+import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
+
+/**
+ * A coordinator over the queue's OWN book, with a fake transport.
+ *
+ * The transport is injected inside the coordinator rather than beside it,
+ * because the coordinator's check on the line above the transport call is what
+ * stops a broadcast typing into a session that is already held — and a route
+ * holding `sendMessage` itself could walk past it, which is what this one used
+ * to do. `makeActionRoutes` refuses to build if the two are looking at
+ * different books, so `queue.quarantineBook()` is not a convenience here.
+ */
+function sends(book: SendCoordinatorDeps["book"], sendMessage: SendCoordinatorDeps["sendMessage"]): SendCoordinator {
+  return makeSendCoordinator({
+    book,
+    sendMessage,
+    answerQuestion: () => {
+      throw new Error("the action routes never answer a dialog");
+    },
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Fakes: a request, a response, the box, and the delivery module.
@@ -148,18 +178,44 @@ const SENT_OK: SteerResult = {
   sent: [["send-keys", "-t", "%99001", "-l", "--", "…"]],
 };
 
-function harness(over: Partial<ActionDeps> & { io?: ActionIo; result?: SteerResult | ((t: SteerTarget) => SteerResult) } = {}) {
+/**
+ * Which run of the server this harness's queue is, when a test does not care.
+ *
+ * A FIXED VALUE RATHER THAN A RANDOM ONE, so a failure message names the same
+ * id twice and a test that accidentally depends on the shape of an id fails the
+ * same way every time. The tests that DO care pass `instanceId` and get two.
+ */
+const INSTANCE = "1a2b3c4d";
+
+function harness(
+  over: Partial<ActionDeps> & {
+    io?: ActionIo;
+    result?: SteerResult | ((t: SteerTarget) => SteerResult);
+    /** Which run of the server this is. Two harnesses with two of these is a restart. */
+    instanceId?: string;
+  } = {},
+) {
   const sent: Sent[] = [];
   const logs: string[] = [];
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock });
-  const { result, ...rest } = over;
+  const instanceId = over.instanceId ?? INSTANCE;
+  const queue =
+    over.queue ??
+    new SteeringQueue({
+      now: () => clock,
+      serverInstanceId: instanceId,
+      // A REAL BOOK, sharing this harness's clock and run id. The hold
+      // machinery is tests/fleet-quarantine.test.ts's subject; what this needs
+      // is that `next()` here asks the same question production's does.
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: instanceId }),
+    });
+  const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
-    sendMessage: (target, text, declaredStatus) => {
+    send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
       sent.push({ target, text, declaredStatus });
       return typeof result === "function" ? result(target) : (result ?? SENT_OK);
-    },
+    }),
     now: () => clock,
     // Generous by default, so an ordinary test is not accidentally a test of
     // the rate limiter. There is a describe block below that drives a tight one.
@@ -246,6 +302,50 @@ function sessionBody(over: Record<string, unknown> = {}): Record<string, unknown
 
 function recipient(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { paneId: "%99001", sessionId: "$99001", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" }, ...over };
+}
+
+/**
+ * A ROW AS THE PAGE HOLDS IT, which is what `recipient()` above is a
+ * hand-written picture of.
+ *
+ * The two exist for opposite reasons and both are needed: `recipient()` is the
+ * wire shape, so a test can post a body the browser could not build; this is
+ * the browser's own input, so a test can make the browser build one. Typed off
+ * `box`'s own parameter rather than off `FleetRow` directly, so a change to
+ * what the API takes reaches these fixtures.
+ *
+ * A cast rather than a full `FleetRow`, for the reason the `ROW` further down
+ * gives: `steerTargetBody` reads five fields and nothing else, and a full row
+ * here would be a fixture of the state payload — a different file's subject —
+ * that could go stale against it in silence.
+ */
+type PageRow = Parameters<ReturnType<typeof makeActionsApi>["box"]>[2][number];
+
+/**
+ * The rows argument where the request genuinely has none to give.
+ *
+ * `NO_ROWS_NEEDED` is a KILL: `killRoute` reads `pids`, never `recipients`, so
+ * a kill with no rows is not a kill to nobody — it is the only shape a kill
+ * has. (Its own list is missing from the browser's request too; that gap is
+ * named where the kill tests are.)
+ *
+ * `REQUEST_IGNORED` is a call through `replay`, which answers a RECORDED
+ * response and never reads what was posted. Named rather than `[]` at seven
+ * call sites so nobody reads one of them as a broadcast addressed to nobody.
+ */
+const NO_ROWS_NEEDED: readonly PageRow[] = [];
+const REQUEST_IGNORED: readonly PageRow[] = [];
+
+function pageRow(over: Record<string, unknown> = {}): PageRow {
+  return {
+    id: "$99001",
+    paneId: "%99001",
+    claudeSessionId: CLAUDE_ID,
+    panePid: 424242,
+    status: { kind: "idle" },
+    rawStatus: { kind: "idle" },
+    ...over,
+  } as unknown as PageRow;
 }
 
 function proc(over: Partial<ProcRecord>): ProcRecord {
@@ -814,6 +914,165 @@ describe("clearing a whole session's queue", () => {
 });
 
 /* ================================================================== *
+ * An id minted by a previous run of this server.
+ *
+ * **THE HAZARD IS NOT "THE ITEM IS GONE", IT IS "THE ITEM IS SOMEBODY
+ * ELSE'S".** The queue is volatile, so a restart empties it — but the very
+ * next enqueue starts the counter again, so a phone that has been open across
+ * a restart is holding ids the running server is busy re-issuing to different
+ * work. Every one of these tests asserts what happened to the LIVE item, not
+ * just the status code: an unprefixed build cancels, re-arms, abandons or
+ * clears a stranger's instruction and answers 200.
+ * ================================================================== */
+
+describe("an item id from a previous run of the server", () => {
+  const TARGET = { sessionId: "$99001", claudeSessionId: CLAUDE_ID };
+
+  /**
+   * Two servers in one process, which is exactly what a restart looks like from
+   * the phone's side. Each has queued its own first item, so both counters are
+   * at one and an unprefixed id collides by construction.
+   */
+  function twoRuns(): {
+    dead: ReturnType<typeof harness>;
+    live: ReturnType<typeof harness>;
+    staleId: string;
+    liveId: string;
+  } {
+    const dead = harness({ instanceId: "deadbeef" });
+    const live = harness({ instanceId: "0badcafe" });
+    dead.queue.enqueueAction(TARGET, "pull", "greg");
+    live.queue.enqueueAction(TARGET, "push", "greg");
+    return {
+      dead,
+      live,
+      staleId: dead.queue.snapshot("$99001").items[0]?.id ?? "",
+      liveId: live.queue.snapshot("$99001").items[0]?.id ?? "",
+    };
+  }
+
+  it("cannot be confused with this run's, because the two runs mint different ids", () => {
+    const { staleId, liveId } = twoRuns();
+    // The whole defect in one line: without a prefix both of these are `q1`.
+    expect(staleId).not.toBe(liveId);
+  });
+
+  it("does not cancel this run's item", async () => {
+    const { live, staleId, liveId } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: staleId } }));
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    // The fact that matters. The item nobody asked about is still queued.
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("does not re-arm this run's item", async () => {
+    const { live, staleId } = twoRuns();
+    live.tick(31 * 60_000);
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stale");
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: staleId } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    // Still stale: nothing was re-armed, so no pass will deliver it.
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stale");
+  });
+
+  it("does not abandon this run's lease", async () => {
+    const { live, staleId, liveId } = twoRuns();
+    const leased = live.queue.next("$99001", IDLE_CTX);
+    expect(leased.kind).toBe("ready");
+    live.tick(61_000);
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stuck");
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: staleId } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("does not clear this run's queue", async () => {
+    // **AND `stale-view` WOULD NOT HAVE CAUGHT IT.** `clear` compares the
+    // client's list with the queue's droppable set, which is a guard against
+    // CONCURRENT DRIFT — something arriving between the list being drawn and
+    // the tap. An old `[q1]` posted against a restarted queue that also holds
+    // exactly one item called `q1` passes that comparison exactly.
+    const { live, staleId, liveId } = twoRuns();
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [staleId] } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("says which server it came from, and does not say 'no such item'", async () => {
+    // The two facts are different and the second one is the misleading one: it
+    // invites the person to conclude the instruction was never queued.
+    const { live, staleId } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: staleId } }));
+    expect(r.json.code).not.toBe("no-such-item");
+    expect(String(r.json.why)).toContain(staleId);
+    expect(String(r.json.why)).toContain("restart");
+  });
+
+  it("leaves an id that names no run at all as 'no such item'", async () => {
+    // A hand-typed or garbled id is not evidence of a previous server, and
+    // saying so would be a fresh false statement in place of the old one.
+    const { live } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: "q999" } }));
+    expect(r.status).toBe(404);
+    expect(r.json.code).toBe("no-such-item");
+  });
+
+  it("still lets this run's own ids through all four routes", async () => {
+    // The paired positive. A refusal that fires on everything is not a guard,
+    // it is an outage, and each of the four has its own copy of the check.
+    const h = harness();
+    for (const id of ["continue", "pull", "push", "run-checks"] as const) {
+      h.queue.enqueueAction(TARGET, id, "greg");
+    }
+    const ids = h.queue.snapshot("$99001").items.map((i) => i.id);
+    const [first, second, third, fourth] = ids as [string, string, string, string];
+
+    const cancelled = await call(h.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: first } }));
+    expect(cancelled.status).toBe(200);
+
+    h.tick(31 * 60_000);
+    const revived = await call(h.routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: second } }));
+    expect(revived.status).toBe(200);
+
+    const leased = h.queue.next("$99001", IDLE_CTX);
+    if (leased.kind !== "ready") throw new Error("expected a lease");
+    expect(leased.item.id).toBe(second);
+    h.tick(61_000);
+    const abandoned = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: second } }));
+    expect(abandoned.status).toBe(200);
+
+    const cleared = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [third, fourth] } }));
+    expect(cleared.status).toBe(200);
+    expect(h.queue.snapshot("$99001").items).toEqual([]);
+  });
+
+  it("does not swallow `stale-view`, which answers a different question", async () => {
+    // The two refusals must not merge. This one is entirely WITHIN one run:
+    // the ids are this server's, and the list is simply out of date.
+    const h = harness();
+    h.queue.enqueueAction(TARGET, "pull", "greg");
+    const read = h.queue.snapshot("$99001").items.map((i) => i.id);
+    h.queue.enqueueAction(TARGET, "push", "greg");
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: read } }));
+
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("stale-view");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(2);
+  });
+});
+
+/* ================================================================== *
  * The plan runner. The property here is the expensive one.
  * ================================================================== */
 
@@ -1094,7 +1353,7 @@ describe("POST /api/actions/box — killing", () => {
     // only one that runs the real client parse over the real response.
     const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true);
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true, NO_ROWS_NEEDED);
     expect(outcome.ok).toBe(true);
     const shown = outcome.ok ? outcome.result : null;
     // Written as "what a person would read off the panel" rather than as a
@@ -1116,7 +1375,7 @@ describe("POST /api/actions/box — killing", () => {
     // run answers 200 with a preview, and this answers 409.
     const { io, ran } = fakeIo({ procs: [...suites] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false);
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false, NO_ROWS_NEEDED);
 
     expect(outcome.ok).toBe(false);
     // AND THE REMAINING GAP, NAMED RATHER THAN HIDDEN: the page does not yet
@@ -1152,7 +1411,9 @@ describe("POST /api/actions/box — killing", () => {
       fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] } }),
     );
     expect(r.status).toBe(200);
-    expect(resultOf(r).killed).toEqual([5001]);
+    // The intersection is what got a step; what the step ESTABLISHED is the
+    // block below this describe.
+    expect((resultOf(r).kill as { targeted: number[] }).targeted).toEqual([5001]);
     expect(ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
     const skipped = resultOf(r).skipped as { pid: number; why: string }[];
     expect(skipped.map((s) => s.pid).sort()).toEqual([5002, 5005]);
@@ -1236,6 +1497,151 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     return { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five, ...over };
   }
 
+  /**
+   * **THE JOIN, DRIVEN FROM THE BROWSER'S END — AND IT WAS SEVERED FOR A DAY.**
+   *
+   * Every other test in this block hands the route a body with `recipients` in
+   * it, hand-written above. Until 2026-09-09 `boxActionBody` — the only thing
+   * that builds this request in the browser, and the only thing posted by
+   * `makeActionsApi().box` — returned `{actionId, mode, confirm, speaker}` and
+   * nothing else, so the body the page actually sent was refused `bad-request`
+   * by the first line of `broadcastRoute`. Both halves were right about their
+   * own object and had never met: the same shape as the `kill-test-suites` pair
+   * above, which still has it.
+   *
+   * The test that stood here asserted that refusal as the honest state of the
+   * path, and it was — but two sessions then spent an evening measuring which
+   * sessions a broadcast reaches, on a selection rule that had never once run.
+   * **So the assertion that matters is not that the body has a `recipients`
+   * field: it is that a recipient is actually SELECTED at the far end.** A test
+   * of the field would have passed at every moment of that evening while the
+   * button stayed dead.
+   *
+   * `true`, because the first press is the dry run: `ActionButtons` calls
+   * `api.box(action.id, true, rows)` for the preview and only offers Confirm
+   * once that has come back.
+   */
+  it("carries the rows the page is showing into the request, so the route has somebody to speak to", async () => {
+    const { routes, sent } = harness();
+    const rows = [
+      pageRow({ id: "$1", paneId: "%1" }),
+      pageRow({ id: "$2", paneId: "%2", rawStatus: { kind: "working" } }),
+      pageRow({ id: "$3", paneId: "%3", rawStatus: { kind: "needs-you" } }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+
+    expect(preview.ok).toBe(true);
+    /* SOMEBODY WAS SELECTED, read through the real client parse rather than off
+       the raw body, so this is the count the panel would draw. */
+    expect(preview.ok ? preview.effect : null).toEqual({
+      kind: "broadcast",
+      recipients: 3,
+      states: [
+        { state: "would-send", count: 2 },
+        { state: "held", count: 1 },
+      ],
+    });
+    // Which rows, in the page's order, and which one the working status held.
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:would-send",
+      "%2:held",
+      "%3:would-send",
+    ]);
+    // A dry run still says nothing to anybody.
+    expect(sent).toEqual([]);
+  });
+
+  /**
+   * **THE VALUES ARE THE SNAPSHOT'S, NOT A FRESH READING OF THE BOX.**
+   *
+   * `steerTargetBody` sends `row.rawStatus` — the server's own object, kept
+   * beside the parsed `row.status` precisely so a stale-but-honest claim can be
+   * checked at the far end (steer-client.ts § `SteerTargetBody`). This row is
+   * built so the two DISAGREE: what the page drew is `unknown`, which
+   * `drainGate` refuses, and what the server said is `idle`, which it delivers
+   * to. A client that rebuilt the claim out of what it had rendered — or that
+   * re-fetched the row to make its own claim true — cannot pass this.
+   */
+  it("sends the status the row was carrying, not the one the page drew", async () => {
+    const { routes } = harness();
+    const rows = [
+      pageRow({
+        id: "$7",
+        paneId: "%7",
+        status: { kind: "unknown", why: "drawn from a stale collection" },
+        rawStatus: { kind: "idle" },
+      }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+
+    expect(preview.ok).toBe(true);
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%7:would-send"]);
+  });
+
+  /**
+   * **A ROW THAT IS NOT AN ADDRESS MUST NOT SINK THE WHOLE BROADCAST**, and
+   * this one was found the way the last one should have been: by tracing a real
+   * call end to end.
+   *
+   * With the recipients wired up, the page's own payload was built from the
+   * LIVE `/api/state` — 23 rows, through `parseFleetState` and `boxActionBody`
+   * — and posted at the running server on 2026-09-09. It answered **400**:
+   * `a recipient is not addressable: claudeSessionId is missing`. `parseTarget`
+   * requires a `paneId` and a `claudeSessionId` on every recipient and refuses
+   * the request over any one of them, and a real fleet always holds a few rows
+   * with neither: a shell, and a session too old to have pinned a conversation
+   * id. So sending the rows *entirely* raw fixed nothing — one shell on the box
+   * and the broadcast still reached nobody.
+   *
+   * `steer-client.ts` already says what such a row is: a null `claudeSessionId`
+   * means *the row cannot be steered at all*. It is not a recipient the server
+   * should judge; it is not an address. So the client drops it and keeps the
+   * count — see `addressableRows`, and the sentence the panel puts under the
+   * confirmation so the narrowing is not silent.
+   */
+  it("does not let a row it cannot address sink the whole broadcast", async () => {
+    const { routes } = harness();
+    const rows = [
+      pageRow({ id: "$1", paneId: "%1" }),
+      // A session too old to have pinned a conversation id — or a shell.
+      pageRow({ id: "$2", paneId: "%2", claudeSessionId: null }),
+      // A row whose pane never resolved. Also not an address.
+      pageRow({ id: "$3", paneId: null }),
+      pageRow({ id: "$4", paneId: "%4" }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+
+    expect(preview.ok).toBe(true);
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%1:would-send", "%4:would-send"]);
+  });
+
+  /**
+   * **THE PIN.** The two above go through HTTP, so a regression there arrives
+   * as a 400 that a reader can talk themselves out of. This one names the one
+   * field whose removal severs the join and drives the real builder, so
+   * `boxActionBody` dropping `recipients` fails in one line rather than in an
+   * argument about fixtures.
+   */
+  it("builds the request body with the rows in it, verbatim", () => {
+    /* The second row's `panePid` is null ON PURPOSE and is still sent: the
+       server reads a null pid as "no respawn check", which is a weaker guard
+       and a real answer. That is a different thing from the two identifiers
+       `addressableRows` drops, and inventing a pid to fill the hole would be
+       the client signing its name to a check it did not make. */
+    const rows = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2", panePid: null })];
+    const body = boxActionBody("resource-broadcast", false, rows);
+
+    expect(body.recipients).toEqual([
+      { paneId: "%1", sessionId: "$1", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" } },
+      { paneId: "%2", sessionId: "$2", claudeSessionId: CLAUDE_ID, panePid: null, status: { kind: "idle" } },
+    ]);
+    // And the rest of the body is unchanged: `mode` is the field the route reads.
+    expect(body).toMatchObject({ actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg" });
+  });
+
   it("staggers across the recipients it can actually speak to", async () => {
     const { routes, sent } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
@@ -1260,7 +1666,13 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const { routes } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; minutes: number | null; why: string | null }[];
-    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%1:sent", "%2:held", "%3:sent", "%4:blocked", "%5:sent"]);
+    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:keys-submitted",
+      "%2:held",
+      "%3:keys-submitted",
+      "%4:blocked",
+      "%5:keys-submitted",
+    ]);
     expect(rows.find((x) => x.paneId === "%2")?.why).toContain("working");
     expect(rows.find((x) => x.paneId === "%4")?.minutes).toBe(null);
   });
@@ -1276,8 +1688,11 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%3", "%5"]);
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
-    expect(rows.find((x) => x.paneId === "%3")).toMatchObject({ outcome: "refused", code: "not-at-input" });
-    expect(rows.filter((x) => x.outcome === "sent").map((x) => x.paneId)).toEqual(["%1", "%5"]);
+    // `delivery: "none"` on the refusal, so this one is settled: no keystroke
+    // left the box for %3. The three fates that are NOT settled are the block
+    // at the end of this file.
+    expect(rows.find((x) => x.paneId === "%3")).toMatchObject({ outcome: "refused-before-effect", code: "not-at-input" });
+    expect(rows.filter((x) => x.outcome === "keys-submitted").map((x) => x.paneId)).toEqual(["%1", "%5"]);
   });
 
   it("previews without speaking, with the same minutes the send would use", async () => {
@@ -1374,13 +1789,14 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     // about elapsed time without sleeping through it.
     let clock = 1_000_000;
     const sent: string[] = [];
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock }),
-      sendMessage: (target) => {
+      queue,
+      send: sends(queue.quarantineBook(), (target) => {
         sent.push(target.paneId);
         clock += 60_000;
         return SENT_OK;
-      },
+      }),
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -1520,5 +1936,510 @@ describe("reading the process table", () => {
     const rows = parsePsArgs(" 4242     1  91000    12345 node dev.js");
     const merged = mergeProcs(rows, new Map([[4242, "node"]]), () => "/home/greg/gone (deleted)");
     expect(merged.procs[0]?.cwd).toBe("/home/greg/gone (deleted)");
+  });
+});
+
+/* ================================================================== *
+ * Stage 3 of docs/plans/260908j: outcomes that do not claim more than
+ * the box actually established.
+ *
+ * **ALL THREE DEFECTS HAVE ONE SHAPE.** The producer knew several
+ * different things and the consumer wrote down one word — the Class B
+ * lossy join docs/postmortems/260908b is about. So every assertion
+ * below is of the form *these two situations must not read the same*,
+ * and each is driven through the real handler, because a fixture of a
+ * response is a claim about a producer that nothing checks against the
+ * producer.
+ * ================================================================== */
+
+/** Rendered markup, as a person reads it. */
+function strip(html: string): string {
+  return html.replace(/<[^>]+>/g, " ");
+}
+
+/**
+ * The server's OWN BYTES, replayed into the real client.
+ *
+ * `makeActionsApi` posts bodies the page posts, and the page never asks for a
+ * `mode: "run"` session action and never sends `recipients` — so `plan-failed`
+ * and a real broadcast cannot be reached by pointing the client at the route.
+ * Recording the real response and answering the client's request with it is the
+ * nearest honest thing: the producer is the handler and the parser is the
+ * shipped one, and only the transport between them is a stub. A hand-written
+ * body would be the twin-fixture failure this file's header is about.
+ */
+function replay(recorded: { status: number | null; body: string }): typeof fetch {
+  return (async () => new Response(recorded.body, { status: recorded.status ?? 500 })) as unknown as typeof fetch;
+}
+
+describe("a kill reports what it established, not what it intended", () => {
+  const suites = [
+    proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5003, comm: "node-MainThread", args: VITEST_ARGS }),
+  ];
+
+  function killBody(pids: number[]): Record<string, unknown> {
+    return { actionId: "kill-test-suites", mode: "run", confirm: true, pids };
+  }
+
+  it("separates the pids it meant to signal from the ones the signal reached", async () => {
+    /* `kill -TERM <pid>` is a `best-effort` step, so a pid that has already
+       gone — or one this uid may not signal — comes back non-zero and the plan
+       CARRIES ON. The route used to answer `killed: [5001, 5002, 5003]` for
+       exactly that run: the intended list, under a past-tense name, with the
+       step outcomes that contradicted it sitting in the same response. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) => (step.argv[2] === "5002" ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" } : OK_STEP),
+    });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    expect(r.status).toBe(200);
+
+    const kill = resultOf(r).kill as { targeted: number[]; observed: { pid: number; observation: string }[] };
+    /* TARGETED is the intent, and it is allowed to name all three. It was
+       called `attempted` for a day, which named the intent after the attempt in
+       the stage built to stop exactly that. */
+    expect(kill.targeted).toEqual([5001, 5002, 5003]);
+    // OBSERVED is what came back, and it is not allowed to agree with it.
+    expect(kill.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
+      "5001:signal-accepted",
+      "5002:signal-refused",
+      "5003:signal-accepted",
+    ]);
+    // And the collapsed field is gone rather than left beside its replacement,
+    // where a reader would find the reassuring one first.
+    expect(resultOf(r)).not.toHaveProperty("killed");
+  });
+
+  it("does not call a signal it could not send an unsuccessful kill", async () => {
+    /* Three different failures, and only one of them means "that process was
+       not there". A `kill` that could not be spawned, or that was killed for
+       taking too long, establishes NOTHING — the signal may have gone. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) =>
+        step.argv[2] === "5002"
+          ? { ...OK_STEP, code: null, spawnError: "spawn kill ENOENT" }
+          : step.argv[2] === "5003"
+            ? { ...OK_STEP, code: null, timedOut: true }
+            : OK_STEP,
+    });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const kill = resultOf(r).kill as { observed: { pid: number; observation: string; why: string }[] };
+    expect(kill.observed.map((o) => o.observation)).toEqual(["signal-accepted", "not-established", "not-established"]);
+    // The step's own verdict, not a sentence written here.
+    expect(kill.observed[1]?.why).toContain("ENOENT");
+  });
+
+  it("refuses a run short of steps rather than inventing an outcome for the pids it cannot see", () => {
+    /* **WHAT THIS REPLACES WAS DECORATION.** `not-attempted` and
+       `planCompleted` shipped for a day and no code could produce either: every
+       step of a kill plan is `best-effort`, so `judgeStep` never returns
+       `failed` and `runPlan` never stops one early. The only way to see them
+       was to build a `PlanRun` by hand — which the test that asserted them did,
+       so the arm existed to satisfy its own test. A vocabulary word nothing can
+       write costs a reader the assumption that the other words mean something.
+
+       So the shortfall is an invariant now. Throwing loses this run's evidence
+       and that is the direction to be wrong in: `guard()` turns it into a 500
+       naming the mismatch, where the alternative is a 200 naming fewer pids
+       than were signalled — the exact defect this stage removed. */
+    const short: PlanRun = {
+      action: "kill-test-suites",
+      planned: 3,
+      completed: false,
+      stoppedAt: 0,
+      steps: [
+        {
+          argv: ["kill", "-TERM", "5001"],
+          cwd: PRIMARY,
+          why: "",
+          status: "failed",
+          verdict: "it exited 1",
+          code: 1,
+          timedOut: false,
+          spawnError: null,
+          tail: "",
+        },
+      ],
+    };
+    expect(() => killReport([5001, 5002, 5003], short)).toThrow(/1 step\(s\) for 3 targeted pid\(s\)/);
+    // And the same run against the list it actually covers reports normally.
+    expect(killReport([5001], short).observed.map((o) => `${o.pid}:${o.observation}`)).toEqual(["5001:signal-refused"]);
+  });
+
+  it("never says a process is dead, because nothing here looked", async () => {
+    /* An honest ceiling. `kill -TERM` exiting 0 proves the signal was
+       ACCEPTED; the process may ignore it, and nothing re-reads the process
+       table afterwards. So no word in this half of the response may be past
+       tense about the process itself. */
+    const { io } = fakeIo({ procs: suites });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001]) }));
+    const words = JSON.stringify(resultOf(r).kill);
+    expect(words).not.toContain("killed");
+    expect(words).not.toContain("dead");
+    expect(words).toContain("signal-accepted");
+  });
+
+  it("renders each arm through the real card, and no sentence a person reads is past tense about a process", async () => {
+    /* **THE GUARD ON THE THING THIS STAGE EXISTS TO PREVENT**, and it was the
+       piece missing from it. The assertions above forbid `killed` in the JSON
+       and in the heading; the browser test rendered only the arm the route
+       cannot reach. So the sentence a person ACTUALLY READS after a kill —
+       `BOX_STATE_COPY`'s line for `signal-accepted` — could have been changed
+       to *process killed* with the whole suite still green. A review found
+       exactly that by mutating it.
+
+       Real route bytes, the real client parse, the real component. Three pids
+       and three fates in one press, and nothing re-read the process table
+       between them, so the ceiling on all three is the same. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) =>
+        step.argv[2] === "5002"
+          ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" }
+          : step.argv[2] === "5003"
+            ? { ...OK_STEP, code: null, timedOut: true }
+            : OK_STEP,
+    });
+    const { routes } = harness({ io });
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const outcome = await makeActionsApi(replay(recorded)).box("kill-test-suites", false, REQUEST_IGNORED);
+    const effect = outcome.ok ? outcome.effect : null;
+    if (effect === null) throw new Error("expected the answer to carry an effect reading");
+    /* `strip` turns every tag into a space, so the runs are collapsed before
+       anything is matched against them. */
+    const text = strip(renderToStaticMarkup(createElement(BoxEffectSummary, { effect }))).replace(/\s+/g, " ");
+
+    // The join first: three pids, three different words, one each.
+    expect(text).toContain("1 signal-accepted");
+    expect(text).toContain("1 signal-refused");
+    expect(text).toContain("1 not-established");
+
+    /* THE CEILING, ARM BY ARM, in the words on the page.
+
+       `signal-accepted` is the strongest thing this route can establish and it
+       stops at the signal: a process may ignore SIGTERM and nothing here looks
+       again. */
+    expect(text).toContain("signal accepted — not proof the process is gone");
+    // A settled negative, and the only one: `kill` said the pid was not there.
+    expect(text).toContain("no such process, or not ours to signal");
+    /* And the arm that settles NOTHING must not read like either of them. It
+       covers a timeout and a `kill` killed by a signal — in both of which the
+       command RAN, so "could not be run" was false of the case driven here and
+       could be contradicted by the verdict printed underneath it. */
+    expect(text).toContain("the signal attempt did not settle — it may have gone out and it may not");
+    expect(text).not.toContain("could not be run");
+
+    /* No past tense about the process, anywhere on the list a person reads.
+       Named words rather than a shape, because this is the assertion a
+       mutation has to get past. */
+    for (const claim of [/killed/i, /\bdead\b/i, /\bdied\b/i, /terminat/i, /no longer running/i, /shut down/i]) {
+      expect(text).not.toMatch(claim);
+    }
+  });
+});
+
+describe("a broadcast keeps one delivery reading per recipient", () => {
+  const five = [
+    recipient({ paneId: "%1", sessionId: "$1" }),
+    recipient({ paneId: "%2", sessionId: "$2", status: { kind: "working" } }),
+    recipient({ paneId: "%3", sessionId: "$3" }),
+    recipient({ paneId: "%4", sessionId: "$4", status: { kind: "shell", busy: false } }),
+    recipient({ paneId: "%5", sessionId: "$5" }),
+  ];
+
+  function body(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five, ...over };
+  }
+
+  const failing = (delivery: "none" | "partial" | "unknown"): SteerResult => ({
+    ok: false,
+    reason: { code: "send-failed", why: `the tmux call stopped: ${delivery}` },
+    delivery,
+    sent: delivery === "none" ? [] : [["send-keys", "-t", "%3", "-l", "--", "…"]],
+  });
+
+  it("does not report a partial send as a refusal", async () => {
+    /* THE ONE THAT COSTS. `partial` means the literal text reached the pane
+       and the Enter did not, so that agent is sitting on half a message which
+       the next Enter anybody presses will submit. `refused` reads as "nothing
+       reached them", and it was the same word this route used for a send that
+       went nowhere at all. */
+    const { routes } = harness({ result: (t) => (t.paneId === "%3" ? failing("partial") : SENT_OK) });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
+    expect(rows.find((x) => x.paneId === "%3")?.outcome).toBe("partial");
+    expect(rows.find((x) => x.paneId === "%3")?.code).toBe("send-failed");
+    // And the three fates stay three words.
+    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:keys-submitted",
+      "%2:held",
+      "%3:partial",
+      "%4:blocked",
+      "%5:keys-submitted",
+    ]);
+  });
+
+  it("keeps `none` and `unknown` apart, and neither of them is `partial`", async () => {
+    const none = harness({ result: (t) => (t.paneId === "%3" ? failing("none") : SENT_OK) });
+    const a = await call(none.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    expect((resultOf(a).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
+      "refused-before-effect",
+    );
+
+    const unsure = harness({ result: (t) => (t.paneId === "%3" ? failing("unknown") : SENT_OK) });
+    const b = await call(unsure.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    expect((resultOf(b).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
+      "outcome-unknown",
+    );
+  });
+
+  it("reads a throw from the delivery module as unknown, never as a refusal", async () => {
+    /* A throw carries no `Delivery`, so there is nothing to read: `refused` was
+       the reassuring reading of the one case with the least evidence behind it.
+
+       **AND THE SENTENCE MUST NOT SAY WHEN THE THROW HAPPENED.** The `try` is
+       around the WHOLE `sendMessage` call, so a throw before the first keystroke
+       lands in the same branch as one out of the middle of a tmux sequence —
+       and the fake below throws immediately, which is exactly the case the copy
+       used to describe as *partway through the send*. */
+    const { routes } = harness({
+      result: (t) => {
+        if (t.paneId === "%3") throw new Error("execFileSync: EAGAIN");
+        return SENT_OK;
+      },
+    });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
+    expect(row?.outcome).toBe("outcome-unknown");
+    expect(row?.why).toContain("EAGAIN");
+    expect(row?.why).toContain("the delivery module threw while handling this recipient");
+    // The uncertainty survives the rewrite; the invented timing does not.
+    expect(row?.why).toContain("Nothing here can tell whether any of it reached the pane.");
+    expect(row?.why).not.toContain("partway");
+  });
+
+  it("says `would-send` in a preview, so a plan cannot be read as a delivery", async () => {
+    const { routes, sent } = harness();
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run" }) }));
+    const rows = resultOf(r).recipients as { outcome: string }[];
+    expect(rows.filter((x) => x.outcome === "would-send")).toHaveLength(3);
+    expect(rows.map((x) => x.outcome)).not.toContain("keys-submitted");
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("a refusal that carried a plan run reaches the card", () => {
+  const removeBody = (over: Record<string, unknown> = {}) =>
+    sessionBody({ actionId: "remove-worktree", confirm: true, worktreeDir: WORKTREE, branch: "worktree-fixture", ...over });
+
+  const ROW = {
+    id: "$99001",
+    paneId: "%99001",
+    claudeSessionId: CLAUDE_ID,
+    panePid: 424242,
+    status: { kind: "idle" as const },
+  } as unknown as Parameters<ActionsApi["run"]>[0];
+
+  const stoppingIo = () =>
+    fakeIo({
+      step: (_s, i) =>
+        i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" },
+    });
+
+  it("keeps the steps the server described instead of reading them as silence", async () => {
+    const { routes } = harness({ io: stoppingIo().io });
+    const recorded = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
+    expect(recorded.json.code).toBe("plan-failed");
+
+    const outcome = await makeActionsApi(replay(recorded)).run(ROW, "remove-worktree");
+    expect(outcome.ok).toBe(false);
+    const run = outcome.ok === false ? outcome.run : null;
+    expect(run).not.toBe(null);
+    expect(run?.completed).toBe(false);
+    expect(run?.stoppedAt).toBe(1);
+    /* THE DENOMINATOR, and it was not on the wire until this stage: the run
+       carries the steps that RAN, so two outcomes and a `stoppedAt` are the
+       same list of facts whether the plan had two steps or three. `2 of 2`
+       reads as complete. */
+    expect(run?.planned).toBe(3);
+    expect(run?.steps).toHaveLength(2);
+    expect(run?.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
+    expect(run?.steps[1]?.verdict).toContain("exited 1");
+  });
+
+  it("renders what the server said instead of saying it cannot tell", async () => {
+    /* THE WHOLE POINT OF THE STAGE, in one assertion: the card printed *this
+       page cannot tell whether the action took effect* over a body that said,
+       step by step, exactly what had taken effect. */
+    const { routes } = harness({ io: stoppingIo().io });
+    const recorded = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
+    const outcome = await makeActionsApi(replay(recorded)).run(ROW, "remove-worktree");
+
+    const html = renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} }));
+    const text = strip(html);
+    expect(text).not.toContain("This page cannot tell whether the action took effect");
+    // Two of three ran, which is the sentence `steps.length` alone cannot say:
+    // without `planned` this reads "2 of 2", and that reads as complete.
+    expect(text).toContain("2 of 3 steps ran");
+    // And the heading cannot be read on its own: the step that stopped it is
+    // named, with the gate's verdict, and the third is absent because it never
+    // ran.
+    expect(text).toContain("worktree:check");
+    expect(text).toContain("STOPPED THE PLAN");
+    expect(text).not.toContain("worktree:sweep");
+  });
+
+  it("does not read a server's SILENCE about a run as a completed run", async () => {
+    /* **THE HOLE A MUTATION FOUND.** `completed: v["completed"] === true` is
+       the whole safety of this parse — a body that never mentions the field
+       must not be read as done — and nothing drove it, because every response
+       this build produces carries the field. The arm exists for a server that
+       predates it, and this is the only shape that reaches it, so the body is
+       written by hand ON PURPOSE and says so.
+
+       `planned` has the same property one line down: absent, it falls back to
+       the number of steps that ran, which is the most this page can prove. */
+    const outcome = await makeActionsApi(
+      replay({ status: 409, body: JSON.stringify({ ok: false, code: "plan-failed", why: "a step said no", run: { action: "x", steps: [{}, {}] } }) }),
+    ).run(ROW, "remove-worktree");
+    const run = outcome.ok === false ? outcome.run : null;
+    expect(run?.completed).toBe(false);
+    expect(run?.planned).toBe(2);
+    expect(run?.stoppedAt).toBe(null);
+    // And a step whose status is a word this build has never heard of is named
+    // rather than dropped or read as one of the three we know.
+    expect(run?.steps.map((s) => s.status)).toEqual(["unrecognised", "unrecognised"]);
+
+    const text = strip(renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} })));
+    expect(text).toContain("It stopped part-way: 2 of 2 steps ran.");
+    expect(text).toContain("the server used a word this page does not know");
+    /* **A STEP IS NOT NECESSARILY A COMMAND THAT EXITED.** `PlanRun` records a
+       spawn failure, a timeout and a subprocess killed by a signal, and none of
+       those exited. The card said all three did, one line under a list that
+       could be naming them. */
+    /* Split around the apostrophe: `renderToStaticMarkup` escapes it to
+       `&#x27;` and `strip` only removes tags. */
+    expect(text).toContain("Each row below is a plan step the server reached, with the gate");
+    expect(text).toContain("s own verdict.");
+    expect(text).not.toContain("a command that exited");
+  });
+});
+
+describe("the heading over a box answer is a ratio, not a verdict", () => {
+  /* `effectHeadline` is driven with the bytes a real handler produced, through
+     the real client parse. The card that calls it is two clicks deep in a DOM;
+     the assertion that matters — *these two answers must not get the same
+     heading* — is about this function, and putting it here is what lets the
+     route be the producer. */
+
+  const five = [
+    recipient({ paneId: "%1", sessionId: "$1" }),
+    recipient({ paneId: "%2", sessionId: "$2", status: { kind: "working" } }),
+    recipient({ paneId: "%3", sessionId: "$3" }),
+    recipient({ paneId: "%4", sessionId: "$4", status: { kind: "shell", busy: false } }),
+    recipient({ paneId: "%5", sessionId: "$5" }),
+  ];
+
+  const broadcastBody = { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five };
+
+  async function headingFor(recorded: { status: number | null; body: string }): Promise<string | null> {
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
+    return effectHeadline(outcome.ok ? outcome.effect : null);
+  }
+
+  it("cannot head a broadcast that half-landed the way it heads one that all landed", async () => {
+    const all = harness();
+    const half = harness({
+      result: (t) =>
+        t.paneId === "%3"
+          ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
+          : SENT_OK,
+    });
+    const a = await headingFor(await call(all.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
+    const b = await headingFor(await call(half.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
+
+    expect(a).toBe("Keys submitted to 3 of 5 rows.");
+    expect(b).toBe("Keys submitted to 2 of 5 rows.");
+    // The old card headed both "Done."
+    expect(a).not.toEqual(b);
+  });
+
+  it("counts the partial recipient under its own word, where a person will see it", async () => {
+    const { routes } = harness({
+      result: (t) =>
+        t.paneId === "%3"
+          ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
+          : SENT_OK,
+    });
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: broadcastBody }));
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
+    const effect = outcome.ok ? outcome.effect : null;
+    expect(effect?.kind).toBe("broadcast");
+    expect(effect?.states.find((s) => s.state === "partial")?.count).toBe(1);
+    expect(effect?.states.find((s) => s.state === "keys-submitted")?.count).toBe(2);
+    // Not folded in with the two rows nobody could speak to.
+    expect(effect?.states.find((s) => s.state === "refused-before-effect")).toBeUndefined();
+  });
+
+  it("cannot head a kill that signalled nothing the way it heads one that signalled everything", async () => {
+    const body = { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] };
+    const procs = [
+      proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+      proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+    ];
+    const good = harness({ io: fakeIo({ procs }).io });
+    const gone = harness({ io: fakeIo({ procs, step: () => ({ ...OK_STEP, code: 1, stderr: "No such process" }) }).io });
+
+    const a = await makeActionsApi(replay(await call(good.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+      "kill-test-suites",
+      false,
+      REQUEST_IGNORED,
+    );
+    const b = await makeActionsApi(replay(await call(gone.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+      "kill-test-suites",
+      false,
+      REQUEST_IGNORED,
+    );
+
+    expect(effectHeadline(a.ok ? a.effect : null)).toBe("Signal accepted for 2 of 2 pids.");
+    expect(effectHeadline(b.ok ? b.effect : null)).toBe("Signal accepted for 0 of 2 pids.");
+    // And neither of them is the past tense about a process.
+    expect(effectHeadline(a.ok ? a.effect : null)).not.toContain("killed");
+  });
+
+  it("takes the denominator from the pids the server targeted, and falls back to the evidence rather than to zero", async () => {
+    /* THE ONLY SHAPE THAT REACHES THE FALLBACK is a body from a server that
+       predates `targeted`, so it is hand-written on purpose and says so. The
+       fallback is the observed list because that is the most this page can
+       prove; falling back to zero would head a real kill *0 of 0*, which reads
+       as nothing having been aimed at. */
+    const outcome = await makeActionsApi(
+      replay({
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          op: "ran",
+          action: "kill-test-suites",
+          dryRun: false,
+          result: { kill: { observed: [{ pid: 5001, observation: "signal-accepted" }] } },
+        }),
+      }),
+    ).box("kill-test-suites", false, REQUEST_IGNORED);
+
+    const effect = outcome.ok ? outcome.effect : null;
+    expect(effect?.kind === "kill" && effect.targeted).toBe(1);
+    expect(effectHeadline(effect)).toBe("Signal accepted for 1 of 1 pids.");
+  });
+
+  it("heads a preview as a promise, not as a receipt", async () => {
+    const { routes } = harness();
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: { ...broadcastBody, mode: "dry-run" } }));
+    expect(await headingFor(recorded)).toBe("It would go to 3 of 5 rows.");
   });
 });

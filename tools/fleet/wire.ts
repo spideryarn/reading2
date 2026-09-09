@@ -20,6 +20,32 @@
  * So: **types only, no runtime values, no imports.** A `const` here would be
  * bundled into the browser; an import here would take the client's project with
  * it.
+ *
+ * ## Adding to this file, when several sessions are doing it at once
+ *
+ * Six sessions have appended here in two days, so the convention matters more
+ * than it looks. **Append a new block at the end; do not reorganise what is
+ * above it.** A rename in this file is invisible to a client that re-declares
+ * the same shape by hand, which is the whole reason the file exists.
+ *
+ * **Open your block with a UNIQUELY NAMED banner, not the bare separator.**
+ * Measured 2026-09-09: two sessions appended disjoint blocks within minutes of
+ * each other and git conflicted them anyway — not on any type, but on the
+ * identical decorative separator line both blocks opened with (a slash-star
+ * banner rule, which cannot be written out here without ending this comment).
+ * The append rule was
+ * written to stop somebody reorganising existing types, and accidentally
+ * guaranteed a textual conflict between two people following it perfectly. A
+ * banner naming the block has nothing in common with anyone else's.
+ *
+ * **If you do have to resolve a conflict here, verify the result rather than
+ * reading it.** Reconstruct as (merge-base + theirs + yours) from the two
+ * parents, then assert that every `export type` name from BOTH sides survives,
+ * and count them. Hand-resolving a long conflict region is exactly where one
+ * declaration goes missing silently, and "keep both blocks" looks so obviously
+ * right that nobody re-counts afterwards. The mirror image has bitten this repo
+ * too: a merge that DUPLICATED a list entry it did not conflict on, with no
+ * markers and every test green.
  */
 
 /* ------------------------------------------------------------------ *
@@ -36,7 +62,32 @@
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
  */
-export type Speaker = "greg" | "overseer";
+export type Speaker = "greg" | "overseer" | "dashboard";
+
+/*
+ * **`dashboard` IS A REPORT, NEVER AN INSTRUCTION, AND THE ARM SPLITS IF THAT
+ * STOPS BEING TRUE.** Added 2026-09-09 for the line the web UI sends when a
+ * person starts a new session, so the receiving agent is told an event happened
+ * rather than asked for anything.
+ *
+ * It is a third arm rather than a reuse of either existing one, and both
+ * alternatives were wrong in the direction this type exists to prevent.
+ * `greg` would mint his authority for something nobody instructed — the exact
+ * failure A12 names. `overseer` would attribute a notification to a coordinator
+ * that did not send it. A person acted and software is reporting it, which is
+ * neither.
+ *
+ * So its prefix says plainly that nothing is being asked, which the other two
+ * do not need to say because both of theirs ARE asking something. The wording
+ * was reviewed by the session that receives it, which is a better test of it
+ * than the judgement of the session that wrote it.
+ *
+ * **If anything ever goes through this arm that IS an instruction, the prefix
+ * becomes a false statement** and this must split into two arms rather than
+ * having its wording softened. Do not reach for `dashboard` as a
+ * general-purpose "not Greg" speaker; that is what `overseer` is, and it says
+ * so.
+ */
 
 /* ------------------------------------------------------------------ *
  * The spoken half of the vocabulary.
@@ -119,7 +170,20 @@ export type SpokenAction = {
 export type QueuedPayload = { kind: "action"; action: SpokenAction } | { kind: "message"; text: string };
 
 export type QueuedItem = {
-  /** Stable for the life of the item, and what `cancel` and `settle` name. */
+  /**
+   * Stable for the life of the item, and what `cancel` and `settle` name.
+   *
+   * **OPAQUE TO THE CLIENT, AND THAT IS A RULE RATHER THAN AN OBSERVATION.**
+   * The browser stores whatever string it was handed and gives it back
+   * unexamined; nothing outside `SteeringQueue` may parse it or build one.
+   * Since 2026-09-08 it carries the RUN of the server that minted it, because
+   * a per-process counter re-issues `q1` after every restart and a phone left
+   * open across one was able to cancel a stranger's instruction and be told it
+   * had worked. `SteeringQueue.idOrigin` reads the run back; the four routes
+   * that accept an id from a client refuse a foreign one as `other-instance`.
+   * A client that started splitting on the separator would make that shape
+   * impossible to change again.
+   */
   id: string;
   /** tmux's session handle (`$1643`) — which queue this is in. */
   sessionId: string;
@@ -200,6 +264,18 @@ export type QueueView = {
   volatile: true;
   warning: string;
   since: number;
+  /**
+   * The hold stopping this session from being drained, or null.
+   *
+   * **A QUEUE IS ON THE WIRE WHEN IT HAS ITEMS *OR* THIS**, which is the
+   * whole reason the field is here rather than on a feed of its own: the
+   * commonest hold has NO items behind it — one message was queued, the send
+   * came back `partial`, the item settled `uncertain` and left — so a page
+   * that drew a queue only when `items.length > 0` would draw nothing at all
+   * over a session nothing may be sent to. See `QuarantineHoldView`, and
+   * `SteeringQueue.snapshots`, which is the filter that had to change.
+   */
+  quarantine: QuarantineHoldView | null;
 };
 
 /* ------------------------------------------------------------------ *
@@ -1086,6 +1162,44 @@ export type FleetState<Row, Health> = {
    */
   attention: AttentionFeed;
   /**
+   * **IS SUPERVISION STILL WORKING?** — the Overseer's two clocks, its
+   * heartbeat, its scheduler line and its register, or the reason there is no
+   * reading.
+   *
+   * A field on this payload rather than a `/api/overseer` of its own, and the
+   * argument is `attention`'s one field up: **one payload, one clock, one
+   * staleness.** A second endpoint would be a second `servedAt` to skew-correct
+   * against, a second cache to go stale on its own schedule, and a second thing
+   * that can be down while the page looks fine. It is also one file read —
+   * `readCheckpointFeeds` in overseer-status.ts projects this and `attention`
+   * out of the same bytes, so the inbox and the clock beside it can never come
+   * from two different versions of the file.
+   *
+   * The size is why that was a real question rather than a formality: the
+   * register can hold thirty-six sessions. `OverseerRegister` carries a bounded
+   * ranked projection with the total beside it, so this field is a few hundred
+   * bytes on a payload that already carries the rows themselves.
+   */
+  overseer: OverseerStatusFeed;
+  /**
+   * **CAN THIS ACCOUNT AFFORD MORE WORK?** — what the last usage pass found
+   * about the logged-in account, or the reason there is nothing to say.
+   *
+   * The third field to arrive out of one checkpoint read, on the argument the
+   * two above it already make: one payload, one clock, one staleness. It is
+   * also the third projection out of `readCheckpointFeeds`, so the usage
+   * reading, the inbox and the two clocks come from the same bytes — and the
+   * card can say *the Overseer wrote 30 seconds ago and this reading is two
+   * hours old* without either half being borrowed from another version of
+   * the file. That sentence is the point of the card, and `UsageSummary`'s
+   * `collectedAt` is why it is sayable.
+   *
+   * Bounded by construction: the 429s are grouped into incidents before they
+   * cross, so the field is a few hundred bytes whether the box hit one limit
+   * or thirty.
+   */
+  usage: UsageFeed;
+  /**
    * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
    * that is about us rather than about the box.
    *
@@ -1097,4 +1211,1981 @@ export type FleetState<Row, Health> = {
    * `ClockSkew` argue it in full.
    */
   servedAt: string;
+};
+/* ------------------------------------------------------------------ *
+ * IS SUPERVISION STILL WORKING? — the Overseer's own status.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **TWO CLOCKS, AND THEY COME APART EXACTLY WHEN SOMETHING IS WRONG.**
+ *
+ * The direction doc's § Two tenses insists on both, and the reason is the
+ * coupling the seam created: the Overseer has no collector of its own, so it
+ * lives off the dashboard's SSE stream. `writtenAt` says the Overseer is still
+ * writing; `lastGoodSnapshotAt` says it is still HEARING. A daemon ticking
+ * against a dead stream advances the first and freezes the second, and a
+ * watchdog reading only the heartbeat would bless it:
+ *
+ * > **A dead dashboard is a fact the Overseer records, not a silence it sits
+ * > in.**
+ *
+ * So this type never collapses them into one age, and the panel that draws it
+ * warns on a stale source even while the heartbeat advances.
+ *
+ * ## Every part fails on its own
+ *
+ * `heartbeat`, `scheduler` and `register` each carry their own `unreadable`
+ * arm rather than failing the whole projection. That is a request from the
+ * scheduler stage (260908g) and it is right in general: its Stage 3c may widen
+ * `StoredScheduler`'s discriminant, and a `kind` this build has never seen must
+ * read as *I cannot read this part of the file* and not as *the Overseer is
+ * unreadable*. The same rule the session rows already follow, one level down —
+ * `parseStatus`'s default arm in web/src/types.ts.
+ *
+ * The one thing that is NOT per-part is the schema: a checkpoint whose version
+ * this build does not know is refused whole, because the fields' meanings are
+ * what the version is about. `OverseerStatusFeed`'s `unsupported-schema` arm.
+ */
+export type OverseerStatus = {
+  /** The version the file declared. Carried so the page can name it, having accepted it. */
+  schema: number;
+  /** When the Overseer last wrote the checkpoint. The heartbeat's clock, effectively. */
+  writtenAt: string;
+  /**
+   * The producer's own `collectedAt` from the last observation the Overseer
+   * ACCEPTED — its source clock, and `null` when it has never accepted one.
+   *
+   * `null` is not "just started" and must not be drawn as fresh: a daemon that
+   * has been up for an hour without a single accepted snapshot is the deaf case
+   * in its purest form.
+   */
+  lastGoodSnapshotAt: string | null;
+  /**
+   * **THE DEADLINE THE DAEMON ITSELF IS USING** for *the collector has gone
+   * quiet*, in milliseconds — or `null` from a daemon that did not say.
+   *
+   * Carried rather than restated because the two ends already drifted once
+   * exactly here: `scripts/overseer-watchdog.ts` and the daemon called the same
+   * `staleAfterMs` and passed it different inputs, so one said 300,000 and the
+   * other 325,000 under the documented normal values. Sharing a FUNCTION
+   * prevents formula drift and not input drift; sharing the ANSWER prevents
+   * both. GPT Sol's C6 on the store, one consumer further out.
+   *
+   * A page that has no number falls back to its own constant and says which it
+   * used. `null` is *the daemon did not say*, never zero and never a default.
+   */
+  sourceStaleAfterMs: number | null;
+  heartbeat: OverseerHeartbeat;
+  scheduler: OverseerScheduler;
+  register: OverseerRegister;
+};
+
+/**
+ * Which daemon wrote this, and how far it has got.
+ *
+ * `lastTickAt` is `null` on a daemon that has written a checkpoint and not yet
+ * completed a tick — the truth about a fresh start, and not the same as a
+ * daemon that has stopped ticking, which keeps its last one and lets it age.
+ */
+export type OverseerHeartbeat =
+  | {
+      kind: "reading";
+      pid: number;
+      instanceId: string;
+      startedAt: string;
+      lastTickAt: string | null;
+      ticks: number;
+    }
+  /** The field is there and this build cannot read it. Not *there is no daemon*. */
+  | { kind: "unreadable"; why: string };
+
+/**
+ * Whether the scheduler is switched on, in the daemon's own words.
+ *
+ * Four arms for the store's three, and the fourth is the point:
+ *
+ *  - `armed` / `off` — the daemon said so, at `at`, for the reason `why`.
+ *  - `not-said` — the store's own `unknown`: no daemon in that build ever said.
+ *    A checkpoint written before the field existed lands here.
+ *  - `unreadable` — **a `kind` this build does not know**, or a field that is
+ *    not shaped like one at all. 260908g's Stage 3c may widen the discriminant,
+ *    and the widened value must not be able to render as `off`. It is one line
+ *    on the card and nothing else on it is affected.
+ *
+ * `not-said` is renamed from the store's `unknown` deliberately: on this side
+ * of the wire `unknown` would sit next to `unreadable` and the two would read
+ * as the same thing, when one is *nobody decided* and the other is *we cannot
+ * tell what was decided*.
+ */
+export type OverseerScheduler =
+  | { kind: "armed"; why: string; at: string }
+  /**
+   * **SWITCHED ON, AND NOT ONE LOADED JOB CAN RUN.** GPT Sol's S8-7: this state
+   * used to render as `armed`, because the word came from an environment
+   * variable rather than from the definitions. It is neither `off` nor working,
+   * so it gets its own word here as it does in the store.
+   */
+  | { kind: "blocked"; why: string; at: string }
+  | { kind: "off"; why: string; at: string }
+  | { kind: "not-said"; why: string; at: string }
+  | { kind: "unreadable"; why: string };
+
+/**
+ * **THE OVERSEER'S OWN RECORD OF WHAT HAS BEEN RUNNING, AND IT IS NOT A JOIN.**
+ *
+ * The register is the Overseer's past tense: it knows when a session entered
+ * the state it is in, which the dashboard cannot know because it has no
+ * yesterday. This carries a BOUNDED, RANKED PROJECTION of it — the longest
+ * waiting first — and nothing on the page matches these entries to the fleet
+ * rows beside them.
+ *
+ * **That refusal is the design.** A register entry and a fleet row can agree
+ * about a pane and still be about different children: the generation tuple
+ * (`tmuxServerPid`, `paneId`, `panePid`) can stay fixed while the process
+ * inside it is replaced, so *"blocked for at least 20 minutes"* said against a
+ * row needs continuity evidence this build does not have. The plan's Execution
+ * identity stage is what earns that join; until then these are history, drawn
+ * as history, under their own heading. **Whatever is wrong here, the fleet rows
+ * are unaffected** — they come from a different field of the same payload and
+ * nothing about them is derived from this one.
+ *
+ * `total` is the whole register and `sessions` is the cap, so a card that shows
+ * eight of thirty-six says so rather than looking like the whole fleet.
+ */
+export type OverseerRegister =
+  | { kind: "read"; total: number; sessions: OverseerSessionHistory[] }
+  | { kind: "unreadable"; why: string };
+
+/** One session as the Overseer remembers it. Ranked by `since`, oldest first. */
+export type OverseerSessionHistory = {
+  /** The name the launcher gave it. Recognisable, and not addressable. */
+  name: string;
+  /** tmux's handle, meaningless without the server pid — which is why this is not a join key. */
+  tmuxId: string;
+  /**
+   * The status the Overseer last recorded, as its own key — `working`,
+   * `needs-you`, `waiting`, and whatever else the collector grows. A string
+   * rather than a union: this is the Overseer's vocabulary, and a page that
+   * refused a key it had not heard of would drop the row that had changed.
+   */
+  status: string;
+  /**
+   * **WHEN IT ENTERED THAT STATE, AND WHETHER THAT IS A READING OR A FLOOR.**
+   *
+   * `lower-bound` means the daemon found it already in that state and cannot
+   * see when it began — which was four identical `13m` rows against sessions
+   * that had been working for hours. It renders `≥13m`, and the mark is
+   * load-bearing rather than decorative.
+   */
+  since: { kind: "observed" | "lower-bound"; at: string };
+};
+
+/**
+ * **IS SUPERVISION STILL WORKING?** — the whole reading, or the reason there
+ * isn't one.
+ *
+ * The brief's four outcomes, in this file's existing vocabulary so the two
+ * feeds read alike: *missing* is `checkpoint-absent`, *unreadable* is
+ * `checkpoint-unreadable`, *unsupported-schema* is its own arm, *available* is
+ * `published`. `not-asked` is the fifth and it is the parse default, for
+ * exactly the reason `AttentionFeed` has one: the field was added without a
+ * schema bump, so a server that predates it sends nothing, and silence from a
+ * server that never heard of the file is not an observation of the box.
+ *
+ * **`unsupported-schema` is a separate arm rather than a `why` on the
+ * unreadable one** because it is the one failure with an action attached: the
+ * page can say which version it read and which it knows, and somebody can
+ * deploy the other half. It is also the live case — the checkpoint on the box
+ * read schema **1** on 2026-09-08 against a checked-in `STORE_SCHEMA` of 2 —
+ * so this arm renders in production before either of the other two does.
+ */
+export type OverseerStatusFeed =
+  | { kind: "published"; status: OverseerStatus }
+  /** No checkpoint at the path we looked at. Says nothing about whether a daemon is alive. */
+  | { kind: "checkpoint-absent" }
+  /** One is there and could not be opened, read or parsed. */
+  | { kind: "checkpoint-unreadable"; why: string }
+  /** One is there, is JSON, and declares a version this build does not know. */
+  | { kind: "unsupported-schema"; saw: string; known: number }
+  /** This server did not look. Never a claim about the box. */
+  | { kind: "not-asked" };
+
+/* ------------------------------------------------------------------ *
+ * WHAT AN ACTION DID, AS OPPOSED TO WHAT IT WAS ASKED TO DO.
+ *
+ * Stage 3 of docs/plans/260908j. Three shapes, and every one of them
+ * exists because a route knew several different things and wrote down
+ * one word — the Class B lossy join of docs/postmortems/260908b.
+ *
+ * **THE CEILING ON ALL OF IT: NOTHING HERE OBSERVES A CONSEQUENCE.**
+ * The dashboard runs a command and reads its exit status, or hands a
+ * sequence of `tmux send-keys` calls to steer.ts and reads how far it
+ * got. Neither is evidence about the world afterwards — no process
+ * table is re-read after a kill, and no agent acknowledges a keystroke.
+ * So the vocabularies below are deliberately about the ATTEMPT, and the
+ * plan cut a `reception observed` arm rather than ship one nothing can
+ * fill. Do not add a field here that no code can honestly write.
+ * ------------------------------------------------------------------ */
+
+/**
+ * How one step of a plan ended, judged against the gate the plan named.
+ *
+ * `failed-ignored` is the arm that stops a `best-effort` step being smoothed
+ * into a pass: thirty kills of which eleven found nothing there is a fact worth
+ * reading, and it is the difference between a signal that was accepted and one
+ * that was not.
+ */
+export type PlanStepStatus = "passed" | "failed" | "failed-ignored";
+
+/** One step of a plan, after it ran. */
+export type PlanStepView = {
+  argv: readonly string[];
+  cwd: string;
+  /** The step's own reason for existing, from the plan. */
+  why: string;
+  status: PlanStepStatus;
+  /** Why it got that status — the gate, in words. */
+  verdict: string;
+  code: number | null;
+  timedOut: boolean;
+  spawnError: string | null;
+  /** The tail of what it said, bounded, for a person. */
+  tail: string;
+};
+
+/**
+ * A plan, after it ran — **and this is the one whole-action effect contract
+ * the server has.**
+ *
+ * `steps` is the steps that RAN, so a run that stopped is shorter than the plan
+ * that produced it, and `stoppedAt` names where. That asymmetry is the useful
+ * part: a reader can say *one of three steps ran* rather than *something went
+ * wrong*, which is what the card said for the life of the feature because
+ * `refusal()` in the browser dropped this whole object.
+ *
+ * Parameterised on the action id so the server can keep its closed `ActionId`
+ * union while the browser reads a plain string. One declaration, two uses —
+ * this file exists because the alternative was two declarations related by
+ * nothing but hope.
+ */
+export type PlanRunView<Id extends string = string> = {
+  action: Id;
+  steps: PlanStepView[];
+  /**
+   * **HOW MANY STEPS THE PLAN HAD**, which `steps.length` does not say.
+   *
+   * Added in Stage 3 because the denominator was simply absent from the wire: a
+   * three-step plan that stopped at the second sent two step outcomes and a
+   * `stoppedAt`, so the only honest sentence a reader could build was *two
+   * steps ran* — which reads as **all of them**. `1 of 3` and `2 of 2` are the
+   * same list of facts without this number.
+   */
+  planned: number;
+  /** True when every step ran and none failed a gate it was not allowed to fail. */
+  completed: boolean;
+  /** The index of the step that stopped the plan, or null. */
+  stoppedAt: number | null;
+};
+
+/**
+ * **WHAT ONE `kill -TERM <pid>` ESTABLISHED, WHICH IS LESS THAN IT SOUNDS.**
+ *
+ * The strongest arm is `signal-accepted`, and it is deliberately not called
+ * `killed`: it means the `kill` command exited 0, so the signal was delivered
+ * to a process that existed and that this uid may signal. A process is free to
+ * ignore SIGTERM, and nothing re-reads the process table afterwards, so
+ * *accepted* is the whole of the claim. `killed` was the word this route used,
+ * about the pids it INTENDED to signal.
+ */
+export type KillObservation =
+  /** `kill` exited 0. The signal went. Not proof the process is gone. */
+  | "signal-accepted"
+  /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
+  | "signal-refused"
+  /**
+   * The attempt did not settle. The `kill` could not be spawned, or was killed
+   * for taking too long, or died on a signal itself — and in two of those three
+   * **it ran**. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before the command died, and it may not.
+   *
+   * There is deliberately no `not-attempted` beside this. `planKillProcesses`
+   * builds one step per pid and a `best-effort` step cannot stop a plan, so no
+   * pid on this route goes unreached; `killReport` asserts that rather than
+   * carrying an arm nothing can produce. An arm no code can reach is
+   * decoration, and the plan cut `reception observed` for the same reason.
+   */
+  | "not-established";
+
+/** One pid, and what became of the attempt to signal it. */
+export type KillAttempt = {
+  pid: number;
+  observation: KillObservation;
+  /** The step's own verdict, verbatim. */
+  why: string;
+};
+
+/**
+ * A kill, reported as **intent and evidence separately**.
+ *
+ * `targeted` is the list the route set out to signal and is a fact about the
+ * request; `observed` is what came back and is a fact about the box. They are
+ * two fields rather than one because the route used to answer with the first
+ * under a name that reads as the second, and a page cannot recover a
+ * distinction the wire has already collapsed.
+ *
+ * **`targeted` WAS CALLED `attempted` FOR ONE DAY AND THAT WAS THE SAME
+ * MISTAKE ONE NOTCH SMALLER.** This stage exists to stop a kill reporting
+ * intent as outcome, and then named its own intent field after the attempt.
+ * The list is who we aimed at; whether each was attempted is `observed`, one
+ * entry at a time.
+ *
+ * There is no `planCompleted`. Every pid here has a step — `killReport`
+ * asserts it — so a flag saying the plan reached the end of the list could
+ * only ever be true, and a field that cannot be false is a claim rather than a
+ * reading.
+ */
+export type KillReport = {
+  /** Every pid the plan set out to signal, in order. INTENT, not effect. */
+  targeted: readonly number[];
+  /** One entry per targeted pid, in the same order. EVIDENCE. */
+  observed: readonly KillAttempt[];
+};
+
+/**
+ * **WHAT BECAME OF ONE RECIPIENT OF A BROADCAST**, in the vocabulary
+ * docs/plans/260908j settled on: a transient phase, then four terminal states,
+ * plus the three ways a row is never spoken to at all.
+ *
+ * The four that matter are the four the route used to answer `refused` for. A
+ * `partial` send left the literal text in that agent's input box with no Enter
+ * behind it, so the next Enter anybody presses submits it; `refused` reads as
+ * *nothing reached them*, which is the opposite fact. `outcome-unknown` is the
+ * arm for a `Delivery` of `unknown` **and** for a throw out of the delivery
+ * module, which carries no reading at all.
+ *
+ * `keys-submitted` is the ceiling and it is named for what it proves: the tmux
+ * calls completed. It is not `read`, and it is not `obeyed`.
+ */
+export type BroadcastRecipientOutcome =
+  /** A DRY RUN only. What the send would do — never mixed with what one did. */
+  | "would-send"
+  /** Every tmux call completed. The keystrokes were submitted; nothing observed a reader. */
+  | "keys-submitted"
+  /** Some of the sequence arrived and it did not finish. Half a message may be sitting there. */
+  | "partial"
+  /** A throw, or a `Delivery` of `unknown`. It may have landed and it may not. */
+  | "outcome-unknown"
+  /** The delivery module refused with nothing sent: no keystroke left this box. */
+  | "refused-before-effect"
+  /** The queue's gate said "later" — the session is working. Nothing was sent. */
+  | "held"
+  /** The queue's gate said "never" — a shell, a dead Claude. Nothing was sent. */
+  | "blocked"
+  /** The fan-out ran out of time before this row. Nothing was sent. */
+  | "not-reached";
+
+/* ------------------------------------------------------------------ *
+ * Execution identity: which RUN is in this pane, not which pane it is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A DURABLE NAME FOR ONE RUNNING PROCESS, and the whole reason this block
+ * exists.**
+ *
+ * A pane outlives the things that run in it. `tmuxServerPid`, `paneId` and
+ * `panePid` can all stay fixed while the `claude` inside the pane exits and
+ * another one starts — the pane's shell is the same shell, so nothing above
+ * moves — and `claudeSessionId` cannot see it either, because
+ * `CLAUDE_SESSION_ID` is pinned into the tmux environment once, before Claude
+ * runs, and is never rewritten (`ObservedRow.claimedConversationId` in
+ * tools/overseer/observation.ts has the measurement). So every identity this
+ * payload previously carried is stable across exactly the change that matters
+ * most: **the conversation you were talking to has been replaced by a different
+ * one wearing all of its addresses.**
+ *
+ * Three fields, and each one is load-bearing:
+ *
+ *  - `boot` is `/proc/sys/kernel/random/boot_id`, which the kernel mints per
+ *    boot. Without it a token minted before a reboot could collide with one
+ *    minted after, since pids and start ticks both restart.
+ *  - `pid` names the process only for as long as it lives — the warning
+ *    `ChildJob.pid` and `Harness.pid` already carry, and the reason the third
+ *    field is not optional.
+ *  - `startTicks` is field 22 of `/proc/<pid>/stat`, the process's start time in
+ *    clock ticks since boot. It is EXACT and it is what closes pid reuse: the
+ *    next process handed pid 4039575 cannot also have started at tick 72055933.
+ *
+ * **NOT `ProcessStart` FROM work.ts, and that is not a duplication.** That one
+ * is derived from `ps etimes`, counts whole seconds, and its own comment says
+ * two readings of one process can differ by a second and that it must *never be
+ * compared for equality*. It answers "how long has this been running" for a
+ * person. This answers "is this the same run", and equality is the only thing
+ * it is for.
+ */
+export type ExecutionToken = {
+  /** `/proc/sys/kernel/random/boot_id`. A different boot is a different world. */
+  boot: string;
+  /** The harness process's pid, at the instant of the reading. */
+  pid: number;
+  /** `/proc/<pid>/stat` field 22 — start time in clock ticks since boot. Exact. */
+  startTicks: number;
+};
+
+/**
+ * **WHICH CONVERSATION IS IN THERE — kept separate from whether the PROCESS is
+ * identified, because the two are genuinely different questions.**
+ *
+ * Knowing that a live `claude` is the pane's descendant, and holding a durable
+ * token for it, says nothing about which transcript it is writing. A bare
+ * `claude` with no `--session-id` is a perfectly ordinary, perfectly verified
+ * process whose conversation nothing on its command line names.
+ *
+ * `conflicting` is the arm the whole stage was built for: the tmux environment
+ * claims one uuid and the live process's argv carries another, which is a fresh
+ * Claude under an unchanged pane, caught.
+ */
+export type ConversationReading =
+  /** The row carries no `CLAUDE_SESSION_ID`: a shell, a `setup`, a legacy session. */
+  | { kind: "not-claimed" }
+  /** The live harness's own `--session-id` equals the tmux environment's claim. */
+  | { kind: "verified"; id: string }
+  /**
+   * The claim and the process disagree. **The claim is the stale one** — it was
+   * written before the first Claude started and is never updated — so `observed`
+   * is the conversation actually in the pane and `claimed` is what every address
+   * in this payload would have sent you to.
+   */
+  | { kind: "conflicting"; claimed: string; observed: string }
+  /** A claim with nothing to check it against, and the sentence saying what was missing. */
+  | { kind: "unverifiable"; claimed: string; why: string };
+
+/**
+ * Why there is no execution reading. Each arm is a different thing to draw, and
+ * none of them means "there is nothing running".
+ *
+ * The first two are the *nobody looked* pair and they are not interchangeable:
+ * `not-probed` is this producer choosing not to run the pass, `not-reported` is
+ * a producer too old to have one — which a consumer meets across a deploy and
+ * must not read as a session that lost its identity.
+ */
+export type ExecutionUnknownCause =
+  /** This collection did not run the pass. A `FleetRow` starts here. */
+  | "not-probed"
+  /** The payload had no `execution` field at all: a producer from before this stage. */
+  | "not-reported"
+  /** The row carried no pane pid, so there is no tree to walk. */
+  | "no-pane-pid"
+  /** The process table could not be read. `why` carries what the probe said. */
+  | "process-table-unreadable"
+  /** The table is not an ancestry, or the pane's own pid is not in it. */
+  | "pane-tree-unreadable"
+  /**
+   * There is no `/proc` to read. **Unsupported, never "use the pid on its own"**
+   * — a pid with nothing to disambiguate reuse is precisely the identity this
+   * type exists to refuse.
+   */
+  | "platform-unsupported"
+  /** `/proc/sys/kernel/random/boot_id` could not be read, so no token can be minted. */
+  | "boot-identity-unreadable"
+  /**
+   * A harness was found and its start ticks could not be read — almost always
+   * because it exited between the process table and the `/proc` read. We saw
+   * it; we cannot name it durably; that is not a verified execution.
+   */
+  | "process-start-unreadable"
+  /**
+   * **THE PID WAS REUSED WHILE WE WERE LOOKING AT IT.**
+   *
+   * The harness kind and the conversation come from the process table; the
+   * start token comes from a `/proc` read taken afterwards. If the process
+   * exits and its pid is handed to another in between, those two describe
+   * DIFFERENT PROCESSES, and stapling them together produces a `verified`
+   * identity that never existed — the old conversation with the new process's
+   * token, which the write gate would then allow. This arm is what the two
+   * readings disagreeing produces instead. GPT Sol's P1-2, 2026-09-09.
+   */
+  | "process-changed-under-read"
+  /**
+   * `/proc/uptime` could not be read, so the process table's elapsed times and
+   * `/proc`'s start ticks cannot be put on one clock and the check above cannot
+   * be made. **Unverifiable rather than assumed good**: the arm exists to catch
+   * a reading assembled from two processes, and an unmade check is not a passed
+   * one.
+   */
+  | "uptime-unreadable";
+
+/**
+ * **WHAT IS ACTUALLY EXECUTING IN THIS PANE, or the honest reason we cannot
+ * say.**
+ *
+ * Three arms, and the middle one is the one that is easy to leave out:
+ *
+ *  - `verified` — a live harness process under this pane, with a durable token.
+ *    Two `verified` readings whose tokens are equal are the same run; two whose
+ *    tokens differ are not, and no amount of matching pane ids changes that.
+ *  - `claimed-only` — we looked, and the launch metadata is all there is: a pane,
+ *    a claim, and nothing under it we can name. **This is not a weaker
+ *    `verified`**; nothing identity-dependent may be done on it.
+ *  - `unknown` — we did not look, or could not. `cause` says which.
+ *
+ * A verified execution with an unverifiable conversation is normal and is not a
+ * defect: see `ConversationReading`.
+ */
+export type ExecutionReading =
+  | {
+      kind: "verified";
+      token: ExecutionToken;
+      /** Which harness the token names. The same union `Harness` uses. */
+      harness: HarnessKind;
+      conversation: ConversationReading;
+    }
+  /**
+   * **ITS `conversation` CAN ONLY EVER BE `not-claimed` OR `unverifiable`**,
+   * and a consumer that branches on `conflicting` here is writing dead code.
+   *
+   * Said out loud because the type does not say it and a reader of this file
+   * inferred the opposite on 2026-09-09, which would have made the loudest
+   * state look reachable from two arms when it is reachable from one. The
+   * reason is structural rather than incidental: `claimed-only` means *the walk
+   * ran and could not name what it found*, and an unnamed process is one whose
+   * command line we did not read — so there is no observed conversation id to
+   * disagree with the claim. `readExecutionIdentity` passes a null observation
+   * on this path, unconditionally.
+   *
+   * **`conflicting` is reachable from `verified` and nowhere else.** If you are
+   * looking for *this pane changed hands*, that is the one arm to check.
+   *
+   * The near miss worth knowing about is the other direction: when a harness IS
+   * named and only its start ticks cannot be read, this returns
+   * `unknown`/`process-start-unreadable` and DISCARDS the conversation verdict
+   * it briefly had. That is deliberate — a failed `/proc` read almost always
+   * means the process has just exited, and reporting which conversation a dead
+   * process was running is a false alarm rather than a rescued fact.
+   */
+  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
+  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };
+
+/* ------------------------------------------------------------------ *
+ * A SESSION HELD BACK AFTER A SEND NOBODY CAN ACCOUNT FOR.
+ *
+ * Stage 4 of docs/plans/260908j. The dashboard types into other people's
+ * input boxes, and `Delivery` already distinguishes the three things a
+ * send can end as. Two of them — `partial` and `unknown` — mean **text
+ * may be sitting in that agent's input box with no Enter behind it**,
+ * and until somebody looks at the terminal nothing in this process can
+ * find out. The next queued item draining into that same box would
+ * concatenate itself onto half a sentence.
+ *
+ * So the ambiguity becomes a per-session HOLD. **Nothing below observes
+ * a consequence**, for the reason the block above says: no agent
+ * acknowledges a keystroke. `operator-confirmed` is a person's claim
+ * about what they saw with their own eyes, recorded as a claim; it is
+ * never a reading this software made.
+ *
+ * **AND NOTHING HERE IS EVER A RETRY.** A hold stops the NEXT item; it
+ * never re-sends the one that went wrong. Releasing a hold sends nothing
+ * either — both gestures below are records, not actions.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What was read about the send that opened or extended a hold.
+ *
+ * Four arms, and each one names a producer, because an arm nothing can
+ * write is decoration — the rule the plan cut `reception observed` and
+ * `not-attempted` under.
+ *
+ *  - `partial` — `fire()` in steer.ts reached some of the sequence and not
+ *    the end of it (`Delivery` of `"partial"`).
+ *  - `unknown` — `fire()` could not say (`Delivery` of `"unknown"`).
+ *  - `threw` — the delivery module threw. It carries no `Delivery` at all,
+ *    and the `try` surrounds the whole call, so it cannot say whether
+ *    anything went out first. Produced by the direct steer route and by
+ *    the broadcast; **the drain does not produce it**, and the comment on
+ *    `deliverOne` says why — there the lease is left open instead, which
+ *    stops that session's queue harder than a hold would.
+ *  - `none-contradicted` — the transport said `delivery: "none"` and listed
+ *    tmux calls that completed anyway. `nothingWasSent` refuses to certify
+ *    that, and the honest reading of a self-contradicting report is the one
+ *    that assumes something went out.
+ */
+export type UncertainSendReading = "partial" | "unknown" | "threw" | "none-contradicted";
+
+/** Which of the three send paths left the input box in doubt. */
+export type UncertainSendOrigin =
+  /** The refresh loop's drain pass, delivering a queued item. */
+  | "queued-delivery"
+  /** Somebody typed into one session from the page — `POST /api/steer/…`. */
+  | "direct-steer"
+  /** One recipient of a fan-out — `POST /api/actions/box`. */
+  | "broadcast";
+
+/**
+ * The two gestures that end a hold, **neither of which sends anything.**
+ *
+ *  - `operator-confirmed` — *I looked at the terminal and saw it.* A
+ *    person's claim, stored as a person's claim. The dashboard did not
+ *    observe it and the copy must never say it did.
+ *  - `abandoned-unknown` — *Abandon the uncertainty.* It releases the hold
+ *    and **claims nothing in either direction**: not that the text
+ *    arrived, and — the half that is easy to get wrong — not that it did
+ *    not.
+ */
+export type HoldReleaseGesture = "operator-confirmed" | "abandoned-unknown";
+
+/**
+ * Where a hold has got to.
+ *
+ * A union rather than a `state` string beside three optional fields, so
+ * that reading the release gesture forces you to have established that it
+ * WAS released. `superseded` carries both generations because the whole
+ * argument for it is the comparison: a tmux server restart takes every
+ * pane with it, so the input box the hold was about no longer exists.
+ */
+export type HoldOutcome =
+  /** Still holding. Nothing drains into this session. */
+  | { kind: "holding" }
+  | {
+      kind: "released";
+      gesture: HoldReleaseGesture;
+      at: number;
+      /** What that gesture asserted, in words, for the page and the log. */
+      what: string;
+    }
+  | {
+      kind: "superseded";
+      at: number;
+      /** The tmux server the hold was opened against. */
+      was: number;
+      /** The one running now. */
+      now: number;
+      what: string;
+    };
+
+/**
+ * One session's hold, as `GET /api/actions` sends it.
+ *
+ * **`why` IS A SENTENCE, following `QueuedItem.invalidated`** rather than
+ * a code the page has to translate: a hold is a thing a person has to
+ * decide about, and the deciding is done from the sentence.
+ *
+ * `version` is what makes the release idempotent AND safe. It goes up
+ * every time another uncertain send lands on a session that is already
+ * held, so a phone that has been in a pocket since version 1 cannot
+ * release a hold that has since absorbed a second incident.
+ */
+export type QuarantineHoldView = {
+  /** `<instance>-h<n>`. Opaque to the client, exactly like a queued item's id. */
+  id: string;
+  /** Bumped by each further uncertain send. Starts at 1. */
+  version: number;
+  sessionId: string;
+  /** The pane the send was aimed at, or null when the producer had none to give. */
+  paneId: string | null;
+  claudeSessionId: string | null;
+  /** Which run of this server opened it. */
+  serverInstanceId: string;
+  /** The tmux server it was opened against, or null if this server had not been told yet. */
+  tmuxGeneration: number | null;
+  /**
+   * The first tmux server this dashboard was told about **after** this hold
+   * opened, or null.
+   *
+   * **A SEPARATE FIELD RATHER THAN A LATE WRITE TO `tmuxGeneration`**, and the
+   * separation is the whole of it: `tmuxGeneration` is a claim about the world
+   * at the moment the send went out, and this is not one. A hold opened before
+   * the server had been told any generation is bound to none, so no later
+   * change proves anything about the pane it was about — and for a stage of
+   * this file's life that meant such a hold could never be superseded at all,
+   * turning a window one refresh cycle wide into an indefinite one.
+   *
+   * With this, the FIRST generation seen after the hold opens is recorded (it
+   * proves nothing on its own — it may be the same tmux server the send went
+   * to), and the next DISTINCT one supersedes: two different servers observed
+   * after the fact means one of them replaced the other, and the input box is
+   * gone either way.
+   */
+  firstSeenGeneration: number | null;
+  /**
+   * When the send that opened this came back, or **null when nothing recorded
+   * that it ever opened**.
+   *
+   * Null on exactly one kind of hold: `basis.kind === "rehydrated-attempt"`,
+   * rebuilt from a line written before the keystrokes and never resolved. Such
+   * a hold cannot say when it opened, so it says so rather than offering the
+   * moment the attempt was written down as if it were the same fact. The
+   * attempt's own timestamp is on the basis, where it is labelled as what it is.
+   */
+  openedAt: number | null;
+  /**
+   * When the most recent uncertain send landed. Equals `openedAt` while
+   * `incidents` is 1, and null on a `rehydrated-attempt` — nothing landed.
+   */
+  lastSendAt: number | null;
+  /**
+   * How many recorded incidents this hold covers. Never below 1.
+   *
+   * Uncertain sends whose answer this dashboard read, plus — on a
+   * `rehydrated-attempt` — the one attempt nobody ever accounted for.
+   */
+  incidents: number;
+  /**
+   * What was read about the most recent send, or **null when nothing was ever
+   * read**: a `rehydrated-attempt` is a hold over a send whose answer no
+   * process survived to see.
+   */
+  reading: UncertainSendReading | null;
+  /** Which path the most recent one came down. */
+  origin: UncertainSendOrigin;
+  why: string;
+  outcome: HoldOutcome;
+  /**
+   * Whether this process watched this happen, or read it off a disk.
+   *
+   * See `HoldBasis`. It is the field that keeps the three nullable ones above
+   * honest: each null has exactly one basis that produces it.
+   */
+  basis: HoldBasis;
+};
+
+/* ------------------------------------------------------------------ *
+ * The cross-agent feed — `GET /api/feed`.
+ *
+ * Greg, 2026-09-08: *"add a 'Recent messages' tab with a rolling window of the
+ * last N messages across all agents (making it easy to filter)"*.
+ *
+ * The per-session route (`/api/messages?id=`) answers *is this row telling me
+ * the truth?* This one answers *what is the fleet saying* — and the difference
+ * is not only scope. **The reader of this feed was never watching these
+ * sessions**, so a message that is wrong, misattributed or missing has nothing
+ * on screen to contradict it. Every type below that looks like defensive
+ * bookkeeping is there for that reason, and the reasoning is in
+ * docs/plans/260909b-recent-messages-tab-a-rolling-window-across-all-agents.md.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Who said it, on the wire.
+ *
+ * **A structural copy of `TurnSpeaker` in tools/fleet/transcript.ts**, which
+ * this file may not import — the header above says why no import may ever
+ * appear here, and transcript.ts reaches `node:fs`.
+ *
+ * The copy is kept honest in the direction that matters **for free, by an
+ * ordinary assignment**: `routes-recent-feed.ts` assigns a `TurnSpeaker` into
+ * this field, so an arm added to the reader and not to this union is a compile
+ * error at the point of use. No guard, no ceremony, nothing to remember. The
+ * other direction — an arm here the reader never produces — is harmless,
+ * because the browser's parser rounds a speaker it does not know to
+ * `unrecognised` rather than to `assistant`.
+ */
+export type FeedSpeaker =
+  | "human"
+  | "assistant"
+  | "peer"
+  | "notification"
+  | "compact-summary"
+  | "injected"
+  | "api-error"
+  | "system";
+
+/** One tool call, as a label. Structural copy of `ToolCallSummary`, same argument. */
+export type FeedToolCall = { name: string; detail: string | null };
+
+/**
+ * **HOW MUCH THE FEED IS ENTITLED TO CLAIM ABOUT WHO SAID THIS.**
+ *
+ * `CLAUDE_SESSION_ID` is pinned into a tmux session's environment when the pane
+ * is created and is never updated (transcript.ts says so at length). So a pane
+ * that has been re-used — the agent exited and somebody started a fresh
+ * `claude`, or resumed a different conversation — still names the FIRST
+ * conversation, and the reader will faithfully return that conversation's
+ * turns. They are real messages, well formed, correctly attributed, about this
+ * repo, and **not the conversation the row is about**.
+ *
+ * The per-session view can leave that to the reader's own judgement, because
+ * somebody looking at one session usually knows what it was doing. **This feed
+ * cannot**, so the claim is carried explicitly beside every message rather than
+ * asserted by putting a session's name next to some text.
+ *
+ * `verified` REQUIRES `FleetRow.execution` (session
+ * 260908f-roadmap-exec-identity), which is not on `dev` yet — so today this
+ * route never returns it. That is deliberate: an arm nothing can currently
+ * produce is better than a `verified` that means "we did not check".
+ */
+export type FeedAttribution =
+  /** The live pane's conversation id was checked and matches. Needs `FleetRow.execution`. */
+  | { kind: "verified" }
+  /** A pinned id, nothing contradicting it, and nothing confirming it either. The ordinary case. */
+  | { kind: "claimed-only"; why: string }
+  /** Something positively disagrees — e.g. a transcript untouched for hours against a `working` row. */
+  | { kind: "suspect"; why: string };
+
+/** One message in the feed, with the session it was read for attached to it. */
+export type FeedMessage = {
+  /** tmux's SESSION handle, `$1643` — the address, and what the session filter matches on. */
+  sessionId: string;
+  /** For reading. Renames happen, so this is the name at read time, not an identity. */
+  sessionName: string;
+  sessionTitle: string | null;
+  /** See `FeedAttribution`. Never omitted, because its absence would read as confidence. */
+  attribution: FeedAttribution;
+  speaker: FeedSpeaker;
+  /**
+   * ISO, on **the box's clock**, exactly as the transcript wrote it — never
+   * shifted to the browser's. messages-client.ts § `MessageTurn.at` has the
+   * full argument; the short version is that shifting it would assert an
+   * absolute instant nothing happened at.
+   *
+   * Null is in the type and was **not** observed in 955 sampled turns. See
+   * `FeedPayload.undated` for what happens to one if it ever appears.
+   */
+  at: string | null;
+  /** Plain, untrusted, possibly truncated, **never markup**. */
+  text: string;
+  truncated: boolean;
+  fullChars: number;
+  toolCalls: FeedToolCall[];
+  /** The record's own uuid, for a React key that survives a refresh. */
+  uuid: string | null;
+};
+
+/**
+ * What happened when we tried to read one session — carried for **every** row
+ * in the snapshot, including the ones with nothing to read.
+ *
+ * Nine of 21 rows on the box tonight are shells and scheduled sessions still
+ * running `sleep`; they answer `no-claude-session-id`. A feed that listed only
+ * the sessions it could read would show a fleet of twelve and look complete
+ * doing it.
+ */
+export type FeedSessionRead =
+  | {
+      kind: "read";
+      /** How many turns this session contributed to the merge, before the global trim. */
+      turns: number;
+      /**
+       * **WHETHER THIS SESSION'S NEWEST `limit` TURNS WERE ALL ACTUALLY READ.**
+       *
+       * False means the byte budget stopped the walk before the requested
+       * number of turns — so this session may have said more than the feed
+       * shows. A short answer and a quiet agent look identical on screen, which
+       * is the silent-success failure this feature is most exposed to. See
+       * `FeedPayload.mayBeMissing` for when it actually matters.
+       */
+      complete: boolean;
+      /** The transcript's own mtime, ISO, box clock. The one check on the hazard above. */
+      lastModified: string;
+      bytesRead: number;
+      fileBytes: number;
+      /** Tool results the reader skipped, so "silent between two messages" is never implied. */
+      toolResultsSkipped: number;
+      /**
+       * How many transcript files matched this conversation id. Anything but 1
+       * means provenance is ambiguous — the reader exposes it for exactly that,
+       * and a feed that showed the turns without it would be picking one file
+       * silently.
+       */
+      copies: number;
+      /**
+       * Lines that would not parse. **1 is normal** — a live session is being
+       * appended to while we read, so the last line can be half-written.
+       * Anything higher means turns may be missing from this session's answer.
+       */
+      recordsUnparseable: number;
+    }
+  /** No transcript to read. `reason` is the reader's typed code, `why` its sentence. */
+  | { kind: "not-found"; reason: string; why: string }
+  /** There was a file and it could not be read. */
+  | { kind: "unreadable"; path: string | null; why: string };
+
+/** One session in the feed's own census of the fleet. */
+export type FeedSession = {
+  sessionId: string;
+  name: string;
+  title: string | null;
+  read: FeedSessionRead;
+};
+
+/**
+ * **WHY THE FEED MIGHT NOT BE THE LAST N MESSAGES AFTER ALL.**
+ *
+ * Identified by `sessionId`, never by name: names are reassigned when a session
+ * dies and two sessions can wear the same one, so a warning keyed by name can
+ * point at the wrong agent.
+ */
+export type FeedCoverageReason = {
+  sessionId: string;
+  /** The name at read time, for printing beside the id. Not an identifier. */
+  name: string;
+  kind:
+    /** The byte budget stopped the walk before this session's newest N, inside the window shown. */
+    | "byte-budget"
+    /** There was a transcript and it could not be read. */
+    | "unreadable"
+    /** This session claims a conversation whose transcript could not be located. */
+    | "no-transcript"
+    /** Turns came back with no placeable timestamp, so they may have displaced dated ones. */
+    | "undated"
+    /** Timestamps went backwards within one session, so "newest" is not a total order there. */
+    | "out-of-order"
+    /** Two rows name the same conversation, so its turns would be counted twice. */
+    | "duplicate-conversation";
+  why: string;
+};
+
+/**
+ * **WHETHER "THE LAST N MESSAGES" IS A CLAIM THIS PAYLOAD CAN ACTUALLY MAKE.**
+ *
+ * The merge is exact — any message among the true newest N must be among its
+ * own session's newest N — but only while four premises hold: the census is
+ * fixed, each message belongs to exactly one session, every session really
+ * supplied its newest N, and local and global "newest" use the same total
+ * order. Each of the reasons above breaks one of them.
+ *
+ * **THIS IS A PROPERTY OF THE WHOLE FEED, NOT AN ADVISORY ROW BESIDE IT.** An
+ * earlier draft listed only the byte-truncated sessions, and GPT Sol's P1
+ * against that design is the reason this type exists: an unreadable session can
+ * contain *all* of the true newest messages, and showing it as one more row in
+ * a census does nothing to stop the main list looking authoritative. So a
+ * client cannot render this feed without meeting the question, and `complete`
+ * is constructible only when every contributor satisfied the invariant.
+ */
+export type FeedCoverage = { kind: "complete" } | { kind: "indeterminate"; reasons: FeedCoverageReason[] };
+
+export type FeedPayload =
+  | {
+      schema: 1;
+      kind: "feed";
+      /** What was asked for, after clamping — so the page can say it got less than it typed. */
+      limit: number;
+      /**
+       * **NEWEST FIRST**, which is the opposite of `/api/messages`, and the
+       * inversion is done here, once, rather than in every client.
+       *
+       * Stated this loudly because the sibling route returns turns newest LAST
+       * and a reader arriving from messages-client.ts will assume the same here.
+       * Doing it server-side means the ordering has one home and one test.
+       */
+      messages: FeedMessage[];
+      /**
+       * Messages with no timestamp, which cannot be placed in a global ordering.
+       *
+       * **Not dropped** — a feed that silently omits messages is the one thing
+       * this must not be — and **not interleaved at a guessed position**, which
+       * would assert an ordering nothing supports. Zero of 955 sampled turns
+       * needed this. If it is ever non-empty, that is the signal to design
+       * something better rather than evidence that this was enough.
+       */
+      undated: FeedMessage[];
+      /** Every row in the snapshot, readable or not. See `FeedSessionRead`. */
+      sessions: FeedSession[];
+      /**
+       * Whether this really is the last `limit` messages. **Required, and the
+       * client may not render the list without consulting it.** See
+       * `FeedCoverage`.
+       */
+      coverage: FeedCoverage;
+      /**
+       * **THE CENSUS BOUNDARY, WHICH IS THE HONEST CONTRACT.**
+       *
+       * There is no instant at which this answer describes the fleet. The
+       * roster was collected at `collectedAt`, up to a minute before; the
+       * transcripts were read between `readStartedAt` and `readFinishedAt`. So
+       * a session created after `collectedAt` is absent, one that has since died
+       * is still present and its transcript still reads, and a session read
+       * early may have appended while a later one was being read.
+       *
+       * What this payload actually says is *"the newest turns observed from the
+       * roster collected at C, during reads R0–R1"* — not *"the fleet right
+       * now"*, which is what a single timestamp would imply. GPT Sol's P1 on the
+       * plan; the three fields exist so the page can say the true thing.
+       */
+      collectedAt: string | null;
+      readStartedAt: string;
+      readFinishedAt: string;
+      servedAt: string;
+      /**
+       * **WHICH TMUX SERVER THE `sessionId`s IN THIS ANSWER BELONG TO.**
+       *
+       * Every `sessionId` here is a tmux session handle, and a `$1643` is only
+       * meaningful within one tmux server — the same argument `collect.ts` makes
+       * about comparing two snapshots. So a page that joins these messages to
+       * the session list from `/api/state` is comparing two sets of handles, and
+       * without this it cannot tell whether they name the same world.
+       *
+       * The failure it prevents is not hypothetical and is silent: after a tmux
+       * server restart, a `$1643` in a feed read a minute ago is a *different*
+       * session from the `$1643` in the current snapshot, so the row would take
+       * an unrelated session's status and a click on it would open the wrong
+       * conversation. Both look entirely normal. GPT Sol's P0 on the plan for
+       * the clickable/scannable pass.
+       *
+       * `null` when the collector could not read it, which is a reason to
+       * withhold the join rather than to guess at it.
+       */
+      tmuxServerPid: number | null;
+    }
+  /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */
+  | { schema: 1; kind: "unreadable"; why: string };
+
+/* ------------------------------------------------------------------ *
+ * The Deploys tab: what shipped to production, and how stale the record is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The three headings a deploy's reader-facing entries appear under.
+ *
+ * A type rather than the `as const` array, which is a runtime value and belongs
+ * in `deploys.ts` — this file may not hold one. docs/project/changelog.md
+ * § The file has the reasoning for three rather than four: there is no section
+ * for engineering, because a change a reader would notice is a headline change
+ * whatever it took to build.
+ */
+export type DeploySection = "headline" | "enhancement" | "fix";
+
+/** One thing a reader would notice, as the changelog pipeline wrote it. */
+export type DeployEntry = {
+  section: DeploySection;
+  title: string;
+  body: string;
+  /** Where in the app, in the pipeline's words. Null when it named nowhere. */
+  where: string | null;
+  /** Full 40-character shas. The panel renders them as links into the repository. */
+  commits: string[];
+};
+
+/**
+ * One production deploy, as `src/web/changelog-versions.ndjson` has it.
+ *
+ * **Declared here rather than in `deploys.ts` because both ends read it**, and
+ * this file's whole existence is the four fields that reached the browser and
+ * were dropped by a client holding its own unrelated copy of a type. The reader
+ * and the panel import this one.
+ */
+export type DeployVersion = {
+  /** The deploy's timestamp, UTC. It is also the version's id. */
+  version: string;
+  /** Which release this is, counted from the OLDEST line — the number `/changelog` shows. */
+  release: number;
+  deploymentId: string;
+  sha: string;
+  previousSha: string | null;
+  /**
+   * How many commits this deploy shipped, or null when the line does not say.
+   *
+   * **A NON-MERGE COUNT** — the changelog pipeline drops merge commits, because
+   * every one of them here is a `Merge remote-tracking branch 'origin/dev'`
+   * carrying no change of its own. Anything drawn beside it must be counted the
+   * same way or the two are not comparable. **Null is not zero**: a line that
+   * has forgotten what it shipped has not shipped nothing.
+   */
+  commitCount: number | null;
+  /**
+   * Nothing a reader would notice. The common case, and not a fault.
+   *
+   * **Only ever true when `changelogReadable` is** — a deploy whose changelog
+   * could not be read is not a quiet one, and saying so was the bug GPT Sol
+   * found on 2026-09-09.
+   */
+  invisible: boolean;
+  /**
+   * **Whether "what changed" could be read at all**, as distinct from there
+   * being nothing.
+   *
+   * False when `entries` is absent, is not an array, or held nothing readable
+   * on a line that does not claim to be quiet. The panel must draw this as
+   * *we could not read what changed*, never as *nothing changed*: the two look
+   * identical and mean opposite things, and one of them is a headline feature
+   * rendered as an empty deploy.
+   */
+  changelogReadable: boolean;
+  /** Entries on this line that would not parse. Counted, never hidden. */
+  unreadableEntries: number;
+  /** When the changelog job wrote this line — **not** when the deploy happened. */
+  generatedAt: string | null;
+  entries: DeployEntry[];
+};
+
+/**
+ * **Which deploy the git comparison is measured from — or why there is not one.**
+ *
+ * A discriminated reason rather than a nullable sha, because the two ways of
+ * having no watermark need different sentences and had one between them until
+ * GPT Sol's F1, 2026-09-09: an EMPTY record genuinely names no deploy, whereas a
+ * record whose newest line is corrupt names plenty and simply cannot say which
+ * is newest. Rendering the first explanation over the second is a confident
+ * account of the wrong problem.
+ */
+export type Watermark =
+  | { kind: "sha"; sha: string }
+  /** The record holds no deploys at all. */
+  | { kind: "none" }
+  /** The record holds deploys, but its newest line would not parse. */
+  | { kind: "newest-unreadable" };
+
+/**
+ * The three git readings, taken together as one snapshot.
+ *
+ * **One shape rather than three fields, because they must describe one tip.**
+ * `origin/main` is mutable between processes — a dozen agents fetch all night —
+ * so three independently-resolved calls can answer about three different
+ * commits, and the result is a reading of nothing. GPT Sol's P2 finding 6.
+ */
+export type GitSnapshot = {
+  main: MainRef;
+  ancestry: AncestryReading;
+  commitsSince: CountReading;
+};
+
+/**
+ * **This checkout's cached `origin/main`** — where a deploy attempt last pushed
+ * to, which is not the same as what is serving.
+ *
+ * `deploy.ts` pushes and only then waits for Vercel, so a build that failed
+ * leaves main advanced with nothing serving from it. This was called
+ * "production's tip" until GPT Sol's P3, 2026-09-09.
+ *
+ * `lastFetchAtMs` is the age of **the view, not of the commit**. The dashboard
+ * never fetches — see `tools/fleet/git-probe.ts` — so a ref nobody has updated
+ * in a week looks exactly like a week with no deploys unless the page can tell
+ * the two apart.
+ */
+export type MainRef =
+  | { kind: "ref"; sha: string; committedAt: string; lastFetchAtMs: number | null }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * How the newest recorded deploy sits against this checkout's cached tip.
+ *
+ * **Four arms, and the split between the middle two is the one that matters.**
+ * It was three until 2026-09-09, with a single `not-ancestor` drawn as *a
+ * rollback, or a deploy from a working directory* — an alarm. GPT Sol pointed
+ * out that a **merely stale cached ref produces exactly that reading**: when the
+ * changelog job has run since this checkout last fetched, the recorded deploy is
+ * newer than the cached tip and is not its ancestor, and nothing has gone wrong
+ * at all. Raising a rollback alarm on the commonest benign state would have
+ * taught Greg to ignore the alarm.
+ *
+ * So the probe asks the question the other way round too, and:
+ *
+ *  - `ancestor` — the recorded deploy is in the cached tip's history. Normal.
+ *  - `record-ahead` — the cached tip is an ancestor of the recorded deploy.
+ *    **Named for the graph relation, not for the explanation**, because three
+ *    different things produce it: the checkout is merely stale (much the
+ *    commonest), the deploy was made from an unpushed working branch, or main
+ *    was rolled back to the cached commit afterwards. It was called
+ *    `cache-behind` and drawn as "nothing is wrong" for an hour on 2026-09-09,
+ *    and neither the name nor the sentence followed from the evidence —
+ *    GPT Sol's F2. The page says *usually* stale, and stops there.
+ *  - `diverged` — neither contains the other. **This** is the rollback or the
+ *    deploy from somebody's working directory, and it is worth a colour.
+ *  - `unknown` — we could not ask. Never collapse this into any of the above; a
+ *    git that would not run must not render as a rollback that never happened.
+ */
+export type AncestryReading =
+  | { kind: "ancestor" }
+  | { kind: "record-ahead" }
+  | { kind: "diverged" }
+  | { kind: "unknown"; why: string };
+
+/**
+ * How many commits separate the newest recorded deploy from production's tip.
+ *
+ * Non-merge, to match `DeployVersion.commitCount`. **`unknown` rather than a
+ * fallback of `0`**: every failure of this question has a plausible, reassuring
+ * wrong answer, and "0 commits behind" is the most reassuring possible way to
+ * say we have no idea.
+ */
+export type CountReading =
+  { kind: "count"; commits: number }
+  /**
+   * **Only meaningful when the ancestry is `ancestor`.**
+   *
+   * `git rev-list A..B` on divergent histories is a set difference, not "the
+   * commits after A" — so on a rollback it would answer a number that reads like
+   * a distance and is not one. The probe answers `not-comparable` instead, and
+   * the panel draws nothing rather than a plausible wrong figure. GPT Sol,
+   * 2026-09-09.
+   */
+  | { kind: "not-comparable"; why: string }
+  | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/deploys`.
+ *
+ * **`deploys` with an empty `versions` and `unreadable` are different claims** —
+ * *we read the record and it is empty* against *we could not read it* — and the
+ * page must never draw them the same way. Same discipline as the health chart's
+ * blank day, and the same reason: the collapsed version is a confident sentence
+ * about production that nobody checked.
+ *
+ * On `commitsSince`, read `routes-deploys.ts` before writing a sentence about
+ * the number. **It is not undeployed work.** Everything on `main` has shipped or
+ * is shipping, since `main` is written only by `npm run deploy`; the number
+ * lumps together deploys the changelog job has not recorded yet and a tip that
+ * has not been deployed, and nothing on this box can separate those without a
+ * Vercel token.
+ */
+export type DeploysPayload =
+  | {
+      schema: 1;
+      kind: "deploys";
+      /** Newest first, at most `limit` of them. */
+      versions: DeployVersion[];
+      /** How many the record holds altogether, so "show more" knows there is more. */
+      total: number;
+      /** What was served, after clamping — so the page can say if it got less. */
+      limit: number;
+      /** A sentence per line of the record that would not parse. Never merely counted. */
+      unreadable: string[];
+      /** Non-blank lines in the record, parsed or not. The denominator. */
+      recordLines: number;
+      /** When the changelog job last wrote a line. **Not** when anything deployed. */
+      lastGeneratedAt: string | null;
+      /** The newest deploy the record knows about, or null for an empty record. */
+      newestRecordedSha: string | null;
+      /**
+       * **Whether the record's last line parsed** — and therefore whether
+       * `newestRecordedSha` really is the newest deploy or merely the newest
+       * one that survived.
+       *
+       * When false, every comparison below is measured from the wrong deploy,
+       * and the page must say so instead of presenting a confident distance.
+       * The record is append-only, so its last line is its newest deploy.
+       */
+      newestLineRead: boolean;
+      /**
+       * The git readings, as **one snapshot of one tip**.
+       *
+       * Nested rather than spread across three sibling fields, so it is not
+       * possible to build a payload whose `ancestry` and `commitsSince` were
+       * measured against different commits. GitSnapshot says why that is a real
+       * risk here rather than a theoretical one.
+       */
+      git: GitSnapshot;
+      /** The server's clock, so the page can age the record against it. */
+      servedAtMs: number;
+    }
+  | { schema: 1; kind: "unreadable"; why: string };
+
+/* ------------------------------------------------------------------ *
+ * Starting a session from the web UI, and telling the Overseer about it.
+ *
+ * The FOURTH endpoint to move behind this file, and it moved because of a bug
+ * rather than for tidiness. `LaunchRecord` was declared twice — in
+ * `routes-new.ts` and again in `web/src/new-session-client.ts` — related by
+ * nothing but hope, exactly like `QueueView` before it. A cross-family review
+ * found that a launch which reached `started` could carry no notification state
+ * at all, with no way to tell "not attempted" from "nobody wired it up", and
+ * fixing that needs a discriminated union. The union changes the shape on the
+ * wire, and changing the shape while the declaration is written twice is
+ * invisible to the compiler: `parseLaunch` reads `v["state"]` as a raw string,
+ * so a rename returns `null` for every record and the panel silently renders
+ * nothing. Shaped exactly like docs/postmortems/260908b.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What became of the one line the dashboard sends the Overseer when a session
+ * is started from the web UI.
+ *
+ * **There is no "sent".** Nothing on this box can observe reception —
+ * `sendMessage` types keystrokes at a pane, and whether the agent read them,
+ * whether the Enter landed, and whether the text concatenated with something
+ * half-typed are all outside what we can see. So the success arm is
+ * `submitted`, which claims exactly what happened, and every failure carries the
+ * `Delivery` word that path already returns.
+ *
+ * The four not-a-send arms are four different facts, and the union exists so
+ * the launch record cannot flatten them into "not sent": nobody holds the role,
+ * which is what a box looks like after a reboot and is a real answer; the role
+ * is contested, which is a fault to report and never a pick; we could not
+ * establish who holds it or could not address them; and we found the holder and
+ * the send would not go.
+ */
+export type NotifyOutcomeView =
+  /**
+   * **HANDED TO THE QUEUE, WHICH IS AS FAR AS THIS ROUTE'S KNOWLEDGE GOES.**
+   *
+   * Not "sent" and not even "submitted": the notice is in the drain's hands and
+   * will go out on a later refresh, through the same coordinator every other
+   * producer uses. What became of the keystrokes is the queue's story and the
+   * queue's surface tells it — this record would have to poll to find out, and a
+   * launch record that went stale claiming a delivery would be worse than one
+   * that says plainly where it put the thing.
+   */
+  | { kind: "queued"; to: string; position: number }
+  /** The queue turned it down — a full queue, a message it will not carry. */
+  | { kind: "not-queued"; to: string; rule: string; why: string }
+  /** The snapshot was readable and nobody holds the `overseer` role. */
+  | { kind: "no-holder" }
+  /** More than one session claims it. Reported, never resolved here. */
+  | { kind: "contested"; names: readonly string[] }
+  /** We could not establish who holds it, or could not address them. */
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * Where a launch's notification has got to.
+ *
+ * `pending` is a real state and is set **before** the send is attempted, so a
+ * notification can never delay the launch result — the page says a session
+ * started the moment it started, and fills this in afterwards.
+ */
+export type NotifyState = { kind: "pending" } | NotifyOutcomeView;
+
+/**
+ * **THE DISCRIMINANT AND ITS NOTIFICATION, IN ONE FIELD, AND THE NESTING IS THE
+ * POINT.**
+ *
+ * A union on a top-level `state` would be the obvious shape and it cannot be
+ * used here: `routes-new.ts` mutates its record in place, and that record's
+ * OBJECT IDENTITY is load-bearing — `launch()` ends with
+ * `if (inFlight === record)`, a reference comparison an earlier review put there
+ * so that two launches being live at once is loud rather than silent. Moving a
+ * record between arms of a top-level union means replacing the object, which
+ * breaks that check.
+ *
+ * Nesting the discriminant under one field keeps the identity — `record.progress
+ * = {…}` is a single assignment — while still making the bad state
+ * unrepresentable: a `starting` launch cannot carry an outcome, and a `started`
+ * one cannot carry nothing.
+ */
+export type LaunchProgress =
+  | { state: "starting"; notification: { kind: "not-attempted" } }
+  | { state: "started"; notification: NotifyState }
+  /** A launch that never started has nothing to tell anyone about. */
+  | { state: "failed"; notification: { kind: "not-applicable" } };
+
+/** One attempt, from the moment it is accepted to whatever became of it. */
+export type LaunchRecordView = {
+  /** Ours, not the box's — the handle the client polls with. */
+  id: string;
+  progress: LaunchProgress;
+  /** The tmux session name: what the caller asked for, or the opaque one minted for them. */
+  name: string | null;
+  /** What was ASKED for. In repo mode the box may choose another — `startedDir`. */
+  dir: string;
+  /** `repo` is gjd-remote's verified origin resolution; `dir` is the `-d` escape hatch. */
+  resolution: "repo" | "dir" | null;
+  /** The directory the box says it actually started in, once it has said so. */
+  startedDir: string | null;
+  /** The prompt's size. **Never the prompt.** */
+  promptBytes: number;
+  requestedAt: string;
+  finishedAt: string | null;
+  /** Why it failed, in a sentence for a person. */
+  error: string | null;
+  /** A failure that MAY have started something — a timeout, a launcher that vanished. */
+  maybeStarted: boolean;
+  /** Anything true but awkward — a start whose name could not be read back. */
+  note: string | null;
+};
+
+/** Everything the client needs to draw the button's state. */
+export type NewSessionStatusView = {
+  ok: true;
+  /** A launch is in flight; a second POST would be refused. */
+  busy: boolean;
+  /** Milliseconds until a POST would be accepted; 0 when it would be now. */
+  retryAfterMs: number;
+  /** Newest first, capped — this is a live view, not a history. */
+  launches: readonly LaunchRecordView[];
+};
+
+/* ------------------------------------------------------------------ *
+ * CAN THIS ACCOUNT AFFORD MORE WORK? — the usage card's own shapes.
+ *
+ * The `UsageReport` block above is what `tools/overseer/usage.ts` MEASURES.
+ * These are what the dashboard SHOWS, and they are deliberately narrower: a
+ * report carries every 429 in the scanned window (27 on this box on 2026-09-08,
+ * all of them the same limit), the whole cache blob and a scan's full coverage,
+ * and a card that redrew all of it would be a second copy of `overseer usage`
+ * rather than an answer to a question.
+ *
+ * **A view weaker than its wire type is the plan's own rule** — 260908f §
+ * Reconciliation, on `wire.ts`: *"a browser-parsed view may deliberately be
+ * weaker than its wire type."* The narrowing happens ONCE, on the server, in
+ * `tools/fleet/usage-feed.ts`; the browser parses these shapes and nothing else.
+ * That is what keeps the second parser in `web/src/types.ts` small enough to be
+ * read in one sitting, which is the property that made it worth having.
+ *
+ * WHAT IS DROPPED, AND WHY EACH IS SAFE TO DROP:
+ *
+ *  - **Every `*Ms` twin of an ISO field.** The page judges freshness against
+ *    its own skew-corrected clock (`ClockSkew` in web/src/types.ts); a
+ *    server-computed `msUntilReset` would be as old as the payload and would
+ *    read as current. ISO crosses; the age is computed where it is drawn.
+ *  - **The individual 429s.** They are grouped into `UsageIncident` first —
+ *    the acceptance line of this stage. Thirty sessions stopped by one window
+ *    is ONE thing that has happened, and thirty rows is a page that hides it.
+ *  - **Nothing from `ScanCoverage`.** It crosses whole and unmodified, because
+ *    it is the positive control: *no limits hit* is only believable beside
+ *    *opened 235 transcripts, scanned 232,961 lines*. Dropping it to save bytes
+ *    would turn the one honest zero on this page into the unfalsifiable kind.
+ *    docs/reusable/silent-success.md.
+ * ------------------------------------------------------------------ */
+
+/**
+ * One window as the card draws it — **the `expired` arm still carries no
+ * percentage**, and that is inherited on purpose rather than by accident.
+ *
+ * `UsageWindowReading` above refuses to put a void number in a numeric field,
+ * *"not even under a name like `stalePercent`"*, because a renderer handed one
+ * will eventually render it. Narrowing that type into a flatter one is exactly
+ * the moment somebody would helpfully add the field back, so the rule is
+ * restated here where the temptation is: the stale number lives in `why`, as
+ * prose, where it cannot be mistaken for a reading.
+ */
+export type UsageWindowCard =
+  | {
+      kind: "value";
+      window: UsageWindowName;
+      /** 0–100, as `~/.claude.json` gave it. */
+      utilizationPercent: number;
+      /** ISO. The page renders it in UTC, London and Athens — `tools/fleet/zones.ts`. */
+      resetsAt: string;
+    }
+  /** The cached number described a window that has already reset. No percentage exists on this arm. */
+  | { kind: "expired"; window: UsageWindowName; resetsAt: string; why: string }
+  | { kind: "unknown"; window: UsageWindowName; why: string };
+
+/**
+ * **THIRTY SESSIONS, ONE WINDOW, ONE INCIDENT** — the acceptance line of the
+ * usage-visibility stage, as a type.
+ *
+ * A rate limit is a fact about an ACCOUNT AND A WINDOW, not about a
+ * conversation: when the five-hour window fills, every session sharing the
+ * account is rejected within seconds of the others, and the box goes on
+ * producing one 429 per attempt for as long as anybody keeps trying. Measured
+ * on 2026-09-08: 27 rejections sharing a single `resetsAt`. Listed one per row
+ * that is a wall of red saying the same thing 27 times; the number that
+ * actually matters — *when can work resume* — appears 27 times too and is the
+ * same in each. So the grouping is not a display nicety, it is the reading.
+ *
+ * **The key is a window and its reset instant, and there is NO ACCOUNT IN IT.**
+ * A `RateLimitHit` is a line in a transcript and carries no account id at all —
+ * which is exactly why `classifyHit` in tools/overseer/usage.ts exists — and the
+ * scan covers eight days that may span a `/login` swap. So two accounts whose
+ * rejections happened to share a window name and a reset instant would land in
+ * one incident, and nothing in the data could separate them.
+ *
+ * **An incident is therefore an OBSERVED WINDOW CLUSTER, not a proven event in
+ * this account's life**, and nothing rendering one may say otherwise. Whether
+ * any of them binds the logged-in account is `UsageVerdict`'s question, decided
+ * with the cache attribution that only the daemon has. This type said the
+ * account was "implicit in the report" until GPT Sol's P1(4) on 2026-09-09;
+ * `chooseUsage` proves the report was COLLECTED for the current account, which
+ * is a different claim from the hits inside it belonging to it.
+ */
+export type UsageIncident = {
+  /**
+   * Stable across passes, derived from the window and the reset instant —
+   * never minted per render.
+   *
+   * The same property `RateLimitHit.id` has and for a weaker version of the
+   * same reason: this one is a React key and a thing a person points at. An id
+   * that changed every poll would remount the row every two minutes and would
+   * make "the same incident" unsayable between two readings.
+   */
+  id: string;
+  window: UsageWindowName;
+  /** ISO. **The only number on this card that says when work can resume.** */
+  resetsAt: string;
+  /**
+   * The conversations rejected in this window, deduplicated, in first-seen
+   * order — the Claude conversation uuid, NOT a tmux handle or a pane id.
+   * `RateLimitHit.claudeSessionId` says why the three must not be confused.
+   */
+  conversations: string[];
+  /** Rejections counted. **≥ `conversations.length`**: one session retrying produces many. */
+  rejections: number;
+  /**
+   * Rejections whose conversation could not be identified, counted rather than
+   * dropped. A transcript record with no `sessionId` is a real thing; folding
+   * it into the identified ones would inflate the session count, and dropping
+   * it silently would understate the incident.
+   */
+  unidentifiedRejections: number;
+  /** ISO of the earliest and latest rejection seen in this window, or null if none carried a timestamp. */
+  firstHitAt: string | null;
+  lastHitAt: string | null;
+};
+
+/**
+ * **WHAT THE PAGE KNOWS ABOUT THE CURRENT ACCOUNT, AND WHAT IT CANNOT TELL.**
+ *
+ * `collectedAt` is the field that makes the rest of it honest, and it is NOT
+ * the checkpoint's `writtenAt`: a usage pass takes 30–45 seconds over ~2.9 GB
+ * and does not always finish, and `chooseUsage` deliberately republishes a
+ * report from an earlier pass when a fresh scan fell over. So a card drawing
+ * its age from the checkpoint's clock would show a two-hour-old reading as
+ * thirty seconds old — the stale-reading-that-looks-current failure this whole
+ * subsystem exists to refuse, moved one file along. The card ages this.
+ */
+export type UsageSummary = {
+  /** ISO. **When this reading was taken**, which is not when the checkpoint was written. */
+  collectedAt: string;
+  /** Whose headroom this is. Recorded, never rotated — Greg's call; see `UsageAccount`. */
+  account: UsageAccount;
+  /** `limited` is ground truth from a 429; `approaching` is only ever a cache hint. */
+  level: UsageLevel;
+  /** The verdict's own sentences, verbatim. The card prints them rather than re-deriving a headline. */
+  reasons: string[];
+  /**
+   * The cached hint, or the reason there is none. Never the ground truth —
+   * `UsageReport`'s header.
+   *
+   * **`unattributed` CARRIES NO WINDOWS, and that is the same repair as
+   * `UsageWindowReading`'s expired arm one level down.** A cache belongs to
+   * whichever account was logged in when it was written, and after a `/login`
+   * swap `~/.claude.json` can still hold the PREVIOUS subscription's numbers —
+   * measured, and the reason `attributeCache` in tools/overseer/usage.ts exists
+   * at all. A card that drew *96% used* under a heading naming a different
+   * account would be reporting somebody else's headroom as this one's, which is
+   * worse than reporting nothing.
+   *
+   * A percentage that a renderer can reach is a percentage that eventually gets
+   * rendered, so the unattributable case is given no percentages to reach: the
+   * numbers do not cross, and `why` carries the two account ids in prose.
+   */
+  cache:
+    | {
+        kind: "attributed";
+        fetchedAt: string;
+        /** Non-null on this arm by construction: attribution requires both sides to name the same account. */
+        accountUuid: string;
+        windows: UsageWindowCard[];
+      }
+    /** A cache was read and could not be shown to be this account's. No windows, deliberately. */
+    | { kind: "unattributed"; why: string; fetchedAt: string | null; accountUuid: string | null }
+    /** No cache could be read at all. */
+    | { kind: "unknown"; why: string };
+  /**
+   * The 429s, grouped. **`none` is a claim and only `coverage` makes it
+   * believable**, which is why every arm carries one, including `unknown`.
+   */
+  limits:
+    | { kind: "incidents"; incidents: UsageIncident[]; coverage: ScanCoverage }
+    | { kind: "none"; coverage: ScanCoverage }
+    | { kind: "unknown"; why: string; coverage: ScanCoverage };
+  /**
+   * ISO of the moment work can actually resume, or null when nothing is
+   * blocking. From `UsageVerdict.activeLimit`, which is the window that frees
+   * up LAST when several are in force — not the first one to clear.
+   */
+  dueBackAt: string | null;
+  /**
+   * The window `dueBackAt` belongs to, or null with it.
+   *
+   * **BOTH HALVES, BECAUSE AN INCIDENT'S KEY IS BOTH HALVES.** A renderer
+   * marking which incident the producer actually attributed compares against
+   * `UsageIncident`'s key, and that key is `window + resetsAt`. Matching on the
+   * instant alone labels every window that happens to reset at the same moment
+   * — and `five_hour` and `seven_day` sharing an instant is ordinary, not
+   * exotic, since both are aligned to the hour. One attributed limit would then
+   * put an attributed badge on a cluster the daemon explicitly could not
+   * attribute, which is the exact claim this stage spent a review round
+   * removing. GPT Sol's P1(3) in round two, 2026-09-09.
+   */
+  dueBackWindow: UsageWindowName | null;
+};
+
+/**
+ * The usage card's feed, with the same five ways of having nothing to say that
+ * `OverseerStatusFeed` has, plus one of its own.
+ *
+ * **`no-report` is one of them, and it is the arm production draws most.** The
+ * checkpoint was read perfectly well and it says no usage pass has produced a
+ * report — because the daemon was started with `--no-usage`, or because it has
+ * not reached its first 300-second usage tick, or because the field predates
+ * this build. `StoredUsage`'s `none` arm carries the sentence; this passes it
+ * through unchanged rather than flattening it into `checkpoint-unreadable`,
+ * which would send a reader to look for a broken file that is fine.
+ *
+ * **`report-unreadable` is the seventh, and it is separate from `no-report`
+ * precisely because the page says different things about them.** *No pass has
+ * run* is ordinary and the sentence for it ends "nothing is wrong with the
+ * file"; *a report is there and this build cannot read it* is a producer and a
+ * consumer that have come apart, and telling somebody nothing is wrong is then
+ * false and sends them away from the thing that is. GPT Sol's P1(3),
+ * 2026-09-09 — the two had been folded into one arm.
+ */
+export type UsageFeed =
+  /** The server did not look. NOT *nothing is limited* — see `AttentionFeed`. */
+  | { kind: "not-asked" }
+  | { kind: "checkpoint-absent" }
+  | { kind: "checkpoint-unreadable"; why: string }
+  | { kind: "unsupported-schema"; saw: string; known: number }
+  /** The checkpoint is readable and holds no report. `at` is when it was WRITTEN; nothing was scanned. */
+  | { kind: "no-report"; why: string; at: string }
+  /** A report IS there and this reader could not make sense of it. Something is wrong, unlike above. */
+  | { kind: "report-unreadable"; why: string; at: string }
+  | { kind: "published"; summary: UsageSummary; coordinatorWrittenAt: string };
+
+
+/* ------------------------------------------------------------------ *
+ * The queue of ideas.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Who recorded a queue write.
+ *
+ * **Narrower than `Speaker` on purpose.** That type's third arm, `dashboard`,
+ * means *a person acted and software is reporting it* — a report, never an
+ * instruction. A queue write IS an instruction, and an item nobody authored is
+ * exactly what gate 3 exists to refuse, so it must not be spellable here.
+ *
+ * `tools/overseer/idea-queue.ts` imports this rather than declaring its own,
+ * which reads backwards — the record's model importing from the HTTP wire — and
+ * is deliberate anyway: this file is the one home for a shape that crosses the
+ * boundary, and the alternative is the twin declaration this file's header was
+ * written about. `attention-classify.ts` and `usage-carry.ts` already reach here
+ * the same way.
+ */
+export type QueueActor = "greg" | "overseer";
+
+/** Where an item has got to. ONE axis — see `QueueRow` for the other two. */
+export type QueueLifecycle = "queued" | "dispatched" | "done" | "dropped";
+
+/** Whether anybody has said it may happen. */
+export type QueueAuthorityKind = "proposed" | "authorized";
+
+export type QueueProblemKind =
+  | "unreadable-line"
+  | "unknown-item"
+  | "duplicate-item"
+  | "missing-anchor"
+  | "unauthorized-authorization"
+  | "illegal-transition";
+
+/** One thing that happened to an item. `what` is the server's own phrase. */
+export type QueueTouch = { kind: string; at: string; by: QueueActor; what: string };
+
+/**
+ * How deep the queue is, split by **why** each item is not moving.
+ *
+ * The split is the useful part: a single number conflates *nobody has got to it*
+ * with *it is waiting on you*, and only one of those is Greg's to fix.
+ *
+ * The four fields partition `rows` — an item that is both unauthorised and
+ * waiting on Greg is counted once, under `needsGreg`, because that is the
+ * actionable half. Adding them up must give the number of rows.
+ */
+export type QueueDepth = {
+  dispatchable: number;
+  needsGreg: number;
+  unauthorized: number;
+  /**
+   * Rows held only because the FILE has a problem — approved, unblocked, and
+   * still not dispatchable.
+   *
+   * Its own count because without it those rows were reported as
+   * `unauthorized`, so a queue with one bad line said *12 not approved* beside
+   * twelve perfectly approved rows, in the same view as the alarm explaining
+   * that the file was the trouble. GPT Sol's P2-2.
+   */
+  queueHeld: number;
+  dispatched: number;
+  done: number;
+  dropped: number;
+};
+
+export type QueueWindow = { days: number; dispatched: number; done: number };
+
+/**
+ * What the queue has actually done — **measured on the queue's own events**,
+ * never on the fleet's session log.
+ *
+ * `duration` has exactly ONE arm, and that is a deliberate piece of type design
+ * rather than an unfinished union. Greg asked for a wait estimate; GPT Sol
+ * rejected the obvious one twice (P1-5 and its answer 3) and was right on every
+ * term — median session length is a fact about the mix of work, a session is not
+ * a queue item, session lifetime is censored by the long runs still going, and
+ * concurrency is a policy number. *"Three dispatched in the last 7 days"* is an
+ * observation; *"about four days"* is an inference this data cannot support.
+ *
+ * With one arm, a page cannot render a confident figure by forgetting a
+ * comparison. When a real duration becomes possible — enough of this queue's own
+ * `dispatched → done` pairs, grouped by size — it arrives as a second arm and
+ * every reader is made to handle it.
+ */
+export type QueueThroughput = {
+  windows: QueueWindow[];
+  dispatchesEver: number;
+  completionsEver: number;
+  duration: { kind: "not-enough"; why: string };
+};
+
+/**
+ * What can honestly be said about one item's wait.
+ *
+ * Four arms and none is a duration. *Running*, *waiting on you* and *nobody has
+ * approved it* send a reader to three different actions; a single "unknown"
+ * sends them nowhere.
+ */
+export type QueueItemWait =
+  | { kind: "ahead"; ahead: number; why: string }
+  /**
+   * The FILE is the problem, not the item.
+   *
+   * Separate from every per-item reason because it outranks them: while the
+   * record has a hole in it nothing may go out, so *"next in line"* would be a
+   * promise the queue cannot keep — which the panel was making, beside the
+   * alarm saying the opposite. Sol's P2-2.
+   */
+  | { kind: "queue-held"; why: string }
+  | { kind: "running"; session: string | null; why: string }
+  | { kind: "needs-greg"; waitingOn: string | null; why: string }
+  | { kind: "not-authorized"; why: string };
+
+/**
+ * One row of the queue.
+ *
+ * **`ready` and `why` are computed on the SERVER**, and that is not an
+ * optimisation. `ready` is `isDispatchable`, which is gate 3's own test; a
+ * second implementation of it in browser TypeScript would be a second answer to
+ * *"may this go out?"*, and the two would disagree the first time one moved. The
+ * client renders the sentence it is given.
+ */
+export type QueueRow = {
+  id: string;
+  title: string | null;
+  text: string;
+  lifecycle: QueueLifecycle;
+  authority: QueueAuthorityKind;
+  /** The revision the approval names — `null` when it is only proposed. */
+  authorizedRevision: number | null;
+  /** Bumped by every content edit. Not equal to `authorizedRevision` means the approval lapsed. */
+  revision: number;
+  needsGreg: boolean;
+  /** The server's `isDispatchable`. Never recomputed here. */
+  ready: boolean;
+  /** Why not, in the server's words. `null` exactly when `ready`. */
+  why: string | null;
+  wait: QueueItemWait;
+  waitingOn: string | null;
+  size: string | null;
+  source: string | null;
+  runs: string | null;
+  areas: string[];
+  addedBy: QueueActor;
+  addedAt: string;
+  lastTouchedAt: string | null;
+  dispatchedTo: string | null;
+  dispatchedAt: string | null;
+  plan: string | null;
+  droppedWhy: string | null;
+  history: QueueTouch[];
+};
+
+/**
+ * `GET /api/queue`, with three arms because two of them are silences that mean
+ * different things.
+ *
+ * **`never-written` is not an empty `queue`.** Nobody has used this queue is
+ * ordinary; a file that exists and folds to nothing has had everything
+ * dispatched or dropped. Drawn as the same blank list they become one claim.
+ *
+ * **`unreadable` is neither, and it is the one that matters.** The Overseer's
+ * own store may cold-start because losing it costs only history. This file is
+ * original human input and is not disposable, so a lost one rendering as a
+ * healthy empty queue is the single worst thing this tab could do.
+ */
+export type QueueFeed =
+  | { schema: 1; kind: "never-written"; why: string }
+  | { schema: 1; kind: "unreadable"; why: string }
+  | {
+      schema: 1;
+      kind: "queue";
+      /** Opaque; names the tail as well as the count, so `behind` and `different` are distinguishable. */
+      version: string;
+      rows: QueueRow[];
+      settled: QueueRow[];
+      /** Withheld by the settled cap, so the page says "and N more" rather than implying that is all. */
+      settledWithheld: number;
+      depth: QueueDepth;
+      throughput: QueueThroughput;
+      /**
+       * Anything the fold could not accept. **Non-empty means nothing in the
+       * queue is dispatchable** — a queue two items short must not authorise
+       * the items it did manage to read.
+       */
+      problems: { kind: QueueProblemKind; why: string }[];
+      /** Where the file is, so a person can go and look at it. */
+      path: string;
+    };
+
+/* ------------------------------------------------------------------ *
+ * What a session is about, in a sentence.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A generated description of one session, or an honest account of why there
+ * isn't one.
+ *
+ * Greg, 2026-09-09: *"For each session, provide a 1-2-sentence description of
+ * what it's about, and show in the Session List."*
+ *
+ * **`not-yet-described` is the normal state for a while, and it is not an
+ * error.** A description needs a *verified* execution identity, and every row
+ * reads `unknown` until the dashboard and the daemon have been restarted onto
+ * the code that produces one. So its wording has to be informative rather than
+ * apologetic, or a page that is merely new will read as broken.
+ *
+ * **There is no arm carrying an empty string.** Greg ruled that out by name — a
+ * model that answered a different question routinely returns the right shape
+ * with empty strings in it, and publishing one is a row saying nothing
+ * confidently.
+ */
+export type SessionDescription =
+  | {
+      kind: "described";
+      /** A short display title. **Never renames the tmux session** — that name is an address. */
+      title: string;
+      /** One or two sentences: what this session is FOR. */
+      description: string;
+      /** When it was generated, so a reader can age it. */
+      describedAt: string;
+    }
+  /** The pass has not reached this session yet, or has nothing to describe it from. */
+  | { kind: "not-yet-described"; why: string }
+  /** We know why there is no description and it is worth saying. */
+  | { kind: "cannot-tell"; why: string };
+/* ================================================================== *
+ * STAGE 4b — A HOLD THAT OUTLIVED THE PROCESS THAT RECORDED IT
+ *
+ * A uniquely named banner rather than the bare separator this file uses
+ * elsewhere: two sessions appending blocks that both open with the same
+ * line collide in git even when the blocks are about different things.
+ * ================================================================== */
+
+/**
+ * Where a hold's record came from, and therefore **what it is entitled to
+ * say.**
+ *
+ * `tools/fleet/hold-ledger.ts` makes a hold survive a dashboard restart, and
+ * the thing that must not survive with it is the impression that this process
+ * watched any of it happen. A rehydrated hold is a record read off a disk by a
+ * process that was not there: the run that made the send has ended, and nothing
+ * here has been re-checked since the line was written.
+ *
+ *  - `observed-here` — this process made the send and read what came back.
+ *  - `rehydrated-hold` — rebuilt at startup from a line the previous run wrote
+ *    **after** its send returned. It knows what was read and when the hold
+ *    opened, because that run wrote both down. What it cannot know is anything
+ *    that happened after that line: if the operator released it and the process
+ *    died before recording the release, this comes back holding. That is the
+ *    conservative direction — pressing release a second time costs a tap, and
+ *    the other mistake types into an input box nobody has looked at.
+ *  - `rehydrated-attempt` — rebuilt from a line written **before** the
+ *    keystrokes, which nothing ever resolved. **It does not know whether the
+ *    send was even made**, let alone how far it got, and there is no moment at
+ *    which anything opened, so `openedAt`, `lastSendAt` and `reading` are all
+ *    null on such a hold. It is the strongest reason the ledger exists — a
+ *    crash inside the transport is exactly the case where nobody can say what
+ *    is in that input box.
+ *
+ * **THE UNKNOWN FIELDS ARE NULLABLE BESIDE THIS RATHER THAN CARRIED INSIDE
+ * IT.** A union carrying `openedAt`, `lastSendAt`, `reading` and `incidents`
+ * per arm is the better shape in the abstract, and it was rejected here for one
+ * concrete reason: `HoldView` in web/src/actions-client.ts already re-types
+ * every one of those to `| null`, because a server too old to send a field has
+ * made no claim. So a union on the wire would be flattened back to exactly this
+ * shape one file later, and the flattening would be the second place to get it
+ * wrong. What the union buys — you cannot read `openedAt` without establishing
+ * which case you are in — is bought here by the field docs plus this arm.
+ */
+export type HoldBasis =
+  | { kind: "observed-here" }
+  | {
+      kind: "rehydrated-hold";
+      /** When the previous run last wrote this hold down. It knows nothing after this. */
+      recordedAt: number;
+    }
+  | {
+      kind: "rehydrated-attempt";
+      /** When the previous run wrote down that it was **about to** type. */
+      attemptedAt: number;
+    };
+
+/* ================================================================== *
+ * STAGE 6 — THE ACTIONS CATALOGUE'S SHARED WIRE SHAPES
+ *
+ * A uniquely named banner rather than the bare separator this file uses
+ * elsewhere: two sessions appending blocks that both open with the same
+ * line collide in git even when the blocks are about different things.
+ * ================================================================== */
+
+/** Where the action appears, and what it is addressed to. */
+export type ActionScope =
+  /** One session. Needs a `SteerTarget` or a worktree. */
+  | "session"
+  /** The box. Needs no session, and affects everybody. */
+  | "box";
+
+export type EnactedActionId = "remove-worktree" | "kill-session" | "kill-test-suites" | "kill-safe-processes";
+
+export type BroadcastActionId = "resource-broadcast";
+
+export type ActionId = SpokenActionId | EnactedActionId | BroadcastActionId;
+
+/**
+ * An effect outside the conversation: a directory deleted, a process signalled.
+ *
+ * There is no `text` on this arm and there never should be. The catalogue entry
+ * is a DESCRIPTOR — the argv depends on which worktree, which session, which
+ * pids, none of which is known until the moment of use — so the commands come
+ * from the `plan*` functions below, which take those inputs and can refuse.
+ */
+export type EnactedAction = {
+  effect: "enacted";
+  id: EnactedActionId;
+  scope: ActionScope;
+  label: string;
+  summary: string;
+  /**
+   * Literal `true`. An enacted action is never one-tap: each of the four
+   * either deletes work, kills somebody's agent, or throws away a running test
+   * suite. Typed as the literal so that adding a one-tap enacted action is a
+   * compile error and therefore a decision.
+   */
+  needsConfirm: true;
+  /**
+   * The named gate that must pass before the effect, in prose, for the
+   * confirmation dialog. The machine-readable form is the first `Step` of the
+   * plan; this is what the person reads before they press yes.
+   */
+  gate: string;
+};
+
+/**
+ * One sentence to every steerable session, each with its own resume time.
+ *
+ * Greg's word is **staggered**, and the direction doc says why in one line:
+ * thirty-six agents told to pause for an hour all resume in the same second,
+ * and the box falls over at the far end instead of the near one. So there is
+ * no `text` here either — `renderBroadcast` produces a different sentence per
+ * recipient, and the stagger is a parameter of the action rather than a
+ * convention in whoever calls it.
+ */
+export type BroadcastAction = {
+  effect: "broadcast";
+  id: BroadcastActionId;
+  scope: "box";
+  label: string;
+  summary: string;
+  needsConfirm: true;
+  stagger: Stagger;
+};
+
+export type Action = SpokenAction | EnactedAction | BroadcastAction;
+
+/**
+ * How the pause is spread across the fleet.
+ *
+ * `minMinutes` is not zero and must not be: a recipient told to pause for zero
+ * minutes has not paused, and with an evenly spread window somebody always
+ * draws the bottom of it. `windowMinutes` is Greg's "up to an hour".
+ */
+export type Stagger = {
+  minMinutes: number;
+  windowMinutes: number;
 };

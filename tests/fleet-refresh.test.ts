@@ -24,10 +24,12 @@ import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import type { DrainResult } from "../tools/fleet/drain.js";
 import type { HealthTurn, SampleStamp } from "../tools/fleet/health-history.js";
 import type { HealthReport } from "../tools/fleet/health.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
-import { refreshOnce, type RefreshDeps } from "../tools/fleet/refresh.js";
+import { collectionStillRunning, refreshOnce, singleFlightCollect, type RefreshDeps } from "../tools/fleet/refresh.js";
 import { makeActionRoutes, type ActionDeps, type ActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
+import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 
@@ -50,16 +52,23 @@ const SENT_OK: SteerResult = {
 
 function row(over: Partial<FleetRow> = {}): FleetRow {
   return {
+    /* `not-yet-described` rather than a blank: a row nobody has described
+       is a different fact from a session with nothing to say. */
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
     id: SESSION,
     name: "wf-fixture",
     title: null,
     repo: null,
     worktree: null,
     meta: { version: "legacy" },
+    role: { kind: "none" },
     startedAt: "2026-09-08T00:00:00.000Z",
     /* The arm the collector produces before `readPauses` has run. Not `none`:
        a fixture is in no position to claim we looked everywhere. */
     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    // Required on a row and not what this file is about: a fixture is not a box
+    // whose process table anybody probed.
+    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
     status: IDLE,
     paneId: PANE,
     panePid: PANE_PID,
@@ -84,13 +93,21 @@ type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 function actionRoutes(): { routes: ActionRoutes; sent: Sent[]; queue: SteeringQueue } {
   let clock = 1_000_000;
   const sent: Sent[] = [];
-  const queue = new SteeringQueue({ now: () => clock });
+  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
   const routes = makeActionRoutes({
     queue,
-    sendMessage: (target, text, declaredStatus) => {
-      sent.push({ target, text, declaredStatus });
-      return SENT_OK;
-    },
+    // THE TRANSPORT INSIDE THE COORDINATOR, over the queue's OWN book — the
+    // routes refuse to build if the two disagree. `send-coordinator.ts`.
+    send: makeSendCoordinator({
+      book: queue.quarantineBook(),
+      sendMessage: (target, text, declaredStatus) => {
+        sent.push({ target, text, declaredStatus });
+        return SENT_OK;
+      },
+      answerQuestion: () => {
+        throw new Error("the refresh loop never answers a dialog");
+      },
+    }),
     now: () => clock,
     limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     log: () => {},
@@ -169,7 +186,7 @@ function refreshHarness(over: Partial<RefreshDeps> = {}) {
     publish: () => events.push("publish"),
     drain: () => {
       events.push("drain");
-      return { rows: 0, considered: 0, generation: TMUX_GENERATION, invalidated: 0, outcomes: [] } satisfies DrainResult;
+      return { rows: 0, considered: 0, generation: TMUX_GENERATION, invalidated: 0, quarantined: 0, outcomes: [] } satisfies DrainResult;
     },
     log: (line) => {
       logs.push(line);
@@ -339,4 +356,251 @@ describe("one refresh turn, retaining box health", () => {
      DIFFERENT store, the exact failure the test claimed to catch. It now drives
      `makeHealthRetention`, the function the server itself calls. GPT Sol's
      finding 5, 2026-09-08. */
+});
+
+/* ------------------------------------------------------------------ *
+ * The latch: one owned collection attempt at a time.
+ *
+ * **Every test here is about a child that outlives its caller**, which is the
+ * shape of E-blocking: `collectWithDeadline` rejects on the timer and nothing
+ * remembers the `bash -c` still grepping thirty-five transcripts, so the loop's
+ * response to a wedged collector was a second one. Nothing here spawns a
+ * process — `run` is a promise the test resolves by hand, which is the only way
+ * to hold a child in the wedged state on purpose.
+ * ------------------------------------------------------------------ */
+
+/** A child the test settles when it likes, and which counts how many were started. */
+function fakeChild() {
+  let starts = 0;
+  const settlers: { resolve(s: FleetSnapshot): void; reject(e: Error): void }[] = [];
+  return {
+    get starts() {
+      return starts;
+    },
+    run(): Promise<FleetSnapshot> {
+      starts += 1;
+      return new Promise<FleetSnapshot>((resolve, reject) => settlers.push({ resolve, reject }));
+    },
+    /** Settle the nth child (0-based) and let its handlers run. */
+    async finish(index: number, snapshot: FleetSnapshot): Promise<void> {
+      settlers[index]?.resolve(snapshot);
+      await Promise.resolve();
+      await Promise.resolve();
+    },
+    async fail(index: number, why: string): Promise<void> {
+      settlers[index]?.reject(new Error(why));
+      await Promise.resolve();
+      await Promise.resolve();
+    },
+  };
+}
+
+/** The latch with a clock the test moves, and a 10ms caller deadline. */
+function latched(child: { run(): Promise<FleetSnapshot> }, clock: { ms: number }, late: string[] = []) {
+  return singleFlightCollect({
+    run: () => child.run(),
+    deadlineMs: 10,
+    now: () => clock.ms,
+    onLate: (line) => late.push(line),
+  });
+}
+
+describe("singleFlightCollect — a caller's deadline does not release the child", () => {
+  it("starts no second child while the first has not settled", async () => {
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const latch = latched(child, clock);
+
+    await expect(latch.collect()).rejects.toThrow(/did not finish within/);
+    expect(child.starts).toBe(1);
+
+    // The next turn of the loop, with the child still wedged.
+    clock.ms = 420_000;
+    await expect(latch.collect()).rejects.toThrow(/has been running for 420s and has not finished/);
+    // THE ASSERTION THE WHOLE STAGE IS FOR.
+    expect(child.starts).toBe(1);
+
+    // And a third turn is still not a third child.
+    clock.ms = 780_000;
+    await expect(latch.collect()).rejects.toThrow(collectionStillRunning(780_000));
+    expect(child.starts).toBe(1);
+  });
+
+  it("a repeated refresh reports the stuck child and keeps the old rows", async () => {
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const latch = latched(child, clock);
+    const { deps, kept } = refreshHarness({ collect: () => latch.collect() });
+
+    await refreshOnce(deps);
+    clock.ms = 300_000;
+    await refreshOnce(deps);
+
+    expect(kept).toHaveLength(2);
+    // Never a snapshot, so `server.ts` keeps the previous one — and the second
+    // turn's sentence is the stuck child rather than a fresh abandonment.
+    expect(kept.every((k) => "error" in k)).toBe(true);
+    expect(kept[1]).toEqual({ error: expect.stringContaining("has been running for 300s") });
+    expect(child.starts).toBe(1);
+  });
+
+  it("logs a late success and drops it — the next turn collects afresh", async () => {
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const late: string[] = [];
+    const latch = latched(child, clock, late);
+
+    await expect(latch.collect()).rejects.toThrow(/did not finish within/);
+    clock.ms = 500_000;
+    const arrived = snap({ collectedAt: "2026-09-08T11:52:00.000Z" });
+    await child.finish(0, arrived);
+
+    // On the record, so "the child finally finished" and "it is gone for ever"
+    // are distinguishable afterwards.
+    expect(late[0]).toContain("has come back with 1 rows");
+    expect(late[0]).toContain("2026-09-08T11:52:00.000Z");
+    expect(late[0]).toContain("not used");
+
+    // And the latch is free, so the next turn is a real collection rather than
+    // eight-minute-old rows wearing a fresh turn's clothes.
+    const fresh = snap({ collectedAt: "2026-09-08T12:04:00.000Z" });
+    const next = latch.collect();
+    expect(child.starts).toBe(2);
+    await child.finish(1, fresh);
+    await expect(next).resolves.toEqual(fresh);
+  });
+
+  it("a late snapshot never reaches keep, publish or the drain", async () => {
+    /* **THE REASON A LATE SUCCESS IS DROPPED AT ALL**, and the assertion that
+       says so. `refreshOnce` gives whatever `collect()` resolves with to
+       `drain()`, which aims tmux keystrokes at the panes those rows name and
+       decides *whether to send now* from each row's `status`. refresh.ts's own
+       rule, six lines from the bottom of the file: stale rows are how the right
+       text reaches the wrong session. */
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const latch = latched(child, clock);
+    const { deps, kept, events } = refreshHarness({ collect: () => latch.collect() });
+
+    await refreshOnce(deps); // the deadline fires; the child keeps running
+    clock.ms = 500_000;
+    const stale = snap({ collectedAt: "2026-09-08T11:52:00.000Z" });
+    await child.finish(0, stale);
+
+    // The turn that saw the abandonment kept an error, and nothing since has
+    // put those rows anywhere.
+    expect(kept).toEqual([{ error: expect.stringContaining("did not finish within") }]);
+    expect(events).not.toContain("drain");
+
+    // And the next turn drains off a FRESH collection, not the late one.
+    const fresh = snap({ collectedAt: "2026-09-08T12:04:00.000Z" });
+    const turn = refreshOnce(deps);
+    await child.finish(1, fresh);
+    await turn;
+    expect(kept[1]).toEqual({ snapshot: fresh });
+    expect(events).toContain("drain");
+  });
+
+  it("a late failure is logged, not reported, and does not block the next collection", async () => {
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const late: string[] = [];
+    const latch = latched(child, clock, late);
+
+    await expect(latch.collect()).rejects.toThrow(/did not finish within/);
+    clock.ms = 300_000;
+    await child.fail(0, "tmux server gone");
+
+    expect(late[0]).toContain("tmux server gone");
+    expect(late[0]).toContain("not reported");
+
+    // The latch is free again, and the next turn is a real collection.
+    const fresh = snap();
+    const next = latch.collect();
+    expect(child.starts).toBe(2);
+    await child.finish(1, fresh);
+    await expect(next).resolves.toEqual(fresh);
+  });
+
+  it("onStart fires exactly when a child starts, and never on a turn that is refused", async () => {
+    /* **`attemptedAt` HANGS OFF THIS**, and five things read `attemptedAt` as
+       the moment a collection began: the page's header, attempt-clock.ts, and
+       the Overseer's daemon.ts, observation.ts and notes.ts. If a refused turn
+       fired this, the page would say "a collection was started 0s ago" over a
+       child that had been wedged for seven minutes. GPT Sol's P1, 2026-09-08. */
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const starts: number[] = [];
+    const latch = singleFlightCollect({
+      run: () => child.run(),
+      deadlineMs: 10,
+      now: () => clock.ms,
+      onStart: () => starts.push(clock.ms),
+    });
+
+    await expect(latch.collect()).rejects.toThrow(/did not finish within/);
+    expect(starts).toEqual([0]);
+
+    // The wedged child is still out there, so this turn starts nothing — and
+    // must say nothing.
+    clock.ms = 420_000;
+    await expect(latch.collect()).rejects.toThrow(/has been running for 420s/);
+    expect(starts).toEqual([0]);
+
+    clock.ms = 500_000;
+    await expect(latch.collect()).rejects.toThrow(/has been running for 500s/);
+    expect(starts).toEqual([0]);
+
+    // The child finally settles; the next turn does start one, and says so.
+    await child.finish(0, snap());
+    clock.ms = 560_000;
+    const next = latch.collect();
+    await child.finish(1, snap());
+    await next;
+    expect(starts).toEqual([0, 560_000]);
+  });
+
+  it("an onLate that throws does not become an unhandled rejection", async () => {
+    /* The child's own rejection is handled; the promise `then` RETURNS is the
+       one nobody was listening to. GPT Sol probed it with a throwing logger,
+       2026-09-08. Vitest fails the run on an unhandled rejection, so the
+       assertion is partly that this test finishes at all. */
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const latch = singleFlightCollect({
+      run: () => child.run(),
+      deadlineMs: 10,
+      now: () => clock.ms,
+      onLate: () => {
+        throw new Error("the logger itself failed");
+      },
+    });
+
+    await expect(latch.collect()).rejects.toThrow(/did not finish within/);
+    await child.finish(0, snap());
+    await new Promise((r) => setTimeout(r, 5));
+
+    // And the latch is still usable, not wedged by its own logger.
+    const fresh = snap();
+    const next = latch.collect();
+    expect(child.starts).toBe(2);
+    await child.finish(1, fresh);
+    await expect(next).resolves.toEqual(fresh);
+  });
+
+  it("a child that fails inside the deadline is reported normally and releases the latch", async () => {
+    const child = fakeChild();
+    const clock = { ms: 0 };
+    const latch = latched(child, clock);
+
+    const first = latch.collect();
+    await child.fail(0, "could not read this box's tmux sessions");
+    await expect(first).rejects.toThrow("could not read this box's tmux sessions");
+
+    const fresh = snap();
+    const second = latch.collect();
+    expect(child.starts).toBe(2);
+    await child.finish(1, fresh);
+    await expect(second).resolves.toEqual(fresh);
+  });
 });

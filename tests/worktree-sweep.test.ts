@@ -120,16 +120,19 @@ const HOUR = 3600;
 const now = () => Math.floor(Date.now() / 1000);
 
 describe("classifyAll, against real worktrees", () => {
-  it("KEEPS a brand-new worktree, which passes every check but the age floor", () => {
+  it("does NOT advertise a brand-new worktree, which passes every check but the age floor", () => {
     freshWorktree("brand-new");
 
     const row = rowFor(classifyAll(primary), "worktree-brand-new");
 
-    expect(row.verdict.kind).toBe("keep");
-    if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain(`${MIN_IDLE_HOURS}h floor`);
-    /* And it is the ONLY thing keeping it — the trap the guard exists for. */
-    expect(row.verdict.reasons).toHaveLength(1);
+    /* `young` since 2026-09-09, not `keep`: nothing is wrong with it, and the
+       report still must not hand a third party a paste-ready removal. Printing it
+       as `REMOVABLE` is what this guard exists to prevent, so that is the
+       assertion that matters. */
+    expect(row.verdict.kind).toBe("young");
+    expect(row.verdict.kind).not.toBe("removable");
+    if (row.verdict.kind !== "young") throw new Error("unreachable");
+    expect(row.verdict.why).toContain(`${MIN_IDLE_HOURS}h floor`);
     expect(row.facts.check).not.toHaveProperty("error");
   });
 
@@ -398,7 +401,6 @@ describe("removeOne", () => {
 
   it("unregisters a ghost but leaves its branch, whose commits it cannot judge", () => {
     const wt = freshWorktree("ghosted");
-    commit(wt, "mine.txt", "work\n", "unlanded work on the branch");
     rmSync(wt, { recursive: true, force: true });
 
     const out = removeOne(primary, "worktree-ghosted", { now: now() + 999 * HOUR });
@@ -406,6 +408,23 @@ describe("removeOne", () => {
     expect(out.ok).toBe(true);
     expect(git(["worktree", "list", "--porcelain"], primary)).not.toContain(wt);
     expect(git(["branch", "--list", "worktree-ghosted"], primary)).toContain("worktree-ghosted");
+  });
+
+  it("REFUSES a ghost whose gone tree's reflog names work the trunk does not have", () => {
+    /* This test used to make exactly this unlanded commit and assert the ghost
+       was unregistered anyway — which unregisters the admin directory holding the
+       only reflog that names it. Since 2026-09-09 a ghost gets the same landed
+       proof a live tree gets: the directory is gone, the metadata is not, and
+       reading it is the difference between a stale registration and a loss.
+       docs/project/worktrees.md § Sweeping them up. */
+    const wt = freshWorktree("ghosted-unlanded");
+    commit(wt, "mine.txt", "work\n", "unlanded work on the branch");
+    rmSync(wt, { recursive: true, force: true });
+
+    const out = removeOne(primary, "worktree-ghosted-unlanded", { now: now() + 999 * HOUR });
+
+    expect(out.ok).toBe(false);
+    expect(git(["worktree", "list", "--porcelain"], primary)).toContain(wt);
   });
 
   it("removes a LOCKED worktree, which is what claude --worktree creates", () => {

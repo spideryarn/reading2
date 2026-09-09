@@ -30,6 +30,7 @@ function session(over: Partial<Session> = {}): Session {
     claudeId: CLAUDE_ID,
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+    role: { kind: "none" },
     ...over,
   };
 }

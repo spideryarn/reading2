@@ -52,7 +52,12 @@ wave and the paragraph still said they were live. Re-grep before briefing anybod
 1. **The rest of v0.8a — two endpoints, not three.** The actions catalogue, and
    steer/new/messages/rename. Fleet state is done (v0.8b). `FleetRow` still cannot migrate the same
    way at all and the reason is written into `wire.ts` beside the generic hole it leaves.
-2. **v0.9a — HELD, pending one number.** Cancelled at 22:20 on an unconditional mean, reopened at
+2. **v0.9a — MOOT until a broadcast can reach anybody at all.** The button is refused with
+   `bad-request` before recipient selection, because the client never sends `recipients`; verified
+   against the running server 2026-09-09 00:45. The reachability argument below, and the night of
+   sampling behind it, were about a filter that never runs. Fixing the gap is now a stage in
+   [260908j](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md).
+   *Superseded text:* **HELD, pending one number.** Cancelled at 22:20 on an unconditional mean, reopened at
    22:35 when the conditional picture arrived: reachability falls monotonically from 4 to 8 agents
    and every sample at or below 25% reachable is at 7 or 8. Held rather than built, with a written
    decision rule and a range nobody should extrapolate past. The `readShellState` lossy join it
@@ -62,15 +67,27 @@ wave and the paragraph still said they were live. Re-grep before briefing anybod
    running, and a series showing reachability recovering on its own kills the stage. It is two
    changes rather than one, because a box-wide action is *forbidden* from queueing on a stated
    ground that has to be answered rather than deleted.
-3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
-   the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
-   `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
-   feature prerequisite rather than a nicety.
-4. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
-   five states and the repeat-retrieves-the-receipt rule are not built. **The related overclaim is
-   fixed**: the page no longer says a keystroke *landed*, because `verifyTarget` runs before the send
-   and nothing looks at the pane afterwards.
+3. **The systemd cutover — DONE, Greg ran it 2026-09-08 ~21:30.** The unit is active, serves
+   `127.0.0.1:8787` and `100.92.255.119:8787`, and the dashboard has been read from a phone. Two
+   things a reader still needs. **There is no authentication** — reachability is the whole boundary,
+   which was the right call for getting it working and is a decision rather than an oversight. And
+   `navigator.mediaDevices` is *absent* (not degraded) at a plain-HTTP tailnet address, measured by
+   `w2-fleet-dictation`, so dictation there needs HTTPS as a prerequisite rather than a nicety.
+
+   **Landing on `dev` is not deploying.** The unit's `WorkingDirectory` is the primary checkout and
+   its `ExecStartPre=/usr/bin/npm run build:fleet` builds from there, so a restart serves whatever
+   the *primary* has — not what is on `dev`. Merge the primary up first, or a restart will look like
+   it did nothing. Verify afterwards by comparing the served `index-*.js` against the newest asset in
+   `tools/fleet/web/dist/assets/`; a stale bundle answers 200 all night.
+4. **v0.2c — now its own plan, [260908j](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md), and half built.** Six stages, reordered after a
+   cross-family review refused two of them; it is the same work as the roadmap's *Delivery
+   uncertainty* stage, agreed with the Overseer so only one session builds it. **Landed 2026-09-08:**
+   the failure cards stop claiming an action had no effect when they cannot know (both paths,
+   including the kill card), and queue item ids now carry the run that minted them — which was a live
+   defect, not a tidy-up: a dead run's `q1` cancelled a live run's *different* `q1` and answered
+   `200 ok`. **Still open:** process/broadcast outcomes, quarantine after an uncertain delivery,
+   request ids and receipts, and the catalogue's `wire.ts` move. **`reception observed` was cut** —
+   nothing in this system observes reception, so the arm would have shipped permanently empty.
 
 **Done since this list was last written, so nobody fixes them twice:** the attention inbox has a
 consumer; every server timestamp is converted into the browser's clock at the parse boundary;
@@ -2253,7 +2270,57 @@ producer keeps it deliberately as one thing, *nobody can tell you*, and splittin
 the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
 because "no pass has run yet" means wait and "the pass failed" means go and look.
 
-### ⏸ Stage v0.9a (HELD 2026-09-08 22:35, cancelled at 22:20 and reopened fifteen minutes later): the broadcast cannot reach the sessions that caused the load
+### ⛔ Stage v0.9a (MOOT 2026-09-09 00:45 — the broadcast reaches nobody, and did not all evening): the broadcast cannot reach the sessions that caused the load
+
+**Everything below this box argues about which sessions a broadcast reaches. It reaches none, at any
+load, for a reason unrelated to the rule being argued about.** Found by `overseer-tab-messaging`
+reading the client's request builder against the route it posts to; confirmed here against the
+**running server**:
+
+    POST /api/actions/box {"actionId":"resource-broadcast","mode":"dry-run","confirm":false,"speaker":"greg"}
+    -> {"ok":false,"code":"bad-request","why":"a broadcast needs recipients: send the rows the page is showing..."}
+
+`boxActionBody` (`actions-client.ts:968`) is the only body builder for box actions and the only thing
+posted at `:1544`; it never sets `recipients`, and the client reads recipients only off the
+*response*. `broadcastRoute` refuses on `recipients.length === 0` **before** it selects anybody. So
+`drainGate` — the rule this stage exists to widen — is never reached.
+
+**Two sessions spent an evening measuring the selectivity of dead code.** `spideryarn2-b6` ran 147
+samples and then an overnight series; this session cancelled the stage on those numbers at 22:20,
+reopened it at 22:35 on better ones, and corrected a wrong fact of its own inside it at 22:50. The
+0.59 mean, the monotonic falloff from four to eight agents, the 18-agent peak — none of it bore on
+the stage it was built to decide.
+
+**This is the third instance of the class in
+[260908h](../postmortems/260908h-the-plan-and-the-instrument-described-different-systems.md)**, and
+the purest: the instrument was *correct*. Reachability is real and governs the drain. It simply was
+not measuring the thing the stage was about, and it moved convincingly whenever the box got busy,
+which is what made it persuasive. **An instrument attached partway down a severed chain is
+internally consistent, responsive to real conditions, and about nothing.**
+
+`spideryarn2-b6`'s countermeasure, which outranks every item either session had proposed:
+
+> Before measuring anything about a mechanism, trace one real call end to end, from the caller's
+> request body to the server's first refusal.
+
+It cost one `curl` and under a minute. The reason neither session did it is the part worth keeping:
+**both started at the mechanism they cared about and reasoned outwards, and nobody started at the
+caller and went in.** One corollary from this session: *end to end* is load-bearing and must not be
+shortened to *trace the call* — a trace that stopped at `drainGate`, the first thing in that path
+that looks like the answer, would have confirmed the wrong model and found nothing.
+
+And the framing to keep, `spideryarn2-b6`'s own, offered against their own case: the series is
+reusable for the drain and for the concurrency premise, but that is **luck rather than design**, and
+a reader should not take from this that measuring first and checking the caller later usually works
+out.
+
+**What happens to this stage:** nothing, until the recipients gap is fixed — that is now its own
+stage in
+[260908j](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md), because it is a
+live defect in a shipped button rather than an argument about a rule. Once a broadcast can reach
+anybody, the question below becomes answerable for the first time, and the overnight series will be
+the right instrument for it. Until then the text below is preserved as an argument about a rule that
+has never run.
 
 **This stage is not being built, and the reason is the measurement it asked for.** It was written
 holding its own conclusion open — *"a series showing reachability recovering on its own kills the

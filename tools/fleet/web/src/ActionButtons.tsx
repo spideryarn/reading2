@@ -77,19 +77,26 @@ import { RawValue } from "./RawValue";
 import { Explain } from "./Tooltip";
 import {
   actingWarning,
+  addressableRows,
   boxActions,
+  isHolding,
   queueFor,
   sessionActions,
   type ActionOutcome,
   type ActionsApi,
   type ActionsFeed,
+  type BoxEffectReading,
   type BoxOutcome,
   type ClientAction,
+  type HoldView,
+  type PlanRunReading,
   type QueueItemView,
   type QueueOp,
   type QueueView,
+  type StepReading,
 } from "./actions-client";
 import type { DeliveryReading } from "./steer-client";
+import type { HoldReleaseGesture } from "../../wire.js";
 import type { FleetRow } from "./types";
 import { Button, Card, Mono, cx } from "./ui";
 
@@ -174,6 +181,20 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
             : `One was NOT taken out, because it had already been handed over for delivery: “${itemName(kept)}”. Cancelling could not recall it and nor could this — there is no receipt for a keystroke — so treat it as sent.`,
       };
     }
+    case "hold-released":
+      /* THE ONE THING BOTH GESTURES MUST SAY IS THAT NOTHING WENT OUT, and the
+         two bodies differ only in what was written down. `abandoned-unknown`'s
+         is the load-bearing one: like the abandon copy above, it must not read
+         as *the message was not sent*, because nothing knows that. */
+      return {
+        head: outcome.repeat ? "That was already recorded." : "Recorded.",
+        body:
+          (outcome.gesture === "operator-confirmed"
+            ? "Your word that you looked and saw it, kept as your word — the dashboard observed nothing. "
+            : "Nothing here knows whether that send landed, and this does not claim either way. ") +
+          (outcome.repeat ? "Your earlier press had already worked, and this one changed nothing. " : "") +
+          "Nothing was typed at the session. Its queue can move again.",
+      };
     case "accepted":
       return {
         head: "The server took it.",
@@ -187,14 +208,110 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
 }
 
 /**
- * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is four sentences
+ * **TWO FACTS, ONE SENTENCE**, and the collapse is deliberate.
+ *
+ * `unknown` and `not-told` stay separate arms in `DeliveryReading` and in
+ * `parseDelivery`, because they really are different things and a diagnosis
+ * wants to know which. They used to get two headings here, and that was wrong
+ * twice over.
+ *
+ *  - The `not-told` heading said *the server did not say*, which is FALSE half
+ *    the time it appears: `parseDelivery` folds an absent `delivery` and a word
+ *    this build does not recognise onto the same arm, so the server may well
+ *    have said `"half-ish"` and been misunderstood here.
+ *  - A person holding a phone does the same thing either way — go and look
+ *    before pressing it again. Two headings that mean one action are a cost on
+ *    a small screen, and they invite a reader to believe there is a difference
+ *    to act on.
+ *
+ * **The distinction survives in the type, in the parse and in the tests**, and
+ * it is what a later stage needs. The footer under this card — `why`, the
+ * `code · HTTP nnn` line, and who said the words — separates the client-side
+ * readings (`unreachable`, `not-json`, no reply at all) from a server refusal.
+ * It does NOT separate an unparsable delivery word from an absent one, which is
+ * exactly why the heading above it must claim neither.
+ *
+ * **AND IT IS NOT THE HEADING WHEN THE SERVER DESCRIBED A RUN.** Since Stage 3
+ * of docs/plans/260908j, a `plan-failed` refusal carries the plan it ran, and
+ * `PlanRunCard` below says which step stopped it. This copy is for the case it
+ * was always for: a refusal with nothing in it but a code. See `planHeadline`.
+ */
+const CANNOT_TELL: { head: string; body: string } = {
+  head: "This page cannot tell whether the action took effect.",
+  body:
+    "It may have taken effect and it may not; the words below are all there is to go on. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
+};
+
+/**
+ * **WHAT A STOPPED PLAN ACTUALLY ESTABLISHED**, which is more than *we cannot
+ * tell* and less than *nothing happened*.
+ *
+ * `steps` is the steps that RAN, so its length against the plan's is the whole
+ * sentence: one of three ran, and the two after it did not. That is a fact
+ * about the box, in the server's own arithmetic, and it was on the wire for the
+ * life of this panel while the card above printed *this page cannot tell*.
+ *
+ * **It does not say what those steps DID to the box.** `worktree:check`
+ * passing changed nothing, and `worktree:sweep` passing removed a directory.
+ * The gate verdicts underneath are what a person reads for that, verbatim, and
+ * this heading deliberately stops at *ran*.
+ *
+ * **Nor may the body call a step a command that exited**, which is what it said
+ * until a review looked at `PlanStepView`: a spawn failure, a timeout and a
+ * subprocess killed by a signal are all steps, and none of them exited. The
+ * only thing true of every row is that the server reached it.
+ */
+function planHeadline(run: PlanRunReading): { head: string; body: string } {
+  const ran = run.steps.length;
+  /* `planned` is the plan's own count and `ran` is a floor under it, so a
+     server that predates the field cannot make this read as *more* steps than
+     it can prove. */
+  const total = Math.max(ran, run.planned);
+  return {
+    head: run.completed ? "It ran every step, and was still refused." : `It stopped part-way: ${ran} of ${total} steps ran.`,
+    body:
+      "Each row below is a plan step the server reached, with the gate's own verdict. Reaching a step is not the same as a change to the box — read the verdicts before repeating this, because a second press runs the earlier steps again.",
+  };
+}
+
+/** How a step ended, in a word a person can scan a list by. */
+const STEP_MARK: Record<StepReading["status"], string> = {
+  passed: "passed",
+  failed: "STOPPED THE PLAN",
+  "failed-ignored": "failed, and was allowed to",
+  /* A word this build does not know. Named rather than dropped or guessed: the
+     step whose status we cannot read is the one worth looking at. */
+  unrecognised: "the server used a word this page does not know",
+};
+
+/** The steps the server said it ran, in order, with the gate's verdict on each. */
+function PlanRunCard({ run }: { run: PlanRunReading }): ReactNode {
+  return (
+    <ol className="tw:mt-1 tw:space-y-1 tw:border-l tw:border-rule tw:pl-3 tw:text-[12px]">
+      {run.steps.map((step, i) => (
+        <li key={i} className="tw:break-words">
+          <Mono>{step.argv.join(" ")}</Mono>
+          <span className={cx("tw:px-1", step.status === "failed" ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-faint")}>
+            — {STEP_MARK[step.status]}
+          </span>
+          <span className="tw:text-ink">{step.verdict}</span>
+          {step.tail === "" ? null : <div className="tw:text-ink-faint">{step.tail}</div>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is three sentences
  * and used to be one.
  *
  * "Nothing happened." went above every failure, `from: "client"` included —
  * where the answer never came back and the request may perfectly well have
  * deleted a worktree or killed thirty processes. It is the most expensive
  * sentence on this page, because a person who reads it presses the button
- * again, and none of these actions can be taken back.
+ * again, and none of these actions can be taken back. **It is gone**: no
+ * reading available here supports it, `none` included. See `none` below.
  *
  * A `Record` over the closed union, so a fifth arm of `DeliveryReading` fails
  * the build here rather than quietly taking the last branch — the same shape,
@@ -203,32 +320,151 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
  * **The words differ from that one's on purpose and it is not a twin.** There
  * the subject is keystrokes going into an input box, and the advice is about a
  * retry appending to half-typed text. Here the subject is an action — a queue
- * gesture, a worktree removal, a kill — and there is nothing to append to. The
- * TYPE and the PARSE are shared, which is the part a second copy would rot.
- *
- * `unknown` and `not-told` are two situations and get two headings: the first
- * is *the attempt failed in a way that cannot say*, the second is *the server
- * refused and did not mention it*. Both mean look before repeating; neither
- * means nothing happened. Only a server-stated `none` says that.
+ * gesture, a worktree removal, a kill — and there is nothing to append to, so
+ * the advice is that a repeat is a fresh act rather than an addition. The TYPE
+ * and the PARSE are shared, which is the part a second copy would rot.
  */
 const ACTION_DELIVERY_COPY: Record<DeliveryReading["kind"], { head: string; body: string | null }> = {
-  none: { head: "Nothing happened.", body: null },
+  /**
+   * **THIS ARM SPEAKS FOR KEYSTROKES AND MAY NEVER SPEAK FOR THE ACTION.**
+   *
+   * `Delivery` is minted by `fire()` in steer.ts and means one thing: what
+   * became of a sequence of `tmux send-keys` calls. `none` says none of them
+   * left this box. It says nothing whatever about a queue, a worktree or a
+   * process — an action can be refused after its effect has already run, and a
+   * route can state `none` about the keystroke half of a request that did
+   * plenty besides.
+   *
+   * **It is also unreachable on this path today.** No `ok: false` body in
+   * routes-actions.ts carries a `delivery` at all, so every action failure
+   * lands on `not-told`; the fixtures below it in the tests are the only thing
+   * that reaches these words. An unreachable arm making the strongest claim on
+   * the page is the worst combination available, and that is what it was.
+   *
+   * **Do not widen this back out.** Whole-action effect is a different fact,
+   * and it now has its own contract rather than borrowing this one: Stage 3 of
+   * docs/plans/260908j put `run` on a `plan-failed` refusal and `effect` on a
+   * box answer, and `planHeadline` above is what speaks for them. This heading
+   * still describes keystrokes only, and there is still no keystroke on any
+   * `ok: false` body this file's routes send — so the arm remains unreachable
+   * and its claim remains the narrow one.
+   */
+  none: {
+    head: "No keystrokes went out.",
+    body:
+      "That is the whole of what the server said, and it is only about keystrokes: it does not say whether the rest of the action took effect. Read its own words below before repeating it.",
+  },
+  /**
+   * **"AND THE REST DID NOT" WAS FALSE**, and it contradicted the sentence
+   * printed directly beneath it.
+   *
+   * `fire()` reaches `partial` down two roads and only one of them knows the
+   * remainder failed. Its own `why` says "Part of the sequence arrived and the
+   * rest cannot be accounted for" when `mayHaveLanded(e)`, and "and the rest
+   * did not" only when it does not. So the card may assert the first clause —
+   * some of it definitely happened — and must not assert the second.
+   *
+   * The old retry sentence was keystroke reasoning too ("acts again on whatever
+   * the first one already did"), which is true of typing into a box and false
+   * of a kill or a worktree removal: those do not accumulate, they simply
+   * happen again.
+   */
   partial: {
-    head: "PART of it went out.",
+    head: "PART of it took effect.",
     body:
-      "The server says some of it took effect and the rest did not. Do NOT repeat this before going and looking — a second attempt acts again on whatever the first one already did, and nothing here can undo either.",
+      "Some of it definitely happened and the sequence did not finish. The rest may or may not have happened as well; nothing here can tell you which. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
   },
-  unknown: {
-    head: "It is not known whether this happened.",
-    body:
-      "The attempt failed in a way that cannot say what the server did with it, so this may have taken effect. Go and look before pressing it again.",
-  },
-  "not-told": {
-    head: "The server did not say whether this happened.",
-    body:
-      "It refused without saying what it had already done. Treat that as unknown rather than as nothing: look before pressing it again.",
-  },
+  unknown: CANNOT_TELL,
+  "not-told": CANNOT_TELL,
 };
+
+/**
+ * **ONE SENTENCE PER STATE, RATHER THAN A COUNT OF THINGS THAT WENT OUT.**
+ *
+ * The words are the server's (`BroadcastRecipientOutcome` and
+ * `KillObservation` in wire.ts) and the sentences are the ones a person acts
+ * on. `keys submitted` is the ceiling on the delivery half — nothing here
+ * observed a reader — and `signal accepted` is the ceiling on the kill half:
+ * nothing re-read the process table, so no word below says a process died.
+ *
+ * A plain `Record` over strings rather than the closed unions, because
+ * `StateCount.state` is a string on purpose: a word this build has not heard of
+ * is counted and rendered verbatim rather than dropped, and dropping it would
+ * hide exactly the rows that had changed.
+ */
+const BOX_STATE_COPY: Record<string, string> = {
+  "would-send": "would be told",
+  "keys-submitted": "keys submitted — nothing here saw them read",
+  partial: "PART of the message went, and the rest is unaccounted for",
+  "outcome-unknown": "may or may not have landed",
+  "refused-before-effect": "refused, with nothing sent",
+  held: "not at a prompt, so nothing was sent",
+  blocked: "cannot be typed into, so nothing was sent",
+  "not-reached": "ran out of time before this one",
+  "signal-accepted": "signal accepted — not proof the process is gone",
+  "signal-refused": "no such process, or not ours to signal",
+  /* NOT "the kill could not be run", which this arm was called for a day. It
+     also covers a `kill` that timed out and one killed by a signal, and in both
+     of those the command RAN — so the summary contradicted the verdict printed
+     underneath it in exactly the two cases with the least evidence behind
+     them. */
+  "not-established": "the signal attempt did not settle — it may have gone out and it may not",
+  unstated: "the server gave no state for this one",
+};
+
+/**
+ * The per-recipient / per-pid counts, and the heading that replaces "Done."
+ *
+ * **"Done." OVER A BROADCAST THAT HALF-LANDED IS THE DEFECT.** The old card
+ * decided its heading from `dryRun` alone, so a fan-out where six of
+ * thirty-six sessions were left holding half a message read exactly like one
+ * where all thirty-six went out — the counts were in `RawValue` underneath,
+ * where a list of thirty-six objects looks the same either way. Same for a
+ * kill: `killed: [5001, 5002]` under the word "Done.".
+ *
+ * So the heading is a ratio and never a verdict, and `Done.` survives only for
+ * an answer that carried no effect report at all.
+ *
+ * **EXPORTED SO A TEST CAN DRIVE IT WITH A REAL ROUTE'S BYTES**, for
+ * `effectHeadline`'s reason one function down: the card that calls it is two
+ * clicks deep in a DOM, and the assertion that matters here — *no sentence on
+ * this list may be past tense about a process* — is about this component
+ * rather than about the panel around it. A review found the accepted-state
+ * sentence could be changed to "process killed" with the whole suite still
+ * green, because nothing rendered the accepted state through the real one.
+ */
+export function BoxEffectSummary({ effect }: { effect: BoxEffectReading }): ReactNode {
+  return (
+    <ul className="tw:mt-1 tw:space-y-0.5 tw:text-[12px]">
+      {effect.states.map((s) => (
+        <li key={s.state} className="tw:break-words tw:text-ink">
+          <span className="tw:font-medium">{s.count}</span> <Mono>{s.state}</Mono>
+          <span className="tw:text-ink-soft"> — {BOX_STATE_COPY[s.state] ?? "this page does not know that word"}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The ratio a box answer may be headed with, or null when it carried no effect
+ * report.
+ *
+ * Exported so a test can drive it with the bytes a real handler produced. The
+ * card itself is only reachable after two clicks in a DOM, and the assertion
+ * that matters — *these two answers must not get the same heading* — is about
+ * this function.
+ */
+export function effectHeadline(effect: BoxEffectReading | null): string | null {
+  if (effect === null) return null;
+  const of = (state: string): number => effect.states.find((s) => s.state === state)?.count ?? 0;
+  if (effect.kind === "broadcast") {
+    const would = of("would-send");
+    if (would > 0) return `It would go to ${would} of ${effect.recipients} rows.`;
+    return `Keys submitted to ${of("keys-submitted")} of ${effect.recipients} rows.`;
+  }
+  return `Signal accepted for ${of("signal-accepted")} of ${effect.targeted} pids.`;
+}
 
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
   if (outcome.ok) {
@@ -271,13 +507,18 @@ export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutco
       </div>
     );
   }
-  const said = ACTION_DELIVERY_COPY[outcome.delivery.kind];
+  /* THE SERVER'S OWN ACCOUNT WINS OVER THIS PAGE'S UNCERTAINTY. When the body
+     described a run, saying *this page cannot tell* is false — it can, because
+     it was told. `ACTION_DELIVERY_COPY` speaks for the refusals that carry
+     nothing but a code. */
+  const said = outcome.run === null ? ACTION_DELIVERY_COPY[outcome.delivery.kind] : planHeadline(outcome.run);
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
       <p className="tw:font-medium tw:text-alarm-ink">{said.head}</p>
       {said.body === null ? null : <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{said.body}</p>}
       {/* Verbatim. Every word of this is the server's. */}
       <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
+      {outcome.run === null ? null : <PlanRunCard run={outcome.run} />}
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
         <Mono>{outcome.code}</Mono>
         {outcome.status === null ? null : (
@@ -939,6 +1180,111 @@ function QueueItem({
 }
 
 /**
+ * A session held back after a send nobody can account for, and the two ways out.
+ *
+ * **THE TWO BUTTONS SEND NOTHING, AND THE COPY SAYS SO TWICE.** That is the
+ * fact a person on a phone needs before they press either: this is not *deliver
+ * it* and not *cancel it*, because there is no gesture that could be either —
+ * a keystroke cannot be recalled and a second one is a second message.
+ *
+ * The wording of each is the whole design:
+ *
+ *  - **I looked at the terminal and saw it** — an operator's claim, kept as an
+ *    operator's claim. The button must not say "confirm delivered", because the
+ *    dashboard is not the thing doing the confirming and would then be quoted
+ *    as if it were.
+ *  - **Abandon the uncertainty** — stops holding and claims NOTHING in either
+ *    direction. The half that is easy to get wrong is the second: it must not
+ *    read as *it was not delivered*. That is `abandonRoute`'s lesson, one
+ *    gesture along, and the same trap.
+ *
+ * `version` goes back verbatim with the press, so a page that has been in a
+ * pocket since another uncertain send landed is refused rather than clearing a
+ * hold whose reason nobody has read.
+ */
+function QuarantineNotice({
+  hold,
+  busy,
+  onRelease,
+}: {
+  hold: HoldView;
+  busy: boolean;
+  onRelease: (gesture: HoldReleaseGesture) => void;
+}): ReactNode {
+  return (
+    <div
+      role="group"
+      aria-label="Held after a send nobody can account for"
+      className="tw:mt-1 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-2.5"
+    >
+      <p className="tw:text-[13px] tw:font-medium tw:text-alarm-ink">
+        Nothing is being delivered to this session.
+      </p>
+      {/* THE SERVER'S OWN SENTENCE. It knows which of the four readings this
+          was and what was being sent; a sentence rebuilt here from `reading`
+          would be a second opinion, and the more confident of the two.
+
+          **AND WHEN IT DID NOT READ, THE HOLD IS STILL DRAWN AND STILL
+          RELEASABLE.** A missing sentence used to make the whole hold
+          unparseable, which took both gestures away over the one field a person
+          can most easily do without. The generic line below says less; it does
+          not say less accurately. */}
+      <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink">
+        {hold.why ??
+          "This server did not send a sentence this page can read, so nothing here can say what happened. What is " +
+            "known is that it is holding: nothing else will be delivered to this session until somebody says what is " +
+            "actually in its input box."}
+      </p>
+      {hold.incidents !== null && hold.incidents > 1 ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          {hold.incidents} sends to this session have ended this way. The sentence above is the most recent.
+        </p>
+      ) : null}
+      {/* **A REHYDRATED HOLD KNOWS LESS, AND THE PAGE SAYS SO.** The run that
+          made the send has ended, so nothing here has been re-checked since it
+          was written down — and the attempt case knows less again: nothing
+          recorded how far that send got, or whether it was made at all.
+
+          NO TIME IS PRINTED. Every other timestamp on this page goes through
+          the clock-skew shift, this component has no skew to shift by, and a
+          time that is quietly an hour out is worse than no time. The server's
+          own sentence above carries the moment where one matters.
+
+          Deliberately silent when `basis` is null: a server too old to send the
+          field has made no claim, and saying "this dashboard watched it happen"
+          on its behalf is the overstatement the field exists to prevent. */}
+      {hold.basis?.kind === "rehydrated-hold" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          Carried over from the previous run of this dashboard. Nothing has been re-checked since it was written
+          down, and nothing has been re-sent.
+        </p>
+      ) : hold.basis?.kind === "rehydrated-attempt" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          Carried over from the previous run of this dashboard, which stopped before it could record what happened.
+          It cannot say how far that send got, or whether it was made at all. Nothing has been re-sent.
+        </p>
+      ) : null}
+      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-soft">
+        Neither button below sends anything, and neither can recall anything. Look at the terminal —
+        <Mono>gjd-remote resume</Mono> — and then say what you found.
+      </p>
+      <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-1.5">
+        <Button disabled={busy} onClick={() => onRelease("operator-confirmed")}>
+          I looked at the terminal and saw it
+        </Button>
+        <Button variant="danger" disabled={busy} onClick={() => onRelease("abandoned-unknown")}>
+          Abandon the uncertainty
+        </Button>
+      </div>
+      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">
+        Abandoning stops the hold without settling anything: whether that send landed stays unknown, and this
+        does not record that it did not.
+      </p>
+    </div>
+  );
+}
+
+/**
  * One session's queue, or the reason there is nothing to show.
  *
  * The persistence warning is the server's own string and is drawn on every
@@ -1029,6 +1375,53 @@ export function SessionQueue({
     [api, onChanged, sessionId],
   );
 
+  /**
+   * The hold, drawn ABOVE everything else and outside every early return.
+   *
+   * **THE COMMONEST HOLD HAS NO ITEMS BEHIND IT** — one message was queued, the
+   * send came back partial, the item settled and left — so a hold rendered
+   * inside the non-empty branch would be invisible exactly when it matters. A
+   * hold nothing can see is a hold nothing can clear.
+   */
+  const hold = queue?.quarantine ?? null;
+  const holding = isHolding(hold) && hold !== null;
+  const release = useCallback(
+    async (gesture: HoldReleaseGesture): Promise<void> => {
+      if (hold === null) return;
+      setBusy(true);
+      setOutcome(await api.releaseHold(hold.id, hold.version, gesture));
+      setBusy(false);
+      onChanged();
+    },
+    [api, hold, onChanged],
+  );
+  const heldPart = holding ? (
+    <QuarantineNotice hold={hold} busy={busy} onRelease={(g) => void release(g)} />
+  ) : queue?.holdUnreadable === true ? (
+    /* A HOLD THIS PAGE CANNOT ADDRESS. Drawn rather than dropped for
+       `itemsUnreadable`'s reason one field along: a hold that parses to nothing
+       looks exactly like no hold, and on a queue with no items the whole row —
+       and both gestures with it — would vanish. There is no button here,
+       because a release needs an id and a version this page does not have.
+
+       **THE COPY NAMES ONLY THINGS THAT EXIST.** It used to end "clear it from
+       the server if the page stays like this", and there is no such interface —
+       an instruction to do something impossible is worse than the missing row,
+       because the missing row at least looked broken. So this says what is
+       known, points at the one thing that does exist (the terminal, which
+       answers the actual question — what is in that input box), and then says
+       plainly that there is nothing to press here. */
+    <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-alarm-ink">
+      This server says this session is held back after a send it could not account for, and sent that in a shape
+      this page cannot read — so nothing here can say why, and neither gesture can be offered, because a release
+      needs an id and a version that did not arrive. Look at the terminal —{" "}
+      <Mono>gjd-remote resume</Mono> — to find out what is actually in that input box.{" "}
+      <strong>There is nothing you can do about the hold itself from this page.</strong> Reloading is worth one
+      try, in case the server has since sent one this page can read.
+    </p>
+  ) : null;
+  const card = outcome === null ? null : <ActionOutcomeCard outcome={outcome} onRefresh={onChanged} />;
+
   /* BEFORE THE EMPTY-QUEUE SENTENCE, because it is a different fact. A queue
      whose item list this page could not read is not a queue with nothing in it,
      and "Nothing is waiting." is the most reassuring thing this panel can say —
@@ -1036,34 +1429,48 @@ export function SessionQueue({
      `QueueView.itemsUnreadable`. */
   if (queue !== null && queue.itemsUnreadable) {
     return (
-      <p className="tw:text-[13px] tw:text-alarm-ink">
-        This server sent a queue for this session with no list of items this page can read, so nothing here can
-        say what is waiting. That is not the same as nothing waiting — treat it as unknown, and look at the
-        session before sending anything that depends on order.
-      </p>
+      <div>
+        {heldPart}
+        <p className="tw:mt-1 tw:text-[13px] tw:text-alarm-ink">
+          This server sent a queue for this session with no list of items this page can read, so nothing here can
+          say what is waiting. That is not the same as nothing waiting — treat it as unknown, and look at the
+          session before sending anything that depends on order.
+        </p>
+        {card}
+      </div>
     );
   }
 
   if (queue === null || queue.items.length === 0) {
     return (
-      <p className="tw:text-[13px] tw:text-ink-soft">
-        {!asked
-          ? "Asking what is waiting…"
-          : error !== null
-            ? `The queue could not be read: ${error}`
-            : feed !== null && !feed.queuesOffered
-              ? "This server sent no queues at all, which is not the same as having none — it is probably older than this page."
-              : /* The cadence in seconds rather than "a minute or so": the pass
-                   that drains this runs after each collection, which is ~73
-                   seconds apart and not 60 (tools/fleet/drain.ts). Vague here
-                   is what makes somebody press Queue and then watch. */
-                "Nothing is waiting. A message or a spoken action pressed while it is working queues up here, and goes out once it is back at a prompt — checked about every 73 seconds."}
-      </p>
+      <div>
+        {heldPart}
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">
+          {!asked
+            ? "Asking what is waiting…"
+            : error !== null
+              ? `The queue could not be read: ${error}`
+              : feed !== null && !feed.queuesOffered
+                ? "This server sent no queues at all, which is not the same as having none — it is probably older than this page."
+                : holding
+                  ? /* NOT "and goes out once it is back at a prompt", which is
+                       the sentence above and is false while a hold is up.
+                       Nothing is queued AND nothing would go if it were. */
+                    "Nothing is waiting behind the hold. Anything queued now would wait for it too."
+                  : /* The cadence in seconds rather than "a minute or so": the
+                       pass that drains this runs after each collection, which is
+                       ~73 seconds apart and not 60 (tools/fleet/drain.ts). Vague
+                       here is what makes somebody press Queue and then watch. */
+                    "Nothing is waiting. A message or a spoken action pressed while it is working queues up here, and goes out once it is back at a prompt — checked about every 73 seconds."}
+        </p>
+        {card}
+      </div>
     );
   }
 
   return (
     <div>
+      {heldPart}
       <ol>
         {queue.items.map((item, index) => (
           <QueueItem
@@ -1172,7 +1579,7 @@ export function SessionQueue({
       )}
       {/* The server's own sentence about its own volatility. */}
       <p className="tw:mt-2 tw:text-[12px] tw:break-words tw:text-ink-faint">{queue.warning}</p>
-      {outcome === null ? null : <ActionOutcomeCard outcome={outcome} onRefresh={onChanged} />}
+      {card}
     </div>
   );
 }
@@ -1202,8 +1609,23 @@ export function FleetQueues({
   titles: Map<string, string>;
   onChanged: () => void;
 }): ReactNode {
-  const queues: QueueView[] = (feed?.queues ?? []).filter((q) => q.items.length > 0);
+  /**
+   * **ITEMS, OR UNREADABLE CONTENTS, OR A HOLD.**
+   *
+   * `items.length > 0` was the filter, and it hid the two states that most need
+   * showing. A queue whose item list this page could not parse is drawn because
+   * `SessionQueue` has a sentence for exactly that and it is not *nothing is
+   * waiting*. A queue with a HOLD and no items is the commonest hold there is —
+   * one message queued, one ambiguous send, the item settled and gone — and it
+   * was invisible: a session nothing may be sent to, with no row on the page and
+   * therefore no way to press either gesture. **A hold nothing can see is a hold
+   * nothing can clear**, which is the failure this whole stage is against.
+   */
+  const queues: QueueView[] = (feed?.queues ?? []).filter(
+    (q) => q.items.length > 0 || q.itemsUnreadable || q.holdUnreadable || isHolding(q.quarantine),
+  );
   const total = queues.reduce((n, q) => n + q.items.length, 0);
+  const held = queues.filter((q) => isHolding(q.quarantine)).length;
 
   if (queues.length === 0) {
     return (
@@ -1221,9 +1643,22 @@ export function FleetQueues({
 
   return (
     <div>
+      {/*
+        **"None of it has been sent yet." IS GONE, AND IT WAS FALSE TWICE.** It
+        was drawn over every queue, including one holding an item that had been
+        handed over for delivery a second ago, and — once holds existed — over a
+        session where something may already be sitting in the input box. It is
+        the reassuring half of a contradiction, which is the shape
+        docs/postmortems/260908b is about. What is left is the count, which is
+        the part that was true, plus the number of sessions nothing is going to.
+      */}
       <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-        {total} {total === 1 ? "thing is" : "things are"} waiting, across {queues.length}{" "}
-        {queues.length === 1 ? "session" : "sessions"}. None of it has been sent yet.
+        {total === 0
+          ? `Nothing is queued, across ${queues.length} ${queues.length === 1 ? "session" : "sessions"}.`
+          : `${total} ${total === 1 ? "thing is" : "things are"} queued, across ${queues.length} ${queues.length === 1 ? "session" : "sessions"}.`}
+        {held === 0
+          ? ""
+          : ` ${held === 1 ? "One of them is" : `${held} of them are`} held after a send nobody can account for — nothing goes out to ${held === 1 ? "it" : "them"} until somebody says what is in the input box.`}
       </p>
       {queues.map((queue) => (
         <div key={queue.sessionId} className="tw:mt-3">
@@ -1250,6 +1685,12 @@ export function FleetQueues({
  * ------------------------------------------------------------------ */
 
 /**
+ * "This panel was given no rows", as one object rather than a fresh `[]` per
+ * render — otherwise the memoised callbacks below rebuild on every pass.
+ */
+const NO_ROWS: readonly FleetRow[] = [];
+
+/**
  * What a box action would do, before it does it.
  *
  * **The dry run is not a nicety, it is the confirmation.** *"Kill what is
@@ -1267,6 +1708,26 @@ export function FleetQueues({
  * And `dryRun` is read off the ANSWER. A server that ignored the flag would
  * otherwise be reported here as having answered a question when it had killed
  * seventeen processes.
+ *
+ * ## `rows`, and why a broadcast cannot be sent without them
+ *
+ * A broadcast speaks to sessions, and the route will not choose them for us:
+ * it refuses a request that names nobody, deliberately, because a fleet-wide
+ * message must go to **the list the person was looking at** rather than to
+ * whatever the server happens to find when it reads tmux again. Until
+ * 2026-09-09 this panel sent no list at all, so every press was refused before
+ * recipient selection and the button had never reached a single session.
+ *
+ * So the rows go down verbatim — `boxActionBody` maps them through
+ * `steerTargetBody`, unmodified and un-refreshed — and both presses send the
+ * same list, so the confirmed request speaks to exactly what the preview
+ * described.
+ *
+ * **Optional, and the absence is not silent.** A panel that does not know the
+ * fleet — Box Health is one; its own caller has no rows to give it — passes
+ * none, and the server answers `a broadcast needs recipients: send the rows the
+ * page is showing`, which is the true state of that panel rather than a false
+ * success. Give it rows and the same button works; the Overseer tab does.
  */
 export function BoxActions({
   feed,
@@ -1274,12 +1735,15 @@ export function BoxActions({
   asked,
   error,
   onChanged,
+  rows,
 }: {
   feed: ActionsFeed | null;
   api: ActionsApi;
   asked: boolean;
   error: string | null;
   onChanged: () => void;
+  /** The rows this page is showing, verbatim. See the header. */
+  rows?: readonly FleetRow[];
 }): ReactNode {
   const [pending, setPending] = useState<ClientAction | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1288,29 +1752,39 @@ export function BoxActions({
 
   const actions = boxActions(feed);
 
+  /* THE SAME LIST FOR BOTH PRESSES, and it is this page's snapshot rather than
+     a fresh reading — the discipline `cancelBody` and the tmux claims in
+     routes-steer.ts follow. `onScreen` rather than `recipients`, because not
+     all of them are: `addressableRows` drops the ones with nowhere to send to,
+     and the difference is the sentence below. */
+  const onScreen = rows ?? NO_ROWS;
+  /* Counted from the SAME function the body builder uses, so the sentence and
+     the request cannot disagree about who was left out. */
+  const unaddressable = onScreen.length - addressableRows(onScreen).length;
+
   const press = useCallback(
     async (action: ClientAction): Promise<void> => {
       setPending(action);
       setPreview(null);
       setDone(null);
       setBusy(true);
-      setPreview(await api.box(action.id, true));
+      setPreview(await api.box(action.id, true, onScreen));
       setBusy(false);
     },
-    [api],
+    [api, onScreen],
   );
 
   const commit = useCallback(
     async (action: ClientAction): Promise<void> => {
       setBusy(true);
-      const result = await api.box(action.id, false);
+      const result = await api.box(action.id, false, onScreen);
       setDone(result);
       setPending(null);
       setPreview(null);
       setBusy(false);
       onChanged();
     },
-    [api, onChanged],
+    [api, onChanged, onScreen],
   );
 
   if (actions.length === 0) {
@@ -1377,13 +1851,29 @@ export function BoxActions({
             </>
           ) : null}
           {pending.effect === "broadcast" ? (
-            <p className="tw:mt-1 tw:text-ink-soft">
-              A sentence to every steerable session, each asked to pause for a different length of time
-              {pending.stagger === null
-                ? ", though the server did not say how they are spread"
-                : ` — between ${pending.stagger.minMinutes} and ${pending.stagger.windowMinutes} minutes`}
-              . Nothing here can prove an agent read it, let alone obeyed it.
-            </p>
+            <>
+              <p className="tw:mt-1 tw:text-ink-soft">
+                A sentence to every steerable session, each asked to pause for a different length of time
+                {pending.stagger === null
+                  ? ", though the server did not say how they are spread"
+                  : ` — between ${pending.stagger.minMinutes} and ${pending.stagger.windowMinutes} minutes`}
+                . Nothing here can prove an agent read it, let alone obeyed it.
+              </p>
+              {/* THE ROWS THAT ARE NOT ADDRESSES, SAID OUT LOUD. `boxActionBody`
+                  drops a row with no pane or no conversation id, because the
+                  route refuses the whole request over one and a real fleet
+                  always holds a few. A denominator that quietly shrank between
+                  the page and the request is the defect this stage exists to
+                  close, one layer up, so the count is on screen rather than
+                  inferred from a preview that is short. */}
+              {unaddressable === 0 ? null : (
+                <p className="tw:mt-1 tw:text-ink-faint">
+                  {unaddressable} of the {onScreen.length} sessions on this page {unaddressable === 1 ? "has" : "have"} no
+                  pane or no conversation id, so there is nowhere to send to and {unaddressable === 1 ? "it is" : "they are"}{" "}
+                  left out of the {onScreen.length - unaddressable} below.
+                </p>
+              )}
+            </>
           ) : null}
 
           <div className="tw:mt-2 tw:rounded-md tw:border tw:border-rule tw:p-2.5">
@@ -1424,9 +1914,15 @@ export function BoxActions({
                     <Mono>gjd-remote</Mono> can still do it.
                   </p>
                 ) : (
-                  <div className="tw:mt-1">
-                    <RawValue value={preview.result} depth={0} />
-                  </div>
+                  <>
+                    {/* The same counts as the answer card, so the two read
+                        alike and the promise can be compared with the receipt
+                        row for row. */}
+                    {preview.effect === null ? null : <BoxEffectSummary effect={preview.effect} />}
+                    <div className="tw:mt-1">
+                      <RawValue value={preview.result} depth={0} />
+                    </div>
+                  </>
                 )}
               </>
             ) : (
@@ -1492,17 +1988,27 @@ export function BoxActions({
             **AND SO IS "Nothing happened."**, which is the failure half of the
             same rule and was exempt from it until 2026-09-08. This is the panel
             with `kill` on it: a second tap whose reply never came back may have
-            ended thirty processes, and the page said the opposite. The four
-            headings are `ACTION_DELIVERY_COPY`'s, above.
+            ended thirty processes, and the page said the opposite. The sentence
+            is now gone from every arm — `ACTION_DELIVERY_COPY`, above, and its
+            comments say why no reading here can support it.
+          */}
+          {/*
+            **AND "Done." IS A CLAIM ABOUT EVERY RECIPIENT AND EVERY PID**,
+            which is the third of these. `effectHeadline` turns the answer's own
+            per-row states into a ratio, so a fan-out that reached three of five
+            cannot be headed with the same word as one that reached five. Plain
+            "Done." survives only for an answer that carried no effect report.
           */}
           <p className={cx("tw:font-medium", done.ok ? "tw:text-work-ink" : "tw:text-alarm-ink")}>
             {!done.ok
-              ? ACTION_DELIVERY_COPY[done.delivery.kind].head
+              ? done.run === null
+                ? ACTION_DELIVERY_COPY[done.delivery.kind].head
+                : planHeadline(done.run).head
               : !done.dryRunStated
                 ? "The server answered."
                 : done.dryRun
                   ? "Nothing was done."
-                  : "Done."}
+                  : (effectHeadline(done.effect) ?? "Done.")}
           </p>
           {done.ok ? (
             <>
@@ -1516,6 +2022,10 @@ export function BoxActions({
                 </p>
               ) : null}
               {done.why === null ? null : <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>}
+              {/* THE COUNTS ABOVE THE DUMP, not instead of it: `RawValue` still
+                  draws every field the server sent, including the ones this
+                  page has no schema for. */}
+              {done.effect === null ? null : <BoxEffectSummary effect={done.effect} />}
               {done.result === null || done.result === undefined ? (
                 <p className="tw:mt-1 tw:text-ink-soft">It said nothing about what it touched.</p>
               ) : (
@@ -1530,12 +2040,27 @@ export function BoxActions({
             </>
           ) : (
             <>
-              {ACTION_DELIVERY_COPY[done.delivery.kind].body === null ? null : (
-                <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{ACTION_DELIVERY_COPY[done.delivery.kind].body}</p>
+              {(done.run === null ? ACTION_DELIVERY_COPY[done.delivery.kind].body : planHeadline(done.run).body) === null ? null : (
+                <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+                  {done.run === null ? ACTION_DELIVERY_COPY[done.delivery.kind].body : planHeadline(done.run).body}
+                </p>
               )}
               <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>
+              {done.run === null ? null : <PlanRunCard run={done.run} />}
+              {/* THE STATUS BELONGS HERE TOO. The session card has always shown
+                  it and this one did not, and the difference matters now that
+                  `unknown` and `not-told` share one heading: this line is where
+                  a person finds out which situation they are in. "HTTP 500,
+                  said by this browser" is an answer that came back unreadable;
+                  no status at all is a request whose answer never came. */}
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 <Mono>{done.code}</Mono>
+                {done.status === null ? null : (
+                  <>
+                    <span className="tw:px-1">·</span>
+                    <Mono>{`HTTP ${done.status}`}</Mono>
+                  </>
+                )}
                 <span className="tw:px-1">·</span>
                 {done.from === "server" ? "said by the dashboard server" : "said by this browser"}
               </p>

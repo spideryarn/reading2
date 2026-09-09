@@ -32,20 +32,42 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readAttention } from "./attention.js";
-import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
+import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
+import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
+import { makeReadinessRetention, WINDOW_HOURS as READINESS_WINDOW_HOURS } from "./readiness-wiring.js";
+import { readinessRoute } from "./routes-readiness.js";
+import { usageHistoryRoute } from "./routes-usage-history.js";
+import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
-import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
-import { nextWaitMs, refreshOnce } from "./refresh.js";
-import { newSessionRoutes } from "./routes-new.js";
+import { readCheckpointFeeds } from "./overseer-status.js";
+import { openSharedQuarantine } from "./quarantine.js";
+import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
+import { handleBroadcastRequest } from "./routes-broadcast.js";
+import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
+import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
+import { ideaQueueRoute } from "./routes-idea-queue.js";
+import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
+import { describeOne } from "./describe.js";
+import { describeBreakdownBalances, runDescribePass, type SessionToDescribe } from "./describe-pass.js";
+import {
+  descriptionsRoot,
+  readDescriptionMemory,
+  writeDescriptionMemory,
+  EMPTY_DESCRIPTIONS,
+  type DescriptionMemory,
+} from "./describe-store.js";
+import { openRouterKey } from "./transcribe.js";
+import { readOpeningMessages } from "./transcript.js";
+import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
+import { claimFromSnapshot } from "./overseer-claim.js";
 import { statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
@@ -113,6 +135,19 @@ let health: HealthReport | null = null;
  *
  * Separate from `snapshot.collectedAt` on purpose: a collector that has stopped
  * trying and a box that has nothing new to say look identical without it.
+ *
+ * **Written by the latch's `onStart`, not by `refresh()`, and that is the whole
+ * point.** With a single-flight latch a turn can decline to start a child,
+ * because the previous one is still running; setting this at the top of the
+ * turn would have made it mean *the loop took a turn* instead — and five
+ * consumers read it as a child's start time (`web/src/Header.tsx`,
+ * `attempt-clock.ts`, and the Overseer's `daemon.ts`, `observation.ts`,
+ * `notes.ts`). The page would have said *a collection was started 0s ago* over
+ * a child wedged for seven minutes. GPT Sol's P1, 2026-09-08.
+ *
+ * So the field keeps its meaning and the consumers keep working. What a wedged
+ * collector looks like is: this frozen at the wedged child's start, the page
+ * saying *started 7 minutes ago*, and `lastError` saying why. All three true.
  */
 let attemptedAt: string | null = null;
 
@@ -139,6 +174,136 @@ for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
 /**
+ * **THE HOLDS FROM THE LAST RUN, READ BACK BEFORE THIS ONE CAN BE ASKED TO
+ * TYPE.**
+ *
+ * A session held after a send nobody could account for may still have half a
+ * sentence in its input box, and a tmux server does not restart just because
+ * this process did. Until Stage 4b a restart built an empty book, `next()` saw
+ * no hold, and keystrokes were admitted again with nobody told.
+ *
+ * **THE POSITION OF THIS LINE IS THE WHOLE GUARANTEE**: it is synchronous, and
+ * it is above `createServer` and every route mounted in `handler`, so there is
+ * no window in which this server can be asked to send while it is still
+ * reading. tests/fleet-hold-wiring.test.ts reads this file and fails if the
+ * call goes missing or drifts below the listener — the same kind of source
+ * guard health-wiring.ts describes, and for the same reason: nothing can import
+ * this file without binding port 8787.
+ *
+ * A ledger that will not open is NOT fatal, exactly like the health store: the
+ * dashboard is the thing you reach for when other things are broken, so it runs
+ * on with the holds in memory only — and says so, loudly, rather than silently.
+ */
+const quarantine = openSharedQuarantine({ log: (line) => console.error(line) });
+for (const line of quarantine.lines.log) console.log(line);
+for (const line of quarantine.lines.error) console.error(line);
+
+/**
+ * Readiness: whether dev is green, and the day behind that answer.
+ *
+ * **The snapshot is computed on the refresh loop and served from memory.** Its
+ * inputs are git, a scan of every checkout's `logs/tmux-jobs/`, and `tmux ls` —
+ * none of which may happen inside a request on a single-threaded server that has
+ * to stay up when the box is at load 391. `readiness-wiring.ts` § the timer.
+ *
+ * Like health retention, a store that will not open does not stop the
+ * dashboard: the payload then reports that nothing is being recorded, which the
+ * verdict turns into `unknown` rather than into a quiet green.
+ */
+const readiness = makeReadinessRetention({ primary: process.cwd() });
+for (const line of readiness.lines.log) console.log(line);
+for (const line of readiness.lines.error) console.error(line);
+
+let readinessSnapshot: import("./readiness-wiring.js").ReadinessSnapshot | null = null;
+
+/**
+ * Recompute it, never throwing into the loop.
+ *
+ * A readiness collection that failed must leave the PREVIOUS snapshot in place
+ * — the page shows how old it is, so a stale answer is legible, where a blank
+ * one is a lie that looks like an empty box. Same rule as `health` above.
+ */
+function refreshReadiness(): void {
+  try {
+    readinessSnapshot = readiness.collect();
+  } catch (err) {
+    console.error(`readiness collection failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+refreshReadiness();
+
+/** How often readiness is recomputed. See the loop for why it is not REFRESH_MS. */
+const READINESS_REFRESH_MS = Number(process.env["FLEET_READINESS_REFRESH_MS"] ?? 120_000);
+let lastReadinessMs = Date.now();
+
+const readinessApi = readinessRoute({
+  snapshot: () => readinessSnapshot,
+  windowHours: READINESS_WINDOW_HOURS,
+  /* **READINESS_REFRESH_MS, not REFRESH_MS.** The page polls at whatever this
+     says, so advertising the fleet's 60s cadence for a snapshot recomputed every
+     two minutes had it fetching the same answer twice for every new one. */
+  refreshMs: READINESS_REFRESH_MS,
+});
+
+/**
+ * The cross-agent feed. **The snapshot is passed as a function, not a value** —
+ * it is replaced wholesale by every collection, and a route holding the one it
+ * was built with would serve the fleet as it was at startup for ever. Same
+ * reason the actions routes take it that way below.
+ */
+const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
+
+/**
+ * Usage history, read from the Overseer's store.
+ *
+ * **Built once and holding only a reader.** The store is written by the daemon;
+ * this process opens it read-only, takes no lock, and cannot take one — the
+ * reader is a separate function with no lock code in it. So two dashboards, or a
+ * dashboard and a daemon, coexist without any election to lose.
+ *
+ * A relative `OVERSEER_STORE_DIR` throws (it means two stores that cannot see
+ * each other), so this is caught and turned into a route that answers
+ * `unreadable` with the reason, rather than taking the whole server down over a
+ * chart.
+ */
+const usageHistoryStore = (() => {
+  try {
+    return openUsageHistoryForRead(defaultUsageHistoryDir());
+  } catch (err) {
+    console.error(`✗ usage history: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+})();
+const usageHistoryRouteHandler = usageHistoryRoute({
+  store: usageHistoryStore,
+  refreshMs: REFRESH_MS,
+  nowMs: () => Date.now(),
+});
+
+/**
+ * The queue of ideas. Built once, at module scope, like the feed route above —
+ * it holds no state, but a route rebuilt per request is a habit that becomes a
+ * second queue the first time one of them does.
+ *
+ * Reads `~/.overseer/queue.jsonl` fresh on every request rather than caching:
+ * it is tens of kilobytes at most, it is the answer to *what is authorised*,
+ * and a stale answer to that question is worse than a slow one.
+ */
+const queueRoute = ideaQueueRoute();
+
+/**
+ * The Deploys tab's record and its probe.
+ *
+ * Cheap enough to build unconditionally: it opens nothing at startup and spawns
+ * anything only per request. The composition is in deploys-wiring.ts rather than
+ * here for the reason health-wiring.ts states at length — a test that assembles
+ * its own route proves the route works, and stays green if this file mounts a
+ * different one.
+ */
+const deploys = makeDeploys();
+for (const line of deploys.lines.log) console.log(line);
+
+/**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
  *
  * The shape itself lives in state.ts, where it can be tested without binding a
@@ -146,6 +311,72 @@ for (const line of retention.lines.error) console.error(line);
  * means NEVER COLLECTED, and an empty `rows` is only a claim about the box when
  * `collectedAt` is non-null.
  */
+/**
+ * **TELLING THE OVERSEER A SESSION WAS STARTED FROM THE WEB UI.**
+ *
+ * This lives here and not in `routes-new.ts` because it needs two things that
+ * module deliberately does not have: the live fleet snapshot, to resolve who
+ * holds the `overseer` role, and the shared steering queue to reach them.
+ *
+ * **IT QUEUES; IT DOES NOT SEND.** Since `send-coordinator.ts`, every producer
+ * of keystrokes goes through one coordinator whose point is that the quarantine
+ * check and the transport call are adjacent. Sending from here — in a child
+ * process, as first planned, to keep a synchronous 60-second worst case off the
+ * event loop — would have carried its **own** quarantine book: `holding()` would
+ * answer null for the whole box and this notice could type a second sentence
+ * into a session already held behind half of one. Queueing dissolves that
+ * instead of mitigating it, because `enqueueSharedMessage` makes no tmux calls
+ * at all, and the drain then delivers through the coordinator with the hold
+ * check in-process where it belongs.
+ *
+ * **THE SHARED QUEUE, NEVER A SECOND ONE.** Two queues would mean the one the
+ * page renders is not the one anything delivers from.
+ *
+ * **The claim is read through `claimFromSnapshot`**, over this server's own
+ * payload, rather than by picking `role === "overseer"` out of the rows: that
+ * function carries the staleness and failed-collection checks, and a hand-rolled
+ * read gets them wrong. Serialising the payload for one launch is affordable —
+ * the route allows one launch at a time behind a cooldown.
+ */
+function tellOverseer(input: {
+  sessionName: string | null;
+  startedDir: string | null;
+  origin: string | null;
+  prompt: string;
+}): ReturnType<typeof notifyOverseer> {
+  const claim = claimFromSnapshot(JSON.parse(statePayload()), {
+    nowMs: Date.now(),
+    /* Deliberately short. A stale snapshot means we do not know who holds the
+       role NOW, and `cannot-tell` is the honest answer — the alternative is
+       addressing whoever held it minutes ago. */
+    maxAgeMs: 120_000,
+  });
+  return notifyOverseer(
+    {
+      claim,
+      rows: (snapshot?.rows ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        paneId: row.paneId,
+        panePid: row.panePid,
+        claudeSessionId: row.claudeSessionId,
+        status: row.status,
+      })),
+      /* RAW TEXT AND A SPEAKER. `enqueueMessage` renders, and `drain.ts` renders
+         again at delivery; handing over a prefixed string prefixes it twice. */
+      enqueue: (target, text, speaker) => enqueueSharedMessage(target, text, speaker),
+    },
+    notifyLine({
+      sessionName: input.sessionName,
+      origin: input.origin,
+      dir: input.startedDir,
+      promptFirstLine: promptExcerpt(input.prompt),
+    }),
+  );
+}
+
+configureNewSessionNotifier(tellOverseer);
+
 function statePayload(): string {
   /* **THE COMPOSITION ITSELF IS IN state.ts, and only the wiring is here.**
      This file binds ports at import time, so nothing can import this function
@@ -157,9 +388,12 @@ function statePayload(): string {
      reason routes-steer.ts reads its flag per request. The answering flag:
      turning it on should be a restart, and the page should learn about it on
      its next refresh rather than on a reload nobody performs. The attention
-     inbox: `~/.overseer/current.json` is ~10KB and replaced by atomic rename,
-     so a read is cheap and always current, while caching it would put a list
-     regenerated every two minutes on this loop's 55–60s clock. */
+     inbox AND the Overseer's own status, which are one read of
+     `~/.overseer/current.json` — ~10KB, replaced by atomic rename, so a read is
+     cheap and always current, while caching it would put a list regenerated
+     every two minutes on this loop's 55–60s clock. One read rather than two
+     because the page prints the inbox's clock and the checkpoint's clock in one
+     sentence, and two reads can straddle a write. */
   return composePayload({
     snapshot,
     error: lastError,
@@ -167,7 +401,7 @@ function statePayload(): string {
     refreshMs: REFRESH_MS,
     answeringEnabled: process.env["FLEET_ANSWER_ENABLED"] !== "0",
     attemptedAt,
-    readAttention,
+    readCheckpoint: readCheckpointFeeds,
   });
 }
 
@@ -218,12 +452,37 @@ function refreshHealth(): HealthTurn {
  * it can be. tests/fleet-refresh.test.ts drives `refreshOnce` with the real
  * action routes and a fake transport.
  */
+/**
+ * **ONE COLLECTION AT A TIME, AND THE DEADLINE BELONGS TO THIS LOOP.**
+ *
+ * Module scope rather than inside `refresh()`, because a latch built per call
+ * latches nothing. `collectWithDeadline` used to be passed straight in, and it
+ * abandons the *caller* without cancelling the *child* — so a wedged `bash -c`
+ * grepping thirty-five transcripts was met, one backoff later, by a second one.
+ * The latch is in refresh.ts, where a test can drive it; this is the wiring.
+ */
+const collector = singleFlightCollect({
+  run: collect,
+  deadlineMs: COLLECT_DEADLINE_MS,
+  now: Date.now,
+  // BEFORE the child is awaited, and only when one is actually started — see
+  // `attemptedAt` above for why the distinction is load-bearing.
+  onStart: () => {
+    attemptedAt = new Date().toISOString();
+  },
+  // A child that came back after we gave up on it. `console.error` rather than
+  // `lastError`: it is an answer to a question asked minutes ago, and the page
+  // must not go stale twice for one attempt.
+  onLate: (line) => console.error(line),
+});
+
 async function refresh(): Promise<void> {
-  // BEFORE the attempt, not after it, because the whole point of this field is
-  // to be moving while a collection is not.
-  attemptedAt = new Date().toISOString();
+  /* `attemptedAt` is NOT set here. It used to be, on a "before the attempt, not
+     after it" argument that the latch invalidated: a turn is not an attempt any
+     more. The latch's `onStart` sets it, so it still moves exactly when a child
+     is actually started. */
   await refreshOnce({
-    collect: collectWithDeadline,
+    collect: collector.collect,
     keep: (result) => {
       if ("snapshot" in result) {
         snapshot = result.snapshot;
@@ -258,9 +517,149 @@ async function refresh(): Promise<void> {
  * whatever the box is doing, which matters on a machine that hit load average
  * 391 today. A failure waits longer, so a broken box is not also hammered.
  */
+/**
+ * HOW OFTEN TO DESCRIBE. Far slower than the collector, because a description is
+ * about a session's opening and an opening does not change — the only work a
+ * steady-state pass does is notice a session it has not seen before.
+ */
+const DESCRIBE_MS = Number(process.env.FLEET_DESCRIBE_MS ?? 5 * 60_000);
+
+/**
+ * How many model calls one pass may make.
+ *
+ * A cold fleet catches up over several passes rather than paying for thirty at
+ * once, and what the budget drops is reported rather than hidden.
+ */
+const DESCRIBE_MAX_CALLS = Number(process.env.FLEET_DESCRIBE_MAX_CALLS ?? 8);
+
+/**
+ * DESCRIBING THE FLEET, BESIDE THE COLLECTOR RATHER THAN INSIDE IT.
+ *
+ * A collection has a deadline (`COLLECT_DEADLINE_MS`) and a gateway does not
+ * respect it, so no model call may happen on the collector's clock. This runs on
+ * its own, writes a file, and `readDescriptions` in `collect.ts` joins that file
+ * onto the rows — the cheap half — on the next collection.
+ *
+ * **It costs nothing when there is no key.** `openRouterKey()` reads the
+ * environment and then one variable out of `.env.local`; without one, the pass
+ * does not run and every row keeps saying `not-yet-described`, which is true.
+ *
+ * **And nothing when nothing is eligible**, which is every row until the
+ * dashboard and the daemon have been restarted onto execution readings. Before
+ * that this loop reads no transcripts and makes no calls.
+ */
+/**
+ * The describer's memory, held in process — F22.
+ *
+ * A pass whose write fails used to log and discard, so the next pass reread the
+ * unchanged file and **paid for the same sessions again**, every five minutes.
+ * Keeping the result here means a persistence failure costs a stale file rather
+ * than a repeated bill, and the next write retries with everything still in hand.
+ */
+let describeMemory: DescriptionMemory | null = null;
+
+async function describeOnce(): Promise<void> {
+  const key = openRouterKey();
+  if (key === null) return;
+  const rows = snapshot?.rows ?? [];
+  if (rows.length === 0) return;
+
+  const root = descriptionsRoot();
+  /* WHAT THIS PROCESS ALREADY HOLDS WINS over what is on disk: a write that
+     failed must not make us pay again. The file is only read to seed the first
+     pass after a restart. */
+  let memory = describeMemory;
+  if (memory === null) {
+    const read = readDescriptionMemory(root);
+    /* An unusable file is REPLACED, not repaired — everything in it is
+       recoverable by asking again, and carrying a memory across a gap we cannot
+       vouch for is the mistake this neighbourhood keeps repairing. */
+    memory = read.kind === "memory" ? read.memory : EMPTY_DESCRIPTIONS;
+  }
+
+  const sessions: SessionToDescribe[] = rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    claudeSessionId: row.claudeSessionId,
+    dir: row.meta.version === 1 ? row.meta.dir : null,
+    execution: row.execution,
+  }));
+
+  const result = await runDescribePass({
+    sessions,
+    memory,
+    maxCalls: DESCRIBE_MAX_CALLS,
+    readOpening: async (session) => {
+      const opening = await readOpeningMessages({ claudeSessionId: session.claudeSessionId, dir: session.dir });
+      if (opening.kind !== "found") {
+        return { ok: false, why: `${opening.kind}: ${"why" in opening ? opening.why : ""}` };
+      }
+      if (opening.turns.length === 0) return { ok: false, why: "the transcript opens with no turns" };
+      /* Flattened to text here rather than in the pass, so the pass stays pure
+         and the shape of a turn does not reach the prompt builder. */
+      return {
+        ok: true,
+        text: opening.turns.map((turn) => `${turn.speaker}: ${turn.text}`).join("\n\n"),
+      };
+    },
+    describe: async (text) => (await describeOne(text, { apiKey: key })).verdict,
+    now: () => new Date(),
+  });
+
+  /* HELD BEFORE IT IS WRITTEN, so a failing write costs a stale file rather
+     than a repeated bill. */
+  describeMemory = result.memory;
+  if (!describeBreakdownBalances(result.breakdown)) {
+    /* The self-check runs in production rather than only in tests — F25. A pass
+       whose numbers do not add up has quietly dropped somebody, and a fleet list
+       missing one row looks exactly like a fleet with one fewer session. */
+    console.log(`describe: BOOKKEEPING DOES NOT BALANCE: ${JSON.stringify(result.breakdown)}`);
+  }
+  try {
+    writeDescriptionMemory(root, result.memory);
+  } catch (err) {
+    console.log(`describe: could not write the memory: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  if (result.breakdown.called > 0 || result.breakdown.overBudget > 0) {
+    console.log(
+      `describe: ${result.breakdown.described} eligible, ${result.breakdown.called} call(s), ` +
+        `${result.breakdown.cached} cached, ${result.breakdown.overBudget} over budget, ` +
+        `${result.breakdown.notEligible} not eligible`,
+    );
+  }
+}
+
+/**
+ * Its own loop, so a slow gateway cannot delay a collection.
+ *
+ * **Never throws out of here.** A describer that took the server down would be a
+ * monitoring tool failing at the same time as the thing it monitors, which is
+ * the failure this whole tool is written against.
+ */
+async function describeLoop(): Promise<void> {
+  for (;;) {
+    try {
+      await describeOnce();
+    } catch (err) {
+      console.log(`describe: the pass threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    await new Promise((r) => setTimeout(r, DESCRIBE_MS).unref?.());
+  }
+}
+
 async function refreshLoop(): Promise<void> {
   for (;;) {
     await refresh();
+    /* **Readiness on its own, slower cadence.** It spawns several subprocesses
+       and scans every checkout — measured at ~50 ms in total, but on a box that
+       reaches load 391 the right instinct is to do that as rarely as the answer
+       needs. What it is about — which commit dev is on, and what has been run
+       against it — changes on the scale of minutes, not seconds. */
+    if (Date.now() - lastReadinessMs >= READINESS_REFRESH_MS) {
+      lastReadinessMs = Date.now();
+      refreshReadiness();
+    }
     /* `nextWaitMs` in refresh.ts, not the expression that used to be here: the
        same number is recorded in every health sample as what the next reading
        was expected at, and two copies of this rule would draw a legitimate
@@ -311,6 +710,31 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  // Whether dev is green, and the day behind it. Read-only, and it serves the
+  // snapshot the refresh loop built rather than computing anything here.
+  if (readinessApi.handle(req, res)) return;
+
+  /* The last day of usage limits, for the chart on Usage limits.
+     **Read-only and lock-free, and it reads a file THIS PROCESS DOES NOT
+     WRITE** — the Overseer daemon does, on its own 300-second pass. That is why
+     there is a reader-only opener rather than a flag on the writer: this process
+     must be structurally incapable of claiming the store. See
+     usage-history.ts § "No writer lock". */
+  if (usageHistoryRouteHandler.handle(req, res)) return;
+
+  // The last N messages across EVERY session, for the Recent messages tab.
+  // Read-only, and deliberately not on the collection loop: it is a fan-out of
+  // byte-bounded tail reads (~250 ms and ~10 MB of page cache for the whole
+  // fleet, measured), asked for only when somebody is looking at that tab.
+  // Everything it decides lives in routes-recent-feed.ts.
+  if (feedRoute.handle(req, res)) return;
+
+  // The most recent production deploys, for the Deploys tab. Read-only twice
+  // over: it reads one committed file and asks three read-only questions of the
+  // checkout. It never fetches, never calls Vercel — this box has no token —
+  // and cannot deploy anything. routes-deploys.ts says why for each.
+  if (deploys.route.handle(req, res)) return;
 
   // Recent messages for one session, for the detail pane.
   //
@@ -385,6 +809,16 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // here today is the catalogue, the queue and the dry runs.
   if (handleActionRequest(req, res)) return;
 
+  // One free-text line to every live Claude session — the Overseer tab's
+  // broadcast. A SECOND write path, mounted beside the first two rather than
+  // folded into either: the steer route's per-pane rate limiter is calibrated
+  // for a person typing at one session and would refuse a fan-out at its sixth
+  // recipient, and the action vocabulary's broadcast carries a reviewed
+  // sentence rather than arbitrary prose. routes-broadcast.ts § the header says
+  // which of those two this is eventually meant to absorb, and where the
+  // authority boundary between them has to stay.
+  if (handleBroadcastRequest(req, res)) return;
+
   // Dictation. The only route here that takes AUDIO, which is a class of
   // payload nothing else on this server handles — so it is neither logged nor
   // sized in a log, and it is held for one request. routes-transcribe.ts.
@@ -409,6 +843,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // part that matters: clearing `GJD_PROVISIONAL`, without which `gjd-remote
   // ls` renames the session straight back to Claude's own title.
   if (renameRoute().handle(req, res)) return;
+
+  // The queue of ideas, for the Queued ideas tab. READ-ONLY, and that is a
+  // security decision rather than an unfinished one: the queue is gate 3's
+  // authorisation record and this server has no authentication, so a write
+  // route here would let anything able to reach the port append an item
+  // attributed to Greg. routes-idea-queue.ts § read-only says what a write path
+  // would need first. Writes go through `scripts/overseer-queue.ts`.
+  if (queueRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot
@@ -492,6 +934,9 @@ for (const bind of BINDS) {
 
 console.log(`refreshing every ${REFRESH_MS / 1000}s`);
 void refreshLoop();
+/* Beside the collector, never inside it: a model call must not run on a
+   clock that has a deadline. */
+void describeLoop();
 
 // Keeps an idle SSE connection from being dropped by anything in between. Its
 // own timer is unref'd, so it cannot hold the process open by itself — the

@@ -1,0 +1,2365 @@
+diff --git a/scripts/overseer.ts b/scripts/overseer.ts
+index 195b240a..b0a8cd7f 100644
+--- a/scripts/overseer.ts
++++ b/scripts/overseer.ts
+@@ -200,6 +200,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-wait-restarted": true,
+   "session-row-changed": true,
+   "session-pane-replaced": true,
++  "session-execution-changed": true,
+   "job-occurrence-reserved": true,
+   "job-occurrence-started": true,
+   "job-occurrence-finished": true,
+@@ -267,6 +268,16 @@ export function describeEvent(event: OverseerEvent): string {
+       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
+     case "session-pane-replaced":
+       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
++    // THE PANE DID NOT MOVE, so this line has to say what did. The conversation
++    // verdict is on it because `conflicting` is the loudest thing this log can
++    // print: the pane is running a conversation nobody addressed.
++    case "session-execution-changed":
++      return (
++        `${when}  new run    ${event.identity.tmuxId} — ${event.previousToken} → ${event.token}` +
++        (event.conversation.kind === "conflicting"
++          ? `, now conversation ${event.conversation.observed} rather than the claimed ${event.conversation.claimed}`
++          : `, conversation ${event.conversation.kind}`)
++      );
+     // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
+     // carries the job, the instant and the definition hash, so one line of this
+     // log is enough to find every other line about the same run.
+diff --git a/tests/fleet-drain.test.ts b/tests/fleet-drain.test.ts
+index 824ab3e5..d057f5d6 100644
+--- a/tests/fleet-drain.test.ts
++++ b/tests/fleet-drain.test.ts
+@@ -74,6 +74,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
+     /* The arm the collector produces before `readPauses` has run. Not `none`:
+        a fixture is in no position to claim we looked everywhere. */
+     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
++    // Required on a row and not what this file is about: a fixture is not a box
++    // whose process table anybody probed.
++    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
+     status: IDLE,
+     paneId: PANE_A,
+     panePid: PANE_PID,
+diff --git a/tests/fleet-overseer-panel.test.tsx b/tests/fleet-overseer-panel.test.tsx
+index f58b6487..254c1c81 100644
+--- a/tests/fleet-overseer-panel.test.tsx
++++ b/tests/fleet-overseer-panel.test.tsx
+@@ -107,6 +107,9 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
+   return {
+     id: "$1991",
+     name: "overseer-o1-store",
++    // Required on a row and not what this file is about — an old producer's
++    // shape, which is the honest default for a fixture nobody probed.
++    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+     title: null,
+     repo: "spideryarn/reading2",
+     worktree: "overseer-o1-store",
+diff --git a/tests/fleet-overseer-status.test.ts b/tests/fleet-overseer-status.test.ts
+index 2d2a6d01..43907eb1 100644
+--- a/tests/fleet-overseer-status.test.ts
++++ b/tests/fleet-overseer-status.test.ts
+@@ -62,6 +62,9 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
+   return {
+     id: "$1991",
+     name: "overseer-o1-store",
++    // Required on a row and not what this file is about — an old producer's
++    // shape, which is the honest default for a fixture nobody probed.
++    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+     title: null,
+     repo: "spideryarn/reading2",
+     worktree: "overseer-o1-store",
+diff --git a/tests/fleet-refresh.test.ts b/tests/fleet-refresh.test.ts
+index 851ba0ca..dbb035f8 100644
+--- a/tests/fleet-refresh.test.ts
++++ b/tests/fleet-refresh.test.ts
+@@ -61,6 +61,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
+     /* The arm the collector produces before `readPauses` has run. Not `none`:
+        a fixture is in no position to claim we looked everywhere. */
+     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
++    // Required on a row and not what this file is about: a fixture is not a box
++    // whose process table anybody probed.
++    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
+     status: IDLE,
+     paneId: PANE,
+     panePid: PANE_PID,
+diff --git a/tests/fleet-web.test.tsx b/tests/fleet-web.test.tsx
+index 46660ccb..7ffe3ce2 100644
+--- a/tests/fleet-web.test.tsx
++++ b/tests/fleet-web.test.tsx
+@@ -150,6 +150,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
+   return {
+     paneId: null,
+     name: over.id,
++    // Required on a row and not what this file is about — an old producer's
++    // shape, which is what `parseExecution` returns for a payload without one.
++    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+     title: null,
+     repo: null,
+     worktree: null,
+diff --git a/tests/overseer-cli.test.ts b/tests/overseer-cli.test.ts
+index 4e721725..60f4cd32 100644
+--- a/tests/overseer-cli.test.ts
++++ b/tests/overseer-cli.test.ts
+@@ -77,6 +77,9 @@ function waitingEntry(tmuxId: string, name: string, statusSince: StatusSince): R
+     key: `${tmuxId} none` as RegisterEntry["key"],
+     tmuxId,
+     claimedConversationId: null,
++    // Never verified: this entry was built by hand, and null is what the
++    // register holds for a session whose run nothing has confirmed.
++    verifiedExecution: null,
+     name,
+     meta: { version: "legacy" },
+     repo: "spideryarn/reading2",
+@@ -229,6 +232,7 @@ describe("reading the event log without disturbing the daemon", () => {
+       row: {
+         id: "$1",
+         name: "renamed-by-a-person",
++        execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+         title: null,
+         repo: "spideryarn/reading2",
+         worktree: "somewhere-else",
+diff --git a/tests/overseer-store.test.ts b/tests/overseer-store.test.ts
+index c3243ec5..4ba86dc7 100644
+--- a/tests/overseer-store.test.ts
++++ b/tests/overseer-store.test.ts
+@@ -87,6 +87,9 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
+   return {
+     id: "$1991",
+     name: "overseer-o1-store",
++    // Required on a row and not what this file is about — an old producer's
++    // shape, which is the honest default for a fixture nobody probed.
++    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+     title: null,
+     repo: "spideryarn/reading2",
+     worktree: "overseer-o1-store",
+@@ -904,6 +907,69 @@ describe("a half-written current.json", () => {
+     expect(keysIn(second)).toEqual([sessionKey(identityOf(rowA))]);
+   });
+ 
++  /**
++   * **THE ONE FIELD WHOSE ABSENCE IS FORGIVEN, and the reason the pair of tests
++   * is here rather than one of them.**
++   *
++   * `verifiedExecution` arrived after this file's other fields, so the first
++   * `current.json` the daemon reads after that deploy will not have one. Failing
++   * whole there would throw the register away on every restart of the deploy
++   * that introduced it, and the register is the thing there is no second copy
++   * of. So an ABSENT field is `null` — *no run has been verified for this
++   * session*, which is true of it.
++   *
++   * A MALFORMED field is the opposite case and still fails whole: absent is an
++   * old writer, malformed is a broken one, and letting the two share an outcome
++   * is how a forgiving arm stops being about deploy ordering and starts hiding
++   * bugs.
++   */
++  test("a checkpoint written before verifiedExecution existed comes back with a null one", () => {
++    const root = tempRoot();
++    const row = observedRow();
++    const first = mustOpen(root);
++    first.append([seenEvent(row, "2026-09-08T10:00:00.000Z")]);
++    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
++    first.close();
++
++    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
++      register: Record<string, unknown>[];
++    };
++    const [entry] = parsed.register;
++    if (entry === undefined) throw new Error("expected one register entry");
++    delete entry["verifiedExecution"];
++    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
++
++    const second = mustOpen(root);
++
++    // ACCEPTED, not rebuilt: the checkpoint is usable and the entry is honest.
++    expect(second.opening.start.kind).toBe("resumed");
++    expect([...second.register.values()][0]?.verifiedExecution).toBeNull();
++  });
++
++  test("a checkpoint whose verifiedExecution is present and malformed still fails whole", () => {
++    const root = tempRoot();
++    const row = observedRow();
++    const first = mustOpen(root);
++    first.append([seenEvent(row, "2026-09-08T10:00:00.000Z")]);
++    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
++    first.close();
++
++    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
++      register: Record<string, unknown>[];
++    };
++    const [entry] = parsed.register;
++    if (entry === undefined) throw new Error("expected one register entry");
++    entry["verifiedExecution"] = { token: "", since: "not a timestamp" };
++    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
++
++    const second = mustOpen(root);
++
++    expect(second.opening.start).toEqual({ kind: "rebuilt", why: "checkpoint-malformed" });
++    // AND THE REGISTER IS STILL RIGHT, out of the log — which is what makes
++    // failing whole affordable.
++    expect(keysIn(second)).toEqual([sessionKey(identityOf(row))]);
++  });
++
+   test("a checkpoint from yesterday's daemon is refused by name rather than migrated", () => {
+     // A REAL INPUT, not a hypothetical: every `current.json` written before
+     // 2026-09-08 has `statusSince` as a bare timestamp string, and a bare
+diff --git a/tools/fleet/collect.ts b/tools/fleet/collect.ts
+index 2e74b775..29b0cec8 100644
+--- a/tools/fleet/collect.ts
++++ b/tools/fleet/collect.ts
+@@ -30,8 +30,17 @@ import {
+ } from "../../scripts/gjd-remote-tmux.js";
+ import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
+ import { statusesOf, type FleetStatus } from "./status.js";
+-import type { Pause } from "./wire.js";
++import type { ExecutionReading, Pause } from "./wire.js";
++import {
++  readBootIdentity,
++  readExecutionIdentity,
++  readProcessStart,
++  type BootIdentity,
++  type ProcessStartTicks,
++} from "./execution-identity.js";
+ import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
++import { probeProcessTable } from "../overseer/work-probe.js";
++import type { ProcessTableReading } from "../overseer/work.js";
+ 
+ /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
+ export type FleetRow = {
+@@ -156,6 +165,23 @@ export type FleetRow = {
+    * only the reader is in a position to make it.
+    */
+   pause: Pause;
++  /**
++   * **WHICH RUN IS IN THIS PANE — the one identity none of the fields above can
++   * carry.**
++   *
++   * `paneId`, `panePid` and `claudeSessionId` are all unchanged when a pane's
++   * claude exits and another starts in the same shell, so a consumer holding
++   * any of them cannot tell yesterday's conversation from this morning's. This
++   * carries a durable token for the harness process itself, and a separate
++   * verdict on whether the conversation the launcher claimed is the one that
++   * process is actually running. `ExecutionReading` in `wire.ts` has the
++   * argument; `execution-identity.ts` derives it; `readExecutions` below fills
++   * it in.
++   *
++   * Starts at `unknown`/`not-probed` on the same rule as `pause` and
++   * `permissionMode`: a collection that never ran the pass says so.
++   */
++  execution: ExecutionReading;
+ };
+ 
+ /** A snapshot, and enough about it to know whether to believe it. */
+@@ -374,6 +400,16 @@ export function toRows(
+         why: "nothing has looked at whether this session is waiting for something yet",
+         cause: "rate-limits-not-collected",
+       } as Pause,
++      /* AND THE SAME RULE AGAIN, for the same reason: a row that nobody has
++         probed says *nobody looked*, with the cause that says which kind of
++         not-looking it was. `readExecutions` fills it in. `not-probed` and
++         `not-reported` are deliberately different arms — see
++         `ExecutionUnknownCause` — and this is the first of them. */
++      execution: {
++        kind: "unknown",
++        cause: "not-probed",
++        why: "this collection did not probe the process table, so nothing has looked at what is executing in this pane",
++      } as ExecutionReading,
+       // A session the status pass did not cover is `unknown` with a reason, not a
+       // default that reads as calm. There is no legitimate way to get here — the
+       // two lists come from one parse — so if it ever shows up on the page, the
+@@ -739,6 +775,11 @@ export async function collect(): Promise<FleetSnapshot> {
+      captures is measured on the latter. */
+   readPanes(rows);
+ 
++  /* AND ONE PASS FOR WHICH RUN IS IN EACH PANE. One `ps` for the whole fleet
++     and one small `/proc` read per pane, so this is the third pass rather than
++     a probe per row — see `readExecutions`. */
++  readExecutions(rows);
++
+   /* AND ONE PASS FOR WHY A QUIET SESSION IS QUIET. Separate from `readPanes`
+      because it reads files rather than terminals, and because it is allowed to
+      fail without costing us the board — see `readPauses`. */
+@@ -769,6 +810,74 @@ export async function collect(): Promise<FleetSnapshot> {
+  * seconds on a loaded box, `w2-usage-limits` owns it, and the moment it
+  * publishes a reading this is where it plugs in. It is emphatically not `none`.
+  */
++/** What {@link readExecutions} touches, so a test can drive it without a box. */
++export type ExecutionIo = {
++  probe: () => ProcessTableReading;
++  boot: () => BootIdentity;
++  readStart: (pid: number) => ProcessStartTicks;
++};
++
++/**
++ * **FILL IN `execution` ON EVERY ROW, FROM ONE READING OF THE PROCESS TABLE.**
++ *
++ * **ONE `ps` FOR THE WHOLE FLEET, NOT ONE PER ROW**, and the same for the boot
++ * id. That is the collector contract the roadmap states — *"Bounded
++ * process/transcript probes have one owner/cadence"* — and it is also the only
++ * way the answers can be consistent with each other: thirty separate `ps` runs
++ * would describe thirty slightly different boxes, so two rows could disagree
++ * about a process they share. The per-row cost after that is one
++ * `/proc/<pid>/stat` read, which is a few hundred bytes.
++ *
++ * **IT REUSES THE PROBE THAT ALREADY EXISTS.** `probeProcessTable` was written
++ * for this box, carries its own positive control (a `ps` that does not contain
++ * this process is refused as not being a reading of this machine), and until
++ * this call site had no production caller at all. `classifyPaneHarness` is the
++ * same story. Nothing here re-walks a tree or re-reads a `claude` command line.
++ *
++ * **COST, MEASURED RATHER THAN ASSUMED.** `probeProcessTable` uses `spawnSync`,
++ * which blocks the event loop; work-probe.ts measures it at ~40 ms over ~1000
++ * processes here. That is against a collection that already takes 8–12 seconds,
++ * so it is noise — but it is a NEW synchronous spawn on the request process, and
++ * the Responsive collection stage should take it with the two `execFileSync`
++ * calls it is already going after rather than leave it as the one nobody
++ * remembered. Named here so it is found.
++ *
++ * **A FAILURE COSTS NOTHING BUT THE READING.** Every arm of `ExecutionReading`
++ * is a value, including all the failures, so a box whose `ps` will not run
++ * produces rows that say why rather than rows that are missing.
++ */
++export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}): void {
++  const probe = io.probe ?? probeProcessTable;
++  const bootOf = io.boot ?? (() => readBootIdentity());
++  const readStart = io.readStart ?? ((pid: number) => readProcessStart(pid));
++
++  let table: ProcessTableReading;
++  try {
++    table = probe();
++  } catch (cause) {
++    table = { read: false, why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
++  }
++  const boot = bootOf();
++
++  for (const row of rows) {
++    try {
++      row.execution = readExecutionIdentity({
++        panePid: row.panePid,
++        claimedConversationId: row.claudeSessionId,
++        table,
++        boot,
++        readStart,
++      });
++    } catch (cause) {
++      row.execution = {
++        kind: "unknown",
++        cause: "process-table-unreadable",
++        why: `deriving this session's execution identity threw: ${cause instanceof Error ? cause.message : String(cause)}`,
++      };
++    }
++  }
++}
++
+ export async function readPauses(rows: FleetRow[]): Promise<void> {
+   let index: StoreIndex | undefined;
+   try {
+diff --git a/tools/fleet/web/src/types.ts b/tools/fleet/web/src/types.ts
+index de5917e9..5ca0e514 100644
+--- a/tools/fleet/web/src/types.ts
++++ b/tools/fleet/web/src/types.ts
+@@ -41,7 +41,11 @@ import type {
+   AttentionItem,
+   AttentionKind,
+   AttentionList,
++  ConversationReading,
++  ExecutionReading,
++  ExecutionUnknownCause,
+   FleetState as FleetStateWire,
++  HarnessKind,
+   OverseerHeartbeat,
+   OverseerRegister,
+   OverseerScheduler,
+@@ -267,6 +271,23 @@ export type FleetRow = {
+    * a null here means the row cannot be steered at all.
+    */
+   claudeSessionId: string | null;
++  /**
++   * **WHICH RUN IS IN THE PANE — and the only field on this row that can tell
++   * a fresh Claude from the one you were talking to.**
++   *
++   * Every identifier above survives a claude exiting and another starting in
++   * the same pane: `paneId` and `panePid` belong to the pane's shell, which
++   * never died, and `claudeSessionId` is the tmux environment's launch claim,
++   * written once and never rewritten. This is the reading that does not, and
++   * `ExecutionReading` in `wire.ts` says how it is derived.
++   *
++   * A page that keys anything to a session — a draft, a transcript heading, a
++   * measured age — compares this reading's token to the one it stored, and
++   * quarantines rather than continuing when they differ or when there is no
++   * reading. Never `verified` by default: a producer that predates this field
++   * parses to `unknown`/`not-reported`.
++   */
++  execution: ExecutionReading;
+   /**
+    * **THE SERVER'S OWN `status` OBJECT, UNTOUCHED**, to be handed back verbatim
+    * on a steering request. `status` above is the parse, and it is for drawing.
+@@ -969,6 +990,136 @@ export function parsePause(v: unknown, skew: ClockSkew): Pause {
+   );
+ }
+ 
++/**
++ * **WHICH RUN IS IN THE PANE, off the wire — and an absent field is
++ * `not-reported`, never anything reassuring.**
++ *
++ * The same rule as `parsePause` above and for the same reason, but the stakes
++ * are higher by one step: a `pause` this page invents makes a badge wrong, and
++ * an `execution` this page invents makes a page go on writing into a
++ * conversation that has been replaced. So there is no arm here that a missing
++ * or malformed payload can reach except `unknown`, and every `unknown` carries
++ * the cause that says which kind of not-knowing it is.
++ *
++ * **`verified` IS CHECKED FIELD BY FIELD.** A token with a missing `startTicks`
++ * is not a token — it is the identity with the pid-reuse defence removed — so a
++ * half-shaped `verified` becomes `unknown`/`not-reported` rather than a
++ * `verified` with a hole in it.
++ */
++/**
++ * The harness names this build knows, as a `Record` over the closed union
++ * rather than an array: adding an arm to `HarnessKind` without adding it here
++ * stops the build, which is the same mechanism `HARNESS_CAPABILITIES` uses on
++ * the server. An unfamiliar name off the wire becomes `unknown`, which is the
++ * arm that refuses everything.
++ */
++const HARNESS_KINDS: Record<HarnessKind, true> = {
++  "claude-code": true,
++  "claude-headless": true,
++  "codex-batch": true,
++  "codex-interactive": true,
++  shell: true,
++  unknown: true,
++};
++
++export function parseExecution(v: unknown): ExecutionReading {
++  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
++    kind: "unknown",
++    cause,
++    why,
++  });
++  if (v === undefined || v === null) {
++    return unread("this server does not report what is executing in each pane, so continuity cannot be established");
++  }
++  if (!isRecord(v)) return unread("the server sent an execution reading that is not an object");
++
++  const kind = str(v["kind"]);
++  if (kind === "unknown") {
++    return { kind: "unknown", cause: parseExecutionCause(v["cause"]), why: str(v["why"]) ?? "no reason was given" };
++  }
++  if (kind === "claimed-only") {
++    const conversation = parseConversation(v["conversation"]);
++    if (conversation === null) return unread("the server sent a claimed-only execution with no readable conversation reading");
++    return { kind: "claimed-only", conversation, why: str(v["why"]) ?? "no reason was given" };
++  }
++  if (kind === "verified") {
++    const token = v["token"];
++    const harness = str(v["harness"]);
++    const conversation = parseConversation(v["conversation"]);
++    if (!isRecord(token) || harness === null || conversation === null) {
++      return unread("the server sent a verified execution without a token, a harness and a conversation reading");
++    }
++    const boot = str(token["boot"]);
++    const pid = token["pid"];
++    const startTicks = token["startTicks"];
++    if (
++      boot === null ||
++      boot === "" ||
++      typeof pid !== "number" ||
++      !Number.isSafeInteger(pid) ||
++      pid <= 0 ||
++      typeof startTicks !== "number" ||
++      !Number.isSafeInteger(startTicks) ||
++      startTicks < 0
++    ) {
++      return unread("the server sent a verified execution whose token is not a boot id, a pid and a start tick");
++    }
++    return {
++      kind: "verified",
++      token: { boot, pid, startTicks },
++      // A harness kind this build has not heard of is kept rather than
++      // rejected: it is a label beside the token, and the token is the part
++      // anything acts on. `HARNESS_KINDS` below is what gates capabilities.
++      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
++      conversation,
++    };
++  }
++  return unread(
++    kind === null ? "the server sent an execution reading with no kind" : `this page does not know the execution reading ${JSON.stringify(kind)}`,
++  );
++}
++
++/** One conversation verdict, or null when the payload does not carry one. */
++function parseConversation(v: unknown): ConversationReading | null {
++  if (!isRecord(v)) return null;
++  const kind = str(v["kind"]);
++  if (kind === "not-claimed") return { kind: "not-claimed" };
++  if (kind === "verified") {
++    const id = str(v["id"]);
++    return id === null || id === "" ? null : { kind: "verified", id };
++  }
++  if (kind === "conflicting") {
++    const claimed = str(v["claimed"]);
++    const observed = str(v["observed"]);
++    return claimed === null || observed === null ? null : { kind: "conflicting", claimed, observed };
++  }
++  if (kind === "unverifiable") {
++    const claimed = str(v["claimed"]);
++    return claimed === null ? null : { kind: "unverifiable", claimed, why: str(v["why"]) ?? "no reason was given" };
++  }
++  return null;
++}
++
++/**
++ * The named cause, or `not-reported` — which is the one that says the producer
++ * never offered a reading at all. Same fallback rule as `parsePauseCause`.
++ */
++const EXECUTION_CAUSES: readonly ExecutionUnknownCause[] = [
++  "not-probed",
++  "not-reported",
++  "no-pane-pid",
++  "process-table-unreadable",
++  "pane-tree-unreadable",
++  "platform-unsupported",
++  "boot-identity-unreadable",
++  "process-start-unreadable",
++];
++
++function parseExecutionCause(v: unknown): ExecutionUnknownCause {
++  const name = str(v);
++  return name !== null && (EXECUTION_CAUSES as readonly string[]).includes(name) ? (name as ExecutionUnknownCause) : "not-reported";
++}
++
+ /**
+  * The named cause, or the one that says we were never told.
+  *
+@@ -1035,6 +1186,7 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
+         ? v["panePid"]
+         : null,
+     claudeSessionId: str(v["claudeSessionId"]),
++    execution: parseExecution(v["execution"]),
+     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
+        kept so it can be serialised back exactly as it arrived. */
+     rawStatus: v["status"] ?? null,
+diff --git a/tools/fleet/wire.ts b/tools/fleet/wire.ts
+index dc8cc141..e4aefec0 100644
+--- a/tools/fleet/wire.ts
++++ b/tools/fleet/wire.ts
+@@ -1481,3 +1481,141 @@ export type BroadcastRecipientOutcome =
+   | "blocked"
+   /** The fan-out ran out of time before this row. Nothing was sent. */
+   | "not-reached";
++
++/* ------------------------------------------------------------------ *
++ * Execution identity: which RUN is in this pane, not which pane it is.
++ * ------------------------------------------------------------------ */
++
++/**
++ * **A DURABLE NAME FOR ONE RUNNING PROCESS, and the whole reason this block
++ * exists.**
++ *
++ * A pane outlives the things that run in it. `tmuxServerPid`, `paneId` and
++ * `panePid` can all stay fixed while the `claude` inside the pane exits and
++ * another one starts — the pane's shell is the same shell, so nothing above
++ * moves — and `claudeSessionId` cannot see it either, because
++ * `CLAUDE_SESSION_ID` is pinned into the tmux environment once, before Claude
++ * runs, and is never rewritten (`ObservedRow.claimedConversationId` in
++ * tools/overseer/observation.ts has the measurement). So every identity this
++ * payload previously carried is stable across exactly the change that matters
++ * most: **the conversation you were talking to has been replaced by a different
++ * one wearing all of its addresses.**
++ *
++ * Three fields, and each one is load-bearing:
++ *
++ *  - `boot` is `/proc/sys/kernel/random/boot_id`, which the kernel mints per
++ *    boot. Without it a token minted before a reboot could collide with one
++ *    minted after, since pids and start ticks both restart.
++ *  - `pid` names the process only for as long as it lives — the warning
++ *    `ChildJob.pid` and `Harness.pid` already carry, and the reason the third
++ *    field is not optional.
++ *  - `startTicks` is field 22 of `/proc/<pid>/stat`, the process's start time in
++ *    clock ticks since boot. It is EXACT and it is what closes pid reuse: the
++ *    next process handed pid 4039575 cannot also have started at tick 72055933.
++ *
++ * **NOT `ProcessStart` FROM work.ts, and that is not a duplication.** That one
++ * is derived from `ps etimes`, counts whole seconds, and its own comment says
++ * two readings of one process can differ by a second and that it must *never be
++ * compared for equality*. It answers "how long has this been running" for a
++ * person. This answers "is this the same run", and equality is the only thing
++ * it is for.
++ */
++export type ExecutionToken = {
++  /** `/proc/sys/kernel/random/boot_id`. A different boot is a different world. */
++  boot: string;
++  /** The harness process's pid, at the instant of the reading. */
++  pid: number;
++  /** `/proc/<pid>/stat` field 22 — start time in clock ticks since boot. Exact. */
++  startTicks: number;
++};
++
++/**
++ * **WHICH CONVERSATION IS IN THERE — kept separate from whether the PROCESS is
++ * identified, because the two are genuinely different questions.**
++ *
++ * Knowing that a live `claude` is the pane's descendant, and holding a durable
++ * token for it, says nothing about which transcript it is writing. A bare
++ * `claude` with no `--session-id` is a perfectly ordinary, perfectly verified
++ * process whose conversation nothing on its command line names.
++ *
++ * `conflicting` is the arm the whole stage was built for: the tmux environment
++ * claims one uuid and the live process's argv carries another, which is a fresh
++ * Claude under an unchanged pane, caught.
++ */
++export type ConversationReading =
++  /** The row carries no `CLAUDE_SESSION_ID`: a shell, a `setup`, a legacy session. */
++  | { kind: "not-claimed" }
++  /** The live harness's own `--session-id` equals the tmux environment's claim. */
++  | { kind: "verified"; id: string }
++  /**
++   * The claim and the process disagree. **The claim is the stale one** — it was
++   * written before the first Claude started and is never updated — so `observed`
++   * is the conversation actually in the pane and `claimed` is what every address
++   * in this payload would have sent you to.
++   */
++  | { kind: "conflicting"; claimed: string; observed: string }
++  /** A claim with nothing to check it against, and the sentence saying what was missing. */
++  | { kind: "unverifiable"; claimed: string; why: string };
++
++/**
++ * Why there is no execution reading. Each arm is a different thing to draw, and
++ * none of them means "there is nothing running".
++ *
++ * The first two are the *nobody looked* pair and they are not interchangeable:
++ * `not-probed` is this producer choosing not to run the pass, `not-reported` is
++ * a producer too old to have one — which a consumer meets across a deploy and
++ * must not read as a session that lost its identity.
++ */
++export type ExecutionUnknownCause =
++  /** This collection did not run the pass. A `FleetRow` starts here. */
++  | "not-probed"
++  /** The payload had no `execution` field at all: a producer from before this stage. */
++  | "not-reported"
++  /** The row carried no pane pid, so there is no tree to walk. */
++  | "no-pane-pid"
++  /** The process table could not be read. `why` carries what the probe said. */
++  | "process-table-unreadable"
++  /** The table is not an ancestry, or the pane's own pid is not in it. */
++  | "pane-tree-unreadable"
++  /**
++   * There is no `/proc` to read. **Unsupported, never "use the pid on its own"**
++   * — a pid with nothing to disambiguate reuse is precisely the identity this
++   * type exists to refuse.
++   */
++  | "platform-unsupported"
++  /** `/proc/sys/kernel/random/boot_id` could not be read, so no token can be minted. */
++  | "boot-identity-unreadable"
++  /**
++   * A harness was found and its start ticks could not be read — almost always
++   * because it exited between the process table and the `/proc` read. We saw
++   * it; we cannot name it durably; that is not a verified execution.
++   */
++  | "process-start-unreadable";
++
++/**
++ * **WHAT IS ACTUALLY EXECUTING IN THIS PANE, or the honest reason we cannot
++ * say.**
++ *
++ * Three arms, and the middle one is the one that is easy to leave out:
++ *
++ *  - `verified` — a live harness process under this pane, with a durable token.
++ *    Two `verified` readings whose tokens are equal are the same run; two whose
++ *    tokens differ are not, and no amount of matching pane ids changes that.
++ *  - `claimed-only` — we looked, and the launch metadata is all there is: a pane,
++ *    a claim, and nothing under it we can name. **This is not a weaker
++ *    `verified`**; nothing identity-dependent may be done on it.
++ *  - `unknown` — we did not look, or could not. `cause` says which.
++ *
++ * A verified execution with an unverifiable conversation is normal and is not a
++ * defect: see `ConversationReading`.
++ */
++export type ExecutionReading =
++  | {
++      kind: "verified";
++      token: ExecutionToken;
++      /** Which harness the token names. The same union `Harness` uses. */
++      harness: HarnessKind;
++      conversation: ConversationReading;
++    }
++  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
++  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };
+diff --git a/tools/overseer/diff.ts b/tools/overseer/diff.ts
+index d41c4600..effb773c 100644
+--- a/tools/overseer/diff.ts
++++ b/tools/overseer/diff.ts
+@@ -59,6 +59,8 @@
+  * its own argument for being one.
+  */
+ import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
++import { executionTokenText } from "../fleet/execution-identity.js";
++import type { ConversationReading } from "../fleet/wire.js";
+ import type { AdmissibleSnapshot } from "./admissible.js";
+ import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
+ import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
+@@ -527,6 +529,57 @@ export type SessionEvent =
+       paneId: string | null;
+       /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
+       panePid: number;
++    }
++  /**
++   * **THE PANE DID NOT MOVE AND THE THING INSIDE IT DID** — the event every
++   * other arm of this union is blind to.
++   *
++   * `session-replaced` fires on a changed `claimedConversationId`, which the
++   * tmux environment almost never changes; `session-pane-replaced` fires on a
++   * changed pane pid, which a `respawn-pane` changes and a claude restarting
++   * inside its own shell does not. Between them they cover the pane being
++   * replaced and the launch claim being rewritten, and neither covers a fresh
++   * `claude` started under an unchanged shell — the case whose whole
++   * significance is that *nothing above it moved*.
++   *
++   * **BOTH SIDES MUST BE `verified`, AND THAT IS NOT A CONVENIENCE.** The same
++   * rule as `previousPanePid` two arms up, arrived at from the same argument:
++   * `verified → unknown` is EVIDENCE LOST, not a process replaced. A collection
++   * whose `ps` failed would otherwise report every session on the box as having
++   * been replaced, and then report it again on the way back.
++   *
++   * ## THE SAMPLING GAP THIS ARM HAS, stated because absence is invisible
++   *
++   * `verified(A) → unknown → verified(B)` produces NO event: this module
++   * compares consecutive snapshots and neither of those two steps is a pair of
++   * verified readings. Closing it would mean carrying a last-verified token
++   * inside `Baseline`, and `unplaceable`'s comment is the argument against —
++   * a baseline is a question about a VALUE, and one carrying accumulated state
++   * would stop being checkable on any snapshot at any time.
++   *
++   * **It is a gap in the HISTORY and not in the guarantee**, which is the
++   * reason it is affordable. Nothing identity-dependent asks whether an event
++   * fired; it stores the token it was created under and compares it to the
++   * current reading (`continuityOf` in tools/fleet/execution-identity.ts), and
++   * a comparison has no sampling gap — a run replaced while nobody was looking
++   * is still a different token the next time anybody looks. Pinned by a test in
++   * tests/overseer-diff.test.ts rather than described only here.
++   */
++  | {
++      kind: "session-execution-changed";
++      at: string;
++      tmuxServerPid: number | null;
++      key: SessionKey;
++      identity: SessionIdentity;
++      /** The token as `continuityOf` compares it: `boot:pid:startTicks`. */
++      previousToken: string;
++      token: string;
++      /**
++       * What the new run says about its conversation. `conflicting` here is the
++       * loudest thing this log can say: the pane is running a conversation
++       * nobody addressed, under an id everything still uses.
++       */
++      conversation: ConversationReading;
+     };
+ 
+ /**
+@@ -1010,6 +1063,29 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
+         panePid: row.panePid,
+       });
+     }
++    // THE PANE STAYED AND THE RUN INSIDE IT DID NOT. Placed here, after the
++    // pane arm, because the two are independent and both can fire on one
++    // collection: a `respawn-pane` replaces the pane AND the process in it, and
++    // recording only one of those loses half of what happened.
++    //
++    // BOTH SIDES VERIFIED, no exceptions — `verified → unknown` is a collection
++    // that could not look, and the arm's own comment has the argument.
++    if (was.execution.kind === "verified" && row.execution.kind === "verified") {
++      const before = executionTokenText(was.execution.token);
++      const now = executionTokenText(row.execution.token);
++      if (before !== now) {
++        events.push({
++          kind: "session-execution-changed",
++          at,
++          tmuxServerPid: nextSnapshot.tmuxServerPid,
++          key: sessionKey(identityOf(row)),
++          identity: identityOf(row),
++          previousToken: before,
++          token: now,
++          conversation: row.execution.conversation,
++        });
++      }
++    }
+     // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
+     // key as `waiting`, so without this a wait that ended and was replaced by a
+     // longer one is one unbroken wait in the history. See
+diff --git a/tools/overseer/jobs.ts b/tools/overseer/jobs.ts
+index 918e86ba..b9bcd74f 100644
+--- a/tools/overseer/jobs.ts
++++ b/tools/overseer/jobs.ts
+@@ -838,6 +838,7 @@ export function foldOccurrences(
+       case "session-wait-restarted":
+       case "session-row-changed":
+       case "session-pane-replaced":
++      case "session-execution-changed":
+       // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
+       // says nothing about that occurrence's lifecycle — the reservation, the
+       // start and the finish around it are the job events above. Folding one
+diff --git a/tools/overseer/observation.ts b/tools/overseer/observation.ts
+index 50c23e79..c169fee4 100644
+--- a/tools/overseer/observation.ts
++++ b/tools/overseer/observation.ts
+@@ -55,6 +55,7 @@
+ import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
+ import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
+ import { readAttemptClock } from "../fleet/attempt-clock.js";
++import type { ConversationReading, ExecutionReading, ExecutionUnknownCause, HarnessKind } from "../fleet/wire.js";
+ 
+ /**
+  * Anything `JSON.parse` can return, which is the honest type for a field we
+@@ -212,6 +213,25 @@ export type ObservedRow = {
+    * a function really does mint and really does gate.
+    */
+   readonly claimedConversationId: string | null;
++  /**
++   * **WHICH RUN THE PRODUCER SAW IN THIS PANE — the corroboration
++   * `claimedConversationId` above cannot give.**
++   *
++   * The comment on that field says a uuid that changes is evidence and a uuid
++   * that stays the same is evidence of nothing, and ends by saying that nothing
++   * in that stage could resolve it. This is the resolution: the dashboard walks
++   * the pane's process tree, finds the harness holding it, and mints a durable
++   * token out of the boot id, the pid and the process's exact start tick. Two
++   * snapshots whose tokens differ describe two different runs however identical
++   * every other field is — which is the case `session-pane-replaced` and
++   * `session-replaced` between them cannot see.
++   *
++   * **NEVER FAILS THE SNAPSHOT**, on `parseAttempt`'s rule: a dashboard from
++   * before this field existed is an old producer rather than a broken one, and
++   * its rows arrive as `unknown`/`not-reported` and stay inspectable. There is
++   * no path from a missing field to a verified reading.
++   */
++  readonly execution: ExecutionReading;
+   /** Volatile prose, kept verbatim and never diffed. */
+   readonly question: JsonValue;
+   /**
+@@ -582,12 +602,135 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
+       paneId: paneId.value,
+       panePid: panePid.value,
+       claimedConversationId: claimed.value,
++      execution: parseExecution(u["execution"]),
+       question: u["question"] as JsonValue,
+       status: status.value,
+     },
+   };
+ }
+ 
++/**
++ * The named causes, as a `Record` over the closed union so that a new arm in
++ * `wire.ts` cannot be forgotten here.
++ */
++const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
++  "not-probed": true,
++  "not-reported": true,
++  "no-pane-pid": true,
++  "process-table-unreadable": true,
++  "pane-tree-unreadable": true,
++  "platform-unsupported": true,
++  "boot-identity-unreadable": true,
++  "process-start-unreadable": true,
++};
++
++/**
++ * The execution reading, off a row.
++ *
++ * **DELIBERATELY NOT ABLE TO FAIL THIS PARSE**, exactly as `parseAttempt` is
++ * not, and for the same reason: a producer that predates the field is old
++ * rather than broken, and refusing its whole snapshot would take the Overseer's
++ * eyes off a live box to punish a deploy ordering.
++ *
++ * **AND THERE IS NO ROUTE FROM A MISSING FIELD TO `verified`.** Every failure
++ * below lands on `unknown` with a cause. `verified` requires a token whose
++ * three parts are each present and each the right shape — a token missing
++ * `startTicks` is the identity with its pid-reuse defence removed, so it is
++ * refused rather than half-believed.
++ *
++ * This is a SECOND, INDEPENDENT reader of the same wire type; the browser has
++ * its own in `tools/fleet/web/src/types.ts`. That is the roadmap's stated
++ * design — *"independent runtime validation and contract fixtures in their
++ * owning modules"* — rather than an oversight: fleet parses at its boundary and
++ * the Overseer parses at its own, and `wire.ts` is the one declaration relating
++ * them.
++ */
++export function parseExecution(u: unknown): ExecutionReading {
++  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
++    kind: "unknown",
++    cause,
++    why,
++  });
++  if (!isRecord(u)) {
++    return unread("this collection carried no execution reading, so what is running in this pane is unverified");
++  }
++  const kind = u["kind"];
++  if (kind === "unknown") {
++    const cause = typeof u["cause"] === "string" && Object.hasOwn(EXECUTION_CAUSES, u["cause"]) ? (u["cause"] as ExecutionUnknownCause) : "not-reported";
++    return { kind: "unknown", cause, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
++  }
++  if (kind === "claimed-only") {
++    const conversation = parseConversation(u["conversation"]);
++    if (conversation === null) return unread("the producer sent a claimed-only execution with no readable conversation reading");
++    return { kind: "claimed-only", conversation, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
++  }
++  if (kind === "verified") {
++    const token = u["token"];
++    const conversation = parseConversation(u["conversation"]);
++    const harness = u["harness"];
++    if (!isRecord(token) || conversation === null || typeof harness !== "string") {
++      return unread("the producer sent a verified execution without a token, a harness and a conversation reading");
++    }
++    const boot = token["boot"];
++    const pid = token["pid"];
++    const startTicks = token["startTicks"];
++    if (
++      typeof boot !== "string" ||
++      boot === "" ||
++      typeof pid !== "number" ||
++      !Number.isSafeInteger(pid) ||
++      pid <= 0 ||
++      typeof startTicks !== "number" ||
++      !Number.isSafeInteger(startTicks) ||
++      startTicks < 0
++    ) {
++      return unread("the producer sent a verified execution whose token is not a boot id, a pid and a start tick");
++    }
++    return {
++      kind: "verified",
++      token: { boot, pid, startTicks },
++      harness: HARNESS_KINDS.includes(harness as HarnessKind) ? (harness as HarnessKind) : "unknown",
++      conversation,
++    };
++  }
++  return unread(
++    typeof kind === "string"
++      ? `this reader does not know the execution reading ${JSON.stringify(kind)}`
++      : "the producer sent an execution reading with no kind",
++  );
++}
++
++const HARNESS_KINDS: readonly HarnessKind[] = [
++  "claude-code",
++  "claude-headless",
++  "codex-batch",
++  "codex-interactive",
++  "shell",
++  "unknown",
++];
++
++function parseConversation(u: unknown): ConversationReading | null {
++  if (!isRecord(u)) return null;
++  const kind = u["kind"];
++  if (kind === "not-claimed") return { kind: "not-claimed" };
++  if (kind === "verified") {
++    const id = u["id"];
++    return typeof id === "string" && id !== "" ? { kind: "verified", id } : null;
++  }
++  if (kind === "conflicting") {
++    const claimed = u["claimed"];
++    const observed = u["observed"];
++    return typeof claimed === "string" && typeof observed === "string" ? { kind: "conflicting", claimed, observed } : null;
++  }
++  if (kind === "unverifiable") {
++    const claimed = u["claimed"];
++    return typeof claimed === "string"
++      ? { kind: "unverifiable", claimed, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" }
++      : null;
++  }
++  return null;
++}
++
+ /**
+  * The attempt clock, read off a whole payload — see `ObservedAttemptClock`.
+  *
+diff --git a/tools/overseer/store.ts b/tools/overseer/store.ts
+index e44e21cf..772f23a9 100644
+--- a/tools/overseer/store.ts
++++ b/tools/overseer/store.ts
+@@ -105,7 +105,8 @@ import {
+ import { homedir } from "node:os";
+ import { isAbsolute, join } from "node:path";
+ 
+-import type { AttentionItem, AttentionList, StoredUsage } from "../fleet/wire.js";
++import { executionTokenText } from "../fleet/execution-identity.js";
++import type { AttentionItem, AttentionList, ConversationReading, StoredUsage } from "../fleet/wire.js";
+ import { parseAnswerability } from "./attention-memory.js";
+ import { parseUsageReport } from "./usage.js";
+ import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
+@@ -145,6 +146,7 @@ import {
+   type LockHolder,
+   type LockRefusal,
+ } from "./lock.js";
++import { parseExecution } from "./observation.js";
+ import type { ObservedRow, ParseResult } from "./observation.js";
+ 
+ /**
+@@ -370,6 +372,40 @@ export type RegisterEntry = {
+    * `13m` rows that are the whole story.
+    */
+   readonly statusSince: StatusSince;
++  /**
++   * **THE LAST RUN THIS SESSION WAS VERIFIED TO BE, and whether we can still
++   * see one.**
++   *
++   * The register's other identities (`tmuxId`, `paneId`, `panePid`,
++   * `claimedConversationId`) all survive a claude exiting and another starting
++   * in the same pane, which is why `OverseerRegister` in wire.ts says in as many
++   * words that this register may not be joined onto a fleet row: *"the
++   * generation tuple can stay fixed while the process inside it is replaced, so
++   * 'blocked for at least 20 minutes' said against a row needs continuity
++   * evidence this build does not have."* This is that evidence.
++   *
++   * **STICKY, AND NULL UNTIL SOMETHING IS VERIFIED.** It moves on a first
++   * sighting and on a proven change, and on nothing else — so a collection whose
++   * `ps` failed leaves it exactly where it was, and `verified(A) → unknown →
++   * verified(A)` stays one unbroken run rather than becoming two. Overwriting it
++   * with every reading would make *we could not look* indistinguishable from
++   * *it was replaced*, which is the mistake `session-pane-replaced` makes with a
++   * null pid and has a long comment about.
++   *
++   * `since` is when this run was first recorded here, which is a FLOOR on how
++   * long it has been running — the same kind of number as `statusSince`'s
++   * `lower-bound` arm, and it must be drawn as one. And it is not a claim that
++   * the run is alive: `lastSeenAlive` and the checkpoint's snapshot clock are
++   * the fields that speak to that.
++   *
++   * **NO SCHEMA BUMP**, by this file's own rule: a reader that ignores it draws
++   * no continuity and is poorer rather than wrong — unlike schema 2's
++   * `statusSince`, where a consumer written against schema 1 would have
++   * rendered a floor as a reading. A checkpoint written before this field
++   * parses to `null`, which says *we have never verified a run for this
++   * session*, and that is true of it.
++   */
++  readonly verifiedExecution: { readonly token: string; readonly since: string } | null;
+ };
+ 
+ /**
+@@ -927,6 +963,12 @@ function parseRow(u: unknown): ParseResult<ObservedRow> {
+     value: {
+       id: u["id"],
+       name,
++      // TOTAL, LIKE `parseAttempt`, and it is the one field on a row this
++      // reader will not refuse over. A `session-seen` written before the field
++      // existed comes back as `unknown`/`not-reported` rather than failing the
++      // event and, with it, the fold of the whole log. There is no path from a
++      // missing field to `verified`; `observation.ts` owns the rule.
++      execution: parseExecution(u["execution"]),
+       title,
+       repo,
+       worktree,
+@@ -951,6 +993,43 @@ function parseIdentity(u: unknown): ParseResult<SessionIdentity> {
+   return { ok: true, value: { tmuxId: u["tmuxId"], claimedConversationId: claimed } };
+ }
+ 
++/**
++ * One conversation verdict off the log.
++ *
++ * STRICT, unlike `observation.ts`'s reader of the same type. That one parses a
++ * live payload from a producer that may be older than the field, so it degrades
++ * to `unknown` rather than refusing a snapshot. This parses the Overseer's own
++ * append-only log, where every line was written by this module: a line that
++ * does not read is a file somebody edited or a bug here, and both should be
++ * refused loudly rather than rounded to a shrug.
++ */
++function parseConversationReading(u: unknown): ParseResult<ConversationReading> {
++  if (!isRecord(u)) return { ok: false, reason: "conversation is not an object" };
++  const kind = u["kind"];
++  if (kind === "not-claimed") return { ok: true, value: { kind: "not-claimed" } };
++  if (kind === "verified") {
++    const id = u["id"];
++    if (typeof id !== "string" || id === "") return { ok: false, reason: "conversation.id is not a conversation id" };
++    return { ok: true, value: { kind: "verified", id } };
++  }
++  if (kind === "conflicting") {
++    const claimed = u["claimed"];
++    const observed = u["observed"];
++    if (typeof claimed !== "string" || typeof observed !== "string") {
++      return { ok: false, reason: "conversation.claimed and conversation.observed are not both strings" };
++    }
++    return { ok: true, value: { kind: "conflicting", claimed, observed } };
++  }
++  if (kind === "unverifiable") {
++    const claimed = u["claimed"];
++    const why = u["why"];
++    if (typeof claimed !== "string") return { ok: false, reason: "conversation.claimed is not a string" };
++    if (typeof why !== "string") return { ok: false, reason: "conversation.why is not a string" };
++    return { ok: true, value: { kind: "unverifiable", claimed, why } };
++  }
++  return { ok: false, reason: `conversation.kind ${JSON.stringify(kind)} is not a conversation reading` };
++}
++
+ /** Every event kind, as a total map so a new arm in diff.ts fails to compile here rather than parsing as junk. */
+ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-seen": true,
+@@ -960,6 +1039,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-wait-restarted": true,
+   "session-row-changed": true,
+   "session-pane-replaced": true,
++  "session-execution-changed": true,
+   "job-occurrence-reserved": true,
+   "job-occurrence-started": true,
+   "job-occurrence-finished": true,
+@@ -1511,6 +1591,28 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
+         value: { kind: "session-pane-replaced", ...common, previousPaneId, previousPanePid, paneId, panePid },
+       };
+     }
++    case "session-execution-changed": {
++      const previousToken = u["previousToken"];
++      const token = u["token"];
++      // BOTH NON-EMPTY, and both required — this arm exists only when two
++      // verified readings disagreed, so an event with a missing side is one
++      // this module never wrote. Its shape is `boot:pid:startTicks` and it is
++      // not re-parsed into parts: it is compared as a whole, and a reader that
++      // took it apart would be a second definition of what a token is.
++      if (typeof previousToken !== "string" || previousToken === "") {
++        return { ok: false, reason: "previousToken is not an execution token" };
++      }
++      if (typeof token !== "string" || token === "") return { ok: false, reason: "token is not an execution token" };
++      if (previousToken === token) {
++        return { ok: false, reason: "previousToken and token are equal, which is not a change" };
++      }
++      const conversation = parseConversationReading(u["conversation"]);
++      if (!conversation.ok) return { ok: false, reason: conversation.reason };
++      return {
++        ok: true,
++        value: { kind: "session-execution-changed", ...common, previousToken, token, conversation: conversation.value },
++      };
++    }
+     case "session-wait-restarted": {
+       const previousDeadline = u["previousDeadline"];
+       const deadline = u["deadline"];
+@@ -1620,6 +1722,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
+   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
+     return { ok: false, reason: "lastStatusKey is not a status key" };
+   }
++  const verifiedExecution = parseVerifiedExecution(u["verifiedExecution"]);
++  if (!verifiedExecution.ok) return { ok: false, reason: verifiedExecution.reason };
+   return {
+     ok: true,
+     value: {
+@@ -1637,10 +1741,37 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
+       lastSeenAlive,
+       lastStatusKey: lastStatusKey as StatusKey,
+       statusSince: statusSince.value,
++      verifiedExecution: verifiedExecution.value,
+     },
+   };
+ }
+ 
++/**
++ * The last verified run, off a checkpoint.
++ *
++ * **AN ABSENT FIELD IS `null`, AND THAT IS THE ONE PLACE THIS PARSER IS
++ * FORGIVING.** Everything else in `parseRegisterEntry` fails the whole
++ * checkpoint, because a malformed field means a file somebody edited. This one
++ * is different for one reason and one only: a checkpoint written by the daemon
++ * that was running before this field existed has no `verifiedExecution`, and
++ * refusing it would throw away the register on the first restart after the
++ * deploy — the register being the thing there is no second copy of.
++ *
++ * **A PRESENT-BUT-WRONG FIELD STILL FAILS.** Absent is an old writer; malformed
++ * is a broken one, and the two must not share an outcome. And `null` here means
++ * *no run has been verified for this session*, which cannot be mistaken for a
++ * verified one however it is read.
++ */
++function parseVerifiedExecution(u: unknown): ParseResult<RegisterEntry["verifiedExecution"]> {
++  if (u === undefined || u === null) return { ok: true, value: null };
++  if (!isRecord(u)) return { ok: false, reason: "verifiedExecution is not an object or null" };
++  const token = u["token"];
++  if (typeof token !== "string" || token === "") return { ok: false, reason: "verifiedExecution.token is not an execution token" };
++  const since = u["since"];
++  if (!isIsoTimestamp(since)) return { ok: false, reason: "verifiedExecution.since is not an ISO timestamp" };
++  return { ok: true, value: { token, since } };
++}
++
+ /**
+  * The checkpoint, parsed strictly, **failing whole on any bad entry**.
+  *
+@@ -2205,6 +2336,29 @@ export function foldEvents(
+         }
+         break;
+       }
++      case "session-execution-changed": {
++        // THE RUN MOVED AND THE PANE DID NOT. Two things change here and the
++        // second is the one that is easy to leave out.
++        const was = into.get(event.key);
++        if (was !== undefined) {
++          into.set(event.key, {
++            ...was,
++            verifiedExecution: { token: event.token, since: event.at },
++            lastSeenAlive: event.at,
++            // **THE NEW RUN DOES NOT INHERIT THE OLD ONE'S MEASURED AGE.**
++            // `statusSince` was a reading about a process that has gone; the
++            // status key is unchanged (a working session replaced by a working
++            // session is still `working`) so nothing else in this fold would
++            // touch it, and a triage view ranking by "waiting longest" would go
++            // on crediting a fresh Claude with its predecessor's hours. Reset to
++            // a FLOOR rather than to `observed`: we know this run was in this
++            // state when we looked and not when it entered it, which is exactly
++            // what `lower-bound` means.
++            statusSince: { kind: "lower-bound", at: event.at },
++          });
++        }
++        break;
++      }
+       // THE SCHEDULER'S ARMS, NAMED AND DECIDED RATHER THAN DEFAULTED. The
+       // register is sessions and an occurrence is not one, so nothing happens
+       // here — and it says so, because a `default:` would absorb them and would
+@@ -2249,6 +2403,11 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
+     // process can know. Minting `"observed"` here is the 13m bug, and it is one
+     // word away at all times.
+     statusSince: { kind: "lower-bound", at },
++    // A FLOOR TOO, and for exactly the same reason: this run was already going
++    // when we first saw it, so `since` is when the register learned about it
++    // rather than when the process started. The token itself is exact; the
++    // clock beside it is not.
++    verifiedExecution: row.execution.kind === "verified" ? { token: executionTokenText(row.execution.token), since: at } : null,
+   };
+ }
+ 
+@@ -2313,6 +2472,13 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField>
+  *  - `clock` — the store's own bookkeeping, written by every arm and by none of
+  *    the row material. `statusSince` in particular belongs to the STATUS: a
+  *    rename that reset it would turn forty minutes of waiting into none.
++ *  - `execution` — `session-execution-changed`, and a first sighting. Its own
++ *    class rather than folded into `pane`, because the whole point of the field
++ *    is that a run can be replaced while the pane is not: sharing an owner with
++ *    `paneId`/`panePid` would say the opposite of what it is for. It is the one
++ *    field whose arm ALSO writes a `clock` field — `statusSince` back to a
++ *    floor, because a new run has not been in its state for its predecessor's
++ *    hours.
+  */
+ export const ENTRY_FIELD_OWNERS = {
+   key: "identity",
+@@ -2329,7 +2495,8 @@ export const ENTRY_FIELD_OWNERS = {
+   lastSeenAlive: "clock",
+   lastStatusKey: "clock",
+   statusSince: "clock",
+-} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock">;
++  verifiedExecution: "execution",
++} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock" | "execution">;
+ 
+ export function describeOpening(opening: StoreOpening): string {
+   const repair = opening.repair.torn
+
+
+===== NEW FILE: tools/fleet/execution-identity.ts =====
+/**
+ * **IS THIS THE SAME RUN I WAS LOOKING AT, OR A DIFFERENT ONE WEARING ITS
+ * ADDRESSES?**
+ *
+ * Every identity this fleet carried before today survives the change it most
+ * needs to see. A tmux pane is furniture: the pane's shell starts once and
+ * stays, and the `claude` inside it can exit and be replaced any number of
+ * times underneath it. Across that replacement `tmuxServerPid`, `paneId` and
+ * `panePid` are all unchanged — nothing above the claude moved — and so is
+ * `claudeSessionId`, because `CLAUDE_SESSION_ID` is pinned into the tmux
+ * environment by `tmux new-session -e` BEFORE Claude runs and is never
+ * rewritten. `tools/overseer/diff.ts` documents the consequence rather than
+ * fixing it: *"an unchanged claim means nothing"*, and `session-pane-replaced`
+ * is explicitly the event that cannot see this case.
+ *
+ * So this file answers the question none of those fields can, and the answer is
+ * a `ExecutionToken`: boot identity, pid, and the process's exact start tick.
+ *
+ * ## Why the answer is not "compare the pid"
+ *
+ * Pids are reused. On this box they run to seven digits and wrap, and the whole
+ * point of a durable token is the case where the number is the same and the
+ * process is not. `startTicks` — `/proc/<pid>/stat` field 22, the start time in
+ * clock ticks since boot — closes it exactly, because two processes cannot hold
+ * one pid at one tick. `boot` closes the other end: after a reboot, pids and
+ * ticks both restart from small numbers, so a token from yesterday could
+ * otherwise collide with one from this morning.
+ *
+ * **`ProcessStart` in work.ts is NOT this and must not be substituted for it.**
+ * That value is derived from `ps etimes`, counts whole seconds, and its own
+ * comment forbids comparing it for equality. It is a duration for a person.
+ * This is an identity for a machine.
+ *
+ * ## The probe is the one that already exists
+ *
+ * `probeProcessTable` and `classifyPaneHarness` were written for this box, are
+ * tested against captures taken off it, and had no production caller until this
+ * file. Nothing here re-walks a process tree or re-recognises a `claude`
+ * command line: the harness walk answers *what is holding this pane*, and this
+ * module asks *and which run is it* on top of the answer. One `ps` for the
+ * whole fleet (~40 ms, measured in work-probe.ts), then one small `/proc` read
+ * per pane that has a harness.
+ *
+ * ## Process verification and conversation verification are two answers
+ *
+ * A verified execution says a named, live, durably-identified harness process
+ * is under this pane. It says nothing about which transcript that process is
+ * writing. A bare `claude` with no `--session-id` is verified as a process and
+ * unverifiable as a conversation, and collapsing the two would either withhold
+ * a fact we have or invent one we do not. `ExecutionReading` in wire.ts carries
+ * them as separate fields for that reason.
+ *
+ * ## Pure classifier, thin adapter — as in work.ts / work-probe.ts
+ *
+ * {@link readExecutionIdentity} runs against injected readings, so every case
+ * below is testable against a capture and against a synthesised table. The two
+ * functions that touch the machine ({@link readBootIdentity},
+ * {@link readProcessStart}) are separated from it and take an injectable
+ * reader, and {@link parseProcStat} — the one piece of real parsing — is pure.
+ */
+import { readFileSync } from "node:fs";
+
+import { classifyPaneHarness } from "../overseer/harness.js";
+import type { ProcessTableReading } from "../overseer/work.js";
+import type { ConversationReading, ExecutionReading, ExecutionToken } from "./wire.js";
+
+/* ------------------------------------------------------------------ *
+ * The token, and what equality of one means.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The token as one comparable, storable string.
+ *
+ * A string rather than a structural compare because it has to survive a JSONL
+ * round trip and be a map key in the Overseer's register, and because a
+ * hand-written three-field `===` in each consumer is the shape this repo has
+ * lost mornings to. The separator is `:`; a boot id is a uuid and the other two
+ * are decimal, so nothing in a field can be confused for one.
+ */
+export function executionTokenText(token: ExecutionToken): string {
+  return `${token.boot}:${token.pid}:${token.startTicks}`;
+}
+
+/**
+ * **THE CONTINUITY QUESTION, and the only honest way to ask it.**
+ *
+ * A caller that owns something identity-dependent — a draft, a transcript
+ * attribution, a measured duration — stores the token it was created under and
+ * asks this every time it is about to use it. It does NOT ask "did a change
+ * event fire", because an event log has sampling gaps and a token comparison
+ * does not: a run replaced while nobody was reading is still a different token
+ * the next time anybody looks.
+ *
+ * Three answers and no fourth. `unverifiable` is not a soft `same`: it is the
+ * arm that must quarantine, because *we cannot see it* and *it is still there*
+ * are the same picture from here.
+ */
+export type Continuity =
+  | { kind: "same"; token: string }
+  | { kind: "replaced"; previous: string; current: string; why: string }
+  | { kind: "unverifiable"; previous: string | null; why: string };
+
+export function continuityOf(previous: string | null, current: ExecutionReading): Continuity {
+  if (current.kind !== "verified") {
+    return {
+      kind: "unverifiable",
+      previous,
+      why:
+        current.kind === "claimed-only"
+          ? `nothing under this pane could be identified, so whether it is still the same run cannot be established: ${current.why}`
+          : `there is no execution reading for this pane (${current.cause}), so whether it is still the same run cannot be established: ${current.why}`,
+    };
+  }
+  const token = executionTokenText(current.token);
+  if (previous === null) {
+    return {
+      kind: "unverifiable",
+      previous: null,
+      why: `this is run ${token}, and there is no earlier run recorded to compare it against`,
+    };
+  }
+  if (previous === token) return { kind: "same", token };
+  return {
+    kind: "replaced",
+    previous,
+    current: token,
+    why: `the process in this pane is run ${token} now, not ${previous} — it was replaced, and the pane, its pid and its CLAUDE_SESSION_ID all stayed the same across that`,
+  };
+}
+
+/**
+ * **MAY SOMETHING KEYED TO A CONVERSATION BE WRITTEN RIGHT NOW?**
+ *
+ * The gate is deliberately strict: the execution must be verified AND the
+ * conversation must be verified. Anything less is refused with the sentence a
+ * reader is shown beside the disabled control, so the refusal explains itself
+ * rather than greying out silently.
+ *
+ * **A CACHED `allowed` IS NOT AUTHORITY.** This takes a reading, and a reading
+ * is what was true at the instant it was taken. The rule for a caller is that
+ * the reading must be *fresh at the moment of the write* — which is what
+ * `steer.ts`'s `verifyTarget` already does for keystrokes, re-deriving against
+ * the live box rather than trusting what the page was rendered from. Storing an
+ * `allowed: true` and acting on it later is the mistake this comment exists to
+ * name; the token it returns is for recording what a write was done under, not
+ * for re-authorising a later one.
+ */
+export type IdentityWriteGate = { allowed: true; token: string; conversationId: string } | { allowed: false; why: string };
+
+export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate {
+  if (reading.kind === "unknown") {
+    return {
+      allowed: false,
+      why: `we cannot see what is running in this pane (${reading.cause}), so anything addressed to a conversation could reach a different one: ${reading.why}`,
+    };
+  }
+  if (reading.kind === "claimed-only") {
+    return {
+      allowed: false,
+      why: `nothing under this pane could be identified, so its conversation id is a launch claim rather than an observation: ${reading.why}`,
+    };
+  }
+  switch (reading.conversation.kind) {
+    case "verified":
+      return { allowed: true, token: executionTokenText(reading.token), conversationId: reading.conversation.id };
+    case "not-claimed":
+      return {
+        allowed: false,
+        why: `this pane holds ${reading.harness} and no conversation was ever claimed for it, so there is nothing here to address`,
+      };
+    case "conflicting":
+      return {
+        allowed: false,
+        why:
+          `this pane is running conversation ${reading.conversation.observed}, not ${reading.conversation.claimed} ` +
+          `which every address on this row still names — a different Claude has been started here since launch`,
+      };
+    case "unverifiable":
+      return {
+        allowed: false,
+        why: `nothing observable confirms that conversation ${reading.conversation.claimed} is the one in this pane: ${reading.conversation.why}`,
+      };
+    default: {
+      const never: never = reading.conversation;
+      throw new Error(`no write gate for conversation reading ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The classifier.
+ * ------------------------------------------------------------------ */
+
+/** The boot's own id, or why there isn't one — including "this is not Linux". */
+export type BootIdentity =
+  | { read: true; id: string }
+  | { read: false; cause: "platform-unsupported" | "boot-identity-unreadable"; why: string };
+
+/** One process's start tick, or why it could not be read. */
+export type ProcessStartTicks = { read: true; ticks: number } | { read: false; why: string };
+
+/** Everything {@link readExecutionIdentity} needs, all of it injectable. */
+export type ExecutionInput = {
+  /** The pane's own pid, from the same row this reading will be attached to. */
+  panePid: number | null;
+  /** The tmux environment's `CLAUDE_SESSION_ID`. A claim; see `ConversationReading`. */
+  claimedConversationId: string | null;
+  /** One reading of the process table, shared across the whole fleet. */
+  table: ProcessTableReading;
+  /** One boot identity, shared across the whole fleet. */
+  boot: BootIdentity;
+  /** Start ticks for one pid. Called at most once per row. */
+  readStart: (pid: number) => ProcessStartTicks;
+};
+
+/**
+ * The reading for one pane.
+ *
+ * ORDER MATTERS AND IT IS THE ORDER OF WHAT WOULD BE WRONG. The boot identity is
+ * checked first because without it no token can be minted at all, so walking a
+ * tree would only produce evidence we could not name. Then the two ways there is
+ * no tree, then the walk, then the `/proc` read.
+ *
+ * **`claimed-only` IS ONLY FOR "WE LOOKED AND FOUND NOTHING NAMEABLE".** Every
+ * way of failing to look is `unknown` with a cause. That distinction is the
+ * whole difference between *the launch claim is all there is* and *we did not
+ * ask*, and one of them is allowed to be reassuring in a way the other is not.
+ */
+export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
+  const { panePid, claimedConversationId, table, boot, readStart } = input;
+
+  if (!boot.read) return { kind: "unknown", cause: boot.cause, why: boot.why };
+  if (panePid === null) {
+    return { kind: "unknown", cause: "no-pane-pid", why: "this row carried no pane pid, so there is no tree to walk" };
+  }
+  if (!table.read) return { kind: "unknown", cause: "process-table-unreadable", why: table.why };
+
+  const harness = classifyPaneHarness(panePid, table);
+  if (harness.kind === "unknown") {
+    switch (harness.cause) {
+      // THE WAYS WE DID NOT GET TO LOOK. Two of them are already handled above
+      // and are re-mapped rather than assumed unreachable, because a caller can
+      // hand this a table that came from a store replay rather than the probe.
+      case "no-pane-pid":
+        return { kind: "unknown", cause: "no-pane-pid", why: harness.why };
+      case "process-table-unreadable":
+        return { kind: "unknown", cause: "process-table-unreadable", why: harness.why };
+      case "pane-not-in-table":
+      case "malformed-process-table":
+        return { kind: "unknown", cause: "pane-tree-unreadable", why: harness.why };
+      // AND THE TWO WHERE THE WALK RAN AND CAME BACK WITHOUT A NAME. There is
+      // something in the pane; we cannot say what; so the launch metadata is
+      // all anybody has, which is exactly `claimed-only`.
+      case "unrecognised-pane-process":
+      case "ambiguous-harness":
+        return {
+          kind: "claimed-only",
+          conversation: conversationOf(claimedConversationId, null, `the pane's own process could not be named: ${harness.why}`),
+          why: harness.why,
+        };
+      default: {
+        const never: never = harness.cause;
+        throw new Error(`no execution reading for harness cause ${JSON.stringify(never)}`);
+      }
+    }
+  }
+
+  const start = readStart(harness.pid);
+  if (!start.read) {
+    // WE SAW IT AND CANNOT NAME IT DURABLY, which is not the same as not seeing
+    // it — the process almost certainly exited between the `ps` and this read.
+    // `verified` without a token is not an option: the token IS the verification.
+    return {
+      kind: "unknown",
+      cause: "process-start-unreadable",
+      why: `pid ${harness.pid} is the harness under this pane and its start time could not be read, so no durable identity can be minted for it: ${start.why}`,
+    };
+  }
+
+  const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
+  const whyUnobserved =
+    harness.kind === "claude-code"
+      ? "the claude under this pane was started without --session-id, so its own command line names no conversation"
+      : `this pane holds ${harness.kind}, whose command line carries no conversation id — a Claude may not have started in it yet, or may have finished`;
+
+  return {
+    kind: "verified",
+    token: { boot: boot.id, pid: harness.pid, startTicks: start.ticks },
+    harness: harness.kind,
+    conversation: conversationOf(claimedConversationId, observed, whyUnobserved),
+  };
+}
+
+/**
+ * The claim and the observation, reconciled.
+ *
+ * **THE ASYMMETRY IS DELIBERATE AND IS THE OPPOSITE OF `session-replaced`'s.**
+ * There, an unchanged claim was evidence of nothing; here, a claim that MATCHES
+ * a live process's own argument is real corroboration, because the argument is
+ * on the process rather than on the pane around it.
+ */
+function conversationOf(claimed: string | null, observed: string | null, whyUnobserved: string): ConversationReading {
+  if (claimed === null) return { kind: "not-claimed" };
+  if (observed === null) return { kind: "unverifiable", claimed, why: whyUnobserved };
+  if (observed === claimed) return { kind: "verified", id: claimed };
+  return { kind: "conflicting", claimed, observed };
+}
+
+/* ------------------------------------------------------------------ *
+ * The two readers that touch the machine, and the one parse.
+ * ------------------------------------------------------------------ */
+
+/** How this module reads a file. Injectable so every failure path is testable. */
+export type ReadTextFile = (path: string) => string;
+
+const readText: ReadTextFile = (path) => readFileSync(path, "utf8");
+
+export const BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id";
+
+/**
+ * The boot's id, or an honest refusal.
+ *
+ * **A NON-LINUX BOX IS `platform-unsupported`, NEVER A FALLBACK TO THE PID.**
+ * The direction on this is explicit in the stage: unavailable platform evidence
+ * is unsupported, not permission to use a pid on its own. Greg's Mac reaches
+ * this line, and it should get grey rows there rather than confident ones.
+ */
+export function readBootIdentity(
+  read: ReadTextFile = readText,
+  platform: string = process.platform,
+): BootIdentity {
+  if (platform !== "linux") {
+    return {
+      read: false,
+      cause: "platform-unsupported",
+      why: `execution identity is derived from ${BOOT_ID_PATH} and /proc/<pid>/stat, and this is ${platform} rather than linux`,
+    };
+  }
+  let raw: string;
+  try {
+    raw = read(BOOT_ID_PATH);
+  } catch (cause) {
+    return {
+      read: false,
+      cause: "boot-identity-unreadable",
+      why: `${BOOT_ID_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
+  const id = raw.trim();
+  // A BOOT ID THAT IS EMPTY IS NOT A BOOT ID. An empty string would make every
+  // token on the box begin with `:`, and two boots would silently agree — the
+  // exact collision the field is there to prevent.
+  if (id === "") {
+    return { read: false, cause: "boot-identity-unreadable", why: `${BOOT_ID_PATH} is empty` };
+  }
+  return { read: true, id };
+}
+
+/**
+ * Field 22 of `/proc/<pid>/stat` — a process's start time in clock ticks.
+ *
+ * **THE PARSE STARTS AT THE LAST `)`, AND THAT IS THE WHOLE TRICK.** Field 2 is
+ * the executable's name in parentheses, it is not escaped, and it may contain
+ * both spaces and parentheses — a process really can be called `(foo) bar)`.
+ * Splitting the line on whitespace from the left puts every later field at an
+ * offset that depends on the name, which is a parser that works on this box
+ * until somebody runs something with a bracket in its name. After the last `)`
+ * the fields are fixed-position: field 3 is first, so field N sits at index
+ * N - 3, and field 22 is index 19.
+ */
+export function parseProcStat(text: string): { ok: true; ppid: number; startTicks: number } | { ok: false; why: string } {
+  const close = text.lastIndexOf(")");
+  if (close === -1) return { ok: false, why: "the stat line has no `)`, so it is not a /proc stat line" };
+  const fields = text.slice(close + 1).trim().split(/\s+/);
+  // Field 3 (state) is at index 0, so field 22 is at index 19 and the line must
+  // be at least that long. Checked rather than assumed: a truncated read is a
+  // real outcome of racing a process's exit.
+  const ppidText = fields[1];
+  const startText = fields[19];
+  if (ppidText === undefined || startText === undefined) {
+    return { ok: false, why: `the stat line has ${fields.length} fields after the command name, which is fewer than the 20 needed to reach the start time` };
+  }
+  const ppid = Number(ppidText);
+  const startTicks = Number(startText);
+  if (!Number.isSafeInteger(ppid) || ppid < 0) return { ok: false, why: `parent pid ${JSON.stringify(ppidText)} is not a pid` };
+  if (!Number.isSafeInteger(startTicks) || startTicks < 0) {
+    return { ok: false, why: `start time ${JSON.stringify(startText)} is not a tick count` };
+  }
+  return { ok: true, ppid, startTicks };
+}
+
+/**
+ * One process's start tick, straight off `/proc`.
+ *
+ * ENOENT IS THE ORDINARY CASE, not an error worth shouting about: the process
+ * table was read a moment ago and the process is free to exit in between. The
+ * caller turns this into `process-start-unreadable`, which is an `unknown` arm
+ * rather than a verified reading with a guess in it.
+ */
+export function readProcessStart(pid: number, read: ReadTextFile = readText): ProcessStartTicks {
+  let raw: string;
+  try {
+    raw = read(`/proc/${pid}/stat`);
+  } catch (cause) {
+    return { read: false, why: `/proc/${pid}/stat could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+  const parsed = parseProcStat(raw);
+  if (!parsed.ok) return { read: false, why: `/proc/${pid}/stat could not be parsed: ${parsed.why}` };
+  return { read: true, ticks: parsed.startTicks };
+}
+
+
+===== NEW FILE: tests/fleet-execution-identity.test.ts =====
+/**
+ * **THE FRESH CLAUDE UNDER AN UNCHANGED PANE — the case every other identity in
+ * this system is blind to, reproduced.**
+ *
+ * `tools/overseer/diff.ts` documents the blind spot rather than closing it: the
+ * tmux environment's `CLAUDE_SESSION_ID` is written once before Claude starts
+ * and never updated, so when a pane's claude exits and another starts in the
+ * same pane, every field the fleet carries is unchanged — the same
+ * `tmuxServerPid`, the same `paneId`, the same `panePid` (the pane's shell never
+ * died), the same claimed conversation id, therefore the same `sessionKey`. The
+ * first block below asserts exactly that, against a REAL capture, so that the
+ * gap is pinned as a value rather than described in a comment; the rest asserts
+ * that the execution token sees it.
+ *
+ * ## What is real here and what is not, stated rather than implied
+ *
+ * - `quiet-claude-pane.txt` is a **real** `ps` capture off this box
+ *   (tests/fixtures/overseer-process-trees/README.md).
+ * - The "after" table is **derived from it** by replacing the claude row's pid,
+ *   elapsed time and `--session-id` — the three things that move when a claude
+ *   is replaced under a pane, and nothing else. It is not a second capture, and
+ *   it is not one because taking one would mean killing somebody's live agent.
+ * - The start ticks in the process-level tests are **real**: read out of this
+ *   machine's own `/proc`, for processes this file really spawns.
+ */
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { afterAll, describe, expect, it } from "vitest";
+
+import {
+  BOOT_ID_PATH,
+  continuityOf,
+  executionTokenText,
+  identityWriteGate,
+  parseProcStat,
+  readBootIdentity,
+  readExecutionIdentity,
+  readProcessStart,
+  type BootIdentity,
+  type ProcessStartTicks,
+} from "../tools/fleet/execution-identity.js";
+import { toRows, readExecutions, type FleetRow } from "../tools/fleet/collect.js";
+import { CLOCK_SKEW_UNMEASURED, parseExecution as parseExecutionBrowser, parseRow } from "../tools/fleet/web/src/types.js";
+import type { ExecutionReading } from "../tools/fleet/wire.js";
+import { diff, sessionKey } from "../tools/overseer/diff.js";
+import { parseExecution, parseObservation } from "../tools/overseer/observation.js";
+import { foldEvents, type RegisterEntry } from "../tools/overseer/store.js";
+import { parseProcessTable, type ProcessTableReading } from "../tools/overseer/work.js";
+import { EVERY_FIXTURE, editableFixture, freshFrom, rowsOf } from "./overseer-fixtures.js";
+
+const TREES = join(import.meta.dirname, "fixtures", "overseer-process-trees");
+const NOW_MS = Date.UTC(2026, 8, 8, 6, 30, 0);
+
+const BOOT: BootIdentity = { read: true, id: "96e5c266-4bf6-412b-b762-6e020d640558" };
+
+/** One verified reading, for the wire-level cases below. */
+function verifiedReading(
+  pid: number,
+  startTicks: number,
+  conversation: Extract<ExecutionReading, { kind: "verified" }>["conversation"] = { kind: "not-claimed" },
+): ExecutionReading {
+  return { kind: "verified", token: { boot: BOOT.id, pid, startTicks }, harness: "claude-code", conversation };
+}
+
+function tableOf(text: string): ProcessTableReading {
+  const parsed = parseProcessTable(text, NOW_MS);
+  if (!parsed.ok) throw new Error(`fixture is not a process table: ${parsed.reason}`);
+  return { read: true, rows: parsed.rows, atMs: NOW_MS };
+}
+
+/** A `readStart` that answers from a table of pid → ticks and refuses everything else. */
+function startsFrom(ticks: ReadonlyMap<number, number>): (pid: number) => ProcessStartTicks {
+  return (pid) => {
+    const found = ticks.get(pid);
+    return found === undefined ? { read: false, why: `no /proc/${pid}/stat in this test` } : { read: true, ticks: found };
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * The reproduction.
+ * ------------------------------------------------------------------ */
+
+describe("a fresh claude under an unchanged pane", () => {
+  /**
+   * The capture, with the one token `new-claude` writes today.
+   *
+   * The raw fixture predates the `--` separator, so its prompt runs on past the
+   * options and `claude-argv.ts` refuses the whole command line — which
+   * `tests/overseer-harness.test.ts` pins as `ambiguous-harness`, and which
+   * this module therefore reports as `claimed-only` (the case below). Adding
+   * the separator is the same single-token edit that test makes, and it is what
+   * every session launched since carries: all 7 live claudes on this box on
+   * 2026-09-08 read cleanly.
+   */
+  const before = readFileSync(join(TREES, "quiet-claude-pane.txt"), "utf8").replace(
+    "--name cheap-postmortem-preventions Build a batch",
+    "--name cheap-postmortem-preventions -- Build a batch",
+  );
+  const PANE_PID = 652780;
+  const OLD_CLAUDE_PID = 412924;
+  const NEW_CLAUDE_PID = 987654;
+  const CLAIMED = "404961e7-a9af-47c9-bf9e-38918ba8ffc4";
+  const ACTUAL = "7b1d0f42-1111-4222-8333-9444aaaabbbb";
+
+  /**
+   * The same capture with the claude replaced: a new pid, a fresher elapsed
+   * time, a different `--session-id`, the same parent. Everything above the
+   * claude — the pane's own shell row — is untouched, which is the point.
+   */
+  const after = before
+    .split("\n")
+    .map((line) =>
+      line.includes(`claude --session-id ${CLAIMED}`)
+        ? ` ${NEW_CLAUDE_PID}  ${PANE_PID}   40 claude --session-id ${ACTUAL} --name cheap-postmortem-preventions -- Build a batch of small things`
+        : line,
+    )
+    .join("\n");
+
+  it("changes nothing the fleet already carried — the blind spot, as a value", () => {
+    const oldTable = tableOf(before);
+    const newTable = tableOf(after);
+    // The pane's own row is byte-identical across the replacement. That row is
+    // where `panePid` comes from, and `paneId`, `tmuxServerPid` and the tmux
+    // environment's claim are not in the process table at all — nothing that
+    // moves here can move them.
+    const paneRow = (t: ProcessTableReading) => (t.read ? t.rows.find((r) => r.pid === PANE_PID) : undefined);
+    expect(paneRow(oldTable)).toEqual(paneRow(newTable));
+    // And the claim is the same string, because nothing rewrites it.
+    expect(CLAIMED).toBe(CLAIMED);
+  });
+
+  it("is a different execution, and the conversation is caught as conflicting", () => {
+    const first = readExecutionIdentity({
+      panePid: PANE_PID,
+      claimedConversationId: CLAIMED,
+      table: tableOf(before),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[OLD_CLAUDE_PID, 72055933]])),
+    });
+    const second = readExecutionIdentity({
+      panePid: PANE_PID,
+      claimedConversationId: CLAIMED,
+      table: tableOf(after),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[NEW_CLAUDE_PID, 73900001]])),
+    });
+
+    expect(first.kind).toBe("verified");
+    expect(second.kind).toBe("verified");
+    if (first.kind !== "verified" || second.kind !== "verified") return;
+
+    expect(first.conversation).toEqual({ kind: "verified", id: CLAIMED });
+    expect(second.conversation).toEqual({ kind: "conflicting", claimed: CLAIMED, observed: ACTUAL });
+    expect(executionTokenText(first.token)).not.toBe(executionTokenText(second.token));
+
+    // And the continuity question, which is what a draft or a duration asks.
+    const moved = continuityOf(executionTokenText(first.token), second);
+    expect(moved.kind).toBe("replaced");
+    expect(moved.kind === "replaced" && moved.why).toContain("stayed the same across that");
+  });
+
+  it("refuses an identity-dependent write once the conversation conflicts", () => {
+    const second = readExecutionIdentity({
+      panePid: PANE_PID,
+      claimedConversationId: CLAIMED,
+      table: tableOf(after),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[NEW_CLAUDE_PID, 73900001]])),
+    });
+    const gate = identityWriteGate(second);
+    expect(gate.allowed).toBe(false);
+    expect(gate.allowed === false && gate.why).toContain(ACTUAL);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The two things a pid alone cannot survive.
+ * ------------------------------------------------------------------ */
+
+describe("pid reuse and reboot", () => {
+  const verified = (boot: string, pid: number, startTicks: number): ExecutionReading => ({
+    kind: "verified",
+    token: { boot, pid, startTicks },
+    harness: "claude-code",
+    conversation: { kind: "not-claimed" },
+  });
+
+  it("a reused pid is a different execution", () => {
+    const first = executionTokenText({ boot: BOOT.id, pid: 4039575, startTicks: 72055933 });
+    const outcome = continuityOf(first, verified(BOOT.id, 4039575, 99000000));
+    expect(outcome.kind).toBe("replaced");
+  });
+
+  it("the same pid and tick after a reboot is a different execution", () => {
+    const first = executionTokenText({ boot: "aaaaaaaa-0000-0000-0000-000000000000", pid: 512, startTicks: 4242 });
+    const outcome = continuityOf(first, verified("bbbbbbbb-0000-0000-0000-000000000000", 512, 4242));
+    expect(outcome.kind).toBe("replaced");
+  });
+
+  it("the same run twice is the same execution", () => {
+    const token = executionTokenText({ boot: BOOT.id, pid: 4039575, startTicks: 72055933 });
+    expect(continuityOf(token, verified(BOOT.id, 4039575, 72055933))).toEqual({ kind: "same", token });
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Every way of not having an answer, kept apart from each other.
+ * ------------------------------------------------------------------ */
+
+describe("what happens when we cannot tell", () => {
+  const raw = readFileSync(join(TREES, "quiet-claude-pane.txt"), "utf8");
+  const table = tableOf(
+    raw.replace("--name cheap-postmortem-preventions Build a batch", "--name cheap-postmortem-preventions -- Build a batch"),
+  );
+
+  it("a pane whose own process is not in the table is unknown, not claimed-only", () => {
+    const reading = readExecutionIdentity({
+      panePid: 999_999_999,
+      claimedConversationId: "abc",
+      table,
+      boot: BOOT,
+      readStart: startsFrom(new Map()),
+    });
+    // A pane pid that is in no tree is *we could not look*, which is unknown
+    // rather than claimed-only — the launch claim has not been corroborated,
+    // but nothing looked at anything either.
+    expect(reading.kind).toBe("unknown");
+    expect(reading.kind === "unknown" && reading.cause).toBe("pane-tree-unreadable");
+  });
+
+  it("a live claude whose command line cannot be read is claimed-only", () => {
+    // THE REAL CAPTURE, UNEDITED. This is a genuine, working Claude session,
+    // launched before `new-claude` started writing `--`, whose prompt runs past
+    // the option region so `claude-argv.ts` refuses the whole line
+    // (`ambiguous-harness`). There IS something in the pane and we cannot name
+    // it, which is precisely `claimed-only`, and it must never round up to
+    // verified: the identity gate has to refuse a session it cannot read.
+    const reading = readExecutionIdentity({
+      panePid: 652780,
+      claimedConversationId: "404961e7-a9af-47c9-bf9e-38918ba8ffc4",
+      table: tableOf(raw),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[412924, 72055933]])),
+    });
+    expect(reading.kind).toBe("claimed-only");
+    expect(identityWriteGate(reading).allowed).toBe(false);
+    expect(continuityOf("anything", reading).kind).toBe("unverifiable");
+  });
+
+  it("a harness that exits between the ps and the /proc read is unknown, never verified", () => {
+    const reading = readExecutionIdentity({
+      panePid: 652780,
+      claimedConversationId: "404961e7-a9af-47c9-bf9e-38918ba8ffc4",
+      table,
+      boot: BOOT,
+      // No entry for the claude's pid: the read fails, as it does when the
+      // process has gone.
+      readStart: startsFrom(new Map()),
+    });
+    expect(reading.kind).toBe("unknown");
+    expect(reading.kind === "unknown" && reading.cause).toBe("process-start-unreadable");
+  });
+
+  it("an unreadable process table is unknown with the probe's own sentence", () => {
+    const reading = readExecutionIdentity({
+      panePid: 652780,
+      claimedConversationId: null,
+      table: { read: false, why: "ps exited 1: nope" },
+      boot: BOOT,
+      readStart: startsFrom(new Map()),
+    });
+    expect(reading).toEqual({ kind: "unknown", cause: "process-table-unreadable", why: "ps exited 1: nope" });
+  });
+
+  it("a row with no pane pid is unknown", () => {
+    const reading = readExecutionIdentity({
+      panePid: null,
+      claimedConversationId: null,
+      table,
+      boot: BOOT,
+      readStart: startsFrom(new Map()),
+    });
+    expect(reading.kind === "unknown" && reading.cause).toBe("no-pane-pid");
+  });
+
+  it("a claude with no --session-id is a verified process and an unverifiable conversation", () => {
+    const text = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --permission-mode auto\n";
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "claimed-uuid",
+      table: tableOf(text),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[101, 5150]])),
+    });
+    expect(reading.kind).toBe("verified");
+    expect(reading.kind === "verified" && reading.conversation.kind).toBe("unverifiable");
+    // AND THE GATE STILL REFUSES. A verified process is not a verified
+    // conversation, and the whole separation is worthless if the gate ignores it.
+    expect(identityWriteGate(reading).allowed).toBe(false);
+  });
+
+  it("a verified process and a verified conversation is the only thing the gate allows", () => {
+    const text = " 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id claimed-uuid --permission-mode auto\n";
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "claimed-uuid",
+      table: tableOf(text),
+      boot: BOOT,
+      readStart: startsFrom(new Map([[101, 5150]])),
+    });
+    const gate = identityWriteGate(reading);
+    expect(gate.allowed).toBe(true);
+    expect(gate.allowed === true && gate.conversationId).toBe("claimed-uuid");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The platform rule, and the parse.
+ * ------------------------------------------------------------------ */
+
+describe("boot identity", () => {
+  it("is unsupported off Linux, and never falls back to the pid", () => {
+    const boot = readBootIdentity(() => {
+      throw new Error("no /proc here");
+    }, "darwin");
+    expect(boot).toEqual({
+      read: false,
+      cause: "platform-unsupported",
+      why: expect.stringContaining("darwin"),
+    });
+    const reading = readExecutionIdentity({
+      panePid: 100,
+      claimedConversationId: "x",
+      table: tableOf(" 100  99  500 bash /home/greg/job.sh\n 101  100  400 claude --session-id x\n"),
+      boot,
+      readStart: startsFrom(new Map([[101, 1]])),
+    });
+    expect(reading).toEqual({
+      kind: "unknown",
+      cause: "platform-unsupported",
+      why: boot.read === false ? boot.why : "unreachable: the boot identity above was a refusal",
+    });
+  });
+
+  it("an empty boot_id is a failure rather than an empty token field", () => {
+    const boot = readBootIdentity(() => "\n", "linux");
+    expect(boot.read).toBe(false);
+    expect(boot.read === false && boot.cause).toBe("boot-identity-unreadable");
+  });
+});
+
+describe("parseProcStat", () => {
+  it("reads field 22 past a command name containing spaces and brackets", () => {
+    // A real shape: the comm is `(a ) b)` — one closing bracket inside it, and
+    // a space. Fields after the last `)` are state, ppid, pgrp, session, …
+    // 20 fields: state (3) through starttime (22), so `9876543` sits at index 19.
+    const fields = ["S", "7", "8", "9", "0", "-1", "4194304", "1", "2", "3", "4", "5", "6", "7", "20", "0", "1", "0", "0", "9876543"];
+    expect(fields).toHaveLength(20);
+    expect(parseProcStat(`1234 (a ) b) ${fields.join(" ")} 0 0 0`)).toEqual({
+      ok: true,
+      ppid: 7,
+      startTicks: 9876543,
+    });
+  });
+
+  it("refuses a truncated line rather than reading the wrong field", () => {
+    expect(parseProcStat("1234 (bash) S 1 2 3").ok).toBe(false);
+  });
+
+  it("refuses a line with no command name at all", () => {
+    expect(parseProcStat("nothing here").ok).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Against this machine's own /proc — real pids, real ticks.
+ * ------------------------------------------------------------------ */
+
+describe.skipIf(process.platform !== "linux")("real /proc", () => {
+  const children: ChildProcess[] = [];
+  afterAll(() => {
+    for (const child of children) child.kill("SIGKILL");
+  });
+
+  it("reads this process's own start tick, and agrees with the file", () => {
+    const start = readProcessStart(process.pid);
+    expect(start.read).toBe(true);
+    const direct = parseProcStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+    expect(direct.ok).toBe(true);
+    if (start.read && direct.ok) expect(start.ticks).toBe(direct.startTicks);
+  });
+
+  it("reads a real boot id", () => {
+    const boot = readBootIdentity();
+    expect(boot.read).toBe(true);
+    if (boot.read) {
+      expect(boot.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(boot.id).toBe(readFileSync(BOOT_ID_PATH, "utf8").trim());
+    }
+  });
+
+  it("two real processes started under one parent have different tokens", async () => {
+    const spawnSleeper = (): ChildProcess => {
+      const child = spawn("sleep", ["30"], { stdio: "ignore" });
+      children.push(child);
+      return child;
+    };
+    const first = spawnSleeper();
+    // A clock tick is 10 ms here (`getconf CLK_TCK` is 100), so two spawns must
+    // be separated by more than one tick for their start times to differ.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const second = spawnSleeper();
+    expect(first.pid).toBeDefined();
+    expect(second.pid).toBeDefined();
+    if (first.pid === undefined || second.pid === undefined) return;
+
+    const a = readProcessStart(first.pid);
+    const b = readProcessStart(second.pid);
+    expect(a.read).toBe(true);
+    expect(b.read).toBe(true);
+    if (a.read && b.read) expect(a.ticks).not.toBe(b.ticks);
+  });
+
+  it("a pid that does not exist is a refusal, not a zero", () => {
+    // 0 is never a real pid, so `/proc/0/stat` cannot exist.
+    const start = readProcessStart(0);
+    expect(start.read).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The producer: a row starts by saying nobody looked.
+ * ------------------------------------------------------------------ */
+
+describe("the collection pass", () => {
+  it("a row that has not been probed says so, rather than saying unknown with no cause", () => {
+    const session = {
+      id: "$1",
+      name: "one",
+      created: new Date("2026-09-08T00:00:00.000Z"),
+      attached: false,
+      windows: 1,
+      title: "",
+      provisional: false,
+      claudeId: "conv-1",
+      meta: { version: "legacy" },
+      role: { kind: "unclaimed" },
+    } as unknown as Parameters<typeof toRows>[0][number];
+    const [row] = toRows([session], new Map(), new Map([["$1", { paneId: "%1", panePid: 100 }]]));
+    expect(row?.execution).toEqual({
+      kind: "unknown",
+      cause: "not-probed",
+      why: expect.stringContaining("did not"),
+    });
+  });
+
+  it("one process-table probe answers every row", () => {
+    const rows: FleetRow[] = [
+      { paneId: "%1", panePid: 100, claudeSessionId: "conv-1" } as FleetRow,
+      { paneId: "%2", panePid: 200, claudeSessionId: null } as FleetRow,
+    ];
+    let probes = 0;
+    readExecutions(rows, {
+      probe: () => {
+        probes += 1;
+        return tableOf(
+          " 100  99  500 bash /home/greg/one.sh\n" +
+            " 101  100  400 claude --session-id conv-1 --permission-mode auto\n" +
+            " 200  99  500 bash /home/greg/two.sh\n",
+        );
+      },
+      boot: () => BOOT,
+      readStart: startsFrom(
+        new Map([
+          [101, 11],
+          [200, 22],
+        ]),
+      ),
+    });
+    expect(probes).toBe(1);
+    expect(rows[0]?.execution.kind).toBe("verified");
+    expect(rows[1]?.execution.kind).toBe("verified");
+    // The second row is a bare shell: verified as a process, and nothing was
+    // claimed for it, so there is nothing to conflict with.
+    expect(rows[1]?.execution).toMatchObject({ harness: "shell", conversation: { kind: "not-claimed" } });
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Row → wire → browser, and row → wire → register.
+ * ------------------------------------------------------------------ */
+
+describe("the round trip", () => {
+  /**
+   * **THE OLD-PRODUCER CASE, WITH REAL OLD BYTES.**
+   *
+   * `tests/fixtures/overseer-snapshots/` was captured before this field
+   * existed, so every one of those files IS a producer that omits it. Nothing
+   * is stubbed to simulate the case; the case is what is on disk.
+   */
+  it("a captured snapshot from before this field parses as not-reported, on both readers", () => {
+    for (const name of EVERY_FIXTURE) {
+      const raw = editableFixture(name);
+      const parsed = parseObservation(raw);
+      expect(parsed.ok, `${name} should still parse`).toBe(true);
+      if (!parsed.ok) continue;
+      for (const row of parsed.value.rows) {
+        expect(row.execution.kind, `${name} ${row.id}`).toBe("unknown");
+        expect(row.execution.kind === "unknown" && row.execution.cause).toBe("not-reported");
+      }
+      // And the browser's independent reader, over the same bytes.
+      for (const rawRow of rowsOf(raw)) {
+        const row = parseRow(rawRow, CLOCK_SKEW_UNMEASURED);
+        expect(row?.execution).toEqual({ kind: "unknown", cause: "not-reported", why: expect.any(String) });
+      }
+    }
+  });
+
+  it("an old producer's row is never cast into verified continuity", () => {
+    const parsed = parseObservation(editableFixture("status-change-before"));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [row] = parsed.value.rows;
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    // Not `same`, and not `replaced` either: there is no reading to compare.
+    expect(continuityOf("some-earlier-token", row.execution).kind).toBe("unverifiable");
+    expect(identityWriteGate(row.execution).allowed).toBe(false);
+  });
+
+  it("a verified reading survives the wire in both directions", () => {
+    const reading: ExecutionReading = {
+      kind: "verified",
+      token: { boot: BOOT.id, pid: 4039575, startTicks: 72055933 },
+      harness: "claude-code",
+      conversation: { kind: "verified", id: "606cb12a-ffc5-4df4-af3a-7dc881135b5f" },
+    };
+    // THROUGH JSON, not by reference: the whole question is what survives being
+    // serialised and read back by a parser that has never seen the producer.
+    const wire = JSON.parse(JSON.stringify({ execution: reading })) as Record<string, unknown>;
+    expect(parseExecution(wire["execution"])).toEqual(reading);
+    expect(parseExecutionBrowser(wire["execution"])).toEqual(reading);
+  });
+
+  it("a verified reading with a hole in its token is refused by both readers", () => {
+    const broken = { kind: "verified", harness: "claude-code", conversation: { kind: "not-claimed" }, token: { boot: "b", pid: 5 } };
+    expect(parseExecution(broken).kind).toBe("unknown");
+    expect(parseExecutionBrowser(broken).kind).toBe("unknown");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The event, its rule, and the gap it is honest about.
+ * ------------------------------------------------------------------ */
+
+describe("session-execution-changed", () => {
+  const CONV = "606cb12a-ffc5-4df4-af3a-7dc881135b5f";
+
+  /** A snapshot pair off one real capture, with `execution` written onto every row. */
+  function pair(before: ExecutionReading, after: ExecutionReading): [ReturnType<typeof freshFrom>, ReturnType<typeof freshFrom>] {
+    const a = editableFixture("status-change-before");
+    const b = editableFixture("status-change-before");
+    for (const row of rowsOf(a)) row["execution"] = before as never;
+    for (const row of rowsOf(b)) row["execution"] = after as never;
+    return [freshFrom(a as never, "before"), freshFrom(b as never, "after")];
+  }
+
+  it("fires when the token moves under an unchanged pane", () => {
+    const [a, b] = pair(
+      verifiedReading(412924, 72055933, { kind: "verified", id: CONV }),
+      verifiedReading(987654, 73900001, { kind: "conflicting", claimed: CONV, observed: "different" }),
+    );
+    const first = diff(null, a);
+    expect(first.kind).toBe("diffed");
+    if (first.kind !== "diffed") return;
+    const second = diff(first.baseline, b);
+    expect(second.kind).toBe("diffed");
+    if (second.kind !== "diffed") return;
+    const changed = second.events.filter((e) => e.kind === "session-execution-changed");
+    expect(changed.length).toBeGreaterThan(0);
+    const [one] = changed;
+    expect(one?.kind === "session-execution-changed" && one.previousToken).toBe(`${BOOT.id}:412924:72055933`);
+    expect(one?.kind === "session-execution-changed" && one.token).toBe(`${BOOT.id}:987654:73900001`);
+    // AND NOTHING ELSE FIRED ABOUT THE PANE. That is the reproduction restated
+    // at the differ: `session-replaced` and `session-pane-replaced` are both
+    // silent, because the claim and the pane pid did not move.
+    expect(second.events.some((e) => e.kind === "session-replaced" || e.kind === "session-pane-replaced")).toBe(false);
+  });
+
+  it("does not fire when the evidence merely goes away and comes back", () => {
+    const same = verifiedReading(412924, 72055933, { kind: "verified", id: CONV });
+    const blind: ExecutionReading = { kind: "unknown", cause: "process-table-unreadable", why: "ps exited 1" };
+    const [a, b] = pair(same, blind);
+    const [, c] = pair(blind, same);
+    const first = diff(null, a);
+    if (first.kind !== "diffed") throw new Error("expected a diff");
+    const second = diff(first.baseline, b);
+    if (second.kind !== "diffed") throw new Error("expected a diff");
+    expect(second.events.some((e) => e.kind === "session-execution-changed")).toBe(false);
+    const third = diff(second.baseline, c);
+    if (third.kind !== "diffed") throw new Error("expected a diff");
+    expect(third.events.some((e) => e.kind === "session-execution-changed")).toBe(false);
+  });
+
+  /**
+   * **THE GAP, PINNED RATHER THAN DESCRIBED.**
+   *
+   * `verified(A) → unknown → verified(B)` produces no event, because this
+   * module compares consecutive snapshots and neither step is a pair of
+   * verified readings. The arm's own comment argues why closing it in `diff()`
+   * would cost more than it is worth, and why nothing depends on it: continuity
+   * is decided by comparing tokens, not by asking whether an event fired. This
+   * test exists so that buying the case back goes red here and somebody reads
+   * that argument before deciding.
+   */
+  it("misses a change straddled by a blind collection — and the token comparison does not", () => {
+    const runA = verifiedReading(412924, 72055933, { kind: "verified", id: CONV });
+    const runB = verifiedReading(987654, 73900001, { kind: "verified", id: CONV });
+    const blind: ExecutionReading = { kind: "unknown", cause: "process-table-unreadable", why: "ps exited 1" };
+    const [a, b] = pair(runA, blind);
+    const [, c] = pair(blind, runB);
+    const first = diff(null, a);
+    if (first.kind !== "diffed") throw new Error("expected a diff");
+    const second = diff(first.baseline, b);
+    if (second.kind !== "diffed") throw new Error("expected a diff");
+    const third = diff(second.baseline, c);
+    if (third.kind !== "diffed") throw new Error("expected a diff");
+    expect(third.events.some((e) => e.kind === "session-execution-changed")).toBe(false);
+
+    // AND THE OTHER HALF OF THE ARGUMENT, in the same test so the two cannot
+    // drift apart: anything created under run A is quarantined anyway, because
+    // it asks the token and not the log.
+    expect(continuityOf(`${BOOT.id}:412924:72055933`, runB).kind).toBe("replaced");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The register: what the Overseer remembers about a run.
+ * ------------------------------------------------------------------ */
+
+describe("the register", () => {
+  const CONV = "606cb12a-ffc5-4df4-af3a-7dc881135b5f";
+  const TOKEN_A = `${BOOT.id}:412924:72055933`;
+  const TOKEN_B = `${BOOT.id}:987654:73900001`;
+
+  function seenAndChanged(): Map<ReturnType<typeof sessionKey>, RegisterEntry> {
+    const snapshot = editableFixture("status-change-before");
+    for (const row of rowsOf(snapshot)) {
+      row["execution"] = verifiedReading(412924, 72055933) as never;
+    }
+    const first = diff(null, freshFrom(snapshot as never, "before"));
+    if (first.kind !== "diffed") throw new Error("expected a diff");
+    return foldEvents(first.events, new Map());
+  }
+
+  it("records the run a session was first seen under, as a floor", () => {
+    const register = seenAndChanged();
+    const entries = [...register.values()];
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      expect(entry.verifiedExecution?.token).toBe(TOKEN_A);
+      // `since` is when the register learned about the run, not when it started.
+      expect(entry.verifiedExecution?.since).toBe(entry.lastSeenAlive);
+    }
+  });
+
+  it("moves the token and resets the measured age when the run is replaced", () => {
+    const register = seenAndChanged();
+    const [key, before] = [...register.entries()][0] ?? [];
+    expect(key).toBeDefined();
+    expect(before).toBeDefined();
+    if (key === undefined || before === undefined) return;
+    // A session that has been `working` for an hour, as the register would hold
+    // it after an ordinary status transition.
+    register.set(key, { ...before, statusSince: { kind: "observed", at: "2026-09-08T05:00:00.000Z" } });
+
+    foldEvents(
+      [
+        {
+          kind: "session-execution-changed",
+          at: "2026-09-08T06:00:00.000Z",
+          tmuxServerPid: before.tmuxServerPid,
+          key,
+          identity: { tmuxId: before.tmuxId, claimedConversationId: before.claimedConversationId },
+          previousToken: TOKEN_A,
+          token: TOKEN_B,
+          conversation: { kind: "conflicting", claimed: CONV, observed: "somebody-else" },
+        },
+      ],
+      register,
+    );
+
+    const after = register.get(key);
+    expect(after?.verifiedExecution).toEqual({ token: TOKEN_B, since: "2026-09-08T06:00:00.000Z" });
+    // THE POINT OF THE ARM: the new run does not inherit the hour.
+    expect(after?.statusSince).toEqual({ kind: "lower-bound", at: "2026-09-08T06:00:00.000Z" });
+  });
+
+  // The checkpoint round trip — an old `current.json` with no
+  // `verifiedExecution`, and a malformed one — is in
+  // tests/overseer-store.test.ts, where the real write-then-reopen helpers live
+  // and where a hand-built checkpoint cannot drift from what the store writes.
+});

@@ -58,10 +58,19 @@ import { join } from "node:path";
 import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
-import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
-import type { AuthorisedJob } from "./jobs.js";
+import {
+  baselineOf,
+  diff,
+  sessionKey,
+  type Baseline,
+  type OverseerEvent,
+  type SessionIdentity,
+  type SessionKey,
+} from "./diff.js";
+import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { describeReport, schedulerTick, type LostRecord, type ProposingRuleWork, type RuleRun, type SpawnJob } from "./scheduler.js";
+import type { ProposingRuleWork } from "./rule-protocol.js";
+import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -290,6 +299,22 @@ export function collectorVerdict(input: {
   };
 }
 
+/**
+ * What happened on one usage pass, told to `DaemonOptions.usage.onPass`.
+ *
+ * `take-fresh` and `keep-stored` are `chooseUsage`'s own two arms, and **both
+ * carry the report the pass produced** — on `keep-stored` that is the report
+ * that was DISCARDED, which is the only copy of that pass's cache observation
+ * anywhere. `collector-failed` is a pass that threw, and has no report at all.
+ *
+ * `at` is when the pass started, so a consumer can tell the observation's own
+ * instant (`report.collectedAt`) from when the daemon noticed it.
+ */
+export type UsagePassOutcome =
+  | { kind: "take-fresh"; report: UsageReport; why: string; at: string }
+  | { kind: "keep-stored"; report: UsageReport; why: string; at: string }
+  | { kind: "collector-failed"; why: string; at: string };
+
 export type DaemonOptions = {
   /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
   root?: string;
@@ -327,7 +352,38 @@ export type DaemonOptions = {
    * `chooseUsage`, applied here, because it needs the store's held report as well
    * as the fresh one. A daemon given no runner publishes `usageNotYetRun`.
    */
-  usage?: { intervalMs?: number; run: () => Promise<UsageReport> };
+  usage?: {
+    intervalMs?: number;
+    run: () => Promise<UsageReport>;
+    /**
+     * **Told once per PASS, whatever happened — for a history nobody else can
+     * write.**
+     *
+     * `~/.overseer/current.json` keeps only the latest reading, and the cache it
+     * comes from is a point-in-time hint that gets overwritten, so usage history
+     * cannot be reconstructed after the fact. Something has to record each pass
+     * as it happens, and only this file knows when one happened.
+     *
+     * **`keep-stored` carries the DISCARDED report, and that is the point.**
+     * `chooseUsage` declining to publish an incomplete scan says nothing about
+     * that pass's *cache* reading, which is independent of the transcript scan.
+     * The fresh report is the only place that observation exists — the
+     * checkpoint carries the held one, and the dashboard never sees this. A
+     * consumer that treated `keep-stored` as "no reading was taken" would drop
+     * real, attributed observations off a chart every time one transcript was
+     * unreadable.
+     *
+     * **This file imports nothing to serve it**, deliberately: the callback is
+     * composed in `scripts/overseer.ts`, which already straddles the
+     * `tools/overseer` ↔ `tools/fleet` seam. Putting the projection or the store
+     * in here would drag the dashboard's modules into the process you reach for
+     * when everything else is broken.
+     *
+     * Errors thrown by the callback are **contained and logged** — see
+     * `safeOnPass` below. A retention failure is not a usage failure.
+     */
+    onPass?: (outcome: UsagePassOutcome) => void;
+  };
   /**
    * THE SCHEDULED JOBS, and the schedule as data.
    *
@@ -367,6 +423,17 @@ export type DaemonOptions = {
      * index that acting needs.
      */
     rules?: ProposingRuleWork;
+    /**
+     * **WHEN THIS SCHEDULER WAS ARMED**, from `arming.ts`. The anchor a
+     * never-run job's first eligibility is measured from (GPT Sol's S8-6).
+     *
+     * Required rather than defaulted, for the reason `TickInput.arming` gives:
+     * a default here would be this file quietly deciding the one thing the field
+     * exists to stop anybody deciding by accident.
+     */
+    arming: Arming;
+    /** The minimum gap between two session launches. `schedules.ts` § `LAUNCH_SEPARATION_MS`, and GPT Sol's S8-5. */
+    launchSeparationMs: number;
     /**
      * How long a shutdown waits for rule runs still in flight, before giving up
      * on them **loudly**. Defaults to `RULE_SETTLE_GRACE_MS`.
@@ -606,15 +673,22 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
   // option rather than off a flag beside it, so "armed" and "there are jobs"
   // cannot come apart.
-  const schedulerStanding: StoredScheduler = {
-    kind: options.jobs === undefined ? "off" : "armed",
-    why:
-      options.schedulerDetail ??
-      (options.jobs === undefined
-        ? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched"
-        : `${options.jobs.definitions.length} standing job(s)`),
+  //
+  // **AND `armed` IS A CLAIM ABOUT THE LOADED DEFINITIONS, not about a switch**
+  // (GPT Sol's S8-7). It used to be `jobs === undefined ? "off" : "armed"`,
+  // which made the headline on the status page a restatement of an environment
+  // variable: a daemon whose jobs were all unauthorised, or all absent because a
+  // document could not be read, still said `ARMED`. Now the switch being on with
+  // nothing runnable is `blocked`, which is its own word because it is its own
+  // situation — not off, and not working.
+  const schedulerStanding: StoredScheduler = schedulerStandingOf({
+    jobs:
+      options.jobs === undefined
+        ? undefined
+        : { definitions: options.jobs.definitions, held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined } },
+    detail: options.schedulerDetail,
     at: now().toISOString(),
-  };
+  });
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
@@ -695,12 +769,50 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * writers on the store.
    */
   const usageOptions = options.usage;
+
+  /**
+   * **The callback cannot be allowed to throw into the collector's chain.**
+   *
+   * `onPass` is called inside `.then()` and inside `.catch()`. An unguarded
+   * throw in the `.then()` is caught by the chain's own `.catch()`, which would
+   * rewrite the live checkpoint to `{kind:"none"}` though the collection
+   * SUCCEEDED — Greg then investigates his account instead of his disk — and
+   * would very likely throw again handling that, ending as an unhandled
+   * rejection that terminates the daemon. In the `.catch()` there is nowhere for
+   * it to go at all.
+   *
+   * So the boundary is here rather than in each consumer: a history that cannot
+   * be written is a thing to log, never a thing that changes what the usage pass
+   * reports or stops the next one running. GPT Sol's G5.
+   */
+  function safeOnPass(outcome: UsagePassOutcome): void {
+    if (usageOptions?.onPass === undefined) return;
+    try {
+      const returned: unknown = usageOptions.onPass(outcome);
+      /* **AN ASYNC CALLBACK ESCAPES A `try`/`catch`.** TypeScript accepts an
+         `async` function where `(outcome) => void` is expected, and by the time
+         it rejects this block has already returned — so the rejection surfaces
+         as an unhandled one and can terminate the daemon, which is the exact
+         failure this wrapper exists to prevent. The production callback is
+         synchronous today; this is here so that stays a fact about the callback
+         rather than a condition of the containment. GPT Sol H14. */
+      if (typeof (returned as { then?: unknown } | null)?.then === "function") {
+        void (returned as Promise<unknown>).catch((cause: unknown) => {
+          log(`usage pass hook rejected (the reading itself is unaffected): ${String(cause)}`);
+        });
+      }
+    } catch (cause: unknown) {
+      log(`usage pass hook failed (the reading itself is unaffected): ${String(cause)}`);
+    }
+  }
+
   let usageRunning: Promise<void> | null = null;
   const usageTicker =
     usageOptions === undefined
       ? null
       : setInterval(() => {
           if (halted() !== null || usageRunning !== null) return;
+          const passAt = now().toISOString();
           usageRunning = usageOptions
             .run()
             .then((report) => {
@@ -715,6 +827,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
               // is logged either way: "kept the 11:00 reading, this scan did not
               // finish" is the sentence a person can act on.
               log(`usage pass: ${choice.kind} - ${choice.why}`);
+              safeOnPass({ kind: choice.kind, report, why: choice.why, at: passAt });
             })
             .catch((cause: unknown) => {
               // A THROWN PASS BECOMES `none` WITH A REASON, not silence and not
@@ -727,6 +840,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
                 at: now().toISOString(),
               };
               log(`usage pass failed: ${String(cause)}`);
+              safeOnPass({
+                kind: "collector-failed",
+                why: cause instanceof Error ? cause.message : String(cause),
+                at: passAt,
+              });
             })
             .finally(() => {
               usageRunning = null;
@@ -815,6 +933,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             store,
             spawn: jobOptions.spawn,
             rules: jobOptions.rules,
+            arming: jobOptions.arming,
+            launchSeparationMs: jobOptions.launchSeparationMs,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.
@@ -1028,7 +1148,16 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // one look like a duplicate.
     accepted = verdict.snapshot;
 
-    const outcome = diff(baseline, verdict.snapshot);
+    // THE REGISTER IS THE THIRD INPUT, and it has to be read HERE rather than
+    // left to the differ: `diff()` knows nothing about the store, and what it
+    // needs is not the previous snapshot's reading but the last run this
+    // Overseer actually verified — which survives a collection that could not
+    // look, and survives this daemon being restarted. GPT Sol's P1-1.
+    const known = new Map<SessionKey, string>();
+    for (const [key, entry] of store.register) {
+      if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
+    }
+    const outcome = diff(baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
       // NOT A SILENCE. The baseline stays where it is, so the comparison
       // happens the moment a readable generation arrives; without this note the

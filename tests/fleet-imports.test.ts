@@ -260,6 +260,46 @@ function filesUnder(dir: string): string[] {
   return out;
 }
 
+/** Why one top-level statement makes the shared browser wire unsafe. */
+function wireViolations(src: string, file = "tools/fleet/wire.ts"): string[] {
+  const tree = parseOrFail(src, file);
+  if (tree === null) return [`${file}: could not parse`];
+  const violations: string[] = [];
+  for (const statement of tree.program.body) {
+    if (statement.type === "TSTypeAliasDeclaration" || statement.type === "TSInterfaceDeclaration") continue;
+    if (statement.type === "ExportNamedDeclaration") {
+      if (statement.source !== null) {
+        violations.push(`${file}: a type export may not import from another module`);
+        continue;
+      }
+      if (statement.declaration?.type === "TSTypeAliasDeclaration" || statement.declaration?.type === "TSInterfaceDeclaration") {
+        continue;
+      }
+      if (
+        statement.declaration === null &&
+        statement.exportKind === "type" &&
+        statement.specifiers.every((specifier) => specifier.type === "ExportSpecifier" && specifier.exportKind === "type")
+      ) {
+        continue;
+      }
+    }
+    violations.push(`${file}: ${statement.type} is a runtime declaration, import, or value export`);
+  }
+  return violations;
+}
+
+describe("the shared fleet wire is a types-only, import-free leaf", () => {
+  it("allows only types and type-only exports", () => {
+    expect(wireViolations(readFileSync(path.join(TOOLS, "fleet/wire.ts"), "utf8"))).toEqual([]);
+  });
+
+  it("rejects a runtime constant, a plain import, and an enum", () => {
+    expect(wireViolations("export type Good = string; const runtime = 1;", "const.ts")).toHaveLength(1);
+    expect(wireViolations('import { thing } from "./thing.js"; export type Good = string;', "import.ts")).toHaveLength(1);
+    expect(wireViolations("export enum Bad { Value }", "enum.ts")).toHaveLength(1);
+  });
+});
+
 /** Every file the box utilities reach, transitively, as repo-relative paths. */
 function fleetClosure(): Set<string> {
   const seen = new Set<string>();
@@ -397,5 +437,89 @@ describe("what the fleet dashboard imports from src/", () => {
     for (const [file, why] of Object.entries(ALLOWED)) {
       expect(why.length, `${file} needs a reason`).toBeGreaterThan(10);
     }
+  });
+});
+
+/**
+ * **Who may hold the thing that types into a pane.**
+ *
+ * `send-coordinator.ts` exists so that the quarantine check and the transport
+ * call are one line apart and nobody can get between them: it takes
+ * `sendMessage` and `answerQuestion` as its own dependencies, asks the book
+ * whether the session is held, and only then fires. Every producer takes a
+ * `SendCoordinator` instead of a transport, and
+ * `tests/fleet-compile-guards.test.ts` fails if one ever grows a transport field
+ * back.
+ *
+ * **THAT LEAVES ONE DOOR, AND THIS SHUTS IT.** A new producer could take no
+ * transport in its dependencies and simply import `sendMessage` from
+ * `./steer.js` outright. It would compile, it would pass every existing test,
+ * and it would type into held sessions — the review's U2 all over again, with
+ * the evidence one import line further away. So the rule is architectural, and
+ * this asserts it over the whole tree rather than over the files somebody
+ * remembered.
+ *
+ * A TYPE IMPORT IS FINE and is not counted: `typeof realSendMessage` costs
+ * nothing at runtime and cannot be called. It is the VALUE import that matters,
+ * and the walker reads `importKind` on both the declaration and the specifier,
+ * so an inline `type` modifier is allowed in either spelling.
+ */
+const TRANSPORT = ["sendMessage", "answerQuestion"];
+
+/** Files allowed to import the transport as a value, and why. */
+const MAY_HOLD_THE_TRANSPORT: Record<string, string> = {
+  "tools/fleet/steer.ts": "it is the transport",
+  "tools/fleet/send-coordinator.ts": "the one place the hold is checked before it fires",
+};
+
+/** Value imports of the transport in one file, by name. */
+function transportValueImports(src: string, file: string): string[] {
+  const tree = parseOrFail(src, file);
+  if (tree === null) return [];
+  const found: string[] = [];
+  walk(tree.program as unknown as Node, (node) => {
+    if (node.type !== "ImportDeclaration") return;
+    const decl = node as {
+      importKind?: string;
+      specifiers?: { type: string; importKind?: string; imported?: { type: string; name?: string } }[];
+    };
+    // A whole-declaration type import is free.
+    if (decl.importKind === "type") return;
+    for (const spec of decl.specifiers ?? []) {
+      if (spec.type !== "ImportSpecifier") continue;
+      // …and so is a per-specifier one.
+      if (spec.importKind === "type") continue;
+      const name = spec.imported?.type === "Identifier" ? spec.imported.name : undefined;
+      if (name !== undefined && TRANSPORT.includes(name)) found.push(name);
+    }
+  });
+  return found;
+}
+
+describe("only the send coordinator may hold the transport", () => {
+  it("finds a value import and ignores a type-only one — the walker, checked first", () => {
+    /* THE SELF-CHECK, for this file's own reason: the assertion below is of the
+       form "nothing was found", which is what a broken walker reports. */
+    const from = ' from "./steer.js";';
+    expect(transportValueImports(`import { sendMessage }${from}`, "x.ts")).toEqual(["sendMessage"]);
+    expect(transportValueImports(`import { answerQuestion as go }${from}`, "x.ts")).toEqual(["answerQuestion"]);
+    expect(transportValueImports(`import type { sendMessage }${from}`, "x.ts")).toEqual([]);
+    expect(transportValueImports(`import { type sendMessage }${from}`, "x.ts")).toEqual([]);
+  });
+
+  it("is the only file under tools/ that imports one as a value", () => {
+    const offenders: string[] = [];
+    for (const file of filesUnder(TOOLS)) {
+      const rel = path.relative(ROOT, file).split(path.sep).join("/");
+      if (rel in MAY_HOLD_THE_TRANSPORT) continue;
+      const found = transportValueImports(readFileSync(file, "utf8"), rel);
+      if (found.length > 0) offenders.push(`${rel} imports ${found.join(", ")}`);
+    }
+    expect(
+      offenders,
+      "a producer that imports the transport can type into a session the page is showing as HELD. " +
+        "Take a `SendCoordinator` in your dependencies instead — tools/fleet/send-coordinator.ts — " +
+        "which checks the quarantine book on the line above the send.",
+    ).toEqual([]);
   });
 });

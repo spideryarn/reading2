@@ -64,6 +64,8 @@
  * transport's own word for it: see `nothingWasSent`.
  */
 import { actionById, renderMessage, type Speaker } from "./actions.js";
+import { INSTANCE_TOKEN } from "./instance.js";
+import type { HoldEvidence, QuarantineBook, QuarantineHoldView } from "./quarantine.js";
 import type { FleetStatus } from "./status.js";
 import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
 /* A queued item is on the wire verbatim (`{...i, stale, stuck}` in
@@ -279,22 +281,43 @@ export type NextResult =
   | { kind: "stale"; head: QueuedItem; why: string }
   /** The session is working. Come back. */
   | { kind: "held"; head: QueuedItem; why: string }
+  /**
+   * A send to this session came back with no honest account of where it got
+   * to, so text may be sitting in its input box unsent. **Nothing goes in
+   * behind it until a person says what is there** — see quarantine.ts.
+   *
+   * A separate arm rather than a `blocked` with a made-up `Refusal`, because
+   * it is a fact about a PREVIOUS SEND rather than about the session, the page
+   * offers two gestures for it that no other arm has, and folding it into
+   * `held` would tell somebody it was going out shortly.
+   */
+  | { kind: "quarantined"; head: QueuedItem; hold: QuarantineHoldView; why: string }
   /** This session cannot be typed into at all, in steer.ts's words. */
   | { kind: "blocked"; head: QueuedItem; reason: Refusal }
   /** Leased. Deliver it, then `settle`. */
   | { kind: "ready"; item: QueuedItem };
 
 /**
- * What happened to a leased item. **All three remove it**; none requeues.
+ * What happened to a leased item. **All four remove it**; none requeues.
  *
  *  - `delivered` — the send returned ok.
  *  - `refused` — the send returned a refusal. It is not retried: the refusals
  *    steer.ts returns are about the box being different from the page, and
  *    firing the same keys again a moment later is how a message ends up in the
  *    wrong session.
+ *  - `uncertain` — the send returned a refusal that **may still have put text
+ *    in the input box**: `partial`, `unknown`, or a `none` the transport's own
+ *    `sent` list contradicts. Written by `quarantineLeased` and by nothing
+ *    else, because the item leaving and the session being held have to happen
+ *    together — see that method.
  *  - `abandoned` — nobody knows. Used to clear a `stuck` lease.
+ *
+ * **`uncertain` EXISTS BECAUSE `refused` WAS A LIE ABOUT A THIRD OF THEM.**
+ * `drain.ts` settled every non-`none` refusal as `refused`, and *refused* reads
+ * as *nothing reached them* — the opposite of what a `partial` means. The
+ * behaviour was right and only the word was wrong; this is the word.
  */
-export type SettleOutcome = "delivered" | "refused" | "abandoned";
+export type SettleOutcome = "delivered" | "refused" | "uncertain" | "abandoned";
 
 export type SettleResult = { ok: true; item: QueuedItem; outcome: SettleOutcome } | { ok: false; why: string };
 
@@ -359,6 +382,15 @@ export type QueueSnapshot = {
   warning: string;
   /** When this queue's server process started. Items cannot predate it. */
   since: number;
+  /**
+   * The hold stopping this session from being drained, or null.
+   *
+   * On the snapshot rather than on a feed of its own for the reason `volatile`
+   * is: it is a fact about whether this queue is going anywhere, and a caller
+   * that has the items but not this would draw a list of things about to
+   * happen that nothing is going to do.
+   */
+  quarantine: QuarantineHoldView | null;
 };
 
 /* ------------------------------------------------------------------ *
@@ -388,8 +420,55 @@ export function samePayload(a: QueuedPayload, b: QueuedPayload): boolean {
 export type QueueOptions = {
   /** Injected, always. There is no `Date.now()` anywhere below. */
   now: () => number;
+  /**
+   * Which run of the server this queue belongs to — `instance.ts`.
+   *
+   * **INJECTED FOR THE SAME REASON `now` IS, and it is not a style choice.**
+   * The tests have to build two queues with two different ids in one process
+   * to prove that an id from a dead run is refused by a live one; a queue that
+   * reached for a module-level global would make that test unwritable, and the
+   * refusal would then be guarded by nothing.
+   */
+  serverInstanceId: string;
+  /**
+   * The one book of per-session holds — `quarantine.ts`.
+   *
+   * **REQUIRED, AND DELIBERATELY NOT DEFAULTED.** A default would construct a
+   * private book for a queue whose sends are recorded in the shared one, and
+   * nothing would ever go wrong loudly: the direct steer route would open holds
+   * that this queue never consults, and items would go on draining into an
+   * input box we had already said we did not understand. That is the
+   * missing-join failure this whole file's neighbourhood keeps writing
+   * postmortems about (docs/postmortems/260908b), so it is a compile error
+   * instead.
+   */
+  quarantine: QuarantineBook;
   limits?: Partial<QueueLimits>;
 };
+
+/**
+ * Which run of the server minted an item id — as far as this queue can tell.
+ *
+ * Three arms rather than a boolean, because the third one is a real and
+ * different answer. An id that does not carry a run at all (`q1` from before
+ * ids were qualified, something hand-typed, something truncated) is **not
+ * evidence of a previous server**, and saying it was would swap one false
+ * statement for another. The routes let that arm fall through to their existing
+ * "no such item".
+ */
+export type IdOrigin = "this-instance" | "other-instance" | "not-instance-qualified";
+
+/**
+ * What separates the run from the number in an item id.
+ *
+ * **SAFE BECAUSE THE TOKEN IS LOWERCASE HEX** (`INSTANCE_TOKEN` in
+ * instance.ts), so it cannot itself contain a `-`: the FIRST `-` in a qualified
+ * id is always the boundary, whatever the half after it turns out to be. The
+ * client never needs to know any of this — it stores whatever string it was
+ * given and hands it back — but the parse below is what makes the refusal
+ * trustworthy, so the reason it cannot be ambiguous is written down beside it.
+ */
+const ID_SEPARATOR = "-";
 
 /**
  * One `SteeringQueue` per fleet server, holding one ordered list per session.
@@ -401,7 +480,20 @@ export type QueueOptions = {
  */
 export class SteeringQueue {
   private readonly now: () => number;
+  /**
+   * The run of the server every id below is stamped with.
+   *
+   * Public so a refusal can name it: "this server is 0badcafe" is what turns
+   * *no such item* into *that was a previous server*.
+   */
+  readonly serverInstanceId: string;
   private readonly limits: QueueLimits;
+  /**
+   * The per-session holds. **The first per-session state this class has had**
+   * that is not an item list, and it is held rather than owned: three producers
+   * write to it and only one of them is anywhere near a queue.
+   */
+  private readonly quarantine: QuarantineBook;
   private readonly bySession = new Map<string, QueuedItem[]>();
   private seq = 0;
   private readonly startedAt: number;
@@ -413,8 +505,15 @@ export class SteeringQueue {
 
   constructor(options: QueueOptions) {
     this.now = options.now;
+    this.serverInstanceId = options.serverInstanceId;
+    this.quarantine = options.quarantine;
     this.limits = { ...DEFAULT_LIMITS, ...options.limits };
     this.startedAt = options.now();
+  }
+
+  /** The book this queue consults, for whoever has to draw or release a hold. */
+  quarantineBook(): QuarantineBook {
+    return this.quarantine;
   }
 
   /* ---------------- reading ---------------- */
@@ -426,14 +525,32 @@ export class SteeringQueue {
       volatile: true,
       warning: PERSISTENCE_WARNING,
       since: this.startedAt,
+      quarantine: this.quarantine.holding(sessionId),
     };
   }
 
-  /** Every queue that has anything in it. For the header count and the Overseer. */
+  /**
+   * Every queue there is anything to say about.
+   *
+   * **ITEMS *OR* A HOLD, AND THE SECOND HALF IS NEW.** This used to be
+   * `items.length > 0`, which made the commonest hold invisible: one message is
+   * queued, the send comes back `partial`, the item settles `uncertain` and
+   * leaves, and what remains is a session nothing may be sent to and no queue
+   * at all. A page cannot offer a release gesture for a hold it was never told
+   * about, and a hold that outlives every gesture that could clear it is the
+   * worst thing in this design.
+   */
   snapshots(): QueueSnapshot[] {
     const out: QueueSnapshot[] = [];
+    const said = new Set<string>();
     for (const [sessionId, items] of this.bySession) {
-      if (items.length > 0) out.push(this.snapshot(sessionId));
+      if (items.length === 0) continue;
+      said.add(sessionId);
+      out.push(this.snapshot(sessionId));
+    }
+    for (const sessionId of this.quarantine.heldSessions()) {
+      if (said.has(sessionId)) continue;
+      out.push(this.snapshot(sessionId));
     }
     return out;
   }
@@ -466,6 +583,29 @@ export class SteeringQueue {
    */
   isStuck(item: QueuedItem): boolean {
     return item.leasedAt !== null && this.now() - item.leasedAt > this.limits.leaseMs;
+  }
+
+  /**
+   * Which run of the server minted this id — ours, somebody else's, or nobody's.
+   *
+   * **ASKED OF THE QUEUE RATHER THAN COMPARED AT FOUR ROUTES**, for the reason
+   * `isStuck` is: the queue owns the shape of an id, and four copies of a
+   * string comparison would drift from it the moment the shape changes. The
+   * routes ask; the answer, and the sentence a person reads, come from here.
+   *
+   * The parse is deliberately conservative. It splits at the FIRST separator —
+   * safe because the token is lowercase hex, see `ID_SEPARATOR` — and then
+   * demands the token actually LOOK like a run before believing the prefix is
+   * one. So a garbled id reports `not-instance-qualified` and the caller says
+   * "no such item", which is the honest thing to say about a string nothing
+   * ever minted.
+   */
+  idOrigin(itemId: string): IdOrigin {
+    const at = itemId.indexOf(ID_SEPARATOR);
+    if (at < 0) return "not-instance-qualified";
+    const token = itemId.slice(0, at);
+    if (!INSTANCE_TOKEN.test(token)) return "not-instance-qualified";
+    return token === this.serverInstanceId ? "this-instance" : "other-instance";
   }
 
   /**
@@ -606,16 +746,22 @@ export class SteeringQueue {
       return { ok: false, rule: "double-tap", why: `the same thing was queued ${at - twin.enqueuedAt}ms ago; press again in a moment if you meant it` };
     }
 
-    // **`q1` COMES ROUND AGAIN EVERY TIME THIS PROCESS RESTARTS**, and nothing
-    // here notices. A phone left open across a restart can therefore cancel —
-    // or, when there is a route for it, settle — a DIFFERENT `q1` from the one
-    // it is showing. That is a real defect and it already applies to `cancel`;
-    // it is noted here rather than fixed because the fix is a per-process
-    // prefix on the id and every caller that stores one, which is somebody
-    // else's stage (GPT Sol, 2026-09-08).
+    // **`q1` USED TO COME ROUND AGAIN EVERY TIME THIS PROCESS RESTARTED**, and
+    // nothing noticed: a phone left open across a restart could cancel, re-arm,
+    // abandon or clear a DIFFERENT `q1` from the one it was showing, and get a
+    // 200 for it. Measured before it was fixed, 2026-09-08: a dead run's `q1`
+    // (a `pull`) posted at a fresh run removed that run's `q1`, which was a
+    // `push`, and answered `{"ok":true,"op":"cancelled"}`.
+    //
+    // **THE QUEUE BEING VOLATILE IS NOT THE PROTECTION IT LOOKS LIKE.** A
+    // restart does empty it — and then the very next enqueue starts the counter
+    // again and re-issues the same names to different work, which is the state
+    // a phone actually meets. So the run is part of the id, `idOrigin` reads it
+    // back, and the four routes that accept an id from a client refuse a
+    // foreign one by name rather than reporting it as absent.
     this.seq += 1;
     const item: QueuedItem = {
-      id: `q${this.seq}`,
+      id: `${this.serverInstanceId}${ID_SEPARATOR}q${this.seq}`,
       sessionId: target.sessionId,
       claudeSessionId: target.claudeSessionId,
       payload,
@@ -752,6 +898,18 @@ export class SteeringQueue {
       };
     }
 
+    // THE HOLD, BEFORE THE GATE AND AFTER THE FACTS ABOUT THE ITEM.
+    //
+    // Ordered here rather than first because the checks above are all reasons
+    // this PARTICULAR item is not going out — it is orphaned, it is stale, one
+    // is already in flight — and those are the more specific answer. A hold is
+    // a fact about the SESSION, so it belongs with the gate, and before it: a
+    // session that may be holding half a sentence must not be handed anything
+    // even when the gate says now. It is the gate saying `now` that makes this
+    // check load-bearing rather than decorative.
+    const hold = this.quarantine.holding(sessionId);
+    if (hold !== null) return { kind: "quarantined", head, hold, why: hold.why };
+
     // `deliveryGate`, NOT `drainGate`. This function is the one that hands an
     // item to a transport, so the question it must ask is "can this be
     // delivered right now", which is strictly narrower than "may this session
@@ -783,6 +941,36 @@ export class SteeringQueue {
     }
     items.splice(at, 1);
     return { ok: true, item, outcome };
+  }
+
+  /**
+   * Settle a leased item as `uncertain` **and** hold the session, in one call.
+   *
+   * **ONE METHOD RATHER THAN `settle()` THEN `hold()`, AND THAT IS THE WHOLE
+   * REASON IT EXISTS.** Written as two calls, every caller has a line between
+   * them at which the item has gone and the session is not yet held — and the
+   * dangerous half is reachable on its own: settle without hold is exactly the
+   * behaviour this stage removed, and it looks like working code. A caller
+   * cannot write half of this.
+   *
+   * The item is settled and gone, never requeued: that is the never-retry rule,
+   * and `deliverOne`'s comment argues it. What changes is only what it is
+   * settled AS, and that the next item is stopped behind it.
+   *
+   * **THE SETTLE HAPPENS FIRST AND THE HOLD IS UNCONDITIONAL AFTER IT.** If the
+   * item cannot be settled — it was never handed out — nothing is held either,
+   * because a hold with no send behind it is a session blocked for a bug in the
+   * caller.
+   */
+  quarantineLeased(
+    sessionId: string,
+    itemId: string,
+    evidence: Omit<HoldEvidence, "sessionId">,
+  ): { ok: true; item: QueuedItem; outcome: SettleOutcome; hold: QuarantineHoldView } | { ok: false; why: string } {
+    const settled = this.settle(sessionId, itemId, "uncertain");
+    if (!settled.ok) return { ok: false, why: settled.why };
+    const hold = this.quarantine.hold({ ...evidence, sessionId });
+    return { ok: true, item: settled.item, outcome: settled.outcome, hold };
   }
 
   /**
@@ -853,6 +1041,12 @@ export class SteeringQueue {
    * items becoming undeliverable would be its own kind of quiet loss.
    */
   noteGeneration(tmuxServerPid: number): number {
+    // TOLD IN THE SAME BREATH, so the queue and the book cannot come to
+    // disagree about which tmux server the box is running. The book makes its
+    // own first-observation distinction; this returns the ITEM count, which is
+    // what the drain logs, and `quarantineBook().knownGeneration()` is there
+    // for anybody who needs the other half.
+    this.quarantine.noteGeneration(tmuxServerPid);
     if (this.generation === null) {
       this.generation = tmuxServerPid;
       return 0;

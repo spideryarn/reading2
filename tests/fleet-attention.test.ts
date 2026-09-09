@@ -435,8 +435,63 @@ describe("readAttention", () => {
  * thing this seam exists to keep out: it pulls usage, memory, diff, lock and log
  * in behind it, and it holds the Overseer's own opinion about what a bad
  * checkpoint means.
+ *
+ * **THREE MORE ADDED ON 2026-09-09, for execution identity, and they pass the
+ * same test rather than being exceptions to it.** `work.ts`, `work-probe.ts`
+ * and `harness.ts` walk a process table and name what is holding a pane. Their
+ * whole closure is `work.ts` → `fleet/claude-argv.js` (a true leaf),
+ * `harness.ts` → `claude-argv.js` + `wire.js` (types only) + `work.js`, and
+ * `work-probe.ts` → `node:child_process` + `work.js`. **None reaches the
+ * store**, which is what this seam exists to keep out, and none closes a cycle.
+ * `tools/fleet/execution-identity.ts` imports them because the alternative was
+ * a second copy of a process-tree walk that is tested against captures taken
+ * off this box.
+ *
+ * **The count is not the rule; the store is.** Five is not more permissive than
+ * two in the way that matters — it is two more leaves on the safe side of the
+ * same line. The Overseer took this decision explicitly rather than it being
+ * slipped in with the diff.
+ *
+ * **AND THE REAL END STATE IS A MOVE, NOT A LONGER LIST.** Those three modules
+ * are about panes and processes, which is the fleet's own domain — the Overseer
+ * uses them for *interpretation*, which is a consumer relationship, not
+ * ownership. Moving them under `tools/fleet/` would take this list back to two
+ * and put each module where its subject lives. It is named in
+ * docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md as work for a
+ * later stage, and it is too large to do inside one.
  */
-const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["jsonl.ts", "lock.ts"];
+/**
+ * **A MAP, SO A NEW ENTRY CANNOT BE ADDED WITHOUT SAYING WHY IT QUALIFIES.**
+ *
+ * It was an array of five bare strings, with the reasons in the prose above —
+ * and a reader who scrolled to the list saw five names and no way to tell which
+ * argument covered which. The `usage-limits-tab` session made the point while
+ * writing this rule into `overseer-direction.md`: the list's LENGTH is a
+ * consequence of the store rule rather than a limit of its own, and nothing in
+ * a bare array says that to anybody.
+ *
+ * A value is not optional here, so the next addition answers for itself at the
+ * point of being added rather than in a paragraph somebody has to find.
+ */
+const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
+  "jsonl.ts": "a leaf: append, truncate-to-last-line, atomic write. Imports nothing back.",
+  "lock.ts": "a leaf: take, hold, release. `health-history.ts` uses it rather than copying it, and says so.",
+  "work.ts": "the pure process-table parser and classifier. Its whole closure is `fleet/claude-argv.js`, which is a true leaf.",
+  "work-probe.ts": "the `ps` adapter for the above. Closure: `node:child_process` + `work.ts`.",
+  "harness.ts":
+    "names what is holding a pane, purely, over an injected table. Closure: `claude-argv.js` + `wire.js` (types only) + `work.ts`.",
+  /* Added 2026-09-09 by `usage-limits-tab`, NOT by the session that introduced
+     the import — `routes-idea-queue.ts` landed on dev and left this list red,
+     and its author's session had closed. Which is the mechanism working: the
+     equality assertion turned a silent widening into a decision somebody had to
+     take, and the closure below is the answer it was asking for. */
+  "idea-queue.ts":
+    "the queue's own file discipline. Closure: `node:` builtins, `fleet/wire.js` (types only), and `jsonl.ts` + `lock.ts`, which are already here. No store.",
+  "idea-queue-wait.ts":
+    "pure arithmetic over the queue's items — depth, throughput, how long one has waited. Closure: `fleet/wire.js` (types only) + `idea-queue.ts`.",
+};
+
+const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. Build output excluded. */
 /**
@@ -630,7 +685,9 @@ describe("the field on the payload", () => {
   it("carries what it is given, unchanged, and through the wire", () => {
     const root = tempRoot();
     writeCheckpoint(root);
-    const state = fleetState(null, null, null, 60_000, true, null, readAttention(root));
+    const state = fleetState(null, null, null, 60_000, true, null, readAttention(root), { kind: "not-asked" }, {
+      kind: "not-asked",
+    });
     expect(state.attention).toMatchObject({ kind: "published", list: LIST });
     /* The only form the browser ever sees. A `readonly` array that survives a
        function call has not been shown to survive a serialisation. */

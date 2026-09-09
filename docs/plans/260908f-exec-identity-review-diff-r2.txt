@@ -1,0 +1,2576 @@
+diff --git a/scripts/overseer.ts b/scripts/overseer.ts
+index 195b240a..e1bd2c8c 100644
+--- a/scripts/overseer.ts
++++ b/scripts/overseer.ts
+@@ -200,6 +200,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-wait-restarted": true,
+   "session-row-changed": true,
+   "session-pane-replaced": true,
++  "session-execution-changed": true,
+   "job-occurrence-reserved": true,
+   "job-occurrence-started": true,
+   "job-occurrence-finished": true,
+@@ -267,6 +268,16 @@ export function describeEvent(event: OverseerEvent): string {
+       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
+     case "session-pane-replaced":
+       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
++    // THE PANE DID NOT MOVE, so this line has to say what did. The conversation
++    // verdict is on it because `conflicting` is the loudest thing this log can
++    // print: the pane is running a conversation nobody addressed.
++    case "session-execution-changed":
++      return (
++        `${when}  ${event.previousToken === null ? "run seen " : "new run  "}  ${event.identity.tmuxId} — ${event.previousToken ?? "none recorded"} → ${event.token}` +
++        (event.conversation.kind === "conflicting"
++          ? `, now conversation ${event.conversation.observed} rather than the claimed ${event.conversation.claimed}`
++          : `, conversation ${event.conversation.kind}`)
++      );
+     // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
+     // carries the job, the instant and the definition hash, so one line of this
+     // log is enough to find every other line about the same run.
+diff --git a/tools/fleet/collect.ts b/tools/fleet/collect.ts
+index 2e74b775..949e9e82 100644
+--- a/tools/fleet/collect.ts
++++ b/tools/fleet/collect.ts
+@@ -30,8 +30,19 @@ import {
+ } from "../../scripts/gjd-remote-tmux.js";
+ import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
+ import { statusesOf, type FleetStatus } from "./status.js";
+-import type { Pause } from "./wire.js";
++import type { ExecutionReading, Pause } from "./wire.js";
++import {
++  readBootIdentity,
++  readExecutionIdentity,
++  readProcessStart,
++  readUptime,
++  type BootIdentity,
++  type ProcessStartTicks,
++  type UptimeReading,
++} from "./execution-identity.js";
+ import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
++import { probeProcessTable } from "../overseer/work-probe.js";
++import type { ProcessTableReading } from "../overseer/work.js";
+ 
+ /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
+ export type FleetRow = {
+@@ -156,6 +167,23 @@ export type FleetRow = {
+    * only the reader is in a position to make it.
+    */
+   pause: Pause;
++  /**
++   * **WHICH RUN IS IN THIS PANE — the one identity none of the fields above can
++   * carry.**
++   *
++   * `paneId`, `panePid` and `claudeSessionId` are all unchanged when a pane's
++   * claude exits and another starts in the same shell, so a consumer holding
++   * any of them cannot tell yesterday's conversation from this morning's. This
++   * carries a durable token for the harness process itself, and a separate
++   * verdict on whether the conversation the launcher claimed is the one that
++   * process is actually running. `ExecutionReading` in `wire.ts` has the
++   * argument; `execution-identity.ts` derives it; `readExecutions` below fills
++   * it in.
++   *
++   * Starts at `unknown`/`not-probed` on the same rule as `pause` and
++   * `permissionMode`: a collection that never ran the pass says so.
++   */
++  execution: ExecutionReading;
+ };
+ 
+ /** A snapshot, and enough about it to know whether to believe it. */
+@@ -374,6 +402,16 @@ export function toRows(
+         why: "nothing has looked at whether this session is waiting for something yet",
+         cause: "rate-limits-not-collected",
+       } as Pause,
++      /* AND THE SAME RULE AGAIN, for the same reason: a row that nobody has
++         probed says *nobody looked*, with the cause that says which kind of
++         not-looking it was. `readExecutions` fills it in. `not-probed` and
++         `not-reported` are deliberately different arms — see
++         `ExecutionUnknownCause` — and this is the first of them. */
++      execution: {
++        kind: "unknown",
++        cause: "not-probed",
++        why: "this collection did not probe the process table, so nothing has looked at what is executing in this pane",
++      } as ExecutionReading,
+       // A session the status pass did not cover is `unknown` with a reason, not a
+       // default that reads as calm. There is no legitimate way to get here — the
+       // two lists come from one parse — so if it ever shows up on the page, the
+@@ -739,6 +777,11 @@ export async function collect(): Promise<FleetSnapshot> {
+      captures is measured on the latter. */
+   readPanes(rows);
+ 
++  /* AND ONE PASS FOR WHICH RUN IS IN EACH PANE. One `ps` for the whole fleet
++     and one small `/proc` read per pane, so this is the third pass rather than
++     a probe per row — see `readExecutions`. */
++  readExecutions(rows);
++
+   /* AND ONE PASS FOR WHY A QUIET SESSION IS QUIET. Separate from `readPanes`
+      because it reads files rather than terminals, and because it is allowed to
+      fail without costing us the board — see `readPauses`. */
+@@ -769,6 +812,86 @@ export async function collect(): Promise<FleetSnapshot> {
+  * seconds on a loaded box, `w2-usage-limits` owns it, and the moment it
+  * publishes a reading this is where it plugs in. It is emphatically not `none`.
+  */
++/** What {@link readExecutions} touches, so a test can drive it without a box. */
++export type ExecutionIo = {
++  probe: () => ProcessTableReading;
++  boot: () => BootIdentity;
++  uptime: () => UptimeReading;
++  readStart: (pid: number) => ProcessStartTicks;
++};
++
++/**
++ * **FILL IN `execution` ON EVERY ROW, FROM ONE READING OF THE PROCESS TABLE.**
++ *
++ * **ONE `ps` FOR THE WHOLE FLEET, NOT ONE PER ROW**, and the same for the boot
++ * id. That is the collector contract the roadmap states — *"Bounded
++ * process/transcript probes have one owner/cadence"* — and it is also the only
++ * way the answers can be consistent with each other: thirty separate `ps` runs
++ * would describe thirty slightly different boxes, so two rows could disagree
++ * about a process they share. The per-row cost after that is one
++ * `/proc/<pid>/stat` read, which is a few hundred bytes.
++ *
++ * **IT REUSES THE PROBE THAT ALREADY EXISTS.** `probeProcessTable` was written
++ * for this box, carries its own positive control (a `ps` that does not contain
++ * this process is refused as not being a reading of this machine), and until
++ * this call site had no production caller at all. `classifyPaneHarness` is the
++ * same story. Nothing here re-walks a tree or re-reads a `claude` command line.
++ *
++ * **COST, MEASURED RATHER THAN ASSUMED.** `probeProcessTable` uses `spawnSync`,
++ * which blocks the event loop; work-probe.ts measures it at ~40 ms over ~1000
++ * processes here. That is against a collection that already takes 8–12 seconds,
++ * so it is noise — but it is a NEW synchronous spawn on the request process, and
++ * the Responsive collection stage should take it with the two `execFileSync`
++ * calls it is already going after rather than leave it as the one nobody
++ * remembered. Named here so it is found.
++ *
++ * **A FAILURE COSTS NOTHING BUT THE READING.** Every arm of `ExecutionReading`
++ * is a value, including all the failures, so a box whose `ps` will not run
++ * produces rows that say why rather than rows that are missing.
++ */
++export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}): void {
++  const probe = io.probe ?? probeProcessTable;
++  const bootOf = io.boot ?? (() => readBootIdentity());
++  const uptimeOf = io.uptime ?? (() => readUptime());
++  const readStart = io.readStart ?? ((pid: number) => readProcessStart(pid));
++
++  let table: ProcessTableReading;
++  try {
++    table = probe();
++  } catch (cause) {
++    table = { read: false, why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
++  }
++  const boot = bootOf();
++  // READ AFTER THE PROBE, not before. It is the clock the table's elapsed times
++  // are compared against, and taking it after `ps` means the derived start of a
++  // process cannot land in the future.
++  const uptime = uptimeOf();
++
++  for (const row of rows) {
++    try {
++      row.execution = readExecutionIdentity({
++        panePid: row.panePid,
++        claimedConversationId: row.claudeSessionId,
++        table,
++        boot,
++        uptime,
++        readStart,
++      });
++    } catch (cause) {
++      // `readExecutionIdentity` returns values for every failure it knows
++      // about, so a throw here is a bug rather than a condition — and the cause
++      // is the nearest arm rather than an accurate one. THE `why` IS THE
++      // ANSWER; the cause is what a switch has to have. Same shape as
++      // `readPauses` below, which maps a throw onto `transcript-unreadable`.
++      row.execution = {
++        kind: "unknown",
++        cause: "process-table-unreadable",
++        why: `deriving this session's execution identity threw: ${cause instanceof Error ? cause.message : String(cause)}`,
++      };
++    }
++  }
++}
++
+ export async function readPauses(rows: FleetRow[]): Promise<void> {
+   let index: StoreIndex | undefined;
+   try {
+diff --git a/tools/fleet/execution-identity.ts b/tools/fleet/execution-identity.ts
+new file mode 100644
+index 00000000..89ae0710
+--- /dev/null
++++ b/tools/fleet/execution-identity.ts
+@@ -0,0 +1,424 @@
++/**
++ * **IS THIS THE SAME RUN I WAS LOOKING AT, OR A DIFFERENT ONE WEARING ITS
++ * ADDRESSES?**
++ *
++ * Every identity this fleet carried before today survives the change it most
++ * needs to see. A tmux pane is furniture: the pane's shell starts once and
++ * stays, and the `claude` inside it can exit and be replaced any number of
++ * times underneath it. Across that replacement `tmuxServerPid`, `paneId` and
++ * `panePid` are all unchanged — nothing above the claude moved — and so is
++ * `claudeSessionId`, because `CLAUDE_SESSION_ID` is pinned into the tmux
++ * environment by `tmux new-session -e` BEFORE Claude runs and is never
++ * rewritten. `tools/overseer/diff.ts` documents the consequence rather than
++ * fixing it: *"an unchanged claim means nothing"*, and `session-pane-replaced`
++ * is explicitly the event that cannot see this case.
++ *
++ * So this file answers the question none of those fields can, and the answer is
++ * a `ExecutionToken`: boot identity, pid, and the process's exact start tick.
++ *
++ * ## Why the answer is not "compare the pid"
++ *
++ * Pids are reused. On this box they run to seven digits and wrap, and the whole
++ * point of a durable token is the case where the number is the same and the
++ * process is not. `startTicks` — `/proc/<pid>/stat` field 22, the start time in
++ * clock ticks since boot — closes it exactly, because two processes cannot hold
++ * one pid at one tick. `boot` closes the other end: after a reboot, pids and
++ * ticks both restart from small numbers, so a token from yesterday could
++ * otherwise collide with one from this morning.
++ *
++ * **`ProcessStart` in work.ts is NOT this and must not be substituted for it.**
++ * That value is derived from `ps etimes`, counts whole seconds, and its own
++ * comment forbids comparing it for equality. It is a duration for a person.
++ * This is an identity for a machine.
++ *
++ * ## The probe is the one that already exists
++ *
++ * `probeProcessTable` and `classifyPaneHarness` were written for this box, are
++ * tested against captures taken off it, and had no production caller until this
++ * file. Nothing here re-walks a process tree or re-recognises a `claude`
++ * command line: the harness walk answers *what is holding this pane*, and this
++ * module asks *and which run is it* on top of the answer. One `ps` for the
++ * whole fleet (~40 ms, measured in work-probe.ts), then one small `/proc` read
++ * per pane that has a harness.
++ *
++ * ## Process verification and conversation verification are two answers
++ *
++ * A verified execution says a named, live, durably-identified harness process
++ * is under this pane. It says nothing about which transcript that process is
++ * writing. A bare `claude` with no `--session-id` is verified as a process and
++ * unverifiable as a conversation, and collapsing the two would either withhold
++ * a fact we have or invent one we do not. `ExecutionReading` in wire.ts carries
++ * them as separate fields for that reason.
++ *
++ * ## Pure classifier, thin adapter — as in work.ts / work-probe.ts
++ *
++ * {@link readExecutionIdentity} runs against injected readings, so every case
++ * below is testable against a capture and against a synthesised table. The two
++ * functions that touch the machine ({@link readBootIdentity},
++ * {@link readProcessStart}) are separated from it and take an injectable
++ * reader, and {@link parseProcStat} — the one piece of real parsing — is pure.
++ *
++ * ## What is NOT here, and why
++ *
++ * `executionTokenText`, `continuityOf` and `identityWriteGate` live in
++ * `execution-token.ts`. This file imports `node:fs` and two Overseer modules,
++ * so the browser can never import it — and those three are precisely what a
++ * browser component needs before it reuses a draft or enables a write. Policy
++ * that its main consumer cannot import gets copied rather than imported, so it
++ * is a leaf next door. This file is what the machine says; that one is what it
++ * means. GPT Sol's P2-3.
++ */
++import { readFileSync } from "node:fs";
++
++import { classifyPaneHarness } from "../overseer/harness.js";
++import type { ProcessTableReading } from "../overseer/work.js";
++import type { ConversationReading, ExecutionReading } from "./wire.js";
++
++/* ------------------------------------------------------------------ *
++ * The classifier.
++ * ------------------------------------------------------------------ */
++
++/** The boot's own id, or why there isn't one — including "this is not Linux". */
++export type BootIdentity =
++  | { read: true; id: string }
++  | { read: false; cause: "platform-unsupported" | "boot-identity-unreadable"; why: string };
++
++/** One process's start tick, or why it could not be read. */
++export type ProcessStartTicks = { read: true; ticks: number } | { read: false; why: string };
++
++/** Seconds since boot, or why they could not be read. One reading per collection. */
++export type UptimeReading = { read: true; seconds: number } | { read: false; why: string };
++
++/**
++ * **THE procfs CLOCK, WHICH IS NOT THE KERNEL'S.**
++ *
++ * `/proc/<pid>/stat`'s times are in USER_HZ, which the procfs ABI fixes at 100
++ * regardless of the kernel's own `CONFIG_HZ`. That is why this is a constant
++ * rather than a `getconf CLK_TCK` at startup: the number is a property of the
++ * interface we are reading, not of the machine we are reading it on.
++ */
++const USER_HZ = 100;
++
++/**
++ * **HOW FAR THE TWO CLOCKS MAY DISAGREE BEFORE WE STOP BELIEVING THE PAIR.**
++ *
++ * Four sources of honest slack, and none of them is close to the thing being
++ * caught: `ps etimes` is whole seconds (±1), the `/proc` read happens after the
++ * `ps` (up to the probe's own duration), `USER_HZ` rounding (±0.01 s), and the
++ * two reads are simply taken at different instants.
++ *
++ * Five seconds is generous against all of that and still decisive against the
++ * failure: a process that took over a pid inside the race window is seconds
++ * old while the table said minutes or hours, so a real mismatch is off by the
++ * whole of the previous process's life, not by a rounding.
++ */
++const START_AGREEMENT_TOLERANCE_S = 5;
++
++/** Everything {@link readExecutionIdentity} needs, all of it injectable. */
++export type ExecutionInput = {
++  /** The pane's own pid, from the same row this reading will be attached to. */
++  panePid: number | null;
++  /** The tmux environment's `CLAUDE_SESSION_ID`. A claim; see `ConversationReading`. */
++  claimedConversationId: string | null;
++  /** One reading of the process table, shared across the whole fleet. */
++  table: ProcessTableReading;
++  /** One boot identity, shared across the whole fleet. */
++  boot: BootIdentity;
++  /**
++   * Seconds since boot, read once per collection — the clock that lets the
++   * process table's elapsed times and `/proc`'s start ticks be compared. See
++   * the cross-check in {@link readExecutionIdentity}.
++   */
++  uptime: UptimeReading;
++  /** Start ticks for one pid. Called at most once per row. */
++  readStart: (pid: number) => ProcessStartTicks;
++};
++
++/**
++ * The reading for one pane.
++ *
++ * ORDER MATTERS AND IT IS THE ORDER OF WHAT WOULD BE WRONG. The boot identity is
++ * checked first because without it no token can be minted at all, so walking a
++ * tree would only produce evidence we could not name. Then the two ways there is
++ * no tree, then the walk, then the `/proc` read.
++ *
++ * **`claimed-only` IS ONLY FOR "WE LOOKED AND FOUND NOTHING NAMEABLE".** Every
++ * way of failing to look is `unknown` with a cause. That distinction is the
++ * whole difference between *the launch claim is all there is* and *we did not
++ * ask*, and one of them is allowed to be reassuring in a way the other is not.
++ */
++export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
++  const { panePid, claimedConversationId, table, boot, uptime, readStart } = input;
++
++  if (!boot.read) return { kind: "unknown", cause: boot.cause, why: boot.why };
++  if (panePid === null) {
++    return { kind: "unknown", cause: "no-pane-pid", why: "this row carried no pane pid, so there is no tree to walk" };
++  }
++  if (!table.read) return { kind: "unknown", cause: "process-table-unreadable", why: table.why };
++
++  const harness = classifyPaneHarness(panePid, table);
++  if (harness.kind === "unknown") {
++    switch (harness.cause) {
++      // THE WAYS WE DID NOT GET TO LOOK. Two of them are already handled above
++      // and are re-mapped rather than assumed unreachable, because a caller can
++      // hand this a table that came from a store replay rather than the probe.
++      case "no-pane-pid":
++        return { kind: "unknown", cause: "no-pane-pid", why: harness.why };
++      case "process-table-unreadable":
++        return { kind: "unknown", cause: "process-table-unreadable", why: harness.why };
++      case "pane-not-in-table":
++      case "malformed-process-table":
++        return { kind: "unknown", cause: "pane-tree-unreadable", why: harness.why };
++      // AND THE TWO WHERE THE WALK RAN AND CAME BACK WITHOUT A NAME. There is
++      // something in the pane; we cannot say what; so the launch metadata is
++      // all anybody has, which is exactly `claimed-only`.
++      case "unrecognised-pane-process":
++      case "ambiguous-harness":
++        return {
++          kind: "claimed-only",
++          conversation: conversationOf(claimedConversationId, null, `the pane's own process could not be named: ${harness.why}`),
++          why: harness.why,
++        };
++      default: {
++        const never: never = harness.cause;
++        throw new Error(`no execution reading for harness cause ${JSON.stringify(never)}`);
++      }
++    }
++  }
++
++  const start = readStart(harness.pid);
++  if (!start.read) {
++    // WE SAW IT AND CANNOT NAME IT DURABLY, which is not the same as not seeing
++    // it — the process almost certainly exited between the `ps` and this read.
++    // `verified` without a token is not an option: the token IS the verification.
++    return {
++      kind: "unknown",
++      cause: "process-start-unreadable",
++      why: `pid ${harness.pid} is the harness under this pane and its start time could not be read, so no durable identity can be minted for it: ${start.why}`,
++    };
++  }
++
++  // THE TWO READINGS MUST BE OF THE SAME PROCESS, AND UNTIL HERE NOTHING SAID
++  // SO. `harness` and its conversation come from the process table; `start`
++  // comes from a `/proc` read taken afterwards. A pid reused in between yields
++  // the old harness stapled to the new process's token — `verified`, coherent,
++  // and about no process that ever existed. GPT Sol's P1-2.
++  const agreement = startAgrees(harness.pid, table, uptime, start.ticks);
++  if (agreement !== null) return agreement;
++
++  const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
++  const whyUnobserved =
++    harness.kind === "claude-code"
++      ? "the claude under this pane was started without --session-id, so its own command line names no conversation"
++      : `this pane holds ${harness.kind}, whose command line carries no conversation id — a Claude may not have started in it yet, or may have finished`;
++
++  return {
++    kind: "verified",
++    token: { boot: boot.id, pid: harness.pid, startTicks: start.ticks },
++    harness: harness.kind,
++    conversation: conversationOf(claimedConversationId, observed, whyUnobserved),
++  };
++}
++
++/**
++ * **DO THE PROCESS TABLE AND `/proc` DESCRIBE THE SAME PROCESS?** — null when
++ * they agree, and the refusal to return when they do not.
++ *
++ * The check costs nothing anybody was not already paying. `ps` reported this
++ * process's ELAPSED TIME and `/proc` reported its START TICK; with one uptime
++ * reading those are two independent measurements of one instant, taken by two
++ * different mechanisms moments apart. **A second, independent join, built so
++ * that it CAN contradict the first** — which is the only kind of check worth
++ * having here, since a reading assembled from two processes is internally
++ * consistent and looks perfect.
++ *
++ * A replacement that took the pid inside the race window is seconds old while
++ * the table said minutes, so the disagreement is the whole of the previous
++ * process's life rather than a rounding. See `START_AGREEMENT_TOLERANCE_S` for
++ * the honest slack this has to allow.
++ *
++ * **AN UNMADE CHECK IS NOT A PASSED CHECK.** No uptime, or a table row whose
++ * elapsed time could not be converted, refuses rather than waving the pair
++ * through — the same rule as every other arm in this file.
++ */
++function startAgrees(
++  pid: number,
++  table: Extract<ProcessTableReading, { read: true }>,
++  uptime: UptimeReading,
++  ticks: number,
++): ExecutionReading | null {
++  if (!uptime.read) {
++    return {
++      kind: "unknown",
++      cause: "uptime-unreadable",
++      why: `pid ${pid}'s start time cannot be checked against the process table without a boot clock, so whether the two readings are of one process is unknown: ${uptime.why}`,
++    };
++  }
++  const row = table.rows.find((candidate) => candidate.pid === pid);
++  // Cannot happen — the harness came out of this table — but the row is looked
++  // up rather than threaded through, and an absent one must refuse rather than
++  // skip the check.
++  if (row === undefined || !row.started.known) {
++    return {
++      kind: "unknown",
++      cause: "process-changed-under-read",
++      why: `pid ${pid} has no usable elapsed time in the process table it was classified from, so its start tick cannot be checked against it`,
++    };
++  }
++  // Both sides as "seconds since boot at which this process started".
++  const fromProc = ticks / USER_HZ;
++  const fromTable = uptime.seconds - (table.atMs - row.started.atMs) / 1000;
++  const apart = Math.abs(fromProc - fromTable);
++  if (apart <= START_AGREEMENT_TOLERANCE_S) return null;
++  return {
++    kind: "unknown",
++    cause: "process-changed-under-read",
++    why:
++      `pid ${pid} was ${Math.round((table.atMs - row.started.atMs) / 1000)} s old in the process table and /proc says it started ` +
++      `${Math.round(uptime.seconds - fromProc)} s ago — ${Math.round(apart)} s apart, so the two readings are of different processes and the pid was reused between them`,
++  };
++}
++
++/**
++ * The claim and the observation, reconciled.
++ *
++ * **THE ASYMMETRY IS DELIBERATE AND IS THE OPPOSITE OF `session-replaced`'s.**
++ * There, an unchanged claim was evidence of nothing; here, a claim that MATCHES
++ * a live process's own argument is real corroboration, because the argument is
++ * on the process rather than on the pane around it.
++ */
++function conversationOf(claimed: string | null, observed: string | null, whyUnobserved: string): ConversationReading {
++  if (claimed === null) return { kind: "not-claimed" };
++  if (observed === null) return { kind: "unverifiable", claimed, why: whyUnobserved };
++  if (observed === claimed) return { kind: "verified", id: claimed };
++  return { kind: "conflicting", claimed, observed };
++}
++
++/* ------------------------------------------------------------------ *
++ * The two readers that touch the machine, and the one parse.
++ * ------------------------------------------------------------------ */
++
++/** How this module reads a file. Injectable so every failure path is testable. */
++export type ReadTextFile = (path: string) => string;
++
++const readText: ReadTextFile = (path) => readFileSync(path, "utf8");
++
++export const BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id";
++
++/**
++ * The boot's id, or an honest refusal.
++ *
++ * **A NON-LINUX BOX IS `platform-unsupported`, NEVER A FALLBACK TO THE PID.**
++ * The direction on this is explicit in the stage: unavailable platform evidence
++ * is unsupported, not permission to use a pid on its own. Greg's Mac reaches
++ * this line, and it should get grey rows there rather than confident ones.
++ */
++export function readBootIdentity(
++  read: ReadTextFile = readText,
++  platform: string = process.platform,
++): BootIdentity {
++  if (platform !== "linux") {
++    return {
++      read: false,
++      cause: "platform-unsupported",
++      why: `execution identity is derived from ${BOOT_ID_PATH} and /proc/<pid>/stat, and this is ${platform} rather than linux`,
++    };
++  }
++  let raw: string;
++  try {
++    raw = read(BOOT_ID_PATH);
++  } catch (cause) {
++    return {
++      read: false,
++      cause: "boot-identity-unreadable",
++      why: `${BOOT_ID_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
++    };
++  }
++  const id = raw.trim();
++  // A BOOT ID THAT IS EMPTY IS NOT A BOOT ID. An empty string would make every
++  // token on the box begin with `:`, and two boots would silently agree — the
++  // exact collision the field is there to prevent.
++  if (id === "") {
++    return { read: false, cause: "boot-identity-unreadable", why: `${BOOT_ID_PATH} is empty` };
++  }
++  return { read: true, id };
++}
++
++export const UPTIME_PATH = "/proc/uptime";
++
++/**
++ * Seconds since boot, for the cross-check in {@link startAgrees}.
++ *
++ * One read per collection, not per row: it is a property of the box. The file
++ * is two floats and only the first is wanted.
++ */
++export function readUptime(read: ReadTextFile = readText): UptimeReading {
++  let raw: string;
++  try {
++    raw = read(UPTIME_PATH);
++  } catch (cause) {
++    return { read: false, why: `${UPTIME_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
++  }
++  const first = raw.trim().split(/\s+/)[0];
++  const seconds = first === undefined ? Number.NaN : Number(first);
++  // NEGATIVE OR NON-FINITE IS A REFUSAL, not a zero. A zero would put every
++  // process's derived start before the boot and fail every cross-check on the
++  // box, which reads as thirty replaced processes rather than as one bad read.
++  if (!Number.isFinite(seconds) || seconds < 0) {
++    return { read: false, why: `${UPTIME_PATH} does not start with a number of seconds: ${JSON.stringify(raw.slice(0, 60))}` };
++  }
++  return { read: true, seconds };
++}
++
++/**
++ * Field 22 of `/proc/<pid>/stat` — a process's start time in clock ticks.
++ *
++ * **THE PARSE STARTS AT THE LAST `)`, AND THAT IS THE WHOLE TRICK.** Field 2 is
++ * the executable's name in parentheses, it is not escaped, and it may contain
++ * both spaces and parentheses — a process really can be called `(foo) bar)`.
++ * Splitting the line on whitespace from the left puts every later field at an
++ * offset that depends on the name, which is a parser that works on this box
++ * until somebody runs something with a bracket in its name. After the last `)`
++ * the fields are fixed-position: field 3 is first, so field N sits at index
++ * N - 3, and field 22 is index 19.
++ */
++export function parseProcStat(text: string): { ok: true; ppid: number; startTicks: number } | { ok: false; why: string } {
++  const close = text.lastIndexOf(")");
++  if (close === -1) return { ok: false, why: "the stat line has no `)`, so it is not a /proc stat line" };
++  const fields = text.slice(close + 1).trim().split(/\s+/);
++  // Field 3 (state) is at index 0, so field 22 is at index 19 and the line must
++  // be at least that long. Checked rather than assumed: a truncated read is a
++  // real outcome of racing a process's exit.
++  const ppidText = fields[1];
++  const startText = fields[19];
++  if (ppidText === undefined || startText === undefined) {
++    return { ok: false, why: `the stat line has ${fields.length} fields after the command name, which is fewer than the 20 needed to reach the start time` };
++  }
++  const ppid = Number(ppidText);
++  const startTicks = Number(startText);
++  if (!Number.isSafeInteger(ppid) || ppid < 0) return { ok: false, why: `parent pid ${JSON.stringify(ppidText)} is not a pid` };
++  if (!Number.isSafeInteger(startTicks) || startTicks < 0) {
++    return { ok: false, why: `start time ${JSON.stringify(startText)} is not a tick count` };
++  }
++  return { ok: true, ppid, startTicks };
++}
++
++/**
++ * One process's start tick, straight off `/proc`.
++ *
++ * ENOENT IS THE ORDINARY CASE, not an error worth shouting about: the process
++ * table was read a moment ago and the process is free to exit in between. The
++ * caller turns this into `process-start-unreadable`, which is an `unknown` arm
++ * rather than a verified reading with a guess in it.
++ */
++export function readProcessStart(pid: number, read: ReadTextFile = readText): ProcessStartTicks {
++  let raw: string;
++  try {
++    raw = read(`/proc/${pid}/stat`);
++  } catch (cause) {
++    return { read: false, why: `/proc/${pid}/stat could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
++  }
++  const parsed = parseProcStat(raw);
++  if (!parsed.ok) return { read: false, why: `/proc/${pid}/stat could not be parsed: ${parsed.why}` };
++  return { read: true, ticks: parsed.startTicks };
++}
+diff --git a/tools/fleet/execution-token.ts b/tools/fleet/execution-token.ts
+new file mode 100644
+index 00000000..966cbdf6
+--- /dev/null
++++ b/tools/fleet/execution-token.ts
+@@ -0,0 +1,190 @@
++/**
++ * **THE EXECUTION TOKEN'S TEXT FORM, AND THE THREE DECISIONS ANYBODY MAKES WITH
++ * IT** — as a leaf, so the browser can have them.
++ *
++ * ## Why this is a separate file from `execution-identity.ts`
++ *
++ * `execution-identity.ts` reads `/proc` and classifies process trees: it
++ * imports `node:fs` and two Overseer modules, so it can never be imported by
++ * `tools/fleet/web/src/`, which is compiled a second time by a DOM-only
++ * project. But `continuityOf` and `identityWriteGate` are exactly the functions
++ * the browser needs — they are what a component asks before it reuses a draft
++ * or enables a write — and a policy that lives where its main consumer cannot
++ * reach it gets copied instead of imported. GPT Sol's P2-3, 2026-09-09.
++ *
++ * So the split is by dependency rather than by topic: **what the machine says**
++ * stays over there; **what it means** is here, and here has no imports at all
++ * except types. `tools/overseer/diff.ts` and `store.ts` import this rather than
++ * `execution-identity.ts` too, which also unbraids the layering — the Overseer
++ * no longer reaches through a fleet module that reaches back into the Overseer.
++ *
++ * ## The text form is the contract, not an encoding detail
++ *
++ * `boot:pid:startTicks`. It is stored in the Overseer's register, written into
++ * its event log, and used as a cache key by the dashboard. Every one of those
++ * survives a restart, so the shape is a thing other code depends on, and
++ * {@link isExecutionTokenText} is here so that "a malformed token is refused" is
++ * a property something checks rather than a sentence in a comment.
++ */
++import type { ExecutionReading, ExecutionToken } from "./wire.js";
++
++/**
++ * The token as one comparable, storable string.
++ *
++ * A string rather than a structural compare because it has to survive a JSONL
++ * round trip and be a map key in the Overseer's register, and because a
++ * hand-written three-field `===` in each consumer is the shape this repo has
++ * lost mornings to. The separator is `:`; a boot id is a uuid and the other two
++ * are decimal, so nothing in a field can be confused for one.
++ */
++export function executionTokenText(token: ExecutionToken): string {
++  return `${token.boot}:${token.pid}:${token.startTicks}`;
++}
++
++/**
++ * A boot id, a pid and a start tick, in that order.
++ *
++ * Deliberately loose about the boot id's shape — it is whatever the kernel put
++ * in `boot_id`, and pinning it to a uuid here would be this file inventing a
++ * rule about a file it does not read — and strict about the two numbers, which
++ * are ours. **Not exported as a parser returning the parts**: nothing should
++ * take a token apart, because a consumer that compares fields instead of whole
++ * strings is a second definition of what identity means.
++ */
++const TOKEN_TEXT = /^[^:\s]+:[1-9]\d{0,9}:\d{1,19}$/;
++
++export function isExecutionTokenText(value: unknown): value is string {
++  return typeof value === "string" && TOKEN_TEXT.test(value);
++}
++
++/**
++ * **THE CONTINUITY QUESTION, and the only honest way to ask it.**
++ *
++ * A caller that owns something identity-dependent — a draft, a transcript
++ * attribution, a measured duration — stores the token it was created under and
++ * asks this every time it is about to use it. It does NOT ask "did a change
++ * event fire": an event log is a record of what was noticed, and this is a
++ * comparison of what is true now.
++ *
++ * Three answers and no fourth. `unverifiable` is not a soft `same`: it is the
++ * arm that must quarantine, because *we cannot see it* and *it is still there*
++ * are the same picture from here.
++ */
++export type Continuity =
++  | { kind: "same"; token: string }
++  | { kind: "replaced"; previous: string; current: string; why: string }
++  | { kind: "unverifiable"; previous: string | null; why: string };
++
++export function continuityOf(previous: string | null, current: ExecutionReading): Continuity {
++  if (current.kind !== "verified") {
++    return {
++      kind: "unverifiable",
++      previous,
++      why:
++        current.kind === "claimed-only"
++          ? `nothing under this pane could be identified, so whether it is still the same run cannot be established: ${current.why}`
++          : `there is no execution reading for this pane (${current.cause}), so whether it is still the same run cannot be established: ${current.why}`,
++    };
++  }
++  const token = executionTokenText(current.token);
++  if (previous === null) {
++    return {
++      kind: "unverifiable",
++      previous: null,
++      why: `this is run ${token}, and there is no earlier run recorded to compare it against`,
++    };
++  }
++  if (previous === token) return { kind: "same", token };
++  return {
++    kind: "replaced",
++    previous,
++    current: token,
++    why: `the process in this pane is run ${token} now, not ${previous} — it was replaced, and the pane, its pid and its CLAUDE_SESSION_ID all stayed the same across that`,
++  };
++}
++
++/**
++ * **MAY SOMETHING KEYED TO A CONVERSATION BE WRITTEN RIGHT NOW?**
++ *
++ * Three conditions, all required: the execution is verified, the conversation
++ * is verified, and the harness is one we can actually address. The third is
++ * defence in depth rather than redundancy — the arms are produced together by
++ * one function today, but this value also arrives off the wire from a producer
++ * this build did not compile, and a payload asserting a verified conversation
++ * on a `shell` pane must not open a write path. GPT Sol's P2-4.
++ *
++ * Every refusal carries the sentence a reader is shown beside the disabled
++ * control, so it explains itself rather than greying out silently.
++ *
++ * **A CACHED `allowed` IS NOT AUTHORITY.** This takes a reading, and a reading
++ * is what was true at the instant it was taken. The rule for a caller is that
++ * the reading must be *fresh at the moment of the write* — which is what
++ * `steer.ts`'s `verifyTarget` already does for keystrokes, re-deriving against
++ * the live box rather than trusting what the page was rendered from. Storing an
++ * `allowed: true` and acting on it later is the mistake this comment exists to
++ * name; the token it returns is for recording what a write was done under, not
++ * for re-authorising a later one.
++ */
++export type IdentityWriteGate = { allowed: true; token: string; conversationId: string } | { allowed: false; why: string };
++
++/**
++ * The harnesses a conversation-addressed write may target.
++ *
++ * `claude-code` and nothing else, and the two exclusions are the interesting
++ * ones: `claude-headless` really is a Claude running a conversation, and it
++ * stopped reading its terminal after its first prompt, so a write to it is
++ * delivered to nobody. `shell` is the dangerous one — see
++ * `HARNESS_CAPABILITIES` in tools/overseer/harness.ts, whose refusal for a
++ * shell is that it would EXECUTE the text.
++ */
++const ADDRESSABLE: ReadonlySet<string> = new Set(["claude-code"]);
++
++export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate {
++  if (reading.kind === "unknown") {
++    return {
++      allowed: false,
++      why: `we cannot see what is running in this pane (${reading.cause}), so anything addressed to a conversation could reach a different one: ${reading.why}`,
++    };
++  }
++  if (reading.kind === "claimed-only") {
++    return {
++      allowed: false,
++      why: `nothing under this pane could be identified, so its conversation id is a launch claim rather than an observation: ${reading.why}`,
++    };
++  }
++  switch (reading.conversation.kind) {
++    case "verified":
++      // THE HARNESS IS CHECKED EVEN THOUGH THE CONVERSATION IS VERIFIED. A
++      // `verified` conversation on a `shell` is a combination this box's
++      // producer cannot make and a payload can assert; the parsers refuse it
++      // too, and this is the second of the two locks.
++      if (!ADDRESSABLE.has(reading.harness)) {
++        return {
++          allowed: false,
++          why: `this pane holds ${reading.harness}, which cannot be addressed by conversation, so a claim that it is running ${reading.conversation.id} is not something to act on`,
++        };
++      }
++      return { allowed: true, token: executionTokenText(reading.token), conversationId: reading.conversation.id };
++    case "not-claimed":
++      return {
++        allowed: false,
++        why: `this pane holds ${reading.harness} and no conversation was ever claimed for it, so there is nothing here to address`,
++      };
++    case "conflicting":
++      return {
++        allowed: false,
++        why:
++          `this pane is running conversation ${reading.conversation.observed}, not ${reading.conversation.claimed} ` +
++          `which every address on this row still names — a different Claude has been started here since launch`,
++      };
++    case "unverifiable":
++      return {
++        allowed: false,
++        why: `nothing observable confirms that conversation ${reading.conversation.claimed} is the one in this pane: ${reading.conversation.why}`,
++      };
++    default: {
++      const never: never = reading.conversation;
++      throw new Error(`no write gate for conversation reading ${JSON.stringify(never)}`);
++    }
++  }
++}
+diff --git a/tools/fleet/web/src/types.ts b/tools/fleet/web/src/types.ts
+index de5917e9..3ca619b1 100644
+--- a/tools/fleet/web/src/types.ts
++++ b/tools/fleet/web/src/types.ts
+@@ -41,7 +41,11 @@ import type {
+   AttentionItem,
+   AttentionKind,
+   AttentionList,
++  ConversationReading,
++  ExecutionReading,
++  ExecutionUnknownCause,
+   FleetState as FleetStateWire,
++  HarnessKind,
+   OverseerHeartbeat,
+   OverseerRegister,
+   OverseerScheduler,
+@@ -267,6 +271,23 @@ export type FleetRow = {
+    * a null here means the row cannot be steered at all.
+    */
+   claudeSessionId: string | null;
++  /**
++   * **WHICH RUN IS IN THE PANE — and the only field on this row that can tell
++   * a fresh Claude from the one you were talking to.**
++   *
++   * Every identifier above survives a claude exiting and another starting in
++   * the same pane: `paneId` and `panePid` belong to the pane's shell, which
++   * never died, and `claudeSessionId` is the tmux environment's launch claim,
++   * written once and never rewritten. This is the reading that does not, and
++   * `ExecutionReading` in `wire.ts` says how it is derived.
++   *
++   * A page that keys anything to a session — a draft, a transcript heading, a
++   * measured age — compares this reading's token to the one it stored, and
++   * quarantines rather than continuing when they differ or when there is no
++   * reading. Never `verified` by default: a producer that predates this field
++   * parses to `unknown`/`not-reported`.
++   */
++  execution: ExecutionReading;
+   /**
+    * **THE SERVER'S OWN `status` OBJECT, UNTOUCHED**, to be handed back verbatim
+    * on a steering request. `status` above is the parse, and it is for drawing.
+@@ -969,6 +990,160 @@ export function parsePause(v: unknown, skew: ClockSkew): Pause {
+   );
+ }
+ 
++/**
++ * **WHICH RUN IS IN THE PANE, off the wire — and an absent field is
++ * `not-reported`, never anything reassuring.**
++ *
++ * The same rule as `parsePause` above and for the same reason, but the stakes
++ * are higher by one step: a `pause` this page invents makes a badge wrong, and
++ * an `execution` this page invents makes a page go on writing into a
++ * conversation that has been replaced. So there is no arm here that a missing
++ * or malformed payload can reach except `unknown`, and every `unknown` carries
++ * the cause that says which kind of not-knowing it is.
++ *
++ * **`verified` IS CHECKED FIELD BY FIELD.** A token with a missing `startTicks`
++ * is not a token — it is the identity with the pid-reuse defence removed — so a
++ * half-shaped `verified` becomes `unknown`/`not-reported` rather than a
++ * `verified` with a hole in it.
++ */
++/**
++ * The harness names this build knows, as a `Record` over the closed union
++ * rather than an array: adding an arm to `HarnessKind` without adding it here
++ * stops the build, which is the same mechanism `HARNESS_CAPABILITIES` uses on
++ * the server. An unfamiliar name off the wire becomes `unknown`, which is the
++ * arm that refuses everything.
++ */
++const HARNESS_KINDS: Record<HarnessKind, true> = {
++  "claude-code": true,
++  "claude-headless": true,
++  "codex-batch": true,
++  "codex-interactive": true,
++  shell: true,
++  unknown: true,
++};
++
++export function parseExecution(v: unknown): ExecutionReading {
++  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
++    kind: "unknown",
++    cause,
++    why,
++  });
++  if (v === undefined || v === null) {
++    return unread("this server does not report what is executing in each pane, so continuity cannot be established");
++  }
++  if (!isRecord(v)) return unread("the server sent an execution reading that is not an object");
++
++  const kind = str(v["kind"]);
++  if (kind === "unknown") {
++    return { kind: "unknown", cause: parseExecutionCause(v["cause"]), why: str(v["why"]) ?? "no reason was given" };
++  }
++  if (kind === "claimed-only") {
++    const conversation = parseConversation(v["conversation"]);
++    if (conversation === null) return unread("the server sent a claimed-only execution with no readable conversation reading");
++    return { kind: "claimed-only", conversation, why: str(v["why"]) ?? "no reason was given" };
++  }
++  if (kind === "verified") {
++    const token = v["token"];
++    const harness = str(v["harness"]);
++    const conversation = parseConversation(v["conversation"]);
++    if (!isRecord(token) || harness === null || conversation === null) {
++      return unread("the server sent a verified execution without a token, a harness and a conversation reading");
++    }
++    const boot = str(token["boot"]);
++    const pid = token["pid"];
++    const startTicks = token["startTicks"];
++    if (
++      boot === null ||
++      boot === "" ||
++      typeof pid !== "number" ||
++      !Number.isSafeInteger(pid) ||
++      pid <= 0 ||
++      typeof startTicks !== "number" ||
++      !Number.isSafeInteger(startTicks) ||
++      startTicks < 0
++    ) {
++      return unread("the server sent a verified execution whose token is not a boot id, a pid and a start tick");
++    }
++    return {
++      kind: "verified",
++      token: { boot, pid, startTicks },
++      // A harness kind this build has not heard of is kept rather than
++      // rejected: it is a label beside the token, and the token is the part
++      // anything acts on. `HARNESS_KINDS` below is what gates capabilities.
++      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
++      conversation,
++    };
++  }
++  return unread(
++    kind === null ? "the server sent an execution reading with no kind" : `this page does not know the execution reading ${JSON.stringify(kind)}`,
++  );
++}
++
++/**
++ * The reading, checked against the row it arrived on — the browser's copy of
++ * `coherentWith` in `tools/overseer/observation.ts`.
++ *
++ * Two independent readers of one wire type is this area's stated design, so the
++ * rule is stated twice on purpose; what is NOT duplicated is the policy about
++ * which harnesses are addressable, which both sides take from the same
++ * sentence in `tools/fleet/execution-token.ts`.
++ */
++function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
++  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
++  const observed = reading.conversation.id;
++  if (claimed !== null && observed === claimed && reading.harness === "claude-code") return reading;
++  const why =
++    claimed === null
++      ? `this row claims no conversation, so a report that it is running ${observed} agrees with nothing`
++      : observed !== claimed
++        ? `the server reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
++        : `the server reports a verified conversation on ${reading.harness}, which cannot hold one`;
++  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
++}
++
++/** One conversation verdict, or null when the payload does not carry one. */
++function parseConversation(v: unknown): ConversationReading | null {
++  if (!isRecord(v)) return null;
++  const kind = str(v["kind"]);
++  if (kind === "not-claimed") return { kind: "not-claimed" };
++  if (kind === "verified") {
++    const id = str(v["id"]);
++    return id === null || id === "" ? null : { kind: "verified", id };
++  }
++  if (kind === "conflicting") {
++    const claimed = str(v["claimed"]);
++    const observed = str(v["observed"]);
++    return claimed === null || observed === null ? null : { kind: "conflicting", claimed, observed };
++  }
++  if (kind === "unverifiable") {
++    const claimed = str(v["claimed"]);
++    return claimed === null ? null : { kind: "unverifiable", claimed, why: str(v["why"]) ?? "no reason was given" };
++  }
++  return null;
++}
++
++/**
++ * The named cause, or `not-reported` — which is the one that says the producer
++ * never offered a reading at all. Same fallback rule as `parsePauseCause`.
++ */
++const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
++  "not-probed": true,
++  "not-reported": true,
++  "no-pane-pid": true,
++  "process-table-unreadable": true,
++  "pane-tree-unreadable": true,
++  "platform-unsupported": true,
++  "boot-identity-unreadable": true,
++  "process-start-unreadable": true,
++  "process-changed-under-read": true,
++  "uptime-unreadable": true,
++};
++
++function parseExecutionCause(v: unknown): ExecutionUnknownCause {
++  const name = str(v);
++  return name !== null && Object.hasOwn(EXECUTION_CAUSES, name) ? (name as ExecutionUnknownCause) : "not-reported";
++}
++
+ /**
+  * The named cause, or the one that says we were never told.
+  *
+@@ -1035,6 +1210,13 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
+         ? v["panePid"]
+         : null,
+     claudeSessionId: str(v["claudeSessionId"]),
++    /* CHECKED AGAINST ITS OWN ROW, not only against its own shape. A payload
++       asserting a verified conversation that the row does not claim, or one on
++       a harness that cannot hold a conversation, is downgraded to
++       `unverifiable` — the process reading survives, the claim about which
++       transcript it is writing does not. Same rule as `coherentWith` in
++       tools/overseer/observation.ts; GPT Sol's P2-4. */
++    execution: coherentWith(parseExecution(v["execution"]), str(v["claudeSessionId"])),
+     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
+        kept so it can be serialised back exactly as it arrived. */
+     rawStatus: v["status"] ?? null,
+diff --git a/tools/fleet/wire.ts b/tools/fleet/wire.ts
+index dc8cc141..6634b53c 100644
+--- a/tools/fleet/wire.ts
++++ b/tools/fleet/wire.ts
+@@ -1481,3 +1481,184 @@ export type BroadcastRecipientOutcome =
+   | "blocked"
+   /** The fan-out ran out of time before this row. Nothing was sent. */
+   | "not-reached";
++
++/* ------------------------------------------------------------------ *
++ * Execution identity: which RUN is in this pane, not which pane it is.
++ * ------------------------------------------------------------------ */
++
++/**
++ * **A DURABLE NAME FOR ONE RUNNING PROCESS, and the whole reason this block
++ * exists.**
++ *
++ * A pane outlives the things that run in it. `tmuxServerPid`, `paneId` and
++ * `panePid` can all stay fixed while the `claude` inside the pane exits and
++ * another one starts — the pane's shell is the same shell, so nothing above
++ * moves — and `claudeSessionId` cannot see it either, because
++ * `CLAUDE_SESSION_ID` is pinned into the tmux environment once, before Claude
++ * runs, and is never rewritten (`ObservedRow.claimedConversationId` in
++ * tools/overseer/observation.ts has the measurement). So every identity this
++ * payload previously carried is stable across exactly the change that matters
++ * most: **the conversation you were talking to has been replaced by a different
++ * one wearing all of its addresses.**
++ *
++ * Three fields, and each one is load-bearing:
++ *
++ *  - `boot` is `/proc/sys/kernel/random/boot_id`, which the kernel mints per
++ *    boot. Without it a token minted before a reboot could collide with one
++ *    minted after, since pids and start ticks both restart.
++ *  - `pid` names the process only for as long as it lives — the warning
++ *    `ChildJob.pid` and `Harness.pid` already carry, and the reason the third
++ *    field is not optional.
++ *  - `startTicks` is field 22 of `/proc/<pid>/stat`, the process's start time in
++ *    clock ticks since boot. It is EXACT and it is what closes pid reuse: the
++ *    next process handed pid 4039575 cannot also have started at tick 72055933.
++ *
++ * **NOT `ProcessStart` FROM work.ts, and that is not a duplication.** That one
++ * is derived from `ps etimes`, counts whole seconds, and its own comment says
++ * two readings of one process can differ by a second and that it must *never be
++ * compared for equality*. It answers "how long has this been running" for a
++ * person. This answers "is this the same run", and equality is the only thing
++ * it is for.
++ */
++export type ExecutionToken = {
++  /** `/proc/sys/kernel/random/boot_id`. A different boot is a different world. */
++  boot: string;
++  /** The harness process's pid, at the instant of the reading. */
++  pid: number;
++  /** `/proc/<pid>/stat` field 22 — start time in clock ticks since boot. Exact. */
++  startTicks: number;
++};
++
++/**
++ * **WHICH CONVERSATION IS IN THERE — kept separate from whether the PROCESS is
++ * identified, because the two are genuinely different questions.**
++ *
++ * Knowing that a live `claude` is the pane's descendant, and holding a durable
++ * token for it, says nothing about which transcript it is writing. A bare
++ * `claude` with no `--session-id` is a perfectly ordinary, perfectly verified
++ * process whose conversation nothing on its command line names.
++ *
++ * `conflicting` is the arm the whole stage was built for: the tmux environment
++ * claims one uuid and the live process's argv carries another, which is a fresh
++ * Claude under an unchanged pane, caught.
++ */
++export type ConversationReading =
++  /** The row carries no `CLAUDE_SESSION_ID`: a shell, a `setup`, a legacy session. */
++  | { kind: "not-claimed" }
++  /** The live harness's own `--session-id` equals the tmux environment's claim. */
++  | { kind: "verified"; id: string }
++  /**
++   * The claim and the process disagree. **The claim is the stale one** — it was
++   * written before the first Claude started and is never updated — so `observed`
++   * is the conversation actually in the pane and `claimed` is what every address
++   * in this payload would have sent you to.
++   */
++  | { kind: "conflicting"; claimed: string; observed: string }
++  /** A claim with nothing to check it against, and the sentence saying what was missing. */
++  | { kind: "unverifiable"; claimed: string; why: string };
++
++/**
++ * Why there is no execution reading. Each arm is a different thing to draw, and
++ * none of them means "there is nothing running".
++ *
++ * The first two are the *nobody looked* pair and they are not interchangeable:
++ * `not-probed` is this producer choosing not to run the pass, `not-reported` is
++ * a producer too old to have one — which a consumer meets across a deploy and
++ * must not read as a session that lost its identity.
++ */
++export type ExecutionUnknownCause =
++  /** This collection did not run the pass. A `FleetRow` starts here. */
++  | "not-probed"
++  /** The payload had no `execution` field at all: a producer from before this stage. */
++  | "not-reported"
++  /** The row carried no pane pid, so there is no tree to walk. */
++  | "no-pane-pid"
++  /** The process table could not be read. `why` carries what the probe said. */
++  | "process-table-unreadable"
++  /** The table is not an ancestry, or the pane's own pid is not in it. */
++  | "pane-tree-unreadable"
++  /**
++   * There is no `/proc` to read. **Unsupported, never "use the pid on its own"**
++   * — a pid with nothing to disambiguate reuse is precisely the identity this
++   * type exists to refuse.
++   */
++  | "platform-unsupported"
++  /** `/proc/sys/kernel/random/boot_id` could not be read, so no token can be minted. */
++  | "boot-identity-unreadable"
++  /**
++   * A harness was found and its start ticks could not be read — almost always
++   * because it exited between the process table and the `/proc` read. We saw
++   * it; we cannot name it durably; that is not a verified execution.
++   */
++  | "process-start-unreadable"
++  /**
++   * **THE PID WAS REUSED WHILE WE WERE LOOKING AT IT.**
++   *
++   * The harness kind and the conversation come from the process table; the
++   * start token comes from a `/proc` read taken afterwards. If the process
++   * exits and its pid is handed to another in between, those two describe
++   * DIFFERENT PROCESSES, and stapling them together produces a `verified`
++   * identity that never existed — the old conversation with the new process's
++   * token, which the write gate would then allow. This arm is what the two
++   * readings disagreeing produces instead. GPT Sol's P1-2, 2026-09-09.
++   */
++  | "process-changed-under-read"
++  /**
++   * `/proc/uptime` could not be read, so the process table's elapsed times and
++   * `/proc`'s start ticks cannot be put on one clock and the check above cannot
++   * be made. **Unverifiable rather than assumed good**: the arm exists to catch
++   * a reading assembled from two processes, and an unmade check is not a passed
++   * one.
++   */
++  | "uptime-unreadable";
++
++/**
++ * **WHAT IS ACTUALLY EXECUTING IN THIS PANE, or the honest reason we cannot
++ * say.**
++ *
++ * Three arms, and the middle one is the one that is easy to leave out:
++ *
++ *  - `verified` — a live harness process under this pane, with a durable token.
++ *    Two `verified` readings whose tokens are equal are the same run; two whose
++ *    tokens differ are not, and no amount of matching pane ids changes that.
++ *  - `claimed-only` — we looked, and the launch metadata is all there is: a pane,
++ *    a claim, and nothing under it we can name. **This is not a weaker
++ *    `verified`**; nothing identity-dependent may be done on it.
++ *  - `unknown` — we did not look, or could not. `cause` says which.
++ *
++ * A verified execution with an unverifiable conversation is normal and is not a
++ * defect: see `ConversationReading`.
++ */
++export type ExecutionReading =
++  | {
++      kind: "verified";
++      token: ExecutionToken;
++      /** Which harness the token names. The same union `Harness` uses. */
++      harness: HarnessKind;
++      conversation: ConversationReading;
++    }
++  /**
++   * **ITS `conversation` CAN ONLY EVER BE `not-claimed` OR `unverifiable`**,
++   * and a consumer that branches on `conflicting` here is writing dead code.
++   *
++   * Said out loud because the type does not say it and a reader of this file
++   * inferred the opposite on 2026-09-09, which would have made the loudest
++   * state look reachable from two arms when it is reachable from one. The
++   * reason is structural rather than incidental: `claimed-only` means *the walk
++   * ran and could not name what it found*, and an unnamed process is one whose
++   * command line we did not read — so there is no observed conversation id to
++   * disagree with the claim. `readExecutionIdentity` passes a null observation
++   * on this path, unconditionally.
++   *
++   * **`conflicting` is reachable from `verified` and nowhere else.** If you are
++   * looking for *this pane changed hands*, that is the one arm to check.
++   *
++   * The near miss worth knowing about is the other direction: when a harness IS
++   * named and only its start ticks cannot be read, this returns
++   * `unknown`/`process-start-unreadable` and DISCARDS the conversation verdict
++   * it briefly had. That is deliberate — a failed `/proc` read almost always
++   * means the process has just exited, and reporting which conversation a dead
++   * process was running is a false alarm rather than a rescued fact.
++   */
++  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
++  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };
+diff --git a/tools/overseer/daemon.ts b/tools/overseer/daemon.ts
+index 4757b6f6..aa550ee7 100644
+--- a/tools/overseer/daemon.ts
++++ b/tools/overseer/daemon.ts
+@@ -58,7 +58,15 @@ import { join } from "node:path";
+ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
+ import { chooseUsage } from "./usage-carry.js";
+ import { admissible, type AdmissibleSnapshot } from "./admissible.js";
+-import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
++import {
++  baselineOf,
++  diff,
++  sessionKey,
++  type Baseline,
++  type OverseerEvent,
++  type SessionIdentity,
++  type SessionKey,
++} from "./diff.js";
+ import type { AuthorisedJob, SpawnJob } from "./jobs.js";
+ import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+ import type { ProposingRuleWork } from "./rule-protocol.js";
+@@ -1029,7 +1037,16 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
+     // one look like a duplicate.
+     accepted = verdict.snapshot;
+ 
+-    const outcome = diff(baseline, verdict.snapshot);
++    // THE REGISTER IS THE THIRD INPUT, and it has to be read HERE rather than
++    // left to the differ: `diff()` knows nothing about the store, and what it
++    // needs is not the previous snapshot's reading but the last run this
++    // Overseer actually verified — which survives a collection that could not
++    // look, and survives this daemon being restarted. GPT Sol's P1-1.
++    const known = new Map<SessionKey, string>();
++    for (const [key, entry] of store.register) {
++      if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
++    }
++    const outcome = diff(baseline, verdict.snapshot, known);
+     if (outcome.kind === "held") {
+       // NOT A SILENCE. The baseline stays where it is, so the comparison
+       // happens the moment a readable generation arrives; without this note the
+diff --git a/tools/overseer/diff.ts b/tools/overseer/diff.ts
+index d41c4600..c0348053 100644
+--- a/tools/overseer/diff.ts
++++ b/tools/overseer/diff.ts
+@@ -59,6 +59,8 @@
+  * its own argument for being one.
+  */
+ import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
++import { executionTokenText } from "../fleet/execution-token.js";
++import type { ConversationReading } from "../fleet/wire.js";
+ import type { AdmissibleSnapshot } from "./admissible.js";
+ import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
+ import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
+@@ -527,6 +529,69 @@ export type SessionEvent =
+       paneId: string | null;
+       /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
+       panePid: number;
++    }
++  /**
++   * **THE PANE DID NOT MOVE AND THE THING INSIDE IT DID** — the event every
++   * other arm of this union is blind to.
++   *
++   * `session-replaced` fires on a changed `claimedConversationId`, which the
++   * tmux environment almost never changes; `session-pane-replaced` fires on a
++   * changed pane pid, which a `respawn-pane` changes and a claude restarting
++   * inside its own shell does not. Between them they cover the pane being
++   * replaced and the launch claim being rewritten, and neither covers a fresh
++   * `claude` started under an unchanged shell — the case whose whole
++   * significance is that *nothing above it moved*.
++   *
++   * ## IT IS COMPARED AGAINST THE REGISTER, NOT AGAINST THE PREVIOUS SNAPSHOT
++   *
++   * The first version of this arm compared two consecutive snapshots, and GPT
++   * Sol showed that produced two real failures rather than the one cosmetic gap
++   * it was documented as having (2026-09-09):
++   *
++   *  - **On the upgrade path nothing ever fired.** Sessions already in the
++   *    register when this field shipped are never `session-seen` again, so
++   *    their `verifiedExecution` stayed null indefinitely — reproduced against
++   *    the checked-in fixtures, six of six entries null.
++   *  - **`verified(A) → unknown → verified(B)` left the register claiming A**,
++   *    *and kept A's `statusSince`* — so the attention projection ranked a
++   *    fresh Claude by its predecessor's age. That is the acceptance criterion
++   *    of this whole stage ("never silently inherits historical age"), so the
++   *    old claim that the gap cost history and not the guarantee was simply
++   *    wrong: `statusSince` is an existing event-dependent consumer.
++   *
++   * Comparing against the register's last VERIFIED token fixes both, and it is
++   * where the state honestly lives — `Baseline` could not carry it without
++   * ceasing to be a question about a value (see `unplaceable`). A reading that
++   * is not verified moves nothing, so `verified → unknown` is still evidence
++   * lost rather than a replacement, which was the one thing the first version
++   * had right.
++   *
++   * `previousToken` is null for a session the register has never verified —
++   * the upgrade path, and a session whose first readings were all unknown.
++   * **That is a first sighting of an identity, not a replacement**, and the
++   * fold treats it differently: it records the token and leaves `statusSince`
++   * alone, because learning what a session has been running all along is not
++   * evidence that it restarted.
++   */
++  | {
++      kind: "session-execution-changed";
++      at: string;
++      tmuxServerPid: number | null;
++      key: SessionKey;
++      identity: SessionIdentity;
++      /**
++       * The token as `continuityOf` compares it: `boot:pid:startTicks`. Null
++       * when the register had never verified one — see above; that arm records
++       * without resetting the status clock.
++       */
++      previousToken: string | null;
++      token: string;
++      /**
++       * What the new run says about its conversation. `conflicting` here is the
++       * loudest thing this log can say: the pane is running a conversation
++       * nobody addressed, under an id everything still uses.
++       */
++      conversation: ConversationReading;
+     };
+ 
+ /**
+@@ -841,7 +906,25 @@ export type DiffOutcome =
+  * S2-08. Also in tests/fixtures/overseer-snapshots/README.md, under what the
+  * fixtures do not cover.
+  */
+-export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffOutcome {
++/**
++ * **WHAT THE REGISTER HAS ACTUALLY VERIFIED**, keyed by session — the third
++ * input, and the one that is not a snapshot.
++ *
++ * A `ReadonlyMap` passed in rather than an import of `store.ts`: the differ
++ * still knows nothing about the store, and there is still no cycle. An absent
++ * key means *no run has ever been verified for this session*, which is what a
++ * session carried over from before this field existed looks like, and what a
++ * session whose readings have all been unknown looks like. Both are the same
++ * fact and both are handled by the same arm.
++ *
++ * **An EMPTY map is a legitimate value and is not a shortcut.** It says the
++ * register has verified nothing — true at a cold start, and true for a caller
++ * that keeps no register. It cannot cause a false replacement, because the
++ * `previousToken: null` arm is a first sighting rather than a change.
++ */
++export type KnownExecutions = ReadonlyMap<SessionKey, string>;
++
++export function diff(previous: Baseline | null, next: AdmissibleSnapshot, known: KnownExecutions): DiffOutcome {
+   const nextSnapshot = next.snapshot;
+   const at = nextSnapshot.clock.at;
+ 
+@@ -1010,6 +1093,29 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
+         panePid: row.panePid,
+       });
+     }
++    // THE PANE STAYED AND THE RUN INSIDE IT DID NOT. Placed here, after the
++    // pane arm, because the two are independent and both can fire on one
++    // collection: a `respawn-pane` replaces the pane AND the process in it, and
++    // recording only one of those loses half of what happened.
++    //
++    // AGAINST THE REGISTER, NOT AGAINST `was`. The previous snapshot is one
++    // sample and the register is what we have actually verified; comparing to
++    // the sample missed the upgrade path entirely and let a fresh Claude
++    // inherit its predecessor's measured age. GPT Sol's P1-1, and the arm's own
++    // comment has the reproduction.
++    const replaced = executionChange(known, sessionKey(identityOf(row)), row);
++    if (replaced !== null) {
++      events.push({
++        kind: "session-execution-changed",
++        at,
++        tmuxServerPid: nextSnapshot.tmuxServerPid,
++        key: sessionKey(identityOf(row)),
++        identity: identityOf(row),
++        previousToken: replaced.previousToken,
++        token: replaced.token,
++        conversation: replaced.conversation,
++      });
++    }
+     // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
+     // key as `waiting`, so without this a wait that ended and was replaced by a
+     // longer one is one unbroken wait in the history. See
+@@ -1048,6 +1154,32 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
+   return { kind: "diffed", events, baseline: new BaselineBox(nextSnapshot) };
+ }
+ 
++/**
++ * What the register's knowledge of this session's run should become, or null
++ * when it should not move.
++ *
++ * Two nulls, two different sentences: the current reading is not `verified`, so
++ * there is nothing to learn from it (**a `ps` that failed must not report every
++ * session on the box as replaced** — the same rule as `panePid`'s null on
++ * `session-pane-replaced`); or the register already holds this exact token, so
++ * nothing changed.
++ *
++ * Its own function rather than five lines inline, for the reason `waitRestart`
++ * is one: the arm's rule is the thing a reader has to check, and a rule inside
++ * a 200-line loop is read as part of the loop.
++ */
++function executionChange(
++  known: KnownExecutions,
++  key: SessionKey,
++  after: ObservedRow,
++): { previousToken: string | null; token: string; conversation: ConversationReading } | null {
++  if (after.execution.kind !== "verified") return null;
++  const token = executionTokenText(after.execution.token);
++  const previousToken = known.get(key) ?? null;
++  if (previousToken === token) return null;
++  return { previousToken, token, conversation: after.execution.conversation };
++}
++
+ /**
+  * The two implied deadlines, when a wait was pushed materially later.
+  *
+diff --git a/tools/overseer/jobs.ts b/tools/overseer/jobs.ts
+index 918e86ba..b9bcd74f 100644
+--- a/tools/overseer/jobs.ts
++++ b/tools/overseer/jobs.ts
+@@ -838,6 +838,7 @@ export function foldOccurrences(
+       case "session-wait-restarted":
+       case "session-row-changed":
+       case "session-pane-replaced":
++      case "session-execution-changed":
+       // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
+       // says nothing about that occurrence's lifecycle — the reservation, the
+       // start and the finish around it are the job events above. Folding one
+diff --git a/tools/overseer/observation.ts b/tools/overseer/observation.ts
+index 50c23e79..5d2188e4 100644
+--- a/tools/overseer/observation.ts
++++ b/tools/overseer/observation.ts
+@@ -55,6 +55,7 @@
+ import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
+ import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
+ import { readAttemptClock } from "../fleet/attempt-clock.js";
++import type { ConversationReading, ExecutionReading, ExecutionUnknownCause, HarnessKind } from "../fleet/wire.js";
+ 
+ /**
+  * Anything `JSON.parse` can return, which is the honest type for a field we
+@@ -212,6 +213,25 @@ export type ObservedRow = {
+    * a function really does mint and really does gate.
+    */
+   readonly claimedConversationId: string | null;
++  /**
++   * **WHICH RUN THE PRODUCER SAW IN THIS PANE — the corroboration
++   * `claimedConversationId` above cannot give.**
++   *
++   * The comment on that field says a uuid that changes is evidence and a uuid
++   * that stays the same is evidence of nothing, and ends by saying that nothing
++   * in that stage could resolve it. This is the resolution: the dashboard walks
++   * the pane's process tree, finds the harness holding it, and mints a durable
++   * token out of the boot id, the pid and the process's exact start tick. Two
++   * snapshots whose tokens differ describe two different runs however identical
++   * every other field is — which is the case `session-pane-replaced` and
++   * `session-replaced` between them cannot see.
++   *
++   * **NEVER FAILS THE SNAPSHOT**, on `parseAttempt`'s rule: a dashboard from
++   * before this field existed is an old producer rather than a broken one, and
++   * its rows arrive as `unknown`/`not-reported` and stay inspectable. There is
++   * no path from a missing field to a verified reading.
++   */
++  readonly execution: ExecutionReading;
+   /** Volatile prose, kept verbatim and never diffed. */
+   readonly question: JsonValue;
+   /**
+@@ -582,12 +602,173 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
+       paneId: paneId.value,
+       panePid: panePid.value,
+       claimedConversationId: claimed.value,
++      execution: coherentWith(parseExecution(u["execution"]), claimed.value),
+       question: u["question"] as JsonValue,
+       status: status.value,
+     },
+   };
+ }
+ 
++/**
++ * **THE READING MUST AGREE WITH THE ROW IT ARRIVED ON.**
++ *
++ * `parseExecution` checks the reading's own shape; nothing until here checked
++ * it against its neighbours. A payload can assert a `verified` conversation
++ * whose id is not the one the row claims, or assert one on a harness that
++ * cannot hold a conversation at all — combinations this box's producer cannot
++ * construct and a parser will happily rebuild. GPT Sol's P2-4.
++ *
++ * **IT DOWNGRADES THE CONVERSATION RATHER THAN FAILING THE SNAPSHOT**, and
++ * rather than inventing a ninth `ExecutionUnknownCause`. The PROCESS reading is
++ * still good — the token is well-formed and says which run is there — and it is
++ * only the claim about which transcript that run is writing that nothing
++ * corroborates. `unverifiable` is exactly that sentence, and it is already the
++ * arm the write gate refuses.
++ */
++function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
++  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
++  const observed = reading.conversation.id;
++  if (claimed !== null && observed === claimed && ADDRESSABLE_HARNESSES.has(reading.harness)) return reading;
++  const why =
++    claimed === null
++      ? `this row claims no conversation, so a producer's report that it is running ${observed} agrees with nothing`
++      : observed !== claimed
++        ? `the producer reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
++        : `the producer reports a verified conversation on ${reading.harness}, which cannot hold one`;
++  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
++}
++
++/**
++ * The harnesses that can hold an addressable conversation — see the twin in
++ * `tools/fleet/execution-token.ts`, which is the policy this defers to.
++ */
++const ADDRESSABLE_HARNESSES: ReadonlySet<HarnessKind> = new Set<HarnessKind>(["claude-code"]);
++
++/**
++ * The named causes, as a `Record` over the closed union so that a new arm in
++ * `wire.ts` cannot be forgotten here.
++ */
++const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
++  "not-probed": true,
++  "not-reported": true,
++  "no-pane-pid": true,
++  "process-table-unreadable": true,
++  "pane-tree-unreadable": true,
++  "platform-unsupported": true,
++  "boot-identity-unreadable": true,
++  "process-start-unreadable": true,
++  "process-changed-under-read": true,
++  "uptime-unreadable": true,
++};
++
++/**
++ * The execution reading, off a row.
++ *
++ * **DELIBERATELY NOT ABLE TO FAIL THIS PARSE**, exactly as `parseAttempt` is
++ * not, and for the same reason: a producer that predates the field is old
++ * rather than broken, and refusing its whole snapshot would take the Overseer's
++ * eyes off a live box to punish a deploy ordering.
++ *
++ * **AND THERE IS NO ROUTE FROM A MISSING FIELD TO `verified`.** Every failure
++ * below lands on `unknown` with a cause. `verified` requires a token whose
++ * three parts are each present and each the right shape — a token missing
++ * `startTicks` is the identity with its pid-reuse defence removed, so it is
++ * refused rather than half-believed.
++ *
++ * This is a SECOND, INDEPENDENT reader of the same wire type; the browser has
++ * its own in `tools/fleet/web/src/types.ts`. That is the roadmap's stated
++ * design — *"independent runtime validation and contract fixtures in their
++ * owning modules"* — rather than an oversight: fleet parses at its boundary and
++ * the Overseer parses at its own, and `wire.ts` is the one declaration relating
++ * them.
++ */
++export function parseExecution(u: unknown): ExecutionReading {
++  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
++    kind: "unknown",
++    cause,
++    why,
++  });
++  if (!isRecord(u)) {
++    return unread("this collection carried no execution reading, so what is running in this pane is unverified");
++  }
++  const kind = u["kind"];
++  if (kind === "unknown") {
++    const cause = typeof u["cause"] === "string" && Object.hasOwn(EXECUTION_CAUSES, u["cause"]) ? (u["cause"] as ExecutionUnknownCause) : "not-reported";
++    return { kind: "unknown", cause, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
++  }
++  if (kind === "claimed-only") {
++    const conversation = parseConversation(u["conversation"]);
++    if (conversation === null) return unread("the producer sent a claimed-only execution with no readable conversation reading");
++    return { kind: "claimed-only", conversation, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
++  }
++  if (kind === "verified") {
++    const token = u["token"];
++    const conversation = parseConversation(u["conversation"]);
++    const harness = u["harness"];
++    if (!isRecord(token) || conversation === null || typeof harness !== "string") {
++      return unread("the producer sent a verified execution without a token, a harness and a conversation reading");
++    }
++    const boot = token["boot"];
++    const pid = token["pid"];
++    const startTicks = token["startTicks"];
++    if (
++      typeof boot !== "string" ||
++      boot === "" ||
++      typeof pid !== "number" ||
++      !Number.isSafeInteger(pid) ||
++      pid <= 0 ||
++      typeof startTicks !== "number" ||
++      !Number.isSafeInteger(startTicks) ||
++      startTicks < 0
++    ) {
++      return unread("the producer sent a verified execution whose token is not a boot id, a pid and a start tick");
++    }
++    return {
++      kind: "verified",
++      token: { boot, pid, startTicks },
++      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
++      conversation,
++    };
++  }
++  return unread(
++    typeof kind === "string"
++      ? `this reader does not know the execution reading ${JSON.stringify(kind)}`
++      : "the producer sent an execution reading with no kind",
++  );
++}
++
++/** A `Record` over the closed union, so a new `HarnessKind` stops the build here. */
++const HARNESS_KINDS: Record<HarnessKind, true> = {
++  "claude-code": true,
++  "claude-headless": true,
++  "codex-batch": true,
++  "codex-interactive": true,
++  shell: true,
++  unknown: true,
++};
++
++function parseConversation(u: unknown): ConversationReading | null {
++  if (!isRecord(u)) return null;
++  const kind = u["kind"];
++  if (kind === "not-claimed") return { kind: "not-claimed" };
++  if (kind === "verified") {
++    const id = u["id"];
++    return typeof id === "string" && id !== "" ? { kind: "verified", id } : null;
++  }
++  if (kind === "conflicting") {
++    const claimed = u["claimed"];
++    const observed = u["observed"];
++    return typeof claimed === "string" && typeof observed === "string" ? { kind: "conflicting", claimed, observed } : null;
++  }
++  if (kind === "unverifiable") {
++    const claimed = u["claimed"];
++    return typeof claimed === "string"
++      ? { kind: "unverifiable", claimed, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" }
++      : null;
++  }
++  return null;
++}
++
+ /**
+  * The attempt clock, read off a whole payload — see `ObservedAttemptClock`.
+  *
+diff --git a/tools/overseer/store.ts b/tools/overseer/store.ts
+index e44e21cf..9cdf7c2a 100644
+--- a/tools/overseer/store.ts
++++ b/tools/overseer/store.ts
+@@ -105,7 +105,8 @@ import {
+ import { homedir } from "node:os";
+ import { isAbsolute, join } from "node:path";
+ 
+-import type { AttentionItem, AttentionList, StoredUsage } from "../fleet/wire.js";
++import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
++import type { AttentionItem, AttentionList, ConversationReading, StoredUsage } from "../fleet/wire.js";
+ import { parseAnswerability } from "./attention-memory.js";
+ import { parseUsageReport } from "./usage.js";
+ import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
+@@ -145,6 +146,7 @@ import {
+   type LockHolder,
+   type LockRefusal,
+ } from "./lock.js";
++import { parseExecution } from "./observation.js";
+ import type { ObservedRow, ParseResult } from "./observation.js";
+ 
+ /**
+@@ -370,6 +372,40 @@ export type RegisterEntry = {
+    * `13m` rows that are the whole story.
+    */
+   readonly statusSince: StatusSince;
++  /**
++   * **THE LAST RUN THIS SESSION WAS VERIFIED TO BE, and whether we can still
++   * see one.**
++   *
++   * The register's other identities (`tmuxId`, `paneId`, `panePid`,
++   * `claimedConversationId`) all survive a claude exiting and another starting
++   * in the same pane, which is why `OverseerRegister` in wire.ts says in as many
++   * words that this register may not be joined onto a fleet row: *"the
++   * generation tuple can stay fixed while the process inside it is replaced, so
++   * 'blocked for at least 20 minutes' said against a row needs continuity
++   * evidence this build does not have."* This is that evidence.
++   *
++   * **STICKY, AND NULL UNTIL SOMETHING IS VERIFIED.** It moves on a first
++   * sighting and on a proven change, and on nothing else — so a collection whose
++   * `ps` failed leaves it exactly where it was, and `verified(A) → unknown →
++   * verified(A)` stays one unbroken run rather than becoming two. Overwriting it
++   * with every reading would make *we could not look* indistinguishable from
++   * *it was replaced*, which is the mistake `session-pane-replaced` makes with a
++   * null pid and has a long comment about.
++   *
++   * `since` is when this run was first recorded here, which is a FLOOR on how
++   * long it has been running — the same kind of number as `statusSince`'s
++   * `lower-bound` arm, and it must be drawn as one. And it is not a claim that
++   * the run is alive: `lastSeenAlive` and the checkpoint's snapshot clock are
++   * the fields that speak to that.
++   *
++   * **NO SCHEMA BUMP**, by this file's own rule: a reader that ignores it draws
++   * no continuity and is poorer rather than wrong — unlike schema 2's
++   * `statusSince`, where a consumer written against schema 1 would have
++   * rendered a floor as a reading. A checkpoint written before this field
++   * parses to `null`, which says *we have never verified a run for this
++   * session*, and that is true of it.
++   */
++  readonly verifiedExecution: { readonly token: string; readonly since: string } | null;
+ };
+ 
+ /**
+@@ -927,6 +963,12 @@ function parseRow(u: unknown): ParseResult<ObservedRow> {
+     value: {
+       id: u["id"],
+       name,
++      // TOTAL, LIKE `parseAttempt`, and it is the one field on a row this
++      // reader will not refuse over. A `session-seen` written before the field
++      // existed comes back as `unknown`/`not-reported` rather than failing the
++      // event and, with it, the fold of the whole log. There is no path from a
++      // missing field to `verified`; `observation.ts` owns the rule.
++      execution: parseExecution(u["execution"]),
+       title,
+       repo,
+       worktree,
+@@ -951,6 +993,79 @@ function parseIdentity(u: unknown): ParseResult<SessionIdentity> {
+   return { ok: true, value: { tmuxId: u["tmuxId"], claimedConversationId: claimed } };
+ }
+ 
++/** The common half of every session event: whatever `parseEvent` has already checked. */
++type SessionEventCommon = { at: string; key: SessionKey; identity: SessionIdentity; tmuxServerPid: number | null };
++
++/**
++ * `session-execution-changed`, off the log.
++ *
++ * Its own function rather than a case body, because it is four checks and the
++ * `parseEvent` switch is already the longest thing in this file.
++ *
++ * **`token` IS REQUIRED AND WELL-FORMED; `previousToken` MAY BE NULL AND MAY
++ * NOT EQUAL IT.** Null is the first-sighting arm — a session the register had
++ * never verified — and an event whose two sides are equal is not a change and
++ * is one this module never wrote. Both tokens go through
++ * {@link isExecutionTokenText}, so "malformed present values are refused" is a
++ * property of the parser rather than of the writer's good manners; accepting
++ * any non-empty string was GPT Sol's P2-4b.
++ */
++function parseExecutionChanged(u: Record<string, unknown>, common: SessionEventCommon): ParseResult<OverseerEvent> {
++  const rawPrevious = u["previousToken"];
++  const token = u["token"];
++  if (rawPrevious !== null && !isExecutionTokenText(rawPrevious)) {
++    return { ok: false, reason: "previousToken is neither null nor an execution token" };
++  }
++  const previousToken = rawPrevious as string | null;
++  if (!isExecutionTokenText(token)) return { ok: false, reason: "token is not an execution token" };
++  if (previousToken === token) {
++    return { ok: false, reason: "previousToken and token are equal, which is not a change" };
++  }
++  const conversation = parseConversationReading(u["conversation"]);
++  if (!conversation.ok) return { ok: false, reason: conversation.reason };
++  return {
++    ok: true,
++    value: { kind: "session-execution-changed", ...common, previousToken, token, conversation: conversation.value },
++  };
++}
++
++/**
++ * One conversation verdict off the log.
++ *
++ * STRICT, unlike `observation.ts`'s reader of the same type. That one parses a
++ * live payload from a producer that may be older than the field, so it degrades
++ * to `unknown` rather than refusing a snapshot. This parses the Overseer's own
++ * append-only log, where every line was written by this module: a line that
++ * does not read is a file somebody edited or a bug here, and both should be
++ * refused loudly rather than rounded to a shrug.
++ */
++function parseConversationReading(u: unknown): ParseResult<ConversationReading> {
++  if (!isRecord(u)) return { ok: false, reason: "conversation is not an object" };
++  const kind = u["kind"];
++  if (kind === "not-claimed") return { ok: true, value: { kind: "not-claimed" } };
++  if (kind === "verified") {
++    const id = u["id"];
++    if (typeof id !== "string" || id === "") return { ok: false, reason: "conversation.id is not a conversation id" };
++    return { ok: true, value: { kind: "verified", id } };
++  }
++  if (kind === "conflicting") {
++    const claimed = u["claimed"];
++    const observed = u["observed"];
++    if (typeof claimed !== "string" || typeof observed !== "string") {
++      return { ok: false, reason: "conversation.claimed and conversation.observed are not both strings" };
++    }
++    return { ok: true, value: { kind: "conflicting", claimed, observed } };
++  }
++  if (kind === "unverifiable") {
++    const claimed = u["claimed"];
++    const why = u["why"];
++    if (typeof claimed !== "string") return { ok: false, reason: "conversation.claimed is not a string" };
++    if (typeof why !== "string") return { ok: false, reason: "conversation.why is not a string" };
++    return { ok: true, value: { kind: "unverifiable", claimed, why } };
++  }
++  return { ok: false, reason: `conversation.kind ${JSON.stringify(kind)} is not a conversation reading` };
++}
++
+ /** Every event kind, as a total map so a new arm in diff.ts fails to compile here rather than parsing as junk. */
+ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-seen": true,
+@@ -960,6 +1075,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
+   "session-wait-restarted": true,
+   "session-row-changed": true,
+   "session-pane-replaced": true,
++  "session-execution-changed": true,
+   "job-occurrence-reserved": true,
+   "job-occurrence-started": true,
+   "job-occurrence-finished": true,
+@@ -1511,6 +1627,8 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
+         value: { kind: "session-pane-replaced", ...common, previousPaneId, previousPanePid, paneId, panePid },
+       };
+     }
++    case "session-execution-changed":
++      return parseExecutionChanged(u, common);
+     case "session-wait-restarted": {
+       const previousDeadline = u["previousDeadline"];
+       const deadline = u["deadline"];
+@@ -1620,6 +1738,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
+   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
+     return { ok: false, reason: "lastStatusKey is not a status key" };
+   }
++  const verifiedExecution = parseVerifiedExecution(u["verifiedExecution"]);
++  if (!verifiedExecution.ok) return { ok: false, reason: verifiedExecution.reason };
+   return {
+     ok: true,
+     value: {
+@@ -1637,10 +1757,41 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
+       lastSeenAlive,
+       lastStatusKey: lastStatusKey as StatusKey,
+       statusSince: statusSince.value,
++      verifiedExecution: verifiedExecution.value,
+     },
+   };
+ }
+ 
++/**
++ * The last verified run, off a checkpoint.
++ *
++ * **AN ABSENT FIELD IS `null`, AND THAT IS THE ONE PLACE THIS PARSER IS
++ * FORGIVING.** Everything else in `parseRegisterEntry` fails the whole
++ * checkpoint, because a malformed field means a file somebody edited. This one
++ * is different for one reason and one only: a checkpoint written by the daemon
++ * that was running before this field existed has no `verifiedExecution`, and
++ * refusing it would throw away the register on the first restart after the
++ * deploy — the register being the thing there is no second copy of.
++ *
++ * **A PRESENT-BUT-WRONG FIELD STILL FAILS.** Absent is an old writer; malformed
++ * is a broken one, and the two must not share an outcome. And `null` here means
++ * *no run has been verified for this session*, which cannot be mistaken for a
++ * verified one however it is read.
++ */
++function parseVerifiedExecution(u: unknown): ParseResult<RegisterEntry["verifiedExecution"]> {
++  if (u === undefined || u === null) return { ok: true, value: null };
++  if (!isRecord(u)) return { ok: false, reason: "verifiedExecution is not an object or null" };
++  // THE REAL SHAPE, not merely non-empty. Accepting any string made the claim
++  // "a present-but-malformed value fails whole" false for every value except
++  // `""` — GPT Sol's P2-4b — and this is the register, so a token that parses
++  // and means nothing would be compared against real ones for ever.
++  const token = u["token"];
++  if (!isExecutionTokenText(token)) return { ok: false, reason: "verifiedExecution.token is not an execution token" };
++  const since = u["since"];
++  if (!isIsoTimestamp(since)) return { ok: false, reason: "verifiedExecution.since is not an ISO timestamp" };
++  return { ok: true, value: { token, since } };
++}
++
+ /**
+  * The checkpoint, parsed strictly, **failing whole on any bad entry**.
+  *
+@@ -2205,6 +2356,35 @@ export function foldEvents(
+         }
+         break;
+       }
++      case "session-execution-changed": {
++        const was = into.get(event.key);
++        if (was !== undefined) {
++          // **A FIRST SIGHTING AND A REPLACEMENT ARE NOT THE SAME EVENT**, and
++          // this is the line that keeps them apart. A null `previousToken` means
++          // the register had never verified a run for this session — the upgrade
++          // path, where every existing entry learns its identity on the first
++          // collection after the deploy. Resetting the status clock there would
++          // wipe the measured age of every session on the box at once, which is
++          // the opposite of what this stage is for.
++          const learned = event.previousToken === null;
++          into.set(event.key, {
++            ...was,
++            verifiedExecution: { token: event.token, since: event.at },
++            lastSeenAlive: event.at,
++            // **A REPLACEMENT DOES NOT INHERIT THE OLD RUN'S MEASURED AGE.**
++            // `statusSince` was a reading about a process that has gone; the
++            // status key is unchanged (a working session replaced by a working
++            // session is still `working`) so nothing else in this fold would
++            // touch it, and a triage view ranking by "waiting longest" would go
++            // on crediting a fresh Claude with its predecessor's hours. Reset to
++            // a FLOOR rather than to `observed`: we know this run was in this
++            // state when we looked and not when it entered it, which is exactly
++            // what `lower-bound` means.
++            statusSince: learned ? was.statusSince : { kind: "lower-bound", at: event.at },
++          });
++        }
++        break;
++      }
+       // THE SCHEDULER'S ARMS, NAMED AND DECIDED RATHER THAN DEFAULTED. The
+       // register is sessions and an occurrence is not one, so nothing happens
+       // here — and it says so, because a `default:` would absorb them and would
+@@ -2249,6 +2429,11 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
+     // process can know. Minting `"observed"` here is the 13m bug, and it is one
+     // word away at all times.
+     statusSince: { kind: "lower-bound", at },
++    // A FLOOR TOO, and for exactly the same reason: this run was already going
++    // when we first saw it, so `since` is when the register learned about it
++    // rather than when the process started. The token itself is exact; the
++    // clock beside it is not.
++    verifiedExecution: row.execution.kind === "verified" ? { token: executionTokenText(row.execution.token), since: at } : null,
+   };
+ }
+ 
+@@ -2313,6 +2498,13 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField>
+  *  - `clock` — the store's own bookkeeping, written by every arm and by none of
+  *    the row material. `statusSince` in particular belongs to the STATUS: a
+  *    rename that reset it would turn forty minutes of waiting into none.
++ *  - `execution` — `session-execution-changed`, and a first sighting. Its own
++ *    class rather than folded into `pane`, because the whole point of the field
++ *    is that a run can be replaced while the pane is not: sharing an owner with
++ *    `paneId`/`panePid` would say the opposite of what it is for. It is the one
++ *    field whose arm ALSO writes a `clock` field — `statusSince` back to a
++ *    floor, because a new run has not been in its state for its predecessor's
++ *    hours.
+  */
+ export const ENTRY_FIELD_OWNERS = {
+   key: "identity",
+@@ -2329,7 +2521,8 @@ export const ENTRY_FIELD_OWNERS = {
+   lastSeenAlive: "clock",
+   lastStatusKey: "clock",
+   statusSince: "clock",
+-} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock">;
++  verifiedExecution: "execution",
++} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock" | "execution">;
+ 
+ export function describeOpening(opening: StoreOpening): string {
+   const repair = opening.repair.torn
+
+
+===== NEW FILE: tools/fleet/execution-token.ts =====
+/**
+ * **THE EXECUTION TOKEN'S TEXT FORM, AND THE THREE DECISIONS ANYBODY MAKES WITH
+ * IT** — as a leaf, so the browser can have them.
+ *
+ * ## Why this is a separate file from `execution-identity.ts`
+ *
+ * `execution-identity.ts` reads `/proc` and classifies process trees: it
+ * imports `node:fs` and two Overseer modules, so it can never be imported by
+ * `tools/fleet/web/src/`, which is compiled a second time by a DOM-only
+ * project. But `continuityOf` and `identityWriteGate` are exactly the functions
+ * the browser needs — they are what a component asks before it reuses a draft
+ * or enables a write — and a policy that lives where its main consumer cannot
+ * reach it gets copied instead of imported. GPT Sol's P2-3, 2026-09-09.
+ *
+ * So the split is by dependency rather than by topic: **what the machine says**
+ * stays over there; **what it means** is here, and here has no imports at all
+ * except types. `tools/overseer/diff.ts` and `store.ts` import this rather than
+ * `execution-identity.ts` too, which also unbraids the layering — the Overseer
+ * no longer reaches through a fleet module that reaches back into the Overseer.
+ *
+ * ## The text form is the contract, not an encoding detail
+ *
+ * `boot:pid:startTicks`. It is stored in the Overseer's register, written into
+ * its event log, and used as a cache key by the dashboard. Every one of those
+ * survives a restart, so the shape is a thing other code depends on, and
+ * {@link isExecutionTokenText} is here so that "a malformed token is refused" is
+ * a property something checks rather than a sentence in a comment.
+ */
+import type { ExecutionReading, ExecutionToken } from "./wire.js";
+
+/**
+ * The token as one comparable, storable string.
+ *
+ * A string rather than a structural compare because it has to survive a JSONL
+ * round trip and be a map key in the Overseer's register, and because a
+ * hand-written three-field `===` in each consumer is the shape this repo has
+ * lost mornings to. The separator is `:`; a boot id is a uuid and the other two
+ * are decimal, so nothing in a field can be confused for one.
+ */
+export function executionTokenText(token: ExecutionToken): string {
+  return `${token.boot}:${token.pid}:${token.startTicks}`;
+}
+
+/**
+ * A boot id, a pid and a start tick, in that order.
+ *
+ * Deliberately loose about the boot id's shape — it is whatever the kernel put
+ * in `boot_id`, and pinning it to a uuid here would be this file inventing a
+ * rule about a file it does not read — and strict about the two numbers, which
+ * are ours. **Not exported as a parser returning the parts**: nothing should
+ * take a token apart, because a consumer that compares fields instead of whole
+ * strings is a second definition of what identity means.
+ */
+const TOKEN_TEXT = /^[^:\s]+:[1-9]\d{0,9}:\d{1,19}$/;
+
+export function isExecutionTokenText(value: unknown): value is string {
+  return typeof value === "string" && TOKEN_TEXT.test(value);
+}
+
+/**
+ * **THE CONTINUITY QUESTION, and the only honest way to ask it.**
+ *
+ * A caller that owns something identity-dependent — a draft, a transcript
+ * attribution, a measured duration — stores the token it was created under and
+ * asks this every time it is about to use it. It does NOT ask "did a change
+ * event fire": an event log is a record of what was noticed, and this is a
+ * comparison of what is true now.
+ *
+ * Three answers and no fourth. `unverifiable` is not a soft `same`: it is the
+ * arm that must quarantine, because *we cannot see it* and *it is still there*
+ * are the same picture from here.
+ */
+export type Continuity =
+  | { kind: "same"; token: string }
+  | { kind: "replaced"; previous: string; current: string; why: string }
+  | { kind: "unverifiable"; previous: string | null; why: string };
+
+export function continuityOf(previous: string | null, current: ExecutionReading): Continuity {
+  if (current.kind !== "verified") {
+    return {
+      kind: "unverifiable",
+      previous,
+      why:
+        current.kind === "claimed-only"
+          ? `nothing under this pane could be identified, so whether it is still the same run cannot be established: ${current.why}`
+          : `there is no execution reading for this pane (${current.cause}), so whether it is still the same run cannot be established: ${current.why}`,
+    };
+  }
+  const token = executionTokenText(current.token);
+  if (previous === null) {
+    return {
+      kind: "unverifiable",
+      previous: null,
+      why: `this is run ${token}, and there is no earlier run recorded to compare it against`,
+    };
+  }
+  if (previous === token) return { kind: "same", token };
+  return {
+    kind: "replaced",
+    previous,
+    current: token,
+    why: `the process in this pane is run ${token} now, not ${previous} — it was replaced, and the pane, its pid and its CLAUDE_SESSION_ID all stayed the same across that`,
+  };
+}
+
+/**
+ * **MAY SOMETHING KEYED TO A CONVERSATION BE WRITTEN RIGHT NOW?**
+ *
+ * Three conditions, all required: the execution is verified, the conversation
+ * is verified, and the harness is one we can actually address. The third is
+ * defence in depth rather than redundancy — the arms are produced together by
+ * one function today, but this value also arrives off the wire from a producer
+ * this build did not compile, and a payload asserting a verified conversation
+ * on a `shell` pane must not open a write path. GPT Sol's P2-4.
+ *
+ * Every refusal carries the sentence a reader is shown beside the disabled
+ * control, so it explains itself rather than greying out silently.
+ *
+ * **A CACHED `allowed` IS NOT AUTHORITY.** This takes a reading, and a reading
+ * is what was true at the instant it was taken. The rule for a caller is that
+ * the reading must be *fresh at the moment of the write* — which is what
+ * `steer.ts`'s `verifyTarget` already does for keystrokes, re-deriving against
+ * the live box rather than trusting what the page was rendered from. Storing an
+ * `allowed: true` and acting on it later is the mistake this comment exists to
+ * name; the token it returns is for recording what a write was done under, not
+ * for re-authorising a later one.
+ */
+export type IdentityWriteGate = { allowed: true; token: string; conversationId: string } | { allowed: false; why: string };
+
+/**
+ * The harnesses a conversation-addressed write may target.
+ *
+ * `claude-code` and nothing else, and the two exclusions are the interesting
+ * ones: `claude-headless` really is a Claude running a conversation, and it
+ * stopped reading its terminal after its first prompt, so a write to it is
+ * delivered to nobody. `shell` is the dangerous one — see
+ * `HARNESS_CAPABILITIES` in tools/overseer/harness.ts, whose refusal for a
+ * shell is that it would EXECUTE the text.
+ */
+const ADDRESSABLE: ReadonlySet<string> = new Set(["claude-code"]);
+
+export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate {
+  if (reading.kind === "unknown") {
+    return {
+      allowed: false,
+      why: `we cannot see what is running in this pane (${reading.cause}), so anything addressed to a conversation could reach a different one: ${reading.why}`,
+    };
+  }
+  if (reading.kind === "claimed-only") {
+    return {
+      allowed: false,
+      why: `nothing under this pane could be identified, so its conversation id is a launch claim rather than an observation: ${reading.why}`,
+    };
+  }
+  switch (reading.conversation.kind) {
+    case "verified":
+      // THE HARNESS IS CHECKED EVEN THOUGH THE CONVERSATION IS VERIFIED. A
+      // `verified` conversation on a `shell` is a combination this box's
+      // producer cannot make and a payload can assert; the parsers refuse it
+      // too, and this is the second of the two locks.
+      if (!ADDRESSABLE.has(reading.harness)) {
+        return {
+          allowed: false,
+          why: `this pane holds ${reading.harness}, which cannot be addressed by conversation, so a claim that it is running ${reading.conversation.id} is not something to act on`,
+        };
+      }
+      return { allowed: true, token: executionTokenText(reading.token), conversationId: reading.conversation.id };
+    case "not-claimed":
+      return {
+        allowed: false,
+        why: `this pane holds ${reading.harness} and no conversation was ever claimed for it, so there is nothing here to address`,
+      };
+    case "conflicting":
+      return {
+        allowed: false,
+        why:
+          `this pane is running conversation ${reading.conversation.observed}, not ${reading.conversation.claimed} ` +
+          `which every address on this row still names — a different Claude has been started here since launch`,
+      };
+    case "unverifiable":
+      return {
+        allowed: false,
+        why: `nothing observable confirms that conversation ${reading.conversation.claimed} is the one in this pane: ${reading.conversation.why}`,
+      };
+    default: {
+      const never: never = reading.conversation;
+      throw new Error(`no write gate for conversation reading ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+
+===== NEW FILE: tools/fleet/execution-identity.ts =====
+/**
+ * **IS THIS THE SAME RUN I WAS LOOKING AT, OR A DIFFERENT ONE WEARING ITS
+ * ADDRESSES?**
+ *
+ * Every identity this fleet carried before today survives the change it most
+ * needs to see. A tmux pane is furniture: the pane's shell starts once and
+ * stays, and the `claude` inside it can exit and be replaced any number of
+ * times underneath it. Across that replacement `tmuxServerPid`, `paneId` and
+ * `panePid` are all unchanged — nothing above the claude moved — and so is
+ * `claudeSessionId`, because `CLAUDE_SESSION_ID` is pinned into the tmux
+ * environment by `tmux new-session -e` BEFORE Claude runs and is never
+ * rewritten. `tools/overseer/diff.ts` documents the consequence rather than
+ * fixing it: *"an unchanged claim means nothing"*, and `session-pane-replaced`
+ * is explicitly the event that cannot see this case.
+ *
+ * So this file answers the question none of those fields can, and the answer is
+ * a `ExecutionToken`: boot identity, pid, and the process's exact start tick.
+ *
+ * ## Why the answer is not "compare the pid"
+ *
+ * Pids are reused. On this box they run to seven digits and wrap, and the whole
+ * point of a durable token is the case where the number is the same and the
+ * process is not. `startTicks` — `/proc/<pid>/stat` field 22, the start time in
+ * clock ticks since boot — closes it exactly, because two processes cannot hold
+ * one pid at one tick. `boot` closes the other end: after a reboot, pids and
+ * ticks both restart from small numbers, so a token from yesterday could
+ * otherwise collide with one from this morning.
+ *
+ * **`ProcessStart` in work.ts is NOT this and must not be substituted for it.**
+ * That value is derived from `ps etimes`, counts whole seconds, and its own
+ * comment forbids comparing it for equality. It is a duration for a person.
+ * This is an identity for a machine.
+ *
+ * ## The probe is the one that already exists
+ *
+ * `probeProcessTable` and `classifyPaneHarness` were written for this box, are
+ * tested against captures taken off it, and had no production caller until this
+ * file. Nothing here re-walks a process tree or re-recognises a `claude`
+ * command line: the harness walk answers *what is holding this pane*, and this
+ * module asks *and which run is it* on top of the answer. One `ps` for the
+ * whole fleet (~40 ms, measured in work-probe.ts), then one small `/proc` read
+ * per pane that has a harness.
+ *
+ * ## Process verification and conversation verification are two answers
+ *
+ * A verified execution says a named, live, durably-identified harness process
+ * is under this pane. It says nothing about which transcript that process is
+ * writing. A bare `claude` with no `--session-id` is verified as a process and
+ * unverifiable as a conversation, and collapsing the two would either withhold
+ * a fact we have or invent one we do not. `ExecutionReading` in wire.ts carries
+ * them as separate fields for that reason.
+ *
+ * ## Pure classifier, thin adapter — as in work.ts / work-probe.ts
+ *
+ * {@link readExecutionIdentity} runs against injected readings, so every case
+ * below is testable against a capture and against a synthesised table. The two
+ * functions that touch the machine ({@link readBootIdentity},
+ * {@link readProcessStart}) are separated from it and take an injectable
+ * reader, and {@link parseProcStat} — the one piece of real parsing — is pure.
+ *
+ * ## What is NOT here, and why
+ *
+ * `executionTokenText`, `continuityOf` and `identityWriteGate` live in
+ * `execution-token.ts`. This file imports `node:fs` and two Overseer modules,
+ * so the browser can never import it — and those three are precisely what a
+ * browser component needs before it reuses a draft or enables a write. Policy
+ * that its main consumer cannot import gets copied rather than imported, so it
+ * is a leaf next door. This file is what the machine says; that one is what it
+ * means. GPT Sol's P2-3.
+ */
+import { readFileSync } from "node:fs";
+
+import { classifyPaneHarness } from "../overseer/harness.js";
+import type { ProcessTableReading } from "../overseer/work.js";
+import type { ConversationReading, ExecutionReading } from "./wire.js";
+
+/* ------------------------------------------------------------------ *
+ * The classifier.
+ * ------------------------------------------------------------------ */
+
+/** The boot's own id, or why there isn't one — including "this is not Linux". */
+export type BootIdentity =
+  | { read: true; id: string }
+  | { read: false; cause: "platform-unsupported" | "boot-identity-unreadable"; why: string };
+
+/** One process's start tick, or why it could not be read. */
+export type ProcessStartTicks = { read: true; ticks: number } | { read: false; why: string };
+
+/** Seconds since boot, or why they could not be read. One reading per collection. */
+export type UptimeReading = { read: true; seconds: number } | { read: false; why: string };
+
+/**
+ * **THE procfs CLOCK, WHICH IS NOT THE KERNEL'S.**
+ *
+ * `/proc/<pid>/stat`'s times are in USER_HZ, which the procfs ABI fixes at 100
+ * regardless of the kernel's own `CONFIG_HZ`. That is why this is a constant
+ * rather than a `getconf CLK_TCK` at startup: the number is a property of the
+ * interface we are reading, not of the machine we are reading it on.
+ */
+const USER_HZ = 100;
+
+/**
+ * **HOW FAR THE TWO CLOCKS MAY DISAGREE BEFORE WE STOP BELIEVING THE PAIR.**
+ *
+ * Four sources of honest slack, and none of them is close to the thing being
+ * caught: `ps etimes` is whole seconds (±1), the `/proc` read happens after the
+ * `ps` (up to the probe's own duration), `USER_HZ` rounding (±0.01 s), and the
+ * two reads are simply taken at different instants.
+ *
+ * Five seconds is generous against all of that and still decisive against the
+ * failure: a process that took over a pid inside the race window is seconds
+ * old while the table said minutes or hours, so a real mismatch is off by the
+ * whole of the previous process's life, not by a rounding.
+ */
+const START_AGREEMENT_TOLERANCE_S = 5;
+
+/** Everything {@link readExecutionIdentity} needs, all of it injectable. */
+export type ExecutionInput = {
+  /** The pane's own pid, from the same row this reading will be attached to. */
+  panePid: number | null;
+  /** The tmux environment's `CLAUDE_SESSION_ID`. A claim; see `ConversationReading`. */
+  claimedConversationId: string | null;
+  /** One reading of the process table, shared across the whole fleet. */
+  table: ProcessTableReading;
+  /** One boot identity, shared across the whole fleet. */
+  boot: BootIdentity;
+  /**
+   * Seconds since boot, read once per collection — the clock that lets the
+   * process table's elapsed times and `/proc`'s start ticks be compared. See
+   * the cross-check in {@link readExecutionIdentity}.
+   */
+  uptime: UptimeReading;
+  /** Start ticks for one pid. Called at most once per row. */
+  readStart: (pid: number) => ProcessStartTicks;
+};
+
+/**
+ * The reading for one pane.
+ *
+ * ORDER MATTERS AND IT IS THE ORDER OF WHAT WOULD BE WRONG. The boot identity is
+ * checked first because without it no token can be minted at all, so walking a
+ * tree would only produce evidence we could not name. Then the two ways there is
+ * no tree, then the walk, then the `/proc` read.
+ *
+ * **`claimed-only` IS ONLY FOR "WE LOOKED AND FOUND NOTHING NAMEABLE".** Every
+ * way of failing to look is `unknown` with a cause. That distinction is the
+ * whole difference between *the launch claim is all there is* and *we did not
+ * ask*, and one of them is allowed to be reassuring in a way the other is not.
+ */
+export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
+  const { panePid, claimedConversationId, table, boot, uptime, readStart } = input;
+
+  if (!boot.read) return { kind: "unknown", cause: boot.cause, why: boot.why };
+  if (panePid === null) {
+    return { kind: "unknown", cause: "no-pane-pid", why: "this row carried no pane pid, so there is no tree to walk" };
+  }
+  if (!table.read) return { kind: "unknown", cause: "process-table-unreadable", why: table.why };
+
+  const harness = classifyPaneHarness(panePid, table);
+  if (harness.kind === "unknown") {
+    switch (harness.cause) {
+      // THE WAYS WE DID NOT GET TO LOOK. Two of them are already handled above
+      // and are re-mapped rather than assumed unreachable, because a caller can
+      // hand this a table that came from a store replay rather than the probe.
+      case "no-pane-pid":
+        return { kind: "unknown", cause: "no-pane-pid", why: harness.why };
+      case "process-table-unreadable":
+        return { kind: "unknown", cause: "process-table-unreadable", why: harness.why };
+      case "pane-not-in-table":
+      case "malformed-process-table":
+        return { kind: "unknown", cause: "pane-tree-unreadable", why: harness.why };
+      // AND THE TWO WHERE THE WALK RAN AND CAME BACK WITHOUT A NAME. There is
+      // something in the pane; we cannot say what; so the launch metadata is
+      // all anybody has, which is exactly `claimed-only`.
+      case "unrecognised-pane-process":
+      case "ambiguous-harness":
+        return {
+          kind: "claimed-only",
+          conversation: conversationOf(claimedConversationId, null, `the pane's own process could not be named: ${harness.why}`),
+          why: harness.why,
+        };
+      default: {
+        const never: never = harness.cause;
+        throw new Error(`no execution reading for harness cause ${JSON.stringify(never)}`);
+      }
+    }
+  }
+
+  const start = readStart(harness.pid);
+  if (!start.read) {
+    // WE SAW IT AND CANNOT NAME IT DURABLY, which is not the same as not seeing
+    // it — the process almost certainly exited between the `ps` and this read.
+    // `verified` without a token is not an option: the token IS the verification.
+    return {
+      kind: "unknown",
+      cause: "process-start-unreadable",
+      why: `pid ${harness.pid} is the harness under this pane and its start time could not be read, so no durable identity can be minted for it: ${start.why}`,
+    };
+  }
+
+  // THE TWO READINGS MUST BE OF THE SAME PROCESS, AND UNTIL HERE NOTHING SAID
+  // SO. `harness` and its conversation come from the process table; `start`
+  // comes from a `/proc` read taken afterwards. A pid reused in between yields
+  // the old harness stapled to the new process's token — `verified`, coherent,
+  // and about no process that ever existed. GPT Sol's P1-2.
+  const agreement = startAgrees(harness.pid, table, uptime, start.ticks);
+  if (agreement !== null) return agreement;
+
+  const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
+  const whyUnobserved =
+    harness.kind === "claude-code"
+      ? "the claude under this pane was started without --session-id, so its own command line names no conversation"
+      : `this pane holds ${harness.kind}, whose command line carries no conversation id — a Claude may not have started in it yet, or may have finished`;
+
+  return {
+    kind: "verified",
+    token: { boot: boot.id, pid: harness.pid, startTicks: start.ticks },
+    harness: harness.kind,
+    conversation: conversationOf(claimedConversationId, observed, whyUnobserved),
+  };
+}
+
+/**
+ * **DO THE PROCESS TABLE AND `/proc` DESCRIBE THE SAME PROCESS?** — null when
+ * they agree, and the refusal to return when they do not.
+ *
+ * The check costs nothing anybody was not already paying. `ps` reported this
+ * process's ELAPSED TIME and `/proc` reported its START TICK; with one uptime
+ * reading those are two independent measurements of one instant, taken by two
+ * different mechanisms moments apart. **A second, independent join, built so
+ * that it CAN contradict the first** — which is the only kind of check worth
+ * having here, since a reading assembled from two processes is internally
+ * consistent and looks perfect.
+ *
+ * A replacement that took the pid inside the race window is seconds old while
+ * the table said minutes, so the disagreement is the whole of the previous
+ * process's life rather than a rounding. See `START_AGREEMENT_TOLERANCE_S` for
+ * the honest slack this has to allow.
+ *
+ * **AN UNMADE CHECK IS NOT A PASSED CHECK.** No uptime, or a table row whose
+ * elapsed time could not be converted, refuses rather than waving the pair
+ * through — the same rule as every other arm in this file.
+ */
+function startAgrees(
+  pid: number,
+  table: Extract<ProcessTableReading, { read: true }>,
+  uptime: UptimeReading,
+  ticks: number,
+): ExecutionReading | null {
+  if (!uptime.read) {
+    return {
+      kind: "unknown",
+      cause: "uptime-unreadable",
+      why: `pid ${pid}'s start time cannot be checked against the process table without a boot clock, so whether the two readings are of one process is unknown: ${uptime.why}`,
+    };
+  }
+  const row = table.rows.find((candidate) => candidate.pid === pid);
+  // Cannot happen — the harness came out of this table — but the row is looked
+  // up rather than threaded through, and an absent one must refuse rather than
+  // skip the check.
+  if (row === undefined || !row.started.known) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why: `pid ${pid} has no usable elapsed time in the process table it was classified from, so its start tick cannot be checked against it`,
+    };
+  }
+  // Both sides as "seconds since boot at which this process started".
+  const fromProc = ticks / USER_HZ;
+  const fromTable = uptime.seconds - (table.atMs - row.started.atMs) / 1000;
+  const apart = Math.abs(fromProc - fromTable);
+  if (apart <= START_AGREEMENT_TOLERANCE_S) return null;
+  return {
+    kind: "unknown",
+    cause: "process-changed-under-read",
+    why:
+      `pid ${pid} was ${Math.round((table.atMs - row.started.atMs) / 1000)} s old in the process table and /proc says it started ` +
+      `${Math.round(uptime.seconds - fromProc)} s ago — ${Math.round(apart)} s apart, so the two readings are of different processes and the pid was reused between them`,
+  };
+}
+
+/**
+ * The claim and the observation, reconciled.
+ *
+ * **THE ASYMMETRY IS DELIBERATE AND IS THE OPPOSITE OF `session-replaced`'s.**
+ * There, an unchanged claim was evidence of nothing; here, a claim that MATCHES
+ * a live process's own argument is real corroboration, because the argument is
+ * on the process rather than on the pane around it.
+ */
+function conversationOf(claimed: string | null, observed: string | null, whyUnobserved: string): ConversationReading {
+  if (claimed === null) return { kind: "not-claimed" };
+  if (observed === null) return { kind: "unverifiable", claimed, why: whyUnobserved };
+  if (observed === claimed) return { kind: "verified", id: claimed };
+  return { kind: "conflicting", claimed, observed };
+}
+
+/* ------------------------------------------------------------------ *
+ * The two readers that touch the machine, and the one parse.
+ * ------------------------------------------------------------------ */
+
+/** How this module reads a file. Injectable so every failure path is testable. */
+export type ReadTextFile = (path: string) => string;
+
+const readText: ReadTextFile = (path) => readFileSync(path, "utf8");
+
+export const BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id";
+
+/**
+ * The boot's id, or an honest refusal.
+ *
+ * **A NON-LINUX BOX IS `platform-unsupported`, NEVER A FALLBACK TO THE PID.**
+ * The direction on this is explicit in the stage: unavailable platform evidence
+ * is unsupported, not permission to use a pid on its own. Greg's Mac reaches
+ * this line, and it should get grey rows there rather than confident ones.
+ */
+export function readBootIdentity(
+  read: ReadTextFile = readText,
+  platform: string = process.platform,
+): BootIdentity {
+  if (platform !== "linux") {
+    return {
+      read: false,
+      cause: "platform-unsupported",
+      why: `execution identity is derived from ${BOOT_ID_PATH} and /proc/<pid>/stat, and this is ${platform} rather than linux`,
+    };
+  }
+  let raw: string;
+  try {
+    raw = read(BOOT_ID_PATH);
+  } catch (cause) {
+    return {
+      read: false,
+      cause: "boot-identity-unreadable",
+      why: `${BOOT_ID_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
+  const id = raw.trim();
+  // A BOOT ID THAT IS EMPTY IS NOT A BOOT ID. An empty string would make every
+  // token on the box begin with `:`, and two boots would silently agree — the
+  // exact collision the field is there to prevent.
+  if (id === "") {
+    return { read: false, cause: "boot-identity-unreadable", why: `${BOOT_ID_PATH} is empty` };
+  }
+  return { read: true, id };
+}
+
+export const UPTIME_PATH = "/proc/uptime";
+
+/**
+ * Seconds since boot, for the cross-check in {@link startAgrees}.
+ *
+ * One read per collection, not per row: it is a property of the box. The file
+ * is two floats and only the first is wanted.
+ */
+export function readUptime(read: ReadTextFile = readText): UptimeReading {
+  let raw: string;
+  try {
+    raw = read(UPTIME_PATH);
+  } catch (cause) {
+    return { read: false, why: `${UPTIME_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+  const first = raw.trim().split(/\s+/)[0];
+  const seconds = first === undefined ? Number.NaN : Number(first);
+  // NEGATIVE OR NON-FINITE IS A REFUSAL, not a zero. A zero would put every
+  // process's derived start before the boot and fail every cross-check on the
+  // box, which reads as thirty replaced processes rather than as one bad read.
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return { read: false, why: `${UPTIME_PATH} does not start with a number of seconds: ${JSON.stringify(raw.slice(0, 60))}` };
+  }
+  return { read: true, seconds };
+}
+
+/**
+ * Field 22 of `/proc/<pid>/stat` — a process's start time in clock ticks.
+ *
+ * **THE PARSE STARTS AT THE LAST `)`, AND THAT IS THE WHOLE TRICK.** Field 2 is
+ * the executable's name in parentheses, it is not escaped, and it may contain
+ * both spaces and parentheses — a process really can be called `(foo) bar)`.
+ * Splitting the line on whitespace from the left puts every later field at an
+ * offset that depends on the name, which is a parser that works on this box
+ * until somebody runs something with a bracket in its name. After the last `)`
+ * the fields are fixed-position: field 3 is first, so field N sits at index
+ * N - 3, and field 22 is index 19.
+ */
+export function parseProcStat(text: string): { ok: true; ppid: number; startTicks: number } | { ok: false; why: string } {
+  const close = text.lastIndexOf(")");
+  if (close === -1) return { ok: false, why: "the stat line has no `)`, so it is not a /proc stat line" };
+  const fields = text.slice(close + 1).trim().split(/\s+/);
+  // Field 3 (state) is at index 0, so field 22 is at index 19 and the line must
+  // be at least that long. Checked rather than assumed: a truncated read is a
+  // real outcome of racing a process's exit.
+  const ppidText = fields[1];
+  const startText = fields[19];
+  if (ppidText === undefined || startText === undefined) {
+    return { ok: false, why: `the stat line has ${fields.length} fields after the command name, which is fewer than the 20 needed to reach the start time` };
+  }
+  const ppid = Number(ppidText);
+  const startTicks = Number(startText);
+  if (!Number.isSafeInteger(ppid) || ppid < 0) return { ok: false, why: `parent pid ${JSON.stringify(ppidText)} is not a pid` };
+  if (!Number.isSafeInteger(startTicks) || startTicks < 0) {
+    return { ok: false, why: `start time ${JSON.stringify(startText)} is not a tick count` };
+  }
+  return { ok: true, ppid, startTicks };
+}
+
+/**
+ * One process's start tick, straight off `/proc`.
+ *
+ * ENOENT IS THE ORDINARY CASE, not an error worth shouting about: the process
+ * table was read a moment ago and the process is free to exit in between. The
+ * caller turns this into `process-start-unreadable`, which is an `unknown` arm
+ * rather than a verified reading with a guess in it.
+ */
+export function readProcessStart(pid: number, read: ReadTextFile = readText): ProcessStartTicks {
+  let raw: string;
+  try {
+    raw = read(`/proc/${pid}/stat`);
+  } catch (cause) {
+    return { read: false, why: `/proc/${pid}/stat could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+  const parsed = parseProcStat(raw);
+  if (!parsed.ok) return { read: false, why: `/proc/${pid}/stat could not be parsed: ${parsed.why}` };
+  return { read: true, ticks: parsed.startTicks };
+}

@@ -32,6 +32,7 @@ import {
   type QueueLimits,
   type UnsentFailure,
 } from "../tools/fleet/queue.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { steerableStatus, type SteerFailure } from "../tools/fleet/steer.js";
 
@@ -63,11 +64,25 @@ const EVERY_STATUS: readonly FleetStatus[] = [
   { kind: "unknown", cause: "agents-unavailable", why: "the box could not be asked" },
 ];
 
+/**
+ * Which run of the server a queue is, when the test does not care.
+ *
+ * Fixed rather than random, so a failing assertion prints the same id twice.
+ * The tests that DO care build two queues with two of these — that pair is what
+ * a restart looks like from a phone still holding the old ids.
+ */
+const INSTANCE = "1a2b3c4d";
+
 /** A queue with a clock you move by hand. Nothing here waits for real time. */
-function makeQueue(limits?: Partial<QueueLimits>) {
+function makeQueue(limits?: Partial<QueueLimits>, serverInstanceId = INSTANCE) {
   const clock = { t: 1_700_000_000_000 };
-  const q = new SteeringQueue({ now: () => clock.t, ...(limits ? { limits } : {}) });
-  return { q, clock, advance: (ms: number) => (clock.t += ms) };
+  // ITS OWN BOOK, sharing this queue's clock and run id. The hold machinery has
+  // its own file — tests/fleet-quarantine.test.ts — and nothing in this one
+  // opens a hold; what it needs is a real book rather than a stub, so that a
+  // `next()` here asks the same question production's does.
+  const quarantine = new QuarantineBook({ now: () => clock.t, serverInstanceId });
+  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId, quarantine, ...(limits ? { limits } : {}) });
+  return { q, quarantine, clock, advance: (ms: number) => (clock.t += ms) };
 }
 
 function ctx(status: FleetStatus, claudeSessionId = CONVO) {
@@ -685,6 +700,68 @@ describe("noteGeneration", () => {
     expect(q.noteGeneration(400_100)).toBe(0);
     expect(q.snapshot(SESSION).items[0]?.invalidated).toBe(null);
     expect(q.next(SESSION, ctx(IDLE)).kind).toBe("in-flight");
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * Which run of the server minted an id.
+ *
+ * `q1` came round again on every restart, and nothing noticed. The queue is
+ * volatile, so a restart empties it — but the counter restarts too, and the
+ * very next enqueue re-issues `q1` to somebody else's instruction. A phone left
+ * open across a restart is holding ids that now name different work.
+ * ---------------------------------------------------------------- */
+
+describe("instance-qualified ids", () => {
+  it("mints different ids in two runs of the server for the same first item", () => {
+    const a = makeQueue(undefined, "deadbeef");
+    const b = makeQueue(undefined, "0badcafe");
+    a.q.enqueueAction(TARGET, "pull", "greg");
+    b.q.enqueueAction(TARGET, "pull", "greg");
+    const first = a.q.snapshot(SESSION).items[0]?.id ?? "";
+    const second = b.q.snapshot(SESSION).items[0]?.id ?? "";
+    // Without the prefix both of these are `q1`, and every route that matches
+    // an id by string equality resolves one to the other.
+    expect(first).not.toBe(second);
+    expect(first).toContain("deadbeef");
+    expect(second).toContain("0badcafe");
+  });
+
+  it("keeps counting within one run, so ids stay distinct and ordered", () => {
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.enqueueAction(TARGET, "push", "greg");
+    const ids = q.snapshot(SESSION).items.map((i) => i.id);
+    expect(new Set(ids).size).toBe(2);
+    for (const id of ids) expect(q.idOrigin(id)).toBe("this-instance");
+  });
+
+  it("tells its own ids from another run's, and both from a string that names no run", () => {
+    const a = makeQueue(undefined, "deadbeef");
+    const b = makeQueue(undefined, "0badcafe");
+    a.q.enqueueAction(TARGET, "pull", "greg");
+    const mine = a.q.snapshot(SESSION).items[0]?.id ?? "";
+
+    expect(a.q.idOrigin(mine)).toBe("this-instance");
+    expect(b.q.idOrigin(mine)).toBe("other-instance");
+    // A hand-typed or garbled id is NOT evidence of a previous server, and
+    // claiming it was would swap one false statement for another. The routes
+    // let this fall through to their existing "no such item".
+    expect(a.q.idOrigin("q1")).toBe("not-instance-qualified");
+    expect(a.q.idOrigin("")).toBe("not-instance-qualified");
+  });
+
+  it("splits at the first separator, so nothing about the suffix can confuse it", () => {
+    // The instance token is lowercase hex, so the separator cannot occur inside
+    // it and the FIRST one is always the boundary. Asserted rather than
+    // assumed, because the parse is what makes the refusal trustworthy.
+    const { q } = makeQueue(undefined, "deadbeef");
+    expect(q.idOrigin("deadbeef-q1-q2")).toBe("this-instance");
+    expect(q.idOrigin("0badcafe-q1-q2")).toBe("other-instance");
+    // An empty or non-hex token is not a run of anything, so it is not an
+    // instance either. Same reason as the garbled id above.
+    expect(q.idOrigin("-q1")).toBe("not-instance-qualified");
+    expect(q.idOrigin("zzzzzzzz-q1")).toBe("not-instance-qualified");
   });
 });
 

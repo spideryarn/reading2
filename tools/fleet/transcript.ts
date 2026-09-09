@@ -888,6 +888,149 @@ function toolDetail(input: unknown): string | null {
  * turns in the range read (check `reachedStartOfFile` before saying "has said
  * nothing"), and is a different fact from `not-found`.
  */
+/**
+ * How much of the head of a transcript is read for an opening. 256 KB is one
+ * chunk of the backwards reader and is far more than the first few turns of any
+ * conversation on this box.
+ */
+export const DEFAULT_OPENING_BYTES = 256 * 1024;
+
+/** How many opening turns are worth having. The brief is usually the first one. */
+export const DEFAULT_OPENING_LIMIT = 6;
+
+export type OpeningMessagesOptions = {
+  claudeSessionId: string | null;
+  /** A hint, exactly as `readRecentMessages` means it. */
+  dir: string | null;
+  limit?: number;
+  maxBytes?: number;
+  maxTextChars?: number;
+  projectsDir?: string;
+};
+
+/**
+ * WHAT THIS SESSION WAS ASKED TO DO — the head of the transcript, not the tail.
+ *
+ * **Every other reader in this file goes backwards, and that is why this one
+ * exists.** `readRecentMessages` and `readRawTail` seek from EOF, so they answer
+ * *what is this session doing now*. A description of what a session is FOR has
+ * to come from its opening, and a description built from the newest turns would
+ * churn on every turn — which turns "one model call per session" into one per
+ * turn, the exact cost a budget exists to prevent.
+ *
+ * **It is cheaper than the reader it sits beside**, which is worth saying because
+ * "another transcript read per session" sounds like the 10–12 s cost this
+ * dashboard exists to avoid. There is no seeking: one chunk from byte 0, capped,
+ * and complete records only.
+ *
+ * **`complete` is the honest half.** A head read that filled its budget has not
+ * necessarily reached the end of the opening, and a caller fingerprinting the
+ * result needs to know whether it is looking at a whole thing or a prefix.
+ */
+export type OpeningMessages =
+  | {
+      kind: "found";
+      path: string;
+      via: "slug-guess" | "scan";
+      /** Oldest first — the opposite of `readRecentMessages`. */
+      turns: TranscriptTurn[];
+      /**
+       * Whether the read covered the whole file rather than stopping at the cap.
+       * `false` means these are the first turns of something longer, which is
+       * the ordinary case and is fine; it is stated so a caller does not treat a
+       * truncated opening as a complete one.
+       */
+      reachedEndOfFile: boolean;
+      bytesRead: number;
+      fileBytes: number;
+      recordsParsed: number;
+      recordsUnparseable: number;
+      toolResultsSkipped: number;
+    }
+  | { kind: "not-found"; reason: string; why: string }
+  | { kind: "unreadable"; path: string | null; why: string };
+
+/**
+ * Read the first turns of a session's transcript.
+ *
+ * Same refusal arms as `readRecentMessages`, for the same reason: an empty list
+ * must never stand in for a failure.
+ */
+export async function readOpeningMessages(opts: OpeningMessagesOptions): Promise<OpeningMessages> {
+  const limit = opts.limit ?? DEFAULT_OPENING_LIMIT;
+  const maxBytes = opts.maxBytes ?? DEFAULT_OPENING_BYTES;
+  const maxTextChars = opts.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;
+  const projectsDir = opts.projectsDir ?? path.join(homedir(), ".claude", "projects");
+
+  if (opts.claudeSessionId === null || opts.claudeSessionId === "") {
+    return {
+      kind: "not-found",
+      reason: "no-claude-session-id",
+      why: "this session has no conversation id, so there is no transcript to read — it may not be a Claude session, or it predates the launcher pinning one",
+    };
+  }
+
+  const located = await findTranscript(projectsDir, opts.claudeSessionId, opts.dir);
+  if (located.kind === "not-found") return located;
+
+  let text: string;
+  let fileBytes: number;
+  let bytesRead: number;
+  try {
+    const handle = await open(located.path, "r");
+    try {
+      const stat = await handle.stat();
+      fileBytes = stat.size;
+      const want = Math.min(maxBytes, fileBytes);
+      const buf = Buffer.alloc(want);
+      const { bytesRead: got } = await handle.read(buf, 0, want, 0);
+      bytesRead = got;
+      text = buf.subarray(0, got).toString("utf8");
+    } finally {
+      await handle.close();
+    }
+  } catch (err) {
+    return { kind: "unreadable", path: located.path, why: `could not read the transcript: ${errText(err)}` };
+  }
+
+  /* COMPLETE RECORDS ONLY. A capped read almost always ends mid-line, and half a
+     JSON object is not a record — so the last line is dropped unless the read
+     reached the end of the file, where it is whole. */
+  const reachedEndOfFile = bytesRead >= fileBytes;
+  const lines = text.split("\n");
+  if (!reachedEndOfFile) lines.pop();
+
+  const records: RawRecord[] = [];
+  let recordsUnparseable = 0;
+  for (const line of lines) {
+    if (line.trim() === "") continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        records.push(parsed as RawRecord);
+      } else {
+        recordsUnparseable += 1;
+      }
+    } catch {
+      recordsUnparseable += 1;
+    }
+  }
+
+  const { turns, toolResultsSkipped } = recordsToTurns(records, maxTextChars);
+  return {
+    kind: "found",
+    path: located.path,
+    via: located.via,
+    turns: turns.slice(0, limit),
+    reachedEndOfFile,
+    bytesRead,
+    fileBytes,
+    recordsParsed: records.length,
+    recordsUnparseable,
+    toolResultsSkipped,
+  };
+}
+
 export async function readRecentMessages(opts: RecentMessagesOptions): Promise<RecentMessages> {
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;

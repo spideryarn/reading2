@@ -105,7 +105,8 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-import type { AttentionItem, AttentionList, StoredUsage } from "../fleet/wire.js";
+import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
+import type { AttentionItem, AttentionList, ConversationReading, StoredUsage } from "../fleet/wire.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -125,14 +126,15 @@ import {
   adoptOccurrence,
   foldOccurrences,
   occurrenceId as occurrenceIdOf,
-  type DefinitionHash,
+  type BehaviourHash,
   type JobOutcome,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
 } from "./jobs.js";
-import type { RuleFinding, RuleId, RuleOutcome, WedgedProcess } from "./rules.js";
+import type { KillPolicy } from "../fleet/actions.js";
+import type { DriftedSession, LaunchModeFinding, RuleFinding, RuleId, RuleOutcome, WedgedProcess, WedgedWorkFinding } from "./rules.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
   isProcessAlive,
@@ -144,6 +146,7 @@ import {
   type LockHolder,
   type LockRefusal,
 } from "./lock.js";
+import { parseExecution } from "./observation.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
 
 /**
@@ -369,6 +372,40 @@ export type RegisterEntry = {
    * `13m` rows that are the whole story.
    */
   readonly statusSince: StatusSince;
+  /**
+   * **THE LAST RUN THIS SESSION WAS VERIFIED TO BE, and whether we can still
+   * see one.**
+   *
+   * The register's other identities (`tmuxId`, `paneId`, `panePid`,
+   * `claimedConversationId`) all survive a claude exiting and another starting
+   * in the same pane, which is why `OverseerRegister` in wire.ts says in as many
+   * words that this register may not be joined onto a fleet row: *"the
+   * generation tuple can stay fixed while the process inside it is replaced, so
+   * 'blocked for at least 20 minutes' said against a row needs continuity
+   * evidence this build does not have."* This is that evidence.
+   *
+   * **STICKY, AND NULL UNTIL SOMETHING IS VERIFIED.** It moves on a first
+   * sighting and on a proven change, and on nothing else — so a collection whose
+   * `ps` failed leaves it exactly where it was, and `verified(A) → unknown →
+   * verified(A)` stays one unbroken run rather than becoming two. Overwriting it
+   * with every reading would make *we could not look* indistinguishable from
+   * *it was replaced*, which is the mistake `session-pane-replaced` makes with a
+   * null pid and has a long comment about.
+   *
+   * `since` is when this run was first recorded here, which is a FLOOR on how
+   * long it has been running — the same kind of number as `statusSince`'s
+   * `lower-bound` arm, and it must be drawn as one. And it is not a claim that
+   * the run is alive: `lastSeenAlive` and the checkpoint's snapshot clock are
+   * the fields that speak to that.
+   *
+   * **NO SCHEMA BUMP**, by this file's own rule: a reader that ignores it draws
+   * no continuity and is poorer rather than wrong — unlike schema 2's
+   * `statusSince`, where a consumer written against schema 1 would have
+   * rendered a floor as a reading. A checkpoint written before this field
+   * parses to `null`, which says *we have never verified a run for this
+   * session*, and that is true of it.
+   */
+  readonly verifiedExecution: { readonly token: string; readonly since: string } | null;
 };
 
 /**
@@ -541,13 +578,26 @@ export type Checkpoint = {
 /**
  * What a checkpoint says about the scheduler.
  *
- * Three arms rather than a boolean, because *nobody has said* is a third fact
- * and the most dangerous one to fold into `off`: an old checkpoint would then
- * claim a scheduler is disarmed when what is true is that this build cannot
- * tell. Same reasoning as `StoredUsage`'s `none` arm two fields up.
+ * Four arms rather than a boolean. *Nobody has said* is a fact and the most
+ * dangerous one to fold into `off`: an old checkpoint would then claim a
+ * scheduler is disarmed when what is true is that this build cannot tell. Same
+ * reasoning as `StoredUsage`'s `none` arm two fields up.
+ *
+ * **`blocked` is GPT Sol's S8-7, and it is the arm this design was missing.**
+ * The word on the status page came from an environment variable alone, so
+ * systemd could be active, the daemon healthy, the headline reading `ARMED` —
+ * and both jobs unauthorised, or absent because a document could not be read.
+ * A person reading that page would have been told the opposite of the truth by
+ * the one line they trusted.
+ *
+ * So `armed` is now a claim about the **loaded, authorised definitions**: the
+ * switch is on AND at least one job could actually run. Switched on with nothing
+ * runnable is `blocked`, which is neither of the other two and needs its own
+ * word.
  */
 export type StoredScheduler =
   | { kind: "armed"; why: string; at: string }
+  | { kind: "blocked"; why: string; at: string }
   | { kind: "off"; why: string; at: string }
   | { kind: "unknown"; why: string; at: string };
 
@@ -926,6 +976,12 @@ function parseRow(u: unknown): ParseResult<ObservedRow> {
     value: {
       id: u["id"],
       name,
+      // TOTAL, LIKE `parseAttempt`, and it is the one field on a row this
+      // reader will not refuse over. A `session-seen` written before the field
+      // existed comes back as `unknown`/`not-reported` rather than failing the
+      // event and, with it, the fold of the whole log. There is no path from a
+      // missing field to `verified`; `observation.ts` owns the rule.
+      execution: parseExecution(u["execution"]),
       title,
       repo,
       worktree,
@@ -950,6 +1006,79 @@ function parseIdentity(u: unknown): ParseResult<SessionIdentity> {
   return { ok: true, value: { tmuxId: u["tmuxId"], claimedConversationId: claimed } };
 }
 
+/** The common half of every session event: whatever `parseEvent` has already checked. */
+type SessionEventCommon = { at: string; key: SessionKey; identity: SessionIdentity; tmuxServerPid: number | null };
+
+/**
+ * `session-execution-changed`, off the log.
+ *
+ * Its own function rather than a case body, because it is four checks and the
+ * `parseEvent` switch is already the longest thing in this file.
+ *
+ * **`token` IS REQUIRED AND WELL-FORMED; `previousToken` MAY BE NULL AND MAY
+ * NOT EQUAL IT.** Null is the first-sighting arm — a session the register had
+ * never verified — and an event whose two sides are equal is not a change and
+ * is one this module never wrote. Both tokens go through
+ * {@link isExecutionTokenText}, so "malformed present values are refused" is a
+ * property of the parser rather than of the writer's good manners; accepting
+ * any non-empty string was GPT Sol's P2-4b.
+ */
+function parseExecutionChanged(u: Record<string, unknown>, common: SessionEventCommon): ParseResult<OverseerEvent> {
+  const rawPrevious = u["previousToken"];
+  const token = u["token"];
+  if (rawPrevious !== null && !isExecutionTokenText(rawPrevious)) {
+    return { ok: false, reason: "previousToken is neither null nor an execution token" };
+  }
+  const previousToken = rawPrevious as string | null;
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "token is not an execution token" };
+  if (previousToken === token) {
+    return { ok: false, reason: "previousToken and token are equal, which is not a change" };
+  }
+  const conversation = parseConversationReading(u["conversation"]);
+  if (!conversation.ok) return { ok: false, reason: conversation.reason };
+  return {
+    ok: true,
+    value: { kind: "session-execution-changed", ...common, previousToken, token, conversation: conversation.value },
+  };
+}
+
+/**
+ * One conversation verdict off the log.
+ *
+ * STRICT, unlike `observation.ts`'s reader of the same type. That one parses a
+ * live payload from a producer that may be older than the field, so it degrades
+ * to `unknown` rather than refusing a snapshot. This parses the Overseer's own
+ * append-only log, where every line was written by this module: a line that
+ * does not read is a file somebody edited or a bug here, and both should be
+ * refused loudly rather than rounded to a shrug.
+ */
+function parseConversationReading(u: unknown): ParseResult<ConversationReading> {
+  if (!isRecord(u)) return { ok: false, reason: "conversation is not an object" };
+  const kind = u["kind"];
+  if (kind === "not-claimed") return { ok: true, value: { kind: "not-claimed" } };
+  if (kind === "verified") {
+    const id = u["id"];
+    if (typeof id !== "string" || id === "") return { ok: false, reason: "conversation.id is not a conversation id" };
+    return { ok: true, value: { kind: "verified", id } };
+  }
+  if (kind === "conflicting") {
+    const claimed = u["claimed"];
+    const observed = u["observed"];
+    if (typeof claimed !== "string" || typeof observed !== "string") {
+      return { ok: false, reason: "conversation.claimed and conversation.observed are not both strings" };
+    }
+    return { ok: true, value: { kind: "conflicting", claimed, observed } };
+  }
+  if (kind === "unverifiable") {
+    const claimed = u["claimed"];
+    const why = u["why"];
+    if (typeof claimed !== "string") return { ok: false, reason: "conversation.claimed is not a string" };
+    if (typeof why !== "string") return { ok: false, reason: "conversation.why is not a string" };
+    return { ok: true, value: { kind: "unverifiable", claimed, why } };
+  }
+  return { ok: false, reason: `conversation.kind ${JSON.stringify(kind)} is not a conversation reading` };
+}
+
 /** Every event kind, as a total map so a new arm in diff.ts fails to compile here rather than parsing as junk. */
 const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-seen": true,
@@ -959,6 +1088,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "session-execution-changed": true,
   "job-occurrence-reserved": true,
   "job-occurrence-started": true,
   "job-occurrence-finished": true,
@@ -1059,17 +1189,21 @@ function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: s
     case "job-occurrence-reserved": {
       const jobId = u["jobId"];
       const scheduledAt = u["scheduledAt"];
-      const hash = u["definitionHash"];
+      // EITHER NAME, and the old one is not a kindness. Lines written before
+      // 2026-09-09 spell it `definitionHash`; the field means the same thing and
+      // the id it is checked against is byte-identical, so refusing them would
+      // turn a rename into a lost ledger — and a lost ledger holds every job.
+      const hash = u["behaviourHash"] ?? u["definitionHash"];
       const instanceId = u["instanceId"];
       const leaseUntil = u["leaseUntil"];
       const what = u["what"];
       if (!isName(jobId)) return { ok: false, reason: "jobId is not a job id" };
       if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "scheduledAt is not an ISO timestamp" };
-      if (!isName(hash)) return { ok: false, reason: "definitionHash is not a hash" };
+      if (!isName(hash)) return { ok: false, reason: "behaviourHash is not a hash" };
       if (!isName(instanceId)) return { ok: false, reason: "instanceId is not an instance id" };
       if (!isIsoTimestamp(leaseUntil)) return { ok: false, reason: "leaseUntil is not an ISO timestamp" };
       if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
-      const expected = occurrenceIdOf({ jobId, scheduledAt, definitionHash: hash as DefinitionHash });
+      const expected = occurrenceIdOf({ jobId, scheduledAt, behaviourHash: hash as BehaviourHash });
       if (expected !== occurrence) {
         return { ok: false, reason: `occurrenceId ${JSON.stringify(id)} is not the id of its own key (${expected})` };
       }
@@ -1080,7 +1214,7 @@ function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: s
           at,
           jobId,
           scheduledAt,
-          definitionHash: hash as DefinitionHash,
+          behaviourHash: hash as BehaviourHash,
           occurrenceId: occurrence,
           instanceId,
           leaseUntil,
@@ -1146,22 +1280,104 @@ function parseWedgedProcess(u: unknown): ParseResult<WedgedProcess> {
   };
 }
 
-/** What a rule found, off the disk. */
+/**
+ * What a rule found, off the disk — **one parser per rule, chosen by the
+ * finding's own `kind`.**
+ *
+ * Exhaustive on `RuleId`, so a new rule cannot be added without saying how its
+ * finding is read back. SP-9's shape: an event kind with no parse branch
+ * appends perfectly and comes back on the next read as "not an event this
+ * version knows", and the finding inside it is the same hazard one level down.
+ */
 function parseFinding(u: unknown): ParseResult<RuleFinding> {
   if (!isRecord(u)) return { ok: false, reason: "finding is not an object" };
-  if (!isRuleId(u["kind"])) return { ok: false, reason: `finding.kind ${JSON.stringify(u["kind"])} is not a rule this version knows` };
-  const policy = u["policy"];
-  if (policy !== "safe-to-kill" && policy !== "test-suites") {
-    return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
+  const kind = u["kind"];
+  if (!isRuleId(kind)) return { ok: false, reason: `finding.kind ${JSON.stringify(kind)} is not a rule this version knows` };
+  switch (kind) {
+    case "wedged-work":
+      return parseWedgedWorkFinding(kind, u);
+    case "launch-mode":
+      return parseLaunchModeFinding(kind, u);
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no finding parser for ${String(never)}` };
+    }
   }
+}
+
+/** Every count `decideRule` used, so a replay can redo its arithmetic rather than take its conclusion. */
+function parseCounts(u: Record<string, unknown>, fields: readonly string[]): ParseResult<Record<string, number>> {
   const counts: Record<string, number> = {};
-  for (const field of ["minAgeSeconds", "matched", "candidates", "scanned"] as const) {
+  for (const field of fields) {
     const value = u[field];
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       return { ok: false, reason: `finding.${field} is not a count` };
     }
     counts[field] = value;
   }
+  return { ok: true, value: counts };
+}
+
+/** One drifted session off the disk — the address a person would use to go and relaunch it. */
+function parseDriftedSession(u: unknown): ParseResult<DriftedSession> {
+  if (!isRecord(u)) return { ok: false, reason: "a session is not an object" };
+  for (const field of ["id", "name", "mode"] as const) {
+    const value = u[field];
+    if (typeof value !== "string" || (field !== "name" && value === "")) {
+      return { ok: false, reason: `session.${field} is not a name` };
+    }
+  }
+  return { ok: true, value: { id: u["id"] as string, name: u["name"] as string, mode: u["mode"] as string } };
+}
+
+/**
+ * Rule 1's finding, off the disk.
+ *
+ * **The four arms are read as four counts.** A parser that summed them, or
+ * defaulted a missing one to zero, would turn "two sessions we could not read"
+ * into "two sessions that were fine" on the way back out — which is the same
+ * collapse the rule refuses to make on the way in, and the reason this is a
+ * round trip rather than an append.
+ */
+function parseLaunchModeFinding(kind: "launch-mode", u: Record<string, unknown>): ParseResult<LaunchModeFinding> {
+  const counts = parseCounts(u, ["minSessions", "maxCollectionAgeSeconds", "collectionAgeSeconds", "auto", "notAuto", "cannotTell", "notApplicable", "rows"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
+  const raw = u["sessions"];
+  if (!Array.isArray(raw)) return { ok: false, reason: "finding.sessions is not an array" };
+  const sessions: DriftedSession[] = [];
+  for (const item of raw) {
+    const session = parseDriftedSession(item);
+    if (!session.ok) return { ok: false, reason: `finding.${session.reason}` };
+    sessions.push(session.value);
+  }
+  return {
+    ok: true,
+    value: {
+      kind,
+      minSessions: counts.value["minSessions"] as number,
+      maxCollectionAgeSeconds: counts.value["maxCollectionAgeSeconds"] as number,
+      collectionAgeSeconds: counts.value["collectionAgeSeconds"] as number,
+      auto: counts.value["auto"] as number,
+      notAuto: counts.value["notAuto"] as number,
+      cannotTell: counts.value["cannotTell"] as number,
+      notApplicable: counts.value["notApplicable"] as number,
+      rows: counts.value["rows"] as number,
+      sessions,
+    },
+  };
+}
+
+/** Rule 2's finding, off the disk. */
+function parseWedgedWorkFinding(kind: "wedged-work", u: Record<string, unknown>): ParseResult<WedgedWorkFinding> {
+  const policy = u["policy"];
+  // Keyed by `KillPolicy`, so a third policy is a compile error here rather than
+  // a value this parser silently refuses off the disk. The two-literal `!==`
+  // pair it replaces was the same not-exhaustive shape as `RULE_IDS`.
+  if (!isKillPolicy(policy)) {
+    return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
+  }
+  const counts = parseCounts(u, ["minAgeSeconds", "matched", "candidates", "scanned"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
   const raw = u["processes"];
   if (!Array.isArray(raw)) return { ok: false, reason: "finding.processes is not an array" };
   const processes: WedgedProcess[] = [];
@@ -1173,21 +1389,39 @@ function parseFinding(u: unknown): ParseResult<RuleFinding> {
   return {
     ok: true,
     value: {
-      kind: u["kind"],
+      kind,
       policy,
-      minAgeSeconds: counts["minAgeSeconds"] as number,
-      matched: counts["matched"] as number,
-      candidates: counts["candidates"] as number,
-      scanned: counts["scanned"] as number,
+      minAgeSeconds: counts.value["minAgeSeconds"] as number,
+      matched: counts.value["matched"] as number,
+      candidates: counts.value["candidates"] as number,
+      scanned: counts.value["scanned"] as number,
       processes,
     },
   };
 }
 
-const RULE_IDS = new Set<string>(["wedged-work"] satisfies RuleId[]);
+/**
+ * The rule ids this version knows.
+ *
+ * **A `Record<RuleId, true>` rather than an array**, so adding a rule without
+ * teaching the parser about it does not compile. It was
+ * `["wedged-work"] satisfies RuleId[]`, which checks that the members ARE rule
+ * ids and says nothing about whether they are ALL of them — the same
+ * not-exhaustive hole as the destructure SC-4 was about, in a different
+ * costume. Found while adding the second rule, which is the only moment it
+ * could have been found.
+ */
+const RULE_IDS: Record<RuleId, true> = { "wedged-work": true, "launch-mode": true };
+
+/** The kill policies this version can read back. Keyed by the type, for the reason `RULE_IDS` gives. */
+const KILL_POLICIES: Record<KillPolicy, true> = { "safe-to-kill": true, "test-suites": true };
+
+function isKillPolicy(u: unknown): u is KillPolicy {
+  return typeof u === "string" && Object.hasOwn(KILL_POLICIES, u);
+}
 
 function isRuleId(u: unknown): u is RuleId {
-  return typeof u === "string" && RULE_IDS.has(u);
+  return typeof u === "string" && Object.hasOwn(RULE_IDS, u);
 }
 
 /**
@@ -1198,26 +1432,39 @@ function isRuleId(u: unknown): u is RuleId {
  * broke" are the two a reader must not confuse, and a parser with a permissive
  * fallback is where that confusion would be introduced.
  */
+/**
+ * WHICH SENTENCE EACH ENDING CARRIES — a table keyed by the arm, so a sixth
+ * outcome does not compile until somebody says how it is read back.
+ *
+ * It was a `switch` on a raw string, which the compiler does not tie to
+ * `RuleOutcome["kind"]` at all: a new arm would have appended fine and come back
+ * as *"not one this version knows"*, taking the whole event with it. Same
+ * not-exhaustive shape as the `satisfies` array below it used to be, and GPT
+ * Sol found both in one pass.
+ */
+const RULE_OUTCOME_FIELDS: Record<RuleOutcome["kind"], "why" | "what"> = {
+  "nothing-to-do": "why",
+  refused: "why",
+  failed: "why",
+  proposed: "what",
+  sent: "what",
+};
+
+function isRuleOutcomeKind(u: unknown): u is RuleOutcome["kind"] {
+  return typeof u === "string" && Object.hasOwn(RULE_OUTCOME_FIELDS, u);
+}
+
 function parseRuleOutcome(u: unknown): ParseResult<RuleOutcome> {
   if (!isRecord(u)) return { ok: false, reason: "outcome is not an object" };
   const kind = u["kind"];
-  switch (kind) {
-    case "nothing-to-do":
-    case "refused":
-    case "failed": {
-      const why = u["why"];
-      if (typeof why !== "string") return { ok: false, reason: "outcome.why is not a string" };
-      return { ok: true, value: { kind, why } };
-    }
-    case "proposed":
-    case "sent": {
-      const what = u["what"];
-      if (typeof what !== "string") return { ok: false, reason: "outcome.what is not a string" };
-      return { ok: true, value: { kind, what } };
-    }
-    default:
-      return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
-  }
+  if (!isRuleOutcomeKind(kind)) return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
+  const field = RULE_OUTCOME_FIELDS[kind];
+  const sentence = u[field];
+  if (typeof sentence !== "string") return { ok: false, reason: `outcome.${field} is not a string` };
+  // The cast is the mapped table's own guarantee written out: `kind` and
+  // `field` came from one entry, so the pair is exactly one arm of the union,
+  // which TypeScript cannot see through a computed key.
+  return { ok: true, value: { kind, [field]: sentence } as RuleOutcome };
 }
 
 /** One rule event off the disk. The occurrence id is opaque here: the run it belongs to is addressed by it, and `parseJobEvent` is what checks the id against its own key. */
@@ -1233,6 +1480,15 @@ function parseRuleEvent(kind: RuleEvent["kind"], u: Record<string, unknown>, at:
       if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
       const finding = parseFinding(u["finding"]);
       if (!finding.ok) return { ok: false, reason: finding.reason };
+      // **THE TWO DISCRIMINANTS HAVE TO AGREE**, and checking each on its own
+      // did not make them (GPT Sol's finding 5 on 3b). An event claiming
+      // `ruleId: "launch-mode"` with a `wedged-work` finding parsed perfectly
+      // and came back as a launch-mode run whose numbers are another rule's
+      // arithmetic — a record that reads plausibly and is false, which is the
+      // one thing a durable log must not produce.
+      if (finding.value.kind !== ruleId) {
+        return { ok: false, reason: `ruleId ${JSON.stringify(ruleId)} carries a ${JSON.stringify(finding.value.kind)} finding, so the event contradicts itself` };
+      }
       return { ok: true, value: { kind, at, occurrenceId, ruleId, what, finding: finding.value } };
     }
     case "rule-settled": {
@@ -1388,6 +1644,8 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
         value: { kind: "session-pane-replaced", ...common, previousPaneId, previousPanePid, paneId, panePid },
       };
     }
+    case "session-execution-changed":
+      return parseExecutionChanged(u, common);
     case "session-wait-restarted": {
       const previousDeadline = u["previousDeadline"];
       const deadline = u["deadline"];
@@ -1497,6 +1755,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
     return { ok: false, reason: "lastStatusKey is not a status key" };
   }
+  const verifiedExecution = parseVerifiedExecution(u["verifiedExecution"]);
+  if (!verifiedExecution.ok) return { ok: false, reason: verifiedExecution.reason };
   return {
     ok: true,
     value: {
@@ -1514,8 +1774,39 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
       lastSeenAlive,
       lastStatusKey: lastStatusKey as StatusKey,
       statusSince: statusSince.value,
+      verifiedExecution: verifiedExecution.value,
     },
   };
+}
+
+/**
+ * The last verified run, off a checkpoint.
+ *
+ * **AN ABSENT FIELD IS `null`, AND THAT IS THE ONE PLACE THIS PARSER IS
+ * FORGIVING.** Everything else in `parseRegisterEntry` fails the whole
+ * checkpoint, because a malformed field means a file somebody edited. This one
+ * is different for one reason and one only: a checkpoint written by the daemon
+ * that was running before this field existed has no `verifiedExecution`, and
+ * refusing it would throw away the register on the first restart after the
+ * deploy — the register being the thing there is no second copy of.
+ *
+ * **A PRESENT-BUT-WRONG FIELD STILL FAILS.** Absent is an old writer; malformed
+ * is a broken one, and the two must not share an outcome. And `null` here means
+ * *no run has been verified for this session*, which cannot be mistaken for a
+ * verified one however it is read.
+ */
+function parseVerifiedExecution(u: unknown): ParseResult<RegisterEntry["verifiedExecution"]> {
+  if (u === undefined || u === null) return { ok: true, value: null };
+  if (!isRecord(u)) return { ok: false, reason: "verifiedExecution is not an object or null" };
+  // THE REAL SHAPE, not merely non-empty. Accepting any string made the claim
+  // "a present-but-malformed value fails whole" false for every value except
+  // `""` — GPT Sol's P2-4b — and this is the register, so a token that parses
+  // and means nothing would be compared against real ones for ever.
+  const token = u["token"];
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "verifiedExecution.token is not an execution token" };
+  const since = u["since"];
+  if (!isIsoTimestamp(since)) return { ok: false, reason: "verifiedExecution.since is not an ISO timestamp" };
+  return { ok: true, value: { token, since } };
 }
 
 /**
@@ -1636,11 +1927,13 @@ function parseOccurrence(u: unknown): ParseResult<Occurrence> {
   if (!isRecord(key)) return { ok: false, reason: "key is not an object" };
   const jobId = key["jobId"];
   const scheduledAt = key["scheduledAt"];
-  const hash = key["definitionHash"];
+  // Either name, for the reason `parseJobEvent` gives: a checkpoint written
+  // before the 2026-09-09 rename says `definitionHash` and means this.
+  const hash = key["behaviourHash"] ?? key["definitionHash"];
   if (!isName(jobId)) return { ok: false, reason: "key.jobId is not a job id" };
   if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "key.scheduledAt is not an ISO timestamp" };
-  if (!isName(hash)) return { ok: false, reason: "key.definitionHash is not a hash" };
-  const parsedKey = { jobId, scheduledAt, definitionHash: hash as DefinitionHash };
+  if (!isName(hash)) return { ok: false, reason: "key.behaviourHash is not a hash" };
+  const parsedKey = { jobId, scheduledAt, behaviourHash: hash as BehaviourHash };
   const id = u["id"];
   const expected = occurrenceIdOf(parsedKey);
   if (id !== expected) return { ok: false, reason: `id ${JSON.stringify(id)} is not the id of its own key (${expected})` };
@@ -1760,7 +2053,7 @@ function parseStoredScheduler(u: unknown, writtenAt: string): StoredScheduler {
   const bad = (why: string): StoredScheduler => ({ kind: "unknown", why: `the stored scheduler block was unusable: ${why}`, at: writtenAt });
   if (!isRecord(u)) return bad("it is not an object");
   const kind = u["kind"];
-  if (kind !== "armed" && kind !== "off" && kind !== "unknown") return bad(`kind ${JSON.stringify(kind)} is not one this build knows`);
+  if (kind !== "armed" && kind !== "blocked" && kind !== "off" && kind !== "unknown") return bad(`kind ${JSON.stringify(kind)} is not one this build knows`);
   const why = u["why"];
   const at = u["at"];
   if (typeof why !== "string") return bad("it has no reason");
@@ -2082,6 +2375,39 @@ export function foldEvents(
         }
         break;
       }
+      case "session-execution-changed": {
+        const was = into.get(event.key);
+        if (was !== undefined) {
+          into.set(event.key, {
+            ...was,
+            verifiedExecution: { token: event.token, since: event.at },
+            lastSeenAlive: event.at,
+            // **THE AGE RESETS ON EVERY ARM, INCLUDING A FIRST SIGHTING**, and
+            // the version that did not was GPT Sol's second-round P1.
+            //
+            // It read: a null `previousToken` is the one-time migration case, so
+            // preserve the age rather than wiping every duration on the box at
+            // deploy. That is true of the migration and **false of the other
+            // case null covers** — a session registered while its execution was
+            // unknown, whose harness was replaced during the blind interval, and
+            // whose first verified reading is therefore already the NEW run. One
+            // null cannot carry both decisions, and preserving the age there
+            // hands run B the age of run A: the original failure class, narrowed
+            // to sessions we could not see for a while.
+            //
+            // So it resets unconditionally. What that costs is real and is a
+            // one-off: on the first collection after this ships, every session
+            // learns its token and its measured age becomes a floor. What it
+            // buys is that `statusSince` after this stage means *how long THIS
+            // RUN has been in this state*, with no arm where it silently means
+            // something else. The measured age we would have kept was a fact
+            // about the SESSION, and this field stopped being about the session
+            // the moment execution identity existed.
+            statusSince: { kind: "lower-bound", at: event.at },
+          });
+        }
+        break;
+      }
       // THE SCHEDULER'S ARMS, NAMED AND DECIDED RATHER THAN DEFAULTED. The
       // register is sessions and an occurrence is not one, so nothing happens
       // here — and it says so, because a `default:` would absorb them and would
@@ -2126,6 +2452,11 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     // process can know. Minting `"observed"` here is the 13m bug, and it is one
     // word away at all times.
     statusSince: { kind: "lower-bound", at },
+    // A FLOOR TOO, and for exactly the same reason: this run was already going
+    // when we first saw it, so `since` is when the register learned about it
+    // rather than when the process started. The token itself is exact; the
+    // clock beside it is not.
+    verifiedExecution: row.execution.kind === "verified" ? { token: executionTokenText(row.execution.token), since: at } : null,
   };
 }
 
@@ -2190,6 +2521,13 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField> 
  *  - `clock` — the store's own bookkeeping, written by every arm and by none of
  *    the row material. `statusSince` in particular belongs to the STATUS: a
  *    rename that reset it would turn forty minutes of waiting into none.
+ *  - `execution` — `session-execution-changed`, and a first sighting. Its own
+ *    class rather than folded into `pane`, because the whole point of the field
+ *    is that a run can be replaced while the pane is not: sharing an owner with
+ *    `paneId`/`panePid` would say the opposite of what it is for. It is the one
+ *    field whose arm ALSO writes a `clock` field — `statusSince` back to a
+ *    floor, because a new run has not been in its state for its predecessor's
+ *    hours.
  */
 export const ENTRY_FIELD_OWNERS = {
   key: "identity",
@@ -2206,7 +2544,8 @@ export const ENTRY_FIELD_OWNERS = {
   lastSeenAlive: "clock",
   lastStatusKey: "clock",
   statusSince: "clock",
-} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock">;
+  verifiedExecution: "execution",
+} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock" | "execution">;
 
 export function describeOpening(opening: StoreOpening): string {
   const repair = opening.repair.torn

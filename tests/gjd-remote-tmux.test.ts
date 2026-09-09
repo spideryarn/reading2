@@ -67,6 +67,10 @@ const row = (
     kind: string;
     repo: string;
     dir: string;
+    /** The Overseer claim, empty for the overwhelming majority of sessions.
+     *  Encoded here the way the remote script encodes it — see
+     *  tests/gjd-remote-overseer-claim.test.ts, which is where it is exercised. */
+    role: string;
   }> = {},
 ) =>
   [
@@ -83,6 +87,7 @@ const row = (
     o.kind ?? "claude",
     o.repo ?? "gregdetre/reading2",
     b64(o.dir ?? "/home/greg/code/spideryarn2"),
+    b64(o.role ?? ""),
   ].join("|");
 
 /**
@@ -102,6 +107,13 @@ const parsed = (line: string): Session | null => {
  * What the box really printed on 2026-09-01, tmux 3.4, claude 2.1.251, verbatim
  * but for the agents blob, which is trimmed to the three sessions below.
  *
+ * **One edit since, named rather than quietly absorbed**, because the value of
+ * this fixture is that it is a real capture: each row gained a fourteenth field
+ * on 2026-09-08 when the Overseer claim was added, and it is empty on all four
+ * because none of these sessions was the Overseer — the role did not exist. A
+ * record from before that field is refused outright by `parseSessionLine`, which
+ * is the point of the exact field count.
+ *
  * Three states in one reply, and they are the three worth having: a session
  * Claude Code calls `waiting` — parked on a permission prompt nobody has
  * answered — one it calls `busy`, and one that is not in the agents list at all
@@ -115,10 +127,10 @@ const AGENTS_JSON = JSON.stringify([
 
 const REAL = reply(
   [
-    "$36|1788194293|1|1|0|3c67234f-2da6-4208-8473-9b5ee58be82a|claude|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|RGF0YWJhc2UgbW92ZSBjb21wbGV0aW9u||||",
-    "$81|1788259262|1|1|0|49348111-df07-44ac-a204-f2e168f46de5|claude|Z2pkLXJlbW90ZS1scy1zdGF0dXMtaW5kaWNhdG9ycw==|Z2pkLXJlbW90ZSBscyBzdGF0dXMgaW5kaWNhdG9ycw==||||",
-    "$78|1788259066|0|1|1|7d9a25bf-ef51-425f-9ec5-65ada264eb4c|wait:13335|cnVuLWdpdC1jb21taXQtY2hhbmdlcy1tZC10aGVuLXB1bGw=|||||",
-    "$77|1788246895|1|1|0|70852e00-cc1b-4218-9106-4f7b17eb6e34|claude|d29ya3RyZWVzLW1pZ3JhdGlvbi1oaXN0b3J5|V29ya3RyZWVzIG1pZ3JhdGlvbiBoaXN0b3J5||||",
+    "$36|1788194293|1|1|0|3c67234f-2da6-4208-8473-9b5ee58be82a|claude|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|RGF0YWJhc2UgbW92ZSBjb21wbGV0aW9u|||||",
+    "$81|1788259262|1|1|0|49348111-df07-44ac-a204-f2e168f46de5|claude|Z2pkLXJlbW90ZS1scy1zdGF0dXMtaW5kaWNhdG9ycw==|Z2pkLXJlbW90ZSBscyBzdGF0dXMgaW5kaWNhdG9ycw==|||||",
+    "$78|1788259066|0|1|1|7d9a25bf-ef51-425f-9ec5-65ada264eb4c|wait:13335|cnVuLWdpdC1jb21taXQtY2hhbmdlcy1tZC10aGVuLXB1bGw=||||||",
+    "$77|1788246895|1|1|0|70852e00-cc1b-4218-9106-4f7b17eb6e34|claude|d29ya3RyZWVzLW1pZ3JhdGlvbi1oaXN0b3J5|V29ya3RyZWVzIG1pZ3JhdGlvbiBoaXN0b3J5|||||",
   ],
   [`${AGENTS_OK} ${Buffer.from(AGENTS_JSON, "utf8").toString("base64")}`],
 );
@@ -378,6 +390,7 @@ describe("sessionState", () => {
     claudeId: UUID,
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "gregdetre/reading2", dir: "/home/greg/code/spideryarn2" },
+    role: { kind: "none" },
     ...o,
   });
   const agents = (status: string) => new Map([[UUID, status]]);
@@ -796,6 +809,26 @@ describe("buildSessionScript", () => {
   const script = buildSessionScript({ agents: true });
 
   /**
+   * The script with its whole-line comments removed.
+   *
+   * **The breadth below is deliberate and is kept**: the check is for the word
+   * anywhere, not for `tmux display`, because reaching for `display` again to
+   * fetch one more field is how the original bug would come back and a narrow
+   * check would not see it. What the breadth cannot do is tell a COMMAND from
+   * PROSE — and on 2026-09-09 it stopped the build over the word "displayed"
+   * in an explanatory comment, on a script that calls `display` nowhere.
+   *
+   * So the prose is removed and the paranoia is not. Whole-line comments only:
+   * an inline `#` is left alone, so nothing can hide an invocation behind one.
+   */
+  const NEWLINE = String.fromCharCode(10);
+  const executableLines = (text: string): string =>
+    text
+      .split(NEWLINE)
+      .filter((line) => !/^\s*#/.test(line))
+      .join(NEWLINE);
+
+  /**
    * The original bug was asking for the stats per session with `tmux display -p
    * -t "=$name"`. `display` takes a target *pane*, and the `=` exact-match
    * prefix is only honoured on the session part when a colon follows — so tmux
@@ -808,7 +841,7 @@ describe("buildSessionScript", () => {
    * again to fetch one more field is exactly how this would come back.
    */
   it("never asks display for anything", () => {
-    expect(script).not.toContain("display");
+    expect(executableLines(script)).not.toContain("display");
   });
 
   it("gets everything tmux knows from a single untargeted listing", () => {
@@ -1317,6 +1350,7 @@ describe("resolveSession", () => {
     claudeId: null,
     proc: { kind: "none" },
     meta: { version: "legacy" },
+    role: { kind: "none" },
   });
   const live = [s("gateA", "$1"), s("stageDbase", "$2"), s("spideryarn-ui-top-bar-cleanup", "$3")];
 
