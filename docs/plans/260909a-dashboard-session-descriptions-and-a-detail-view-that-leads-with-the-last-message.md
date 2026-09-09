@@ -776,3 +776,66 @@ as footnotes.
   `EarlierMessages` takes only the `found` arm, so the bad composition is not expressible.
 
 Eight tests added (363 total), typecheck clean across 1765 files.
+
+## Stage D: the module is built, and its wiring hit a design question worth stopping on
+
+**Built, tested and committed (`189e234c`): `tools/fleet/notify-overseer.ts` and its 15 tests.** Who to
+tell, what to say, what to record about what became of it — everything impure injected, so all six
+arms of `NotifyOutcome` are reachable with no tmux, no pane and no gateway. Mutation-checked:
+collapsing `cannot-tell` into `no-holder` turns exactly the test that names that distinction red.
+**Not wired**, and the stage is not done until it is.
+
+### F6 is bigger than "add a field", and the reason is `inFlight === record`
+
+Sol's F6 asks for `LaunchRecord` to become a discriminated union so `{state:"started",
+notification:absent}` is unrepresentable. Sizing it against the code turned up a constraint neither of
+us had:
+
+**The launch record is mutated in place, and its object identity is load-bearing.** `launch()` ends
+with `if (inFlight === record)` (`routes-new.ts:893`) — a **reference** comparison that exists because
+of an earlier Sol finding: before the claim was atomic, two launches could be live at once and the
+first to finish cleared the second's slot. That check is what makes the impossible loud. Replacing the
+record object to move it between union arms **breaks that identity**, and repairing it by comparing
+`id` instead would quietly weaken the thing it was built to protect.
+
+Every type-level formulation that preserves identity moves the discriminant off the top level —
+`record.progress = {state, notification}` assigned wholesale, or `state` becoming an object. Both
+change the **wire shape**. And `LaunchRecord` is a **hand-written twin**: the server declares it in
+`routes-new.ts:182` and the client declares it again in `new-session-client.ts:62`, related by nothing
+but hope, with `parseLaunch` reading `v["state"]` as a string. So a rename is invisible to the
+compiler and shows up as `parseLaunch` returning `null` for every record and the panel rendering
+nothing — the exact silent-break class of
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md).
+
+**So F6 done properly is "migrate `/api/sessions/new` behind `wire.ts`"**, where one declaration turns
+both ends red on a change. That is not scope creep invented here — it is **item 1 on
+[260907e](260907e-agent-fleet-dashboard.md)'s own "what is left" list**, and `wire.ts` belongs to
+`claude-agents-dashboard` under a "one new block at the END only" agreement that a new block would
+satisfy.
+
+**Three ways to take it, and this is a decision rather than a preference:**
+
+1. **Migrate the endpoint behind `wire.ts` as part of this stage.** Correct, and it closes a known
+   twin. Costs a stage of its own and lands in another workstream's roadmap item.
+2. **Wire the notification with `notification` as a required top-level field**, no union, plus a test
+   that a `started` record never carries `not-attempted`. Ships tonight; leaves F6 satisfied by a test
+   rather than by the compiler, which is the thing this project keeps saying is not enough.
+3. **Leave Stage D unwired** until the migration is scheduled. The module is committed and inert; no
+   half-join exists.
+
+**Not decided here** — it is the Overseer's to sequence, because option 1 collides with somebody
+else's roadmap and option 2 knowingly accepts a weaker guarantee than a P1 finding asked for.
+Recorded rather than chosen at 1:30am at the end of a long session, which is the condition under which
+option 2 looks most attractive and is least likely to be revisited.
+
+### What remains in Stage D whichever way that goes
+
+- The send in a **child process** with one total deadline (F7): `sendMessage` is synchronous
+  `execFileSync` across as many as six tmux and process calls at 10 s each, and `launch()` runs on the
+  dashboard's event loop. The module already takes an async `send`, so this is wiring rather than
+  redesign.
+- A **re-read of the claim immediately before delivery** (F8): a holder can release the role between
+  the snapshot and the send while staying in the same pane, and every one of `sendMessage`'s guards
+  would still pass. Process identity is not current role ownership.
+- Mark the launch `started` **before** notifying, so the notification can never delay the launch result.
+- The panel line, after `record.note` (`NewSessionPanel.tsx:165-167`).
