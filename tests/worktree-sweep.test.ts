@@ -120,16 +120,19 @@ const HOUR = 3600;
 const now = () => Math.floor(Date.now() / 1000);
 
 describe("classifyAll, against real worktrees", () => {
-  it("KEEPS a brand-new worktree, which passes every check but the age floor", () => {
+  it("does NOT advertise a brand-new worktree, which passes every check but the age floor", () => {
     freshWorktree("brand-new");
 
     const row = rowFor(classifyAll(primary), "worktree-brand-new");
 
-    expect(row.verdict.kind).toBe("keep");
-    if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain(`${MIN_IDLE_HOURS}h floor`);
-    /* And it is the ONLY thing keeping it — the trap the guard exists for. */
-    expect(row.verdict.reasons).toHaveLength(1);
+    /* `young` since 2026-09-09, not `keep`: nothing is wrong with it, and the
+       report still must not hand a third party a paste-ready removal. Printing it
+       as `REMOVABLE` is what this guard exists to prevent, so that is the
+       assertion that matters. */
+    expect(row.verdict.kind).toBe("young");
+    expect(row.verdict.kind).not.toBe("removable");
+    if (row.verdict.kind !== "young") throw new Error("unreachable");
+    expect(row.verdict.why).toContain(`${MIN_IDLE_HOURS}h floor`);
     expect(row.facts.check).not.toHaveProperty("error");
   });
 

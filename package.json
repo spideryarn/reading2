@@ -8,6 +8,7 @@
     "worktree:setup": "tsx scripts/worktree-setup.ts",
     "worktree:sweep": "tsx scripts/worktree-sweep.ts",
     "worktree:check": "tsx scripts/worktree-check.ts",
+    "worktree:remove": "tsx scripts/worktree-remove.ts",
     "lint": "biome lint --max-diagnostics=none .",
     "lint:fix": "biome lint --write --max-diagnostics=none .",
     "cycles": "biome lint --only=suspicious/noImportCycles .",

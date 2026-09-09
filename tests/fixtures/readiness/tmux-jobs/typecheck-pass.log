@@ -1,0 +1,9 @@
+
+> spideryarn@1.0.0 typecheck
+> tsx scripts/typecheck.ts
+
+✓ src/web/tsconfig.json  (309 files)
+✓ tests/tsconfig.json  (1387 files)
+✓ tsconfig.json  (419 files)
+✓ all 1461 source files are covered by some project
+EXIT=0

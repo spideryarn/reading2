@@ -36,7 +36,32 @@
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
  */
-export type Speaker = "greg" | "overseer";
+export type Speaker = "greg" | "overseer" | "dashboard";
+
+/*
+ * **`dashboard` IS A REPORT, NEVER AN INSTRUCTION, AND THE ARM SPLITS IF THAT
+ * STOPS BEING TRUE.** Added 2026-09-09 for the line the web UI sends when a
+ * person starts a new session, so the receiving agent is told an event happened
+ * rather than asked for anything.
+ *
+ * It is a third arm rather than a reuse of either existing one, and both
+ * alternatives were wrong in the direction this type exists to prevent.
+ * `greg` would mint his authority for something nobody instructed — the exact
+ * failure A12 names. `overseer` would attribute a notification to a coordinator
+ * that did not send it. A person acted and software is reporting it, which is
+ * neither.
+ *
+ * So its prefix says plainly that nothing is being asked, which the other two
+ * do not need to say because both of theirs ARE asking something. The wording
+ * was reviewed by the session that receives it, which is a better test of it
+ * than the judgement of the session that wrote it.
+ *
+ * **If anything ever goes through this arm that IS an instruction, the prefix
+ * becomes a false statement** and this must split into two arms rather than
+ * having its wording softened. Do not reach for `dashboard` as a
+ * general-purpose "not Greg" speaker; that is what `overseer` is, and it says
+ * so.
+ */
 
 /* ------------------------------------------------------------------ *
  * The spoken half of the vocabulary.
