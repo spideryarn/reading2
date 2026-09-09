@@ -69,17 +69,18 @@ function decided(
     ...eventEnvelope("overseer"),
     kind: "decided",
     id,
-    decidedBy: "overseer",
+    decidedAt: "2026-09-09T09:59:00.000Z",
     class: "decision",
     question: "Which implementation should we use?",
     options: [
       { name: "Simple", tradeoffs: "Less flexible, but cheap to understand." },
       { name: "General", tradeoffs: "More flexible, but adds machinery." },
     ],
-    decision: "Use the simple implementation.",
+    chose: { option: "Simple", note: "Use the simple implementation." },
     why: "No current use needs the machinery.",
     advisers: ["nobody"],
     bearsOn: { sessions: [], plan: null },
+    supersedes: null,
     ...over,
   };
 }
@@ -137,13 +138,41 @@ describe("strict event parsing", () => {
     ["at", { at: "Tuesday lunchtime" }],
     ["by", { by: "daemon" }],
     ["id", { id: "dec-with-i" }],
-    ["decidedBy", { decidedBy: "greg" }],
     ["class", { class: "guess" }],
     ["question", { question: "  " }],
-    ["decision", { decision: "" }],
+    ["decidedAt", { decidedAt: "Tuesday lunchtime" }],
     ["why", { why: "\n" }],
   ] as const)("rejects an unknown, missing, or invalid %s", (_field, patch) => {
     expect(parseEvent(JSON.stringify({ ...decided(), ...patch }))).toBeNull();
+  });
+
+  test("rejects a stale decidedBy key even when its old value is overseer", () => {
+    expect(parseEvent(JSON.stringify({ ...decided(), decidedBy: "overseer" }))).toBeNull();
+    expect(
+      parseEvent(JSON.stringify({ ...eventEnvelope("greg"), kind: "reviewed", id: A, note: null, decidedBy: "overseer" })),
+    ).toBeNull();
+  });
+
+  test("requires a choice naming a listed option, compared after trimming", () => {
+    const withoutChoice = { ...decided() } as Record<string, unknown>;
+    delete withoutChoice["chose"];
+    expect(parseEvent(JSON.stringify(withoutChoice))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...decided(), chose: { option: "Unlisted", note: null } }))).toBeNull();
+    const spaced = decided(A, {
+      options: [
+        { name: "  Simple  ", tradeoffs: "Less flexible, but cheap to understand." },
+        { name: "General", tradeoffs: "More flexible, but adds machinery." },
+      ],
+      chose: { option: " Simple ", note: null },
+    });
+    expect(parseEvent(asLine(spaced))).toEqual(spaced);
+  });
+
+  test("requires a nullable supersedes field containing a decision id", () => {
+    const missing = { ...decided() } as Record<string, unknown>;
+    delete missing["supersedes"];
+    expect(parseEvent(JSON.stringify(missing))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...decided(), supersedes: "not-an-id" }))).toBeNull();
   });
 
   test.each(["schema", "kind", "eventId", "commandId", "at", "by", "id"])("rejects a missing envelope field: %s", (field) => {
@@ -190,6 +219,36 @@ describe("strict event parsing", () => {
     expect(parseEvent(JSON.stringify({ ...decided(), advisers: ["nobody", "sol"] }))).toBeNull();
   });
 
+  test("each execution-reference arm round-trips", () => {
+    const base = decided();
+    const event = {
+      ...base,
+      bearsOn: {
+        sessions: [
+          { name: "verified", execution: { kind: "verified", token: "boot:42:7", since: "2026-09-09T09:00:00.000Z" } },
+          { name: "missing", execution: { kind: "not-found" } },
+          { name: "unknown", execution: { kind: "unavailable", why: "checkpoint unreadable" } },
+        ],
+        plan: null,
+      },
+    };
+    expect(parseEvent(JSON.stringify(event))).toEqual(event);
+  });
+
+  test("rejects a malformed execution reference", () => {
+    const base = decided();
+    for (const execution of [
+      { kind: "verified", token: "boot:42:7", since: "yesterday" },
+      { kind: "verified", token: "", since: "2026-09-09T09:00:00.000Z" },
+      { kind: "unavailable", why: " " },
+      { kind: "invented" },
+    ]) {
+      expect(
+        parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [{ name: "worker", execution }], plan: null } })),
+      ).toBeNull();
+    }
+  });
+
   test("rejects duplicate session names", () => {
     const base = decided();
     expect(
@@ -198,8 +257,8 @@ describe("strict event parsing", () => {
           ...base,
           bearsOn: {
             sessions: [
-              { name: "worker", executionToken: "boot:42:7" },
-              { name: "worker", executionToken: null },
+              { name: "worker", execution: { kind: "not-found" } },
+              { name: "worker", execution: { kind: "unavailable", why: "could not look" } },
             ],
             plan: null,
           },
@@ -211,10 +270,10 @@ describe("strict event parsing", () => {
   test("rejects blank session names and malformed nested fields", () => {
     const base = decided();
     expect(
-      parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [{ name: "  ", executionToken: null }], plan: null } })),
+      parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [{ name: "  ", execution: { kind: "not-found" } }], plan: null } })),
     ).toBeNull();
     expect(
-      parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [{ name: "worker", executionToken: 42 }], plan: null } })),
+      parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [{ name: "worker", execution: null }], plan: null } })),
     ).toBeNull();
     expect(parseEvent(JSON.stringify({ ...base, bearsOn: { sessions: [], plan: 42 } }))).toBeNull();
   });
@@ -258,44 +317,35 @@ describe("the fold protects the review state", () => {
 
   test("a second decided event is a problem and cannot replace the first", () => {
     const first = decided();
-    const view = foldDecisions([first, decided(A, { decision: "Replace the decision" })]);
+    const view = foldDecisions([first, decided(A, { chose: { option: "General", note: "Replace the decision" } })]);
     expect(view.problems.map((problem) => problem.kind)).toEqual(["duplicate-decision"]);
-    expect(only(view).decision).toBe(first.decision);
+    expect(only(view).chose).toEqual(first.chose);
     expect(only(view).touches).toHaveLength(1);
   });
 
-  test("a duplicate eventId is a problem, while a duplicate commandId is a silent retry", () => {
+  test("an identical command retry is a no-op, while a differing payload is a conflict", () => {
     const first = decided(A, { ...eventEnvelope("overseer", undefined, "add-a") });
-    const duplicateEvent: DecisionEvent = {
-      ...eventEnvelope("greg", undefined, "review-a"),
-      eventId: first.eventId,
-      kind: "reviewed",
-      id: A,
-      note: null,
-    };
-    const duplicateCommand: DecisionEvent = {
-      ...eventEnvelope("greg", undefined, "add-a"),
-      kind: "reviewed",
-      id: A,
-      note: "a retry with different bytes is still the same command",
-    };
-    const view = foldDecisions([first, duplicateEvent, duplicateCommand]);
+    const retry = { ...first, eventId: eventEnvelope().eventId };
+    const conflict = { ...retry, eventId: eventEnvelope().eventId, why: "different bytes" };
+    const view = foldDecisions([first, retry, conflict]);
+    expect(view.problems.map((problem) => problem.kind)).toEqual(["command-conflict"]);
+    expect(only(view).touches).toHaveLength(1);
+    expect(view.version).toEqual({ events: 3, lastEventId: conflict.eventId });
+  });
+
+  test("a duplicate eventId is caught even when its commandId is also duplicated", () => {
+    const first = decided(A, { ...eventEnvelope("overseer", undefined, "add-a") });
+    const collision = { ...first };
+    const view = foldDecisions([first, collision]);
     expect(view.problems.map((problem) => problem.kind)).toEqual(["duplicate-event"]);
     expect(only(view).reviewed).toBe(false);
-    expect(only(view).touches).toHaveLength(1);
-    expect(view.version).toEqual({ events: 3, lastEventId: duplicateCommand.eventId });
   });
 
-  test("an event id on a silently dropped command retry is still consumed", () => {
+  test("an exact retry's event id is consumed for later duplicate detection", () => {
     const first = decided(A, { ...eventEnvelope("overseer", undefined, "add-a") });
-    const retry: DecisionEvent = {
-      ...eventEnvelope("greg", undefined, "add-a"),
-      kind: "reviewed",
-      id: A,
-      note: null,
-    };
+    const retry = { ...first, eventId: eventEnvelope().eventId };
     const reused: DecisionEvent = {
-      ...eventEnvelope("greg", undefined, "different-command"),
+      ...eventEnvelope("greg", undefined, "review-a"),
       eventId: retry.eventId,
       kind: "reviewed",
       id: A,
@@ -306,13 +356,90 @@ describe("the fold protects the review state", () => {
     expect(only(view).reviewed).toBe(false);
   });
 
+  test("a decision dated after its envelope is a problem", () => {
+    const view = foldDecisions([
+      decided(A, { at: "2026-09-09T10:00:00.000Z", decidedAt: "2026-09-09T10:00:00.001Z" }),
+    ]);
+    expect(view.problems.map((problem) => problem.kind)).toEqual(["illegal-transition"]);
+    expect(view.records).toEqual([]);
+  });
+
   test("a review dated before the decision is a problem and leaves it unreviewed", () => {
     const view = foldDecisions([
-      decided(A, { at: "2026-09-09T12:00:00.000Z" }),
-      { ...eventEnvelope("greg", "2026-09-09T11:59:59.000Z"), kind: "reviewed", id: A, note: null },
+      decided(A, { at: "2026-09-09T12:00:00.000Z", decidedAt: "2026-09-09T11:00:00.000Z" }),
+      { ...eventEnvelope("greg", "2026-09-09T10:59:59.000Z"), kind: "reviewed", id: A, note: null },
     ]);
     expect(view.problems.map((problem) => problem.kind)).toEqual(["illegal-transition"]);
     expect(only(view).reviewed).toBe(false);
+
+    const writtenLater = foldDecisions([
+      decided(A, { at: "2026-09-09T12:00:00.000Z", decidedAt: "2026-09-09T11:00:00.000Z" }),
+      { ...eventEnvelope("greg", "2026-09-09T11:30:00.000Z"), kind: "reviewed", id: A, note: null },
+    ]);
+    expect(writtenLater.problems).toEqual([]);
+    expect(only(writtenLater).reviewed).toBe(true);
+  });
+
+  test("superseding requires an existing, earlier target and rejects self-reference", () => {
+    const missing = foldDecisions([decided(B, { supersedes: A })]);
+    expect(missing.problems.map((problem) => problem.kind)).toEqual(["invalid-supersession"]);
+    expect(missing.records).toEqual([]);
+
+    const self = foldDecisions([decided(A), decided(A, { supersedes: A, decidedAt: "2026-09-09T09:59:30.000Z" })]);
+    expect(self.problems.map((problem) => problem.kind)).toEqual(["invalid-supersession"]);
+    expect(self.problems[0]?.why).toContain("cannot supersede itself");
+
+    const laterTarget = decided(A, { decidedAt: "2026-09-09T09:59:30.000Z" });
+    const earlierSuccessor = decided(B, { decidedAt: "2026-09-09T09:59:00.000Z", supersedes: A });
+    const later = foldDecisions([laterTarget, earlierSuccessor]);
+    expect(later.problems.map((problem) => problem.kind)).toEqual(["invalid-supersession"]);
+    expect(later.records).toHaveLength(1);
+  });
+
+  test("one record can be superseded only once", () => {
+    const C = "dec-cccccccc";
+    const view = foldDecisions([
+      decided(A, { decidedAt: "2026-09-09T09:57:00.000Z" }),
+      decided(B, { decidedAt: "2026-09-09T09:58:00.000Z", supersedes: A }),
+      decided(C, { decidedAt: "2026-09-09T09:59:00.000Z", supersedes: A }),
+    ]);
+    expect(view.problems.map((problem) => problem.kind)).toEqual(["invalid-supersession"]);
+    expect(only(view, A).supersededBy).toBe(B);
+    expect(view.records.map((record) => record.id)).toEqual([A, B]);
+  });
+
+  test("a supersession chain cannot cycle", () => {
+    const view = foldDecisions([
+      decided(A, { decidedAt: "2026-09-09T09:57:00.000Z" }),
+      decided(B, { decidedAt: "2026-09-09T09:58:00.000Z", supersedes: A }),
+      decided(A, { decidedAt: "2026-09-09T09:59:00.000Z", supersedes: B }),
+    ]);
+    expect(view.problems.map((problem) => problem.kind)).toEqual(["invalid-supersession"]);
+    expect(only(view, A).supersedes).toBeNull();
+    expect(only(view, B).supersedes).toBe(A);
+  });
+
+  test("supersession replaces an unreviewed row and adds a pending row after review", () => {
+    const unreviewed = foldDecisions([
+      decided(A, { decidedAt: "2026-09-09T09:57:00.000Z" }),
+      decided(B, { decidedAt: "2026-09-09T09:58:00.000Z", supersedes: A }),
+    ]);
+    expect(unreviewed.records.filter((record) => !record.reviewed && record.supersededBy === null)).toHaveLength(1);
+
+    const reviewedBefore = foldDecisions([
+      decided(A, { decidedAt: "2026-09-09T09:57:00.000Z" }),
+      { ...eventEnvelope("greg", "2026-09-09T09:58:00.000Z"), kind: "reviewed", id: A, note: null },
+    ]);
+    const reviewed = foldDecisions([
+      decided(A, { decidedAt: "2026-09-09T09:57:00.000Z" }),
+      { ...eventEnvelope("greg", "2026-09-09T09:58:00.000Z"), kind: "reviewed", id: A, note: null },
+      decided(B, { decidedAt: "2026-09-09T09:59:00.000Z", supersedes: A }),
+    ]);
+    const pendingBefore = reviewedBefore.records.filter((record) => !record.reviewed && record.supersededBy === null).length;
+    const pendingAfter = reviewed.records.filter((record) => !record.reviewed && record.supersededBy === null).length;
+    expect(pendingAfter).toBe(pendingBefore + 1);
+    expect(only(reviewed, A)).toMatchObject({ reviewed: true, supersededBy: B });
+    expect(only(reviewed, B)).toMatchObject({ reviewed: false, supersedes: A, supersededBy: null });
   });
 
   test("Greg reversing implies review, records the touch, and is terminal", () => {
@@ -372,6 +499,49 @@ describe("reading and appending", () => {
     expect(existsSync(join(root, DECISIONS_INIT_FILE))).toBe(true);
     expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(`${asLine(event)}\n`);
     expect(result.view.version).toEqual({ events: 1, lastEventId: event.eventId });
+  });
+
+  test("an identical command retry returns the original result without appending", () => {
+    const root = tempRoot();
+    const firstEvent = decided(A, { ...eventEnvelope("overseer", undefined, "command-a") });
+    const first = appendEvents([firstEvent], { root });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(first.why);
+    const before = readFileSync(join(root, DECISIONS_FILE), "utf8");
+    const retry = { ...firstEvent, eventId: eventEnvelope().eventId };
+
+    const result = appendEvents([retry], { root });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.why);
+    expect(result.view).toEqual(first.view);
+    expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(before);
+  });
+
+  test("a reused command id with a different payload is refused as a command conflict", () => {
+    const root = tempRoot();
+    const firstEvent = decided(A, { ...eventEnvelope("overseer", undefined, "command-a") });
+    expect(appendEvents([firstEvent], { root }).ok).toBe(true);
+    const before = readFileSync(join(root, DECISIONS_FILE), "utf8");
+    const conflict = { ...firstEvent, eventId: eventEnvelope().eventId, why: "different bytes" };
+
+    const result = appendEvents([conflict], { root });
+
+    expect(result).toMatchObject({ ok: false, code: "command-conflict" });
+    expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(before);
+  });
+
+  test("append reports duplicate-event even when the command id is duplicated too", () => {
+    const root = tempRoot();
+    const firstEvent = decided(A, { ...eventEnvelope("overseer", undefined, "command-a") });
+    expect(appendEvents([firstEvent], { root }).ok).toBe(true);
+    const before = readFileSync(join(root, DECISIONS_FILE), "utf8");
+
+    const result = appendEvents([{ ...firstEvent }], { root });
+
+    expect(result).toMatchObject({ ok: false, code: "would-break" });
+    expect(result.ok ? "unexpected success" : result.why).toContain("duplicate-event");
+    expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(before);
   });
 
   test("stale versions and a held lock refuse without changing the file", () => {

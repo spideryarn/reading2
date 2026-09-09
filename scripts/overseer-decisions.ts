@@ -4,7 +4,6 @@
  *
  *     npx tsx scripts/overseer-decisions.ts template > /tmp/decision.json
  *     npx tsx scripts/overseer-decisions.ts add --file /tmp/decision.json --by overseer
- *     npx tsx scripts/overseer-decisions.ts list --unreviewed
  *
  * The template is the ergonomic centre: the Overseer writes these while work
  * is moving, and one structured file is easier to inspect than nine shell flags
@@ -21,10 +20,9 @@
  * constraint rather than an OS boundary. Saying otherwise would advertise a
  * protection the file does not have.
  *
- * Session execution tokens are looked up at decision time, the only moment a
- * reusable pane name can still be joined to a particular run. Missing,
- * unreadable, and ambiguous register entries all become null; inventing an
- * identity or refusing the decision would destroy the fact we actually know.
+ * Session executions are looked up at decision time, the only moment a reusable
+ * pane name can still be joined to a particular run. The three result arms keep
+ * "not there" separate from "could not look" without ever refusing a decision.
  *
  * `console.log` is correct here: docs/project/logging.md's rule follows the
  * destination, and this destination is a terminal rather than a server log.
@@ -66,20 +64,16 @@ const TEMPLATE = `// Copy this to a file, replace the examples, then run:
     { "name": "Small", "tradeoffs": "Ships quickly, with fewer extension points." },
     { "name": "General", "tradeoffs": "Handles imagined cases, with more machinery." }
   ],
-  "decision": "Use the small shape.",
+  "chose": { "option": "Small", "note": "Use the small shape." },
   "why": "There is no demonstrated need for the extension points.",
   "advisers": ["nobody"],
-  "bearsOn": { "sessions": [], "plan": null }
+  "bearsOn": { "sessions": [], "plan": null },
+  "supersedes": null
 }`;
 
 function actor(value: string): DecisionActor {
   if (value === "greg" || value === "overseer") return value;
   throw new InvalidArgumentError(`actor must be 'greg' or 'overseer', not '${value}'`);
-}
-
-function decisionClass(value: string): DecisionClass {
-  if (value === "assumption" || value === "decision" || value === "decline") return value;
-  throw new InvalidArgumentError(`class must be 'assumption', 'decision', or 'decline', not '${value}'`);
 }
 
 function decisionId(value: string): string {
@@ -90,7 +84,6 @@ function decisionId(value: string): string {
 export type Parsed =
   | { command: "template" }
   | { command: "add"; file: string; by: DecisionActor; commandId: string | null }
-  | { command: "list"; class: DecisionClass | null; unreviewed: boolean; json: boolean }
   | { command: "show"; id: string }
   | { command: "export" }
   | { command: "reviewed"; id: string; by: DecisionActor; note: string | null }
@@ -111,16 +104,6 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
     .option("--command-id <id>", "idempotency key for a retry")
     .action((opts: { file: string; by: DecisionActor; commandId?: string }) =>
       sink({ command: "add", file: opts.file, by: opts.by, commandId: opts.commandId ?? null }),
-    );
-
-  program
-    .command("list")
-    .description("list decisions in log order")
-    .option("--class <class>", "assumption, decision, or decline", decisionClass)
-    .option("--unreviewed", "only decisions Greg has not reviewed", false)
-    .option("--json", "print the folded view as JSON", false)
-    .action((opts: { class?: DecisionClass; unreviewed: boolean; json: boolean }) =>
-      sink({ command: "list", class: opts.class ?? null, unreviewed: opts.unreviewed, json: opts.json }),
     );
 
   program
@@ -204,11 +187,12 @@ type AddInput = {
   class: DecisionClass;
   question: string;
   options: readonly DecisionOption[];
-  decision: string;
+  chose: { readonly option: string; readonly note: string | null };
   why: string;
   advisers: readonly Adviser[];
   sessionNames: readonly string[];
   plan: string | null;
+  supersedes: string | null;
 };
 
 /** Full-line comments are the only extension the generated template needs. */
@@ -242,17 +226,21 @@ function parseAddInput(text: string): AddInput {
     ...envelope("overseer", { at: "2026-09-09T00:00:00.000Z" }),
     kind: "decided",
     id: "dec-22222222",
-    decidedBy: "overseer",
+    decidedAt: "2026-09-09T00:00:00.000Z",
     class: value["class"],
     question: value["question"],
     options: value["options"],
-    decision: value["decision"],
+    chose: value["chose"],
     why: value["why"],
     advisers: value["advisers"],
     bearsOn: {
-      sessions: sessionNames.map((name) => ({ name, executionToken: null })),
+      sessions: sessionNames.map((name) => ({
+        name,
+        execution: { kind: "unavailable", why: "provisional CLI validation" },
+      })),
       plan: value["bearsOn"]["plan"],
     },
+    supersedes: value["supersedes"],
   };
   const checked = parseEvent(JSON.stringify(provisional));
   if (checked === null || checked.kind !== "decided") {
@@ -262,35 +250,71 @@ function parseAddInput(text: string): AddInput {
     class: checked.class,
     question: checked.question,
     options: checked.options,
-    decision: checked.decision,
+    chose: checked.chose,
     why: checked.why,
     advisers: checked.advisers,
     sessionNames,
     plan: checked.bearsOn.plan,
+    supersedes: checked.supersedes,
   };
 }
 
-function registerEntries(env: NodeJS.ProcessEnv): readonly RegisterEntry[] {
+type RegisterLookup =
+  | { readonly kind: "available"; readonly entries: readonly RegisterEntry[] }
+  | { readonly kind: "unavailable"; readonly why: string };
+
+function registerEntries(env: NodeJS.ProcessEnv, nowMs: number = Date.now()): RegisterLookup {
   try {
     const read = readCheckpoint(storeRoot(env));
-    return read.kind === "checkpoint" ? read.checkpoint.register : [];
-  } catch {
+    if (read.kind === "absent") return { kind: "unavailable", why: "the Overseer checkpoint is absent" };
+    if (read.kind === "unusable") {
+      return { kind: "unavailable", why: `the Overseer checkpoint is unreadable (${read.why}: ${read.detail})` };
+    }
+    const checkpoint = read.checkpoint;
+    if (checkpoint.lastGoodSnapshotAt === null) {
+      return { kind: "unavailable", why: "the Overseer checkpoint has no accepted snapshot" };
+    }
+    if (checkpoint.snapshotStaleAfterMs === null) {
+      return { kind: "unavailable", why: "the Overseer checkpoint has no snapshot staleness bound" };
+    }
+    const ageMs = nowMs - Date.parse(checkpoint.lastGoodSnapshotAt);
+    if (ageMs > checkpoint.snapshotStaleAfterMs) {
+      return {
+        kind: "unavailable",
+        why:
+          `the Overseer checkpoint is stale (${Math.round(ageMs / 1000)}s old; ` +
+          `its bound is ${Math.round(checkpoint.snapshotStaleAfterMs / 1000)}s)`,
+      };
+    }
+    return { kind: "available", entries: checkpoint.register };
+  } catch (cause) {
     // A bad store setting or unreadable checkpoint is an unavailable identity
     // source, not permission to invent one and not a reason to lose the record.
-    return [];
+    return { kind: "unavailable", why: `the Overseer checkpoint could not be read: ${String(cause)}` };
   }
 }
 
 function resolveSessions(names: readonly string[], env: NodeJS.ProcessEnv): SessionRef[] {
-  const entries = registerEntries(env);
+  const lookup = registerEntries(env);
+  if (lookup.kind === "unavailable") {
+    return names.map((name) => ({ name, execution: { kind: "unavailable", why: lookup.why } }));
+  }
   return names.map((name) => {
-    const matches = entries.filter((entry) => entry.name === name);
+    const matches = lookup.entries.filter((entry) => entry.name === name);
     if (matches.length > 1) {
-      console.log(`session ${name} is ambiguous in the register (${matches.length} entries); stored executionToken null`);
-      return { name, executionToken: null };
+      const why = `session ${name} is ambiguous in the register (${matches.length} entries)`;
+      console.log(`${why}; stored execution unavailable`);
+      return { name, execution: { kind: "unavailable", why } };
     }
     const match = matches[0];
-    return { name, executionToken: match?.verifiedExecution?.token ?? null };
+    if (match === undefined) return { name, execution: { kind: "not-found" } };
+    if (match.verifiedExecution === null) {
+      return {
+        name,
+        execution: { kind: "unavailable", why: `the register has no verified execution for session ${name}` },
+      };
+    }
+    return { name, execution: { kind: "verified", ...match.verifiedExecution } };
   });
 }
 
@@ -325,36 +349,22 @@ export function runParsed(
       const text = parsed.file === "-" ? readStdin() : readFileSync(path.resolve(parsed.file), "utf8");
       const input = parseAddInput(text);
       const bearsOn: BearsOn = { sessions: resolveSessions(input.sessionNames, env), plan: input.plan };
+      const eventEnvelope = envelope(parsed.by, { commandId: parsed.commandId });
       const event: DecisionEvent = {
-        ...envelope(parsed.by, { commandId: parsed.commandId }),
+        ...eventEnvelope,
         kind: "decided",
         id: mintId(),
-        decidedBy: "overseer",
+        decidedAt: eventEnvelope.at,
         class: input.class,
         question: input.question,
         options: input.options,
-        decision: input.decision,
+        chose: input.chose,
         why: input.why,
         advisers: input.advisers,
         bearsOn,
+        supersedes: input.supersedes,
       };
       return appendOne(event, root);
-    }
-    case "list": {
-      const view = requireView(root);
-      const records = view.records.filter(
-        (record) => (parsed.class === null || record.class === parsed.class) && (!parsed.unreviewed || !record.reviewed),
-      );
-      if (parsed.json) {
-        console.log(JSON.stringify({ ...view, records }, null, 2));
-        return 0;
-      }
-      if (records.length === 0) console.log("no decisions match");
-      for (const record of records) {
-        console.log(`${record.reviewed ? "✓" : "?"} ${record.id}  ${record.class}  ${record.question}`);
-      }
-      if (view.problems.length > 0) console.log(`! ${view.problems.length} problem(s) in the decision record`);
-      return 0;
     }
     case "show": {
       const record = requireView(root).records.find((candidate) => candidate.id === parsed.id);

@@ -39,6 +39,19 @@
  * replaces. Claiming stronger identity here would be worse than naming the
  * limit; a device-scoped write boundary is a separate, still-open decision.
  *
+ * Every `decided` row in V1 is Overseer-originated. That is a schema invariant,
+ * not a per-row `decidedBy` field: an `assumption` unblocks work under Greg's
+ * standing decision, so saying the Overseer decided it would be false. The
+ * envelope's `by` says only who wrote the line.
+ *
+ * A verified session reference is the register's last verified run for that
+ * name as of the checkpoint. `verifiedExecution` is sticky through observations
+ * that cannot verify a run, which is why its `since` travels with the token. An
+ * absent, unreadable, or stale checkpoint and an ambiguous name are
+ * `unavailable`, never `not-found`. The token makes later event-log measurement
+ * joinable off the request path, not correct: that can yield observed
+ * run-lifetime, still not work attributable to this decision.
+ *
  * ## A corrupt record must not read as an empty one
  *
  * This file is original human input, not disposable cache. The initialisation
@@ -73,7 +86,12 @@ export const DECISIONS_INIT_FILE = "decisions.created";
 export type DecisionClass = "assumption" | "decision" | "decline";
 export type Adviser = "sol" | "fable" | "nobody";
 export type DecisionOption = { readonly name: string; readonly tradeoffs: string };
-export type SessionRef = { readonly name: string; readonly executionToken: string | null };
+export type DecisionChoice = { readonly option: string; readonly note: string | null };
+export type ExecutionRef =
+  | { readonly kind: "verified"; readonly token: string; readonly since: string }
+  | { readonly kind: "not-found" }
+  | { readonly kind: "unavailable"; readonly why: string };
+export type SessionRef = { readonly name: string; readonly execution: ExecutionRef };
 export type BearsOn = { readonly sessions: readonly SessionRef[]; readonly plan: string | null };
 
 /** The same two recorders the queue admits; this is who recorded, not who decided. */
@@ -85,7 +103,7 @@ export type Envelope = {
   readonly eventId: string;
   readonly commandId: string | null;
   readonly at: string;
-  /** Who RECORDED the event. `decidedBy` below answers a different question. */
+  /** Who recorded this line; every decision's Overseer origin is invariant. */
   readonly by: DecisionActor;
 };
 
@@ -94,15 +112,15 @@ export type DecisionEvent = Envelope &
     | {
         readonly kind: "decided";
         readonly id: string;
-        /** V1 records only delegated decisions; Greg's own calls do not await his review. */
-        readonly decidedBy: "overseer";
+        readonly decidedAt: string;
         readonly class: DecisionClass;
         readonly question: string;
         readonly options: readonly DecisionOption[];
-        readonly decision: string;
+        readonly chose: DecisionChoice;
         readonly why: string;
         readonly advisers: readonly Adviser[];
         readonly bearsOn: BearsOn;
+        readonly supersedes: string | null;
       }
     | { readonly kind: "reviewed"; readonly id: string; readonly note: string | null }
     | { readonly kind: "reversed"; readonly id: string; readonly why: string | null }
@@ -124,6 +142,8 @@ export type DecisionProblemKind =
   | "duplicate-decision"
   | "unknown-decision"
   | "duplicate-event"
+  | "command-conflict"
+  | "invalid-supersession"
   | "illegal-transition";
 
 /** Collected rather than thrown: one bad line must not take down the whole reader. */
@@ -136,17 +156,18 @@ export type DecisionProblem = {
 /** A decision as replay leaves it; the source fields are never amended in V1. */
 export type DecisionRecord = {
   readonly id: string;
-  readonly decidedBy: "overseer";
-  /** Who wrote the `decided` line, separate from who exercised the delegated judgement. */
+  /** Who wrote the `decided` line. V1's Overseer origin is invariant. */
   readonly recordedBy: DecisionActor;
   readonly class: DecisionClass;
   readonly question: string;
   readonly options: readonly DecisionOption[];
-  readonly decision: string;
+  readonly chose: DecisionChoice;
   readonly why: string;
   readonly advisers: readonly Adviser[];
   readonly bearsOn: BearsOn;
   readonly decidedAt: string;
+  readonly supersedes: string | null;
+  readonly supersededBy: string | null;
   readonly reviewed: boolean;
   readonly reviewedAt: string | null;
   readonly reviewNote: string | null;
@@ -197,16 +218,17 @@ export const EMPTY_VIEW: DecisionView = {
 
 type MutableDecision = {
   id: string;
-  decidedBy: "overseer";
   recordedBy: DecisionActor;
   class: DecisionClass;
   question: string;
   options: DecisionOption[];
-  decision: string;
+  chose: DecisionChoice;
   why: string;
   advisers: Adviser[];
   bearsOn: { sessions: SessionRef[]; plan: string | null };
   decidedAt: string;
+  supersedes: string | null;
+  supersededBy: string | null;
   reviewed: boolean;
   reviewedAt: string | null;
   reviewNote: string | null;
@@ -227,6 +249,41 @@ function describeTouch(event: DecisionEvent): string {
   }
 }
 
+/** Stable schema order makes "same bytes apart from eventId" independent of object insertion order. */
+function commandPayload(event: DecisionEvent): string {
+  const common = {
+    schema: event.schema,
+    commandId: event.commandId,
+    at: event.at,
+    by: event.by,
+    kind: event.kind,
+    id: event.id,
+  };
+  switch (event.kind) {
+    case "decided":
+      return JSON.stringify({
+        ...common,
+        decidedAt: event.decidedAt,
+        class: event.class,
+        question: event.question,
+        options: event.options,
+        chose: event.chose,
+        why: event.why,
+        advisers: event.advisers,
+        bearsOn: event.bearsOn,
+        supersedes: event.supersedes,
+      });
+    case "reviewed":
+      return JSON.stringify({ ...common, note: event.note });
+    case "reversed":
+      return JSON.stringify({ ...common, why: event.why });
+  }
+}
+
+function sameCommandPayload(a: DecisionEvent, b: DecisionEvent): boolean {
+  return commandPayload(a) === commandPayload(b);
+}
+
 /**
  * Replay events into records without throwing.
  *
@@ -243,7 +300,7 @@ export function foldDecisions(
   const order: string[] = [];
   const problems: DecisionProblem[] = [...seedProblems];
   const eventIds = new Set<string>();
-  const commandIds = new Set<string>();
+  const commands = new Map<string, DecisionEvent>();
   let lastEventId: string | null = null;
 
   const problem = (kind: DecisionProblemKind, why: string, eventId: string | null): void => {
@@ -253,27 +310,76 @@ export function foldDecisions(
   for (const event of events) {
     lastEventId = event.eventId;
 
-    /* A repeated command is the caller saying "I did not get the answer"; it
-       is dropped silently because idempotent retry is expected operation. A
-       repeated event id with a different/no command is different: two claimed
-       history entries share an identity, which is malformed provenance and is
-       therefore a visible problem. Check the retry first so replaying the exact
-       same command stays the harmless case it was designed to be. */
-    if (event.commandId !== null && commandIds.has(event.commandId)) {
-      // It does not affect a record, but its event identity still appeared in
-      // the history. Consume it so a later, different command cannot reuse that
-      // id and evade the duplicate-event rule.
-      eventIds.add(event.eventId);
-      continue;
-    }
-    if (event.commandId !== null) commandIds.add(event.commandId);
+    /* Event identity comes first: a repeated command must never mask two lines
+       claiming the same event id. Only then can identical payload be a retry. */
     if (eventIds.has(event.eventId)) {
       problem("duplicate-event", `event id ${event.eventId} appears more than once; the later event was ignored`, event.eventId);
       continue;
     }
     eventIds.add(event.eventId);
+    if (event.commandId !== null) {
+      const original = commands.get(event.commandId);
+      if (original !== undefined) {
+        if (sameCommandPayload(original, event)) continue;
+        problem(
+          "command-conflict",
+          `command id ${event.commandId} was reused with a different payload; the later event was ignored`,
+          event.eventId,
+        );
+        continue;
+      }
+      commands.set(event.commandId, event);
+    }
 
     if (event.kind === "decided") {
+      if (Date.parse(event.decidedAt) > Date.parse(event.at)) {
+        problem(
+          "illegal-transition",
+          `${event.id} was decided at ${event.decidedAt}, after its line was written at ${event.at}`,
+          event.eventId,
+        );
+        continue;
+      }
+      let superseded: MutableDecision | undefined;
+      if (event.supersedes !== null) {
+        if (event.supersedes === event.id) {
+          problem("invalid-supersession", `${event.id} cannot supersede itself`, event.eventId);
+          continue;
+        }
+        superseded = records.get(event.supersedes);
+        if (superseded === undefined) {
+          problem(
+            "invalid-supersession",
+            `${event.id} supersedes ${event.supersedes}, which is not an existing decision`,
+            event.eventId,
+          );
+          continue;
+        }
+        if (Date.parse(superseded.decidedAt) >= Date.parse(event.decidedAt)) {
+          problem(
+            "invalid-supersession",
+            `${event.id} cannot supersede ${event.supersedes}, which was not decided earlier`,
+            event.eventId,
+          );
+          continue;
+        }
+        if (superseded.supersededBy !== null) {
+          problem(
+            "invalid-supersession",
+            `${event.supersedes} was already superseded by ${superseded.supersededBy}`,
+            event.eventId,
+          );
+          continue;
+        }
+        let ancestor: MutableDecision | undefined = superseded;
+        while (ancestor !== undefined && ancestor.id !== event.id) {
+          ancestor = ancestor.supersedes === null ? undefined : records.get(ancestor.supersedes);
+        }
+        if (ancestor !== undefined) {
+          problem("invalid-supersession", `superseding ${event.supersedes} with ${event.id} would make a cycle`, event.eventId);
+          continue;
+        }
+      }
       if (records.has(event.id)) {
         // Never last-one-wins: that would replace the question and rationale
         // while retaining whatever review state the first record acquired.
@@ -282,16 +388,20 @@ export function foldDecisions(
       }
       records.set(event.id, {
         id: event.id,
-        decidedBy: event.decidedBy,
         recordedBy: event.by,
         class: event.class,
         question: event.question,
         options: event.options.map((option) => ({ ...option })),
-        decision: event.decision,
+        chose: { ...event.chose },
         why: event.why,
         advisers: [...event.advisers],
-        bearsOn: { sessions: event.bearsOn.sessions.map((session) => ({ ...session })), plan: event.bearsOn.plan },
-        decidedAt: event.at,
+        bearsOn: {
+          sessions: event.bearsOn.sessions.map((session) => ({ name: session.name, execution: { ...session.execution } })),
+          plan: event.bearsOn.plan,
+        },
+        decidedAt: event.decidedAt,
+        supersedes: event.supersedes,
+        supersededBy: null,
         reviewed: false,
         reviewedAt: null,
         reviewNote: null,
@@ -300,6 +410,7 @@ export function foldDecisions(
         reversedWhy: null,
         touches: [{ kind: "decided", at: event.at, by: event.by, what: describeTouch(event) }],
       });
+      if (superseded !== undefined) superseded.supersededBy = event.id;
       order.push(event.id);
       continue;
     }
@@ -356,16 +467,17 @@ export function foldDecisions(
 
   const freeze = (record: MutableDecision): DecisionRecord => ({
     id: record.id,
-    decidedBy: record.decidedBy,
     recordedBy: record.recordedBy,
     class: record.class,
     question: record.question,
     options: record.options,
-    decision: record.decision,
+    chose: record.chose,
     why: record.why,
     advisers: record.advisers,
     bearsOn: record.bearsOn,
     decidedAt: record.decidedAt,
+    supersedes: record.supersedes,
+    supersededBy: record.supersededBy,
     reviewed: record.reviewed,
     reviewedAt: record.reviewedAt,
     reviewNote: record.reviewNote,
@@ -434,6 +546,15 @@ function asOptions(value: unknown): readonly DecisionOption[] | null {
   return options;
 }
 
+function asChoice(value: unknown, options: readonly DecisionOption[]): DecisionChoice | null {
+  if (!isRecord(value) || !isNonBlank(value["option"]) || !("note" in value)) return null;
+  const note = asNullableString(value["note"]);
+  if (note === undefined) return null;
+  const comparable = value["option"].trim();
+  if (!options.some((option) => option.name.trim() === comparable)) return null;
+  return { option: value["option"], note };
+}
+
 function asAdvisers(value: unknown): readonly Adviser[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const advisers: Adviser[] = [];
@@ -448,6 +569,24 @@ function asAdvisers(value: unknown): readonly Adviser[] | null {
   return advisers;
 }
 
+function asExecution(value: unknown): ExecutionRef | null {
+  if (!isRecord(value)) return null;
+  switch (value["kind"]) {
+    case "verified": {
+      const since = asIso(value["since"]);
+      return isNonBlank(value["token"]) && since !== null
+        ? { kind: "verified", token: value["token"], since }
+        : null;
+    }
+    case "not-found":
+      return { kind: "not-found" };
+    case "unavailable":
+      return isNonBlank(value["why"]) ? { kind: "unavailable", why: value["why"] } : null;
+    default:
+      return null;
+  }
+}
+
 function asBearsOn(value: unknown): BearsOn | null {
   if (!isRecord(value) || !Array.isArray(value["sessions"]) || !("plan" in value)) return null;
   const plan = asNullableString(value["plan"]);
@@ -455,37 +594,43 @@ function asBearsOn(value: unknown): BearsOn | null {
   const sessions: SessionRef[] = [];
   const names = new Set<string>();
   for (const candidate of value["sessions"]) {
-    if (!isRecord(candidate) || !isNonBlank(candidate["name"]) || !("executionToken" in candidate)) return null;
-    const executionToken = asNullableString(candidate["executionToken"]);
-    if (executionToken === undefined) return null;
+    if (!isRecord(candidate) || !isNonBlank(candidate["name"]) || !("execution" in candidate)) return null;
+    const execution = asExecution(candidate["execution"]);
+    if (execution === null) return null;
     if (names.has(candidate["name"])) return null;
     names.add(candidate["name"]);
-    sessions.push({ name: candidate["name"], executionToken });
+    sessions.push({ name: candidate["name"], execution });
   }
   return { sessions, plan };
 }
 
 function parseDecided(json: Record<string, unknown>, envelope: Envelope, id: string): DecisionEvent | null {
-  if (json["decidedBy"] !== "overseer") return null;
+  const decidedAt = asIso(json["decidedAt"]);
   const decisionClass = asClass(json["class"]);
-  if (decisionClass === null) return null;
-  if (!isNonBlank(json["question"]) || !isNonBlank(json["decision"]) || !isNonBlank(json["why"])) return null;
+  if (decidedAt === null || decisionClass === null) return null;
+  if (!isNonBlank(json["question"]) || !isNonBlank(json["why"])) return null;
   const options = asOptions(json["options"]);
+  if (options === null) return null;
+  const chose = asChoice(json["chose"], options);
   const advisers = asAdvisers(json["advisers"]);
   const bearsOn = asBearsOn(json["bearsOn"]);
-  if (options === null || advisers === null || bearsOn === null) return null;
+  if (!("supersedes" in json)) return null;
+  const supersedes = asNullableString(json["supersedes"]);
+  if (chose === null || advisers === null || bearsOn === null || supersedes === undefined) return null;
+  if (supersedes !== null && !ID_RULE.test(supersedes)) return null;
   return {
     ...envelope,
     kind: "decided",
     id,
-    decidedBy: "overseer",
+    decidedAt,
     class: decisionClass,
     question: json["question"],
     options,
-    decision: json["decision"],
+    chose,
     why: json["why"],
     advisers,
     bearsOn,
+    supersedes,
   };
 }
 
@@ -497,7 +642,7 @@ export function parseEvent(line: string): DecisionEvent | null {
   } catch {
     return null;
   }
-  if (!isRecord(json) || json["schema"] !== DECISIONS_SCHEMA) return null;
+  if (!isRecord(json) || json["schema"] !== DECISIONS_SCHEMA || "decidedBy" in json) return null;
   const eventId = json["eventId"];
   const commandId = asNullableString(json["commandId"]);
   const at = asIso(json["at"]);
@@ -654,7 +799,7 @@ export type AppendResult =
   | { ok: true; view: DecisionView; path: string; repaired: JsonlRepair }
   | {
       ok: false;
-      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break";
+      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break" | "command-conflict";
       why: string;
     };
 
@@ -721,13 +866,31 @@ export function appendEvents(
       const added = candidate.problems.slice(baseline.problems.length);
       return {
         ok: false,
-        code: "would-break",
+        code: added.some((problem) => problem.kind === "command-conflict") ? "command-conflict" : "would-break",
         why:
           `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
           "decision record, and an append-only log has no way to take them back — " +
           added.map((problem) => `${problem.kind}: ${problem.why}`).join("; "),
       };
     }
+
+    /* Exact retries are evidence that the original write succeeded, not new
+       history. Filter them only after the fold has checked duplicate event ids
+       and command conflicts, so idempotency cannot mute either problem. */
+    const commands = new Map<string, DecisionEvent>();
+    for (const event of prefix) {
+      if (event.commandId !== null && !commands.has(event.commandId)) commands.set(event.commandId, event);
+    }
+    const toAppend: DecisionEvent[] = [];
+    for (const event of events) {
+      if (event.commandId !== null) {
+        const original = commands.get(event.commandId);
+        if (original !== undefined && sameCommandPayload(original, event)) continue;
+        commands.set(event.commandId, event);
+      }
+      toAppend.push(event);
+    }
+    if (toAppend.length === 0) return { ok: true, view: current, path: file, repaired };
 
     // The marker is before the first record but after preflight: a refused
     // first command must not leave proof of a record that never got one line.
@@ -737,7 +900,7 @@ export function appendEvents(
       return { ok: false, code: "refused", why: `could not initialise the decision record: ${String(cause)}` };
     }
 
-    const body = events.map((event) => `${JSON.stringify(event)}\n`).join("");
+    const body = toAppend.map((event) => `${JSON.stringify(event)}\n`).join("");
     let fd: number;
     try {
       fd = openSync(file, "a");

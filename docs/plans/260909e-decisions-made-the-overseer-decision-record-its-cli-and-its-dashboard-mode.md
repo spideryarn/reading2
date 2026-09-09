@@ -177,10 +177,12 @@ age from the wrong instant.
   forgot.
 - **`bearsOn`** — `{ sessions: SessionRef[]; plan: string | null }`, session names distinct. See
   § What a session reference carries, which is the other thing the review changed.
-- **`decidedBy`** — **`"overseer"` only in v1.** The first draft allowed `greg` too; Sol's P1-4 is
-  that a Greg-origin decision does not await Greg's review, so counting it makes the pending count
-  wrong and excluding it makes `decidedBy` a lever for calming the count. Reversed. Who *recorded*
-  an event is the envelope's `by`, as in the queue.
+- **`supersedes`** — `string | null`, naming an existing record decided earlier. § The five ways,
+  door 5.
+
+There is no `decidedBy` field at all — see above. An event arriving with one is **rejected** rather
+than accepted-and-ignored, so a writer built against the older shape fails loudly instead of having
+a field silently dropped.
 
 **What this does not do**, stated because a claimed protection is worse than an admitted gap:
 anything running as this user can append a line saying `by: "greg"`. That is equally true of the
@@ -189,11 +191,15 @@ boundary.
 
 **Transitions, each with a test:** no two `decided` with one id; no event for an unknown id (never a
 row created by a side effect); no duplicate `eventId`; a `reviewed` or `reversed` timestamped before
-its `decided`; `reversed` is terminal, and it counts as Greg having seen the record; repeated
-`reversed`, and `reviewed` after `reversed`, are problems. `commandId` is **consumed**, not merely
-carried: a second event with a `commandId` already in the log is dropped as the retry it is. The
-queue carries the key without consuming it; the first draft claimed the cost and skipped the
-behaviour, which was Sol's P2-3.
+its `decidedAt`; `reversed` is terminal, and it counts as Greg having seen the record; repeated
+`reversed`, and `reviewed` after `reversed`, are problems.
+
+**`commandId` is a conflict key, not a mute button.** The queue carries the key without consuming it;
+the first draft claimed the cost and skipped the behaviour (Sol's P2-3), and the *second* draft
+over-corrected into "a repeat is dropped as the retry it is" — which silently swallows a genuinely
+different write that happens to reuse a key. So: same key with a **byte-identical** payload returns
+the original result and appends nothing; same key with a **different** payload is **refused as a
+conflict**. And the duplicate-`eventId` check runs **first**, so a reused command can never mask one.
 
 ## What a session reference carries, and the ranking that is not being built
 

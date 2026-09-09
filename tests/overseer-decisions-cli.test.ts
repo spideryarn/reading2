@@ -71,10 +71,11 @@ function payload(sessions: readonly string[] = []): Record<string, unknown> {
       { name: "Small", tradeoffs: "Ships quickly, with fewer extension points." },
       { name: "General", tradeoffs: "Handles imagined cases, with more machinery." },
     ],
-    decision: "Use the small shape.",
+    chose: { option: "Small", note: "Use the small shape." },
     why: "There is no demonstrated need for the extension points.",
     advisers: ["nobody"],
     bearsOn: { sessions, plan: null },
+    supersedes: null,
   };
 }
 
@@ -113,12 +114,13 @@ function seen(row: ObservedRow, at: string): OverseerEvent {
 }
 
 function checkpoint(root: string, rows: readonly ObservedRow[]): void {
-  const opened = openStore({ root, now: () => new Date("2026-09-09T10:00:00.000Z") });
+  const now = new Date();
+  const opened = openStore({ root, now: () => now });
   if (!opened.ok) throw new Error(describeRefusal(opened.refusal));
   stores.push(opened.store);
-  const appended = opened.store.append(rows.map((row, index) => seen(row, `2026-09-09T09:0${index}:00.000Z`)));
+  const appended = opened.store.append(rows.map((row, index) => seen(row, new Date(now.getTime() - index * 1_000).toISOString())));
   if (!appended.ok) throw new Error("the fixture store lost its lock");
-  const written = opened.store.checkpoint({ lastGoodSnapshotAt: "2026-09-09T09:05:00.000Z", tick: true });
+  const written = opened.store.checkpoint({ lastGoodSnapshotAt: now.toISOString(), snapshotStaleAfterMs: 300_000, tick: true });
   if (!written.ok) throw new Error("the fixture checkpoint was not written");
   opened.store.close();
   stores.splice(stores.indexOf(opened.store), 1);
@@ -163,6 +165,12 @@ describe("Commander grammar", () => {
       .join("\n");
     expect(JSON.parse(json)).toEqual(expect.objectContaining(payload()));
   });
+
+  test("list is not a Stage 1 command", () => {
+    const result = run(tempRoot(), ["list"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/unknown command/i);
+  });
 });
 
 describe("add and register identity", () => {
@@ -180,12 +188,14 @@ describe("add and register identity", () => {
     expect(records(root)).toEqual([
       expect.objectContaining({
         class: "decision",
-        decidedBy: "overseer",
         recordedBy: "overseer",
         question: payload().question,
         reviewed: false,
         reversed: false,
-        bearsOn: { sessions: [{ name: "not-in-register", executionToken: null }], plan: null },
+        bearsOn: {
+          sessions: [{ name: "not-in-register", execution: { kind: "unavailable", why: expect.stringMatching(/checkpoint.*absent/i) } }],
+          plan: null,
+        },
       }),
     ]);
     const raw = readFileSync(join(root, DECISIONS_FILE), "utf8");
@@ -200,7 +210,7 @@ describe("add and register identity", () => {
     expect(records(root)).toHaveLength(1);
   });
 
-  test("stores the verified execution token found at write time, and null for a missing name", () => {
+  test("stores verified and not-found separately from a fresh checkpoint", () => {
     const root = tempRoot();
     checkpoint(root, [
       observedRow("known-session", "$731", "791b6ca1-0001-4000-8000-000000000731", {
@@ -216,22 +226,31 @@ describe("add and register identity", () => {
 
     expect(result.status).toBe(0);
     expect(records(root)[0]?.bearsOn.sessions).toEqual([
-      { name: "known-session", executionToken: "boot-cli-known:52731:81191" },
-      { name: "missing-session", executionToken: null },
+      {
+        name: "known-session",
+        execution: {
+          kind: "verified",
+          token: "boot-cli-known:52731:81191",
+          since: expect.any(String),
+        },
+      },
+      { name: "missing-session", execution: { kind: "not-found" } },
     ]);
   });
 
-  test("an unreadable checkpoint does not fail the write and records null honestly", () => {
+  test("an unreadable checkpoint does not fail the write and records unavailable honestly", () => {
     const root = tempRoot();
     writeFileSync(join(root, "current.json"), "not json");
     const file = join(root, "decision.json");
     writeFileSync(file, JSON.stringify(payload(["unknown-now"])));
     const result = run(root, ["add", "--file", file, "--by", "overseer"]);
     expect(result.status).toBe(0);
-    expect(records(root)[0]?.bearsOn.sessions).toEqual([{ name: "unknown-now", executionToken: null }]);
+    expect(records(root)[0]?.bearsOn.sessions).toEqual([
+      { name: "unknown-now", execution: { kind: "unavailable", why: expect.stringMatching(/unreadable|malformed/i) } },
+    ]);
   });
 
-  test("two register entries with one name store null and announce the ambiguity on stdout", () => {
+  test("two register entries with one name store unavailable and announce the ambiguity on stdout", () => {
     const root = tempRoot();
     checkpoint(root, [
       observedRow("shared-name", "$741", "791b6ca1-0002-4000-8000-000000000741", {
@@ -253,12 +272,33 @@ describe("add and register identity", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("shared-name");
     expect(result.stdout).toMatch(/ambiguous/i);
-    expect(records(root)[0]?.bearsOn.sessions).toEqual([{ name: "shared-name", executionToken: null }]);
+    expect(records(root)[0]?.bearsOn.sessions).toEqual([
+      { name: "shared-name", execution: { kind: "unavailable", why: expect.stringMatching(/ambiguous/i) } },
+    ]);
+  });
+
+  test("a stale checkpoint stores unavailable instead of drawing absence", () => {
+    const root = tempRoot();
+    checkpoint(root, []);
+    const checkpointPath = join(root, "current.json");
+    const current = JSON.parse(readFileSync(checkpointPath, "utf8")) as Record<string, unknown>;
+    current["lastGoodSnapshotAt"] = "2026-09-09T09:00:00.000Z";
+    current["snapshotStaleAfterMs"] = 1_000;
+    writeFileSync(checkpointPath, JSON.stringify(current));
+    const file = join(root, "decision.json");
+    writeFileSync(file, JSON.stringify(payload(["unknown-now"])));
+
+    const result = run(root, ["add", "--file", file, "--by", "overseer"]);
+
+    expect(result.status).toBe(0);
+    expect(records(root)[0]?.bearsOn.sessions).toEqual([
+      { name: "unknown-now", execution: { kind: "unavailable", why: expect.stringMatching(/stale/i) } },
+    ]);
   });
 });
 
 describe("reading and Greg's two write commands", () => {
-  test("list, class filtering, show, export, reviewed and reversed all use the same record", () => {
+  test("show, export, reviewed and reversed all use the same record", () => {
     const root = tempRoot();
     const file = join(root, "decision.json");
     writeFileSync(file, JSON.stringify(payload()));
@@ -266,12 +306,6 @@ describe("reading and Greg's two write commands", () => {
     expect(added.status).toBe(0);
     const id = /dec-[23456789abcdefghjkmnpqrstvwxyz]{8}/.exec(added.stdout)?.[0];
     if (id === undefined) throw new Error(`no id in ${added.stdout}`);
-
-    const listed = run(root, ["list", "--unreviewed"]);
-    expect(listed.status).toBe(0);
-    expect(listed.stdout).toContain(id);
-    expect(run(root, ["list", "--class", "assumption"]).stdout).not.toContain(id);
-    expect(run(root, ["list", "--json"]).stdout).toContain('"records"');
 
     const shown = run(root, ["show", id]);
     expect(shown.status).toBe(0);
