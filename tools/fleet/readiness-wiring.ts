@@ -176,9 +176,20 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
           readings,
           devSha: dev.kind === "known" ? dev.devSha : null,
           caveat: dev.kind === "known" ? dev.caveat : "",
-          /* **A store that would not open counts as unreadable**, not as empty.
-             Otherwise the one state where nothing is being recorded at all
-             renders identically to a quiet day. */
+          /**
+           * **A store that would not open counts as unreadable**, not as empty.
+           * Otherwise the one state where nothing is being recorded at all
+           * renders identically to a quiet day.
+           *
+           * **`scan.unreadable` is deliberately NOT added.** A tmux log that
+           * would not parse is history we could not read, and history can never
+           * vote — so it cannot shadow a pass the way an unreadable *record*
+           * can. Counting it here would make the verdict permanently `unknown`
+           * for as long as one odd log sat in a directory a dozen agents write
+           * to, which is a tab that has stopped answering rather than one being
+           * careful. It is reported in `diagnostics` instead, where a gap in the
+           * graph belongs.
+           */
           unreadable: (held?.unreadable.length ?? 0) + (store === null ? 1 : 0),
         }),
         dev,
