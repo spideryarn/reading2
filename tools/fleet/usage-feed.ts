@@ -47,33 +47,32 @@
  * that guards collection — a throw here ends the refresh loop and leaves the
  * page wearing its last good timestamp. Every path returns an arm.
  *
- * ## IT IS SAFE TO CALL FROM THE DAEMON TOO, AND THAT IS A PROPERTY WORTH
- * KEEPING RATHER THAN AN ACCIDENT
+ * ## PURE, SO ONE PROJECTION CAN SERVE A LIVE CARD AND A REPLAYED HISTORY
  *
- * `projectUsage` is **pure, takes no clock, and reads nothing live** — the same
- * three facts that make the card honest also make one projection serve two
- * callers in two processes. So the live card and a *replayed history* can be
- * the same reading rather than two interpretations of one measurement, which is
- * the whole class of bug this area keeps producing. Session `usage-limits-tab`
- * is building a usage history on top of it (2026-09-09); whichever process ends
- * up appending, it wraps a stored line as
- * `{schema, writtenAt, usage}` and gets back exactly what the card is drawn
- * from.
+ * `projectUsage` **takes no clock and reads nothing live** — the same two facts
+ * that make the card honest also mean a stored reading replayed later goes
+ * through this exact function and comes out the same. That matters because
+ * session `usage-limits-tab` is building a usage history on top of it
+ * (2026-09-09), and a chart drawn from a second interpretation of one
+ * measurement is the class of bug this whole area keeps producing.
  *
- * **The import surface is what keeps that true, so keep it to leaves.** Today
- * this file reaches `./attention.js` (for its four shared narrowings, and
- * `node:fs` behind them), `./usage-absence.js` (no imports at all) and
- * `./wire.js` (types only). **None of them touches `tools/overseer/`**, so a
- * daemon-side caller closes no cycle. Reaching for `store.ts` or the Overseer's
- * `usage.ts` from here would: those import `collect.ts` and `status.ts` back
- * out of `tools/fleet/`, and the second caller stops being free the moment one
- * of them arrives.
+ * **It takes a parsed CHECKPOINT, not a `UsageReport`** — `{schema, writtenAt,
+ * usage}` — so a replayed line has to carry the schema it was written under.
+ * That is deliberate rather than incidental: it is what stops a schema-2 line
+ * being read by a build that has moved on.
  *
- * Note that the constraint is WEIGHT rather than DIRECTION, which is easy to
- * get backwards: `tools/fleet/health-history.ts` imports `jsonl.ts` and
- * `lock.ts` out of `tools/overseer/` quite happily, because both are pure
- * leaves. It is the modules that drag `node:child_process` and the daemon's
- * module graph that may not cross.
+ * **Keep the import surface to leaves.** Today: `./attention.js` (four shared
+ * narrowings, and `node:fs` behind them — so this file is Node-only, which is
+ * why the browser has its own parser), `./usage-absence.js` (no imports) and
+ * `./wire.js` (types only). None touches `tools/overseer/`. Reaching for
+ * `store.ts` or the Overseer's `usage.ts` would close a cycle: those import
+ * `collect.ts` and `status.ts` back out of `tools/fleet/`.
+ *
+ * Note the constraint is WEIGHT rather than DIRECTION, which two sessions got
+ * backwards in opposite directions on 2026-09-09: `tools/fleet/health-history.ts`
+ * imports `jsonl.ts` and `lock.ts` out of `tools/overseer/` quite happily,
+ * because both import only `node:*`. It is the modules dragging
+ * `node:child_process` and the daemon's graph that may not cross.
  */
 import { isRecord, iso, KNOWN_SCHEMA, nonBlank } from "./attention.js";
 import { absenceGapReason } from "./usage-absence.js";

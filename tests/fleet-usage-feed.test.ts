@@ -40,7 +40,14 @@ function hit(over: Partial<Parameters<typeof groupUsageIncidents>[0][number]> = 
     window: "five_hour",
     resetsAtMs: Date.parse("2026-09-08T06:30:00.000Z"),
     hitAtMs: Date.parse("2026-09-08T06:23:02.314Z"),
-    claudeSessionId: "3dbdbfcb-3264-4b23-9243-1c3013826ae9",
+    /* **NOT A UUID COPIED OUT OF A REAL TRANSCRIPT**, which is how this landed
+       the first time. `tests/fixture-ids.test.ts` refuses a uuid claimed by two
+       test files — vitest runs files in parallel against one database, so
+       whichever tears down first deletes the other's fixture — and the one I
+       had lifted off the live box was already `overseer-harness.test.ts`'s.
+       Neither file inserts a row, but the guard is deliberately blind to that
+       and it is cheaper to be unique than to argue. */
+    claudeSessionId: "u5a9e1c7-0000-4000-8000-usagefeed0001",
     ...over,
   };
 }
