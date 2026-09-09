@@ -213,8 +213,11 @@ function workLine(work: PaneWork | null, paneStatus: string, scan: WorkScan): st
         ? `${prefix}nothing recognised under it (${work.inspected} processes inspected)`
         : `${prefix}nothing was recognised under it when checked ${scan.shownAge} (${work.inspected} processes inspected)`;
     case "work": {
-      const first = work.jobs[0];
-      if (first === undefined) return `${prefix}cannot tell — the positive reading carried no job`;
+      // `jobs` is a non-empty tuple, so there is no jobless arm to write a sentence
+      // for. There used to be one, and it was unreachable: three parsers refused an
+      // empty array and the type still allowed it, which is the shape that grows a
+      // branch nobody can test. The type carries it now.
+      const [first] = work.jobs;
       const more = work.jobs.length > 1 ? ` + ${work.jobs.length - 1} more` : "";
       const ranFor = first.ranForMs === null ? "an unreadable duration" : formatDuration(first.ranForMs);
       return scan.fresh

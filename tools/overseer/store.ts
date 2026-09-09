@@ -2265,7 +2265,11 @@ function parsePaneWork(u: unknown): ParseResult<PaneWork> {
     if (!job.ok) return { ok: false, reason: `jobs[${index}]: ${job.reason}` };
     jobs.push(job.value);
   }
-  return { ok: true, value: { kind, jobs, inspected, paneCommand, paneStartedAt } };
+  const [first, ...rest] = jobs;
+  // The length check above already refused an empty array; this is how that fact
+  // reaches the TYPE, so the wire's non-empty tuple needs no cast to be satisfied.
+  if (first === undefined) return { ok: false, reason: "work.jobs is not a non-empty array" };
+  return { ok: true, value: { kind, jobs: [first, ...rest], inspected, paneCommand, paneStartedAt } };
 }
 
 function parsePaneJob(u: unknown): ParseResult<PaneJob> {

@@ -385,6 +385,28 @@ boundaries made both strengthened suites fail until the checks were put back.
 clean across all four projects, scoped lint without errors, and diff check clean. The whole suite was
 not run, as this review explicitly excludes it.
 
+### F23 closed after all: `jobs` is a non-empty tuple
+
+The independent round left F23 open as *wider than stage 3* — `PaneWork.jobs` was an ordinary
+`readonly PaneJob[]` though the producer and all three parsers require it non-empty, which is why
+`workLine` had grown a *"the positive reading carried no job"* branch nothing could reach.
+
+It is closed, because every file it touches is this stage's own: `wire.ts`, the store's parser, the
+projection's, the browser's, and the renderer. The type is now
+`readonly [PaneJob, ...PaneJob[]]`, the three parsers destructure to satisfy it rather than cast, and
+the unreachable sentence is gone.
+
+**The stake is not the dead branch.** `{kind: "work", jobs: []}` renders as a session with recognised
+work and nothing to say about it — a positive claim with no evidence under it, which is the one shape
+this area exists to refuse. The type refuses it now.
+
+**And the guard was mutation-tested**, because `vitest` never type-checks and a type-level guard that
+has never been seen to fail is not evidence. `tests/fleet-compile-guards.test.ts` gained a block whose
+`@ts-expect-error` asserts `jobs: []` does not compile. Widening the tuple back to an array makes
+`npm run typecheck` fail with three errors — the unused directive, and two `'first' is possibly
+undefined` in the guard and in `OverseerPanel` — and reverting makes it green again. Both directions
+observed, 2026-09-10.
+
 ### What it actually says about this box — measured, 2026-09-10 00:18 UTC
 
 The suite proves the wire carries a reading. It cannot say whether the reading is worth having, so I

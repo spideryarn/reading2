@@ -577,7 +577,9 @@ function parsePaneWork(u: unknown): PaneWork | null {
         if (job === null) return null;
         jobs.push(job);
       }
-      return { kind: "work", jobs, inspected, paneCommand, paneStartedAt };
+      const [first, ...rest] = jobs;
+      if (first === undefined) return null;
+      return { kind: "work", jobs: [first, ...rest], inspected, paneCommand, paneStartedAt };
     }
     default:
       return null;

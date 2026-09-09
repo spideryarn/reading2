@@ -2126,9 +2126,14 @@ function parsePaneWork(raw: unknown, skew: ClockSkew, scannedAt: string | null):
       command,
     });
   }
+  const [first, ...rest] = jobs;
+  // The emptiness check at the top of this arm already refused a jobless positive
+  // reading; destructuring is how that reaches the TYPE, so `PaneWork`'s non-empty
+  // tuple is satisfied without a cast and the renderer needs no unreachable branch.
+  if (first === undefined) return bad("a positive work reading arrived without any jobs");
   return {
     kind: "read",
-    work: { kind: "work", jobs, inspected, paneCommand, paneStartedAt: shiftedPaneStartedAt },
+    work: { kind: "work", jobs: [first, ...rest], inspected, paneCommand, paneStartedAt: shiftedPaneStartedAt },
   };
 }
 

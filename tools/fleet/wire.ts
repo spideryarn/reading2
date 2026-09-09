@@ -1425,8 +1425,13 @@ export type PaneWork =
    *  measured arms because without it the delayed scan cannot apply even its limited pid-reuse
    *  backstop; an unavailable start is `cannot-tell`, never `none`. */
   | { kind: "none"; inspected: number; paneCommand: string; paneStartedAt: string }
-  /** Found some. `jobs` is non-empty by construction on the producing side. */
-  | { kind: "work"; jobs: readonly PaneJob[]; inspected: number; paneCommand: string; paneStartedAt: string };
+  /**
+   * Found some. **A NON-EMPTY TUPLE RATHER THAN AN ARRAY**, so that "a positive reading with no
+   * job" is a state the compiler refuses rather than one three parsers each have to reject and a
+   * renderer has to carry a sentence for. It was an ordinary array until a review pointed at the
+   * unreachable branch that shape had grown in `OverseerPanel`.
+   */
+  | { kind: "work"; jobs: readonly [PaneJob, ...PaneJob[]]; inspected: number; paneCommand: string; paneStartedAt: string };
 
 /** One pane's reading, tagged with the Overseer's own session key so it can be joined to a register
  *  entry — the same key, written by the same daemon into the same file at the same instant. */
