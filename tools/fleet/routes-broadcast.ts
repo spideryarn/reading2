@@ -94,7 +94,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderMessage, type Speaker } from "./actions.js";
 import { sharedQuarantineBook, type QuarantineBook, type UncertainSendReading } from "./quarantine.js";
-import { drainGate, nothingWasSent } from "./queue.js";
+import { drainGate, nothingWasSent, type EnqueueRefusalRule } from "./queue.js";
 /* **THE ONE DOOR TO THE ONE QUEUE.** Written like `drainSharedQueues` beside
    it, and for the reason both that function and server.ts's mount point already
    state: two `SteeringQueue`s would be two queues, and the one the page can see
@@ -299,7 +299,16 @@ export type EnqueueForBroadcast =
       target: { sessionId: string; claudeSessionId: string },
       text: string,
       speaker: Speaker,
-    ) => { ok: true; position: number } | { ok: false; why: string });
+    ) =>
+      | { ok: true; position: number }
+      /**
+       * `rule` travels because two of its arms want opposite handling in a
+       * fan-out. `bad-text` is a fact about the MESSAGE and will fail
+       * identically for every recipient — twenty rows saying it is one truth
+       * reported twenty times — while a queue cap or the double-tap window is a
+       * fact about that recipient. See `enqueueSharedMessage`'s comment.
+       */
+      | { ok: false; rule: EnqueueRefusalRule; why: string });
 
 export type BroadcastDeps = {
   sendMessage: typeof realSendMessage;
@@ -790,7 +799,9 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     /* TAKEN BEFORE THE SENDS, not after, and before the first `await`. A fan-out
        of thirty-six takes a while, and a second request arriving halfway through
        must find the cooldown already spent — otherwise the two interleave, which
-       is the exact failure the cooldown exists to prevent. */
+       is the exact failure the cooldown exists to prevent. Kept so the one path
+       that sends nothing at all can hand it back; see the `bad-text` arm. */
+    const cooldownWas = lastBroadcastAt;
     lastBroadcastAt = at;
 
     deps.log(
@@ -822,11 +833,28 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
           outcomes.set(rec.target.paneId, { ...where, kind: "queued", position: result.position });
           continue;
         }
-        deps.log(`broadcast: queue refused session=${rec.target.sessionId} why=${oneLine(result.why)}`);
+        /* **`bad-text` IS ONE TRUTH, NOT ONE PER RECIPIENT**, and it ends the
+           whole broadcast here. It is a fact about the message — the queue's own
+           `checkText` and `renderMessage` refused it — so it will fail
+           identically for every session, and rendering twenty identical rows
+           would report one problem twenty times.
+
+           Ending here is clean rather than lucky: this loop runs BEFORE the
+           fan-out, so nothing has been typed at anybody yet. And the cooldown is
+           handed back, because a broadcast that sent nothing must not lock the
+           fleet out for ten minutes — safe to do because nothing between taking
+           it and here awaits, so no second request can have seen it. */
+        if (result.rule === "bad-text") {
+          lastBroadcastAt = cooldownWas;
+          deps.log(`broadcast: refused code=bad-text why=${oneLine(result.why)}`);
+          respond(res, 400, { ok: false, code: "bad-text", why: result.why });
+          return;
+        }
+        deps.log(`broadcast: queue refused session=${rec.target.sessionId} rule=${result.rule}`);
         outcomes.set(rec.target.paneId, {
           ...where,
           kind: "skipped",
-          code: "not-queued",
+          code: `not-queued-${result.rule}`,
           why: result.why,
         });
       }

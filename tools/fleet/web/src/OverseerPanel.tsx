@@ -58,6 +58,7 @@
 import type { ReactNode } from "react";
 
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
+import { BroadcastCard } from "./BroadcastCard";
 import { MessageOverseerCard } from "./MessageOverseerCard";
 import { Explain } from "./Tooltip";
 import type { FleetRow, OverseerScheduler, OverseerSessionHistory, OverseerStatus, OverseerView } from "./types";
@@ -544,6 +545,13 @@ export function OverseerPanel({
           path as everything else. The card below keeps both halves — see its
           header, and docs/plans/260909b-…. */}
       <MessageOverseerCard rows={rows} unreadableRows={unreadableRows} />
+
+      {/* The other half of what Greg asked for on 2026-09-08. Beside the
+          ease-off broadcast rather than replacing it: that one says a reviewed
+          sentence with a staggered pause in it, this one says whatever you type.
+          routes-broadcast.ts § the header says why they are two loops today and
+          which way the dependency should run when they become one. */}
+      <BroadcastCard rows={rows} />
     </div>
   );
 }

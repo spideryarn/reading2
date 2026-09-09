@@ -45,6 +45,7 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
+import { enqueueSharedMessage } from "../tools/fleet/routes-actions.js";
 import { makeBroadcastRoutes, type BroadcastDeps, type BroadcastRecipient } from "../tools/fleet/routes-broadcast.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -380,12 +381,37 @@ describe("who gets it — and the busiest sessions are the point", () => {
   });
 
   it("reports a queue that refused, rather than counting it as delivered", async () => {
-    const full = harness({ enqueue: () => ({ ok: false, why: "this session already has 20 items queued" }) });
+    const full = harness({
+      enqueue: () => ({ ok: false, rule: "session-queue-full", why: "this session already has 20 items queued" }),
+    });
     const r = await post(full.routes, run({ recipients: [recipient({ id: "$2", status: WORKING })] }));
     const refused = row(r.json, "$2");
     expect(refused.kind).toBe("skipped");
     expect(refused.kind === "skipped" && refused.why).toContain("20 items");
     expect(result(r.json).counts["queued"]).toBe(0);
+  });
+
+  it("refuses the whole broadcast on a message the queue will not take, rather than N identical rows", async () => {
+    /**
+     * `bad-text` is a fact about the MESSAGE, so it fails identically for every
+     * recipient: twenty rows saying it would be one truth reported twenty
+     * times. It ends the broadcast cleanly because the queue half runs BEFORE
+     * the fan-out — nothing has been typed at anybody yet — and the cooldown is
+     * handed back, because a broadcast that sent nothing must not lock the
+     * fleet out for ten minutes.
+     */
+    const bad = harness({ enqueue: () => ({ ok: false, rule: "bad-text", why: "that text cannot be sent" }) });
+    const r = await post(
+      bad.routes,
+      run({ recipients: [recipient({ id: "$1" }), recipient({ id: "$2", status: WORKING })] }),
+    );
+    expect(r.status).toBe(400);
+    expect(r.json["code"]).toBe("bad-text");
+    // Nothing typed at the session that WAS at a prompt.
+    expect(bad.calls).toHaveLength(0);
+    // And the fleet is not locked out over a message that never went.
+    const after = await post(bad.routes, run({ recipients: [recipient({ id: "$1" })] }));
+    expect(after.status).toBe(200);
   });
 
   it("skips a shell, because the text would be EXECUTED there", async () => {
@@ -750,6 +776,34 @@ describe("the cooldown", () => {
     h.tick(10 * 60_000 + 1);
     const later = await post(h.routes, run());
     expect(later.status).toBe(200);
+  });
+});
+
+describe("the composition root, which the tests above are structurally blind to", () => {
+  /**
+   * **EVERY TEST IN THIS FILE INJECTS ITS OWN `enqueue`, SO NONE OF THEM CAN
+   * SEE WHETHER THE REAL ONE REACHES THE REAL QUEUE.**
+   *
+   * That blindness is invisible in a green suite, and it is where two of
+   * tonight's defects lived next door: `shared ??= makeActionRoutes()` becoming
+   * `shared = makeActionRoutes()` hands two callers two different queues, every
+   * unit test goes on passing, and the item the page can see is the one nothing
+   * ever delivers. The comment on `drainSharedQueues` has said why since it was
+   * written; nothing checked it.
+   *
+   * So this asserts the property directly: two calls through the door land in
+   * ONE queue. It looks like it is testing the language, which is the reason
+   * nobody writes it.
+   *
+   * No tmux and no send — enqueueing is state, and this never reaches a pane.
+   */
+  it("reaches one queue, so two calls through the door stack", () => {
+    const target = { sessionId: "$97531", claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a" };
+    const first = enqueueSharedMessage(target, "the first line", "greg");
+    const second = enqueueSharedMessage(target, "a different second line", "greg");
+    expect(first).toMatchObject({ ok: true, position: 1 });
+    // `2` is the whole assertion: a second queue would answer `1` again.
+    expect(second).toMatchObject({ ok: true, position: 2 });
   });
 });
 

@@ -2508,17 +2508,28 @@ export function drainSharedQueues(snapshot: FleetSnapshot): DrainResult {
  * reaching `settle`, `release`, `revive` or the quarantine surface, and the
  * cheapest moment to decide that is before anything needs them.
  *
- * `text` is the RAW line and must stay raw: `enqueueMessage` renders the
- * speaker's prefix to check the length, stores what it was given, and the drain
+ * `text` is the RAW line and must stay raw. `enqueueMessage` calls
+ * `renderMessage` only to apply the slash rule and to length-check *with* the
+ * prefix — which counts towards the limit, so a message that fits raw can fail
+ * rendered — and then pushes the raw parameter (`queue.ts:722`); `drain.ts:306`
  * renders again at delivery. Handing it an already-prefixed string prefixes it
- * twice.
+ * twice, which reads as clumsy rather than as a bug and fails nothing.
+ *
+ * **`rule` TRAVELS, and narrowing it away was the first version of this
+ * function.** `bad-text` is a fact about the MESSAGE — it will fail identically
+ * for every recipient, so a fan-out to twenty sessions has one truth to report,
+ * not twenty — while a queue cap or the double-tap window is a fact about THAT
+ * recipient, and twenty of those really are twenty facts. A caller that cannot
+ * tell them apart cannot render either honestly. Collapsing it is the
+ * lossy-join half of docs/postmortems/260908b: the producer said the careful
+ * thing and the consumer threw the distinction away.
  */
 export function enqueueSharedMessage(
   target: { sessionId: string; claudeSessionId: string },
   text: string,
   speaker: Speaker,
-): { ok: true; position: number } | { ok: false; why: string } {
+): { ok: true; position: number } | { ok: false; rule: EnqueueRefusalRule; why: string } {
   shared ??= makeActionRoutes();
   const result = shared.enqueueMessage(target, text, speaker);
-  return result.ok ? { ok: true, position: result.position } : { ok: false, why: result.why };
+  return result.ok ? { ok: true, position: result.position } : { ok: false, rule: result.rule, why: result.why };
 }

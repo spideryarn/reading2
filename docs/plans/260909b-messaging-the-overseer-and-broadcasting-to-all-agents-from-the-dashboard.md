@@ -302,43 +302,48 @@ a GPT Sol review at the end; commit.
 
 ### Stage 1 — Message the Overseer
 
-- [ ] `SteerReceipt.tsx` (new): renders one `SteerOutcome` — the verified address, the refusal code
+- [x] `SteerReceipt.tsx` (new): renders one `SteerOutcome` — the verified address, the refusal code
       and sentence, the delivery arm. Imports `SteerOutcome`, `DeliveryReading`, `checkLanding` from
       `steer-client.ts`; declares no vocabulary of its own (D6). Offered to the dashboard's Stage 5,
       not wired into `SessionDetail.tsx`.
-- [ ] `MessageOverseerCard` in `OverseerPanel.tsx` (new card, replacing the "There is still nothing
+- [x] `MessageOverseerCard` in `OverseerPanel.tsx` (new card, replacing the "There is still nothing
       here to send a message to." card): four arms off `overseerClaim(rows)` — `one` draws the input,
       `none` / `contested` / `cannot-tell` each refuse with the reason named.
-- [ ] Keep the distinction the old card was protecting: the **daemon** publishes a checkpoint and
+- [x] Keep the distinction the old card was protecting: the **daemon** publishes a checkpoint and
       reads no inbox; the message goes to the Overseer's **Claude session**, as keystrokes at its
       pane. A card that blurred those would be the lie the old card existed to avoid.
-- [ ] Tests: `tests/fleet-overseer-message.test.tsx` — each claim arm, a send through a fake
+- [x] Tests: `tests/fleet-overseer-message.test.tsx` — each claim arm, a send through a fake
       `SteerApi`, a refusal rendered, a `partial` delivery rendered as such.
 
-**Status:** not started.
+**Status:** done.
 
 ### Stage 2 — The broadcast route
 
-- [ ] `tools/fleet/routes-broadcast.ts` (new). `POST /api/broadcast`, body
+- [x] `tools/fleet/routes-broadcast.ts` (new). `POST /api/broadcast`, body
       `{text, speaker, mode: "dry-run" | "run", confirm, recipients: [{…target, status}]}`.
-- [ ] Recipients come **from the client, verbatim off the rows it displayed** — the same rule the box
+- [x] Recipients come **from the client, verbatim off the rows it displayed** — the same rule the box
       route already keeps. The server must not choose recipients from its own snapshot, or the count
       in the confirmation is not the count that got the message.
-- [ ] Guards, each mirroring an existing one rather than inventing a rule: origin and content-type
+- [x] Guards, each mirroring an existing one rather than inventing a rule: origin and content-type
       (`checkOrigin`), body cap (`readBody`, `MAX_BODY_BYTES`), a recipient cap, `drainGate` per
       recipient, a cooldown, a deadline with the event loop handed back between sends,
       `renderMessage` for attribution.
-- [ ] Imports only. No edits to `steer.ts`, `routes-steer.ts`, `actions.ts`, `routes-actions.ts`,
+- [x] Imports only. No edits to `steer.ts`, `routes-steer.ts`, `actions.ts`, `routes-actions.ts`,
       `queue.ts`, `drain.ts`. `parseTarget` may move under the dashboard's Stage 5 — accept the
       conflict, do not fork it.
-- [ ] One additive mount line in `server.ts`, beside `handleSteerRequest`.
-- [ ] **Open a quarantine hold on every ambiguous outcome.** `tools/fleet/quarantine.ts` exports a
-      `QuarantineBook`; `SteeringQueue` takes one and exposes `quarantineBook()`. A `partial` or
-      `unknown` send leaves that session's input box in a state nothing can read, and a later message
-      draining into it appends rather than replaces. This route is the **fifth producer** of
-      ambiguous sends and must reach the book like the other four. Wired here rather than left to the
-      dashboard's owner, at its request.
-- [ ] Tests: `tests/fleet-broadcast-route.test.ts` — a fake `sendMessage`, so no keystroke reaches a
+- [x] One additive mount line in `server.ts`, beside `handleSteerRequest`.
+- [x] **Open a quarantine hold on every ambiguous outcome** — `partial`, `unknown`, `threw`, and a
+      `delivery: "none"` that `nothingWasSent` refuses to certify, through `sharedQuarantineBook()`.
+      It does **not** check for a hold before sending; see D9 for why that is deliberate and whose
+      it is.
+- [x] **A composition test, because every other test here injects its own `enqueue`.** Two calls
+      through `enqueueSharedMessage` must land in one queue — `position: 2` on the second is the
+      whole assertion, since a second queue would answer `1` again. Written after
+      `claude-agents-dashboard` retracted a coverage guarantee for exactly this blind spot: unit
+      tests with injected fakes cannot see whether the real thing is wired together, and that
+      blindness is invisible in a green suite. Confirmed by mutation: `shared ??=` → `shared =`
+      turns it red and turns nothing else red.
+- [x] Tests: `tests/fleet-broadcast-route.test.ts` — a fake `sendMessage`, so no keystroke reaches a
       real pane. Dry run vs run distinguishable in the response; skipped recipients carry
       `drainGate`'s own sentence; the deadline stops early and names what it never reached; the
       cooldown refuses a second broadcast; `delivery` survives to the response.
@@ -346,29 +351,54 @@ a GPT Sol review at the end; commit.
       agrees with itself proves nothing about whether this route reached it. Shape copied from
       `tests/fleet-quarantine.test.ts`.
 
-**Status:** not started.
+**Status:** done.
 
 ### Stage 3 — The broadcast UI
 
-- [ ] `broadcast-client.ts` (new): the `SteerApi`-shaped seam, so a test drives it without a network.
-- [ ] `BroadcastCard` in `OverseerPanel.tsx`: the text, the recipient count, the Overseer opt-in
+- [x] `broadcast-client.ts` (new): the `SteerApi`-shaped seam, so a test drives it without a network.
+- [x] `BroadcastCard` in `OverseerPanel.tsx`: the text, the recipient count, the Overseer opt-in
       (D7), a dry-run preview, a confirmation naming how many sessions will receive it **and what
       that costs** — every line is a turn of a paid model, and steering costs the target its context.
-- [ ] Receipts table afterwards: one row per session, verified / refused-with-code / unknown, and the
-      headline is *"N of M heard this"*.
-- [ ] `MODE_TIPS.overseer` in `Dock.tsx`: *"Nothing on that panel is live, and it says so"* is out of
+- [x] Receipts table afterwards: one row per session, verified / refused-with-code / unknown, and the
+      headline counts what was measured — `submitted`, `queued`, `skipped`, `notReached` — and never says "heard" (D5a).
+- [x] `MODE_TIPS.overseer` in `Dock.tsx`: *"Nothing on that panel is live, and it says so"* is out of
       date and gets replaced.
-- [ ] Tests: `tests/fleet-broadcast-card.test.tsx`.
+- [x] Tests: `tests/fleet-broadcast-card.test.tsx`.
 
-**Status:** not started.
+**Status:** done.
 
 ### Stage 4 — Docs, review, land
 
-- [ ] A section in `docs/project/overseer-direction.md` or a line in the dashboard doc pointing at
+- [x] A section in `docs/project/overseer-direction.md` or a line in the dashboard doc pointing at
       this plan, and D4 recorded where the next person will find it.
-- [ ] GPT Sol review of the whole diff, second round, then land on `dev`.
+- [x] GPT Sol review of the whole diff, second round, then land on `dev`.
 
-**Status:** not started.
+**Status:** in progress — the Sol code review is running against the branch sha.
+
+### D9. The quarantine is recorded here and enforced elsewhere — and not yet on this path
+
+This route **opens** a hold on `partial`, `unknown`, `threw` and a `delivery: "none"` that
+`nothingWasSent` refuses to certify. It **does not check** for one before sending, and that is
+deliberate rather than missed.
+
+`claude-agents-dashboard` retracted two guarantees on 2026-09-09, unprompted, after its Stage 4
+review:
+
+- *"a fourth producer added without a hold is a red test"* — **false**: every producer test injects
+  its own book, nothing joins the real mounted compositions, and the tests enumerate today's
+  producers rather than requiring tomorrow's.
+- the hold is enforced **only** in `SteeringQueue.next()`. Direct steering and broadcast record holds
+  and never consult them, so **today a held session can still be typed at** by either.
+
+The fix is a single mandatory send coordinator immediately before the synchronous transport call,
+with direct messages, answers, broadcast recipients and drain delivery all going through it. It is
+being built in that session's files. Writing a hold check here against today's shape would have to
+be unpicked, so this route stays unaware and gets threaded through the coordinator when it lands.
+
+**What this branch owes that gap: silence about it in the copy.** Nothing the card says claims a hold
+is respected, and given the above that omission is load-bearing rather than lucky. The queued half is
+unaffected — `push` does not consult the book, and queueing to a held session is correct, because
+refusing would throw away the instruction the whole mechanism exists to protect.
 
 ## Open, for the debrief
 

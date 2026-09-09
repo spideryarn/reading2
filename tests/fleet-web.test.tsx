@@ -6105,8 +6105,14 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("There is no Overseer session.");
     // The daemon caveat survived the replacement.
     expect(container.textContent).toContain("does not reach the daemon");
-    // And no box that would swallow words into nothing.
-    expect(container.querySelector("textarea")).toBeNull();
+    /* And no box that would swallow words into nothing. **Scoped by label, not
+       by tag**: the tab grew a second textarea when the broadcast card landed
+       beside this one, and a bare `querySelector("textarea")` then asserted
+       something about whichever card React rendered first — which is not a
+       thing this test ever meant to be about. */
+    expect(container.querySelector('textarea[aria-label="Message the Overseer"]')).toBeNull();
+    // The broadcast's own box IS here, and is a different control entirely.
+    expect(container.querySelector('textarea[aria-label="Broadcast to all agents"]')).not.toBeNull();
   });
 
   it("draws the Overseer's own two clocks on the tab, straight off the payload", async () => {
