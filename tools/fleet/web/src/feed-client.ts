@@ -40,6 +40,7 @@ import type {
   FeedSessionRead,
 } from "../../wire.js";
 import type { MessageSpeaker, MessageTurn } from "./messages-client";
+import { shiftMsToBrowserClock, type ClockSkew, type FleetRow } from "./types";
 
 export const FEED_URL = "api/feed";
 
@@ -118,6 +119,16 @@ export type FeedView =
       readStartedAt: string | null;
       readFinishedAt: string | null;
       servedAt: string | null;
+      /**
+       * Which tmux server the `sessionId`s in this answer belong to — wire.ts
+       * § `FeedPayload.tmuxServerPid`.
+       *
+       * `null` for a server that did not send it as well as for a collector
+       * that could not read it, and the page treats both the same way: it
+       * withholds the join to the session list rather than guessing that two
+       * sets of handles name one world.
+       */
+      tmuxServerPid: number | null;
     }
   | { kind: "unreadable"; why: string }
   /** This page never got an answer it could read. **Our sentence, not the server's.** */
@@ -411,6 +422,15 @@ export function parseFeed(raw: unknown): FeedView {
     readStartedAt: str(raw["readStartedAt"]),
     readFinishedAt: str(raw["readFinishedAt"]),
     servedAt: str(raw["servedAt"]),
+    /* A pid is a positive integer or it is nothing. `num` alone would accept a
+       0 or a float and hand it to a comparison that would then quietly say
+       "different world" for ever. */
+    tmuxServerPid:
+      typeof raw["tmuxServerPid"] === "number" &&
+      Number.isSafeInteger(raw["tmuxServerPid"]) &&
+      raw["tmuxServerPid"] > 0
+        ? raw["tmuxServerPid"]
+        : null,
   };
 }
 
@@ -531,6 +551,217 @@ export const FEED_LIMITS = [25, 50, 100, 200] as const;
 export function limitFromParams(params: Readonly<Record<string, string>>): number {
   const raw = Number(params[FILTER_KEYS.limit]);
   return (FEED_LIMITS as readonly number[]).includes(raw) ? raw : 50;
+}
+
+/* ------------------------------------------------------------------ *
+ * Scanning a row: what the session is doing, and how long ago it spoke.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What this page can say about the session a message came from.
+ *
+ * > can we make "Recent messages" … scannable (e.g. to see at a glance the
+ * > status and human-readable timing of each)
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * **The status is the LIVE session list's, not a second reading.** The feed
+ * route says nothing about what a session is doing now, and adding a field to
+ * it would be a second answer to a question `/api/state` already answers, on a
+ * different cadence, kept in step by nothing. `App` already holds the rows the
+ * Sessions tab draws, so a row here is looked up in exactly those and drawn
+ * with exactly that component — which is what makes the two tabs structurally
+ * unable to disagree (overseer-direction.md § `idle` is the bug).
+ *
+ * **The two ways there is no status are two different sentences, and neither is
+ * calm.** The feed's census was taken before the session list's, so a session
+ * genuinely can have gone; and before the first payload nothing has been read
+ * at all. Drawing nothing for either — or worse, `idle` — is the failure this
+ * whole tab is shaped against.
+ */
+export type FeedSessionStatus =
+  /** No state payload has arrived at all. Nothing has been read, so nothing may be claimed. */
+  | { kind: "not-arrived" }
+  /**
+   * A state payload arrived, but no census has finished — `collectedAt` is null
+   * for the first seconds after a restart while a collection runs.
+   *
+   * **A separate arm from `not-arrived` because it is a different fact**, and
+   * from `not-listed` because an unfinished census lists nobody: reading "not in
+   * the session list" off it would call every session on the box absent. It is
+   * the same distinction `SessionsPanel` draws between "No sessions." and
+   * "Collecting…".
+   */
+  | { kind: "not-collected" }
+  /**
+   * **ONE OF THE TWO ANSWERS DID NOT SAY WHICH TMUX SERVER IT READ**, so the
+   * handles cannot be shown to name the same world — but nothing says they do
+   * not, either.
+   *
+   * No status: an unverified join is a guess, and this page does not print
+   * guesses as facts. **The way in stays**, and the asymmetry is deliberate.
+   * A server that predates `tmuxServerPid` answers like this for every row, and
+   * treating ignorance as proof would switch the whole feature off against it —
+   * "a warning that never clears, and one nobody reads", which
+   * fleet-recent-messages.md already names as this tab's characteristic
+   * failure. The cost of being wrong is bounded and visible: the destination
+   * pane prints the session's own name and handle, and `SessionsPanel` already
+   * draws `MissingSession` for a handle it cannot find.
+   */
+  | { kind: "unverifiable"; why: string }
+  /**
+   * **THE TWO ANSWERS NAME DIFFERENT TMUX SERVERS**, which is not ignorance but
+   * proof: the tmux server has restarted since this feed was read, so every
+   * handle in it now belongs to somebody else.
+   *
+   * No status and **no way in** — a click would open a real, wrong conversation
+   * with nothing on screen to say so.
+   */
+  | { kind: "different-world"; why: string }
+  /**
+   * A finished census that holds no row with this id.
+   *
+   * `unreadableRows` decides whether this is a *claim* or a *maybe*: a payload
+   * whose rows the page could not all parse cannot say the session is absent,
+   * only that it is not in the part that was readable.
+   */
+  | { kind: "not-listed"; unreadableRows: number }
+  | { kind: "listed"; row: FleetRow };
+
+/**
+ * The last session list this page received, in the only shape that can tell its
+ * three states apart.
+ *
+ * **`rows: []` IS NOT AN ABSENCE OF ROWS.** It is a measurement — *we read the
+ * fleet and it holds nobody* — and there are two other things a page can be
+ * holding: no payload, and a payload whose collection has not finished. `App`
+ * builds this arm by arm; nothing here defaults.
+ *
+ * "Last good", not "live": a failed poll deliberately leaves the previous rows
+ * on screen (useFleetState.ts), and the masthead qualifies their staleness for
+ * the whole page rather than per row.
+ */
+export type SessionListReading =
+  | { kind: "not-arrived" }
+  | { kind: "not-collected" }
+  | {
+      kind: "collected";
+      rows: readonly FleetRow[];
+      /** Rows the payload held and this page could not parse. `0` is a measurement. */
+      unreadableRows: number;
+      /** Which tmux server these handles belong to. `null` when the collector could not say. */
+      tmuxServerPid: number | null;
+    };
+
+/**
+ * The status of the session a message came from.
+ *
+ * Pure, and it takes the feed's own `tmuxServerPid` beside the list's: the join
+ * is only sound when both name the same tmux server, and neither a missing pid
+ * nor a mismatched one may be rounded to "close enough".
+ */
+export function sessionStatusOf(
+  list: SessionListReading,
+  feedTmuxServerPid: number | null,
+  sessionId: string,
+): FeedSessionStatus {
+  if (list.kind === "not-arrived") return { kind: "not-arrived" };
+  if (list.kind === "not-collected") return { kind: "not-collected" };
+  /* **THE GATE, BEFORE ANY LOOKUP.** A `$1643` from a feed read before a tmux
+     restart is a different session from the `$1643` in this snapshot, and the
+     handles are identical either way — so the check has to happen before the
+     `find`, not as a caveat on its result. */
+  if (feedTmuxServerPid === null || list.tmuxServerPid === null) {
+    return {
+      kind: "unverifiable",
+      why: `${feedTmuxServerPid === null ? "these messages" : "the session list"} did not say which tmux server they were read from, so this page cannot check that the handle in the message means the same session as the one in the list. It usually does; it stops being true when the tmux server restarts.`,
+    };
+  }
+  if (feedTmuxServerPid !== list.tmuxServerPid) {
+    return {
+      kind: "different-world",
+      why: `these messages were read from tmux server ${feedTmuxServerPid} and the session list came from ${list.tmuxServerPid}, so the handles belong to different worlds — the tmux server has restarted since this feed was read. Read the feed again.`,
+    };
+  }
+  const row = list.rows.find((r) => r.id === sessionId);
+  return row === undefined
+    ? { kind: "not-listed", unreadableRows: list.unreadableRows }
+    : { kind: "listed", row };
+}
+
+/**
+ * When a turn was written, as an age — or as the reason there is no age.
+ *
+ * **THE AGE IS SHIFTED AND THE TIMESTAMP IS NOT**, and the two halves of that
+ * come from the same `at`. An age is a SUBTRACTION between the box's clock and
+ * this device's, which is exactly what `ClockSkew` exists to correct
+ * (types.ts § `ClockSkew`). Printing the instant is not: `withClockSkew` in
+ * messages-client.ts carries GPT Sol's K4 on precisely this — shifting a string
+ * that is drawn as a wall clock asserts an absolute instant nothing happened
+ * at. So the row prints `zonedLine(turn.at)` unshifted beside an age computed
+ * through here, the same split `UsagePanel` makes.
+ */
+export type TurnAge =
+  /** How long ago, in this browser's terms. */
+  | { kind: "aged"; ms: number }
+  /**
+   * The turn is stamped **ahead of this device's clock** by more than the page's
+   * own noticing threshold.
+   *
+   * A separate arm rather than a clamp to zero. Clamping is right for `uptime`,
+   * where the two numbers come from one clock; here they come from two, so a
+   * real minute of disagreement is a fact about the clocks and "0s ago" would
+   * hide it behind the most reassuring answer available.
+   */
+  | { kind: "ahead"; ms: number }
+  /** No timestamp, or one this page cannot parse. There is nothing to print. */
+  | { kind: "unplaceable" };
+
+/**
+ * How far ahead a turn may be stamped before it is reported rather than rounded
+ * to now.
+ *
+ * **ITS OWN CONSTANT, and small.** This was `CLOCK_SKEW_NOTICE_MS` for a review
+ * round, and GPT Sol was right that borrowing it is not the same argument: that
+ * threshold governs whether the masthead mentions a *measured* device-clock
+ * disagreement, and at 60 seconds it made a turn stamped 59 seconds in the
+ * future read "0s ago" — on a row whose own formatter prints seconds for
+ * anything under five minutes. The slack this actually wants is the round trip
+ * that produced the number: `readClockSkew` understates the skew by one-way
+ * latency, which on a box talking to itself is milliseconds, plus the one-second
+ * tick of `useNow`. Five seconds is generous for both and small enough that a
+ * real clock disagreement still shows up as one.
+ */
+export const TURN_AHEAD_TOLERANCE_MS = 5_000;
+
+/**
+ * A timestamp that came out of `toISOString()`, or null.
+ *
+ * **`Date.parse` IS NOT A VALIDATOR**, and this is the trap types.ts already
+ * documents for `servedAt`: `Date.parse("0")` is January 2000, not a refusal,
+ * so a junk `at` would be drawn as a confident age twenty-six years old rather
+ * than as the unreadable thing it is. The feed's parser accepts any string into
+ * `turn.at` deliberately — the server said something and dropping it would hide
+ * that — so the check belongs here, where the string is about to become a
+ * number. GPT Sol's P2.
+ *
+ * The cost is strictness: a timestamp without milliseconds would be refused and
+ * drawn as its raw string. That is the safe direction, and every transcript
+ * timestamp this reads is written by `toISOString()`.
+ */
+function canonicalIso(v: string): number | null {
+  const at = new Date(v);
+  const ms = at.getTime();
+  return Number.isNaN(ms) || at.toISOString() !== v ? null : ms;
+}
+
+export function turnAge(at: string | null, now: number, skew: ClockSkew): TurnAge {
+  if (at === null) return { kind: "unplaceable" };
+  const parsed = canonicalIso(at);
+  if (parsed === null) return { kind: "unplaceable" };
+  const ms = now - shiftMsToBrowserClock(parsed, skew);
+  if (ms < -TURN_AHEAD_TOLERANCE_MS) return { kind: "ahead", ms: -ms };
+  return { kind: "aged", ms: Math.max(0, ms) };
 }
 
 /* ------------------------------------------------------------------ *

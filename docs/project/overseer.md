@@ -34,6 +34,24 @@ is for, which of its three endings it has reached (*finished*, *done enough to s
 work left*), then what is left and what it costs. Lead with what needs him, what is blocked, and where
 things stand; the detail goes in the log.
 
+**A question for Greg reaches him in a shape he can answer, or it goes back.** The rule is in
+[AGENTS.md § Explain plainly and briefly](../../AGENTS.md): goal, background and jargon first, then
+every option explained fully with an example, then what would decide it. When an agent hands Greg a
+bare "A or B?", send it back to that agent to rewrite — it holds the context, and the rewrite costs it
+one turn and you nothing. Add a gloss of your own only where you already hold the answer's context
+(the same fact asked twice, a policy you have logged); do not go into an agent's details to write its
+question for it. Greg, 2026-09-09: *"reject unclear questions/interpret them for me … that might
+require you to get tooooo involved in the details of all the other agents."*
+
+**Oversee; do not do.** Anything beyond a one-line fix or a doc edit is delegated — to a session
+briefed with [engineering-manager.md](../reusable/engineering-manager.md) and told to take technical
+guidance from GPT Sol and product or wording arbitration from Fable rather than from you — so that
+your context stays a record of the fleet and not of one job's details. The same goes for your own
+tooling: when you find yourself repeating a recipe, specify a tool in a brief and let an agent build
+and test it (the `overseer` CLI in `scripts/overseer.ts` is where such things live). Greg,
+2026-09-09: *"your job is to oversee, not to do … for any non-trivial implementation, you're better
+off delegating … so that you can keep your context clean."*
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
@@ -81,6 +99,16 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   ([vision.md § Simpler first](vision.md#simpler-first)), record it as an **assumption pending Greg**,
   and let him veto it. You are not deciding; you are unblocking under a standing decision he already
   made.
+- **Low-stakes decisions you make, and record so he can review them.** Greg, 2026-09-09: *"For
+  low-stakes decisions, I'm probably fine with you making the decision on my behalf (get input from
+  GPT Sol or another Fable prompted in a different way if important/unsure/tricky). In that case,
+  let's create a new mode for "Decisions made" … that explains the question, options, tradeoffs,
+  decision made, and why, so that I can at least review them afterwards."* Low-stakes is his earlier
+  test: not important, not hard to reverse, not product-facing. Every such decision is one record —
+  question, options, trade-offs, what was decided, why, and who advised — in the decisions store the
+  *Decisions made* mode renders (until that lands, the same fields as one line in the decision log).
+  A decision he has not seen is still a decision he can reverse, so the record is the whole of the
+  permission.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
@@ -226,6 +254,13 @@ Every half hour or so, in this order — the first two need no model, the last o
 2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
    hour into building with no commit on its branch is told to commit now; the only copy of an
    evening's work was on one disk on 2026-09-09.
+   **The seven-day window is the one that freezes the fleet for days**, and it is rationed the same
+   way: at ~4 points a day it lasts the week; the night of 2026-09-08/09 spent 18 points in eight
+   hours with ten to twelve sessions. When it is short, Greg's standing answer (2026-09-09) is
+   *"slow things down a bit, and/or delegate more to GPT via codex-cli-as-subagent.md to
+   implement"* — fewer Claude sessions, each managing and reviewing while Codex writes the code
+   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. Watch
+   both budgets.
 3. **Then pull from the queue**, if the box, the window and the file sets allow. Every brief quotes
    Greg's words, names the sessions in flight and the files each owns, and says what is *not* this
    agent's — never a queue of agents behind one "owner" of a shared file.
@@ -302,9 +337,13 @@ should call it rather than growing a second way:
 
 Prefer a **narrow operational action** over a conversational one wherever both would work. *Defer new
 jobs, reduce monitoring frequency, deduplicate alerts, restart a dead service* are safe because their
-consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard or daemon to deploy what the primary now holds is also
-yours, once you have read the steering queue (`GET /api/actions`), because a restart discards it —
-Greg approved, 2026-09-08 — but the classifier may still refuse the command, and then it is Greg's.
+consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard to deploy what the primary now holds is yours, and
+`npx tsx scripts/fleet-restart.ts restart` is how: it reads the steering queue for you and refuses if
+anything is in it, holds included — Greg approved the restart 2026-09-08, and the classifier accepted
+that command unattended on 2026-09-09. `check` is the same thing without the restart. A hand-typed
+`sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
+refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
+*Prove the relaunch before you stop a process*.
 
 ### Dispatching agents
 

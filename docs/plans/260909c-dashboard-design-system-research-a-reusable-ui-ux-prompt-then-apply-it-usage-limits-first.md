@@ -1,8 +1,19 @@
 # A design system for the fleet dashboard: research, a reusable UI/UX prompt, then apply it
 
-**Status as of 2026-09-09: Stages 1–3 done.** Screenshots and measurements taken, the research done,
-and [design-a-screen.md](../reusable/design-a-screen.md) written. Sol's read of the screens and the
-restyle follow.
+**Status as of 2026-09-09: DONE ENOUGH TO STOP HERE. Stages 1–4b and 6 done and on `dev` at
+`dd231938`, both review rounds closed; 5a, 5b and 7 not started.** What remains is real but
+optional, and what landed is coherent on its own: a reusable doc, a design vocabulary with tests,
+and the one tab Greg named, rebuilt. The highest-value unstarted thing is the landing surface
+(Stage 5a first — its data contract, which the review split out precisely so it would not be
+guessed at).
+The research, the screenshots, [design-a-screen.md](../reusable/design-a-screen.md), two Sol
+reviews, the type scale, `StatCard`, and the Usage limits rewrite have landed. What remains is the
+landing surface (5a's data contract first, then 5b) and the tab-by-tab sweep, which Sol asked be a
+reassessment rather than a queue.
+
+**Readiness and Deploys are now mine outright**, handed over by their sessions; `dashboard-tooltips`
+has finished Recent messages, Queued ideas and Sessions/masthead, so those are unblocked too. The
+agreements and what each handover carried are in § Ownership below.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md);
@@ -407,7 +418,24 @@ Above the fold on a phone, in order: the verdict, `CACHED HEADROOM`, both window
 window that reset 182 minutes ago — then the fold, then *Why*. Before, the first screenful was three
 paragraphs of provenance.
 
-#### Two things left deliberately undecided until the code review answers
+#### Two changes to `wire.ts`, which this session does not own
+
+Both came out of the code review, and both are the same shape: **the renderer is guessing at
+something only the producer knows.** Neither is urgent; both would make this tab sharper.
+
+- **An absence classification on `UsageWindowCard.unknown` and `UsageSummary.cache.unknown`.** One
+  arm currently covers a missing `resets_at`, a non-object entry, an invalid date, a missing or
+  out-of-range utilisation, and — on the cache — both "nothing was cached" and "the cache was
+  unreadable". The card can only draw `Unknown` for all of them, when three of the states it has
+  are genuinely different pieces of news.
+- **A per-window status, or the threshold behind it.** Without one, a window card cannot colour
+  itself without inventing a severity that contradicts the verdict, so it stays neutral.
+
+A third would let the withdrawn compaction be rebuilt honestly: **something that says which windows
+are primary.** `UsageWindowName` is `string`, so `five_hour` and `nimbus_quill` are
+indistinguishable to a consumer, and that is why five cards is currently the honest answer.
+
+#### Two things left deliberately undecided until the code review answers — both now answered
 
 - **`windowStat`'s tone thresholds** — `left <= 10` alarm, `<= 25` needs — are numbers I invented.
   A nearly-full window really is closer to blocking, so this is arithmetic rather than judgement;
@@ -573,6 +601,103 @@ lines removed; Usage rebuilt from its typed epistemic states. It also names the 
 existing-screen deletion** as those two constant lines — which is where I had independently landed
 from the pixels, and it is a product call for Greg rather than mine.
 
+### The Sol code review of this stage, and the fold withdrawn
+
+[260909c-dashboard-design-system-usage-code-review-sol-r1.md](260909c-dashboard-design-system-usage-code-review-sol-r1.md),
+at `f172b9fd`. No P0, **five P1s, all accepted and fixed**. This is the review the
+engineering-manager rule says to weight higher than the plan review, and it earned that: three of
+the five are things no plan review could have found.
+
+| Finding | What it was, and what I did |
+|---|---|
+| **UL-01** | With `dueBackAt` in the past the headline says *the limit has since reset* — and `DueBackCard`, reading the same instant, said **"Work can resume in — Unknown"** underneath it. Two components disagreeing about one instant in view of each other. The card is not drawn when `head.cleared`, and the cleared-limit test now asserts its absence; it had only ever checked the headline |
+| **UL-02** | The producer's `window.kind === "unknown"` covers *five* different situations — no `resets_at`, a non-object entry, an invalid date, a missing utilisation, an out-of-range utilisation — and `cache.kind === "unknown"` covers both *nothing was cached* and *the cache was unreadable*. **This arm has now been wrong twice**: first `unavailable`, then `withheld`, both the renderer deciding what it cannot know. `Unknown` is the only defensible common rendering, and the real fix is the producer carrying its own absence classification |
+| **UL-03** | **The fold is withdrawn.** It partitioned by epistemic state when only relevance justified it, so `five_hour` arriving unreadable was folded away beside the noise — and `UsageWindowName` is `string`, so nothing in the data can tell them apart. It also had a bug its own comment denied: with every window unknown, `!every(...)` suppressed the disclosure and all the names and reasons vanished |
+| **UL-04** | The attributed cache's `fetchedAt` was **lost** in the rewrite — the card showed only `collectedAt`, and a fresh pass routinely republishes a cache fetched hours earlier, so a stale percentage read as freshly taken. One `cached 10m ago` beside the group, not one per tile |
+| **UL-05** | The invented tone thresholds, which I had flagged as invented without knowing they were also *wrong*: measured against the producer's 80%-used default, the card would say `needs` at 75% while the verdict said `ok`, and `alarm` at 90% against `approaching`. Dropped |
+| **UL-06** | `100 - 99.99` is `0.010000000000005116`, in the largest text on the card |
+| **TEST-01/02** | `screen()` is `textContent`, so it counts closed disclosures and `sr-only` prose — several assertions were passing off hidden text. And my own edit had duplicated three assertions verbatim |
+| **TYPE-01** | The scale did not satisfy its own claim: the real ratios were 29 / 31 / 8 / 9%, not "each ~25%", and `lead` at 15px *was the root body size* |
+
+**The type scale is now three levels and two density variants, and says so.** `lead` widened to 17px
+so it is a step; `note` and `label` are documented as deliberately close, because a dense page needs
+secondary text smaller than body without implying a further demotion, and what separates them is
+weight and colour. **A claim a reader can measure and disprove is worse than no claim** — the
+checklist now says to state which of your sizes are levels and which are density, and to check the
+top of the scale against the root font size.
+
+**And the mutation that nothing caught.** Re-adding the invented thresholds left all fourteen tests
+green: every other assertion is about words, and that one is about colour. There is now a test that
+draws a window at 95% used against a verdict of `ok` and asserts the value carries neither the alarm
+nor the needs ink. Three of the four earlier mutations were caught; this is the fourth, closed.
+
+**UL-05's first fix was wrong in the other direction, and the screenshot caught that too.** Dropping
+the thresholds, I set the tone to `work` — and `work` is this palette's green, the status colour of
+a session that is running. On a headroom figure green does not read as *measured*, it reads as
+*healthy*, so `4% left` would have been drawn as good news. Sol's word was **neutral** and it was
+the right word; the tone is `idle` now, and the test asserts the absence of all three severity inks
+rather than only the loud two. Size and weight still make the number the biggest thing in its box,
+which is what the card is for.
+
+That makes **three** defects on this tab found by looking at the rendering rather than by running
+anything, all three after a green suite, and all three about *colour* — the one property every
+assertion here was blind to until this stage added one.
+
+### Round two: no P0, no P1, land it
+
+[260909c-dashboard-design-system-usage-code-review-2-sol.md](260909c-dashboard-design-system-usage-code-review-2-sol.md),
+scoped to the five fixes with discovery closed. *"The five fixes are sound; I would land
+`20f8c504`."* It confirmed the four judgement calls: withdrawing the fold was correct (folding all
+but today's known names *"would still invent a future compatibility contract"*); `Unknown` for both
+broad arms is right, and `Withheld` and `Unavailable` each having one precise caller is *"evidence
+that those states now mean something specific, not a smell"*; and 22 / 17 / 13 reads as three
+levels.
+
+**Two P2s, both about my own prose overclaiming, both fixed:**
+
+- The comment said the exact cache instant *"can remain in the tooltip"* while `USAGE_TIPS.cached`
+  was static and never received `fetchedAt`. A sentence asserting a behaviour that was not there —
+  [written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md)'s exact shape.
+  `usageCachedTip(fetchedAt)` now computes it.
+- The new colour test used **95% used against a verdict of `ok`**, which the producer's 80%
+  threshold cannot emit. The mutation was still caught, but a fixture the real system cannot reach
+  proves something about nothing. It is 75% / `ok` now — inside the threshold, and exactly where the
+  withdrawn `left <= 25` rule would have shouted over a verdict saying the account is fine.
+
+#### And the mutation check that was itself wrong
+
+Re-running the threshold mutation after that change, a test failed — but **the wrong one**. There
+are three `tone: "idle"` in the file and the `perl` substitution took the first, which is
+`headline()`'s cleared arm, not `windowStat`'s. So the run "passed" the mutation check while having
+mutated a different function; the new colour test had not been exercised at all. Targeting line 412
+specifically, it fails as intended.
+
+**A mutation you did not verify landed where you meant is a green tick for a check you did not
+run** — the same family as everything else this stage turned up, and the reason to print what the
+mutation actually changed rather than trusting a pattern to be unique.
+
+### One question for Greg, raised once by `deploys-ui` on behalf of both tabs
+
+**`zones.ts` says a clock time is always drawn in all three zones — UTC, London, Athens — and two
+sessions broke that rule on two tabs on the same night, from opposite directions.** Deploys tucked
+the three-zone line behind an expand on a row whose whole purpose was to stop being 950px tall; this
+plan turned nine of Usage's ten wall-clock instants into durations and kept all three zones only on
+the reset.
+
+The proposal — theirs, and better than the way I had it — is a distinction rather than an exception:
+
+> **the instant you act at versus the instant you judge freshness by.**
+
+A reset time is the first, and ambiguity there costs a decision. A deploy timestamp from yesterday
+is the second, and `25h ago` has already answered it before anyone reads a clock. If that holds,
+`zones.ts` is right about the case it was written for and over-broad everywhere else — a much
+smaller change than either tab backing out.
+
+**It is Greg's to settle** and `deploys-ui` is putting it to him in their debrief, with this tab's
+evidence, so he gets one question rather than two halves of one. Nothing here should be re-litigated
+until he answers; if he rules that all three zones must stay visible everywhere, `instantTip` is the
+cheapest place to look first.
+
 ### Stage 7+ — the remaining tabs: a reassessment, not a queue
 
 Each with a before/after pair, the gates, and a Sol code review. Order decided after Stage 4's
@@ -586,7 +711,7 @@ agreements, so the next agent does not have to re-negotiate them:
 | With | Agreed |
 |---|---|
 | `dashboard-tooltips` | **Their tooltips land on a tab first, my restyle after** — a restyle that moves prose into a card changes what an `Explain` is attached to. Their order: Recent messages → Queued ideas → Sessions/masthead → Overseer. **Usage limits, Readiness and Deploys are unclaimed by them and mine to take now** |
-| `deploys-ui` | Deploys stays in the sweep; they message me when their rework lands and I do the visual pass **on top of it**, not underneath. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against |
+| `deploys-ui` | **Landed and handed over** (`4ccf4822`): 8,824px → 1,682px at 390px. The visual pass is mine, on top of their build. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against. They also added four `.deploy-row` rules to `tailwind.css` — including hiding Safari's `::-webkit-details-marker`, which `list-none` does not reach — lifted from `src/web/styles/changelog.css` rather than re-derived |
 | `readiness-tab` | **Handed to me outright** — *"ReadinessPanel.tsx is finished and I'm stopping, so restyle it freely."* Their session has since ended; see § Readiness below for what they asked and my answer |
 | `claude-agents-dashboard` | `ActionButtons.tsx` and the detail's action machinery stay theirs; **the narrow-width layout question in `App.tsx` is mine**. An extraction of shared shapes out of `ActionButtons.tsx` is welcome *after* Stages 5–6, on the condition that the copy tests move with the components and **no string is tidied on the way** — several are worded around what the code can and cannot know, and the awkward ones are awkward on purpose |
 

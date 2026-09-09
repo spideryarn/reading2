@@ -326,6 +326,22 @@ Either answer is a small change: amend `zones.ts` to name the Deploys exception,
 `deployWhen(version.version)` in the summary and let the row wrap. **Until Greg rules, the tab ships
 as briefed** and this paragraph is the record that it was noticed rather than missed.
 
+**And it is not only this tab.** Session `dashboard-design-system` hit the same rule the same night
+from the other end: its Usage rewrite turned nine of that tab's ten wall-clock instants into
+durations and kept all three zones only on the reset. Two sessions arriving at the same exception
+from opposite directions is a rule meeting its edge, not two people finding it inconvenient — so it
+goes to Greg once, for both tabs, rather than twice.
+
+The proposal to put to him, which is ours rather than his, is the distinction that session drew:
+**the instant you act at, against the instant you judge freshness by.** A limit reset is the first,
+and ambiguity there costs a decision — which is exactly the case `zones.ts` was written for and
+argues at length. A deploy that happened yesterday is the second, and this row has already answered
+*when* with `25h ago` before anybody reads the clock. If that split holds, "all three, always" is
+right where it came from and over-broad everywhere else, which is a smaller change than either tab
+backing out. A third option arrived in the same merge and is worth naming: `instant.ts`'s `instantTip`
+puts all three zones one hover away from any printed instant — attractive, except that the
+dashboard's tips are `mouseOnly`, so it does nothing on the phone where this actually matters.
+
 **The contents was navigation with no landmark and no groups.** Tabbing it gave "Jump to release 74",
 "Jump to release 73" and so on, with each date sitting alongside as an unassociated `<span>` — so a
 sighted reader got an index organised by day and a screen-reader reader got a flat run of numbers.

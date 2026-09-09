@@ -73,6 +73,7 @@
    these types reaches `node:child_process` transitively, and this project has no
    node types. See wire.ts's header. */
 import type {
+  HoldBasis,
   HoldOutcome,
   HoldReleaseGesture,
   PlanRunView,
@@ -476,6 +477,7 @@ export type HoldView = Omit<
   | "lastSendAt"
   | "incidents"
   | "tmuxGeneration"
+  | "basis"
   /* Deliberately unread. The hold is only ever drawn inside the queue whose
      `sessionId` the page already has; the pane and the conversation are the
      server's business; and which run recorded it is what its own id carries —
@@ -522,6 +524,16 @@ export type HoldView = Omit<
   firstSeenGeneration: number | null;
   /** Where the hold has got to, or null when the server did not say. */
   outcome: HoldOutcome | null;
+  /**
+   * Whether the server watched this hold open or read it off a disk at
+   * startup, or null when it did not say.
+   *
+   * **NULL IS NOT `observed-here`.** A server too old to send the field has
+   * made no claim, and drawing a rehydrated hold as one this dashboard watched
+   * happen is the exact overstatement `HoldBasis` exists to stop. The page says
+   * nothing extra when this is null.
+   */
+  basis: HoldBasis | null;
 };
 
 /**
@@ -671,7 +683,30 @@ export function parseHold(v: unknown): HoldView | null {
     tmuxGeneration: finite(v["tmuxGeneration"]),
     firstSeenGeneration: finite(v["firstSeenGeneration"]),
     outcome: parseHoldOutcome(v["outcome"]),
+    basis: parseHoldBasis(v["basis"]),
   };
+}
+
+/**
+ * How much this hold's record is entitled to claim, or null.
+ *
+ * **AN UNRECOGNISED `kind` IS NULL RATHER THAN THE HARMLESS-LOOKING ARM**, the
+ * same rule `parseHoldOutcome` keeps: `observed-here` would be the tempting
+ * default and it is a claim — *this dashboard was there* — which is the one
+ * thing a page must never invent on a server's behalf.
+ */
+function parseHoldBasis(v: unknown): HoldBasis | null {
+  if (!isRecord(v)) return null;
+  if (v["kind"] === "observed-here") return { kind: "observed-here" };
+  if (v["kind"] === "rehydrated-hold") {
+    const recordedAt = millis(v["recordedAt"]);
+    return recordedAt === null ? null : { kind: "rehydrated-hold", recordedAt };
+  }
+  if (v["kind"] === "rehydrated-attempt") {
+    const attemptedAt = millis(v["attemptedAt"]);
+    return attemptedAt === null ? null : { kind: "rehydrated-attempt", attemptedAt };
+  }
+  return null;
 }
 
 /**

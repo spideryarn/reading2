@@ -151,6 +151,24 @@ export const USAGE_TIPS: Record<string, Tip> = {
 };
 
 /**
+ * The cache's own card, carrying the instant its age is an age of.
+ *
+ * Computed rather than the static `USAGE_TIPS.cached`, because a comment
+ * claiming "the exact instant remains in the tip" while the tip was static was
+ * an overclaim in prose about the thing prose cannot check — GPT Sol's round-two
+ * P2, and [written-down-is-not-checked.md](../../../docs/reusable/written-down-is-not-checked.md)
+ * is the class. The age is what a reader judges freshness by; the instant is
+ * what they quote into a message, and it now exists.
+ */
+export function usageCachedTip(fetchedAt: string): Tip {
+  return {
+    head: USAGE_TIPS["cached"]!.head,
+    what: `${USAGE_TIPS["cached"]!.what} This one was fetched ${whenLine(fetchedAt)}.`,
+    how: USAGE_TIPS["cached"]!.how,
+  };
+}
+
+/**
  * One window's card. Computed rather than a map entry, because half of it is
  * the window's own name and reset instant — the same shape as `instantTip`.
  */
@@ -308,17 +326,23 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
   tone: Tone;
 } {
   if (window.kind === "unknown") {
-    /* **`withheld`, NOT `unavailable`** — corrected on 2026-09-09 after looking
-       at the rendered tab rather than at the code. This arm is *a number arrived
-       and cannot be shown to be valid* — typically no `resets_at`, so nothing
-       says whether it describes a window that still exists. Nothing failed. The
-       first draft filed it under `unavailable`, and the consequence was three
-       red alarm cards on a tab whose verdict is "cannot tell": a gap painted as
-       a fault, which is alert fatigue and a misattribution at once. The tests
-       could not catch it because both are honest absences; only the screenshot
-       could. `design-a-screen.md` § Absence is the rule it broke, in the
-       component written to enforce it. */
-    return { value: { kind: "absent", state: "withheld", why: window.why }, evidence: null, tone: "unknown" };
+    /* **`unknown`, AND THIS ARM HAS NOW BEEN WRONG TWICE.**
+
+       First draft: `unavailable`, which drew three red alarm cards on a tab
+       whose verdict is "cannot tell" — a gap painted as a fault. Second draft:
+       `withheld`, on the reasoning that a number had arrived and could not be
+       shown to be valid. Both were the renderer deciding something it cannot
+       know. GPT Sol, UL-02, 2026-09-09: this one producer arm covers **a cache
+       value with no `resets_at`, a non-object entry, an invalid date, a missing
+       or non-numeric utilisation, and an out-of-range utilisation** — a mixture
+       of withheld, invalid and source failure, which no consumer can unpick
+       from `{ kind, window, why }`.
+
+       So `Unknown` is the only defensible common rendering, and the fix that
+       would let it be sharper is **the producer carrying its own absence
+       classification**, not the renderer guessing harder. Noted in plan 260909c
+       as a change to `wire.ts`, which this session does not own. */
+    return { value: { kind: "absent", state: "unknown", why: window.why }, evidence: null, tone: "unknown" };
   }
   if (window.kind === "expired") {
     /* THE PRODUCER'S SENTENCE, NOT A PREFIX AND THEN THE PRODUCER'S SENTENCE.
@@ -343,7 +367,14 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
       tone: "unknown",
     };
   }
-  const left = 100 - window.utilizationPercent;
+  /* **ROUNDED, BECAUSE THE COMPLEMENT OF A DECIMAL IS UGLY.** Both parsers
+     require a finite value in [0, 100], so `left` can be neither negative nor
+     NaN nor over 100 — but `100 - 99.99` is `0.010000000000005116`, and that
+     reaches the screen as the answer to "how much is left". GPT Sol's UL-06.
+     One decimal place, then trailing zeroes dropped, so 42 stays `42` and 0.01
+     becomes `0`. A `0% left` that was really 0.01% is the right rounding
+     direction: it does not overstate the headroom. */
+  const left = Number((100 - window.utilizationPercent).toFixed(1));
   return {
     value: { kind: "value", text: `${left}% left` },
     /* The producer's own number stays on screen beside the one derived from it,
@@ -355,9 +386,30 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
         {window.utilizationPercent}% used · resets in {formatDuration(until.ms)}
       </>
     ),
-    /* The colour is earned, and the thresholds are the card's own rather than
-       the verdict's: this is one window, and `level` is about the account. */
-    tone: left <= 10 ? "alarm" : left <= 25 ? "needs" : "work",
+    /* **NO SEVERITY OF OUR OWN.** The first draft coloured this card by
+       thresholds it invented — alarm under 10% left, needs under 25% — and GPT
+       Sol (UL-05) measured what that costs against the producer's actual
+       default of 80% used: at 75% used the card would say `needs` while the
+       verdict still says `ok`, and at 90% it would say `alarm` while the
+       producer says only `approaching`. **A card contradicting the verdict
+       above it** is precisely the second interpretation of one measurement this
+       file's header forbids, and I had flagged the numbers as invented in the
+       review prompt before knowing they were also wrong.
+
+       **`idle`, which is the neutral one — NOT `work`.** The first attempt at
+       this fix used `work`, and `work` is the green in this palette: the status
+       colour for a session that is running. On a headroom figure green does not
+       mean "measured", it means "healthy" — so `4% left` would have been drawn
+       in the reassuring colour, which is a severity claim of exactly the kind
+       the finding was about, made in the other direction. Sol's word was
+       *neutral* and it was the right word.
+
+       A real number, drawn as a real number: 22px and semibold still make it
+       the biggest thing in its box, which is what the card is for. The
+       account's severity is the verdict's to state, once, at the top. The way
+       to earn a per-window colour is for the producer to carry a per-window
+       status — noted in plan 260909c. */
+    tone: "idle",
   };
 }
 
@@ -647,7 +699,15 @@ function Reading({
           of *and here is when you are not* — and it comes from the verdict's
           own attributed limit rather than from `~/.claude.json`, so filing it
           under "cached headroom" would attribute it to the wrong source. */}
-      {summary.dueBackAt === null ? null : (
+      {/* **NOT DRAWN ONCE THE LIMIT HAS CLEARED**, which is a bug GPT Sol found
+          in the first draft (UL-01): with `dueBackAt` in the past, `headline()`
+          correctly says the limit has since reset — and this card, reading the
+          same fact, said **"Work can resume in — Unknown"** right underneath it.
+          The answer is not unknown; as far as the attributed limit goes, work
+          can resume now, and the sentence above already says so. Two components
+          reading one instant and disagreeing about it in view of each other is
+          the thing this whole page is written against. */}
+      {summary.dueBackAt === null || head.cleared ? null : (
         <div className="tw:mt-3">
           <DueBackCard dueBackAt={summary.dueBackAt} asOf={asOf} skew={skew} />
         </div>
@@ -668,36 +728,71 @@ function Reading({
       <h3 className="tw:mt-3 tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
         Cached headroom
       </h3>
+      {/* **THE CACHE'S OWN AGE, ONCE, FOR THE WHOLE GROUP.**
+
+          This went missing in the rewrite and GPT Sol found it (UL-04). The old
+          render showed `cache.fetchedAt`; the new one showed only
+          `summary.collectedAt`, and **those are different clocks** — a fresh
+          usage pass routinely republishes a cache fetched hours earlier, so a
+          stale-but-valid percentage was reading as freshly taken. That is the
+          precise failure `design-a-screen.md` § Absence names, and it arrived by
+          deletion rather than by a wrong word.
+
+          Once, here, rather than per tile: these numbers all came out of one
+          fetch, and a timestamp on each of five cards is the wall of provenance
+          this rewrite removed. Same rule, the other way up. */}
+      {summary.cache.kind === "attributed" ? (
+        <p className="tw:mt-1 tw:text-note tw:text-ink-faint">
+          <Explain tip={usageCachedTip(summary.cache.fetchedAt)}>
+            cached {ago(summary.cache.fetchedAt, asOf, skew).text}
+          </Explain>
+        </p>
+      ) : null}
       <div data-slot="usage-headroom" className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
-        {summary.cache.kind === "attributed"
-          ? summary.cache.windows
-              .filter((window) => window.kind !== "unknown")
-              .map((window) => <WindowStatCard key={window.window} window={window} asOf={asOf} skew={skew} />)
+        {/* **EVERY WINDOW GETS A CARD, INCLUDING THE ABSENT ONES.**
+
+            A draft between these two folded the `unknown` windows into a
+            disclosure, because on the live box three of the five entries are
+            ancillary codenames — `nimbus_quill`, `spend`,
+            `member_dashboard_available` — that carried five near-identical
+            lines each and most of the first screenful.
+
+            **Withdrawn on GPT Sol's UL-03**, and the reason is worth keeping
+            because the idea will occur to the next person too. It partitioned
+            by EPISTEMIC STATE when the thing that justified it was RELEVANCE,
+            and those are not the same set: `five_hour` arriving unreadable is
+            decision-changing and was being folded away beside the noise.
+            Nothing in the data can tell them apart — `UsageWindowName` is
+            `string`, so the producer names no window as ancillary — which makes
+            the compaction unbuildable here rather than merely unwise. It also
+            had a bug the comment beside it denied: with EVERY window unknown
+            the disclosure was suppressed by its own `!every(...)` guard, so all
+            the names and reasons vanished.
+
+            The height cost is real and stays. The way to earn the compaction is
+            for the wire to say which windows are primary; plan 260909c. */}
+        {summary.cache.kind === "attributed" && summary.cache.windows.length > 0
+          ? summary.cache.windows.map((window) => (
+              <WindowStatCard key={window.window} window={window} asOf={asOf} skew={skew} />
+            ))
           : null}
-        {summary.cache.kind === "attributed" && summary.cache.windows.every((w) => w.kind === "unknown") ? (
-          /* Every entry unusable reads the same to a reader as none at all: the
-             answer is that there is no headroom figure here. The entries
-             themselves are still listed below, so this is a summary and not a
-             deletion. */
+        {summary.cache.kind === "attributed" && summary.cache.windows.length === 0 ? (
+          <StatCard
+            label="Headroom"
+            value={{ kind: "absent", state: "unknown", why: "The cache carried no windows at all." }}
+            tone="unknown"
+          />
+        ) : null}
+        {summary.cache.kind === "unknown" ? (
+          /* `unknown`, not `unavailable`: this producer arm covers *Claude has
+             not cached a reading here*, which is ordinary, as well as a cache
+             that could not be parsed, which is a fault. Sol's UL-02 again — one
+             arm, two meanings, and the consumer cannot tell which it has. */
           <StatCard
             label="Headroom"
             value={{
               kind: "absent",
               state: "unknown",
-              why:
-                summary.cache.windows.length === 0
-                  ? "The cache carried no windows at all."
-                  : "No window in the cache carried a usable number.",
-            }}
-            tone="unknown"
-          />
-        ) : null}
-        {summary.cache.kind === "unknown" ? (
-          <StatCard
-            label="Headroom"
-            value={{
-              kind: "absent",
-              state: "unavailable",
               why: `The cached utilisation could not be read — ${summary.cache.why}`,
             }}
             tone="unknown"
@@ -734,43 +829,6 @@ function Reading({
           />
         ) : null}
       </div>
-
-      {/* **THE ENTRIES THAT NEVER CARRIED A NUMBER, AS A COUNT.**
-          `~/.claude.json`'s cache is a blob and not all of it is headroom:
-          measured on the live box, `nimbus_quill`, `spend` and
-          `member_dashboard_available` sit alongside `five_hour` and
-          `seven_day`, each with no `resets_at` and so no way to check whether
-          it describes anything. Drawn as full cards they took most of the first
-          screenful at 390px with five near-identical lines apiece — three
-          violet cards where a red wall used to be, which is a quieter version
-          of the same disease.
-
-          **Summarised, never dropped**, and the same partition `Incidents`
-          makes one section below for the same reason: none of these is a thing
-          to act on, and a count with the entries one tap away says so without
-          claiming they do not exist. The count is on the face, so an absence
-          cannot become invisible by being folded — what is behind the
-          disclosure is which entries, not whether there were any. */}
-      {summary.cache.kind === "attributed" &&
-      summary.cache.windows.some((w) => w.kind === "unknown") &&
-      !summary.cache.windows.every((w) => w.kind === "unknown") ? (
-        <details data-slot="usage-unusable" className="tw:mt-2">
-          <summary className="tw:cursor-pointer tw:text-note tw:text-ink-faint">
-            {summary.cache.windows.filter((w) => w.kind === "unknown").length} more cache{" "}
-            {summary.cache.windows.filter((w) => w.kind === "unknown").length === 1 ? "entry" : "entries"} carried no
-            usable number
-          </summary>
-          <ul className="tw:mt-1 tw:space-y-1 tw:text-note tw:text-ink-faint">
-            {summary.cache.windows
-              .filter((w) => w.kind === "unknown")
-              .map((window) => (
-                <li key={window.window}>
-                  <span className="tw:font-mono">{window.window}</span> — withheld: {window.why}
-                </li>
-              ))}
-          </ul>
-        </details>
-      ) : null}
 
       {/* ------------------------------------------------------- 3 · WHY --
           The producer's reasons stay on the page rather than going into a

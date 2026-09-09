@@ -550,7 +550,7 @@ nothing between them. It reasoned from the header to the consequence without hav
 the bug — which is the argument for writing the reason down rather than only enforcing it, and the
 clearest evidence tonight that a comment can do work a test cannot.
 
-### Stage 4b — a hold must survive the process that recorded it
+### 🟢 Stage 4b — a hold must survive the process that recorded it (built 2026-09-09)
 
 **U1, and it is the one finding that needs new machinery rather than a repair.** The quarantine book
 is in memory. A dashboard restart constructs an empty one, `next()` then sees no hold, and
@@ -564,20 +564,93 @@ none, and the plan's own rejected-options section says instance-scoped memory is
 receipts* — that argument does not transfer, because a receipt's job ends with the process and a
 hold's does not.
 
-- [ ] A small append-only ledger, JSONL, in the shape the roadmap's storage contract already allows
+- [x] A small append-only ledger, JSONL, in the shape the roadmap's storage contract already allows
       — no new store type, no SQLite. Write the unresolved attempt **before** the send; remove it
       only on a definitive success or a proven `none`.
-- [ ] On startup, reload unresolved attempts as holds **before mounting any send route**, so there
+- [x] On startup, reload unresolved attempts as holds **before mounting any send route**, so there
       is no window in which the server can be asked to type while it is still reading.
-- [ ] Accept rehydrated ids from the previous process rather than refusing them as foreign — which
+- [x] Accept rehydrated ids from the previous process rather than refusing them as foreign — which
       is a direct tension with Stage 2's instance-prefixing, and the resolution has to be written
       down rather than discovered: a queue id names volatile state and should die with it; a hold id
       names a fact about the *world* that outlived the process.
-- [ ] Prove it by restarting: open a hold, restart the server, assert the session is still held and
+- [x] Prove it by restarting: open a hold, restart the server, assert the session is still held and
       both gestures still work.
 
 **Done:** a hold survives a restart, or the operator is told it did not — and the second is not
 acceptable as the design, only as the failure mode.
+
+#### Built 2026-09-09 — three records, and the one thing a rehydrated hold may not claim
+
+New leaf `tools/fleet/hold-ledger.ts`, writing `~/.fleet-holds/holds.jsonl` (`FLEET_HOLDS_DIR`
+overrides it, absolutely or not at all). **A third directory rather than a corner of an existing
+one**: `~/.overseer/` is the daemon's record of what it observed and `~/.fleet-health/` is the
+dashboard's record of the box, and a second writer beside either produces the failure `lock.ts`
+names — not corruption anybody can see, but a plausible history that never happened. The lock and
+the append discipline are `tools/overseer/lock.ts` and `jsonl.ts`, **imported, not copied**; both
+were already on the two-then-five list `tests/fleet-attention.test.ts` enforces, so the closure walk
+stayed green and no cycle was closed.
+
+**Three records, and the fold is "last record per session wins."** `attempt` is written on the line
+between the hold check and the transport call — the window between it and the send is the whole
+point of the file. `held` is written after an ambiguous answer, and is what lets a rehydrated hold
+say *what* was read and *when* it opened. `resolved` is the only thing that takes a session off the
+list: a definitive success, a proven `none`, a person's gesture, a proven generation change. **A
+throw is deliberately not on that list**, so the drain's open lease — which is memory and does not
+survive a restart either — is now backed by something that does. The fold is sound rather than
+convenient because the coordinator refuses before it records, so a session has at most one live
+attempt at a time.
+
+**What a rehydrated hold knows less, said in the type rather than in a comment.** `HoldBasis` has
+three arms and `openedAt`, `lastSendAt` and `reading` became nullable beside it, with exactly one
+arm producing each null. A `rehydrated-attempt` — the crash-inside-the-transport case — cannot say
+how far the send got or whether it was made at all, so it says none of it; a `rehydrated-hold` knows
+what the previous run wrote down and nothing after it, including whether somebody released it in the
+seconds before that run stopped. The union-per-arm shape was the better one in the abstract and was
+passed over for a concrete reason recorded in `wire.ts`: `HoldView` in the client already re-types
+every one of those to `| null`, so a wire union would be flattened back one file later and the
+flattening would be the second place to get it wrong.
+
+**Bounded by compaction**: the file is rewritten to its live records — one line per session with
+something unresolved, so a few kilobytes whatever the history — whenever it passes 256 KiB, through
+`jsonl.ts`'s `writeAtomically`. The first version of that test passed under a compaction that wrote
+an **empty file**, because the record it checked had been written after the last compaction; it now
+goes in first and is read back off the disk.
+
+**The Stage 2 tension is resolved in the route, at the point of temptation.** `POST
+/api/actions/hold/release` refuses a foreign id only when the book has nothing by that name, so the
+id the page was drawing before the restart still works — and the comment says why the inconsistency
+with queue ids is the point rather than an oversight. The old sentence *"Holds do not survive a
+restart"* is gone, since it is now false and a refusal explaining itself with a false rule sends
+somebody to look in the wrong place.
+
+**Three judgements worth recording.** (1) A ledger that will not open, is locked out, or cannot
+write **never stops a send**: failing closed would make a full disk a reason the one tool you reach
+for when things are broken cannot type, and failing open degrades to exactly the Stage 4 behaviour
+— every such failure is on `status()`, reaches the log at the moment it happens, and is not silent.
+(2) `openSharedQuarantine()` throws in exactly one case — the shared book was handed out before its
+ledger — which is Stage 4's `makeActionRoutes` argument unchanged, and `server.ts` calls it above
+`createServer` with a source guard keeping it there. (3) `writeHold` refuses to put an `openedAt` on
+disk for a hold that has none, rather than substituting the latest send's clock: a moment nothing
+observed, read back one restart later as a fact, is the exact class this plan has cut three arms
+under.
+
+**`send-coordinator.ts`'s header now says what changed and what did not.** A dashboard restart no
+longer forgets its holds; **a child process still must not send**, for three reasons it now lists —
+its book is a snapshot, it is read-only behind the parent's lock, and a child that never calls
+`openSharedQuarantine()` gets the empty book the header described before.
+
+**Sixteen mutations, sixteen caught** — after the first pass found one survivor, which was the
+compaction test above. Among them: rehydration made a no-op, the pre-send write removed, each of the
+four resolutions removed, a rehydrated hold given a fresh id, the release route refusing every
+foreign id again, a locked-out ledger writing anyway, the invented `openedAt`, and the startup
+building a private book instead of the shared one.
+
+**And the full suite earned its keep on the way past**: `tests/fixture-ids.test.ts` went red because
+the new ledger test had copied `fleet-quarantine.test.ts`'s conversation uuid, and one uuid declared
+by two files is a fixture the first teardown deletes out from under the second. Nothing in either
+file touches a database and the guard is still right — it cannot tell, and a shared id is one insert
+away from being a real one. 2,129 fleet tests green across 56 files, 19,040 across 926 in the whole
+suite; `npm run typecheck` exit 0.
 
 ### Stage 5 — request ids and receipts
 

@@ -18,8 +18,16 @@
  * one recipient of a broadcast — and only one of them is anywhere near a
  * `SteeringQueue`. `routes-steer.ts` cannot import `routes-actions.ts` (that
  * import already runs the other way, for the rate limiter), so the hold has to
- * live somewhere both can reach. This file imports `instance.ts` and nothing
- * else, so it can be reached from either side without a cycle.
+ * live somewhere both can reach. This file imports `instance.ts` and
+ * `hold-ledger.ts`, both leaves, so it can still be reached from either side
+ * without a cycle.
+ *
+ * THE BOOK IS NO LONGER ONLY MEMORY. `hold-ledger.ts` writes an unresolved
+ * attempt down **before** the keystrokes and takes it off the list only when
+ * something accounted for it, so a dashboard restart rebuilds the holds instead
+ * of quietly forgetting them — Stage 4b, and the P0 the Stage 4 review found.
+ * The ledger is injected and optional: a book without one behaves exactly as it
+ * did before, which is what every test here uses.
  *
  * NOTHING HERE SENDS, RETRIES, OR OBSERVES. It holds no transport and no
  * timer. **Both release gestures are records rather than actions** — one says a
@@ -31,6 +39,14 @@
  * NO CLOCK OF ITS OWN. `now` is injected, matching queue.ts and drain.ts, so
  * every test here moves time by assignment.
  */
+import {
+  holdLedgerDir,
+  openHoldLedger,
+  type AttemptRecord,
+  type HeldRecord,
+  type HoldLedger,
+  type HoldResolution,
+} from "./hold-ledger.js";
 import { INSTANCE_TOKEN, serverInstanceId } from "./instance.js";
 import type {
   HoldReleaseGesture,
@@ -40,6 +56,7 @@ import type {
 } from "./wire.js";
 
 export type {
+  HoldBasis,
   HoldOutcome,
   HoldReleaseGesture,
   QuarantineHoldView,
@@ -97,6 +114,27 @@ export type HoldEvidence = {
   what: string;
 };
 
+/**
+ * What a producer knows **before** it types — everything on `HoldEvidence`
+ * except the one thing that does not exist yet.
+ *
+ * `reading` is missing because nothing has been read: this is written down on
+ * the line above the transport call, and the whole reason for writing it there
+ * is the case where nobody ever finds out how far the send got. A type that
+ * asked for a reading here would have to be given an invented one.
+ */
+export type SendAttemptEvidence = Omit<HoldEvidence, "reading">;
+
+/**
+ * The two ways a send accounts for itself, and therefore the only two a
+ * producer may use to take its attempt off the ledger.
+ *
+ * Narrower than `HoldResolution` on purpose: `released` and `superseded` are
+ * this book's to write, and a transport that could write them would be able to
+ * clear a hold by reporting on itself.
+ */
+export type SendResolution = Extract<HoldResolution, "delivered" | "nothing-was-sent">;
+
 export type ReleaseRequest = {
   holdId: string;
   /** The version the person was looking at. See `QuarantineHoldView.version`. */
@@ -148,6 +186,17 @@ export type QuarantineOptions = {
    * and a class that reached for a module-level global makes that unwritable.
    */
   serverInstanceId: string;
+  /**
+   * Where holds are written down, or null for a book that is only memory.
+   *
+   * **OPTIONAL, AND NOT BECAUSE DURABILITY IS OPTIONAL.** Every test here
+   * builds a book without one, because a test that wrote to a real directory
+   * would be a test that could take the live dashboard's writer lock. The one
+   * composition that matters — `openSharedQuarantine()` at the bottom — always
+   * has one, and a source guard makes `server.ts` call it before it can be
+   * asked to type.
+   */
+  ledger?: HoldLedger | null;
 };
 
 /**
@@ -192,6 +241,43 @@ function whyHeld(e: HoldEvidence): string {
       return never;
     }
   }
+}
+
+/**
+ * The sentence for a hold this process did not watch open.
+ *
+ * **IT SAYS WHAT IT DOES NOT KNOW, FIRST.** A rehydrated record has exactly one
+ * thing a live hold has not got: the run that could have told you what happened
+ * is gone. The temptation is to read the ledger line back as though this
+ * dashboard had seen it, and the sentence a person decides from is precisely
+ * where that would do damage.
+ */
+function whyRehydratedHold(e: HoldEvidence): string {
+  return (
+    `${whyHeld(e)} This record was rebuilt when the dashboard restarted, from what the previous run wrote down ` +
+    "before it ended — so nothing in it has been re-checked since, and if somebody released it in the seconds " +
+    "before that run stopped, this is holding a session nothing is wrong with."
+  );
+}
+
+/**
+ * The sentence for an attempt nobody ever accounted for — **the least this
+ * dashboard can ever know and still be holding a session.**
+ *
+ * The line was written on the instant before the keystrokes, and nothing was
+ * written after it. So this cannot say how far the send got, and it cannot say
+ * that it was made at all: the process may have died between writing the line
+ * and calling the transport. Both readings end in the same place — somebody has
+ * to look at the terminal — which is why one hold covers both rather than two
+ * arms splitting a distinction nobody can act on differently.
+ */
+function whyUnaccountedAttempt(what: string, at: number): string {
+  return (
+    `This dashboard wrote down that it was about to send to this session (${what}) and then stopped before it ` +
+    `could record what happened, at ${new Date(at).toISOString()}. It cannot say how far that send got, or ` +
+    "whether it was made at all. Nothing else will be delivered here until somebody says what is actually in " +
+    "that input box — there is no receipt for a keystroke, so this dashboard cannot find out on its own."
+  );
 }
 
 /**
@@ -249,9 +335,13 @@ export class QuarantineBook {
   /** The tmux server every handle here belongs to, or null until somebody says. */
   private generation: number | null = null;
 
+  /** Where holds are written down, or null for a book that is only memory. */
+  private readonly ledger: HoldLedger | null;
+
   constructor(options: QuarantineOptions) {
     this.now = options.now;
     this.serverInstanceId = options.serverInstanceId;
+    this.ledger = options.ledger ?? null;
   }
 
   /* ---------------- reading ---------------- */
@@ -333,6 +423,7 @@ export class QuarantineBook {
       };
       holds.open = extended;
       this.bySession.set(evidence.sessionId, holds);
+      this.writeHold(extended, evidence.what);
       return extended;
     }
     this.seq += 1;
@@ -356,10 +447,12 @@ export class QuarantineBook {
       origin: evidence.origin,
       why: whyHeld(evidence),
       outcome: { kind: "holding" },
+      basis: { kind: "observed-here" },
     };
     holds.open = opened;
     this.bySession.set(evidence.sessionId, holds);
     this.evict();
+    this.writeHold(opened, evidence.what);
     return opened;
   }
 
@@ -422,6 +515,11 @@ export class QuarantineBook {
       outcome: { kind: "released", gesture: request.gesture, at: this.now(), what: whatWasSaid(request.gesture) },
     };
     this.close(released);
+    /* AFTER `close`, not before: the ledger line says *this session has been
+       accounted for*, and writing it while the hold was still open would leave
+       a crash in between with a session the file calls clear and the page calls
+       held. In this order the two disagree only in the safe direction. */
+    this.resolve(released.sessionId, "released");
     return { ok: true, hold: released, repeat: false };
   }
 
@@ -478,6 +576,7 @@ export class QuarantineBook {
               "every pane went with it, so whatever was in that input box is gone and there is nothing left to hold back.",
           },
         });
+        this.resolve(open.sessionId, "superseded");
         superseded += 1;
         continue;
       }
@@ -506,9 +605,211 @@ export class QuarantineBook {
             "is gone and there is nothing left to hold back.",
         },
       });
+      this.resolve(open.sessionId, "superseded");
       superseded += 1;
     }
     return superseded;
+  }
+
+  /* ---------------- durability ---------------- */
+
+  /**
+   * **WRITE DOWN THAT WE ARE ABOUT TO TYPE, BEFORE WE TYPE.**
+   *
+   * Called by `send-coordinator.ts` on the line between the hold check and the
+   * transport call, and the gap between this line and that one is the entire
+   * reason the ledger exists: a crash inside the transport must leave a record
+   * behind, because that is precisely the case where nobody can say what is in
+   * the input box and nothing else knows to ask.
+   *
+   * **IT IS NOT A HOLD AND IT DOES NOT BLOCK ANYTHING IN THIS PROCESS.** The
+   * live book is unchanged by it; what it changes is what the NEXT process
+   * finds. And it cannot refuse — a ledger that will not write records the
+   * failure and the send goes out anyway, leaving the fleet exactly where Stage
+   * 4 left it rather than making a full disk a reason the dashboard cannot type.
+   */
+  noteAttempt(evidence: SendAttemptEvidence): void {
+    this.ledger?.noteAttempt({
+      at: this.now(),
+      sessionId: evidence.sessionId,
+      paneId: evidence.paneId,
+      claudeSessionId: evidence.claudeSessionId,
+      origin: evidence.origin,
+      what: evidence.what,
+      serverInstanceId: this.serverInstanceId,
+      tmuxGeneration: this.generation,
+    });
+  }
+
+  /**
+   * The send accounted for itself, so the attempt above is no longer a reason
+   * to hold anything after a restart.
+   *
+   * **ONLY TWO ANSWERS COUNT AS ACCOUNTING** — see `SendResolution`. An
+   * exception out of the transport is not one of them and must not be made into
+   * one: it is the outcome with the least evidence behind it, and its attempt
+   * stays on the ledger so a restart rebuilds a hold from it.
+   */
+  resolveAttempt(sessionId: string, how: SendResolution): void {
+    this.resolve(sessionId, how);
+  }
+
+  /**
+   * Rebuild the holds the previous run left behind. **Nothing is sent, ever.**
+   *
+   * A hold is a REFUSAL TO DELIVER, not a queue of work, so there is no arm
+   * here that re-sends anything — and there must never be one. What comes back
+   * is a session nothing may be typed into until a person says what is in its
+   * input box, which is the same thing the live book produces and reached a
+   * different way.
+   *
+   * **A REHYDRATED ID FROM THE PREVIOUS RUN IS KEPT, AND THIS IS A DELIBERATE
+   * TENSION WITH STAGE 2.** `SteeringQueue` prefixes queue ids with the server
+   * instance so an id minted by a dead process is refused by a live one, and
+   * that is right: a queue id names volatile state and should die with it. **A
+   * hold id names a fact about the WORLD that outlived the process** — there is
+   * still text in an input box — so it is kept, and the release route answers
+   * it. Anyone tempted to make the two consistent should change the route's
+   * comment, not this: the inconsistency is the point.
+   *
+   * An attempt that never became a hold has no id to keep, because no hold was
+   * ever minted for it, so this run mints one of its own.
+   */
+  rehydrate(): { holds: number; attempts: number; skipped: number } {
+    let holds = 0;
+    let attempts = 0;
+    let skipped = 0;
+    for (const state of this.ledger?.live() ?? []) {
+      if (this.holding(state.sessionId) !== null) {
+        /* **THE LIVE HOLD WINS, AND THE COUNT SAYS SO RATHER THAN THE FILE
+           BEING SILENT ABOUT IT.** Produced by a second `rehydrate()` on a book
+           that already came back holding — which is what a caller that forgot
+           it had already started does. Overwriting a live hold with a record
+           read off a disk is the one direction that loses information, so it
+           refuses and counts. */
+        skipped += 1;
+        continue;
+      }
+      const rebuilt = state.kind === "held" ? this.fromHeldRecord(state) : this.fromAttemptRecord(state);
+      const existing = this.bySession.get(state.sessionId) ?? { open: null, closed: [] };
+      existing.open = rebuilt;
+      this.bySession.set(state.sessionId, existing);
+      if (state.kind === "held") holds += 1;
+      else attempts += 1;
+    }
+    return { holds, attempts, skipped };
+  }
+
+  /**
+   * A hold the previous run wrote down after its send returned.
+   *
+   * Everything a live hold says about the send, it can say — that run read the
+   * transport's answer and recorded it. **The id and the version are kept**, so
+   * a phone that was looking at the page before the restart can still release
+   * exactly what it was looking at.
+   */
+  private fromHeldRecord(record: HeldRecord): QuarantineHoldView {
+    const evidence: HoldEvidence = {
+      sessionId: record.sessionId,
+      paneId: record.paneId,
+      claudeSessionId: record.claudeSessionId,
+      reading: record.reading,
+      origin: record.origin,
+      what: record.what,
+    };
+    return {
+      id: record.holdId,
+      version: record.version,
+      sessionId: record.sessionId,
+      paneId: record.paneId,
+      claudeSessionId: record.claudeSessionId,
+      /* THE RUN THAT OPENED IT, not this one. It is what the id carries, and
+         overwriting it would make the id and the field disagree. */
+      serverInstanceId: record.serverInstanceId,
+      tmuxGeneration: record.tmuxGeneration,
+      /* Not stored — `hold-ledger.ts` § `tmuxGeneration` says why nothing could
+         have written a non-null one. This run makes its own first observation. */
+      firstSeenGeneration: null,
+      openedAt: record.openedAt,
+      lastSendAt: record.lastSendAt,
+      incidents: record.incidents,
+      reading: record.reading,
+      origin: record.origin,
+      why: whyRehydratedHold(evidence),
+      outcome: { kind: "holding" },
+      basis: { kind: "rehydrated-hold", recordedAt: record.at },
+    };
+  }
+
+  /**
+   * A hold over an attempt nobody ever accounted for.
+   *
+   * **IT KNOWS LESS THAN ANY OTHER HOLD, AND THE TYPE SAYS SO**: no `openedAt`,
+   * no `lastSendAt`, no `reading`, because no process survived to read one. The
+   * moment on the basis is when the line was written, which is *before* the
+   * send — a different fact from when a hold opened, and labelled as one.
+   */
+  private fromAttemptRecord(record: AttemptRecord): QuarantineHoldView {
+    this.seq += 1;
+    return {
+      id: `${this.serverInstanceId}${ID_SEPARATOR}h${this.seq}`,
+      version: 1,
+      sessionId: record.sessionId,
+      paneId: record.paneId,
+      claudeSessionId: record.claudeSessionId,
+      serverInstanceId: record.serverInstanceId,
+      tmuxGeneration: record.tmuxGeneration,
+      firstSeenGeneration: null,
+      openedAt: null,
+      lastSendAt: null,
+      /* One recorded incident: the attempt. `incidents` counts what the record
+         covers, and it is never zero — see `QuarantineHoldView.incidents`. */
+      incidents: 1,
+      reading: null,
+      origin: record.origin,
+      why: whyUnaccountedAttempt(record.what, record.at),
+      outcome: { kind: "holding" },
+      basis: { kind: "rehydrated-attempt", attemptedAt: record.at },
+    };
+  }
+
+  /**
+   * One `held` line, carrying whatever the book now says about this hold.
+   *
+   * **AND NOTHING AT ALL WHEN THE HOLD CANNOT SAY WHEN IT OPENED.** That is one
+   * case: a live send landing on a hold rehydrated from an attempt nobody
+   * accounted for. There is still no moment at which anything opened, and
+   * writing the send's own timestamp into `openedAt` would put a claim on disk
+   * that nothing ever observed — which the next start would read back as a
+   * fact, one restart further from anyone who could contradict it. The attempt
+   * line stays exactly as it is: the session goes on being held either way, and
+   * what is given up is precision this dashboard never had.
+   */
+  private writeHold(hold: QuarantineHoldView, what: string): void {
+    if (this.ledger === null) return;
+    const openedAt = hold.openedAt;
+    const lastSendAt = hold.lastSendAt;
+    if (openedAt === null || lastSendAt === null || hold.reading === null) return;
+    this.ledger.noteHold({
+      at: this.now(),
+      sessionId: hold.sessionId,
+      holdId: hold.id,
+      version: hold.version,
+      openedAt,
+      lastSendAt,
+      incidents: hold.incidents,
+      reading: hold.reading,
+      origin: hold.origin,
+      what,
+      paneId: hold.paneId,
+      claudeSessionId: hold.claudeSessionId,
+      serverInstanceId: hold.serverInstanceId,
+      tmuxGeneration: hold.tmuxGeneration,
+    });
+  }
+
+  private resolve(sessionId: string, how: HoldResolution): void {
+    this.ledger?.noteResolved({ at: this.now(), sessionId, how });
   }
 
   /* ---------------- housekeeping ---------------- */
@@ -551,8 +852,113 @@ export class QuarantineBook {
  * Tests inject their own; nothing in a test should ever reach this.
  */
 let shared: QuarantineBook | null = null;
+let sharedLedger: HoldLedger | null = null;
 
 export function sharedQuarantineBook(): QuarantineBook {
-  shared ??= new QuarantineBook({ now: () => Date.now(), serverInstanceId: serverInstanceId() });
+  shared ??= new QuarantineBook({
+    now: () => Date.now(),
+    serverInstanceId: serverInstanceId(),
+    ledger: sharedLedger,
+  });
   return shared;
+}
+
+/**
+ * What a start found, in sentences a launcher can print.
+ *
+ * **THE COUNTS ARE THE POINT.** A dashboard that came back holding four
+ * sessions and a dashboard that came back holding none look identical from the
+ * outside, and only one of them means somebody has to go and look at four
+ * terminals.
+ */
+export type QuarantineStartup = {
+  book: QuarantineBook;
+  /** The ledger, or null when it would not open — durability off, everything else unchanged. */
+  ledger: HoldLedger | null;
+  rehydrated: { holds: number; attempts: number; skipped: number };
+  lines: { log: string[]; error: string[] };
+};
+
+/**
+ * **OPEN THE LEDGER AND REBUILD THE HOLDS — BEFORE ANY SEND ROUTE IS MOUNTED.**
+ *
+ * Synchronous, and `server.ts` calls it above `createServer`, so there is no
+ * window in which this process can be asked to type while it is still reading.
+ * That ordering is not left to memory: tests/fleet-hold-wiring.test.ts reads
+ * server.ts and fails if the call is missing or comes after the listener, which
+ * is the same kind of source guard `tests/fleet-health-wiring.test.ts` uses for
+ * the same reason — the file that composes the server cannot be imported by a
+ * test without binding port 8787.
+ *
+ * **IDEMPOTENT, AND IT THROWS IN EXACTLY ONE CASE**: somebody has already been
+ * handed the shared book without a ledger, which means a send could already
+ * have gone out unrecorded and a hold could already have been missed. That is
+ * the failure this whole stage exists to close, and it can only be reached by
+ * calling `sharedQuarantineBook()` before this — a composition mistake, which
+ * fails immediately and every time rather than lying dormant. Stage 4's
+ * argument for `makeActionRoutes` throwing on a book mismatch, unchanged: a
+ * dashboard that refuses to start is visible; a dashboard running with its
+ * quarantine silently un-durable is not.
+ */
+export function openSharedQuarantine(options: { dir?: string | undefined; log?: (line: string) => void } = {}): QuarantineStartup {
+  const log: string[] = [];
+  const error: string[] = [];
+  if (sharedLedger !== null) {
+    return { book: sharedQuarantineBook(), ledger: sharedLedger, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
+  }
+  if (shared !== null) {
+    throw new Error(
+      "the shared quarantine book was built before its ledger was opened, so a send could already have gone out " +
+        "with nothing written down. Call openSharedQuarantine() before anything that can type — server.ts does it " +
+        "above createServer, and tests/fleet-hold-wiring.test.ts is what keeps it there.",
+    );
+  }
+
+  const resolved = options.dir === undefined ? holdLedgerDir() : { ok: true as const, dir: options.dir };
+  if (!resolved.ok) {
+    error.push(`hold ledger: ${resolved.why}. Holds will not survive a restart.`);
+    return { book: sharedQuarantineBook(), ledger: null, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
+  }
+
+  const opened = openHoldLedger(resolved.dir, {
+    /* A ledger that has quietly stopped writing looks exactly like one that is
+       working, so every new trouble reaches the dashboard's log at the moment
+       it happens rather than only at the next start. */
+    onTrouble: (why) => (options.log ?? console.error)(`hold ledger: ${why}`),
+  });
+  if (opened.kind === "refused") {
+    error.push(`hold ledger: ${opened.why}. Holds will not survive a restart.`);
+    return { book: sharedQuarantineBook(), ledger: null, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
+  }
+
+  sharedLedger = opened.ledger;
+  const book = sharedQuarantineBook();
+  const rehydrated = book.rehydrate();
+  const status = opened.ledger.status();
+  log.push(`hold ledger → ${status.dir}`);
+  if (status.repaired.torn) {
+    error.push(`hold ledger: repaired a torn last line (${status.repaired.droppedBytes} bytes dropped)`);
+  }
+  if (status.unreadableLines > 0) error.push(`hold ledger: ${status.unreadableLines} line(s) could not be read`);
+  if (status.lockedOutBy !== null) error.push(`hold ledger is read-only here: ${status.lockedOutBy}`);
+  if (rehydrated.holds + rehydrated.attempts > 0) {
+    error.push(
+      `hold ledger: ${rehydrated.holds + rehydrated.attempts} session(s) came back HELD from the previous run ` +
+        `(${rehydrated.holds} with an answer recorded, ${rehydrated.attempts} with none). Nothing has been re-sent; ` +
+        "somebody has to look at those terminals and release them.",
+    );
+  }
+  return { book, ledger: opened.ledger, rehydrated, lines: { log, error } };
+}
+
+/**
+ * Forget the shared composition. **Tests only**, and the reason it exists at
+ * all is that a module-level singleton and a temporary directory cannot both be
+ * right otherwise: tests/fleet-hold-wiring.test.ts drives the real startup path
+ * against a `mkdtemp` and has to be able to do it twice.
+ */
+export function resetSharedQuarantineForTests(): void {
+  sharedLedger?.close();
+  sharedLedger = null;
+  shared = null;
 }
