@@ -307,7 +307,28 @@ anything so the tree is unchanged for everyone else.
 
 ### Stage 3 — the store
 
-- [ ] Tests first, red:
+**Status: ✅ done and on `dev` at `977279f8`** (stage commit `3138327e`). `tools/fleet/usage-history.ts`
++ `tests/fleet-usage-history.test.ts`; 39 tests across the two usage-history suites, typecheck exit
+0, no lint errors. Wired to nothing — Stage 4 is the daemon hook and the route.
+
+📔 **What this stage cost that the plan did not predict:**
+
+- **Mutation testing found a second real hole.** Ten mutations, nine caught; swapping the read order
+  to `[live, prev]` passed everything, because the rotation test counted samples and never looked at
+  their order. A renderer walking that array draws the newer half first and the older after it — a
+  sawtooth, from a store that recorded the truth perfectly. *"Oldest first" is in the type's own doc
+  comment and nothing checked it.* That is now two stages running where the mutation found something
+  no amount of re-reading would have.
+- **Two of my own tests had gone green against something that could not fail.** The unreadable-store
+  test pointed at an empty directory, so the injected error was never called; and a span assertion
+  was off by one, replaced with the thing it actually meant (`read.files === 2`).
+- **`read` hit cognitive complexity 44**, split into `decodeAll`. The extracted function is where the
+  "place the damage, don't just count it" rule now lives, which is a better home for it than a branch
+  inside a reader.
+- The **`omitted` arm was added to the record here**, not in Stage 2 — a record too large to write
+  needs somewhere to stand, and that was not obvious until the store existed.
+
+- ✅ Tests first, red:
   - [ ] one line per pass; the three arms; a `collector-failed` line keyed on the daemon's `at`
   - [ ] **a `keep-stored` pass still contributes its cache observation** (D5) while its scan reads
         inconclusive — the failure this design exists to avoid
