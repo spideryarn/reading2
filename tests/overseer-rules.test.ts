@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import { definitionHash, type AuthorisedJob, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
+import { behaviourHash, type Arming, type AuthorisedJob, type JobBehaviour, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
 import {
   AUTHORISED_RULE_HASHES,
   LAUNCH_MODE_SPEC,
@@ -131,15 +131,30 @@ const YOUNG: WedgedProcess = { ...SPECIMEN, pid: 999_001, etimeSeconds: 60 };
 
 function ruleJob(spec: RuleSpec = SPEC, everyMs = 60_000): AuthorisedJob {
   const definition: RuleJobDefinition = {
-    id: "wedged-work",
-    everyMs,
-    leaseMs: 120_000,
-    what: "propose kills for wedged work",
-    documents: [],
-    work: { kind: "rule", rule: spec },
+    behaviour: {
+      id: "wedged-work",
+      what: "propose kills for wedged work",
+      documents: [],
+      work: { kind: "rule", rule: spec },
+    },
+    // `initialDelayMs: 0` so a job with no history is due at once, which is what
+    // `due` did unconditionally before 2026-09-09 and what every test here
+    // assumes. Nothing in this file is about the first-run delay.
+    schedule: { everyMs, leaseMs: 120_000, initialDelayMs: 0 },
   };
-  return { definition, authorisedHash: definitionHash(definition) };
+  return { definition, authorisedHash: behaviourHash(definition.behaviour) };
 }
+
+/**
+ * THE ARMING AND THE SPACING GATE, both set so they are inert.
+ *
+ * Every clock in this file starts at 2026-09-08T21:00Z or later, so this instant
+ * plus a zero delay is always past. The spacing gate is zero because it only
+ * ever rations SESSION launches and everything here is a rule — but it is a
+ * required field, so it is stated rather than defaulted.
+ */
+const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
+const NO_SPACING = 0;
 
 /**
  * An ACTING capability whose observation the test decides, and which records
@@ -229,15 +244,15 @@ describe("rule 2 as arithmetic, with no I/O anywhere near it", () => {
     expect(decision.what).toContain(String(100 + many.length - 1));
   });
 
-  test("every knob moves the canonical form, so `definitionHash` cannot miss one", () => {
+  test("every knob moves the canonical form, so `behaviourHash` cannot miss one", () => {
     // SP-1 in one assertion: a threshold or an action that changed while the
     // fingerprint did not is the hole this exists to close.
     const base = canonicalRuleSpec(SPEC);
     expect(canonicalRuleSpec({ ...SPEC, minAgeSeconds: 1 })).not.toBe(base);
     expect(canonicalRuleSpec({ ...SPEC, policy: "test-suites" })).not.toBe(base);
     expect(canonicalRuleSpec({ ...SPEC, disposition: "act" })).not.toBe(base);
-    expect(definitionHash(ruleJob({ ...SPEC, minAgeSeconds: 1 }).definition)).not.toBe(definitionHash(ruleJob().definition));
-    expect(definitionHash(ruleJob({ ...SPEC, disposition: "act" }).definition)).not.toBe(definitionHash(ruleJob().definition));
+    expect(behaviourHash(ruleJob({ ...SPEC, minAgeSeconds: 1 }).definition.behaviour)).not.toBe(behaviourHash(ruleJob().definition.behaviour));
+    expect(behaviourHash(ruleJob({ ...SPEC, disposition: "act" }).definition.behaviour)).not.toBe(behaviourHash(ruleJob().definition.behaviour));
   });
 
   test("THE FIELD LIST IS THE TYPE'S OWN, for EVERY rule, so a knob added later cannot sit outside the fingerprint", () => {
@@ -304,7 +319,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [SPECIMEN, YOUNG], scanned: 750 });
-    const reports = schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now });
+    const reports = schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     expect(reports.map((r) => r.kind)).toEqual(["dispatched"]);
     await settle();
 
@@ -364,7 +379,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [YOUNG], scanned: 750 });
-    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
@@ -376,7 +391,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "cannot-see", why: "could not reach the fleet API at http://127.0.0.1:8787/api/actions/box: ECONNREFUSED" });
-    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     if (settled?.kind !== "rule-settled") throw new Error("expected a settled event");
@@ -394,7 +409,7 @@ describe("the two-phase protocol, under the scheduler", () => {
       selfPid: 1,
       observe: () => Promise.reject(new Error("socket hang up")),
     };
-    schedulerTick({ definitions: [ruleJob()], store, rules: work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob()], store, rules: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("refused");
@@ -408,7 +423,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const real = mustOpen(root, clock.now);
     const refuseFrom = failingAfter(real, 3);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }, { kind: "sent", what: "killed it" });
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, acting: stub.work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, acting: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     expect(stub.acted).toEqual([]);
     // And the run is visibly a failure rather than a quiet success: a rule that
@@ -443,7 +458,7 @@ describe("the two-phase protocol, under the scheduler", () => {
         return { kind: "sent", what: "killed 1 process" };
       },
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     expect(whenActed).toHaveLength(1);
     expect(whenActed[0]).toContain("rule-intended");
@@ -460,7 +475,7 @@ describe("the two-phase protocol, under the scheduler", () => {
       observe: async () => ({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }),
       act: () => Promise.reject(new Error("the route exploded")),
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("failed");
@@ -470,7 +485,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const reports = schedulerTick({ definitions: [ruleJob()], store, now: clock.now });
+    const reports = schedulerTick({ definitions: [ruleJob()], store, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
   });
 
@@ -485,7 +500,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const look: ProposingRuleWork = { selfPid: 7, observe: async () => ({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }) };
-    const reports = schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: look, now: clock.now });
+    const reports = schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
     const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
     expect(refusal.why).toContain("no actor");
@@ -498,18 +513,16 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const session: JobDefinition = {
-      id: "get-ready-to-deploy",
-      everyMs: 1,
-      leaseMs: 1000,
-      what: "start a session",
-      documents: [],
-      work: { kind: "session" },
+      behaviour: { id: "get-ready-to-deploy", what: "start a session", documents: [], work: { kind: "session" } },
+      schedule: { everyMs: 1, leaseMs: 1000, initialDelayMs: 0 },
     };
     const reports = schedulerTick({
-      definitions: [{ definition: session, authorisedHash: definitionHash(session) }],
+      definitions: [{ definition: session, authorisedHash: behaviourHash(session.behaviour) }],
       store,
       rules: ruleWorkStub({ kind: "wedged", candidates: [], scanned: 1 }).work,
       now: clock.now,
+      arming: ARMED,
+      launchSeparationMs: NO_SPACING,
     });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
     const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
@@ -537,14 +550,15 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
 
   function launchJob(): AuthorisedJob {
     const definition: RuleJobDefinition = {
-      id: "launch-mode",
-      everyMs: 60_000,
-      leaseMs: 120_000,
-      what: "watch for sessions that did not come up in auto mode",
-      documents: [],
-      work: { kind: "rule", rule: LAUNCH_SPEC },
+      behaviour: {
+        id: "launch-mode",
+        what: "watch for sessions that did not come up in auto mode",
+        documents: [],
+        work: { kind: "rule", rule: LAUNCH_SPEC },
+      },
+      schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
     };
-    return { definition, authorisedHash: definitionHash(definition) };
+    return { definition, authorisedHash: behaviourHash(definition.behaviour) };
   }
 
   function looking(observation: RuleObservation): ProposingRuleWork {
@@ -565,7 +579,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
         { id: "$4", name: "worktree-gamma", mode: { kind: "cannot-tell", why: "the status bar is not on this screenful" } },
       ],
     });
-    const reports = schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now });
+    const reports = schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     expect(reports.map((r) => r.kind)).toEqual(["dispatched"]);
     await settle();
 
@@ -622,7 +636,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 10 },
       sessions: [{ id: "$1", name: "worktree-beta", mode: { kind: "not-auto", mode: "manual mode" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     // Rewrite the finding to another rule's, ON THE DISK, which is the only
     // place this can be got wrong — nothing in the process can produce it.
@@ -651,7 +665,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 10 },
       sessions: [{ id: "$1", name: "worktree-alpha", mode: { kind: "auto" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
@@ -671,7 +685,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 4000 },
       sessions: [{ id: "$1", name: "worktree-alpha", mode: { kind: "not-auto", mode: "manual mode" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     if (settled?.kind !== "rule-settled") throw new Error("no rule-settled");
@@ -741,8 +755,8 @@ describe("the shipped rule job, and its pin", () => {
     expect(built.problems).toEqual([]);
     const job = built.jobs[0];
     if (job === undefined) throw new Error("expected the wedged-work rule");
-    expect(job.definition.id).toBe("wedged-work");
-    expect(job.definition.documents.map((d) => d.path)).toEqual([...RULE_SOURCES]);
+    expect(job.definition.behaviour.id).toBe("wedged-work");
+    expect(job.definition.behaviour.documents.map((d) => d.path)).toEqual([...RULE_SOURCES]);
     // AND `rule-protocol.ts` IS ONE OF THEM. The protocol was deliberately left
     // out on the argument that shared machinery in a tripwire mostly fires
     // falsely; GPT Sol's SC-2 is that this falls the wrong way, because the
@@ -754,7 +768,7 @@ describe("the shipped rule job, and its pin", () => {
     expect([...RULE_SOURCES]).toContain("tools/overseer/rule-protocol.ts");
     // GATE 3. Not a comment: the field is hashed, so this is also what stops it
     // being changed quietly.
-    const spec = job.definition.work.rule;
+    const spec = job.definition.behaviour.work.rule;
     if (spec.kind !== "wedged-work") throw new Error("expected the wedged-work spec");
     expect(spec.disposition).toBe("propose");
     expect(spec.minAgeSeconds).toBe(WEDGED_WORK_MIN_AGE_SECONDS);
@@ -770,11 +784,11 @@ describe("the shipped rule job, and its pin", () => {
     // one rule moves both, and a test that read `jobs[0]` would have watched
     // half of that.
     const built = ruleJobs(REPO).jobs;
-    expect(built.map((job) => job.definition.id)).toEqual(["wedged-work", "launch-mode"]);
+    expect(built.map((job) => job.definition.behaviour.id)).toEqual(["wedged-work", "launch-mode"]);
     for (const job of built) {
-      expect([job.definition.id, definitionHash(job.definition)]).toEqual([
-        job.definition.id,
-        AUTHORISED_RULE_HASHES[job.definition.id as keyof typeof AUTHORISED_RULE_HASHES],
+      expect([job.definition.behaviour.id, behaviourHash(job.definition.behaviour)]).toEqual([
+        job.definition.behaviour.id,
+        AUTHORISED_RULE_HASHES[job.definition.behaviour.id as keyof typeof AUTHORISED_RULE_HASHES],
       ]);
     }
   });
@@ -787,11 +801,11 @@ describe("the shipped rule job, and its pin", () => {
     // any file whose digest happened to end in `0`. It did on 2026-09-08, one
     // edit to `rules.ts` after this was written: a one-in-sixteen test.
     const flip = (sha: string): string => `${sha.slice(0, -1)}${sha.endsWith("0") ? "1" : "0"}`;
-    const tampered = {
-      ...job.definition,
-      documents: job.definition.documents.map((d, i) => (i === 0 ? { ...d, sha256: flip(d.sha256) } : d)),
+    const tampered: JobBehaviour = {
+      ...job.definition.behaviour,
+      documents: job.definition.behaviour.documents.map((d, i) => (i === 0 ? { ...d, sha256: flip(d.sha256) } : d)),
     };
-    expect(definitionHash(tampered)).not.toBe(definitionHash(job.definition));
+    expect(behaviourHash(tampered)).not.toBe(behaviourHash(job.definition.behaviour));
   });
 
   test("OFF and ARMED read differently, and OFF still says what it would have run", () => {
@@ -845,7 +859,7 @@ describe("what a rule's pin covers, and what it deliberately does not", () => {
   function hashOf(root: string): string {
     const job = ruleJobs(root).jobs[0];
     if (job === undefined) throw new Error(`no rule job was built from ${root}`);
-    return definitionHash(job.definition);
+    return behaviourHash(job.definition.behaviour);
   }
 
   /** An edit a person would actually make, and it is asserted to have landed — a no-op edit would make either test green for nothing. */
@@ -1014,10 +1028,10 @@ describe("rule 1: launch-mode drift", () => {
 
   test("every knob of the launch-mode spec moves the fingerprint", () => {
     const base = ruleJob(LAUNCH).definition;
-    const hash = definitionHash(base);
-    expect(definitionHash(ruleJob({ ...LAUNCH, minSessions: 2 }).definition)).not.toBe(hash);
-    expect(definitionHash(ruleJob({ ...LAUNCH, maxCollectionAgeSeconds: 301 }).definition)).not.toBe(hash);
-    expect(definitionHash(ruleJob({ ...LAUNCH, disposition: "act" }).definition)).not.toBe(hash);
+    const hash = behaviourHash(base.behaviour);
+    expect(behaviourHash(ruleJob({ ...LAUNCH, minSessions: 2 }).definition.behaviour)).not.toBe(hash);
+    expect(behaviourHash(ruleJob({ ...LAUNCH, maxCollectionAgeSeconds: 301 }).definition.behaviour)).not.toBe(hash);
+    expect(behaviourHash(ruleJob({ ...LAUNCH, disposition: "act" }).definition.behaviour)).not.toBe(hash);
     // And the two rules' canonical forms cannot collide.
     expect(canonicalRuleSpec(LAUNCH)).not.toBe(canonicalRuleSpec(SPEC));
   });
@@ -1164,19 +1178,19 @@ describe("the deterministic-only arming, as the shipped CLI does it", () => {
   test("RULES-ONLY HANDS THE DAEMON NO SPAWNER AT ALL, and no standing job either", () => {
     // The assertion SP-4 asked for, and the one that catches somebody
     // "simplifying" this back into a filter.
-    const wiring = schedulerWiring({ [RULES_ENABLED_VAR]: "1" });
+    const wiring = schedulerWiring({ [RULES_ENABLED_VAR]: "1" }, ARMED);
     expect(wiring.arming).toBe("rules-only");
     expect(wiring.jobs?.spawn).toBeUndefined();
     expect(wiring.jobs?.rules).toBeDefined();
-    expect(wiring.jobs?.definitions.map((job) => job.definition.id)).toEqual(["wedged-work", "launch-mode"]);
+    expect(wiring.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual(["wedged-work", "launch-mode"]);
     expect(wiring.detail).toContain("NO SESSION DISPATCHER");
   });
 
   test("the full arming still supplies both standing jobs AND the rule, with a spawner", () => {
-    const wiring = schedulerWiring({ OVERSEER_JOBS_ENABLED: "1" });
+    const wiring = schedulerWiring({ OVERSEER_JOBS_ENABLED: "1" }, ARMED);
     expect(wiring.arming).toBe("all");
     expect(typeof wiring.jobs?.spawn).toBe("function");
-    expect(wiring.jobs?.definitions.map((job) => job.definition.id)).toEqual([
+    expect(wiring.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual([
       "get-ready-to-deploy",
       "feedback-sweep",
       "wedged-work",
@@ -1185,10 +1199,10 @@ describe("the deterministic-only arming, as the shipped CLI does it", () => {
   });
 
   test("off is still off, and still says what it would have run", () => {
-    const wiring = schedulerWiring({});
+    const wiring = schedulerWiring({}, ARMED);
     expect(wiring.arming).toBe("off");
     expect(wiring.jobs).toBeUndefined();
-    expect(wiring.definitions.map((job) => job.definition.id)).toEqual([
+    expect(wiring.definitions.map((job) => job.definition.behaviour.id)).toEqual([
       "get-ready-to-deploy",
       "feedback-sweep",
       "wedged-work",
@@ -1250,7 +1264,7 @@ describe("looking at the box, and the actor that refuses", () => {
     const work = ruleWork({ baseUrl: "http://127.0.0.1:8787", selfPid: 4242 });
     expect(Object.hasOwn(work, "observe")).toBe(true);
     expect(Object.hasOwn(work, "act")).toBe(false);
-    const wired = schedulerWiring({ [RULES_ENABLED_VAR]: "1" }).jobs?.rules;
+    const wired = schedulerWiring({ [RULES_ENABLED_VAR]: "1" }, ARMED).jobs?.rules;
     expect(wired === undefined || Object.hasOwn(wired, "act")).toBe(false);
   });
 });

@@ -306,7 +306,7 @@ file contents when the mutation is a reversion.
 tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
 mutations caught. 1,479 tests green across 36 files, typecheck 0.
 
-### Stage 4 — quarantine a session after an uncertain delivery
+### ✅ Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09)
 
 #### Read `drain.ts` before briefing this, because it is more careful than this plan said
 
@@ -361,6 +361,38 @@ been sent yet"* (`:1177-1179`) is false in the presence of leased or held items 
 **Done:** a partial first message stops the second draining; the hold is visible with no items left;
 both release gestures work and neither sends anything; a tmux generation change releases it
 automatically and the old record survives as superseded.
+
+#### Built 2026-09-09 — and the brief's one wrong assumption was about the generation
+
+New leaf `tools/fleet/quarantine.ts`: a `QuarantineBook` of at most one open hold per session, plus a
+bounded three-deep history so a lost HTTP response can be answered twice. **It is its own file
+because `routes-steer.ts` cannot import `routes-actions.ts`** — that import already runs the other
+way, for the rate limiter — so the one thing all three producers write to had to live somewhere
+neither owns. `SteeringQueue` takes the book as a **required** `QueueOptions` field: a default would
+have built a private book for a queue whose sends are recorded in the shared one, and nothing would
+have gone wrong loudly. `serverInstanceId()` in instance.ts is now memoised, so the queue's ids and
+the book's carry the same run.
+
+`next()` gains a `quarantined` arm, consulted after the facts about the item and **before the gate**
+— it is the gate saying `now` that makes the check load-bearing. `quarantineLeased` is the one
+atomic method: settle `uncertain`, then hold, and it **throws** rather than answering if the settle
+fails, because reporting a session as held when it is not is the gap this stage closes.
+
+**Where the brief was wrong.** It says a proven tmux-generation change releases the hold — right —
+but a hold opened before this server had been told any generation is bound to none, and no later
+change proves anything about it. Those keep holding until a person releases them; the window is one
+refresh cycle wide and both gestures work throughout it. The test says so, and a mutation that
+supersedes them anyway is caught.
+
+**One gap found by trying to build an unclearable hold, and closed:** a malformed `quarantine` on the
+wire parses to `null`, which is also what *nothing is held* looks like — so on a queue with no items
+the row, and both gestures, would have disappeared. `QueueView.holdUnreadable` is `itemsUnreadable`'s
+twin and keeps the row.
+
+**Sixteen mutations, all caught**, snapshotted and restored by `cp` and verified by reading the files
+— including the two that matter most: `FleetQueues` filtering to `items.length > 0` again, and the
+abandon copy claiming the message was not delivered. 811 fleet tests green across 12 files before the
+last two additions; typecheck exit 0.
 
 ### Stage 5 — request ids and receipts
 

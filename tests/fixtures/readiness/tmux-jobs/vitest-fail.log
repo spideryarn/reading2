@@ -1,0 +1,19 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+ ❯  unit  tests/fixture-ids.test.ts (5 tests | 1 failed) 395ms
+     × are not claimed by two test files at once 147ms
+     ✓ is looking at files that really do declare fixture ids 136ms
+     ✓ still reports a collision that is not exempt 3ms
+     ✓ has no exemption that has stopped earning its place 105ms
+…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  05:28:01
+   Duration  889ms (transform 176ms, setup 215ms, import 20ms, tests 395ms, environment 0ms)
+
+EXIT=1
