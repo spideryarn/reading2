@@ -1876,14 +1876,30 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     const { holdId, version, gesture } = body.value;
     const book = deps.queue.quarantineBook();
-    // **BEFORE THE LOOKUP**, the same order and the same reason as `clearRoute`:
-    // an id from a dead run can collide with a live one exactly, and "no such
-    // hold" would then be the misleading answer rather than the true one.
-    if (book.idOrigin(holdId) === "other-instance") {
+    /**
+     * **A HOLD ID FROM THE PREVIOUS RUN IS ANSWERED, AND A QUEUE ID IS NOT.
+     * THAT INCONSISTENCY IS DELIBERATE — DO NOT "FIX" IT.**
+     *
+     * Stage 2 made queue ids die with the process that minted them, and Stage 4b
+     * makes holds survive one. Both are right, and the distinction is what each
+     * id NAMES: **a queue id names volatile state and should die with it; a hold
+     * id names a fact about the world that outlived the process** — there may
+     * still be half a sentence in that input box, and the tmux server that is
+     * holding it did not restart just because this dashboard did.
+     *
+     * So the test is not *whose token is on the front of it* but *is this a hold
+     * this run is actually holding*: an id the book has is answerable whoever
+     * minted it, because `hold-ledger.ts` rebuilt it here at startup with its
+     * original id, precisely so that a phone which was looking at the page
+     * before the restart can still release what it was looking at. Only an id
+     * this run has nothing for AND that names another run is refused — and it
+     * still comes before the release, for `clearRoute`'s reason.
+     */
+    if (book.find(holdId) === null && book.idOrigin(holdId) === "other-instance") {
       const why =
-        `${holdId} was recorded by a different run of this dashboard; this one is ${book.serverInstanceId}. ` +
-        "Holds do not survive a restart, so that one is gone — and nothing is being held back on its account. " +
-        "Reload the page and look at what is actually held.";
+        `${holdId} was recorded by a different run of this dashboard; this one is ${book.serverInstanceId}, ` +
+        "and it was not among the holds carried forward when this one started — so nothing is being held back on " +
+        "its account. Reload the page and look at what is actually held.";
       deps.log(`action hold: refused code=other-instance hold=${holdId}`);
       refuse(res, "other-instance", why);
       return;

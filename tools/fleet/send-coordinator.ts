@@ -49,7 +49,14 @@
  * `sharedQuarantineBook`.
  */
 import { nothingWasSent, type UnsentFailure } from "./queue.js";
-import type { HoldEvidence, QuarantineBook, QuarantineHoldView, UncertainSendOrigin, UncertainSendReading } from "./quarantine.js";
+import type {
+  HoldEvidence,
+  QuarantineBook,
+  QuarantineHoldView,
+  SendAttemptEvidence,
+  UncertainSendOrigin,
+  UncertainSendReading,
+} from "./quarantine.js";
 import { sharedQuarantineBook } from "./quarantine.js";
 import type { FleetStatus } from "./status.js";
 import {
@@ -158,25 +165,41 @@ export type SendAttempt =
  * introduced by changing one `??=` to `=` with the whole suite staying green.
  */
 /**
- * **THE GUARANTEE IN THIS FILE IS PROCESS-LOCAL, AND EVERY GUARD ON IT IS TOO.**
+ * **THE GUARANTEE IN THIS FILE IS PROCESS-LOCAL, AND STAGE 4b CHANGED HOW MUCH
+ * THAT COSTS — WITHOUT CHANGING THE RULE.**
  *
- * The book lives in memory in one process. A CHILD PROCESS — a spawned script, a
- * worker, anything with its own module graph — calls `sharedSendCoordinator()`
- * and gets a **fresh, empty book**. `holding()` then answers `null` for every
- * session on the box, and the send goes into a pane that may be holding half a
- * sentence. Nothing about that looks wrong from inside the child.
+ * What it used to say, and what was true until 2026-09-09: the book lived only
+ * in memory, so a CHILD PROCESS — a spawned script, a worker, anything with its
+ * own module graph — called `sharedSendCoordinator()` and got a **fresh, empty
+ * book**. `holding()` answered `null` for every session on the box, and the send
+ * went into a pane that might be holding half a sentence.
  *
- * **None of the three enforcements can see it.** The import walk in
+ * **WHAT IS NOW TRUE.** `hold-ledger.ts` writes holds to disk, so a process that
+ * calls `openSharedQuarantine()` starts with the holds the last one left, and a
+ * DASHBOARD RESTART no longer forgets them. That is the P0 this file's last
+ * paragraph pointed at, and it is closed.
+ *
+ * **WHAT IS STILL NOT TRUE, AND THE RULE IS UNCHANGED: DO NOT SEND KEYSTROKES
+ * FROM A CHILD PROCESS.** Three reasons, and each is enough on its own:
+ *
+ *  - The child's book is a SNAPSHOT taken when it started. A hold the parent
+ *    opened a second later is invisible to it, and that is the dangerous
+ *    direction: it types into a session the parent's page is drawing as held.
+ *  - The parent holds the ledger's writer lock, so the child is **read-only** —
+ *    its own ambiguous sends are recorded nowhere, and the next start will not
+ *    know about them.
+ *  - A child that never calls `openSharedQuarantine()` — which is every child
+ *    that is not this dashboard — still gets the fresh, empty book described
+ *    above.
+ *
+ * **None of the three enforcements can see any of that.** The import walk in
  * `tests/fleet-imports.test.ts` checks who may hold the transport, and the child
  * legitimately holds a coordinator. `tests/fleet-compile-guards.test.ts` checks
  * dependency types, which are correct. `tests/fleet-send-composition.test.ts`
  * asserts one book across two compositions **within one process**, which is the
- * failure it was written for and is silent about this one.
- *
- * So this is written down rather than guarded, because the guard would have to
- * be a durable store and that is Stage 4b. **Do not send keystrokes from a child
- * process.** If something needs to, it must ask the parent — the parent owns the
- * book — or wait for the ledger that makes a hold survive its process.
+ * failure it was written for and is silent about this one. So this stays written
+ * down rather than guarded: if something in a child needs to type, it must ask
+ * the parent, because the parent owns the book and the lock.
  *
  * Found 2026-09-09 by `dashboard-titles-descriptions-detail`, which had been
  * asked to build a child-process send and abandoned it after reading the
@@ -222,11 +245,45 @@ export function makeSendCoordinator(deps: SendCoordinatorDeps): SendCoordinator 
       };
     }
 
+    /**
+     * **WRITTEN DOWN BEFORE THE KEYSTROKES, AND THE WINDOW IS THE POINT.**
+     *
+     * Stage 4b. If this process dies inside `fire()` — or between these two
+     * lines — the next one finds an attempt nobody accounted for and rebuilds a
+     * hold from it, because that is exactly the case where nobody can say what
+     * is in the input box. Without it a restart admitted keystrokes again with
+     * nobody told, while the tmux server and the half-typed sentence were still
+     * there.
+     *
+     * **IT DOES NOT BREAK THE ADJACENCY THE FILE INSISTS ON.** The rule above
+     * is that nothing may come between the check and the call that could change
+     * the answer or add a decision: this is neither. It cannot refuse, it
+     * cannot yield — the process is single-threaded and the append is
+     * synchronous — and a ledger that will not write records the failure and
+     * lets the send proceed, leaving the fleet where Stage 4 left it rather
+     * than making a full disk a reason the dashboard cannot type.
+     *
+     * It goes AFTER the hold check, not before, because a send that was refused
+     * is not an attempt to type and must leave nothing behind to resolve.
+     */
+    const attempted: SendAttemptEvidence = {
+      sessionId: target.sessionId,
+      paneId: target.paneId,
+      claudeSessionId: target.claudeSessionId,
+      origin: purpose.origin,
+      what: purpose.what,
+    };
+    deps.book.noteAttempt(attempted);
+
     let result: SteerResult;
     try {
       result = fire();
     } catch (e) {
       const error = e instanceof Error ? e : new Error(String(e));
+      /* NEITHER ARM RESOLVES THE ATTEMPT. A throw is the outcome with the least
+         evidence behind it, so the ledger keeps it and a restart rebuilds a
+         hold — which is strictly better than the drain's open lease, since the
+         lease is memory and does not survive one either. */
       if (purpose.onThrow === "leave-the-lease-open") return { kind: "threw", error, hold: null };
       return { kind: "threw", error, hold: record(target, purpose, "threw") };
     }
@@ -235,9 +292,18 @@ export function makeSendCoordinator(deps: SendCoordinatorDeps): SendCoordinator 
     // cannot be settled, and that throw is a bug in the caller rather than a
     // report about the pane — catching it here would relabel it as a transport
     // failure and hide the one condition the drain wants loud.
-    if (result.ok) return { kind: "answered", result, unsent: null, hold: null };
+    /* THE TWO ANSWERS THAT ACCOUNT FOR A SEND, and the only two that take the
+       attempt off the ledger — `SendResolution` says why a producer may write
+       no others. */
+    if (result.ok) {
+      deps.book.resolveAttempt(target.sessionId, "delivered");
+      return { kind: "answered", result, unsent: null, hold: null };
+    }
     const unsent = nothingWasSent(result);
-    if (unsent !== null) return { kind: "answered", result, unsent, hold: null };
+    if (unsent !== null) {
+      deps.book.resolveAttempt(target.sessionId, "nothing-was-sent");
+      return { kind: "answered", result, unsent, hold: null };
+    }
     // WHICH OF THE THREE READINGS THIS IS, read off the transport rather than
     // assumed. `delivery: "none"` reaching this line means `nothingWasSent`
     // refused to certify it — the summary said nothing was sent and the `sent`

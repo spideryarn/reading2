@@ -31,16 +31,19 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ACTIONS, type EnactedAction } from "../tools/fleet/actions.js";
+import { ACTIONS } from "../tools/fleet/actions.js";
 import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
 import { fleetState } from "../tools/fleet/state.js";
 import type {
+  Action as ActionWire,
+  EnactedAction,
   FleetState as FleetStateWire,
   LaunchProgress,
   LaunchRecordView,
   NotifyOutcomeView,
   QueuedItem,
 } from "../tools/fleet/wire.js";
+import type { ClientAction } from "../tools/fleet/web/src/actions-client.js";
 import type { DrainDeps } from "../tools/fleet/drain.js";
 import { realActionDeps, type ActionDeps } from "../tools/fleet/routes-actions.js";
 import { realBroadcastDeps, type BroadcastDeps } from "../tools/fleet/routes-broadcast.js";
@@ -78,6 +81,75 @@ describe("an enacted action is never one-tap", () => {
     const enacted = ACTIONS.filter((a) => a.effect === "enacted");
     expect(enacted.length).toBeGreaterThan(0);
     for (const a of enacted) expect(a.needsConfirm, a.id).toBe(true);
+  });
+});
+
+/**
+ * The catalogue's server arms and the parsed client arms meet through
+ * `wire.ts`, not a comment saying two handwritten unions should agree.
+ *
+ * This has the same boundary as the other shared-wire guards: only a required,
+ * top-level field is guaranteed to arrive as a compile failure. A client may
+ * deliberately re-type an id it read from JSON, and may read an absent stagger
+ * as null, but it may not silently omit a new required field the server sends.
+ */
+describe("the actions catalogue's shared wire shapes", () => {
+  type EveryKeyRequired<T> = [T] extends [Required<T>] ? true : false;
+  type EnactedWire = Extract<ActionWire, { effect: "enacted" }>;
+  type SpokenWire = Extract<ActionWire, { effect: "spoken" }>;
+  type BroadcastWire = Extract<ActionWire, { effect: "broadcast" }>;
+  type EnactedClient = Extract<ClientAction, { effect: "enacted" }>;
+
+  it("requires every top-level field on all three server arms", () => {
+    const enactedTotal: EveryKeyRequired<EnactedWire> = true;
+    const spokenTotal: EveryKeyRequired<SpokenWire> = true;
+    const broadcastTotal: EveryKeyRequired<BroadcastWire> = true;
+    expect(enactedTotal).toBe(true);
+    expect(spokenTotal).toBe(true);
+    expect(broadcastTotal).toBe(true);
+
+    // @ts-expect-error `false` is assignable ONLY when an enacted wire field is
+    // optional. If this compiles, the directive goes unused and `npm run
+    // typecheck` fails rather than a new field quietly becoming optional.
+    const enactedOptional: EveryKeyRequired<EnactedWire> = false;
+    void enactedOptional;
+
+    // @ts-expect-error `false` is assignable ONLY when a spoken wire field is
+    // optional. If this compiles, the directive goes unused and `npm run
+    // typecheck` fails rather than a new field quietly becoming optional.
+    const spokenOptional: EveryKeyRequired<SpokenWire> = false;
+    void spokenOptional;
+
+    // @ts-expect-error `false` is assignable ONLY when a broadcast wire field
+    // is optional. If this compiles, the directive goes unused and `npm run
+    // typecheck` fails rather than a new field quietly becoming optional.
+    const broadcastOptional: EveryKeyRequired<BroadcastWire> = false;
+    void broadcastOptional;
+
+    /* This is deliberately the CLIENT arm, not a second server fixture. Add a
+       required top-level field to `EnactedAction` in wire.ts and this object
+       stops compiling until actions-client.ts parses or explicitly declines it. */
+    const parsed: EnactedClient = {
+      effect: "enacted",
+      id: "a newer enacted id is still named",
+      scope: "session",
+      label: "An enacted action",
+      summary: "Its wire fields are carried to the client.",
+      needsConfirm: true,
+      gate: "The server's named gate.",
+    };
+    expect(parsed.effect).toBe("enacted");
+
+    const server: EnactedAction = {
+      effect: "enacted",
+      id: "kill-session",
+      scope: "session",
+      label: "Exit",
+      summary: "Kill the session",
+      needsConfirm: true,
+      gate: "the name must still mean this session",
+    };
+    expect(server.needsConfirm).toBe(true);
   });
 });
 
