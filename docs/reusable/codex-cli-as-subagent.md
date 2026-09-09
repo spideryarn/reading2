@@ -785,6 +785,17 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   `cat`s a missing file into a doc records silence as agreement. **Always test that the answer
   file exists and is non-empty**, not just that the command succeeded.
 - **Any *other* exit 1** means reading the log before assuming the wrapper or the prompt is at fault.
+- **A prompt that asks the model to break a security-shaped invariant can be killed by OpenAI's
+  content filter**, and it looks exactly like a run that found nothing: exit 1, no answer file. The
+  reason is only in the activity log, as
+  `ERROR: This content was flagged for possible cybersecurity risk`. Measured 2026-09-09 on a review
+  of an unattended CI runner, whose prompt said "attack it" and listed git redirection mechanisms to
+  try — `GIT_DIR` poisoning, `core.worktree`, `refs/replace`. Nothing about the work was offensive
+  security; the *framing* was. **Reframe in correctness terms** — "is this statement accurate as
+  written", the invariant and the scenarios it must survive — rather than as an attack to mount, and
+  the same review runs. Worth knowing that the run is not wasted either way: read the activity log
+  before re-dispatching, because the partial work is in it. That one had reproduced a real
+  `refs/replace` hole before it was cut off, and the finding survived the run that died.
 - **Codex cites code as absolute `/Users/…/file.ts:148`, usually as a markdown link.** Leave them
   alone, or make them code spans. This bullet used to say to rewrite them repo-relative, and on
   2026-09-02 following it put 48 broken links into two review docs and reddened the deploy gate:
