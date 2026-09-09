@@ -389,20 +389,26 @@ describe("the launch record's own shape", () => {
   });
 
   /**
-   * `submitted` is the success word and `sent` is not available anywhere in the
-   * union, because nothing on this box can observe reception.
+   * `queued` is the success word. Neither `sent` nor `delivered` exists in the
+   * union, because this route hands the line to the queue and stops — the
+   * queue's own surface says what became of the keystrokes.
    */
   it("has no arm that claims a message was received", () => {
     const arms: NotifyOutcomeView["kind"][] = [
-      "submitted",
+      "queued",
+      "not-queued",
       "no-holder",
       "contested",
       "cannot-tell",
-      "refused",
-      "unknown",
     ];
-    for (const arm of arms) expect(arm).not.toBe("sent");
-    expect(arms).toContain("submitted");
+    /* Neither word is available, and that is the design: this route hands the
+       line to the queue and stops, so it cannot claim a delivery and must not
+       have an arm that reads like one. */
+    for (const arm of arms) {
+      expect(arm).not.toBe("sent");
+      expect(arm).not.toBe("delivered");
+    }
+    expect(arms).toContain("queued");
   });
 });
 

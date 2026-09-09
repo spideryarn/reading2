@@ -2,7 +2,7 @@
 
 Up: [plans.md](../project/plans.md).
 
-**Status: stage 1 written, Sol review pending.**
+**Status: finished. Both stages done, Sol-reviewed, on `dev`.**
 
 Greg, 2026-09-08:
 
@@ -92,5 +92,53 @@ the case it was written for. Which is [silent-success.md](../reusable/silent-suc
 
 ### Stage 2 — Sol review, then land
 
-- [ ] `npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high` on the doc plus the diff.
-- [ ] Merge `origin/dev`, commit by name, `git push origin HEAD:dev`.
+**Status: done.** Sol reviewed at effort high, EXIT=0, answer fresh. **No P0; seven P1 and four P2,
+and it answered "No" to the conclusion check** — a session reading only the doc could not then have
+added a working tab. All findings applied.
+
+- [x] Sol review. The review ran against the doc two commits before the one that landed, so each
+      finding was checked against the current text rather than applied blind — several were already
+      fixed by the peer corrections.
+- [x] Applied, plus the five queued peer findings.
+- [x] `doc-links` 14/14; merged `origin/dev`; pushed.
+
+**The finding nobody else had, and the reason the conclusion was "No":** a **sixth** registration, in
+a **third** file. `.dock-modes { flex: 3 0 auto }` under `@media (pointer: coarse)` hard-codes the
+mode count as a share weight, so a fourth mode gets four buttons three shares against Refresh's one.
+Verified: it still said `3` after `deploys` landed. No type and no test can see it, and the symptom
+is proportion rather than breakage. That is now a row in the registration table and an item in
+§ What this costs.
+
+**The structural finding, which made the doc shorter rather than longer.** Sol's P2 on
+`documentation-policy.md`: the doc retold implementation instead of signposting it, and *the retelling
+is exactly where it drifted*. Both of its factual P1s were in retold detail —
+
+- *"collected every 60 s"* — `FLEET_REFRESH_MS` is the wait **after** each pass finishes, so the real
+  gap is longer (the chart code reckons ~73 s);
+- *"no read inside the collection loop"* — **false as stated**; the collector already reads every
+  pane, health, and the Overseer checkpoint. The true rule is narrower: do not add a new per-session
+  transcript or disk fan-out to the refresh path.
+
+**Three more claims that were wrong rather than imprecise:**
+
+- *"A panel taking pushed state never fetches"* — `HealthPanel` takes a pushed prop **and** mounts
+  `HealthHistory`, which fetches. The choice is per **datum**, not per panel. Replaced with an
+  end-to-end path table, which is also Sol's proposed fix for the checklist being unable to carry an
+  on-demand or write-backed mode to completion.
+- *"A tab that does anything is two files"* — a new on-demand read needs a route, a `server.ts`
+  mount, a client seam, an `App.tsx` injection and the panel; a panel reusing `ActionsUi` needs no
+  new client at all.
+- *"Switching a tab spends nothing"* — Box health mounts `HealthHistory`, which calls its route
+  immediately and then polls. The doc had used this to justify the tooltip register, so the
+  justification changed with it.
+
+And one accessibility claim corrected: a screen-reader user gets the button's `aria-label`, not "the
+label and the icon" — the icon is `aria-hidden` and the tip is mounted only while open, so **no
+persistent copy of the card's text exists** in the accessibility tree.
+
+**The pattern across the whole job.** Every error this doc shipped was reasoned from reading the
+source; every correction came from somebody who ran the case — three peers and Sol. Two of them were
+the *same sentence* corrected in opposite directions before a measurement settled it narrower than
+either. That is [silent-success.md](../reusable/silent-success.md) applied to prose, and it is the
+argument for the queue item suggested to the Overseer: sweep the fleet suites for guards that survive
+mutation of the thing they guard.

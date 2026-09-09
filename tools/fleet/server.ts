@@ -41,14 +41,17 @@ import { makeHealthRetention } from "./health-wiring.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
-import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
+import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
 import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
-import { newSessionRoutes } from "./routes-new.js";
+import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
+import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
+import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
+import { claimFromSnapshot } from "./overseer-claim.js";
 import { statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
@@ -163,6 +166,17 @@ for (const line of retention.lines.error) console.error(line);
 const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
 
 /**
+ * The queue of ideas. Built once, at module scope, like the feed route above —
+ * it holds no state, but a route rebuilt per request is a habit that becomes a
+ * second queue the first time one of them does.
+ *
+ * Reads `~/.overseer/queue.jsonl` fresh on every request rather than caching:
+ * it is tens of kilobytes at most, it is the answer to *what is authorised*,
+ * and a stale answer to that question is worse than a slow one.
+ */
+const queueRoute = ideaQueueRoute();
+
+/**
  * The Deploys tab's record and its probe.
  *
  * Cheap enough to build unconditionally: it opens nothing at startup and spawns
@@ -182,6 +196,72 @@ for (const line of deploys.lines.log) console.log(line);
  * means NEVER COLLECTED, and an empty `rows` is only a claim about the box when
  * `collectedAt` is non-null.
  */
+/**
+ * **TELLING THE OVERSEER A SESSION WAS STARTED FROM THE WEB UI.**
+ *
+ * This lives here and not in `routes-new.ts` because it needs two things that
+ * module deliberately does not have: the live fleet snapshot, to resolve who
+ * holds the `overseer` role, and the shared steering queue to reach them.
+ *
+ * **IT QUEUES; IT DOES NOT SEND.** Since `send-coordinator.ts`, every producer
+ * of keystrokes goes through one coordinator whose point is that the quarantine
+ * check and the transport call are adjacent. Sending from here — in a child
+ * process, as first planned, to keep a synchronous 60-second worst case off the
+ * event loop — would have carried its **own** quarantine book: `holding()` would
+ * answer null for the whole box and this notice could type a second sentence
+ * into a session already held behind half of one. Queueing dissolves that
+ * instead of mitigating it, because `enqueueSharedMessage` makes no tmux calls
+ * at all, and the drain then delivers through the coordinator with the hold
+ * check in-process where it belongs.
+ *
+ * **THE SHARED QUEUE, NEVER A SECOND ONE.** Two queues would mean the one the
+ * page renders is not the one anything delivers from.
+ *
+ * **The claim is read through `claimFromSnapshot`**, over this server's own
+ * payload, rather than by picking `role === "overseer"` out of the rows: that
+ * function carries the staleness and failed-collection checks, and a hand-rolled
+ * read gets them wrong. Serialising the payload for one launch is affordable —
+ * the route allows one launch at a time behind a cooldown.
+ */
+function tellOverseer(input: {
+  sessionName: string | null;
+  startedDir: string | null;
+  origin: string | null;
+  prompt: string;
+}): ReturnType<typeof notifyOverseer> {
+  const claim = claimFromSnapshot(JSON.parse(statePayload()), {
+    nowMs: Date.now(),
+    /* Deliberately short. A stale snapshot means we do not know who holds the
+       role NOW, and `cannot-tell` is the honest answer — the alternative is
+       addressing whoever held it minutes ago. */
+    maxAgeMs: 120_000,
+  });
+  return notifyOverseer(
+    {
+      claim,
+      rows: (snapshot?.rows ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        paneId: row.paneId,
+        panePid: row.panePid,
+        claudeSessionId: row.claudeSessionId,
+        status: row.status,
+      })),
+      /* RAW TEXT AND A SPEAKER. `enqueueMessage` renders, and `drain.ts` renders
+         again at delivery; handing over a prefixed string prefixes it twice. */
+      enqueue: (target, text, speaker) => enqueueSharedMessage(target, text, speaker),
+    },
+    notifyLine({
+      sessionName: input.sessionName,
+      origin: input.origin,
+      dir: input.startedDir,
+      promptFirstLine: promptExcerpt(input.prompt),
+    }),
+  );
+}
+
+configureNewSessionNotifier(tellOverseer);
+
 function statePayload(): string {
   /* **THE COMPOSITION ITSELF IS IN state.ts, and only the wiring is here.**
      This file binds ports at import time, so nothing can import this function
@@ -496,6 +576,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // part that matters: clearing `GJD_PROVISIONAL`, without which `gjd-remote
   // ls` renames the session straight back to Claude's own title.
   if (renameRoute().handle(req, res)) return;
+
+  // The queue of ideas, for the Queued ideas tab. READ-ONLY, and that is a
+  // security decision rather than an unfinished one: the queue is gate 3's
+  // authorisation record and this server has no authentication, so a write
+  // route here would let anything able to reach the port append an item
+  // attributed to Greg. routes-idea-queue.ts § read-only says what a write path
+  // would need first. Writes go through `scripts/overseer-queue.ts`.
+  if (queueRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot

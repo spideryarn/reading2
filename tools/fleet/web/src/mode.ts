@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
  * is its budget, and a reader asking "why is everything slow / stalled" checks
  * both. Appending it would have been a smaller diff and a worse dock.
  */
-export const MODES = ["sessions", "messages", "health", "usage", "overseer", "deploys"] as const;
+export const MODES = ["sessions", "messages", "health", "usage", "overseer", "ideas", "deploys"] as const;
 
 export type Mode = (typeof MODES)[number];
 
@@ -42,6 +42,7 @@ export const MODE_LABELS: Record<Mode, string> = {
   health: "Box health",
   usage: "Usage limits",
   overseer: "Overseer",
+  ideas: "Queued ideas",
   deploys: "Deploys",
 };
 

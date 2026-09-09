@@ -25,6 +25,7 @@ import { FeedPanel } from "./FeedPanel";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
+import { QueuePanel } from "./QueuePanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
@@ -42,6 +43,7 @@ import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
+import { httpQueueApi, type QueueApi } from "./queue-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
@@ -62,6 +64,7 @@ export function App({
   historyApi = httpHistoryApi,
   feedApi = httpFeedApi,
   deploysApi = httpDeploysApi,
+  queueApi = httpQueueApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -97,6 +100,13 @@ export function App({
    * it thought it was exercising.
    */
   deploysApi?: DeploysApi;
+  /**
+   * The queue of ideas. Injected here as well as defaulted in `QueuePanel`, so
+   * that no test in this file can reach `fetch` by accident — a suite that
+   * quietly made real requests would pass and tell you nothing about the seam
+   * it thought it was exercising.
+   */
+  queueApi?: QueueApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -328,6 +338,11 @@ export function App({
             fleet-dashboard-modes.md § Where the panel's data comes from: no read
             inside the collection loop. All it needs from here is the page's
             clock, so every age on screen is anchored to the same tick. */}
+        {mode === "ideas" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <QueuePanel api={queueApi} refreshNonce={refreshNonce} />
+          </div>
+        ) : null}
         {mode === "deploys" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
