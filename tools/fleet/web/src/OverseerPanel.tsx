@@ -511,13 +511,20 @@ export function OverseerPanel({
       </Card>
 
       {/* The same component Box Health draws. One implementation of "say this
-          to everybody", per the plan. */}
+          to everybody", per the plan.
+
+          `rows` IS WHAT MAKES THE BROADCAST REACH ANYBODY. The route refuses a
+          fleet-wide message that names no recipients, on purpose — it must act
+          on the list the person was looking at — and this tab is the one that
+          has that list. See `boxActionBody`. Passed straight through, never
+          re-read. */}
       <BoxActionsCard
         feed={actions.feed}
         api={actions.api}
         asked={actions.asked}
         error={actions.error}
         onChanged={actions.refresh}
+        rows={rows}
       />
 
       {/* **A DAEMON IS NOT A RECIPIENT.** The Overseer writes a checkpoint;
