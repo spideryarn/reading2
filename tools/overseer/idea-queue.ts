@@ -95,6 +95,7 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
 
+import type { QueueActor, QueueLifecycle, QueueProblemKind } from "../fleet/wire.js";
 import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "./lock.js";
 
@@ -116,15 +117,21 @@ export const QUEUE_LOCK_FILE = "queue.lock";
 /**
  * Who recorded an event.
  *
- * Two arms, and the narrowing from `wire.ts`'s `Speaker` is deliberate: that
- * type's third arm, `dashboard`, means *a person acted and software is reporting
- * it* — a report, never an instruction. A queue write IS an instruction, so an
- * item nobody authored must not be spellable.
+ * **An alias, so there is exactly one declaration.** The union itself lives in
+ * [`wire.ts`](../fleet/wire.ts) as `QueueActor`, because it crosses the HTTP
+ * boundary and that file is the one home for anything that does — declaring it
+ * twice is the precise bug its header was written about. Reaching from here into
+ * `tools/fleet/` reads backwards; `attention-classify.ts` and `usage-carry.ts`
+ * already do it, and `wire.ts` imports nothing, so nothing comes with it.
  *
- * **This is who recorded it, which is not the same as who authorised it** —
- * `authority` below is that, and only Greg can grant it.
+ * The narrowing from `Speaker` is the interesting part, and it is argued at
+ * `QueueActor`: `dashboard` means *a report, never an instruction*, and a queue
+ * write is an instruction.
+ *
+ * **This is who RECORDED it, which is not who authorised it** — `Authority`
+ * below is that, and only Greg can grant it.
  */
-export type IdeaActor = "greg" | "overseer";
+export type IdeaActor = QueueActor;
 
 export const IDEA_ACTORS: readonly IdeaActor[] = ["greg", "overseer"];
 
@@ -135,8 +142,12 @@ export type Authority =
   /** Greg said yes — to **this** revision of the text, and no later one. */
   | { readonly kind: "authorized"; readonly by: IdeaActor; readonly at: string; readonly revision: number };
 
-/** Where an item has got to. One axis, and only this one is a lifecycle. */
-export type Lifecycle = "queued" | "dispatched" | "done" | "dropped";
+/**
+ * Where an item has got to — one axis, and only this one is a lifecycle.
+ *
+ * Aliased from `wire.ts` for the reason `IdeaActor` is.
+ */
+export type Lifecycle = QueueLifecycle;
 
 /**
  * What the Overseer needs in order to write the brief it would otherwise
@@ -258,13 +269,8 @@ export type IdeaTouch = {
  * their presence is what makes a view undispatchable.
  */
 export type QueueProblem = {
-  readonly kind:
-    | "unreadable-line"
-    | "unknown-item"
-    | "duplicate-item"
-    | "missing-anchor"
-    | "unauthorized-authorization"
-    | "illegal-transition";
+  /** Aliased from `wire.ts`, like the two above: the page prints these. */
+  readonly kind: QueueProblemKind;
   readonly why: string;
   /** The event's own id, where there was one to quote. */
   readonly eventId: string | null;

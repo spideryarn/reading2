@@ -25,7 +25,7 @@
  * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
  * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, Hourglass, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
+import { Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -55,6 +55,9 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
      turns over, which is the thing this tab is actually about. */
   usage: Hourglass,
   overseer: Network,
+  /* A lightbulb, because the rows are ideas before they are work — and because
+     every other glyph in this bar is a machine. */
+  ideas: Lightbulb,
   deploys: Rocket,
 };
 
@@ -99,6 +102,15 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Overseer",
     what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",
     how: "The status card computes what it shows, and tells a dead Overseer from a deaf one. The message and broadcast controls type at real sessions — a broadcast spends a turn of a paid model per recipient, so it asks the server what it would do before it does it.",
+  },
+  ideas: {
+    head: "Queued ideas",
+    what: "What you have asked for and not got yet, in order, each row saying why it is not moving.",
+    /* **The badge is the non-obvious half**, so it is what the second sentence
+       spends itself on: four different reasons an item is stuck, only one of
+       which is yours to clear. Not a gesture framing — this copy is also the
+       button's accessible description, where nothing is being pressed. */
+    how: "Four reasons an item sits still — waiting on you, never approved, approved then edited, or just next in line — and only the first is yours. There is no ETA, and the panel says why.",
   },
   deploys: {
     head: "Deploys",
