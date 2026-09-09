@@ -302,8 +302,12 @@ command by hand on a busy box, and for the herd case the admission valve explici
 
 ## Stage 3 — start it, and say what the tab shows
 
-**Status: in progress.** The runner's worktree was built by hand first, as the design's own
-rehearsal: `.claude/worktrees/readiness-checks` on branch `readiness-checks`, created with
+**Status: complete.** The loop is running under tmux as `readiness-loop-1826-3793769`, holding
+`~/.fleet-readiness/readiness-loop.lock`, and the Readiness tab says **ready** for `7ea2cf54` on real
+wrapper evidence. What is *not* done, and is Greg's: the systemd unit that would make it survive a
+reboot — four places, written out in the debrief.
+
+The runner's worktree was built by hand first, as the design's own rehearsal: `.claude/worktrees/readiness-checks` on branch `readiness-checks`, created with
 `worktree add … origin/dev` and set up with `scripts/worktree-setup.ts`. Two things came out of it
 that the plan did not know.
 
@@ -317,10 +321,46 @@ the `check` would be red about nothing. The loop has to copy it, and Stage 2's b
 first time on this box. The first-ever record was written at 16:03 by
 `readiness-run.ts check` in that worktree.
 
-- [ ] Start the loop under `tmux-job.ts` and watch one full cycle land a record.
-- [ ] Read `/api/readiness` and report the verdict on the current dev head: green, or `unknown` with
-      the failing clause named. Either is a success for this stage; what is not is not knowing.
-- [ ] The systemd unit text goes in the debrief, unwritten, for Greg.
+- [x] Start the loop under `tmux-job.ts` and watch one full cycle land a record.
+- [x] Read the verdict on the current dev head: green, or `unknown` with the failing clause named.
+- [x] The systemd unit text goes in the debrief, unwritten, for Greg.
+
+### What actually happened, which is the evidence for the whole plan
+
+**The loop ran itself end to end, unattended, and the chain fired in order.** From its own log:
+
+    2026-09-09T16:51:36Z 7ea2cf54644a run: Readiness is unknown for this clean dev tree,
+                                        and the box gates permit a full check.
+    2026-09-09T17:24:02Z 7ea2cf54644a outcome: pass; duration 31m 58s; log …
+
+It fetched, fast-forwarded the runner worktree from `6a680a6c` to `7ea2cf54`, stamped it clean at
+exactly dev's head, found no record for that commit, passed the memory and health gates, wrote its
+pending record *before* spawning so its own death would be visible, and recorded a pass.
+
+**The verdict is `READY`**, computed through `readinessVerdict` over the real store:
+
+    check full wrapper state=fail start=[6a680a6c clean] end=[6a680a6c clean]   test:failed
+    check full wrapper state=pass start=[7ea2cf54 clean] end=[7ea2cf54 clean]   test:clean
+
+    VERDICT: READY
+      test:      pass — a full `npm run check` passed on this commit, and its gates include this one
+      typecheck: pass — a full `npm run check` passed on this commit, and its gates include this one
+
+Two records, and between them they are the feature's argument: the same full check, on two commits,
+disagreeing. `unreadable: 0`.
+
+**The first run found dev genuinely red, and that was the point.** On `6a680a6c` the check failed on
+four tests, re-run individually rather than believed as a batch: `fixture-ids` and `fleet-attention`
+were real reds nobody knew about; `fleet-decisions-route` was the missing `build:fleet`; and
+`load-article-serialisation` passed alone and was contention. **That last one is a standing limit,
+not a bug**: a full suite on a shared box can fail for reasons that are not the commit's, and this
+loop records those as a red dev. Nothing cheap distinguishes them, so it is written down here rather
+than papered over.
+
+**The first tick after a start is slow and silent for a couple of minutes**, because preparation is
+state convergence rather than merge-triggered: a fresh process runs `npm ci`, migrations and
+`build:fleet` before it decides anything. That is deliberate — it is what lets a loop restarted after
+a kill repair itself — but it means a person watching the log sees nothing at first.
 
 ## Gates
 
