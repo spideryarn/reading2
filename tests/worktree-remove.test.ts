@@ -87,7 +87,16 @@ afterEach(() => {
 /* ------------------------------------------------------- registrations -- */
 
 describe("classifyRegistration", () => {
-  const base = { path: "/x", head: "abc", locked: false, prunable: false, present: true, main: false, bare: false };
+  const base = {
+    path: "/x",
+    head: "abc",
+    locked: false,
+    prunable: false,
+    present: true,
+    main: false,
+    bare: false,
+    detached: false,
+  };
 
   it("REFUSES a prunable registration whose directory is still there", () => {
     /* The one that would have been force-deleted: `ghosts()` counts
