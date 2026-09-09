@@ -114,13 +114,20 @@ const APPROVAL_TIP: Tip = {
 export const BADGE_TIPS: Record<string, Tip> = {
   ready: {
     head: "Ready",
-    what: "Authorised, unblocked, and waiting only for a slot. Nothing about this item needs anybody's attention.",
-    how: "The server computed it, using the same test that decides whether an item may actually go out — this page never recomputes that, so the badge and the dispatch gate can never disagree.",
+    what: "Authorised, unblocked, and next in line for a slot. Nothing about this item is waiting on anybody.",
+    /* **This said the page never recomputes the verdict, and the page does.**
+       `badgeFor` derives the badge here, from the item's three axes; it does
+       not read `row.ready` at all. What arrives computed is the SENTENCE under
+       the title, and that is the one the dispatch gate uses. GPT Sol's P0. */
+    how: "The badge is worked out on this page from the item's lifecycle, its authority and whether it is waiting on Greg. The sentence under the title is the server's own dispatch verdict, and that is the one that actually decides whether an item may go out.",
   },
   "needs you": {
     head: "Needs you",
-    what: "Held because it is waiting on an answer from Greg, not because it is unapproved or out of turn.",
-    how: "The only one of the four stuck reasons that is his to clear, which is why it outranks the others on a row that is more than one of them at once. Only he can mark it answered — noticing that something needs him is the coordinator's job, deciding it no longer does is the answer itself.",
+    /* It does NOT mean the item is otherwise clear: `badgeFor` returns this
+       first, so an item that is also a proposal or lapsed wears it. Saying "not
+       because it is unapproved" asserted something the badge cannot support. */
+    what: "Waiting on an answer from Greg. It may be unapproved or out of turn as well — this simply outranks those, because it is the only one he can clear.",
+    how: "Only he can mark it answered: noticing that something needs him is the coordinator's job, and deciding it no longer does is the answer itself.",
   },
   proposal: {
     head: "Proposal",
@@ -134,8 +141,11 @@ export const BADGE_TIPS: Record<string, Tip> = {
   },
   running: {
     head: "Running",
-    what: "Dispatched to a session, which is working on it now. The session's name is in the row when you open it.",
-    how: "It says a session was started, not that anything has landed — the queue records the dispatch, and the work itself finishes in git and in a plan doc rather than here.",
+    /* The queue records that a dispatch event was accepted. Nothing re-checks
+       the session afterwards, so "is working on it now" was a claim about the
+       present made from a record of the past. */
+    what: "A dispatch was recorded for this item, naming a session. Open the row for the name.",
+    how: "It says a dispatch happened, not that the session is still working or that anything has landed — nothing here re-checks it afterwards. The Sessions tab is what can say whether that session is alive.",
   },
   done: {
     head: "Done",
@@ -149,7 +159,7 @@ export const BADGE_TIPS: Record<string, Tip> = {
   },
   "on hold": {
     head: "On hold",
-    what: "Nothing about this item is wrong. The queue file itself has a problem, and while it does, nothing in it is dispatchable.",
+    what: "The queue file has a problem, and while it does nothing in it is dispatchable — whatever state this item is in.",
     /* **The word this card may not print is `not approved`**, and that is the
        same trap Header.tsx's freshness tip names about `STALE`: a test asserts
        that a queue held by a broken file never says those words anywhere on the
@@ -157,7 +167,7 @@ export const BADGE_TIPS: Record<string, Tip> = {
        stop — and an explanation that quoted them would satisfy the search on
        every page and quietly retire the check. The sentence works without them;
        the check does not. Found by that test, 2026-09-09. */
-    how: "It outranks the row's own reasons, which is why an approved and unblocked item wears it too. Its own count exists because without it these rows were reported as lacking approval — so a queue with one bad line accused twelve perfectly approved items.",
+    how: "It outranks the item's own reasons rather than replacing them, so an approved and unblocked item wears it too and one with its own blockers still has them. Its own count exists because without it these rows were reported as lacking approval — so a queue with one bad line accused twelve perfectly approved items.",
   },
 };
 
@@ -178,7 +188,7 @@ export const PROBLEM_TIPS: Record<string, Tip> = {
   "unknown-item": {
     head: "Unknown item",
     what: "Something happened to an item that was never added — an approval, a move or a dispatch naming an id with no beginning.",
-    how: "Applied to nothing rather than guessed at. It usually means an earlier line is the unreadable one, so the two arrive together.",
+    how: "Applied to nothing rather than guessed at. Any event naming an id that was never added produces it — including, but not only, one whose `added` line is elsewhere in the file and could not be read.",
   },
   "duplicate-item": {
     head: "Duplicate item",
@@ -192,8 +202,12 @@ export const PROBLEM_TIPS: Record<string, Tip> = {
   },
   "unauthorized-authorization": {
     head: "Unauthorised authorisation",
-    what: "Somebody other than Greg wrote a line that grants approval, or that says an item no longer needs him.",
-    how: "Refused here rather than in the writers, because the CLI, the HTTP route and a hand-edited file are three entrances and this is the one thing all three pass through. A model must not mint its own approval.",
+    what: "A line grants approval, or clears a waiting-on-Greg flag, under an actor other than Greg.",
+    /* **`by` is a self-declaration, not a proven identity** — idea-queue.ts
+       says so outright: any process running as this user can append `by:
+       "greg"`. So this is about what the record says, never about who typed
+       it, and the card must not imply the second. GPT Sol's P0. */
+    how: "Checked in the fold rather than in the writers, because the CLI, the HTTP route and a hand-edited file are three entrances and all three fold. It is a governance constraint and not an OS boundary: the actor on a line is what that line claims, not proof of who wrote it.",
   },
   "illegal-transition": {
     head: "Illegal transition",
@@ -220,22 +234,22 @@ export const FACT_TIPS: Record<string, Tip> = {
   "waiting on": {
     head: "Waiting on",
     what: "What has to happen before this can start, in the queue's own words — “a lull”, “the next gateway edit”.",
-    how: "Free text and nothing acts on it: it is a note to a person, not a condition anything evaluates. The badge is what decides whether an item may go out.",
+    how: "Free text and nothing acts on it: a note to a person, not a condition anything evaluates. What decides whether an item may go out is the server's dispatch verdict, printed under the title — neither this field nor the badge.",
   },
   size: {
     head: "Size",
-    what: "A rough guess at how big the job is — XS through L.",
+    what: "A rough guess at how big the job is. Free text, usually something like XS or L, but nothing constrains it to those.",
     how: "A guess and never a promise, and not what the queue times itself by: sessions here run from ten minutes to six hours, which is why the panel refuses to turn a position into an ETA.",
   },
   source: {
     head: "Source",
     what: "The plan or doc that already holds the detail, repo-relative — where the idea came from.",
-    how: "Written when the idea was queued, so it points backwards. What the dispatched session goes on to write is the separate `plan` field below, and until 2026-09-09 this one was drawn under that name.",
+    how: "Ordinary metadata on the item, so an edit can change it at any time. What a dispatch recorded is the separate `plan` field below, and until 2026-09-09 this one was drawn under that name.",
   },
   plan: {
     head: "Plan",
-    what: "The plan doc the session dispatched to this item wrote for it, recorded at the moment it was dispatched.",
-    how: "Points forwards, unlike `source` above, and exists only once something has actually gone out — so an item with a source and no plan has been thought about and not started.",
+    what: "The path that was recorded alongside this item's dispatch.",
+    how: "Supplied by whoever recorded the dispatch. Nothing here checks that the file exists, or that the dispatched session is what wrote it. It appears only once something has gone out, unlike `source` above, which is set when the idea is queued.",
   },
   runs: {
     head: "Runs",
@@ -245,12 +259,12 @@ export const FACT_TIPS: Record<string, Tip> = {
   areas: {
     head: "Areas",
     what: "The files or directories this touches, used to write the file set into the brief the session is given.",
-    how: "How two sessions are kept out of each other's way, and it is a declaration rather than a lock — nothing stops a session editing outside it, so a brief that gets this wrong costs a merge conflict.",
+    how: "A declaration rather than a lock: nothing enforces it, and nothing stops a session editing outside it. It is what a brief's file set is written from.",
   },
   session: {
     head: "Session",
-    what: "The name of the session this was dispatched to.",
-    how: "A tmux handle, so it is how to find the work on the box and on the Sessions tab — but names are reused when a session dies, so it identifies a launch rather than a conversation.",
+    what: "The session name recorded with the dispatch.",
+    how: "Taken as free text rather than checked against tmux, so it is where to start looking on the Sessions tab rather than a promise that a session by that name is running. Names are reused when a session dies, so it identifies a launch at best.",
   },
 };
 
@@ -308,6 +322,13 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
      on to write — and the row named one while showing the other. See
      `FACT_TIPS` above. */
   const facts: [string, string | null][] = [
+    /* **The two things the badge's card cannot give a phone.** Its tooltip is
+       `mouseOnly` (it lives inside this row's own button), and the row's `why`
+       is null exactly when the item is ready — so without these, a sighted
+       touch reader had no route to either. Rows of the same `dl` rather than a
+       paragraph: this tab's complaint is length. GPT Sol's P1. */
+    [badge.label, badgeTip(badge.label).what],
+    ["id", row.id],
     ["waiting on", row.waitingOn],
     ["size", row.size],
     ["source", row.source],

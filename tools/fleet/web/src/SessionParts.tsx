@@ -252,8 +252,16 @@ export const HANDLE_TIPS = {
   },
   conversation: {
     head: "The conversation's id",
-    what: "Claude's own session uuid — the identifier of the conversation, not of anything tmux owns.",
-    how: "The only one of these that survives a resume, so it is what distinguishes this agent from one that replaced it in the same pane. A shell has none, and where it is missing the dashboard refuses to steer rather than guessing.",
+    what: "Claude's own session uuid — the identifier the agent was launched with, not anything tmux owns.",
+    /* **This card used to say the opposite, and so does half of its source.**
+       `types.ts` § `claudeSessionId` calls it what distinguishes this agent
+       from its replacement; the paragraph immediately below it, added with
+       execution identity, says every identifier above `execution` survives a
+       claude exiting and another starting in the same pane, this one included,
+       because it is a launch claim written once. The second is the careful one.
+       GPT Sol caught the card repeating the first; the field comment itself
+       still needs reconciling by whoever owns it. */
+    how: "A launch-time claim from the session's tmux environment, written once and never rewritten — so it survives one agent exiting and another starting in the same pane, and on its own it does not tell you which run is in there now. A shell has none, and where it is missing the dashboard refuses to steer rather than guessing.",
   },
 } satisfies Record<string, Tip>;
 

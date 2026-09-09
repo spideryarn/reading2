@@ -233,23 +233,38 @@ describe("the join, all five hops", () => {
        satisfy `toContain` while failing the requirement exactly. So count the
        rows, and count the reset instant they would each have repeated.
        GPT Sol's P2(4), 2026-09-09. */
-    /* One incident row and one verdict reason. The count is spelled out so that
-       a change to it is a decision rather than a number quietly going up — and
-       on 2026-09-09 it was one: the two cached windows used to be `li` rows here
-       and are now `StatCard`s, so this counts 2 where it counted 4 (plan
-       260909c). **The requirement did not move**: the assertions below still
-       pin one incident row and one reset instant, which is what "ninety
-       rejections are one thing" actually means. The windows are counted in
-       their own terms on the next line, so nothing stopped being checked. */
-    expect(container.querySelectorAll("li").length).toBe(1 + 1);
-    /* Three stats: the two cached windows, and — new on 2026-09-09 — **when
-       work can actually resume**, which is the number this whole card exists to
-       deliver and which used to be reachable only by reading an incident row's
-       third line. It is drawn from `dueBackAt`, the window that frees up LAST,
-       so a reader who acts on it is not caught out by a second window still in
-       force. */
-    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(3);
+    /* **COUNTED WHERE THEY LIVE, NOT AS A TOTAL.** A bare `li` count was the
+       right assertion when the card had one list. It now has three — incidents,
+       verdict reasons, and the cache entries that carried no usable number — so
+       a total would move for a good reason and a bad one indistinguishably, and
+       the number would be edited rather than read. The requirement has not
+       changed and is pinned directly instead: **one incident row**, whatever
+       else the card grows around it (plan 260909c). */
+    expect(container.querySelectorAll('[data-slot="usage-provenance"] li').length).toBe(1);
+    /* Two stats: the one cached window that carries a real reading, and — new
+       on 2026-09-09 — **when work can actually resume**, which is the number
+       this whole card exists to deliver and which used to be reachable only by
+       reading an incident row's third line. It is drawn from `dueBackAt`, the
+       window that frees up LAST, so a reader who acts on it is not caught out by
+       a second window still in force. */
+    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(2);
     expect(screen()).toContain("Work can resume in");
+    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
+       number, so it is not headroom and gets no card — but the count is on the
+       face of the page and the entry and its own reason are one tap behind it.
+       An absence folded away *without* a count is the exact failure this rewrite
+       exists to avoid, so both halves are pinned rather than the fold alone. */
+    expect(screen()).toContain("1 more cache entry carried no usable number");
+    expect(screen()).toContain("nimbus_quill");
+    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
+    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
+       number, so it is not headroom and does not get a card — but the count is
+       on the face of the page and the entry and its reason are behind the
+       disclosure. An absence folded away without a count would be the exact
+       failure this rewrite exists to avoid, so both halves are pinned. */
+    expect(screen()).toContain("1 more cache entry carried no usable number");
+    expect(screen()).toContain("nimbus_quill");
+    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
     expect(screen().match(/five_hour has not reset yet/g)).toHaveLength(1);
     expect(screen()).toContain("five_hour has not reset yet");
     /* **AND IT DOES NOT SAY "IN FORCE".** Only the verdict may claim the
