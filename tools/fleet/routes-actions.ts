@@ -80,10 +80,10 @@ import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
 import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
+import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import {
   deliveryGate,
   drainGate,
-  nothingWasSent,
   SteeringQueue,
   type DrainGate,
   type EnqueueRefusalRule,
@@ -104,7 +104,7 @@ import {
   type RouteErrorCode,
 } from "./routes-steer.js";
 import type { FleetStatus } from "./status.js";
-import { sendMessage as realSendMessage, type Delivery, type RefusalCode, type SteerResult, type SteerTarget } from "./steer.js";
+import type { Delivery, RefusalCode, SteerTarget } from "./steer.js";
 
 /* ------------------------------------------------------------------ *
  * Limits. Exported so a test can drive them rather than sleeping.
@@ -293,6 +293,12 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "rate-limited": 429,
   "method-not-allowed": 405,
   "answering-disabled": 503,
+  /* Inherited from `RouteErrorCode`, and unreachable from THIS file's routes —
+     nothing under /api/actions answers with it, because a broadcast reports a
+     held recipient row by row rather than refusing the whole fan-out. It is
+     here because the union is shared with routes-steer.ts, where it is a 409:
+     the request was fine, nothing was typed, and pressing again will not help. */
+  "session-held": 409,
   internal: 500,
   "no-such-action": 400,
   "wrong-scope": 400,
@@ -354,7 +360,6 @@ import type {
   PlanStepView,
   QuarantineHoldView,
   QueueView,
-  UncertainSendReading,
 } from "./wire.js";
 
 export type { QueuedItemView, QueueView } from "./wire.js";
@@ -1151,11 +1156,19 @@ export type ActionDeps = {
   /** The one queue per server. Shared with whatever drains it. */
   queue: SteeringQueue;
   /**
-   * The delivery module, injected so this file's own tests can prove what it
-   * passes DOWN without a single keystroke going out. There are ~35 live agent
-   * sessions on this box doing other people's work.
+   * **The only thing here that can type into a pane** — `send-coordinator.ts`.
+   *
+   * The transport is injected one level down, inside it, so this file's own
+   * tests can prove what reaches it without a single keystroke going out (there
+   * are ~35 live agent sessions on this box doing other people's work). There
+   * is no `sendMessage` beside it on purpose: the broadcast used to hold the
+   * transport itself and chose its recipients on `drainGate` alone, so a
+   * session the page was showing as HELD was still fanned out to.
+   *
+   * **IT MUST BE LOOKING AT THE SAME BOOK AS `queue`**, and `makeActionRoutes`
+   * refuses to build if it is not — see the check there.
    */
-  sendMessage: typeof realSendMessage;
+  send: SendCoordinator;
   io: ActionIo;
   now: () => number;
   limiter: RateLimiter;
@@ -1205,7 +1218,11 @@ export function realActionDeps(): ActionDeps {
       serverInstanceId: serverInstanceId(),
       quarantine: sharedQuarantineBook(),
     }),
-    sendMessage: realSendMessage,
+    // THE SAME BOOK, REACHED THE SAME WAY. `sharedSendCoordinator()` is built
+    // over `sharedQuarantineBook()`, so the queue above and the transport below
+    // are looking at one set of holds — which is what makes a hold opened by a
+    // message typed from the phone stop the drain a minute later.
+    send: sharedSendCoordinator(),
     io: realActionIo(),
     now: () => Date.now(),
     limiter: createRateLimiter({ minIntervalMs: MIN_INTERVAL_MS, burstMax: BURST_MAX, burstWindowMs: BURST_WINDOW_MS }),
@@ -1316,6 +1333,29 @@ const PLAN_REFUSAL_CODE: Record<PlanRefusalRule, ActionErrorCode> = {
 
 export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRoutes {
   const deps: ActionDeps = { ...realActionDeps(), ...overrides };
+  /**
+   * **ONE BOOK, CHECKED RATHER THAN TRUSTED.**
+   *
+   * The queue asks its book whether a session is held before it leases
+   * anything, and the coordinator asks its own on the line above the transport.
+   * If those are two different books, each of them is right about half the
+   * holds and the page is wrong about all of them — a message typed from the
+   * phone would be recorded where the drain never looks.
+   *
+   * That is not hypothetical: a review showed that changing one `??=` to `=` in
+   * `quarantine.ts` split the two compositions apart **with the whole suite
+   * staying green**, because every producer's test injected its own book and
+   * nothing joined the real ones. A comment saying "they are the same book"
+   * would have gone on being true-looking. This throws instead, at
+   * construction, before anything can be typed anywhere.
+   */
+  if (deps.send.book() !== deps.queue.quarantineBook()) {
+    throw new Error(
+      "the action routes were built with a send coordinator and a queue looking at two different quarantine books: " +
+        "a hold recorded by one would be invisible to the other, and the drain would go on delivering into a session " +
+        "the page says nothing may be sent to.",
+    );
+  }
   /** When the fleet was last told to ease off. Server-lifetime, like the queue. */
   let lastBroadcastAt: number | null = null;
   /**
@@ -2156,48 +2196,74 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         continue;
       }
       /**
-       * Hold this recipient's session, because this send may have left text in
-       * its input box.
+       * What this send is, for the coordinator — and therefore for the hold.
        *
        * **THE THIRD PRODUCER, AND IT IS THE SAME BOOK AS THE OTHER TWO.** A
        * fan-out that half-reached six agents used to leave six half-filled
        * input boxes and no record anywhere; the queue would then drain into
-       * them one by one. `deps.queue` owns the book so this reaches the same
-       * one the drain consults — see `SteeringQueue.quarantineBook`.
+       * them one by one. The construction check at the top of this function is
+       * what makes "the same book" a fact rather than a comment.
+       *
+       * **AND THE READING GOES THE OTHER WAY TOO**, which is the half this
+       * route was missing: a recipient that is ALREADY held is not sent to at
+       * all. Recipients used to be chosen on `drainGate` alone, so a broadcast
+       * would type into every session the page was showing as quarantined.
        */
-      const holdRecipient = (reading: UncertainSendReading): void => {
-        const hold = deps.queue.quarantineBook().hold({
-          sessionId: rec.target.sessionId,
-          paneId: rec.target.paneId,
-          claudeSessionId: rec.target.claudeSessionId,
-          reading,
-          origin: "broadcast",
-          what: `action ${action.id}`,
-        });
-        deps.log(
-          `action box: HELD session=${rec.target.sessionId} hold=${hold.id} v${hold.version} reading=${reading}`,
-        );
+      const purpose: SendPurpose = {
+        origin: "broadcast",
+        what: `action ${action.id}`,
+        onThrow: "hold",
+        record: { kind: "book" },
       };
       const minutes = staggerMinutes(index, total, action.stagger);
       // RENDERED HERE, ONE LINE ABOVE THE SEND. Not above the loop, not in the
       // parse, not in the queue.
       const text = renderBroadcast(action, { index, total }, r.speaker);
       index += 1;
-      let result: SteerResult;
-      try {
-        result = deps.sendMessage(rec.target, text, rec.declaredStatus);
-      } catch (e) {
+      const attempt = deps.send.message(rec.target, text, rec.declaredStatus, purpose);
+      if (attempt.hold !== null) {
+        deps.log(
+          `action box: HELD session=${rec.target.sessionId} hold=${attempt.hold.id} v${attempt.hold.version} ` +
+            `reading=${attempt.hold.reading}`,
+        );
+      }
+      if (attempt.kind === "held") {
+        /* **NOTHING WAS TYPED AT THIS ONE.** It was already holding text
+           nobody can account for, and a broadcast sentence landing behind half
+           of somebody else's would be read by the agent as one instruction that
+           neither person wrote.
+
+           `held` is the existing arm for *not now*, and it is the right one
+           here: `skippedOutcome` uses it for a session that is working. The
+           sentence is what distinguishes them, and it is the hold's own.
+
+           `minutes: null` and the gap it leaves in the stagger are deliberate.
+           `index` has already advanced, so the remaining recipients keep the
+           resume times they would have had — the alternative is renumbering a
+           fan-out around a session that was told nothing, which would make the
+           minutes depend on who happened to be held. */
+        outcomes.push({
+          paneId: rec.target.paneId,
+          sessionId: rec.target.sessionId,
+          minutes: null,
+          outcome: "held",
+          code: null,
+          why: attempt.why,
+        });
+        continue;
+      }
+      if (attempt.kind === "threw") {
         /* **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and it
            answered `refused` — the reading that says nothing reached them. The
            exception carries no `Delivery`, so the honest arm is the one that
            claims nothing either way.
 
-           **AND THIS `try` IS AROUND THE WHOLE CALL**, so it cannot say WHEN.
+           **AND THE `try` IS AROUND THE WHOLE CALL**, so it cannot say WHEN.
            `fire()` may throw out of the middle of a tmux sequence, and it may
            throw before the first keystroke — a bad target, a refused spawn.
            The sentence said *partway through the send*, which asserts the
-           first and is false of the second. */
-        holdRecipient("threw");
+           first and is false of the second. The hold above is the consequence,
+           and the coordinator opened it. */
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -2205,11 +2271,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           outcome: "outcome-unknown",
           code: null,
           why:
-            `the delivery module threw while handling this recipient: ${(e as Error).message}. ` +
+            `the delivery module threw while handling this recipient: ${attempt.error.message}. ` +
             "Nothing here can tell whether any of it reached the pane.",
         });
         continue;
       }
+      const result = attempt.result;
       if (result.ok) {
         submitted += 1;
         outcomes.push({
@@ -2221,19 +2288,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           why: null,
         });
       } else {
-        /* THE READING `sendMessage` ALREADY MADE, kept rather than flattened.
+        /* THE READING THE TRANSPORT ALREADY MADE, kept rather than flattened.
            `partial` is not `refused`: the text is in that agent's input box
            and the next Enter anybody presses submits it.
 
            **AND KEEPING THE WORD WAS NEVER THE WHOLE ANSWER.** The text is
            still in that box after this response has been drawn, so the session
            is held too — asked of `nothingWasSent`, which reads the `sent` list
-           as well as the summary, rather than of `result.delivery` alone. */
-        if (nothingWasSent(result) === null) {
-          holdRecipient(
-            result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted",
-          );
-        }
+           as well as the summary, rather than of `result.delivery` alone. That
+           reading is the coordinator's now, and the HELD line above is logged
+           from the hold it opened. */
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -2316,7 +2380,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
   return {
     drain(snapshot) {
-      return drainOnce(snapshot, { queue: deps.queue, cursor: drainCursor, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
+      return drainOnce(snapshot, { queue: deps.queue, cursor: drainCursor, send: deps.send, log: deps.log, now: deps.now });
     },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";

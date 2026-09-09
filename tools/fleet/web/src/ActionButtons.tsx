@@ -1222,8 +1222,19 @@ function QuarantineNotice({
       </p>
       {/* THE SERVER'S OWN SENTENCE. It knows which of the four readings this
           was and what was being sent; a sentence rebuilt here from `reading`
-          would be a second opinion, and the more confident of the two. */}
-      <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink">{hold.why}</p>
+          would be a second opinion, and the more confident of the two.
+
+          **AND WHEN IT DID NOT READ, THE HOLD IS STILL DRAWN AND STILL
+          RELEASABLE.** A missing sentence used to make the whole hold
+          unparseable, which took both gestures away over the one field a person
+          can most easily do without. The generic line below says less; it does
+          not say less accurately. */}
+      <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink">
+        {hold.why ??
+          "This server did not send a sentence this page can read, so nothing here can say what happened. What is " +
+            "known is that it is holding: nothing else will be delivered to this session until somebody says what is " +
+            "actually in its input box."}
+      </p>
       {hold.incidents !== null && hold.incidents > 1 ? (
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
           {hold.incidents} sends to this session have ended this way. The sentence above is the most recent.
@@ -1363,15 +1374,26 @@ export function SessionQueue({
   const heldPart = holding ? (
     <QuarantineNotice hold={hold} busy={busy} onRelease={(g) => void release(g)} />
   ) : queue?.holdUnreadable === true ? (
-    /* A HOLD THIS PAGE COULD NOT READ. Drawn rather than dropped for
+    /* A HOLD THIS PAGE CANNOT ADDRESS. Drawn rather than dropped for
        `itemsUnreadable`'s reason one field along: a hold that parses to nothing
        looks exactly like no hold, and on a queue with no items the whole row —
        and both gestures with it — would vanish. There is no button here,
-       because a release needs an id and a version this page does not have. */
+       because a release needs an id and a version this page does not have.
+
+       **THE COPY NAMES ONLY THINGS THAT EXIST.** It used to end "clear it from
+       the server if the page stays like this", and there is no such interface —
+       an instruction to do something impossible is worse than the missing row,
+       because the missing row at least looked broken. So this says what is
+       known, points at the one thing that does exist (the terminal, which
+       answers the actual question — what is in that input box), and then says
+       plainly that there is nothing to press here. */
     <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-alarm-ink">
-      This server says this session is held back after a send it could not account for, and sent that in a
-      shape this page cannot read — so nothing here can say why, and neither gesture can be offered. Look at
-      the terminal, and clear it from the server if the page stays like this.
+      This server says this session is held back after a send it could not account for, and sent that in a shape
+      this page cannot read — so nothing here can say why, and neither gesture can be offered, because a release
+      needs an id and a version that did not arrive. Look at the terminal —{" "}
+      <Mono>gjd-remote resume</Mono> — to find out what is actually in that input box.{" "}
+      <strong>There is nothing you can do about the hold itself from this page.</strong> Reloading is worth one
+      try, in case the server has since sent one this page can read.
     </p>
   ) : null;
   const card = outcome === null ? null : <ActionOutcomeCard outcome={outcome} onRefresh={onChanged} />;

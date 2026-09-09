@@ -306,7 +306,7 @@ file contents when the mutation is a reversion.
 tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
 mutations caught. 1,479 tests green across 36 files, typecheck 0.
 
-### 🟡 Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09, THREE P0s open)
+### 🟢 Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09; three P0s found by review, all fixed the same day — U1 became Stage 4b)
 
 #### Read `drain.ts` before briefing this, because it is more careful than this plan said
 
@@ -443,6 +443,85 @@ U2 lands, because there is one input buffer and sends are synchronous; versionin
 stale releases; open holds are never evicted; both gestures and supersession send no keystrokes;
 there is no fourth keystroke path today and dry-run does not reach the transport; and a client that
 stops polling does not lose an active hold.
+
+#### The fix round, 2026-09-09 — the transport is not handed out any more
+
+**U2 could not be repaired by adding two checks**, because two checks that everybody must remember
+is the thing that failed. So the transport left the producers: `sendMessage` and `answerQuestion` are
+now private to a new leaf, `tools/fleet/send-coordinator.ts`, and `SteerDeps`, `ActionDeps` and
+`DrainDeps` each carry a `SendCoordinator` and nothing callable beside it. The book is consulted on
+the line above the transport call, inside that file, and **a producer cannot get past it because
+there is nothing else to call.**
+
+Enforced rather than described, because "you cannot write that" is a claim about a compiler and a
+module graph, and neither can go red under `npm test`:
+
+- `tests/fleet-compile-guards.test.ts` — a `@ts-expect-error` per dependency type. Put a transport
+  back on one and the directive goes unused and `npm run typecheck` fails.
+- `tests/fleet-imports.test.ts` — a Babel walk over all of `tools/`: only `steer.ts` and
+  `send-coordinator.ts` may import the transport as a **value**. That closes the door the type check
+  cannot see — a new producer taking no transport and simply importing one.
+
+**Four paths, four tests, and each asserts the TRANSPORT WAS NOT REACHED** rather than that a
+refusal came back: a route that answered 409 and typed anyway would pass the weaker assertion, and
+typing anyway is the whole failure. Direct message and direct answer answer `409 session-held`; a
+broadcast reports that recipient `held` **and goes on to the others**, because refusing the whole
+fan-out over one hold is a different bug of the same size; the drain stops at `next()` with the item
+still in the queue and unleased.
+
+**U6's own mutation now goes red.** `tests/fleet-send-composition.test.ts` asks the question every
+producer test is structurally unable to ask — *is it the same object?* — by identity across both real
+compositions, and end to end by driving an ambiguous **direct** send through the real steering route
+and reading the hold back out of the real action catalogue. `makeActionRoutes` also **throws** if its
+queue and its coordinator are looking at two different books, so the split cannot come up half-right.
+
+**U3**: the release *address* is parsed on its own. `id` and `version` read ⇒ both gestures stay and a
+missing sentence becomes a generic warning; only an unreadable address withholds them, and that copy
+now names the terminal (which exists) and says plainly that there is nothing to press here. The line
+telling the operator to *"clear it from the server"* is gone — there is no such interface, and an
+instruction to do something impossible is worse than the missing row.
+
+**U4**: `DrainOutcome`'s arm and the operator log are `uncertain`; the transport's `code` stays beside
+it as **evidence** of why the send stopped, which is a different claim from how far it got.
+
+**U5**: a hold opened before any generation was known records the first one seen **afterwards** on
+`firstSeenGeneration` — its own field, because it is not a claim about the moment of the send — and
+the next distinct one supersedes it. The window is one refresh cycle again rather than indefinite.
+
+**Done:** 1,776 fleet tests green across 45 files; typecheck exit 0; nine mutations, nine caught,
+including `shared ??=` → `shared =`, which the review demonstrated the whole suite could sleep
+through. U1 is untouched and is Stage 4b.
+
+#### Three judgements the implementer asked for, and the rule one of them refines
+
+**An unreachable arm that REFUSES is not an unreachable arm that CLAIMS.** The drain's `held` arm
+cannot fire today — `next()` refuses first — and the implementer asked whether to cut it, since this
+plan has already cut two unreachable arms. **Keep it**, and the distinction matters enough to state,
+because the rule as written would have removed it:
+
+- `reception observed`, `not-attempted` and `planCompleted` were cut because each **asserted a fact
+  about the world that nothing could establish**. Shipping one means the type promising a
+  distinction the system cannot make, and a reader believing it.
+- The drain's `held` arm **claims nothing**. It declines to act. An unreachable *defensive* branch
+  costs a little code and buys a floor under a path where being wrong means a keystroke nobody can
+  recall.
+
+So: **cut an unreachable arm that makes a claim; keep an unreachable arm that refuses to act — and
+say in the code which of the two it is.** This one leaves the lease open rather than settling, so if
+it ever does fire, a person decides rather than the code guessing.
+
+**The stagger keeps its numbering when a recipient is held.** Renumbering around whoever happens to
+be held would make everybody else's resume times depend on the holds, which is a worse property than
+a gap in the sequence.
+
+**`makeActionRoutes` throwing on a book mismatch stays**, and it was the closest call. It is a new
+way for the dashboard to fail to start, and this is the tier where that matters most — the thing you
+reach for when other things are broken. It stays because the mismatch can only be introduced by
+editing composition code, so it fails immediately and every time rather than lying dormant, and
+because of the asymmetry: **a dashboard that refuses to start is visible; a dashboard running with
+its quarantine silently disabled is not** — and the second is precisely the failure this stage
+exists to prevent. Logging and carrying on would reproduce U6 as a runtime behaviour after removing
+it as a compile-time one.
 
 ### Stage 4b — a hold must survive the process that recorded it
 

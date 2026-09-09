@@ -437,15 +437,21 @@ export type QueueView = Omit<
    */
   quarantine: HoldView | null;
   /**
-   * **The server sent a hold this page could not read.**
+   * **The server sent a hold this page cannot even ADDRESS.**
    *
    * `itemsUnreadable`'s twin, and it is here for a sharper version of the same
    * reason. A malformed `quarantine` object parses to `null`, and `null` is
    * also what "nothing is held" looks like — so on a queue with no items the
    * whole row would disappear, and with it both gestures. **That is the one
    * failure this stage is most against: a hold nothing can see is a hold
-   * nothing can clear.** So a hold that would not parse keeps the row on the
-   * page and says the session is stopped and this page cannot say why.
+   * nothing can clear.** So a hold that would not parse keeps the row.
+   *
+   * **IT IS NARROWER THAN IT WAS, DELIBERATELY.** It used to fire when any of
+   * `id`, `version` or `why` failed to read, which withheld both gestures from
+   * a hold that could perfectly well have been released — a missing sentence
+   * cost a person the only way out. Now only the release address counts: if
+   * `id` and `version` read, the hold is drawn with both gestures and a generic
+   * warning, and this stays false.
    */
   holdUnreadable: boolean;
 };
@@ -462,6 +468,7 @@ export type QueueView = Omit<
 export type HoldView = Omit<
   QuarantineHoldView,
   /* Re-typed below, each to `| null`. */
+  | "why"
   | "reading"
   | "origin"
   | "outcome"
@@ -487,8 +494,20 @@ export type HoldView = Omit<
    * clearing a hold whose reason nobody has read.
    */
   version: number;
-  /** The server's sentence. This is what a person decides from. */
-  why: string;
+  /**
+   * The server's sentence — what a person decides from — or **null when it did
+   * not read**.
+   *
+   * `| null` since the review of Stage 4, and the nullability is the fix rather
+   * than a loosening. `why` used to be load-bearing in the parse: one bad
+   * descriptive field rejected the whole object, so a hold with a perfectly
+   * readable `id` and `version` became **unclearable**, both gestures withheld
+   * over a missing sentence. The address and the description are now parsed
+   * separately: if the page can address the hold it can release it, and a
+   * missing sentence is answered with a generic warning rather than with the
+   * removal of the only way out.
+   */
+  why: string | null;
   /** What was read about the most recent send, or null when the server did not say. */
   reading: UncertainSendReading | null;
   /** Which send path it came down, or null when the server did not say. */
@@ -499,6 +518,8 @@ export type HoldView = Omit<
   lastSendAt: number | null;
   /** The tmux server it was opened against, or null. */
   tmuxGeneration: number | null;
+  /** The first tmux server seen after it opened, or null. `wire.ts` says why. */
+  firstSeenGeneration: number | null;
   /** Where the hold has got to, or null when the server did not say. */
   outcome: HoldOutcome | null;
 };
@@ -611,26 +632,34 @@ export function parseQueueItem(v: unknown): QueueItemView | null {
 }
 
 /**
- * One hold, as the server sends it — or null when this page cannot read it.
+ * One hold, as the server sends it — or null when this page cannot **address**
+ * it.
  *
- * `id`, `version` and `why` are the load-bearing three and an absent one makes
- * the whole thing unreadable: without an id there is nothing to release, without
- * a version the release would be built from a reading nobody can name, and
- * without the sentence there is nothing for a person to decide from. Everything
- * else folds to `null` — no claim — the way `stale` and `speaker` do.
+ * **THE RELEASE ADDRESS IS PARSED ON ITS OWN, AND ONLY IT IS LOAD-BEARING.**
+ * `id` and `version` are what a release is built from: without an id there is
+ * nothing to name, and without a version the release would be built from a
+ * reading nobody can pin, which is what stops a phone that has been in a pocket
+ * clearing a hold that has since absorbed another incident. Everything else —
+ * `why` included — folds to `null`, meaning *no claim*, the way `stale` and
+ * `speaker` do.
+ *
+ * **`why` USED TO BE LOAD-BEARING HERE AND THAT WAS THE BUG.** One bad
+ * descriptive field rejected the whole object, so a hold this page could
+ * perfectly well have released became one it drew as unreadable and offered no
+ * way out of. A missing sentence is a reason to warn; it is never a reason to
+ * take away the only gestures that end a hold.
  */
 export function parseHold(v: unknown): HoldView | null {
   if (!isRecord(v)) return null;
   const id = str(v["id"]);
-  const why = str(v["why"]);
   const version = finite(v["version"]);
-  if (id === null || why === null || version === null) return null;
+  if (id === null || version === null) return null;
   const reading = v["reading"];
   const origin = v["origin"];
   return {
     id,
     version,
-    why,
+    why: str(v["why"]),
     reading:
       reading === "partial" || reading === "unknown" || reading === "threw" || reading === "none-contradicted"
         ? reading
@@ -640,6 +669,7 @@ export function parseHold(v: unknown): HoldView | null {
     openedAt: millis(v["openedAt"]),
     lastSendAt: millis(v["lastSendAt"]),
     tmuxGeneration: finite(v["tmuxGeneration"]),
+    firstSeenGeneration: finite(v["firstSeenGeneration"]),
     outcome: parseHoldOutcome(v["outcome"]),
   };
 }
@@ -701,10 +731,12 @@ export function parseQueue(v: unknown): QueueView | null {
     unreadableItems,
     itemsUnreadable,
     quarantine: hold,
-    /* PRESENT AND UNREADABLE, not merely absent. `null` and `undefined` are the
-       server saying there is no hold (or an older server saying nothing); an
-       object that would not parse is a hold this page cannot draw, and the row
-       has to survive so the gestures can be reached. */
+    /* PRESENT AND UNADDRESSABLE, not merely absent. `null` and `undefined` are
+       the server saying there is no hold (or an older server saying nothing); an
+       object whose id or version would not parse is a hold this page cannot
+       release, and the row has to survive so that at least the FACT of it is on
+       screen. Anything less than that — a bad `why`, an unknown `reading` — is
+       drawn with both gestures and a warning. */
     holdUnreadable: rawHold !== null && rawHold !== undefined && hold === null,
   };
 }

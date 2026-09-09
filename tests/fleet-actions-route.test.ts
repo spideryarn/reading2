@@ -43,8 +43,29 @@ import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fl
 import { boxActionBody, makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
+import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
+
+/**
+ * A coordinator over the queue's OWN book, with a fake transport.
+ *
+ * The transport is injected inside the coordinator rather than beside it,
+ * because the coordinator's check on the line above the transport call is what
+ * stops a broadcast typing into a session that is already held — and a route
+ * holding `sendMessage` itself could walk past it, which is what this one used
+ * to do. `makeActionRoutes` refuses to build if the two are looking at
+ * different books, so `queue.quarantineBook()` is not a convenience here.
+ */
+function sends(book: SendCoordinatorDeps["book"], sendMessage: SendCoordinatorDeps["sendMessage"]): SendCoordinator {
+  return makeSendCoordinator({
+    book,
+    sendMessage,
+    answerQuestion: () => {
+      throw new Error("the action routes never answer a dialog");
+    },
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Fakes: a request, a response, the box, and the delivery module.
@@ -191,10 +212,10 @@ function harness(
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
-    sendMessage: (target, text, declaredStatus) => {
+    send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
       sent.push({ target, text, declaredStatus });
       return typeof result === "function" ? result(target) : (result ?? SENT_OK);
-    },
+    }),
     now: () => clock,
     // Generous by default, so an ordinary test is not accidentally a test of
     // the rate limiter. There is a describe block below that drives a tight one.
@@ -1768,13 +1789,14 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     // about elapsed time without sleeping through it.
     let clock = 1_000_000;
     const sent: string[] = [];
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
-      sendMessage: (target) => {
+      queue,
+      send: sends(queue.quarantineBook(), (target) => {
         sent.push(target.paneId);
         clock += 60_000;
         return SENT_OK;
-      },
+      }),
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},

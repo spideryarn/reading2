@@ -1705,6 +1705,25 @@ export type QuarantineHoldView = {
   serverInstanceId: string;
   /** The tmux server it was opened against, or null if this server had not been told yet. */
   tmuxGeneration: number | null;
+  /**
+   * The first tmux server this dashboard was told about **after** this hold
+   * opened, or null.
+   *
+   * **A SEPARATE FIELD RATHER THAN A LATE WRITE TO `tmuxGeneration`**, and the
+   * separation is the whole of it: `tmuxGeneration` is a claim about the world
+   * at the moment the send went out, and this is not one. A hold opened before
+   * the server had been told any generation is bound to none, so no later
+   * change proves anything about the pane it was about — and for a stage of
+   * this file's life that meant such a hold could never be superseded at all,
+   * turning a window one refresh cycle wide into an indefinite one.
+   *
+   * With this, the FIRST generation seen after the hold opens is recorded (it
+   * proves nothing on its own — it may be the same tmux server the send went
+   * to), and the next DISTINCT one supersedes: two different servers observed
+   * after the fact means one of them replaced the other, and the input box is
+   * gone either way.
+   */
+  firstSeenGeneration: number | null;
   openedAt: number;
   /** When the most recent uncertain send landed. Equals `openedAt` while `incidents` is 1. */
   lastSendAt: number;
