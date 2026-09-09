@@ -413,7 +413,24 @@ Above the fold on a phone, in order: the verdict, `CACHED HEADROOM`, both window
 window that reset 182 minutes ago — then the fold, then *Why*. Before, the first screenful was three
 paragraphs of provenance.
 
-#### Two things left deliberately undecided until the code review answers
+#### Two changes to `wire.ts`, which this session does not own
+
+Both came out of the code review, and both are the same shape: **the renderer is guessing at
+something only the producer knows.** Neither is urgent; both would make this tab sharper.
+
+- **An absence classification on `UsageWindowCard.unknown` and `UsageSummary.cache.unknown`.** One
+  arm currently covers a missing `resets_at`, a non-object entry, an invalid date, a missing or
+  out-of-range utilisation, and — on the cache — both "nothing was cached" and "the cache was
+  unreadable". The card can only draw `Unknown` for all of them, when three of the states it has
+  are genuinely different pieces of news.
+- **A per-window status, or the threshold behind it.** Without one, a window card cannot colour
+  itself without inventing a severity that contradicts the verdict, so it stays neutral.
+
+A third would let the withdrawn compaction be rebuilt honestly: **something that says which windows
+are primary.** `UsageWindowName` is `string`, so `five_hour` and `nimbus_quill` are
+indistinguishable to a consumer, and that is why five cards is currently the honest answer.
+
+#### Two things left deliberately undecided until the code review answers — both now answered
 
 - **`windowStat`'s tone thresholds** — `left <= 10` alarm, `<= 25` needs — are numbers I invented.
   A nearly-full window really is closer to blocking, so this is arithmetic rather than judgement;
@@ -578,6 +595,36 @@ action-first overview; Sessions rewritten around purpose, blocker and progress w
 lines removed; Usage rebuilt from its typed epistemic states. It also names the **best single
 existing-screen deletion** as those two constant lines — which is where I had independently landed
 from the pixels, and it is a product call for Greg rather than mine.
+
+### The Sol code review of this stage, and the fold withdrawn
+
+[260909c-dashboard-design-system-usage-code-review-sol-r1.md](260909c-dashboard-design-system-usage-code-review-sol-r1.md),
+at `f172b9fd`. No P0, **five P1s, all accepted and fixed**. This is the review the
+engineering-manager rule says to weight higher than the plan review, and it earned that: three of
+the five are things no plan review could have found.
+
+| Finding | What it was, and what I did |
+|---|---|
+| **UL-01** | With `dueBackAt` in the past the headline says *the limit has since reset* — and `DueBackCard`, reading the same instant, said **"Work can resume in — Unknown"** underneath it. Two components disagreeing about one instant in view of each other. The card is not drawn when `head.cleared`, and the cleared-limit test now asserts its absence; it had only ever checked the headline |
+| **UL-02** | The producer's `window.kind === "unknown"` covers *five* different situations — no `resets_at`, a non-object entry, an invalid date, a missing utilisation, an out-of-range utilisation — and `cache.kind === "unknown"` covers both *nothing was cached* and *the cache was unreadable*. **This arm has now been wrong twice**: first `unavailable`, then `withheld`, both the renderer deciding what it cannot know. `Unknown` is the only defensible common rendering, and the real fix is the producer carrying its own absence classification |
+| **UL-03** | **The fold is withdrawn.** It partitioned by epistemic state when only relevance justified it, so `five_hour` arriving unreadable was folded away beside the noise — and `UsageWindowName` is `string`, so nothing in the data can tell them apart. It also had a bug its own comment denied: with every window unknown, `!every(...)` suppressed the disclosure and all the names and reasons vanished |
+| **UL-04** | The attributed cache's `fetchedAt` was **lost** in the rewrite — the card showed only `collectedAt`, and a fresh pass routinely republishes a cache fetched hours earlier, so a stale percentage read as freshly taken. One `cached 10m ago` beside the group, not one per tile |
+| **UL-05** | The invented tone thresholds, which I had flagged as invented without knowing they were also *wrong*: measured against the producer's 80%-used default, the card would say `needs` at 75% while the verdict said `ok`, and `alarm` at 90% against `approaching`. Dropped |
+| **UL-06** | `100 - 99.99` is `0.010000000000005116`, in the largest text on the card |
+| **TEST-01/02** | `screen()` is `textContent`, so it counts closed disclosures and `sr-only` prose — several assertions were passing off hidden text. And my own edit had duplicated three assertions verbatim |
+| **TYPE-01** | The scale did not satisfy its own claim: the real ratios were 29 / 31 / 8 / 9%, not "each ~25%", and `lead` at 15px *was the root body size* |
+
+**The type scale is now three levels and two density variants, and says so.** `lead` widened to 17px
+so it is a step; `note` and `label` are documented as deliberately close, because a dense page needs
+secondary text smaller than body without implying a further demotion, and what separates them is
+weight and colour. **A claim a reader can measure and disprove is worse than no claim** — the
+checklist now says to state which of your sizes are levels and which are density, and to check the
+top of the scale against the root font size.
+
+**And the mutation that nothing caught.** Re-adding the invented thresholds left all fourteen tests
+green: every other assertion is about words, and that one is about colour. There is now a test that
+draws a window at 95% used against a verdict of `ok` and asserts the value carries neither the alarm
+nor the needs ink. Three of the four earlier mutations were caught; this is the fourth, closed.
 
 ### One question for Greg, raised once by `deploys-ui` on behalf of both tabs
 
