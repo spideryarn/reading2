@@ -38,6 +38,8 @@ import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
+import { usageHistoryRoute } from "./routes-usage-history.js";
+import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
@@ -50,6 +52,11 @@ import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
+import { describeOne } from "./describe.js";
+import { runDescribePass, type SessionToDescribe } from "./describe-pass.js";
+import { descriptionsRoot, readDescriptionMemory, writeDescriptionMemory, EMPTY_DESCRIPTIONS } from "./describe-store.js";
+import { openRouterKey } from "./transcribe.js";
+import { readOpeningMessages } from "./transcript.js";
 import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
 import { claimFromSnapshot } from "./overseer-claim.js";
 import { statePayload as composePayload } from "./state.js";
@@ -164,6 +171,33 @@ for (const line of retention.lines.error) console.error(line);
  * reason the actions routes take it that way below.
  */
 const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
+
+/**
+ * Usage history, read from the Overseer's store.
+ *
+ * **Built once and holding only a reader.** The store is written by the daemon;
+ * this process opens it read-only, takes no lock, and cannot take one — the
+ * reader is a separate function with no lock code in it. So two dashboards, or a
+ * dashboard and a daemon, coexist without any election to lose.
+ *
+ * A relative `OVERSEER_STORE_DIR` throws (it means two stores that cannot see
+ * each other), so this is caught and turned into a route that answers
+ * `unreadable` with the reason, rather than taking the whole server down over a
+ * chart.
+ */
+const usageHistoryStore = (() => {
+  try {
+    return openUsageHistoryForRead(defaultUsageHistoryDir());
+  } catch (err) {
+    console.error(`✗ usage history: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+})();
+const usageHistoryRouteHandler = usageHistoryRoute({
+  store: usageHistoryStore,
+  refreshMs: REFRESH_MS,
+  nowMs: () => Date.now(),
+});
 
 /**
  * The queue of ideas. Built once, at module scope, like the feed route above —
@@ -402,6 +436,112 @@ async function refresh(): Promise<void> {
  * whatever the box is doing, which matters on a machine that hit load average
  * 391 today. A failure waits longer, so a broken box is not also hammered.
  */
+/**
+ * HOW OFTEN TO DESCRIBE. Far slower than the collector, because a description is
+ * about a session's opening and an opening does not change — the only work a
+ * steady-state pass does is notice a session it has not seen before.
+ */
+const DESCRIBE_MS = Number(process.env.FLEET_DESCRIBE_MS ?? 5 * 60_000);
+
+/**
+ * How many model calls one pass may make.
+ *
+ * A cold fleet catches up over several passes rather than paying for thirty at
+ * once, and what the budget drops is reported rather than hidden.
+ */
+const DESCRIBE_MAX_CALLS = Number(process.env.FLEET_DESCRIBE_MAX_CALLS ?? 8);
+
+/**
+ * DESCRIBING THE FLEET, BESIDE THE COLLECTOR RATHER THAN INSIDE IT.
+ *
+ * A collection has a deadline (`COLLECT_DEADLINE_MS`) and a gateway does not
+ * respect it, so no model call may happen on the collector's clock. This runs on
+ * its own, writes a file, and `readDescriptions` in `collect.ts` joins that file
+ * onto the rows — the cheap half — on the next collection.
+ *
+ * **It costs nothing when there is no key.** `openRouterKey()` reads the
+ * environment and then one variable out of `.env.local`; without one, the pass
+ * does not run and every row keeps saying `not-yet-described`, which is true.
+ *
+ * **And nothing when nothing is eligible**, which is every row until the
+ * dashboard and the daemon have been restarted onto execution readings. Before
+ * that this loop reads no transcripts and makes no calls.
+ */
+async function describeOnce(): Promise<void> {
+  const key = openRouterKey();
+  if (key === null) return;
+  const rows = snapshot?.rows ?? [];
+  if (rows.length === 0) return;
+
+  const root = descriptionsRoot();
+  const read = readDescriptionMemory(root);
+  /* An unusable file is REPLACED, not repaired — everything in it is
+     recoverable by asking again, and carrying a memory across a gap we cannot
+     vouch for is the mistake this neighbourhood keeps repairing. */
+  const memory = read.kind === "memory" ? read.memory : EMPTY_DESCRIPTIONS;
+
+  const sessions: SessionToDescribe[] = rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    claudeSessionId: row.claudeSessionId,
+    dir: row.meta.version === 1 ? row.meta.dir : null,
+    execution: row.execution,
+  }));
+
+  const result = await runDescribePass({
+    sessions,
+    memory,
+    maxCalls: DESCRIBE_MAX_CALLS,
+    readOpening: async (session) => {
+      const opening = await readOpeningMessages({ claudeSessionId: session.claudeSessionId, dir: session.dir });
+      if (opening.kind !== "found") {
+        return { ok: false, why: `${opening.kind}: ${"why" in opening ? opening.why : ""}` };
+      }
+      if (opening.turns.length === 0) return { ok: false, why: "the transcript opens with no turns" };
+      /* Flattened to text here rather than in the pass, so the pass stays pure
+         and the shape of a turn does not reach the prompt builder. */
+      return {
+        ok: true,
+        text: opening.turns.map((turn) => `${turn.speaker}: ${turn.text}`).join("\n\n"),
+      };
+    },
+    describe: async (text) => (await describeOne(text, { apiKey: key })).verdict,
+    now: () => new Date(),
+  });
+
+  try {
+    writeDescriptionMemory(root, result.memory);
+  } catch (err) {
+    console.log(`describe: could not write the memory: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  if (result.breakdown.called > 0 || result.breakdown.overBudget > 0) {
+    console.log(
+      `describe: ${result.breakdown.described} eligible, ${result.breakdown.called} call(s), ` +
+        `${result.breakdown.cached} cached, ${result.breakdown.overBudget} over budget, ` +
+        `${result.breakdown.notEligible} not eligible`,
+    );
+  }
+}
+
+/**
+ * Its own loop, so a slow gateway cannot delay a collection.
+ *
+ * **Never throws out of here.** A describer that took the server down would be a
+ * monitoring tool failing at the same time as the thing it monitors, which is
+ * the failure this whole tool is written against.
+ */
+async function describeLoop(): Promise<void> {
+  for (;;) {
+    try {
+      await describeOnce();
+    } catch (err) {
+      console.log(`describe: the pass threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    await new Promise((r) => setTimeout(r, DESCRIBE_MS).unref?.());
+  }
+}
+
 async function refreshLoop(): Promise<void> {
   for (;;) {
     await refresh();
@@ -455,6 +595,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  /* The last day of usage limits, for the chart on Usage limits.
+     **Read-only and lock-free, and it reads a file THIS PROCESS DOES NOT
+     WRITE** — the Overseer daemon does, on its own 300-second pass. That is why
+     there is a reader-only opener rather than a flag on the writer: this process
+     must be structurally incapable of claiming the store. See
+     usage-history.ts § "No writer lock". */
+  if (usageHistoryRouteHandler.handle(req, res)) return;
 
   // The last N messages across EVERY session, for the Recent messages tab.
   // Read-only, and deliberately not on the collection loop: it is a fan-out of
@@ -667,6 +815,9 @@ for (const bind of BINDS) {
 
 console.log(`refreshing every ${REFRESH_MS / 1000}s`);
 void refreshLoop();
+/* Beside the collector, never inside it: a model call must not run on a
+   clock that has a deadline. */
+void describeLoop();
 
 // Keeps an idle SSE connection from being dropped by anything in between. Its
 // own timer is unref'd, so it cannot hold the process open by itself — the

@@ -40,9 +40,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
 import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-client";
+import type { UsageHistoryApi } from "../tools/fleet/web/src/usage-history-client";
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import type { QueueApi, QueueView } from "../tools/fleet/web/src/queue-client";
 import { freshness } from "../tools/fleet/web/src/Header";
+import { headingFor } from "../tools/fleet/web/src/SessionsPanel";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
 import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
@@ -154,6 +156,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
   return {
     paneId: null,
     name: over.id,
+    /* Not what this file is about, and required — the shape `parseDescription`
+       returns for a payload without one, which is what an older server sends. */
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
     // Required on a row and not what this file is about — an old producer's
     // shape, which is what `parseExecution` returns for a payload without one.
     execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
@@ -511,6 +516,7 @@ function mount(
   transport: Transport,
   deploysApi: DeploysApi = recordingDeploys().api,
   queueApi: QueueApi = fakeQueue(),
+  usageHistoryApi: UsageHistoryApi = { window: async () => ({ kind: "unreadable", why: "no history in this fixture" }) },
 ): void {
   act(() =>
     root.render(
@@ -521,6 +527,7 @@ function mount(
         messagesApi={recordingMessages().api}
         deploysApi={deploysApi}
         queueApi={queueApi}
+        usageHistoryApi={usageHistoryApi}
         actionsPollMs={3_600_000}
       />,
     ),
@@ -928,6 +935,68 @@ describe("the usage limits tab", () => {
 
     expect(window.location.hash).toBe("#usage");
     expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("draws the last 24 hours under the card, from its own route", async () => {
+    /* The chart is NOT in the snapshot: it is written by the Overseer daemon and
+       read on its own route, so it costs nothing until somebody opens this tab.
+       This is the missing-mount test for the second half of the panel. */
+    const at = Date.now() - 600_000;
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys().api, fakeQueue(), {
+      window: async () => ({
+        kind: "history",
+        windowHours: 24,
+        fromMs: Date.now() - 24 * 60 * 60 * 1000,
+        toMs: Date.now(),
+        samples: [
+          {
+            kind: "sample",
+            sourceAtMs: at,
+            line: {
+              nextDueMs: 300_000,
+              recordedAt: new Date(at).toISOString(),
+              pass: {
+                kind: "pass",
+                collectedAt: new Date(at).toISOString(),
+                accountUuid: "acct-A",
+                cache: {
+                  kind: "attributed",
+                  accountUuid: "acct-A",
+                  fetchedAt: new Date(at).toISOString(),
+                  windows: [
+                    {
+                      kind: "unknown",
+                      window: "nimbus_quill",
+                      why: "no resets_at, so the utilization (0) cannot be checked",
+                    },
+                  ],
+                },
+                scan: { conclusive: true, why: null, incidents: [] },
+                publication: { decision: "take-fresh", why: "finished" },
+              },
+            },
+          },
+        ],
+        predecessor: null,
+        holes: [],
+        earliestAt: null,
+        rotated: false,
+        unreadableLines: 0,
+        unsupportedLines: 0,
+        recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
+        refreshMs: 60_000,
+      }),
+    });
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("The last 24 hours");
+    /* The unknown window is NAMED with its reason rather than dropped, and never
+       drawn from the unvalidated 0 it carries. */
+    expect(container.textContent).toContain("nimbus_quill");
+    expect(container.textContent).toContain("cannot be checked");
   });
 
   it("shows the SAME reading as the Overseer tab's card, from one payload", async () => {
@@ -9573,5 +9642,98 @@ describe("what the launch card says about telling the Overseer", () => {
     const text = await cardFor({ kind: "contested", names: ["Overseer", "overseer-2"] });
     expect(text).toContain("2 sessions claim the Overseer role");
     expect(text).toContain("overseer-2");
+  });
+});
+
+/**
+ * WHAT A ROW IS CALLED, AND WHO SAID SO.
+ *
+ * Three sources that are not interchangeable — the session's own title, a
+ * generated one, and the tmux name — and the reader has to be able to tell which
+ * they are looking at, because a model's guess drawn like a fact is what this
+ * page is written against.
+ */
+describe("the heading on a session card, and what it is about", () => {
+  function described(over: Record<string, unknown> = {}) {
+    return {
+      kind: "described" as const,
+      title: "Fix the table of contents",
+      description: "Repair the nested ToC on the reader.",
+      describedAt: "2026-09-09T03:00:00.000Z",
+      ...over,
+    };
+  }
+
+  it("prefers the session's own title, and does not mark it generated", () => {
+    expect(headingFor(row({ id: "$1", name: "wf-x", title: "Claude's own title" }))).toEqual({
+      kind: "own",
+      text: "Claude's own title",
+    });
+  });
+
+  /**
+   * F4, and it is the finding that makes the whole feature reach the sessions it
+   * is for. Launching with a name writes that name as the session's own title,
+   * so most of this fleet carries a "title" that merely repeats the line below
+   * it — and treating that as already-titled would make the generated one
+   * unreachable for exactly those sessions.
+   */
+  it("does not count a title that merely repeats the session name", () => {
+    const heading = headingFor(
+      row({ id: "$1", name: "worktree-removal-script", title: "worktree-removal-script", description: described() }),
+    );
+    expect(heading).toEqual({ kind: "generated", text: "Fix the table of contents" });
+  });
+
+  it("falls back to the generated title when there is no title of its own", () => {
+    const heading = headingFor(row({ id: "$1", name: "wf-x", title: null, description: described() }));
+    expect(heading.kind).toBe("generated");
+  });
+
+  /** Better than "no title yet", which tells a reader nothing they cannot see. */
+  it("falls back to the session name when nothing has described it either", () => {
+    expect(headingFor(row({ id: "$1", name: "wf-x", title: null }))).toEqual({ kind: "name", text: "wf-x" });
+  });
+
+  it("marks a generated title on the page, and does not mark one Claude gave itself", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$1", name: "gen", title: null, description: described({ title: "A generated one" }) }),
+            row({ id: "$2", name: "own", title: "Claude's own" }),
+          ],
+        }),
+      ),
+    );
+
+    const headings = [...container.querySelectorAll("h3")].map((h) => h.textContent ?? "");
+    const generated = headings.find((h) => h.includes("A generated one"));
+    const own = headings.find((h) => h.includes("Claude's own"));
+    expect(generated).toContain("generated");
+    expect(own).not.toContain("generated");
+  });
+
+  it("shows the description on the card, which is the point of the feature", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [row({ id: "$1", name: "wf-x", description: described() })] })));
+    expect(container.textContent).toContain("Repair the nested ToC on the reader.");
+  });
+
+  /**
+   * Every row reads `not-yet-described` until the dashboard and daemon are
+   * restarted onto execution readings, so this is the NORMAL case for a while.
+   * It must not draw an empty paragraph that reads as a session with nothing to
+   * say — the row simply carries no description line.
+   */
+  it("draws no description line at all when there is not one yet", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [row({ id: "$1", name: "wf-x" })] })));
+    expect(container.textContent).not.toContain("not-yet-described");
+    expect(container.textContent).not.toContain("undefined");
   });
 });

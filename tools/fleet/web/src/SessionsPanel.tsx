@@ -91,6 +91,34 @@ import {
  * session; that is the one place on the card where a tap does something else,
  * and it is the place a reader taps when they want to know what the word means.
  */
+/**
+ * WHAT TO CALL A SESSION, IN ORDER OF WHO SAID IT.
+ *
+ * Three sources and they are not interchangeable, so the reader is told which
+ * one they are looking at:
+ *
+ *  1. **The session's own title**, from Claude's `aiTitle` or from a name given
+ *     at launch. It wins the moment it exists — Greg's rule.
+ *  2. **A generated one**, marked as such. It is a model's guess about what the
+ *     session is for, and a guess drawn like a fact is the thing this whole page
+ *     is written against.
+ *  3. **The tmux name**, which is always there and is an address rather than a
+ *     description — but it beats "no title yet", which tells the reader nothing
+ *     they could not see.
+ *
+ * **A title that IS the session's name is not a title.** Launching with a name
+ * writes it as the session's own title, so most of this fleet carries one that
+ * merely repeats the name in the line below it — and treating that as "already
+ * titled" is what would make the generated one unreachable for exactly the
+ * sessions that need it. Found by a cross-family review as F4.
+ */
+export function headingFor(row: FleetRow): { kind: "own" | "generated" | "name"; text: string } {
+  const own = row.title?.trim() ?? "";
+  if (own !== "" && own !== row.name) return { kind: "own", text: own };
+  if (row.description.kind === "described") return { kind: "generated", text: row.description.title };
+  return { kind: "name", text: row.name };
+}
+
 function SessionCard({
   row,
   now,
@@ -111,6 +139,8 @@ function SessionCard({
   /* Only a version-1 meta has a directory; a `legacy` session recorded none,
      and there is nothing to show rather than something to apologise for. */
   const dir = row.meta.version === 1 ? row.meta.dir : null;
+  const heading = headingFor(row);
+
   return (
     <Card
       className={cx(
@@ -147,13 +177,57 @@ function SessionCard({
       <h3 className="tw:mt-1.5 tw:leading-snug tw:font-medium tw:break-words">
         <button
           type="button"
-          className={cx("session-open", row.title === null && "tw:text-ink-faint tw:italic")}
+          className={cx(
+            "session-open",
+            /* ONLY A BARE NAME IS FAINT. A generated title is real
+               information about the session and a tmux name is the absence
+               of any, and the first version drew both in the same grey — so
+               a described row and an undescribed one looked equally
+               de-emphasised, which defeats the point of distinguishing the
+               three sources at all. The marker says it is generated; the
+               colour no longer has to. Found in a browser, where it is the
+               only place it is visible. */
+            heading.kind === "name" && "tw:text-ink-faint",
+          )}
           aria-current={selected ? "true" : undefined}
           onClick={() => onSelect(row.id)}
         >
-          {row.title ?? "no title yet"}
+          {heading.text}
         </button>
+        {heading.kind === "generated" ? (
+          /* SAID OUT LOUD, because a generated title is a guess about a session
+             and the reader has to be able to tell it from the one Claude gave
+             itself. Greg: show it "marked as generated". */
+          /* A CHIP RATHER THAN FAINT TEXT, and the reason is a browser
+             check's judgement rather than a measurement: with the title no
+             longer greyed, faint grey text pushed to the right of a
+             variable-length heading is easy for an eye scanning a left-aligned
+             column to miss. The same chip the Overseer badge uses, so the page
+             has one way of saying "this is a tag about the row" — and it costs
+             the title nothing, which was the point of un-greying it. */
+          <span
+            className="tw:ml-1.5 tw:align-middle tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[10px] tw:font-semibold tw:tracking-wide tw:text-ink-soft tw:uppercase"
+            title="A generated description of this session, not a title it gave itself."
+          >
+            generated
+          </span>
+        ) : null}
       </h3>
+
+      {/* WHAT THIS SESSION IS ABOUT, which is the whole point of the feature: a
+          list of thirty rows showing a status pill and a tmux name is a list you
+          cannot triage. Drawn under the title and above the status sentence,
+          because it is what you scan for. */}
+      {row.description.kind === "described" ? (
+        /* CLAMPED TO TWO LINES, and the cap is about triage rather than
+           tidiness: at 390px a 185-character description runs to four
+           lines, which is about three cards per screen — a scroll rather
+           than a list you can scan. Measured in a browser. The full text
+           is one tap away in the detail view. */
+        <p className="tw:mt-1 tw:line-clamp-2 tw:text-[13px] tw:break-words tw:text-ink-soft">
+          {row.description.description}
+        </p>
+      ) : null}
 
       {label.detail !== null ? (
         <p className={cx("tw:mt-1 tw:text-[13px] tw:break-words", tone.ink)}>{label.detail}</p>

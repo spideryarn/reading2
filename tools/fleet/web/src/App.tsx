@@ -28,6 +28,7 @@ import { OverseerPanel } from "./OverseerPanel";
 import { QueuePanel } from "./QueuePanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
+import { UsageHistory } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import {
   FILTER_KEYS,
@@ -38,6 +39,7 @@ import {
   type FeedApi,
 } from "./feed-client";
 import { httpDeploysApi, type DeploysApi } from "./deploys-client";
+import { httpUsageHistoryApi, type UsageHistoryApi } from "./usage-history-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
@@ -64,6 +66,7 @@ export function App({
   historyApi = httpHistoryApi,
   feedApi = httpFeedApi,
   deploysApi = httpDeploysApi,
+  usageHistoryApi = httpUsageHistoryApi,
   queueApi = httpQueueApi,
   actionsPollMs,
 }: {
@@ -100,6 +103,8 @@ export function App({
    * it thought it was exercising.
    */
   deploysApi?: DeploysApi;
+  /** Injected so a test can drive the chart without a network. Same seam as `deploysApi`. */
+  usageHistoryApi?: UsageHistoryApi;
   /**
    * The queue of ideas. Injected here as well as defaulted in `QueuePanel`, so
    * that no test in this file can reach `fetch` by accident — a suite that
@@ -295,6 +300,15 @@ export function App({
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+            {/* **The history is on its OWN route, not in the snapshot.** It costs
+                nothing until somebody opens this tab, and it is written by the
+                Overseer daemon rather than by this process — so it cannot ride
+                along on the collection loop even if we wanted it to. */}
+            <UsageHistory
+              api={usageHistoryApi}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+              refreshNonce={refreshNonce}
             />
           </div>
         ) : null}

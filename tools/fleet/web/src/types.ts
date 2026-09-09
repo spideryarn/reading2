@@ -45,6 +45,7 @@ import type {
   AttentionList,
   ConversationReading,
   ExecutionReading,
+  SessionDescription,
   ExecutionUnknownCause,
   FleetState as FleetStateWire,
   HarnessKind,
@@ -304,6 +305,14 @@ export type FleetRow = {
    * parses to `unknown`/`not-reported`.
    */
   execution: ExecutionReading;
+  /**
+   * What this session is about, in a sentence — generated on the server and
+   * joined onto the row there, never matched up here.
+   *
+   * The join needs the execution token and the verified conversation id, and a
+   * client doing that would be a second hand-written copy of the identity rule.
+   */
+  description: SessionDescription;
   /**
    * **THE SERVER'S OWN `status` OBJECT, UNTOUCHED**, to be handed back verbatim
    * on a steering request. `status` above is the parse, and it is for drawing.
@@ -1067,6 +1076,44 @@ const HARNESS_KINDS: Record<HarnessKind, true> = {
   unknown: true,
 };
 
+/**
+ * What the server said this session is about.
+ *
+ * **An absent field is `not-yet-described`, not a blank.** A server too old to
+ * send one has made no claim, and a row drawing nothing would read as a session
+ * with nothing to say — which is a different fact and the one this whole feature
+ * exists to stop the page implying.
+ *
+ * **An empty string is refused on the way in.** Greg ruled that arm out by name;
+ * a model that answered a different question returns the right shape with empty
+ * strings in it, and a lenient parse here would put one on the page after the
+ * server's own parser had already turned it away.
+ */
+export function parseDescription(v: unknown): SessionDescription {
+  const notYet = (why: string): SessionDescription => ({ kind: "not-yet-described", why });
+  if (v === undefined || v === null) {
+    return notYet("this server does not generate descriptions yet");
+  }
+  if (!isRecord(v)) return notYet("the server sent a description that is not an object");
+
+  const kind = str(v["kind"]);
+  if (kind === "cannot-tell") {
+    return { kind: "cannot-tell", why: str(v["why"]) ?? "the server did not say why" };
+  }
+  if (kind === "not-yet-described") {
+    return notYet(str(v["why"]) ?? "this session has not been described yet");
+  }
+  if (kind !== "described") return notYet(`this build does not know the description kind ${JSON.stringify(kind)}`);
+
+  const title = str(v["title"])?.trim() ?? "";
+  const description = str(v["description"])?.trim() ?? "";
+  const describedAt = str(v["describedAt"]);
+  if (title === "" || description === "" || describedAt === null) {
+    return notYet("the server called this described and did not say what it is");
+  }
+  return { kind: "described", title, description, describedAt };
+}
+
 export function parseExecution(v: unknown): ExecutionReading {
   const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
     kind: "unknown",
@@ -1264,6 +1311,7 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
        transcript it is writing does not. Same rule as `coherentWith` in
        tools/overseer/observation.ts; GPT Sol's P2-4. */
     execution: coherentWith(parseExecution(v["execution"]), str(v["claudeSessionId"])),
+    description: parseDescription(v["description"]),
     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
        kept so it can be serialised back exactly as it arrived. */
     rawStatus: v["status"] ?? null,
