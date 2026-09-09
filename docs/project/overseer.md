@@ -254,6 +254,13 @@ Every half hour or so, in this order — the first two need no model, the last o
 2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
    hour into building with no commit on its branch is told to commit now; the only copy of an
    evening's work was on one disk on 2026-09-09.
+   **The seven-day window is the one that freezes the fleet for days**, and it is rationed the same
+   way: at ~4 points a day it lasts the week; the night of 2026-09-08/09 spent 18 points in eight
+   hours with ten to twelve sessions. When it is short, Greg's standing answer (2026-09-09) is
+   *"slow things down a bit, and/or delegate more to GPT via codex-cli-as-subagent.md to
+   implement"* — fewer Claude sessions, each managing and reviewing while Codex writes the code
+   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. Watch
+   both budgets.
 3. **Then pull from the queue**, if the box, the window and the file sets allow. Every brief quotes
    Greg's words, names the sessions in flight and the files each owns, and says what is *not* this
    agent's — never a queue of agents behind one "owner" of a shared file.
