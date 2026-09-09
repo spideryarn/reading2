@@ -373,11 +373,12 @@ filter before it reported.
 
 ### Stage 3 — the nonce's claim, and the runner's, narrowed to what they are
 
-**Status: not started.**
+**Status: done, 2026-09-09.** Comments only, no behaviour. The nonce half landed separately in
+`77e7391b`, before Stage 1, because it touched no file Codex was working in.
 
-- [ ] `vitest.config.ts`, `vitest-admission.ts` and `tools/fleet/readiness-parse.ts` say what the
+- [x] `vitest.config.ts`, `vitest-admission.ts` and `tools/fleet/readiness-parse.ts` say what the
       nonce actually protects, and name `/proc/self/environ` as the reason it is not more (F7).
-- [ ] `scripts/readiness-loop.ts`'s header stops claiming a green means "against this commit's
+- [x] `scripts/readiness-loop.ts`'s header stops claiming a green means "against this commit's
       schema" (F5), and its fleet-prerequisite comment is made accurate (F8).
 
 ### Stage 4 — land it, and restart the loop on it

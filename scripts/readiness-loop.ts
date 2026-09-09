@@ -11,6 +11,30 @@
  * § "Where the periodic runner lives, and why not the daemon". The cost is no
  * supervision across a reboot or tmux-server exit; the Readiness tab makes that
  * absence visible by returning to unknown when fresh evidence stops arriving.
+ *
+ * ## What a green here does NOT claim, and it is narrower than it looks
+ *
+ * A pass says the commit's checks passed **against this box's database**, not
+ * against a schema built only from that commit's own migrations. Every worktree
+ * on the box shares one local Supabase, and `scripts/db-migrate.ts` passes
+ * `allowHistoricalExtras: isLocal` — so a ledger row belonging to no migration
+ * in this commit's journal is a warning here, not a refusal. The consequence:
+ *
+ *   1. `origin/dev` is B, whose code declares a column but whose commit left the
+ *      migration out.
+ *   2. Another worktree C adds that migration and applies it locally. C is not
+ *      on `origin/dev`.
+ *   3. This runner prepares B. B's migrator tolerates C's ledger row.
+ *   4. `db:check` finds the column, B's tests pass **against C's schema**, and B
+ *      is recorded green.
+ *
+ * GPT Sol's F5, 2026-09-09, established. Not fixed here, deliberately: the two
+ * repairs are a database of this runner's own, or holding the migration
+ * advisory lock across the whole 26-minute check — which would block every other
+ * agent's tests on the box for that long. Both are somebody else's to authorise,
+ * so the claim is weakened instead and the choice is with Greg. See
+ * docs/plans/260909g-readiness-runner-git-env-and-preparation-latch.md
+ * § "The shared local database can be ahead of the commit under test".
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
@@ -368,12 +392,18 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * **`npm run check` has an undeclared prerequisite, and without this the runner
  * would record a permanent false red.**
  *
- * `tests/fleet-decisions-route.test.ts` reads `tools/fleet/web/dist`, and
- * `check`'s build step is `build:client && build:api` — `build:fleet` is in
- * neither. So the test fails in any checkout where nobody happened to run that
- * by hand, which a machine-made worktree never does. Measured on 2026-09-09: it
- * failed in this runner's first recorded check and passed immediately after
- * `npm run build:fleet`.
+ * `tests/fleet-decisions-route.test.ts` imports `tools/fleet/server.ts`, and
+ * that module refuses at startup unless `tools/fleet/web/dist/index.html`
+ * exists. `check`'s build step is `build:client && build:api` — `build:fleet` is
+ * in neither. So the test fails in any checkout where nobody happened to run
+ * that by hand, which a machine-made worktree never does. Measured on
+ * 2026-09-09: it failed in this runner's first recorded check and passed
+ * immediately after `npm run build:fleet`.
+ *
+ * (This paragraph used to say the test *read* `dist`. It does not, and the
+ * difference matters to anyone trying to fix it: nothing rebuilds when the
+ * built content is stale, because nothing reads the content at all — an
+ * `index.html` from any past build satisfies it. GPT Sol's F8, 2026-09-09.)
  *
  * That is the same class `scripts/check.ts`'s own header says it fixed once for
  * `api-dist` — *"npm run check was red on a clean checkout for everybody who had
