@@ -115,6 +115,20 @@ export const MAX_LINE_BYTES = 64 * 1024;
 /** Prose from the producer is bounded, and says when it was cut. */
 export const MAX_WHY_CHARS = 2000;
 
+/**
+ * The largest epoch milliseconds `Date` will accept — ECMA-262's ±100,000,000
+ * days from the epoch.
+ *
+ * **Finite is not the same as in range**, and this is the check that gets
+ * skipped. `new Date(1e100)` is a perfectly ordinary Invalid Date, and
+ * `.toISOString()` on it **throws** — so a `resetsAtMs` that passed a
+ * `Number.isFinite` guard at the boundary detonates later, in a renderer,
+ * somewhere with no idea where the number came from. `tools/overseer/usage.ts`
+ * had the same gap on external epochs; the fix in both places is to validate at
+ * the boundary rather than in each reader.
+ */
+export const MAX_EPOCH_MS = 8.64e15;
+
 export type WindowObservation =
   | {
       kind: "value";
@@ -175,7 +189,18 @@ export type UsagePass =
       scan: ScanObservation;
       publication: { decision: "take-fresh" | "keep-stored"; why: string };
     }
-  | { kind: "collector-failed"; at: string; why: string };
+  | { kind: "collector-failed"; at: string; why: string }
+  /**
+   * A record the store could not write, standing where it would have been.
+   *
+   * Distinct from `collector-failed` on purpose: the collector **worked** and
+   * produced a reading, and it was the persistence that refused it — a record
+   * over `MAX_LINE_BYTES`. Folding the two together would tell a reader the
+   * usage pass had failed when it had not, and the two want different
+   * investigations. What must never happen is the third option: dropping the
+   * line, which leaves the chart to join straight across a reading that existed.
+   */
+  | { kind: "omitted"; at: string; why: string };
 
 export type UsageHistoryLine = {
   lineSchema: number;
@@ -236,7 +261,9 @@ function isInstant(value: unknown): value is string {
 }
 
 function bounded(pass: UsagePass): UsagePass {
-  if (pass.kind === "collector-failed") return { ...pass, why: truncateWhy(pass.why) };
+  if (pass.kind === "collector-failed" || pass.kind === "omitted") {
+    return { ...pass, why: truncateWhy(pass.why) };
+  }
   const cache: CacheObservation =
     pass.cache.kind === "attributed"
       ? {
@@ -263,8 +290,20 @@ export function encodeUsageHistoryLine(line: UsageHistoryLine): string {
     throw new Error(`usage history: nextDueMs must be finite and positive, got ${String(line.nextDueMs)}`);
   }
   requireInstant(line.recordedAt, "recordedAt");
-  if (line.pass.kind === "collector-failed") requireInstant(line.pass.at, "at");
-  else requireInstant(line.pass.collectedAt, "collectedAt");
+  if (line.pass.kind === "collector-failed" || line.pass.kind === "omitted") requireInstant(line.pass.at, "at");
+  else {
+    requireInstant(line.pass.collectedAt, "collectedAt");
+    if (line.pass.cache.kind === "attributed") {
+      for (const window of line.pass.cache.windows) {
+        if (window.kind !== "value") continue;
+        if (!Number.isFinite(window.resetsAtMs) || Math.abs(window.resetsAtMs) > MAX_EPOCH_MS) {
+          throw new Error(
+            `usage history: resetsAtMs for ${window.window} is not a representable epoch (${String(window.resetsAtMs)})`,
+          );
+        }
+      }
+    }
+  }
 
   const encoded = `${JSON.stringify({ ...line, pass: bounded(line.pass) })}\n`;
   const bytes = Buffer.byteLength(encoded, "utf8");
@@ -307,8 +346,8 @@ export function decodeUsageHistoryLine(raw: string): DecodedLine {
   }
   const pass = record.pass as UsagePass | undefined;
   if (typeof pass !== "object" || pass === null) return { kind: "unreadable", why: "no pass" };
-  if (pass.kind === "collector-failed") {
-    if (!isInstant(pass.at)) return { kind: "unreadable", why: "collector-failed without an instant" };
+  if (pass.kind === "collector-failed" || pass.kind === "omitted") {
+    if (!isInstant(pass.at)) return { kind: "unreadable", why: `${pass.kind} without an instant` };
   } else if (pass.kind === "pass") {
     if (!isInstant(pass.collectedAt)) return { kind: "unreadable", why: "pass without a collectedAt" };
   } else {
