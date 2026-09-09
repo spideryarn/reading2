@@ -134,6 +134,28 @@ So the honest claim is narrower, and it is the one the code should carry:
 runner path. If it does not, skip the tick and say so. That is one 5 ms git call every ten minutes
 and it closes the `core.worktree` redirect at the only place the runner mutates anything.
 
+### A replace ref forges the content without disturbing the stamp
+
+Found sideways, in the activity log of a Stage 1 review that OpenAI's content filter killed before
+it could report — it had been building `refs/replace` scenarios. Reproduced here properly, and it is
+the worst of the three because it leaves nothing to notice. A consumer sitting at A, fast-forwarded
+to B, with a `refs/replace/<B>` ref present:
+
+```
+[replace active] real-B=5a929f0d stamped=5a929f0d dirty=clean content=SUBSTITUTED CONTENT
+[NO_REPLACE=1  ] real-B=186562e3 stamped=186562e3 dirty=clean content=HONEST B CONTENT
+```
+
+It stamps **B's true sha**, reports the tree **clean**, and holds content that commit never had. The
+`core.worktree` redirect above at least leaves a discrepancy a guard can ask about; this one is
+invisible to every reading the runner takes. And `refs/replace/` is a **shared** ref namespace
+across linked worktrees, so a single `git replace` anywhere on this box would reach the runner.
+
+**Remedy: `GIT_NO_REPLACE_OBJECTS=1` in `gitEnv()`** — one line, since nothing here wants
+replacement semantics. The test for it reads the bytes on disk, because no stamp can see this; it was
+watched red with `SUBSTITUTED CONTENT`, and the `stampTree` assertion in the same test passed *while
+it was red*, which is the finding in one line.
+
 **Remedy declined:** threading `--work-tree=<cwd>` through every invocation, and validating the
 linked worktree's `.git` backlink. Once `--show-toplevel` agrees with `cwd`, `--work-tree` adds
 nothing; and a redirected *metadata* directory with a correct work tree cannot move another
@@ -228,6 +250,16 @@ check. The first is a real piece of work; the second would block every other age
 box for 26 minutes at a time, which is an operational trade-off for the Overseer or Greg to make and
 not one to slip into a bug-fix stage. Sol's own remedy permits this ending in as many words —
 *"Without one of these, the stated exact-schema invariant must be weakened explicitly."*
+
+**Assumption pending Greg**, in the Overseer's words, 2026-09-09:
+
+> the readiness verdict is against the shared local schema, not necessarily the commit's own
+> migrations
+
+The Overseer kept this ending and is putting the choice to Greg directly, because both repairs are
+somebody else's to authorise: a dedicated readiness database is a change to the box, which lives in
+a file under `infra/` and is Greg's; and holding the migration lock for 26 minutes blocks every
+agent's tests, which nobody may impose on the fleet unilaterally.
 
 So the runner's header stops claiming that a green means B passed against B's schema, and says what
 it actually means: B passed against **this box's** schema, which is B's own migrations applied to a

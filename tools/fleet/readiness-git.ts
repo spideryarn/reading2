@@ -60,12 +60,29 @@ export const GIT_LOCATION_ENV = [
  * This removes inherited redirects; it does not override repository-local
  * `core.worktree` or a linked worktree's `.git` pointer, so the mutating loop
  * separately verifies the work tree Git reports before it fetches or merges.
+ *
+ * ## `GIT_NO_REPLACE_OBJECTS`, and why this one is set rather than stripped
+ *
+ * A `refs/replace/<sha>` ref makes git serve a *different* object wherever that
+ * sha is mentioned — and `refs/replace/` is shared by every linked worktree, so
+ * one `git replace` anywhere on this box would reach the runner. Measured here,
+ * 2026-09-09, on a consumer fast-forwarded to B with such a ref present:
+ *
+ *     [replace active] real-B=5a929f0d stamped=5a929f0d dirty=clean content=SUBSTITUTED CONTENT
+ *     [NO_REPLACE=1  ] real-B=186562e3 stamped=186562e3 dirty=clean content=HONEST B CONTENT
+ *
+ * **It stamps the true sha, reports the tree clean, and holds content that
+ * commit never had.** That is worse than the `core.worktree` redirect the loop
+ * guards against separately: that one at least leaves something to notice, and
+ * this leaves a record that is wrong in the one way nothing downstream can see.
+ * Nothing here wants replacement semantics, so it is turned off outright.
  */
 export function gitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env = { ...source };
   for (const name of GIT_LOCATION_ENV) delete env[name];
   env.GIT_TERMINAL_PROMPT = "0";
   env.GIT_OPTIONAL_LOCKS = "0";
+  env.GIT_NO_REPLACE_OBJECTS = "1";
   return env;
 }
 

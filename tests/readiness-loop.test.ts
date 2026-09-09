@@ -430,6 +430,44 @@ describe("the unattended process boundary", () => {
     expect(source).toHaveProperty("GIT_DIR", "poison-GIT_DIR");
   });
 
+  /**
+   * A `refs/replace` ref substitutes one object for another wherever its sha is
+   * mentioned, and `refs/replace/` is shared by every linked worktree — so one
+   * `git replace` on this box reaches the runner. The tree still stamps the true
+   * sha and still reports clean, which is why this needs a test that looks at
+   * the bytes on disk rather than at any stamp.
+   */
+  it("fast-forwards to the commit's real content even when a replace ref substitutes it", () => {
+    const origin = makeRepo("replace-origin", "dev", "honest A\n");
+    const shaA = origin.sha;
+    writeFileSync(path.join(origin.root, "fixture.txt"), "HONEST B CONTENT\n");
+    git(origin.root, ["add", "--", "fixture.txt"]);
+    git(origin.root, ["commit", "--quiet", "-m", "B"]);
+    const shaB = git(origin.root, ["rev-parse", "HEAD"]);
+
+    /* A commit with the same parent and different content, put in B's place. */
+    writeFileSync(path.join(origin.root, "fixture.txt"), "SUBSTITUTED CONTENT\n");
+    git(origin.root, ["add", "--", "fixture.txt"]);
+    const tree = git(origin.root, ["write-tree"]);
+    const fake = git(origin.root, ["commit-tree", tree, "-p", shaA, "-m", "substitute"]);
+    git(origin.root, ["checkout", "--quiet", "--", "fixture.txt"]);
+    git(origin.root, ["replace", shaB, fake]);
+
+    const consumer = mkdtempSync(path.join(tmpdir(), "readiness-replace-consumer-"));
+    scratchDirectories.push(consumer);
+    git(path.dirname(consumer), ["clone", "--quiet", origin.root, consumer]);
+    git(consumer, ["checkout", "--quiet", "-B", "work", shaA]);
+    git(consumer, ["fetch", "--quiet", "origin", "+refs/replace/*:refs/replace/*"]);
+    git(consumer, ["fetch", "--quiet", "origin", "dev"]);
+
+    const merged = runCommand(consumer, "git", ["merge", "--ff-only", "origin/dev"]);
+    expect(merged.status).toBe(0);
+
+    /* The stamp cannot tell the difference — that is the whole point of it. */
+    expect(stampTree(consumer)).toEqual({ kind: "known", sha: shaB, branch: "work", dirty: false });
+    expect(readFileSync(path.join(consumer, "fixture.txt"), "utf8")).toBe("HONEST B CONTENT\n");
+  });
+
   /* The two spawns that launch the check itself, asked for their real
      environments rather than pattern-matched in the source. Both build it
      through a named function that the spawn call then uses, so what is asserted
