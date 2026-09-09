@@ -402,7 +402,30 @@ function existingSeed(root: string): Extract<DecisionEvent, { kind: "decided" }>
  * SECOND copy of a decision behind an existing problem is the worst available
  * outcome. An unparseable line simply is not a match.
  */
-function existingDecisionFor(commandId: string, root: string): string | null {
+/**
+ * The author's input, and nothing the machine supplied.
+ *
+ * This is what two runs of the same command have in common. The decision id is
+ * minted per run, `decidedAt` is stamped per run, and every session's
+ * `execution` is re-resolved against a register that has moved — so comparing
+ * whole events would call every honest retry a conflict, which is the mistake
+ * that put this check in the CLI in the first place.
+ */
+function authoredContent(event: Extract<DecisionEvent, { kind: "decided" }>): string {
+  return JSON.stringify({
+    class: event.class,
+    question: event.question,
+    options: event.options,
+    chose: event.chose,
+    why: event.why,
+    advisers: event.advisers,
+    supersedes: event.supersedes,
+    plan: event.bearsOn.plan,
+    sessions: event.bearsOn.sessions.map((session) => session.name),
+  });
+}
+
+function existingDecisionFor(commandId: string, root: string): Extract<DecisionEvent, { kind: "decided" }> | null {
   let text: string;
   try {
     text = readFileSync(path.join(root, DECISIONS_FILE), "utf8");
@@ -417,7 +440,7 @@ function existingDecisionFor(commandId: string, root: string): string | null {
     if (event.kind !== "decided") {
       throw new Error(`command id ${commandId} is already used by a ${event.kind} event`);
     }
-    return event.id;
+    return event;
   }
   return null;
 }
@@ -526,13 +549,33 @@ export function runParsed(
 
          The check is therefore here, where the intent is known, and the fold's
          comparison stays as the safety net for writers this file knows nothing
-         about. The gap between reading and appending is not a hole: a racing
-         writer loses the version check or trips the conflict, which fails
-         safely rather than duplicating a decision. */
+         about.
+
+         **BOTH HALVES, AND THE SECOND ONE WAS DROPPED ONCE.** Recognising the
+         retry is only half of what the key promises; refusing a DIFFERENT
+         command under the same key is the other, and a version of this that
+         compared ids alone exited 0 and printed the earlier decision's id while
+         silently discarding a new one. What is compared is the author's input
+         (`authoredContent`), because that is the part two runs of one command
+         share.
+
+         The gap between reading and appending is not a hole: a racing writer
+         trips the fold's own conflict under the lock, which fails safely rather
+         than duplicating a decision. (It does not lose a version check — this
+         command passes no `expect`; saying otherwise would claim a guard that is
+         not there.) */
       if (parsed.commandId !== null) {
         const already = existingDecisionFor(parsed.commandId, root);
         if (already !== null) {
-          console.log(already);
+          const wanted = { ...already, class: input.class, question: input.question, options: input.options, chose: input.chose, why: input.why, advisers: input.advisers, supersedes: input.supersedes, bearsOn: { sessions: input.sessionNames.map((name) => ({ name, execution: { kind: "not-found" } as const })), plan: input.plan } };
+          if (authoredContent(already) !== authoredContent(wanted)) {
+            console.error(
+              `✗ command id ${parsed.commandId} already recorded a different decision (${already.id}); ` +
+                "nothing was written. Use a new command id, or supersede that decision.",
+            );
+            return 1;
+          }
+          console.log(already.id);
           console.log(`already recorded under command id ${parsed.commandId}; nothing was written`);
           return 0;
         }

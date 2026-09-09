@@ -199,6 +199,32 @@ describe("add and register identity", () => {
     expect(second.stdout).toContain(id as string);
   });
 
+  test("reusing a command id for a DIFFERENT decision is refused, not reported as a retry", () => {
+    /* The regression this pins: the retry check moved to the CLI in Stage 2b and
+       lost half of itself in the move. Comparing only the command id makes a
+       different decision under a reused key exit 0 and print the OLD id — the
+       exact failure the fold's conflict arm exists to prevent, reintroduced one
+       layer up where the fold never sees it. GPT Sol's P1, reviewing the
+       implementation. What is compared is the AUTHOR'S INPUT, because that is
+       what is stable: the decision id, `decidedAt` and every resolved execution
+       ref legitimately differ between two runs of the same command. */
+    const root = tempRoot();
+    const a = join(root, "a.json");
+    const b = join(root, "b.json");
+    writeFileSync(a, JSON.stringify(payload()));
+    writeFileSync(b, JSON.stringify({ ...payload(), question: "An entirely different question?", why: "For different reasons." }));
+
+    const first = run(root, ["add", "--file", a, "--by", "overseer", "--command-id", "same-key"]);
+    const second = run(root, ["add", "--file", b, "--by", "overseer", "--command-id", "same-key"]);
+
+    expect(first.status).toBe(0);
+    expect(second.status).not.toBe(0);
+    expect(second.stderr).toMatch(/same-key/);
+    expect(second.stderr).toMatch(/different/i);
+    expect(records(root)).toHaveLength(1);
+    expect(records(root)[0]).toMatchObject({ question: payload().question });
+  });
+
   test("add writes a well-formed decided event and prints its id and version", () => {
     const root = tempRoot();
     const file = join(root, "decision.json");
