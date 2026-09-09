@@ -58,7 +58,7 @@ import {
 } from "./broadcast-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
-import { type FleetRow } from "./types";
+import type { FleetRow } from "./types";
 import { Button, Card, Mono } from "./ui";
 
 /**

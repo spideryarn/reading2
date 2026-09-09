@@ -284,6 +284,14 @@ should call it rather than growing a second way:
 - **broadcast** — `resource-broadcast`, already staggered, because thirty-six agents told to pause
   for an hour all resume in the same second and the box falls over at the far end instead of the near
   one.
+- **free text to the whole fleet** — `POST /api/broadcast`, which is **not** part of this vocabulary
+  and is deliberately not reachable by an action id: it carries whatever somebody typed, where every
+  entry above carries a sentence that has been reviewed. Sessions at a prompt are typed at; sessions
+  that are **working** get the line put in their own queue and read it at their next prompt, which is
+  most of the fleet most of the time. It costs a turn of a paid model per recipient and its own
+  ten-minute cooldown says so. Added 2026-09-09 —
+  [260909b](../plans/260909b-messaging-the-overseer-and-broadcasting-to-all-agents-from-the-dashboard.md),
+  which also says why there are two fan-out loops for now and which should absorb the other.
 
 Prefer a **narrow operational action** over a conversational one wherever both would work. *Defer new
 jobs, reduce monitoring frequency, deduplicate alerts, restart a dead service* are safe because their

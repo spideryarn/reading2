@@ -602,7 +602,23 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     return { asked, submitted, queued, skipped, notReached };
   }
 
-  /** Everything the page asked about, in the page's order, and nothing invented. */
+  /**
+   * Everything the page asked about, in the page's order, and nothing invented.
+   *
+   * **A ROW SHOULD NEVER BE MISSING, and the `filter` is what happens if one
+   * is.** The three piles are exhaustive over `request.recipients` — `never` and
+   * a doorless `later` are set during the partition, `queued`/`skipped` by the
+   * enqueue loop, `attempted`/`not-reached` by the fan-out, and every branch of
+   * both loops sets exactly once before continuing. Duplicates are impossible
+   * because the parse refuses a repeated pane.
+   *
+   * So the drop is unreachable. What makes it safe to leave as a `filter`
+   * rather than a throw is that `counts.asked` comes from
+   * `request.recipients.length` and not from this array: a row that went
+   * missing shows up as a list shorter than the number beside it, which is a
+   * visible discrepancy rather than a smaller fleet quietly reported as the
+   * whole one.
+   */
   function ordered(request: BroadcastRequest, into: Map<string, BroadcastRecipient>): BroadcastRecipient[] {
     return request.recipients
       .map((r) => into.get(r.target.paneId))
