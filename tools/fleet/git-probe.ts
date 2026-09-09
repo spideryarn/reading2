@@ -70,7 +70,24 @@ export type { AncestryReading, CountReading, GitSnapshot, MainRef };
 const run = promisify(execFile);
 
 /** Long enough for a cold cache on a loaded box, short enough not to hang a poll. */
-export const GIT_TIMEOUT_MS = 5_000;
+export const GIT_TIMEOUT_MS = 2_500;
+
+/**
+ * **The whole snapshot's budget, and it MUST stay under the browser's.**
+ *
+ * The per-call timeout is not the route's worst case: resolving the ref, then
+ * two `rev-parse` calls for `FETCH_HEAD`, then the ancestry/count phase is four
+ * sequential waits. At 5 s each that was ~20 s — while `deploys-client.ts` gives
+ * up at 15 s. So the probe would eventually produce its honest `unknown` arms
+ * and **the browser would already have replaced the whole readable deploy list
+ * with "no answer"**: a git that was merely slow would blank a record that read
+ * perfectly. GPT Sol's P1 finding 3, 2026-09-09.
+ *
+ * 8 s against the client's 15 s leaves room for the file read, the JSON and the
+ * gzip, and means a slow git costs the reader some greyed-out comparisons rather
+ * than the list.
+ */
+export const SNAPSHOT_BUDGET_MS = 8_000;
 
 /**
  * How long a snapshot stands.
@@ -102,7 +119,7 @@ export type GitProbe = {
   snapshot(recordedSha: string | null): Promise<GitSnapshot>;
 };
 
-type Ran = { ok: true; stdout: string } | { ok: false; why: string; status: number | null };
+export type Ran = { ok: true; stdout: string } | { ok: false; why: string; status: number | null };
 
 /**
  * One git call.
@@ -165,14 +182,16 @@ async function git(repoRoot: string, args: string[], timeoutMs: number): Promise
  * it. Anything stronger needs `git ls-remote`, which is network work this route
  * has decided not to do.
  */
-async function lastFetchAtMs(repoRoot: string, timeoutMs: number): Promise<number | null> {
-  const dirs: string[] = [];
-  /* This worktree's gitdir and the shared common dir: a fetch run in any
-     worktree writes its own FETCH_HEAD, and the refs it wrote are shared. */
-  for (const flag of ["--git-dir", "--git-common-dir"]) {
-    const read = await git(repoRoot, ["rev-parse", flag], timeoutMs);
-    if (read.ok && read.stdout !== "") dirs.push(path.resolve(repoRoot, read.stdout));
-  }
+async function lastFetchAtMs(call: (args: string[]) => Promise<Ran>): Promise<number | null> {
+  /* Both dirs in ONE call rather than two sequential ones — it halves this
+     step's share of the snapshot budget, and `rev-parse` takes several flags. */
+  const read = await call(["rev-parse", "--git-dir", "--git-common-dir"]);
+  if (!read.ok) return null;
+  const dirs = read.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .map((line) => path.resolve(line));
   let newest: number | null = null;
   for (const dir of dirs) {
     try {
@@ -198,14 +217,20 @@ export function gitProbe(options: {
   /** Default `origin/main`, which is production. Never `main`, a local branch. */
   ref?: string;
   timeoutMs?: number;
+  /** The whole snapshot's ceiling. See `SNAPSHOT_BUDGET_MS`. */
+  budgetMs?: number;
   ttlMs?: number;
   nowMs?: () => number;
+  /** Injectable so a test can count real executions rather than trust a fake. */
+  run?: (args: string[], timeoutMs: number) => Promise<Ran>;
 }): GitProbe {
   const repoRoot = options.repoRoot;
   const ref = options.ref ?? "origin/main";
   const timeoutMs = options.timeoutMs ?? GIT_TIMEOUT_MS;
+  const budgetMs = options.budgetMs ?? SNAPSHOT_BUDGET_MS;
   const ttlMs = options.ttlMs ?? SNAPSHOT_TTL_MS;
   const now = options.nowMs ?? ((): number => Date.now());
+  const exec = options.run ?? ((args, ms): Promise<Ran> => git(repoRoot, args, ms));
 
   /* Single flight and a short TTL. Two readers arriving together share one
      probe; a reader arriving inside the window pays nothing. Keyed by the
@@ -214,7 +239,21 @@ export function gitProbe(options: {
   let inFlight: { key: string; promise: Promise<GitSnapshot> } | null = null;
 
   async function take(recordedSha: string | null): Promise<GitSnapshot> {
-    const main = await readRef();
+    /* The budget is opened here and consumed by every call below, so the four
+       sequential waits cannot add up past it. `left()` returning 0 means the
+       remaining calls fail fast with a stated reason rather than each starting
+       a fresh timeout of its own. */
+    const deadline = now() + budgetMs;
+    const left = (): number => Math.max(0, deadline - now());
+    const call = async (args: string[]): Promise<Ran> => {
+      const remaining = left();
+      if (remaining <= 0) {
+        return { ok: false, why: `the ${budgetMs}ms budget for reading git ran out`, status: null };
+      }
+      return exec(args, Math.min(timeoutMs, remaining));
+    };
+
+    const main = await readRef(call);
     if (main.kind !== "ref") {
       /* No tip, so nothing to compare against — and saying so once is better
          than three arms each blaming git separately. */
@@ -231,46 +270,93 @@ export function gitProbe(options: {
     }
 
     /* **Against the resolved sha, not against `ref`.** That is the whole point
-       of taking a snapshot: the three answers describe one tip even if somebody
-       fetches underneath us. */
-    const [ancestry, commitsSince] = await Promise.all([
-      readAncestry(recordedSha, main.sha),
-      readCount(recordedSha, main.sha),
+       of taking a snapshot: every answer describes one tip even if somebody
+       fetches underneath us.
+
+       Both directions of the ancestry question, because they mean different
+       things and only asking one way makes a stale cache look like a rollback —
+       see `AncestryReading` in wire.ts. */
+    const [forwards, backwards, commitsSince] = await Promise.all([
+      isAncestorOf(call, recordedSha, main.sha),
+      isAncestorOf(call, main.sha, recordedSha),
+      readCount(call, recordedSha, main.sha),
     ]);
-    return { main, ancestry, commitsSince };
+
+    const ancestry = readAncestry(forwards, backwards);
+    return {
+      main,
+      ancestry,
+      /* **The count is withheld unless the histories are actually comparable.**
+         On a divergent pair `rev-list A..B` is a set difference that reads like
+         a distance. */
+      commitsSince:
+        ancestry.kind === "ancestor"
+          ? commitsSince
+          : ancestry.kind === "unknown"
+            ? { kind: "unknown", why: ancestry.why }
+            : {
+                kind: "not-comparable",
+                why:
+                  ancestry.kind === "cache-behind"
+                    ? "this checkout has not fetched since that deploy, so it cannot measure the distance"
+                    : "the recorded deploy and the cached tip have diverged, so there is no distance between them",
+              },
+    };
   }
 
-  async function readRef(): Promise<MainRef> {
+  async function readRef(call: (args: string[]) => Promise<Ran>): Promise<MainRef> {
     /* One call for both fields: `%H %cI` off the tip. Two calls could disagree
        with each other if somebody fetched between them, which is a sha and a
        date from different commits. */
-    const read = await git(repoRoot, ["log", "-1", "--format=%H %cI", ref], timeoutMs);
+    const read = await call(["log", "-1", "--format=%H %cI", ref]);
     if (!read.ok) return { kind: "unavailable", why: `${ref}: ${read.why}` };
     const [sha, committedAt] = read.stdout.split(" ");
     if (sha === undefined || !SHA.test(sha) || committedAt === undefined) {
       return { kind: "unavailable", why: `${ref}: git answered something unreadable` };
     }
-    return { kind: "ref", sha, committedAt, lastFetchAtMs: await lastFetchAtMs(repoRoot, timeoutMs) };
+    return { kind: "ref", sha, committedAt, lastFetchAtMs: await lastFetchAtMs(call) };
   }
 
-  async function readAncestry(sha: string, tip: string): Promise<AncestryReading> {
-    const read = await git(repoRoot, ["merge-base", "--is-ancestor", sha, tip], timeoutMs);
-    if (read.ok) return { kind: "ancestor" };
-    /* **EXIT 1 IS THE ANSWER "no", NOT A FAILURE.** Everything else — 128 for an
-       unknown sha, a timeout, a missing git — is a failure, and collapsing the
-       two draws "this deploy is not on main", which reads as a rollback nobody
-       performed. */
-    if (read.status === 1) return { kind: "not-ancestor" };
-    return { kind: "unknown", why: read.why };
+  /**
+   * Is `sha` an ancestor of `of`? Three answers, never two.
+   *
+   * **EXIT 1 IS THE ANSWER "no", NOT A FAILURE.** Everything else — 128 for an
+   * unknown sha, a timeout, a missing git — is a failure, and collapsing the two
+   * draws a definite "no", which downstream reads as a rollback nobody
+   * performed.
+   */
+  async function isAncestorOf(
+    call: (args: string[]) => Promise<Ran>,
+    sha: string,
+    of: string,
+  ): Promise<boolean | { why: string }> {
+    const read = await call(["merge-base", "--is-ancestor", sha, of]);
+    if (read.ok) return true;
+    if (read.status === 1) return false;
+    return { why: read.why };
   }
 
-  async function readCount(sha: string, tip: string): Promise<CountReading> {
+  /** The two directions, read together. wire.ts § AncestryReading says why. */
+  function readAncestry(
+    forwards: boolean | { why: string },
+    backwards: boolean | { why: string },
+  ): AncestryReading {
+    if (typeof forwards !== "boolean") return { kind: "unknown", why: forwards.why };
+    if (forwards) return { kind: "ancestor" };
+    /* Not an ancestor. The reverse question decides whether that is alarming.
+       If IT could not be asked we must not guess: an unreadable second answer
+       makes the pair unknown rather than divergent. */
+    if (typeof backwards !== "boolean") return { kind: "unknown", why: backwards.why };
+    return backwards ? { kind: "cache-behind" } : { kind: "diverged" };
+  }
+
+  async function readCount(call: (args: string[]) => Promise<Ran>, sha: string, tip: string): Promise<CountReading> {
     /* `--no-merges` to match the record's own `commit_count`, which drops merge
        commits — every one here is a `Merge remote-tracking branch 'origin/dev'`
        carrying no change of its own. A count taken the other way would sit
        beside the record's numbers looking comparable and not be.
        docs/project/changelog.md § Enumerate. */
-    const read = await git(repoRoot, ["rev-list", "--count", "--no-merges", `${sha}..${tip}`], timeoutMs);
+    const read = await call(["rev-list", "--count", "--no-merges", `${sha}..${tip}`]);
     if (!read.ok) return { kind: "unknown", why: read.why };
     const commits = Number(read.stdout);
     if (!Number.isInteger(commits) || commits < 0) {

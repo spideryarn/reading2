@@ -32,8 +32,19 @@ export const DEPLOYS_URL = "api/deploys";
 /** How many the tab asks for first. The server's own default, restated so a caller can widen it. */
 export const FIRST_PAGE = 10;
 
-/** What "show more" asks for. The server clamps at 200. */
+/** How many more rows each "show more" press asks for. */
 export const MORE_PAGE = 60;
+
+/**
+ * The ceiling, restated from the route's own `MAX_LIMIT`.
+ *
+ * Two copies of a number is how they come to disagree, and normally this would
+ * be imported — but `routes-deploys.ts` reaches `node:fs`, so the browser
+ * project cannot see it (wire.ts's header has the measurement). It is a `const`
+ * rather than a magic number so the next person finds this note; the route
+ * clamps regardless, so a disagreement costs a wasted press rather than a bug.
+ */
+export const MAX_LIMIT = 200;
 
 /** How long before deciding an answer is not coming. */
 export const REQUEST_TIMEOUT_MS = 15_000;
@@ -97,8 +108,8 @@ function readPayload(body: unknown): DeploysView {
   return body as DeploysView;
 }
 
-/** The real one. Relative URL, so the tool works behind any host. */
-export function httpDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
+/** A client against a given URL. Relative, so the tool works behind any host. */
+export function makeDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
   return {
     async fetch(limit, signal): Promise<DeploysView> {
       const controller = new AbortController();
@@ -141,6 +152,26 @@ export function httpDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
     },
   };
 }
+
+/**
+ * The real one, built once.
+ *
+ * **A FACTORY CALLED IN A DEFAULT ARGUMENT IS A NEW OBJECT EVERY RENDER**, and
+ * this page re-renders once a second because `useNow` ticks. `DeploysPanel`'s
+ * effect depends on the api's identity, so `api = makeDeploysApi()` as a default
+ * meant: abort the in-flight request and start another, once a second, for as
+ * long as the tab is open — while the box kept working on every abandoned one.
+ * A response slower than a second would never have been accepted at all.
+ *
+ * The tests could not see it because they inject a stable fake, which is exactly
+ * the shape of hole GPT Sol was looking for. Found in review, 2026-09-09.
+ *
+ * So this is a `const`, like `httpHistoryApi` and `httpActionsApi` beside it —
+ * the house pattern, and now for a reason that is written down. `makeDeploysApi`
+ * remains for a caller that needs a different URL; **do not call it in a default
+ * argument.**
+ */
+export const httpDeploysApi: DeploysApi = makeDeploysApi();
 
 /* ------------------------------------------------------------------ *
  * Saying when, and how long ago.

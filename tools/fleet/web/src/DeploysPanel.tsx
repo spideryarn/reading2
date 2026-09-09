@@ -43,6 +43,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Explain, type Tip } from "./Tooltip";
 import {
   FIRST_PAGE,
+  MAX_LIMIT,
   MORE_PAGE,
   ago,
   agoFrom,
@@ -93,8 +94,28 @@ function Sha({ sha }: { sha: string }): ReactNode {
  * omitting a line whose reading failed — leaves a header that looks complete and
  * is quietly missing the one fact that was wrong.
  */
-function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploys" }>; nowMs: number }): ReactNode {
-  const generatedAgo = ago(view.lastGeneratedAt, nowMs);
+function Freshness({
+  view,
+  nowMs,
+  arrivedAtMs,
+}: {
+  view: Extract<DeploysView, { kind: "deploys" }>;
+  nowMs: number;
+  /** The browser's clock at the moment this payload landed. See `skewed` below. */
+  arrivedAtMs: number;
+}): ReactNode {
+  /* **Ages are measured against the SERVER's clock, corrected by the skew this
+     browser has drifted since the answer arrived.**
+
+     Every timestamp here was stamped by the box; `nowMs` is the phone's. On a
+     device whose clock is a few minutes out, subtracting one from the other
+     changes every "ago" on the page — and this panel's whole subject is how
+     stale things are, so a device-skew error reads as a stale record. The
+     payload carries `servedAtMs` for exactly this and it was going unused.
+     GPT Sol, 2026-09-09. `skewed` keeps ticking, because an age that only moves
+     when data arrives freezes at the moment it matters. */
+  const skewed = view.servedAtMs + (nowMs - arrivedAtMs);
+  const generatedAgo = ago(view.lastGeneratedAt, skewed);
   const mainRef = view.git.main;
 
   return (
@@ -113,10 +134,14 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
       </div>
 
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1">
-        <span className="tw:font-semibold tw:text-ink">Production</span>
+        {/* **"main is at", not "Production is at".** The second is the claim the
+            route's own comment says cannot be made from here: `deploy.ts` pushes
+            and then waits, so the tip of main is where a deploy *attempt* got
+            to, not what is serving. GPT Sol's P1 finding 2. */}
+        <span className="tw:font-semibold tw:text-ink">main</span>
         {mainRef.kind === "ref" ? (
           <span>
-            is at <Sha sha={mainRef.sha} />, committed {ago(mainRef.committedAt, nowMs) ?? "at an unreadable time"}
+            is at <Sha sha={mainRef.sha} />, committed {ago(mainRef.committedAt, skewed) ?? "at an unreadable time"}
             {/* **The age of the VIEW, not of the commit** — a ref nobody has
                 updated in a week looks exactly like a week with no deploys
                 unless this says which it is. **Labelled as exactly what it
@@ -132,7 +157,7 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
               <span className="tw:text-ink-faint">
                 {" "}
                 — a cached view; this checkout last fetched something{" "}
-                {agoFrom(mainRef.lastFetchAtMs, nowMs) ?? "at an unreadable time"}
+                {agoFrom(mainRef.lastFetchAtMs, skewed) ?? "at an unreadable time"}
               </span>
             )}
           </span>
@@ -141,21 +166,28 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
         )}
       </div>
 
-      {/* Ancestry: three arms, and `not-ancestor` is the one worth a colour.
-          It means the newest recorded deploy is not on main at all — a rollback,
-          or a deploy from somebody's working directory — which changelog.md
-          says to check per version precisely because it breaks the ranges
-          silently. */}
+      {/* **Four arms, and only ONE of them is an alarm.** This drew a rollback
+          warning for any non-ancestor until 2026-09-09 — including the
+          commonest benign case, a cached ref older than the record, which is
+          what you get whenever the changelog job has run since this checkout
+          last fetched. An alarm that fires on the normal state is an alarm
+          nobody reads. wire.ts § AncestryReading. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1">
         {view.git.ancestry.kind === "ancestor" ? (
-          <span className="tw:text-ink-faint">The newest recorded deploy is on main.</span>
-        ) : view.git.ancestry.kind === "not-ancestor" ? (
+          <span className="tw:text-ink-faint">The newest recorded deploy is in this checkout&rsquo;s history of main.</span>
+        ) : view.git.ancestry.kind === "cache-behind" ? (
+          <span className="tw:text-ink-faint">
+            This checkout has not fetched since the newest recorded deploy, so it cannot say how far behind the record
+            is. Nothing is wrong.
+          </span>
+        ) : view.git.ancestry.kind === "diverged" ? (
           <span className="tw:font-semibold tw:text-alarm-ink">
-            The newest recorded deploy is not on main — a rollback, or a deploy from a working directory.
+            The newest recorded deploy is not in this checkout&rsquo;s history of main at all, and main is not in its
+            history either — a rollback, or a deploy from a working directory.
           </span>
         ) : (
           <span className="tw:text-unknown-ink">
-            Whether the newest recorded deploy is on main could not be checked: {view.git.ancestry.why}
+            How the newest recorded deploy sits against main could not be checked: {view.git.ancestry.why}
           </span>
         )}
       </div>
@@ -171,12 +203,30 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
               </span>
             </span>
           </Explain>
+        ) : view.git.commitsSince.kind === "not-comparable" ? (
+          /* Deliberately NOT a number. `rev-list A..B` on divergent histories is
+             a set difference that reads like a distance. */
+          <span className="tw:text-ink-faint">
+            No distance from the newest recorded deploy to main can be measured: {view.git.commitsSince.why}
+          </span>
         ) : (
           <span className="tw:text-unknown-ink">
             How far the record is behind main could not be measured: {view.git.commitsSince.why}
           </span>
         )}
       </div>
+
+      {/* **The newest line specifically.** A corrupt line anywhere costs a
+          deploy; a corrupt LAST line also means everything above is measured
+          from the wrong place, because the record is append-only and its last
+          line is its newest deploy. The route refuses to measure at all in that
+          case, and this is where the page says why. GPT Sol's P1 finding 4. */}
+      {!view.newestLineRead && view.recordLines > 0 ? (
+        <div className="tw:mt-1.5 tw:font-semibold tw:text-alarm-ink">
+          The record&rsquo;s newest line could not be read, so the newest deploy is unknown and nothing above is
+          measured against it.
+        </div>
+      ) : null}
 
       {/* A line of the record that would not parse is a deploy missing from the
           list. Counted and shown, never swallowed — otherwise the list is
@@ -288,7 +338,7 @@ function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number 
 }
 
 export function DeploysPanel({
-  api = httpDeploysApi(),
+  api = httpDeploysApi,
   now,
   refreshNonce = 0,
 }: {
@@ -308,6 +358,9 @@ export function DeploysPanel({
   refreshNonce?: number;
 }): ReactNode {
   const [state, setState] = useState<State>({ kind: "loading" });
+  /* Stamped when the payload lands rather than read at render time: the gap
+     between the two is what `skewed` is correcting for. */
+  const [arrivedAtMs, setArrivedAtMs] = useState<number>(() => Date.now());
   const [limit, setLimit] = useState<number>(FIRST_PAGE);
   /* The panel's own view of "now" is the page's, but a fetch must not be
      re-issued every time it ticks — hence `limit` in the dependency list and
@@ -325,7 +378,9 @@ export function DeploysPanel({
     const controller = new AbortController();
     let live = true;
     void api.fetch(limit, controller.signal).then((view) => {
-      if (live) setState(view);
+      if (!live) return;
+      setArrivedAtMs(Date.now());
+      setState(view);
     });
     return () => {
       live = false;
@@ -333,7 +388,11 @@ export function DeploysPanel({
     };
   }, [api, limit, refreshNonce]);
 
-  const showMore = useCallback(() => setLimit(MORE_PAGE), []);
+  /* **Adds a page rather than setting one.** `setLimit(MORE_PAGE)` jumped to 60
+     and then did nothing on every later press — with 74 deploys the button
+     stayed visible offering 14 more and delivering none. The fake API returned
+     one row whatever the limit, so no test could see it. GPT Sol, 2026-09-09. */
+  const showMore = useCallback(() => setLimit((n) => Math.min(n + MORE_PAGE, MAX_LIMIT)), []);
 
   const more = useMemo(
     () => (state.kind === "deploys" ? state.total - state.versions.length : 0),
@@ -368,7 +427,7 @@ export function DeploysPanel({
         </Card>
       ) : (
         <>
-          <Freshness view={state} nowMs={now} />
+          <Freshness view={state} nowMs={now} arrivedAtMs={arrivedAtMs} />
 
           {state.versions.length === 0 ? (
             /* We READ the record and it is empty — a different claim from
@@ -379,7 +438,13 @@ export function DeploysPanel({
           ) : (
             <div className="tw:flex tw:flex-col tw:gap-2">
               {state.versions.map((version) => (
-                <DeployCard key={version.deploymentId} version={version} nowMs={now} />
+                <DeployCard
+                  key={version.deploymentId}
+                  version={version}
+                  /* The same corrected clock the header uses, so a deploy's age
+                     and the record's age cannot disagree by the device's drift. */
+                  nowMs={state.servedAtMs + (now - arrivedAtMs)}
+                />
               ))}
             </div>
           )}

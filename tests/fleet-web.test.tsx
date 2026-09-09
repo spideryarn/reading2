@@ -354,6 +354,7 @@ function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = 
     recordLines: 74,
     lastGeneratedAt: "2026-09-08T07:06:51Z",
     newestRecordedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+    newestLineRead: true,
     git: healthyGit(),
     servedAtMs: 1_788_912_000_000,
     ...over,
@@ -930,13 +931,13 @@ describe("the deploys tab", () => {
     expect(container.textContent).toContain("Nothing a reader would notice");
   });
 
-  it("shows a deploy that is not on main as the alarm it is, not as a shrug", async () => {
+  it("shows a DIVERGED deploy as the alarm it is, not as a shrug", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();
-    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "not-ancestor" } } })).api);
+    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "diverged" } } })).api);
     await act(async () => undefined);
 
-    expect(container.textContent).toContain("is not on main");
+    expect(container.textContent).toContain("not in this checkout\u2019s history of main at all");
     expect(container.textContent).toContain("rollback");
   });
 
@@ -975,12 +976,36 @@ describe("the deploys tab", () => {
     await act(async () => undefined);
 
     expect(deploys.asked).toEqual([10]);
-    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
-    expect(more?.textContent).toContain("73 older deploys");
+    const more = (): HTMLButtonElement | undefined =>
+      [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more()?.textContent).toContain("73 older deploys");
 
-    act(() => more?.click());
+    act(() => more()?.click());
     await act(async () => undefined);
-    expect(deploys.asked).toEqual([10, 60]);
+    expect(deploys.asked).toEqual([10, 70]);
+
+    /* **Pressed twice, because once was not a test of paging.** `showMore` used
+       to `setLimit(MORE_PAGE)` — a jump to 60 that then did nothing on every
+       later press, while the button stayed visible offering more. One press
+       could not see it, and the fake returning one row whatever the limit
+       hid it as well. GPT Sol, 2026-09-09. */
+    act(() => more()?.click());
+    await act(async () => undefined);
+    expect(deploys.asked).toEqual([10, 70, 130]);
+  });
+
+  it("stops asking for more once the record is exhausted", async () => {
+    /* The button must disappear rather than sit there doing nothing — which is
+       what "show more" looked like after the jump-to-60 bug. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    mount(feed.transport, recordingDeploys(() => deploysView({ total: one.versions.length })).api);
+    await act(async () => undefined);
+
+    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more, "no more to show, so no button").toBeUndefined();
   });
 
   it("answers the dock's Refresh button, which claims to refresh the page", async () => {

@@ -297,6 +297,44 @@ describe("newestDeploy and lastGeneratedAt", () => {
 });
 
 /**
+ * **A corrupt NEWEST line is not the same as a corrupt line.**
+ *
+ * The record is append-only, so its last line is its newest deploy. When that
+ * line fails, `newestDeploy()` hands back the one before it and everything
+ * downstream calls that "the newest recorded deploy" and measures a confident
+ * distance from the wrong place. The earlier tests only covered a corrupt
+ * OLDEST line, which costs a row and nothing else — GPT Sol's P1 finding 4,
+ * 2026-09-09, and it is the difference between a test that looks thorough and
+ * one that is.
+ */
+describe("which line was corrupt matters", () => {
+  it("says the newest line failed when it did", () => {
+    const read = readDeploys([line({ deployment_id: "dpl_1" }), "{broken"].join("\n"));
+
+    expect(read.newestLineRead).toBe(false);
+    expect(read.versions).toHaveLength(1);
+  });
+
+  it("says the newest line was fine when an OLDER one failed", () => {
+    const read = readDeploys(
+      ["{broken", line({ version: "2026-09-03T10:00:00Z", sha: SHA_C, deployment_id: "dpl_3" })].join("\n"),
+    );
+
+    expect(read.newestLineRead).toBe(true);
+    expect(read.unreadable).toHaveLength(1);
+  });
+
+  it("is false for an empty record, because there is no newest line to have read", () => {
+    expect(readDeploys("").newestLineRead).toBe(false);
+    expect(readDeploys("\n\n").newestLineRead).toBe(false);
+  });
+
+  it("ignores a trailing newline, which is not a corrupt line", () => {
+    expect(readDeploys(`${line()}\n`).newestLineRead).toBe(true);
+  });
+});
+
+/**
  * **THE CHECK THAT CAN GO RED WITHOUT ANYBODY TOUCHING THIS BRANCH.**
  *
  * Everything above proves the reader parses text this file wrote. This proves it
