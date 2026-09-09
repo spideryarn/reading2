@@ -206,6 +206,5 @@ export function seedEvents(options: { at: string; mint?: () => string }): IdeaEv
        written, and over a queue that will hold more than these. Applying it is
        `overseer-queue set-priorities`, one reviewed command over the live file,
        rather than a number frozen into a migration. 260909d. */
-    priority: null,
   }));
 }

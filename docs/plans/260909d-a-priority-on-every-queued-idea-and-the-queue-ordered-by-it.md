@@ -1,6 +1,6 @@
 # A priority on every queued idea, and the queue ordered by it
 
-**Status, 2026-09-09: written, not yet built.** Up:
+**Status, 2026-09-09: built; round-two review changes incorporated.** Up:
 [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer-queue.md](../project/overseer-queue.md). It continues
 [260909b](260909b-queued-ideas-mode-the-overseer-queue-as-ndjson.md), which built the queue as an
@@ -36,11 +36,11 @@ click-through.
   `--back`, `--before`, `--after` — is writable by the Overseer today and bumps no revision. A
   priority is a coarser spelling of the same intent. It would be incoherent for `move --front` to
   preserve an approval and `--priority 0.9` to lapse it.
-- **Priority grants the Overseer no power it does not have.** It already picks which dispatchable
-  item to take (the queue is explicitly not FIFO — *"Take an item only when the current focus has
-  nothing dispatchable"*), and it can already `move` anything to the front. What priority adds is
-  that the choice becomes **durable, attributed and visible** instead of living in one session's
-  head. That is strictly more auditable than the status quo, not less.
+- **Priority does not grant content authority.** It cannot make an item dispatchable or carry Greg's
+  approval onto changed words. It does change the constraint governing what the Overseer takes next,
+  though, and the review rightly identified that as a reordering authority Greg has not explicitly
+  granted. `priorityBy` and `priorityAt` make each live choice auditable while that governance
+  question remains open; they do not answer it.
 - **What must not move, does not move.** Priority cannot promote an item past `authority`.
   `isDispatchable` is untouched: an unauthorised item at 0.9 sorts to the top of the list and is
   still not dispatchable, and the badge still says *proposal*.
@@ -50,19 +50,18 @@ proposal at 0.9 sits at the top of the list Greg reads on his phone, which is a 
 attention that it did not have before. It is not an authorisation vector — the row says *proposal*
 and nothing can dispatch it — and Greg explicitly asked the Overseer to apply his banding, so
 capping what the Overseer may set would refuse the thing he asked for. It is recorded here, and every
-`prioritized` event carries `by`, so *who pushed this up the list* is answerable.
+`prioritized` event carries `by`, and the folded item carries `priorityBy` and `priorityAt`, so *who
+pushed this up the list, and when* is answerable without reconstructing its history.
 
 ### 2. A separate event kind, or a key inside `edited`?
 
 **Taken: a new event kind, `prioritized`, parallel to `moved`.**
 
-The alternative is `edited { priority? }` excluded from `changesContent`. That is the shape of the
-bug Sol found in round two: `needsGreg` was a key inside `edited` that `changesContent` did not
-count, and the consequence was `edit --by overseer --ready` clearing Greg's blocker with no revision
-bump. The fix there was an actor asymmetry — a condition inside a function, which the next person
-adding a fourth optional key has to know about. A separate kind makes the exclusion **structural**:
-there is no way to write a `prioritized` event that accidentally counts as content, because
-`changesContent` never sees one.
+The alternative is `edited { priority? }` excluded from `changesContent`. The separate kind buys an
+honest history line and lets a content edit and priority change compose atomically as two acts. The
+review corrected an overclaim here: this is **not structural authorisation safety**. `parseEvent`
+must still reject both `edited { priority }` and an edit with no recognised field, or a buggy writer
+can believe a change happened when the parser silently discarded it.
 
 It costs one parse arm, one fold arm, one `describeTouch` arm — about thirty lines — and buys a
 history line that reads `prioritised at 0.85` rather than `edited metadata`.
@@ -87,10 +86,12 @@ Sorting the unstated last also buys a safety property worth having: **a newly ad
 silently leapfrog work Greg ranked.** And it is a nudge — the way to get to the top is to say so.
 
 **The cost, which is real: `add --front` no longer reaches the front** unless a priority comes with
-it. That is not hidden. `add` prints the effective position it landed at, and `add --front` with no
-`--priority` prints a sentence saying the item sits below every prioritised one and how to change
-that. Silently inheriting the top item's priority was considered and rejected: it invents an opinion,
-which is the thing the `null` default exists to avoid.
+it once anything in the queue is ranked. That is a refusal, not a successful command with a note:
+unranked `--front`, `--before` and `--after` fail when a named ranked item would remain above the new
+one, and say to pass `--priority` or `--back`. They keep working while the whole queue is unranked,
+because then the placement still does exactly what it says. Silently inheriting the top item's
+priority was considered and rejected: it invents an opinion, which is the thing the `null` default
+exists to avoid.
 
 ## The sort, and where it lives
 
@@ -110,9 +111,11 @@ being stable. Stability is specified in modern V8 and would work; an explicit in
 *what the second key is* to the next reader, and it is what the mutation check swaps.
 
 **Placement stays placement.** The internal `order` array is untouched, so `moved --before X` still
-means *before X in the placement order*, and it still decides the order within a band. Where that is
-invisible — the anchor is in a different band — `move` says so on the way out rather than printing a
-tick over a no-op.
+means *before X in the placement order*, and it still decides the order within an exact-priority
+group. A relative move whose anchor has a different priority is refused by the fold before placement;
+otherwise it can alter the hidden order, fail to achieve the named relation, and reorder peers the
+caller never mentioned. `front` and `back` remain valid placement-array operations and therefore mean
+front or back within the moved item's exact-priority group in the sorted view.
 
 ## Schema, and what an older reader does
 
@@ -120,12 +123,26 @@ tick over a no-op.
 survive"*, and bumping it would make the new reader reject every schema-1 line already in the live
 file — which is the whole file.
 
-An older reader meeting a newer file ignores `priority` on `added` and rejects a `prioritized` line
-as an unknown kind, which becomes an `unreadable-line` problem, which makes the whole queue
-undispatchable. That is a **loud refusal, not a wrong answer**, and it is the direction this module
-is built to fail in. There is one reader, so the case is hypothetical; it is written down because
-the alternative — deciding it at the moment it happens — is how a schema field stops meaning
-anything.
+Priority is forbidden on `added`, including `priority: null`; every item is born unstated. `add
+--priority` appends `added` then `prioritized` in one locked batch. An older reader therefore meets an
+unknown `prioritized` event for every stated priority, records an `unreadable-line` problem and makes
+the whole queue undispatchable. That is a **loud refusal, not a wrong answer**. Rejecting the key on
+`added` also makes a mistaken new writer fail loudly instead of having its claimed priority ignored
+by an old reader. This correction came from the round-two review's P1-2.
+
+## What the plan review changed
+
+GPT Sol reviewed the built priority work (`--model gpt-5.6-sol --effort high`, 2026-09-09). This
+round closes the findings in scope here; the review file remains the record for P1-3, the governance
+decision beyond the P1-5 mitigation, and P2-2.
+
+| finding | what was wrong | change taken |
+|---|---|---|
+| **P1-1** | A cross-priority relative move changed hidden placement without achieving the visible relation, while unranked `add --front` could exit zero and land last. | The fold refuses cross-priority `before`/`after`; the CLI refuses misleading unranked relative/front placement only once a ranked item exists. |
+| **P1-2** | Priority on `added` let an old reader ignore the field and select the wrong item without a problem. | `added` cannot carry the key; `add --priority` atomically appends `added` then `prioritized`. |
+| **P1-4** | One existing parse problem could mask one new fold problem during append preflight. | Baseline and candidate are now folds of the same parsed event stream, with parse problems on neither side. |
+| **P2-1** | The separate event kind was overclaimed as structural safety while empty and priority-bearing `edited` events still parsed. | Both forms are rejected; the separate kind is justified by honest history and atomic composition. |
+| **P1-5 mitigation** | Who changed the ordering constraint was visible only by replaying history while standing authority remains undecided. | Folded items expose `priorityBy` and `priorityAt`, cleared with the priority; no route or wire change is part of this stage. |
 
 ## An out-of-range priority rejects the line
 

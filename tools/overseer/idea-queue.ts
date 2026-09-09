@@ -222,9 +222,9 @@ export const EMPTY_METADATA: IdeaMetadata = { source: null, waitingOn: null, siz
  *
  * `comparePriority` then sorts the unstated **below** everything stated, which
  * also buys a property worth having: a newly added item cannot silently
- * leapfrog work Greg ranked. The cost is that `add --front` without a priority
- * no longer reaches the front, and the CLI says so out loud rather than leaving
- * it to be discovered.
+ * leapfrog work Greg ranked. The cost is that, once anything is ranked, `add
+ * --front` without a priority would no longer reach the front; the CLI refuses
+ * that misleading command rather than leaving it to be discovered.
  *
  * **Out of range REJECTS THE LINE** — see `parseEvent`. Clamping `1000` to `1`
  * would turn a typo into a legitimate-looking top of the queue, and ignoring it
@@ -303,8 +303,6 @@ export type IdeaEvent = Envelope &
         readonly placement: Placement;
         /** True when this is waiting on a person, not on a slot. */
         readonly needsGreg: boolean;
-        /** `null` when the add did not say. Never invented — see `isPriority`. */
-        readonly priority: number | null;
       }
     | {
         readonly kind: "edited";
@@ -327,14 +325,11 @@ export type IdeaEvent = Envelope &
      * **ITS OWN KIND, NOT A KEY INSIDE `edited`**, and that is a fix for a bug
      * rather than a matter of taste.
      *
-     * `needsGreg` is a key inside `edited` that `changesContent` deliberately
-     * does not count, and the consequence was GPT Sol's round-two P0-2:
-     * `edit --by overseer --ready` cleared Greg's blocker with no revision bump.
-     * That hole is a *condition inside a function*, which the next person adding
-     * an optional key to `edited` has to already know about. A separate kind
-     * makes the exclusion **structural**: `changesContent` never sees one of
-     * these, so there is no way to write a priority change that accidentally
-     * counts as content. `null` clears it back to unstated.
+     * The separate kind buys an honest history entry and lets a content edit
+     * and priority change compose atomically without pretending they were one
+     * act. It is **not structural authorisation safety**: GPT Sol's round-two
+     * P2-1 was right that the parser still has to reject `edited { priority }`
+     * and empty edits explicitly. `null` clears it back to unstated.
      */
     | { readonly kind: "prioritized"; readonly id: string; readonly priority: number | null }
     | {
@@ -414,6 +409,17 @@ export type IdeaItem = {
    * pushed this up the list* stays answerable.
    */
   readonly priority: number | null;
+  /**
+   * Who set the priority now governing the item's place, and when.
+   *
+   * GPT Sol's P1-5 concern is that the Overseer changing priorities changes
+   * the constraint governing its own choice of what to take next. The work is
+   * still authorised, but that reordering authority has not been explicitly
+   * granted. These fields make the act visible on the row while Greg decides
+   * that governance question, rather than requiring an audit of the history.
+   */
+  readonly priorityBy: IdeaActor | null;
+  readonly priorityAt: string | null;
   /**
    * Bumped by every content edit. **The number an authorisation names**, and
    * what makes "approved, then changed" visible — see the header, Sol's P0-2.
@@ -543,6 +549,8 @@ type Mutable = {
   lifecycle: Lifecycle;
   needsGreg: boolean;
   priority: number | null;
+  priorityBy: IdeaActor | null;
+  priorityAt: string | null;
   revision: number;
   addedBy: IdeaActor;
   addedAt: string;
@@ -692,7 +700,13 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           event.by === "greg" ? { kind: "authorized", by: "greg", at: event.at, revision: 0 } : { kind: "proposed" },
         lifecycle: "queued",
         needsGreg: event.needsGreg,
-        priority: event.priority,
+        /* Priority cannot ride on `added`: an older reader would ignore that
+           key and silently calculate the wrong next item. Every item is born
+           unstated, and a separate `prioritized` event makes an old reader
+           refuse loudly. */
+        priority: null,
+        priorityBy: null,
+        priorityAt: null,
         revision: 0,
         addedBy: event.by,
         addedAt: event.at,
@@ -798,6 +812,31 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           problem("illegal-transition", `${event.id} was moved while ${item.lifecycle}`, event.eventId);
           break;
         }
+        if (event.placement.at === "before" || event.placement.at === "after") {
+          /* Presence comes first: a dropped or never-added anchor remains the
+             existing `missing-anchor` problem, not a misleading priority
+             mismatch against stale state retained in `byId`. */
+          const anchor = byId.get(event.placement.anchor);
+          if (anchor === undefined || !order.includes(event.placement.anchor)) {
+            const placed = place(order, event.id, event.placement);
+            if (!placed.ok) problem("missing-anchor", placed.why, event.eventId);
+            break;
+          }
+          if (anchor.priority !== item.priority) {
+            const shown = (priority: number | null): string => (priority === null ? "null (unstated)" : String(priority));
+            problem(
+              "illegal-transition",
+              `${event.id} has priority ${shown(item.priority)}, while anchor ${anchor.id} has priority ${shown(anchor.priority)}; ` +
+                `set them to exactly the same priority before moving ${event.id} ${event.placement.at} ${anchor.id}, ` +
+                `or use --front/--back to move within ${event.id}'s priority group`,
+              event.eventId,
+            );
+            break;
+          }
+        }
+        /* Front and back deliberately remain placement-array operations. Once
+           the view is sorted, that means front or back within the item's exact
+           priority group — useful and visible without a contradictory anchor. */
         const placed = place(order, event.id, event.placement);
         if (!placed.ok) {
           problem("missing-anchor", placed.why, event.eventId);
@@ -821,6 +860,8 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           break;
         }
         item.priority = event.priority;
+        item.priorityBy = event.priority === null ? null : event.by;
+        item.priorityAt = event.priority === null ? null : event.at;
         item.lastTouchedAt = event.at;
         item.history.push({ kind: event.kind, at: event.at, by: event.by, what: describeTouch(event) });
         break;
@@ -902,6 +943,8 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
     lifecycle: m.lifecycle,
     needsGreg: m.needsGreg,
     priority: m.priority,
+    priorityBy: m.priorityBy,
+    priorityAt: m.priorityAt,
     revision: m.revision,
     addedBy: m.addedBy,
     addedAt: m.addedAt,
@@ -1121,10 +1164,12 @@ export function parseEvent(line: string): IdeaEvent | null {
          `json["needsGreg"] === true`, which read `"yes"` as *no* — turning a
          blocked item into a dispatchable one by way of a typo. */
       if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
-      /* Absent means nobody has said, which is `null`. Present and not a
-         priority rejects the line — never clamped, never dropped. */
-      if ("priority" in json && !isPriority(json["priority"])) return null;
-      const priority = "priority" in json && isPriority(json["priority"]) ? json["priority"] : null;
+      /* **PRIORITY MUST NOT RIDE ON `added`, EVEN AS `null`.** An older reader
+         ignores an unknown key on a known event, calls the queue healthy and
+         orders by placement. Requiring a separate `prioritized` event makes
+         every stated priority something that reader rejects loudly instead of
+         selecting the wrong next item in silence. */
+      if ("priority" in json) return null;
       return {
         ...envelope,
         kind: "added",
@@ -1134,10 +1179,14 @@ export function parseEvent(line: string): IdeaEvent | null {
         metadata,
         placement,
         needsGreg: json["needsGreg"] === true,
-        priority,
       };
     }
     case "edited": {
+      /* A separate `prioritized` kind buys honest history and atomic
+         composition, **not structural authorisation safety** (GPT Sol P2-1).
+         Reject the misplaced key even when real edit fields accompany it, so a
+         buggy writer cannot believe the priority changed when it did not. */
+      if ("priority" in json) return null;
       if ("text" in json && typeof json["text"] !== "string") return null;
       const text = typeof json["text"] === "string" ? json["text"] : undefined;
       const title = "title" in json ? asStringOrNull(json["title"]) : undefined;
@@ -1146,6 +1195,10 @@ export function parseEvent(line: string): IdeaEvent | null {
       if (metadata === null) return null;
       if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
       const needsGreg = typeof json["needsGreg"] === "boolean" ? json["needsGreg"] : undefined;
+      /* Every line in an append-only authorisation history must mean
+         something. Accepting no recognised field turns a typo into "edited
+         nothing" and lets the writer believe its intended change happened. */
+      if (text === undefined && title === undefined && metadata === undefined && needsGreg === undefined) return null;
       return {
         ...envelope,
         kind: "edited",
@@ -1460,14 +1513,17 @@ export function appendEvents(
        append-only log with no problem-resolution event, the only repair left is
        editing the file by hand — of an authorisation record.
 
-       Comparing counts rather than contents because the existing problems are
-       already in `current`: what is being asked is only *does this batch make
-       it worse*. A queue that already has problems can still be appended to,
-       which matters — otherwise one bad line would freeze the record forever
-       and leave no way to write the note explaining it. */
-    const candidate = foldQueue([...readEvents(root), ...events], []);
-    if (candidate.problems.length > current.problems.length) {
-      const added = candidate.problems.slice(current.problems.length);
+       Compare like with like: parse problems appear on neither side. Including
+       them only in `current` lets one existing unreadable line mask one new fold
+       problem and permanently append an invalid event. A queue that already
+       has problems can still be appended to, which matters — otherwise one bad
+       line would freeze the record forever and leave no way to write the note
+       explaining it. */
+    const existing = readEvents(root);
+    const baseline = foldQueue(existing, []);
+    const candidate = foldQueue([...existing, ...events], []);
+    if (candidate.problems.length > baseline.problems.length) {
+      const added = candidate.problems.slice(baseline.problems.length);
       return {
         ok: false,
         code: "would-break",

@@ -43,7 +43,7 @@ function env(by: "greg" | "overseer" = "greg", at = "2026-09-19T00:00:00.000Z") 
 
 function added(
   id: string,
-  over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement; priority?: number | null } = {},
+  over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement } = {},
 ): IdeaEvent {
   return {
     ...env(over.by ?? "greg"),
@@ -54,7 +54,6 @@ function added(
     metadata: { ...EMPTY_METADATA, waitingOn: "a lull", size: "M" },
     placement: over.placement ?? { at: "back" },
     needsGreg: over.needsGreg ?? false,
-    priority: over.priority ?? null,
   };
 }
 

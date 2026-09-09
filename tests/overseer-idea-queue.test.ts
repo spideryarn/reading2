@@ -20,9 +20,11 @@
  * here reads or writes `~/.overseer/`, which is the live Overseer's store —
  * `withRoot` is the only way a test gets a path.
  */
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -37,7 +39,7 @@ import {
   appendEvents,
   asPlacement,
   currentOrder,
-  envelope,
+  type envelope,
   foldQueue,
   isDispatchable,
   isPriority,
@@ -85,6 +87,7 @@ const A = "qi-aaaaaaaa";
 const B = "qi-bbbbbbbb";
 const C = "qi-cccccccc";
 const D = "qi-dddddddd";
+const CLI = fileURLToPath(new URL("../scripts/overseer-queue.ts", import.meta.url));
 
 let tick = 0;
 function at(): string {
@@ -107,7 +110,6 @@ function added(
     text?: string;
     title?: string | null;
     metadata?: IdeaMetadata;
-    priority?: number | null;
   } = {},
 ): IdeaEvent {
   return {
@@ -119,8 +121,13 @@ function added(
     metadata: over.metadata ?? EMPTY_METADATA,
     placement: over.placement ?? { at: "back" },
     needsGreg: over.needsGreg ?? false,
-    priority: over.priority ?? null,
   };
+}
+
+function runCli(root: string, args: readonly string[]) {
+  return spawnSync(process.execPath, ["--import", "tsx", CLI, ...args, "--root", root], {
+    encoding: "utf8",
+  });
 }
 
 function only(view: QueueView, id: string): IdeaItem {
@@ -536,7 +543,7 @@ describe("parseEvent", () => {
   });
 
   it("distinguishes an absent title from a cleared one on an edit", () => {
-    const absent = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A }));
+    const absent = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, needsGreg: true }));
     const cleared = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, title: null }));
     expect(absent && "title" in absent).toBe(false);
     expect(cleared && "title" in cleared).toBe(true);
@@ -1164,6 +1171,19 @@ describe("round two: an append that would break the record is refused", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.view.problems).toHaveLength(1);
   });
+
+  it("an existing unreadable line cannot mask one new fold problem", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = appendEvents([prioritized(B, 0.9)], { root });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -1230,6 +1250,15 @@ describe("priority is ordering, not content", () => {
     const said = only(view, A).history.map((t) => t.what);
     expect(said).toEqual(["added", "prioritised at 0.85", "priority cleared"]);
   });
+
+  it("keeps who set the live priority and when on the item, and clears both with it", () => {
+    const set = prioritized(A, 0.85, "overseer");
+    const ranked = only(foldQueue([added(A), set]), A);
+    expect(ranked).toMatchObject({ priority: 0.85, priorityBy: "overseer", priorityAt: set.at });
+
+    const cleared = only(foldQueue([added(A), set, prioritized(A, null, "greg")]), A);
+    expect(cleared).toMatchObject({ priority: null, priorityBy: null, priorityAt: null });
+  });
 });
 
 describe("the queue is ordered by priority, then by placement", () => {
@@ -1266,27 +1295,41 @@ describe("the queue is ordered by priority, then by placement", () => {
     expect(currentOrder(view)).toEqual([B, A]);
   });
 
-  it("leaves the placement order alone, so an anchor still resolves across bands", () => {
+  it("refuses a relative move across priority bands without changing visible order", () => {
     const view = foldQueue([
       added(A),
+      added(C),
       added(B),
-      prioritized(A, 0.1),
-      prioritized(B, 0.9),
-      added(C, { placement: { at: "after", anchor: A } }),
+      prioritized(A, 0.9),
+      prioritized(C, 0.9),
+      prioritized(B, 0.1),
+      { ...env(), kind: "moved", id: A, placement: { at: "after", anchor: B } },
     ]);
-    expect(view.problems).toEqual([]);
-    /* C has no priority so it sorts last; the placement still took effect,
-       which is what stops a later reprioritisation from surprising anybody. */
-    expect(currentOrder(view)).toEqual([B, A, C]);
-    const promoted = foldQueue([
+    expect(view.problems).toHaveLength(1);
+    expect(view.problems[0]).toMatchObject({ kind: "illegal-transition" });
+    expect(view.problems[0]?.why).toContain("0.9");
+    expect(view.problems[0]?.why).toContain("0.1");
+    expect(view.problems[0]?.why).toContain("priority");
+    expect(currentOrder(view)).toEqual([A, C, B]);
+  });
+
+  it("front and back still reorder within an exact-priority group", () => {
+    const events: IdeaEvent[] = [
       added(A),
       added(B),
-      prioritized(A, 0.1),
+      added(C),
+      prioritized(A, 0.9),
       prioritized(B, 0.9),
-      added(C, { placement: { at: "after", anchor: A } }),
       prioritized(C, 0.1),
-    ]);
-    expect(currentOrder(promoted)).toEqual([B, A, C]);
+      { ...env(), kind: "moved", id: B, placement: { at: "front" } },
+    ];
+    const front = foldQueue(events);
+    expect(front.problems).toEqual([]);
+    expect(currentOrder(front)).toEqual([B, A, C]);
+
+    const back = foldQueue([...events, { ...env(), kind: "moved", id: B, placement: { at: "back" } }]);
+    expect(back.problems).toEqual([]);
+    expect(currentOrder(back)).toEqual([A, B, C]);
   });
 
   it("counts what is ahead in the order actually shown", () => {
@@ -1343,7 +1386,7 @@ describe("a priority out of range rejects the line", () => {
     expect(parseEvent(JSON.stringify({ ...base, kind: "prioritized", id: A }))).toBeNull();
   });
 
-  it("takes a priority on `added`, and refuses a bad one there too", () => {
+  it("refuses any priority key on `added`, including null", () => {
     const add = (priority: unknown): string =>
       JSON.stringify({
         ...base,
@@ -1355,13 +1398,21 @@ describe("a priority out of range rejects the line", () => {
         placement: { at: "back" },
         priority,
       });
-    expect(parseEvent(add(0.75))).toMatchObject({ kind: "added", priority: 0.75 });
+    expect(parseEvent(add(0.75))).toBeNull();
     expect(parseEvent(add(2))).toBeNull();
     expect(parseEvent(add("high"))).toBeNull();
-    /* Absent is still absent, and still means nobody has said. */
+    expect(parseEvent(add(null))).toBeNull();
     const without = JSON.parse(add(null)) as Record<string, unknown>;
     delete without["priority"];
-    expect(parseEvent(JSON.stringify(without))).toMatchObject({ priority: null });
+    const parsed = parseEvent(JSON.stringify(without));
+    expect(parsed).toMatchObject({ kind: "added" });
+    expect(parsed && "priority" in parsed).toBe(false);
+  });
+
+  it("refuses an empty edit and an edit trying to smuggle priority", () => {
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A, priority: 0.9 }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A, text: "real edit", priority: 0.9 }))).toBeNull();
   });
 
   it("a rejected line holds the whole queue, as every rejected line does", () => {
@@ -1371,6 +1422,42 @@ describe("a priority out of range rejects the line", () => {
     const view = viewOf(readQueue(root));
     expect(view?.problems.map((p) => p.kind)).toEqual(["unreadable-line"]);
     expect(view === null ? [] : view.items.map((i) => isDispatchable(view, i))).toEqual([false]);
+  });
+});
+
+describe("the add CLI composes priority honestly and refuses misleading placement", () => {
+  it("writes added then prioritized in one command when --priority is present", () => {
+    const root = withRoot();
+    const result = runCli(root, ["add", "--by", "greg", "--text", "rank me", "--priority", "0.8"]);
+    expect(result.status, result.stderr).toBe(0);
+    const lines = readFileSync(join(root, QUEUE_FILE), "utf8").trim().split("\n").map((line) => parseEvent(line));
+    expect(lines.map((event) => event?.kind)).toEqual(["added", "prioritized"]);
+    const queue = viewOf(readQueue(root));
+    expect(queue?.items[0]).toMatchObject({ priority: 0.8, priorityBy: "greg" });
+  });
+
+  it("refuses unranked --front, --before and --after when a named ranked item would remain above it", () => {
+    const root = withRoot();
+    appendEvents([added(A), prioritized(A, 0.5)], { root });
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    for (const placement of [["--front"], ["--before", A], ["--after", A]]) {
+      const result = runCli(root, ["add", "--by", "greg", "--text", "placement means what it says", ...placement]);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain(A);
+      expect(result.stderr).toContain("--priority");
+      expect(result.stderr).toContain("--back");
+    }
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("still allows unranked --front when the queue has no ranked items", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const result = runCli(root, ["add", "--by", "greg", "--text", "ordinary front", "--front"]);
+    expect(result.status, result.stderr).toBe(0);
+    const queue = viewOf(readQueue(root));
+    expect(queue?.items.map((item) => item.text)).toEqual(["ordinary front", `the idea called ${A}`]);
   });
 });
 

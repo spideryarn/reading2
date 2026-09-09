@@ -27,6 +27,8 @@
  * `console.log` rather than src/log.ts, per docs/project/logging.md's rule: the
  * destination is a terminal.
  */
+import { writeSync } from "node:fs";
+
 import { seedEvents } from "../tools/overseer/idea-queue-seed.js";
 import {
   EMPTY_METADATA,
@@ -130,7 +132,10 @@ function parseArgs(argv: readonly string[]): Flags {
 }
 
 function fail(why: string): never {
-  console.error(`✗ ${why}`);
+  /* `process.exit` can discard buffered console output when automation captures
+     stderr through a pipe. Refusals are part of this CLI's safety contract, so
+     write synchronously before exiting rather than returning a silent status 2. */
+  writeSync(2, `✗ ${why}\n`);
   process.exit(2);
 }
 
@@ -490,9 +495,23 @@ function main(): void {
       if (text === null || text.trim() === "") fail("--text is required: the idea, in the words you want kept");
       const queue = view(dir);
       const placement = placementFrom(parsed.flags);
-      const priority = priorityFrom(parsed.flags) ?? null;
+      const priority = priorityFrom(parsed.flags);
+      /* This is a helpfulness refusal about the command a person just typed,
+         not a rule about which histories the fold accepts. An unranked front
+         placement is valid and works exactly as named while every item is
+         unranked; once any item has a stated priority, however, that item will
+         remain above the new one and an exit-zero `--front`/`--before`/`--after`
+         would lie to automation that cannot read an explanatory note. */
+      const rankedAbove = queue.items.find((item) => item.priority !== null);
+      if (typeof priority !== "number" && placement.at !== "back" && rankedAbove !== undefined) {
+        fail(
+          `${rankedAbove.id} (priority ${rankedAbove.priority}) would sit above this unranked item, so ` +
+            `--${placement.at} would not put it where it says. Pass --priority to rank it, or use --back.`,
+        );
+      }
+      const commandId = str(parsed.flags, "command-id");
       const event: IdeaEvent = {
-        ...envelope(by, { commandId: str(parsed.flags, "command-id") }),
+        ...envelope(by, { commandId }),
         kind: "added",
         id: mintId(),
         text,
@@ -500,25 +519,23 @@ function main(): void {
         metadata: { ...EMPTY_METADATA, ...metadataFrom(parsed.flags) },
         placement,
         needsGreg: parsed.flags.get("needs-greg") !== undefined,
-        priority,
       };
+      /* Priority cannot be an `added` field: an older reader would ignore it
+         and silently use the wrong order. The pair is one append batch under
+         one lock, so the record gets either both acts or neither. */
+      const events: IdeaEvent[] = [event];
+      if (typeof priority === "number") {
+        /* **BOTH EVENTS CARRY THE SAME `commandId`, deliberately.** It is the
+           idempotency key for a *command*, not for a line, and this is one
+           command — so a future retry that finds the key has to conclude that
+           the whole of it landed, which is exactly right. Minting a second key
+           would let half an add be replayed. */
+        events.push({ ...envelope(by, { at: event.at, commandId }), kind: "prioritized", id: event.id, priority });
+      }
       /* Said out loud, because it is the one thing about this command that is
          not obvious: the Overseer adding an item does not authorise it. */
       const note = by === "overseer" ? " as a PROPOSAL — only Greg can authorise it" : "";
-      write(dir, [event], queue.version, `queued ${event.id} at the ${placement.at}${note}`);
-      /* **`--front` WITH NO PRIORITY DOES NOT REACH THE FRONT, and the person
-         who just typed it should hear that from the command rather than
-         discover it on the page.** An unstated priority sorts below every
-         stated one (`idea-queue.ts` § `isPriority`), so `--front` puts the item
-         at the front of the unranked band, which is the bottom of the list.
-         Inheriting the top item's priority instead was considered and rejected:
-         it invents an opinion, which is the thing `null` exists to avoid. */
-      if (priority === null && placement.at !== "back") {
-        console.log(
-          `  note: no --priority, so this sits below every item that has one, wherever ` +
-            `--${placement.at} put it.\n  Pass --priority (0..1) to rank it.`,
-        );
-      }
+      write(dir, events, queue.version, `queued ${event.id} at the ${placement.at}${note}`);
       return;
     }
     case "move": {
@@ -612,8 +629,10 @@ function main(): void {
       return;
     }
     default:
-      console.error(`✗ no such command: ${command}\n`);
-      console.error(USAGE);
+      /* Synchronous for the reason `fail` is: `process.exit` discards buffered
+         output when stderr is a pipe, and an exit code with no sentence is the
+         hardest kind of refusal to act on. */
+      writeSync(2, `✗ no such command: ${command}\n\n${USAGE}\n`);
       process.exit(2);
   }
 }
