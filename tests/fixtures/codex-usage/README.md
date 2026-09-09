@@ -49,6 +49,12 @@ real and say nothing about any person or project.
 | `scan-session-history.py` | characterises every historical snapshot — how many exist, which window shapes occur |
 | `measure-used-percent-over-time.py` | **the liveness evidence**: prints every transition of the `codex` bucket's `used_percent`, oldest first |
 | `spike-app-server-from-node.ts` | drives the protocol from Node, both arms, the way the collector will |
+| `verify-child-env-allowlist.ts` | **runs the real collector** under the child-environment allowlist, with sentinel secrets planted in the parent |
+
+`verify-child-env-allowlist.ts` answers the one question the unit tests structurally cannot. The fake
+executor proves what environment the collector *asks for*; only a real spawn proves codex can actually
+run in it. Measured 2026-09-09: the child receives `HOME, LANG, PATH, TERM`, no planted sentinel
+survives, and the reading comes back. Re-run it if the allowlist is ever narrowed.
 
 `measure-used-percent-over-time.py` is the one to re-run if anybody doubts the reading is live. It
 showed the counter taking every integer from 0 to 90 across 25,179 snapshots and climbing 11 → 24 over

@@ -6,9 +6,9 @@
  * are in docs/plans/260909d-read-the-codex-subscription-usage-limits-and-show-them-beside-claude-s.md.
  */
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { isDeepStrictEqual } from "node:util";
 
-import { sanitisedEnv } from "../../scripts/subagent-cli.js";
 import type { CodexUsageBucket, CodexUsageReading, CodexUsageWindow } from "../fleet/wire.js";
 
 export type { CodexUsageBucket, CodexUsageReading, CodexUsageWindow };
@@ -77,12 +77,23 @@ function nullableString(value: unknown): ParseResult<string | null> {
     : { kind: "value", value: parsed };
 }
 
-function resetInstantMs(value: unknown): number | null {
+function nullableBoolean(value: unknown, source: string): ParseResult<boolean | null> {
+  if (value === null || value === undefined) return { kind: "value", value: null };
+  return typeof value === "boolean"
+    ? { kind: "value", value }
+    : { kind: "unknown", why: `${source} was not a boolean or null` };
+}
+
+function resetInstantMs(value: unknown, sourceAtMs: number, windowMinutes: number): number | null {
   const parsed = finiteNumber(value);
-  if (parsed === null || parsed <= 0) return null;
-  // The app-server and session log currently use unix seconds. Accepting an
-  // already-millisecond value prevents a future unit change becoming 1970.
-  return parsed > 1e12 ? parsed : parsed * 1000;
+  if (parsed === null || !Number.isSafeInteger(parsed) || parsed <= 0) return null;
+
+  const latestPossible = sourceAtMs + windowMinutes * 60_000;
+  const valid = [...new Set([parsed, parsed * 1000])].filter(
+    (instantMs) =>
+      Number.isSafeInteger(instantMs) && instantMs > sourceAtMs && instantMs <= latestPossible,
+  );
+  return valid.length === 1 ? valid[0]! : null;
 }
 
 function isoInstant(value: number): string | null {
@@ -115,7 +126,7 @@ function buildWindow(
     );
   }
 
-  const resetsAtMs = resetInstantMs(rawResetsAt);
+  const resetsAtMs = resetInstantMs(rawResetsAt, sourceAtMs, windowMinutes);
   const resetsAt = resetsAtMs === null ? null : isoInstant(resetsAtMs);
   if (resetsAtMs === null || resetsAt === null) {
     return unknownWindow(
@@ -134,11 +145,11 @@ function buildWindow(
   }
 
   const usedPercent = finiteNumber(rawUsedPercent);
-  if (usedPercent === null || usedPercent < 0 || usedPercent > 100) {
+  if (usedPercent === null || usedPercent < 0) {
     return unknownWindow(
       slot,
       windowMinutes,
-      `${sourceNames.percent} was not a percentage from 0 to 100 (${JSON.stringify(rawUsedPercent)})`,
+      `${sourceNames.percent} was not a non-negative number (${JSON.stringify(rawUsedPercent)})`,
     );
   }
 
@@ -211,6 +222,32 @@ function parseCredits(raw: unknown, source: string): ParseResult<CodexUsageBucke
   };
 }
 
+function parseIndividualLimit(
+  raw: unknown,
+  source: string,
+  names: { remainingPercent: string; resetsAt: string },
+): ParseResult<CodexUsageBucket["individualLimit"]> {
+  if (raw === null || raw === undefined) return { kind: "value", value: null };
+  const limit = object(raw);
+  if (!limit) return { kind: "unknown", why: `${source} was not an object or null` };
+  const remainingPercent = finiteNumber(limit[names.remainingPercent]);
+  const resetsAt = finiteNumber(limit[names.resetsAt]);
+  if (
+    typeof limit.limit !== "string" ||
+    typeof limit.used !== "string" ||
+    remainingPercent === null ||
+    !Number.isInteger(remainingPercent) ||
+    resetsAt === null ||
+    !Number.isSafeInteger(resetsAt)
+  ) {
+    return { kind: "unknown", why: `${source} did not match the spend-control limit snapshot` };
+  }
+  return {
+    kind: "value",
+    value: { limit: limit.limit, used: limit.used, remainingPercent, resetsAt },
+  };
+}
+
 /** Parse one camelCase app-server bucket without assigning meaning to its slots. */
 export function parseCodexUsageBucket(
   raw: unknown,
@@ -234,10 +271,29 @@ export function parseCodexUsageBucket(
   if (limitName.kind === "unknown") return limitName;
   const planType = nullableString(bucket.planType);
   if (planType.kind === "unknown") return planType;
+  if (expectedLimitId === "codex" && !Object.hasOwn(bucket, "rateLimitReachedType")) {
+    return { kind: "unknown", why: "codex bucket omitted rateLimitReachedType" };
+  }
   const reached = nullableString(bucket.rateLimitReachedType);
   if (reached.kind === "unknown") return reached;
   const credits = parseCredits(bucket.credits, `bucket ${limitId}`);
   if (credits.kind === "unknown") return credits;
+  const spendControlReached = nullableBoolean(bucket.spendControlReached, `bucket ${limitId}.spendControlReached`);
+  if (spendControlReached.kind === "unknown") return spendControlReached;
+  const individualLimit = parseIndividualLimit(bucket.individualLimit, `bucket ${limitId}.individualLimit`, {
+    remainingPercent: "remainingPercent",
+    resetsAt: "resetsAt",
+  });
+  if (individualLimit.kind === "unknown") return individualLimit;
+  if (expectedLimitId === "codex" && spendControlReached.value !== false) {
+    return { kind: "unknown", why: "codex spend-control state was reached or unavailable" };
+  }
+  if (expectedLimitId === "codex" && !Object.hasOwn(bucket, "individualLimit")) {
+    return { kind: "unknown", why: "codex individual spend-limit state was unavailable" };
+  }
+  if (expectedLimitId === "codex" && individualLimit.value !== null) {
+    return { kind: "unknown", why: "codex reported an individual spend limit not handled by this reader" };
+  }
 
   const windows: CodexUsageWindow[] = [];
   for (const slot of ["primary", "secondary"] as const) {
@@ -253,6 +309,8 @@ export function parseCodexUsageBucket(
       windows,
       planType: planType.value,
       credits: credits.value,
+      individualLimit: individualLimit.value,
+      spendControlReached: spendControlReached.value,
       rateLimitReachedType: reached.value,
     },
   };
@@ -271,6 +329,16 @@ function parseSessionBucket(raw: unknown, sourceAtMs: number): ParseResult<Codex
   if (reached.kind === "unknown") return reached;
   const credits = parseCredits(bucket.credits, `session bucket ${limitId}`);
   if (credits.kind === "unknown") return credits;
+  const spendControlReached = nullableBoolean(
+    bucket.spend_control_reached,
+    `session bucket ${limitId}.spend_control_reached`,
+  );
+  if (spendControlReached.kind === "unknown") return spendControlReached;
+  const individualLimit = parseIndividualLimit(bucket.individual_limit, `session bucket ${limitId}.individual_limit`, {
+    remainingPercent: "remaining_percent",
+    resetsAt: "resets_at",
+  });
+  if (individualLimit.kind === "unknown") return individualLimit;
 
   const windows: CodexUsageWindow[] = [];
   for (const slot of ["primary", "secondary"] as const) {
@@ -285,6 +353,8 @@ function parseSessionBucket(raw: unknown, sourceAtMs: number): ParseResult<Codex
       windows,
       planType: planType.value,
       credits: credits.value,
+      individualLimit: individualLimit.value,
+      spendControlReached: spendControlReached.value,
       rateLimitReachedType: reached.value,
     },
   };
@@ -344,7 +414,7 @@ function readBuckets(result: Record<string, unknown>, nowMs: number): ParseResul
   const rawMapValue = result.rateLimitsByLimitId;
   const hasCanonicalMap = rawMapValue !== null && rawMapValue !== undefined;
   if (!hasCanonicalMap) {
-    const fallback = parseCodexUsageBucket(result.rateLimits, nowMs);
+    const fallback = parseCodexUsageBucket(result.rateLimits, nowMs, "codex");
     if (fallback.kind === "unknown") {
       return {
         kind: "unknown",
@@ -377,9 +447,13 @@ function readBuckets(result: Record<string, unknown>, nowMs: number): ParseResul
   }
 
   if (result.rateLimits !== null && result.rateLimits !== undefined) {
-    const bare = object(result.rateLimits);
-    if (!bare) return { kind: "unknown", why: `rateLimits was present but was not an object` };
-    if (bare.limitId === "codex" && !isDeepStrictEqual(bare, rawTarget)) {
+    const parsedBare = parseCodexUsageBucket(result.rateLimits, nowMs, "codex");
+    const canonical = buckets.find((bucket) => bucket.limitId === "codex");
+    if (
+      parsedBare.kind === "unknown" ||
+      canonical === undefined ||
+      !isDeepStrictEqual(parsedBare.value, canonical)
+    ) {
       return { kind: "unknown", why: `the general codex snapshots in rateLimits and rateLimitsByLimitId disagreed` };
     }
   }
@@ -453,16 +527,68 @@ function enforceExpectedAccount(
 }
 
 /**
+ * The variables the child is given — **an allowlist, and deliberately not the
+ * denylist every other subprocess in this repo uses.**
+ *
+ * `scripts/subagent-cli.ts` § `sanitisedEnv` is the house mechanism, and this
+ * module used it until 2026-09-09. Two reasons it is the wrong tool here, and the
+ * second is the one that matters:
+ *
+ *  - **It reaches `src/env.ts`**, through the dynamic import inside its
+ *    `loadRepoEnv`. `tests/fleet-imports.test.ts` computes its closure over every
+ *    file under `tools/`, and `src/env.ts` is forbidden there beside `src/db.ts`
+ *    and `src/routes.ts` — so importing it reddened that guard on this module
+ *    merely existing, before anything wired it up.
+ *  - **An allowlist is actually available here.** `sanitisedEnv`'s own header
+ *    explains why it is a denylist: a model-driven agent needs "a large and
+ *    unenumerable slice of the environment", and an allowlist "would break in ways
+ *    nobody could predict from reading it". That is true of `codex exec`. It is
+ *    not true of `codex app-server` answering one RPC, which runs no model, spawns
+ *    no shell and produces no activity log. Its needs are enumerable, so the
+ *    stricter mechanism is available — and `CODEX_API_KEY` is then absent **by
+ *    construction** rather than because a naming rule happened to match it.
+ *
+ * Copying `sanitisedEnv`'s word lists instead was the obvious move and is worse
+ * than either: a second denylist is one that drifts out of sync with the first,
+ * silently, in the direction of leaking.
+ *
+ * That this list is SUFFICIENT is a claim about a real process, not a design
+ * argument, so it is verified by running the real collector against it rather
+ * than by reasoning — see the plan's stage 2. If codex ever needs another
+ * variable the symptom is loud (the spawn fails, or auth fails) rather than
+ * silent, which is the right direction for this trade.
+ */
+const CHILD_ENV_ALLOWLIST: readonly string[] = [
+  "PATH", // find the codex binary at all
+  "HOME", // ~/.codex/auth.json, unless CODEX_HOME redirects it
+  "CODEX_HOME", // the credential and config directory, when it is set
+  "TMPDIR", // codex writes temporary state
+  "LANG",
+  "LC_ALL",
+  "TERM", // codex inspects it; absent is fine, wrong is worse
+  "XDG_CONFIG_HOME",
+  "XDG_CACHE_HOME",
+  "XDG_DATA_HOME",
+];
+
+export function childEnvironment(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const name of CHILD_ENV_ALLOWLIST) {
+    const value = parent[name];
+    if (value !== undefined) out[name] = value;
+  }
+  return out;
+}
+
+/**
  * Spawn one short-lived app-server and read the reply for request id 2.
  * This is the only function in this module that reads process state or performs I/O.
  */
 export async function collectCodexUsage(options: CollectCodexUsageOptions = {}): Promise<CodexUsageReading> {
-  const nowMs = options.nowMs ?? Date.now();
+  const pinnedNowMs = options.nowMs;
   const timeoutMs = options.timeoutMs ?? DEFAULT_CODEX_USAGE_TIMEOUT_MS;
   const parentEnv = options.env ?? process.env;
-  // Passing no credentials is run-codex.ts's subscription mode: in particular
-  // CODEX_API_KEY is absent, while ordinary HOME and CODEX_HOME survive.
-  const childEnv = sanitisedEnv(parentEnv);
+  const childEnv = childEnvironment(parentEnv);
 
   const executor: CodexUsageExecutor = options.executor ?? {
     spawn: (command, args, spawnOptions) => {
@@ -508,8 +634,10 @@ export async function collectCodexUsage(options: CollectCodexUsageOptions = {}):
 
   return await new Promise<CodexUsageReading>((resolve) => {
     let buffer = "";
+    const decoder = new StringDecoder("utf8");
     let settled = false;
     let initialized = false;
+    let rateLimitsRequested = false;
     let timer: NodeJS.Timeout | undefined;
 
     const killGroup = (): void => {
@@ -546,16 +674,18 @@ export async function collectCodexUsage(options: CollectCodexUsageOptions = {}):
         }
         initialized = true;
         if (!send({ jsonrpc: "2.0", method: "initialized", params: {} })) return;
-        send({ jsonrpc: "2.0", id: 2, method: "account/rateLimits/read", params: {} });
+        rateLimitsRequested = true;
+        if (!send({ jsonrpc: "2.0", id: 2, method: "account/rateLimits/read", params: {} })) return;
         return;
       }
-      if (response.id === 2) {
-        finish(enforceExpectedAccount(parseCodexAppServerReply(response, nowMs), options.expectedAccountId));
+      if (response.id === 2 && rateLimitsRequested) {
+        const replyAtMs = pinnedNowMs ?? Date.now();
+        finish(enforceExpectedAccount(parseCodexAppServerReply(response, replyAtMs), options.expectedAccountId));
       }
     };
 
     child.onStdout((chunk) => {
-      buffer += chunk.toString();
+      buffer += typeof chunk === "string" ? chunk : decoder.write(chunk);
       const decoded = jsonMessages(buffer);
       buffer = decoded.rest;
       for (const response of decoded.messages) handleResponse(response);

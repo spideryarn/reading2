@@ -3137,6 +3137,13 @@ export type CodexUsageBucket = {
     unlimited: boolean;
     balance: string | null;
   } | null;
+  individualLimit: {
+    limit: string;
+    used: string;
+    remainingPercent: number;
+    resetsAt: number;
+  } | null;
+  spendControlReached: boolean | null;
   rateLimitReachedType: string | null;
 };
 

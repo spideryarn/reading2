@@ -1,7 +1,7 @@
 {
   "id": 2,
   "result": {
-    "accountId": "00000000-0000-0000-0000-000000000000",
+    "accountId": "account-id-redacted-not-a-database-row",
     "rateLimitResetCredits": {
       "availableCount": 2,
       "credits": [
