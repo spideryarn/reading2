@@ -178,7 +178,29 @@ export function ago(iso: string | null, nowMs: number): string | null {
   if (iso === null) return null;
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
-  const seconds = Math.round((nowMs - at) / 1000);
+  return agoFrom(at, nowMs);
+}
+
+/**
+ * The same, from epoch milliseconds — **and it exists to avoid a `Date` that can
+ * throw.**
+ *
+ * `lastFetchAtMs` is a filesystem mtime, and the panel used to render it as
+ * `ago(new Date(ms).toISOString(), now)`. `new Date(x).toISOString()` raises
+ * `RangeError` for an `x` outside ±8.64e15 rather than returning anything odd,
+ * and a `RangeError` thrown during render takes the **whole panel** down, not
+ * one line of it — so a corrupt or absurd mtime on one file would blank the
+ * deploy list and say nothing about why.
+ *
+ * Flagged by session `260908f-roadmap-usage`, which hit the same class twice in
+ * the usage card: an out-of-range instant, and a difference of two individually
+ * valid instants that left the range. **A finiteness check is not enough** —
+ * `1e300` is perfectly finite and still out of range — so this checks the range
+ * itself, and then never builds a `Date` at all.
+ */
+export function agoFrom(atMs: number | null, nowMs: number): string | null {
+  if (atMs === null || !Number.isFinite(atMs) || Math.abs(atMs) > 8.64e15) return null;
+  const seconds = Math.round((nowMs - atMs) / 1000);
   /* A future stamp is a clock disagreement, not a negative age. The box and the
      phone need not agree, and "in 3 minutes" beside a deploy is a puzzle
      nobody should have to solve on a phone. */

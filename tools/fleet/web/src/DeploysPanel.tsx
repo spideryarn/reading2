@@ -15,13 +15,20 @@
  * ## The sentence this panel must not get wrong
  *
  * `commitsSince` is the non-merge distance from the newest recorded deploy to
- * `origin/main`. **It is not undeployed work.** Everything on `main` has shipped
- * or is shipping — `main` is written only by `npm run deploy` — so the number
- * lumps together deploys the changelog job has not written up yet and a tip that
- * has not been deployed. Nothing on this box can separate those without a Vercel
- * token. The copy below says the weaker true thing and names what it cannot
- * tell; if you are tempted to tighten it into something punchier, read
- * routes-deploys.ts § The claim in the header first.
+ * this checkout's cached `origin/main`. **It is not undeployed work, and it is
+ * not shipped work either.**
+ *
+ * This comment said *everything on `main` has shipped or is shipping, because
+ * `main` is written only by `npm run deploy`* until 2026-09-09, and that is
+ * false: `deploy.ts` pushes to `main` and only *then* waits for Vercel, so a
+ * build that failed or timed out leaves `main` advanced with nothing serving
+ * from it. The number therefore mixes three things — deploys not yet written up,
+ * a tip not yet deployed, and pushes whose build never succeeded.
+ *
+ * So the copy below says the literal thing and names what it cannot tell. **If
+ * you are tempted to tighten it into something punchier, read routes-deploys.ts
+ * § The claim in the header first** — there is a token-free way to do better,
+ * and shortening the sentence is not it.
  *
  * ## Every kind of nothing, kept apart
  *
@@ -38,6 +45,7 @@ import {
   FIRST_PAGE,
   MORE_PAGE,
   ago,
+  agoFrom,
   commitUrl,
   deployWhen,
   groupedEntries,
@@ -109,11 +117,11 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
         {mainRef.kind === "ref" ? (
           <span>
             is at <Sha sha={mainRef.sha} />, committed {ago(mainRef.committedAt, nowMs) ?? "at an unreadable time"}
-            {/* **The age of the VIEW, not of the commit.** The dashboard never
-                fetches, so a ref nobody has updated in a week looks exactly like
-                a week with no deploys unless this says which it is. */}
-            {/* **Labelled as exactly what it measures, after GPT Sol's P1
-                finding 2 and a measurement on this box.** `FETCH_HEAD`'s mtime
+            {/* **The age of the VIEW, not of the commit** — a ref nobody has
+                updated in a week looks exactly like a week with no deploys
+                unless this says which it is. **Labelled as exactly what it
+                measures**, after GPT Sol's P1 finding 2 and a measurement on
+                this box: `FETCH_HEAD`'s mtime
                 does advance on a no-op fetch — so it says when we last ASKED,
                 not when the ref last moved — but it names whatever was last
                 fetched, so it does not prove `origin/main` itself was
@@ -124,7 +132,7 @@ function Freshness({ view, nowMs }: { view: Extract<DeploysView, { kind: "deploy
               <span className="tw:text-ink-faint">
                 {" "}
                 — a cached view; this checkout last fetched something{" "}
-                {ago(new Date(mainRef.lastFetchAtMs).toISOString(), nowMs) ?? "at an unreadable time"}
+                {agoFrom(mainRef.lastFetchAtMs, nowMs) ?? "at an unreadable time"}
               </span>
             )}
           </span>

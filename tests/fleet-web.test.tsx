@@ -1005,6 +1005,32 @@ describe("the deploys tab", () => {
     expect(feed.refreshes()).toBeGreaterThan(0);
   });
 
+  it("survives an out-of-range fetch time rather than taking the panel down", async () => {
+    /* `lastFetchAtMs` is a filesystem mtime. The panel used to render it as
+       `ago(new Date(ms).toISOString(), now)`, and `toISOString()` raises
+       `RangeError` past ±8.64e15 rather than returning something odd — thrown
+       during render, that blanks the WHOLE panel, so one absurd mtime would
+       hide the deploy list and say nothing about why. Flagged by session
+       `260908f-roadmap-usage`, which hit the same class twice. Note 1e300 is
+       perfectly finite: a finiteness check would not have caught it. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(
+      feed.transport,
+      recordingDeploys(() =>
+        deploysView({
+          git: { ...healthyGit(), main: { ...healthyGit().main, lastFetchAtMs: 1e300 } as never },
+        }),
+      ).api,
+    );
+    await act(async () => undefined);
+
+    /* The list is still there, and the unreadable time says so rather than
+       being silently omitted. */
+    expect(container.textContent).toContain("Release 74");
+    expect(container.textContent).toContain("at an unreadable time");
+  });
+
   it("counts the lines it could not read rather than showing a quietly short list", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();
