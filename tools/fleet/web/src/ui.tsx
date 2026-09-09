@@ -148,6 +148,163 @@ export function SectionHeading({ children, tip }: { children: ReactNode; tip?: T
 }
 
 /**
+ * **Why a number is missing is part of the number's meaning**, so the three
+ * ways it can be missing are three states rather than one.
+ *
+ * GPT Sol, reviewing this file's first draft on 2026-09-09, and it was right:
+ *
+ * > Do not use a bare em dash: without the explanatory state word, it conflates
+ * > unknown, absent, and failed.
+ *
+ * The first draft had one `absent` arm drawing `—` with the reason underneath.
+ * That is the failure `docs/reusable/design-a-screen.md` § Absence describes,
+ * arriving in the primitive written to prevent it: *nobody has measured this*,
+ * *this was measured and cannot be shown to be about you*, and *the source
+ * broke* are three different pieces of news, and a reader who sees the same
+ * dash for all three learns to read it as "nothing to see".
+ *
+ * A closed vocabulary rather than a caller-supplied word, for the reason
+ * `TONE_CLASSES` is one: the word and the tone are then a property of the state
+ * instead of something eight call sites have to remember in the same way.
+ */
+export type AbsentState =
+  /** Nobody has taken this reading, or the one we had no longer describes anything. */
+  | "unknown"
+  /** It was read, and it cannot be shown to be about the thing this card names. */
+  | "withheld"
+  /** The source failed. Louder than the other two, because it is a fault rather than a gap. */
+  | "unavailable";
+
+const ABSENT_STATES: Record<AbsentState, { word: string; tone: Tone }> = {
+  unknown: { word: "Unknown", tone: "unknown" },
+  withheld: { word: "Withheld", tone: "unknown" },
+  unavailable: { word: "Unavailable", tone: "alarm" },
+};
+
+/**
+ * **The value of a stat, or the reason there isn't one.**
+ *
+ * A union rather than `value: string | null`, so an absence has NOWHERE TO PUT
+ * A NUMBER. `UsagePanel`'s expired-window arm makes the same argument at the
+ * wire and exists for the same reason: a renderer handed a numeric field
+ * eventually renders it — a void percentage with a caveat beside it that nobody
+ * reads before the number.
+ *
+ * `stale` is the fourth state and the easiest to get wrong. A reading that is
+ * old but still valid **keeps its number** — blanking it throws away the best
+ * information available — and wears its age where the number cannot be read
+ * without it.
+ */
+export type StatValue =
+  | { kind: "value"; text: ReactNode }
+  | { kind: "stale"; text: ReactNode; age: string }
+  | { kind: "absent"; state: AbsentState; why: string };
+
+/**
+ * **One number, large, in the colour it has earned** — and the evidence that
+ * makes it mean something.
+ *
+ * Lifted out of `HealthPanel`'s `StatTile` on 2026-09-09 and generalised,
+ * because that tile was the only place on the whole dashboard where the number
+ * the reader came for is the biggest thing in its box, and the only user of the
+ * 22px size. Everything else was drawn in a 3px band. Naming this shape and
+ * spreading it is most of what "we need a design system" turned out to mean.
+ *
+ * Three parts, in this order, and the order is the design:
+ *
+ *  - **label** — 11px caps, faint. What this is.
+ *  - **value** — 22px semibold, in the tone's ink. THE thing. At most one per
+ *    card; a card with two answers has none.
+ *  - **evidence** — 12px soft. What the number is out of, which is the half
+ *    that makes "72%" mean something, and the half that makes a zero
+ *    falsifiable. `docs/reusable/silent-success.md`.
+ *
+ * **The label sits above the value** so a tile is a fixed shape whatever the
+ * number is — a row of them stays a row when one of them says `100%` and
+ * another says an em-dash.
+ *
+ * **Colour is never the only carrier.** The tone tints the value and the card's
+ * left edge; the label and the evidence say the same thing in words. WCAG 1.4.1,
+ * and the ~8% of men who cannot separate the red from the green.
+ *
+ * `tip` is optional and follows `SectionHeading`'s lead: when given, the whole
+ * card becomes the trigger and the sentence lands in its accessible name.
+ * `health-view.ts` already computes a `Tip` per stat, so its tiles get theirs
+ * for free.
+ */
+export function StatCard({
+  label,
+  value,
+  evidence,
+  tone,
+  tip,
+  className,
+}: {
+  label: ReactNode;
+  value: StatValue;
+  /** What the number is out of. Omitted only when there is genuinely nothing to say. */
+  evidence?: ReactNode;
+  tone: Tone;
+  tip?: Tip;
+  className?: string;
+}): ReactNode {
+  /* **AN ABSENCE IS DRAWN IN ITS OWN TONE, NEVER THE CALLER'S.** A card whose
+     number could not be taken must not inherit the calm of the tone it would
+     have had if it had one — that is the "unknown rendered as a healthy zero"
+     failure, and the caller is the code least placed to remember it. So the
+     tone argument describes the VALUE, and an absence overrides it. */
+  const classes = toneClasses(value.kind === "absent" ? ABSENT_STATES[value.state].tone : tone);
+  const body = (
+    <Card
+      className={cx("tw:h-full tw:border-l-4 tw:p-3 tw:text-left", classes.edge, classes.wash, className)}
+    >
+      <div
+        data-slot="stat-label"
+        className="tw:text-label tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase"
+      >
+        {label}
+      </div>
+      <div
+        data-slot={value.kind === "absent" ? "stat-absent" : "stat-value"}
+        data-absent-state={value.kind === "absent" ? value.state : undefined}
+        className={cx(
+          "tw:mt-0.5 tw:text-answer tw:font-semibold",
+          /* Tabular figures only where there are figures. A state word set in
+             tabular numerals is set in a font feature that does nothing to it,
+             which is harmless — but `tabular-nums` on the number is the whole
+             reason a column of these can be scanned down. */
+          value.kind === "absent" ? "" : "tw:tabular-nums",
+          classes.ink,
+        )}
+      >
+        {value.kind === "absent" ? ABSENT_STATES[value.state].word : value.text}
+      </div>
+      <div data-slot="stat-evidence" className="tw:mt-0.5 tw:text-note tw:break-words tw:text-ink-soft">
+        {value.kind === "absent" ? value.why : evidence}
+        {value.kind === "stale" ? (
+          /* THE AGE IS NOT OPTIONAL AND NOT IN A TOOLTIP. A stale number that
+             does not wear its age reads exactly like a fresh one, which is the
+             entire hazard; `design-a-screen.md` § Absence. It carries the ink
+             of the unknown tone so the eye separates it from the evidence line
+             it sits in, without a second colour entering the palette. */
+          <span data-slot="stat-stale" className={cx("tw:font-medium", toneClasses("unknown").ink)}>
+            {evidence === undefined ? "" : " · "}
+            {value.age}
+          </span>
+        ) : null}
+      </div>
+    </Card>
+  );
+  return tip === undefined ? (
+    body
+  ) : (
+    <Explain tip={tip} placement="bottom" className="tw:block tw:w-full">
+      {body}
+    </Explain>
+  );
+}
+
+/**
  * **One height, one radius** — docs/project/controls.md, whose numbers section
  * is the whole of what a page this size needs from a design system:
  *
