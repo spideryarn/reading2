@@ -38,6 +38,8 @@ import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
+import { usageHistoryRoute } from "./routes-usage-history.js";
+import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
@@ -169,6 +171,33 @@ for (const line of retention.lines.error) console.error(line);
  * reason the actions routes take it that way below.
  */
 const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
+
+/**
+ * Usage history, read from the Overseer's store.
+ *
+ * **Built once and holding only a reader.** The store is written by the daemon;
+ * this process opens it read-only, takes no lock, and cannot take one — the
+ * reader is a separate function with no lock code in it. So two dashboards, or a
+ * dashboard and a daemon, coexist without any election to lose.
+ *
+ * A relative `OVERSEER_STORE_DIR` throws (it means two stores that cannot see
+ * each other), so this is caught and turned into a route that answers
+ * `unreadable` with the reason, rather than taking the whole server down over a
+ * chart.
+ */
+const usageHistoryStore = (() => {
+  try {
+    return openUsageHistoryForRead(defaultUsageHistoryDir());
+  } catch (err) {
+    console.error(`✗ usage history: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+})();
+const usageHistoryRouteHandler = usageHistoryRoute({
+  store: usageHistoryStore,
+  refreshMs: REFRESH_MS,
+  nowMs: () => Date.now(),
+});
 
 /**
  * The queue of ideas. Built once, at module scope, like the feed route above —
@@ -566,6 +595,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+
+  /* The last day of usage limits, for the chart on Usage limits.
+     **Read-only and lock-free, and it reads a file THIS PROCESS DOES NOT
+     WRITE** — the Overseer daemon does, on its own 300-second pass. That is why
+     there is a reader-only opener rather than a flag on the writer: this process
+     must be structurally incapable of claiming the store. See
+     usage-history.ts § "No writer lock". */
+  if (usageHistoryRouteHandler.handle(req, res)) return;
 
   // The last N messages across EVERY session, for the Recent messages tab.
   // Read-only, and deliberately not on the collection loop: it is a fan-out of

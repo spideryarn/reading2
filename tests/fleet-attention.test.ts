@@ -480,6 +480,15 @@ const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
   "work-probe.ts": "the `ps` adapter for the above. Closure: `node:child_process` + `work.ts`.",
   "harness.ts":
     "names what is holding a pane, purely, over an injected table. Closure: `claude-argv.js` + `wire.js` (types only) + `work.ts`.",
+  /* Added 2026-09-09 by `usage-limits-tab`, NOT by the session that introduced
+     the import — `routes-idea-queue.ts` landed on dev and left this list red,
+     and its author's session had closed. Which is the mechanism working: the
+     equality assertion turned a silent widening into a decision somebody had to
+     take, and the closure below is the answer it was asking for. */
+  "idea-queue.ts":
+    "the queue's own file discipline. Closure: `node:` builtins, `fleet/wire.js` (types only), and `jsonl.ts` + `lock.ts`, which are already here. No store.",
+  "idea-queue-wait.ts":
+    "pure arithmetic over the queue's items — depth, throughput, how long one has waited. Closure: `fleet/wire.js` (types only) + `idea-queue.ts`.",
 };
 
 const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);
