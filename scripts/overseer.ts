@@ -118,9 +118,14 @@ export function usageHistoryDaemonOptions(
     codex: () => collectCodexUsage(),
   },
 ): NonNullable<DaemonOptions["usage"]> {
+  const settle = <T>(run: () => Promise<T>): Promise<T> => Promise.resolve().then(run);
+
   return {
     run: async () => {
-      const [claude, codex] = await Promise.allSettled([collectors.claude(), collectors.codex()]);
+      const [claude, codex] = await Promise.allSettled([
+        settle(collectors.claude),
+        settle(collectors.codex),
+      ]);
       retention.stashCodex(
         codex.status === "fulfilled"
           ? codex.value

@@ -261,6 +261,10 @@ describe("parseCodexAppServerReply", () => {
     };
     delete reply.result.rateLimitsByLimitId.codex;
     const reading = parseCodexAppServerReply(reply, NOW_MS);
+    /* The persisted format can represent the surviving model buckets, but the
+       producer intentionally does not emit that state today. Keeping this as a
+       top-level unknown makes the consumer unable to mistake a model bucket
+       for general subscription headroom; the reason carries what was absent. */
     expect(reading).toEqual(
       expect.objectContaining({ kind: "unknown", why: expect.stringContaining("no general codex bucket") }),
     );

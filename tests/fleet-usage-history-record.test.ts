@@ -145,40 +145,67 @@ describe("encode/decode", () => {
     expect(Object.hasOwn(decoded.line, "codex")).toBe(true);
   });
 
-  it("keeps all six Codex absences distinct", () => {
+  it("never encodes any current line as a legacy line with no Codex key", () => {
+    const { codex: _absent, ...current } = pass({
+      pass: { kind: "collector-failed", at: "2026-09-09T00:55:00.000Z", why: "ENOENT" },
+    });
+
+    const encoded = encodeUsageHistoryLine(current);
+    const bytes = JSON.parse(encoded) as Record<string, unknown>;
+    expect(Object.hasOwn(bytes, "codex")).toBe(true);
+
+    const decoded = decodeUsageHistoryLine(encoded);
+    expect(decoded.kind).toBe("line");
+    if (decoded.kind !== "line") return;
+    expect(decoded.line.codex).toMatchObject({ kind: "unknown", retryable: false });
+  });
+
+  it("keeps all six persisted-format absences distinct", () => {
     const legacy = pass();
     delete legacy.codex;
-    const cases: { name: string; line: UsageHistoryLine; expected: unknown }[] = [
-      { name: "writer predates the field", line: legacy, expected: undefined },
+    const cases: { name: string; raw: string; expected: unknown }[] = [
+      /* Legacy means old bytes. Passing this through today's encoder would add
+         an explicit unknown and fail to exercise the absent-key decoder path. */
+      { name: "writer predates the field", raw: JSON.stringify(legacy), expected: undefined },
       {
         name: "collection attempted and failed",
-        line: pass({ codex: { kind: "unknown", why: "authentication required", retryable: false } }),
+        raw: encodeUsageHistoryLine(
+          pass({ codex: { kind: "unknown", why: "authentication required", retryable: false } }),
+        ),
         expected: { kind: "unknown", why: "authentication required", retryable: false },
       },
       {
-        name: "target bucket absent",
-        line: pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, limitId: "codex_spark" }] } }),
+        /* The format preserves this distinction for differently-written
+           schema-1 lines. Today's producer is deliberately stricter: without
+           the general bucket it emits a top-level unknown carrying the reason,
+           so this state is representable but not producer-reachable. */
+        name: "target bucket absent (format-only)",
+        raw: encodeUsageHistoryLine(
+          pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, limitId: "codex_spark" }] } }),
+        ),
         expected: { kind: "value", buckets: [{ limitId: "codex_spark" }] },
       },
       {
         name: "expected window absent",
-        line: pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, windows: [] }] } }),
+        raw: encodeUsageHistoryLine(
+          pass({ codex: { ...CODEX, buckets: [{ ...CODEX.buckets[0]!, windows: [] }] } }),
+        ),
         expected: { kind: "value", buckets: [{ limitId: "codex", windows: [] }] },
       },
       {
         name: "reading unattributed",
-        line: pass({ codex: { ...CODEX, accountId: null } }),
+        raw: encodeUsageHistoryLine(pass({ codex: { ...CODEX, accountId: null } })),
         expected: { kind: "value", accountId: null },
       },
       {
         name: "source cannot supply reset credits",
-        line: pass({ codex: { ...CODEX, resetCredits: null } }),
+        raw: encodeUsageHistoryLine(pass({ codex: { ...CODEX, resetCredits: null } })),
         expected: { kind: "value", resetCredits: null },
       },
     ];
 
     for (const one of cases) {
-      const decoded = decodeUsageHistoryLine(encodeUsageHistoryLine(one.line));
+      const decoded = decodeUsageHistoryLine(one.raw);
       expect(decoded.kind, one.name).toBe("line");
       if (decoded.kind !== "line") continue;
       if (one.expected === undefined) {
@@ -197,6 +224,43 @@ describe("encode/decode", () => {
     if (decoded.kind !== "line" || decoded.line.pass.kind !== "pass") return;
     expect(decoded.line.pass.cache.kind).toBe("attributed");
     expect(decoded.line.codex).toMatchObject({ kind: "unknown", retryable: false });
+  });
+
+  it("REFUSES a Codex reset beyond the window observed at readAt", () => {
+    /* Persisted validation is deliberately independent of the producer. A
+       producer regression or differently-written schema-1 line must not make
+       a seven-day percentage appear valid for millennia. */
+    const impossible = pass({
+      codex: {
+        ...CODEX,
+        buckets: [
+          {
+            ...CODEX.buckets[0]!,
+            windows: [
+              {
+                kind: "value",
+                slot: "primary",
+                windowMinutes: 10_080,
+                usedPercent: 24,
+                resetsAt: "5138-11-16T09:46:40.000Z",
+                resetsAtMs: 100_000_000_000_000,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(() => encodeUsageHistoryLine(impossible)).toThrow(/resetsAtMs/);
+
+    const decoded = decodeUsageHistoryLine(JSON.stringify(impossible));
+    expect(decoded.kind).toBe("line");
+    if (decoded.kind !== "line") return;
+    expect(decoded.line.codex).toMatchObject({
+      kind: "unknown",
+      why: expect.stringContaining("invalid resetsAtMs"),
+      retryable: false,
+    });
   });
 
   it("encodes one line with no interior newline, because the file is line-delimited", () => {

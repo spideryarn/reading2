@@ -342,11 +342,18 @@ function codexWindowValidationError(
     return `${location} had invalid usedPercent`;
   }
   if (!isInstant(window.resetsAt)) return `${location} had an invalid resetsAt`;
+  const windowMinutes = window.windowMinutes as number;
+  const resetsAtMs = window.resetsAtMs as number;
+  const latestPossible = readAtMs + windowMinutes * 60_000;
   if (
-    !Number.isFinite(window.resetsAtMs) ||
-    Math.abs(window.resetsAtMs as number) > MAX_EPOCH_MS ||
-    Date.parse(window.resetsAt) !== window.resetsAtMs ||
-    (window.resetsAtMs as number) <= readAtMs
+    !Number.isSafeInteger(windowMinutes) ||
+    windowMinutes <= 0 ||
+    !Number.isSafeInteger(resetsAtMs) ||
+    !Number.isSafeInteger(latestPossible) ||
+    Math.abs(resetsAtMs) > MAX_EPOCH_MS ||
+    Date.parse(window.resetsAt) !== resetsAtMs ||
+    resetsAtMs <= readAtMs ||
+    resetsAtMs > latestPossible
   ) {
     return `${location} had an invalid resetsAtMs`;
   }
@@ -461,14 +468,14 @@ function boundedCodex(codex: CodexObservation): CodexObservation {
   };
 }
 
-function codexForEncoding(line: UsageHistoryLine): CodexObservation | undefined {
-  if (line.codex !== undefined || line.pass.kind !== "omitted") return line.codex;
-  /* An omitted marker created by the CURRENT writer must not look like a legacy
-     line merely because the store had to rebuild it. Retrying collection cannot
-     repair this historical position, so the explicit unknown is non-retryable. */
+function codexForEncoding(line: UsageHistoryLine): CodexObservation {
+  if (line.codex !== undefined) return line.codex;
   return {
     kind: "unknown",
-    why: "the Codex observation was not retained because this usage-history record was omitted",
+    why:
+      line.pass.kind === "omitted"
+        ? "the Codex observation was not retained because this usage-history record was omitted"
+        : "the current writer supplied no Codex observation for this usage pass",
     retryable: false,
   };
 }
@@ -485,10 +492,8 @@ export function encodeUsageHistoryLine(line: UsageHistoryLine): string {
     throw new Error(`usage history: nextDueMs must be finite and positive, got ${String(line.nextDueMs)}`);
   }
   requireInstant(line.recordedAt, "recordedAt");
-  if (codex !== undefined) {
-    const why = codexValidationError(codex);
-    if (why !== null) throw new Error(`usage history: codex ${why}`);
-  }
+  const why = codexValidationError(codex);
+  if (why !== null) throw new Error(`usage history: codex ${why}`);
   if (line.pass.kind === "collector-failed" || line.pass.kind === "omitted") requireInstant(line.pass.at, "at");
   else {
     requireInstant(line.pass.collectedAt, "collectedAt");
@@ -507,7 +512,7 @@ export function encodeUsageHistoryLine(line: UsageHistoryLine): string {
   const encoded = `${JSON.stringify({
     ...line,
     pass: bounded(line.pass),
-    ...(codex === undefined ? {} : { codex: boundedCodex(codex) }),
+    codex: boundedCodex(codex),
   })}\n`;
   const bytes = Buffer.byteLength(encoded, "utf8");
   if (bytes > MAX_LINE_BYTES) {

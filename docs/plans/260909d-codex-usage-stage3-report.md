@@ -9,11 +9,13 @@ Implemented stage 3 without committing.
 
 It is record-owned and mapped field-by-field from `CodexUsageReading`. Malformed persisted Codex data becomes a non-retryable `unknown` while the Claude observation survives.
 
-The six absence locations are:
+The persisted format distinguishes six absence locations:
 
 1. Missing `codex` key: legacy writer.
 2. `codex.kind === "unknown"`: attempted collection failed.
-3. Value with no general `codex` bucket.
+3. Value with no general `codex` bucket. This is representable in a schema-1
+   line but is not currently producer-reachable: the producer persists such a
+   reading as top-level `unknown`, carrying the missing-general-bucket reason.
 4. General bucket without the expected window.
 5. `accountId: null`.
 6. `resetCredits: null`.

@@ -14,6 +14,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
+import { parse as babelParse } from "@babel/parser";
+import type { Node } from "@babel/types";
 
 import { usageHistoryDaemonOptions } from "../scripts/overseer.js";
 import { openUsageHistoryForRead } from "../tools/fleet/usage-history.js";
@@ -30,6 +32,51 @@ function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "usage-history-wiring-"));
   roots.push(root);
   return root;
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === "object" && value !== null && typeof (value as { type?: unknown }).type === "string";
+}
+
+function containsNamedCall(node: Node, name: string): boolean {
+  if (
+    node.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === name
+  ) {
+    return true;
+  }
+  return Object.values(node).some((value) =>
+    Array.isArray(value)
+      ? value.some((child) => isNode(child) && containsNamedCall(child, name))
+      : isNode(value) && containsNamedCall(value, name),
+  );
+}
+
+function hasUsageHistoryComposition(sourceText: string): boolean {
+  const source = babelParse(sourceText, { sourceType: "module", plugins: ["typescript"] });
+  let wired = false;
+
+  const visit = (node: Node): void => {
+    if (
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "runOverseer" &&
+      node.arguments.some((argument) => isNode(argument) && containsNamedCall(argument, "usageHistoryDaemonOptions"))
+    ) {
+      wired = true;
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        for (const child of value) if (isNode(child)) visit(child);
+      } else if (isNode(value)) {
+        visit(value);
+      }
+    }
+  };
+
+  visit(source);
+  return wired;
 }
 
 function coverage(over: Partial<ScanCoverage> = {}): ScanCoverage {
@@ -207,7 +254,7 @@ describe("a usage pass becomes a line on disk", () => {
        async onPass, shutdown returns at the assertion below and closes the
        writer while that collection is still unresolved. */
     const compositionRoot = readFileSync(fileURLToPath(new URL("../scripts/overseer.ts", import.meta.url)), "utf8");
-    expect(compositionRoot).toContain("usage: usageHistoryDaemonOptions(usageRetention)");
+    expect(hasUsageHistoryComposition(compositionRoot)).toBe(true);
 
     const root = tempRoot();
     const controller = new AbortController();
@@ -280,6 +327,39 @@ describe("a usage pass becomes a line on disk", () => {
     if (first?.kind !== "sample") throw new Error("shape");
     expect(first.line.pass.kind).toBe("pass");
     expect(first.line.codex).toMatchObject({ kind: "unknown", retryable: true });
+  });
+
+  test("a synchronous Codex throw still awaits the Claude collector", async () => {
+    const root = tempRoot();
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const claude = deferred<UsageReport>();
+    let claudeStarted = false;
+
+    const running = usageHistoryDaemonOptions(retention, {
+      claude: () => {
+        claudeStarted = true;
+        return claude.promise;
+      },
+      codex: () => {
+        throw new Error("synchronous failure");
+      },
+    }).run();
+    const observed = running.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (reason: unknown) => ({ status: "rejected" as const, reason }),
+    );
+    let settled = false;
+    void observed.then(() => {
+      settled = true;
+    });
+
+    await pause(0);
+    expect(claudeStarted).toBe(true);
+    expect(settled, "the combined pass abandoned Claude after Codex threw synchronously").toBe(false);
+
+    claude.resolve(report());
+    await expect(observed).resolves.toMatchObject({ status: "fulfilled", value: report() });
+    retention.close();
   });
 
   test("an incomplete scan still records its CACHE reading", async () => {
