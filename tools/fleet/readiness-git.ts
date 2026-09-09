@@ -223,7 +223,7 @@ export function makeRelationCache(cwd: string): {
     size: () => cache.size,
     relate(readingSha, devSha) {
       if (readingSha === devSha) return { kind: "dev-head" };
-      const key = `${readingSha} ${devSha}`;
+      const key = `${readingSha}\0${devSha}`;
       const hit = cache.get(key);
       if (hit !== undefined) return hit;
 
