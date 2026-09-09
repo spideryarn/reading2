@@ -1187,6 +1187,16 @@ somebody else's stage, and it has now argued against the finding that motivated 
 outcome the series was for, and a plan that recorded only the readings supporting the work would be
 the same defect as a check that shares an assumption with its code.
 
+> **AND NONE OF IT BORE ON THE QUESTION, as of 2026-09-09.** A third session read the request builder
+> against the route it posts to and found that `boxActionBody` never sets `recipients`, so
+> `broadcastRoute` refuses on `recipients.length === 0` **two steps upstream of `drainGate`**. The
+> broadcast reaches nobody, at any load, and never has. Every number above is real and every
+> correction above went the honest way, and the whole argument was about the selectivity of a filter
+> that never runs. Third instance of
+> [260908h](../postmortems/260908h-the-plan-and-the-instrument-described-different-systems.md) in one
+> day, and the worst. **What survives is the reachability series itself** — it governs the drain,
+> which does run, and it carries the only measurement of peak agent concurrency anyone has.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
@@ -1755,8 +1765,124 @@ behaviour pin still requires a person; the activation command is idempotent and 
 than quietly; `tests/systemd-units.test.ts` is green against both copies of the unit; and
 `overseer status` cannot say `ARMED` about a job that cannot run.
 
-8b: not started. **Nothing is armed by this stage** — `EnvironmentFile` ships with an explicitly
+8b: not started. **No paid work is armed by this stage** — `EnvironmentFile` ships with an explicitly
 disarmed value, and the commands that arm it are Greg's.
+
+> **"Arms nothing" is true of the code and false of the command, and the implementer was right to
+> say so.** `overseer-activate.ts --apply --disarm` **stops the running tmux Overseer and hands the
+> box to systemd.** That is a real change to how the box runs — disruptive rather than inert — even
+> though it starts no job and spends nothing. The sentence above used to read *"nothing is armed by
+> this stage"*, which a person skim-reading before a `sudo` would take as *"this is safe to run
+> without thinking"*. It is safe, but it is not nothing, and the difference is exactly the kind a
+> handoff note must not blur. **Dry run is the default for this reason; run it first.**
+
+#### `leaseMs` stays outside, and the fear that put the question was arithmetic I had not done
+
+The implementer moved `leaseMs` out of the fingerprint alongside cadence — further than Sol's S8-1
+asked — and flagged it for me to overrule. My instinct was to pull it back: *shortening a lease
+releases a job whose session is still running, so a second starts beside the first.* Fable arbitrated
+and **the instinct is wrong, for a reason two functions away that neither of us had checked.**
+
+`lastRunOf` turns a stuck occurrence into `{kind: "unresolved", at: reservedAt}`, and `due` then
+measures `everyMs` from that `at` exactly as it does for a settled run (`jobs.ts:690–693`, verified
+by me rather than taken on trust). So a stuck job's next launch is at
+`reservedAt + max(leaseMs, everyMs)`. **Shortening the lease below the cadence is a no-op on launch
+timing.** All it does is surface the `stuck` report sooner, which is the direction you want.
+
+And in the ordinary path the lease is never consulted at all: the launcher exits within seconds and
+the occurrence settles then, so the six-hour session that follows is invisible to the ledger. What
+actually decides whether two sessions coexist is **`everyMs` against how long a session really
+runs** — and that knob is outside the fingerprint too, on Sol's own instruction. Hashing the lease
+would have put a ceremony on a knob that guards nothing while the one carrying the real exposure
+stayed free: **a guard describing coverage it does not provide**, which is the shape gate 4's NOT
+BUILT note exists to warn about.
+
+**Two comments in `schedules.ts` were false and are corrected** — `ScheduleConfig.leaseMs` claiming a
+shortened lease lets a second session start, and `MINIMUM_LEASE_MS` claiming its floor guards
+overlap. Both were written in good faith by an implementer inheriting my framing, which is exactly
+how an unchecked claim becomes a source comment. The floor's only honest job is refusing `0`;
+**`MAXIMUM_LEASE_MS` is the bound that matters**, because a 24-hour lease on a 3-hour job hides a
+hung launcher for a day.
+
+**The one thing worth acting on**, and it is not the lease: `FEEDBACK_SWEEP_PROMPT` tells its session
+to check `gjd-remote ls` for its own claim prefix before doing anything, and
+`GET_READY_TO_DEPLOY_PROMPT` has no such self-check. That is where the real duplicate-session guard
+lives, it is pinned, and adding it is a one-line change that correctly costs a re-pin. Left for 8b or
+later rather than slipped in here.
+
+#### 8a as built, 2026-09-09
+
+All six pieces landed. What is worth knowing that the sections above do not already say:
+
+- **`JobDefinition` is now two fields**, `behaviour` and `schedule`. `behaviourHash` takes a
+  `JobBehaviour` and cannot reach a schedule, so the split is a type rather than a discipline —
+  adding a clock knob to the fingerprint is a compile error in `BEHAVIOUR_ENCODERS`, which is where
+  the mutation check started.
+- **All four pins moved once, in this commit, and never again for a schedule.** Cadence and lease
+  leaving the fingerprint changed the bytes hashed while changing nothing either job does. From here
+  `npx tsx scripts/overseer-pins.ts` prints no drift when `schedules.ts` is edited.
+- **`tools/overseer/schedules.ts` is the file Greg edits.** `hours(6)` and `hours(3)` as asked, plus
+  a `leaseMs` and an `initialDelayMs` per job, and `LAUNCH_SEPARATION_MS`. `validateSchedules` is
+  what replaced the re-pin as the guard on a bad number: a config that fails it builds **no jobs at
+  all**, so a typo disarms rather than dispatching.
+- **Occurrence lineage is the job id.** A synthetic lineage identifier would have been a second copy
+  of a fact the job id already carries. The cost is named in `OccurrenceKey`: repurposing an id
+  inherits the old job's cadence, which is the safe direction.
+- **The wire field `definitionHash` became `behaviourHash`**, with the store's parser reading either,
+  because a rename that made the existing ledger unparseable would hold every job.
+- **`StoredScheduler` gained a `blocked` arm** — switched on, and not one loaded job can run. That is
+  the state that used to print `ARMED`.
+
+**Two things I got wrong on the way, and one is still a live judgement call.**
+
+`leaseMs` left the fingerprint with the cadence, which **Sol did not ask for** — S8-1 names cadence,
+phase and first eligibility. The argument for moving it is that a deadline for disbelieving a run is
+a clock fact and belongs with the other clock facts; the cost is that shortening it releases a job
+whose session is still running, so a second one starts beside the first, and that is now a
+one-integer edit with no re-pin. The floor is `MINIMUM_LEASE_MS = hours(1)`. **If that reads badly,
+the alternative is putting `leaseMs` back on `JobBehaviour` and paying a re-pin every time somebody
+retunes it** — say so and it moves.
+
+And the floors were nearly decoration. `MINIMUM_EVERY_MS` was fifteen minutes for the first hour of
+this stage, which is what you write when you are producing bounds rather than costing them: two jobs
+at fifteen minutes is 192 Claude sessions a day against the twelve Greg asked for. Sol's instruction
+was *"protect abusive schedule values through validation"*, and a floor that permits sixteen times
+the intended rate protects nothing. It is `hours(1)` now — worst case 48, still bad, at least the
+same order as the intent. **It is not a budget.** Gate 4's shared reservation is where the real
+ceiling belongs, and until that exists this number is the only thing between a mistyped `hours(6)`
+and a day's subscription.
+
+**One thing for Greg to decide.** [overseer.md](../project/overseer.md) § gate 3 forbids *"acting on
+a job definition that changed after it was authorised"*. That is still exactly right about the
+behaviour and is now silent about the schedule, which a reader could take either way. It is a rule,
+so it was not edited without asking. The proposed wording is *"acting on a job's **instruction or its
+documents** after they were authorised"*, which says what the mechanism now enforces.
+
+#### The commands, for Greg. Dry run first.
+
+Every one of these is safe to read before it is run, and the first three change nothing.
+
+```
+# 1. From the PRIMARY checkout on the box, on a dev that has this commit:
+cd ~/code/spideryarn2 && git pull
+npx tsx scripts/overseer-pins.ts            # expect no drift
+npx tsx scripts/overseer-activate.ts        # DRY RUN: prints the plan, changes nothing
+
+# 2. Install the unit and leave the scheduler disarmed. This is the whole of 8a.
+#    --disarm creates /etc/overseer.env with OVERSEER_JOBS_ENABLED=0 if it does not exist.
+sudo npx tsx scripts/overseer-activate.ts --apply --disarm
+
+# 3. Check what it says about itself.
+npx tsx scripts/overseer.ts status          # scheduler line should read OFF, not BLOCKED
+```
+
+**Step 2 stops the tmux Overseer.** It has to: a systemd start beside a live tmux daemon loses the
+store lock and can burn the unit's ten-start limit. The command waits for the lock to be released and
+refuses to restart systemd until it is.
+
+**Arming is 8b and is not in this list.** When it happens it is
+`sudo npx tsx scripts/overseer-activate.ts --apply --arm`, and it is blocked on the gate 4 question
+above — not on anything technical.
 
 ## Deliberately not in this job
 

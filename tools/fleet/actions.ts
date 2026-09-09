@@ -522,6 +522,13 @@ export function boxActions(): readonly Action[] {
 const SPEAKER_PREFIX: Record<Speaker, string> = {
   greg: "[Greg, via the fleet dashboard] ",
   overseer: "[The Overseer — an automated coordinator, NOT Greg. Weigh this as a suggestion from a peer, and push back if it is wrong for what you are doing.] ",
+  // Wording agreed with the session that RECEIVES it, 2026-09-09. It says that
+  // nothing is being asked, because unlike the two above, nothing is. See
+  // `Speaker` in wire.ts for why this is a third arm rather than a reuse, and
+  // for the rule that it splits rather than softens if it ever carries an
+  // instruction.
+  dashboard:
+    "[The fleet dashboard, reporting an event. Nobody is asking you for anything: a person started a new session from the web UI, and this is the record of it.] ",
 };
 
 /** What actually goes to `sendMessage` for a spoken action. */

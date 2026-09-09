@@ -306,7 +306,7 @@ file contents when the mutation is a reversion.
 tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
 mutations caught. 1,479 tests green across 36 files, typecheck 0.
 
-### Stage 4 — quarantine a session after an uncertain delivery
+### 🟡 Stage 4 — quarantine a session after an uncertain delivery (landed 2026-09-09, THREE P0s open)
 
 #### Read `drain.ts` before briefing this, because it is more careful than this plan said
 
@@ -361,6 +361,117 @@ been sent yet"* (`:1177-1179`) is false in the presence of leased or held items 
 **Done:** a partial first message stops the second draining; the hold is visible with no items left;
 both release gestures work and neither sends anything; a tmux generation change releases it
 automatically and the old record survives as superseded.
+
+#### Built 2026-09-09 — and the brief's one wrong assumption was about the generation
+
+New leaf `tools/fleet/quarantine.ts`: a `QuarantineBook` of at most one open hold per session, plus a
+bounded three-deep history so a lost HTTP response can be answered twice. **It is its own file
+because `routes-steer.ts` cannot import `routes-actions.ts`** — that import already runs the other
+way, for the rate limiter — so the one thing all three producers write to had to live somewhere
+neither owns. `SteeringQueue` takes the book as a **required** `QueueOptions` field: a default would
+have built a private book for a queue whose sends are recorded in the shared one, and nothing would
+have gone wrong loudly. `serverInstanceId()` in instance.ts is now memoised, so the queue's ids and
+the book's carry the same run.
+
+`next()` gains a `quarantined` arm, consulted after the facts about the item and **before the gate**
+— it is the gate saying `now` that makes the check load-bearing. `quarantineLeased` is the one
+atomic method: settle `uncertain`, then hold, and it **throws** rather than answering if the settle
+fails, because reporting a session as held when it is not is the gap this stage closes.
+
+**Where the brief was wrong.** It says a proven tmux-generation change releases the hold — right —
+but a hold opened before this server had been told any generation is bound to none, and no later
+change proves anything about it. Those keep holding until a person releases them; the window is one
+refresh cycle wide and both gestures work throughout it. The test says so, and a mutation that
+supersedes them anyway is caught.
+
+**One gap found by trying to build an unclearable hold, and closed:** a malformed `quarantine` on the
+wire parses to `null`, which is also what *nothing is held* looks like — so on a queue with no items
+the row, and both gestures, would have disappeared. `QueueView.holdUnreadable` is `itemsUnreadable`'s
+twin and keeps the row.
+
+**Sixteen mutations, all caught**, snapshotted and restored by `cp` and verified by reading the files
+— including the two that matter most: `FleetQueues` filtering to `items.length > 0` again, and the
+abandon copy claiming the message was not delivered. 811 fleet tests green across 12 files before the
+last two additions; typecheck exit 0.
+
+#### The review found the stage's central claim is true of one producer out of three
+
+The hardest review of the plan so far. **The commit's own subject — *"A session that may be holding
+half a sentence is not handed the next one"* — is true of the queued path and false of the other
+two.**
+
+**U2 (P0): the hold is recorded by three producers and enforced by one.** Only
+`SteeringQueue.next()` consults the book (`queue.ts:910`). Direct steering never checks whether the
+target is held before calling the transport (`routes-steer.ts:1105`), and broadcast selects
+recipients on `drainGate` alone (`routes-actions.ts:2063`) and sends at `:2188`. So a held session
+can still receive a direct steer or a broadcast, which contradicts what the page tells the operator,
+and repeating an `unknown` direct send can duplicate keystrokes. **The fix is one mandatory send
+coordinator immediately before the synchronous transport call**, with all four paths through it, and
+a test per path that seeds a hold and asserts the injected transport was never called.
+
+**U6 (P2 by severity, worst by consequence): the guarantee this stage advertised does not exist.**
+Changing `shared ??=` to `shared =` (`quarantine.ts:512`) gives the action queue and the direct-steer
+route **different books** — so direct uncertainty is recorded where the drain never looks — and the
+suite stays green. Every producer test injects its own book; nothing joins the two real mounted
+compositions. **This disproves the claim that a missing future producer makes a test red**, which
+was written into the Stage 4 commit message and repeated to two peer sessions as a reason they could
+rely on the suite. Retracted to both. The tests enumerate today's producers; they do not require
+tomorrow's.
+
+**U3 (P0): the malformed-wire hold is half closed, and the remaining half is worse than the
+original.** `holdUnreadable` keeps the row, but both gestures are withheld and the copy tells the
+operator to *"clear it from the server"* — **there is no such interface**. A hold with a readable
+`id` and `version` is unclearable if `why` is missing, because `parseHold` rejects the whole object
+on one bad field. Parse the release *address* independently of the descriptive fields: if `id` and
+`version` read, keep both gestures and show a generic warning. **An instruction to do something
+impossible is worse than a missing row**, because the missing row at least looked broken.
+
+**U4 (P1): `uncertain` is collapsed back to `refused` one file later.** `deliverOne` returns
+`kind: "refused"` (`drain.ts:442`) and the operator log prints `refused=N` (`:640`). The browser copy
+is honest; the drain result and the log still use the exact word this stage removed.
+
+**U5 (P2): my correction to the brief was itself too broad.** A generation-less hold is skipped
+forever, so the "one refresh cycle" window can become indefinite. Record the first generation
+observed after such a hold opens and supersede on the next distinct one — kept separate from
+`tmuxGeneration`, because it is not a claim about the generation at opening.
+
+**U1 (P0) is not a fix, it is a stage** — see below. A restart erases every hold while the tmux
+server, and therefore the uncertain input buffer, stays alive.
+
+**What the review confirmed rather than found:** one open hold per session is the right model once
+U2 lands, because there is one input buffer and sends are synchronous; versioning correctly protects
+stale releases; open holds are never evicted; both gestures and supersession send no keystrokes;
+there is no fourth keystroke path today and dry-run does not reach the transport; and a client that
+stops polling does not lose an active hold.
+
+### Stage 4b — a hold must survive the process that recorded it
+
+**U1, and it is the one finding that needs new machinery rather than a repair.** The quarantine book
+is in memory. A dashboard restart constructs an empty one, `next()` then sees no hold, and
+**keystrokes are admitted again with nobody told** — while the tmux server, and therefore the
+half-typed sentence, is still there. The release route already states that holds do not survive a
+restart (`routes-actions.ts:1832`), so the behaviour is documented and still wrong: what is lost is
+not a convenience, it is the only record that a session may be holding text.
+
+This is deliberately **not** folded into Stage 4's fix round. It is a durable store where there was
+none, and the plan's own rejected-options section says instance-scoped memory is enough *for
+receipts* — that argument does not transfer, because a receipt's job ends with the process and a
+hold's does not.
+
+- [ ] A small append-only ledger, JSONL, in the shape the roadmap's storage contract already allows
+      — no new store type, no SQLite. Write the unresolved attempt **before** the send; remove it
+      only on a definitive success or a proven `none`.
+- [ ] On startup, reload unresolved attempts as holds **before mounting any send route**, so there
+      is no window in which the server can be asked to type while it is still reading.
+- [ ] Accept rehydrated ids from the previous process rather than refusing them as foreign — which
+      is a direct tension with Stage 2's instance-prefixing, and the resolution has to be written
+      down rather than discovered: a queue id names volatile state and should die with it; a hold id
+      names a fact about the *world* that outlived the process.
+- [ ] Prove it by restarting: open a hold, restart the server, assert the session is still held and
+      both gestures still work.
+
+**Done:** a hold survives a restart, or the operator is told it did not — and the second is not
+acceptable as the design, only as the failure mode.
 
 ### Stage 5 — request ids and receipts
 

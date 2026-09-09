@@ -1,0 +1,5 @@
+npm error Missing script: "readyness"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+EXIT=1

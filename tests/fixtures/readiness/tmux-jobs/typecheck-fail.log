@@ -1,0 +1,11 @@
+
+> spideryarn@1.0.0 typecheck
+> tsx scripts/typecheck.ts
+
+✓ src/web/tsconfig.json  (309 files)
+✗ tests/tsconfig.json  (1387 files, 2 errors)
+  tests/fleet-readiness.test.ts(41,7): error TS2322: Type 'string' is not assignable to type 'number'.
+  tests/fleet-readiness.test.ts(52,3): error TS2554: Expected 2 arguments, but got 1.
+✓ tsconfig.json  (419 files)
+✓ all 1461 source files are covered by some project
+EXIT=1
