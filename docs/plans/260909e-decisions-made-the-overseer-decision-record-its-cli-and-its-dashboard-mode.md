@@ -434,7 +434,78 @@ The fleet dashboard has a bar along the bottom with one button per **mode** (a t
 health, Deploys …). It is the only navigation the page has. Two more modes are landing today, taking
 it from eight to ten, and the bar has run out of room on a phone.
 
-### The measurement, and what kind of claim it is
+### Lead with this: what happens if we do nothing
+
+**Disable the scroll-into-view, rebuild the client, and load the last tab at 390px. The active
+button's right edge is 416 against a 390 viewport — it is off screen.** Put the fix back and the bar
+scrolls 30px, the edge lands at 386, and the tab you are on is visible.
+
+That is the only number in this section that answers *what happens if nothing is done*. Every table
+below shows a bar that is crowded; this shows **a button that disappears**. `questions-mode-s2`
+asked for it to lead, and it is right to.
+
+It also shows why the check had to be taken on the **last** tab. `#sessions` and `#decisions` pass
+with the fix removed — a check on either would have blessed a build with nothing in it.
+
+### The measurement — now taken, at nine modes and at ten
+
+**Both counts have been measured and the derivation held.** Chrome via `playwright-core`, contexts
+with `hasTouch: true` at 390×844 (`(pointer: coarse)` confirmed true in the page), read after the
+fit rung settled. Nine by this session on `692fd230`; ten by `questions-mode-s2` on that plus its
+own two commits, with `--dock-mode-count` reading 10 in a real browser.
+
+| load | modes | rung | scrollWidth | clientWidth | scrollLeft | active button | Refresh |
+|---|---|---|---|---|---|---|---|
+| `#sessions` | 9 | fit-2 | 479 | 390 | 0 | on screen | **off screen** |
+| `#decisions` | 9 | fit-2 | 484 | 390 | 0 | on screen | **off screen** |
+| `#deploys` (last) | 9 | fit-2 | 475 | 390 | 30 | on screen | **off screen** |
+| `#sessions` | 10 | fit-2 | 519 | 390 | 0 | on screen | **off screen** |
+| `#deploys` | 10 | fit-2 | 515 | 390 | 26 | on screen | **off screen** |
+| `#questions` (last) | 10 | fit-2 | 526 | 390 | 77–82 | on screen, flush | **off screen** |
+
+Ten-mode row measured and reported by `questions-mode-s2`, 2026-09-09.
+
+**Predicted ~41px per mode; measured 40px**, on both shared loads independently
+(`#sessions` 479→519, `#deploys` 475→515). The prediction was registered at `b32acbe3` before either
+session measured. It held because it was the right kind of prediction: the 41 came from
+`.dock-btn { min-width: 2.5rem }` plus the 1px segment hairline, which is what a mode costs **once
+labels are gone** — and both bars are at the last rung, so that is the case it was computed for.
+
+**One method correction, `questions-mode-s2`'s:** `scrollWidth` is not a single number at a given
+mode count. It moves ~9–11px depending on which tab is active, because the active button keeps its
+label at the last rung. Any delta must name its load or it subtracts two numbers that differ for a
+reason unrelated to the mode count.
+
+**Why the shared load is what makes the subtraction trustworthy, which is not obvious.** Holding the
+active tab fixed on both sides makes the label cost *identical and cancelling*: `#sessions` active in
+both (479→519), `#deploys` active in both (475→515). What is left is exactly one mode. And because
+the two shared loads sit at different scroll positions and different bar totals and **still agree at
+40**, that is a genuine replication rather than the same number read twice.
+
+**The comparison that looks natural and cannot be done** is *`#decisions` at nine against
+`#questions` at ten*: different active tabs, so the answer is one mode's width plus or minus a
+label, and unreadable. Written down because somebody will reach for it later —
+`questions-mode-s2`, 2026-09-09.
+
+### THE FINDING: Refresh has not been reachable since before either tab
+
+This is the thing to put in front of Greg, and neither of our tabs caused it.
+
+- **eight modes** — `readiness-tab`, 06:12Z: Refresh "sits past the edge";
+- **nine modes** — measured here: off screen on all three loads, **including at `scrollLeft: 0`**;
+- **ten modes** — measured by `questions-mode-s2`: off screen at every load.
+
+The mode buttons still work at ten and the active one is always reachable. **The Refresh control is
+not reachable on any load we measured without a deliberate horizontal drag**, and it has been that
+way for at least two tabs longer than this work.
+
+**And the scroll-into-view makes that half worse, which is a trade rather than an improvement.** It
+scrolls toward the active mode; Refresh sits at the tail past every mode; so each time it fires it
+pushes Refresh further away. That is the right trade — the tab you are on is worth more than a
+control that also has a keyboard route and a page reload — but it is a trade, and reporting only the
+half that improved would be the sort of calm number this whole feature exists to distrust.
+
+### What kind of claim the earlier figures were
 
 **Observed**, by session `readiness-tab` at 06:12Z on 2026-09-09, at 390 px on a touch viewport:
 
