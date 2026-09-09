@@ -79,7 +79,7 @@ function describe(cause: unknown): string {
  * fields checked are the ones the panel would silently render wrong, not every
  * field on the type.
  */
-function readPayload(body: unknown): DeploysView {
+export function readPayload(body: unknown): DeploysView {
   if (typeof body !== "object" || body === null) {
     return { kind: "no-answer", why: "the server's answer was not an object" };
   }
@@ -106,7 +106,36 @@ function readPayload(body: unknown): DeploysView {
       why: `this build cannot read the server's answer (kind ${JSON.stringify(raw.kind)})`,
     };
   }
-  return body as DeploysView;
+
+  /* **Everything below was a cast until GPT Sol's F8**, and each of the three
+     had its own way of going wrong on screen rather than in a check:
+
+       - a missing `git` CRASHES the render, because `view.git.main` throws;
+       - a missing `servedAtMs` makes every age `NaNd ago`;
+       - a missing `newestLineRead` — which is what an OLDER schema-1 server
+         sends, since the field arrived after the schema number did — is falsy,
+         so the page would announce that the record's newest line is corrupt
+         when nothing is wrong at all. **A false alarm invented by a version
+         skew** is the worst of the three, and it is the one a cast guarantees.
+
+     So `git` is required (its absence is a wire we cannot read), and the two
+     scalars are defaulted to the reading that claims LEAST: a `servedAtMs` we
+     cannot trust falls back to this browser's clock, and an absent
+     `newestLineRead` is treated as `true` — no alarm — because absence here
+     means "an older server that never looked", not "the newest line is bad". */
+  const git = raw.git;
+  if (typeof git !== "object" || git === null || !("main" in git) || !("ancestry" in git) || !("commitsSince" in git)) {
+    return { kind: "no-answer", why: "the server's answer carried no git readings this page could use" };
+  }
+
+  return {
+    ...(body as Extract<DeploysView, { kind: "deploys" }>),
+    servedAtMs: typeof raw.servedAtMs === "number" && Number.isFinite(raw.servedAtMs) ? raw.servedAtMs : Date.now(),
+    newestLineRead: raw.newestLineRead !== false,
+    unreadable: Array.isArray(raw.unreadable) ? raw.unreadable.filter((u): u is string => typeof u === "string") : [],
+    total: typeof raw.total === "number" && Number.isFinite(raw.total) ? raw.total : (raw.versions as unknown[]).length,
+    recordLines: typeof raw.recordLines === "number" && Number.isFinite(raw.recordLines) ? raw.recordLines : 0,
+  };
 }
 
 /** A client against a given URL. Relative, so the tool works behind any host. */

@@ -67,7 +67,7 @@ import { gzipSync } from "node:zlib";
 
 import { lastGeneratedAt, newestDeploy, readDeploys } from "./deploys.js";
 import type { GitProbe } from "./git-probe.js";
-import type { DeploysPayload } from "./wire.js";
+import type { DeploysPayload, Watermark } from "./wire.js";
 
 export type { DeploysPayload };
 
@@ -163,7 +163,21 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
      produces a confident distance from the wrong deploy — a number nobody could
      tell was wrong. Refusing to measure is the honest answer, and the page says
      which. GPT Sol's P1 finding 4. */
-  const watermark = read.newestLineRead ? (newest?.sha ?? null) : null;
+  /* **Emptiness is tested FIRST, and the order is the whole point.**
+     `newestLineRead` is false for an empty record too — there is no newest line
+     to have read — so testing it first reported "the record's newest line could
+     not be read" about a file with nothing in it. That is the mirror image of
+     the bug this watermark exists to fix (GPT Sol's F1: two different absences
+     rendering as one sentence), introduced while fixing it, and caught by the
+     test that was already asserting the empty case. */
+  const watermark: Watermark =
+    read.lines === 0
+      ? { kind: "none" }
+      : !read.newestLineRead
+        ? { kind: "newest-unreadable" }
+        : newest === null
+          ? { kind: "none" }
+          : { kind: "sha", sha: newest.sha };
   const git = await deps.git.snapshot(watermark);
 
   return {
@@ -174,6 +188,11 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
     limit,
     unreadable: read.unreadable,
     recordLines: read.lines,
+    /* **Only the newest READABLE line's stamp.** When the newest line is
+       corrupt this is not "when the record was last written" — the run that
+       wrote the unreadable line came after it. The panel qualifies the sentence
+       rather than this withholding the number, because the number is still the
+       best lower bound available. Sol's F1, second half. */
     lastGeneratedAt: lastGeneratedAt(read),
     newestRecordedSha: newest?.sha ?? null,
     newestLineRead: read.newestLineRead,
