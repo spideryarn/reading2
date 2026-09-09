@@ -46,6 +46,24 @@ export type ReadinessPayload =
   | ({ schema: 1; kind: "readiness"; windowHours: number; refreshMs: number } & ReadinessSnapshot)
   | { schema: 1; kind: "unavailable"; why: string };
 
+/**
+ * Does this `Accept-Encoding` actually want gzip?
+ *
+ * Exported for its test. `q=0` is a refusal, and a substring check cannot see
+ * one; `*` counts unless it is itself refused.
+ */
+export function acceptsGzip(header: string): boolean {
+  for (const part of header.split(",")) {
+    const [name = "", ...params] = part.trim().split(";");
+    const token = name.trim().toLowerCase();
+    if (token !== "gzip" && token !== "*") continue;
+    const q = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith("q="));
+    if (q !== undefined && Number(q.slice(2)) === 0) continue;
+    return true;
+  }
+  return false;
+}
+
 export type ReadinessRouteDeps = {
   /** The last snapshot the refresh loop produced, or null before the first one. */
   snapshot(): ReadinessSnapshot | null;
@@ -112,8 +130,14 @@ export function readinessRoute(deps: ReadinessRouteDeps): {
         return true;
       }
 
-      const accepts = String(req.headers["accept-encoding"] ?? "").includes("gzip");
-      if (accepts && body.length > GZIP_ABOVE_BYTES) {
+      /* `gzip;q=0` means "I would rather you did not", and `includes("gzip")`
+         said yes to it. A client that asks not to be gzipped and is gzipped
+         anyway is a small dishonesty in a file about not telling small
+         dishonesties. */
+      const accepts = acceptsGzip(String(req.headers["accept-encoding"] ?? ""));
+      /* Byte length, not string length: the answer is full of sentences with
+         `·` and `—` in them, and the threshold was measuring characters. */
+      if (accepts && Buffer.byteLength(body, "utf8") > GZIP_ABOVE_BYTES) {
         const packed = gzipSync(body);
         res.writeHead(200, {
           "content-type": "application/json",

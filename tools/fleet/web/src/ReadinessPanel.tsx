@@ -63,11 +63,39 @@ const ROWS = ["test", "typecheck", "check", "lint", "build"] as const;
  * is how they got confused.
  */
 const MARK_COLOUR: Record<ReadingView["state"], string> = {
-  pass: "tw:bg-quiet",
+  /**
+   * **Green is `pass`, and `running` is not green.**
+   *
+   * The first version took the dashboard's own vocabulary literally: `quiet` for
+   * a pass (nothing needs you) and `work` for a run in progress. But `--work` IS
+   * green, so an `unknown` panel could be full of green marks that anybody
+   * without a mouse would read as passing runs, while the actual passes were
+   * achromatic grey. On a phone there is no hover to correct the impression.
+   *
+   * So this band departs from the session vocabulary deliberately: on a
+   * pass/fail chart, green means passed, because that is what green means
+   * everywhere else a person has ever looked at one. `running` gets a SHAPE
+   * instead — a hollow outline, which reads as in-progress without competing
+   * for the pass colour.
+   */
+  pass: "tw:bg-work",
   fail: "tw:bg-alarm",
   void: "tw:bg-unknown",
-  running: "tw:bg-work",
+  running: "tw:bg-transparent tw:border tw:border-ink-faint",
 };
+
+/** Worse states win their pixel, so a failure is never hidden behind a pass. */
+const MARK_LAYER: Record<ReadingView["state"], number> = { pass: 1, running: 2, void: 3, fail: 4 };
+
+/**
+ * How close two marks have to be before they are one mark, as a percentage of
+ * the band.
+ *
+ * A 2px mark on a ~200px band is about 1% of it, so anything nearer than that
+ * would overlap on screen — and an overlap that is not merged is a run drawn on
+ * top of another run, silently.
+ */
+const MERGE_PCT = 1;
 
 
 const VERDICT_TONE: Record<VerdictView["kind"], Tone> = {
@@ -115,11 +143,86 @@ function describeDuration(ms: number | null): string {
  * `nosha` — reconstructed from a log, so about no commit anybody can name.
  */
 function provenanceOf(reading: ReadingView, devSha: string | null): "dev" | "other" | "nosha" {
+  /* Only a log reconstruction is `nosha`. A WRAPPER run whose tree we cannot
+     read is `other` — it is a real run about something, and labelling it
+     "reconstructed from a log" was simply false. */
   if (reading.source !== "wrapper") return "nosha";
-  if (reading.tree.kind !== "known") return "nosha";
   if (reading.scope !== "full") return "other";
-  if (devSha === null || reading.tree.sha !== devSha) return "other";
+  if (devSha === null) return "other";
+  const { treeAtStart, treeAtEnd } = reading;
+  if (treeAtStart.kind !== "known") return "other";
+  if (treeAtStart.sha !== devSha || treeAtStart.dirty) return "other";
+  /**
+   * **Both ends, and clean at both** — the same clauses `canVote` applies on the
+   * server. Reading only the start let a run whose checkout moved or went dirty
+   * mid-way wear the "this one counts" treatment while the verdict correctly
+   * refused it, so the picture and the headline disagreed.
+   *
+   * A run still going has no end stamp: it cannot count yet, and `other` is
+   * what it is until it does.
+   */
+  if (treeAtEnd.kind !== "known") return "other";
+  if (treeAtEnd.sha !== treeAtStart.sha || treeAtEnd.dirty) return "other";
   return "dev";
+}
+
+/** One drawn mark: the worst reading in its pixel, and how many it stands for. */
+type Bucket = {
+  reading: ReadingView;
+  left: number;
+  /** How many other runs landed on the same pixel and are not drawn. */
+  hidden: number;
+  provenance: "dev" | "other" | "nosha";
+};
+
+/**
+ * Group readings by the pixel they land on, keeping the worst.
+ *
+ * **Exported for its test.** The rule it enforces is the one the reducer needed
+ * on the server: when two things want the same place, the bad news wins. Drawing
+ * order is not evidence about anything.
+ *
+ * A `dev` mark beats a non-`dev` one at equal severity, because the ringed
+ * treatment is the more informative of the two and losing it hides the run that
+ * actually counts.
+ */
+export function bucketMarks(
+  readings: readonly ReadingView[],
+  fromMs: number,
+  span: number,
+  devSha: string | null,
+): Bucket[] {
+  const placed = readings
+    .map((reading) => ({
+      reading,
+      left: Math.min(100, Math.max(0, ((reading.atMs - fromMs) / span) * 100)),
+      provenance: provenanceOf(reading, devSha),
+    }))
+    .sort((a, b) => a.left - b.left);
+
+  const out: Bucket[] = [];
+  for (const item of placed) {
+    const open = out[out.length - 1];
+    /* **A greedy walk over sorted marks, not a rounded slot.** Slotting by
+       `Math.round(left / step)` was the first attempt and it does not do what it
+       looks like: two marks 0.35% apart straddled a boundary and were drawn
+       separately, while the whole point is that anything closer than a mark's
+       width must merge. Walking in order and comparing to the group's own
+       position has no boundaries to straddle. */
+    if (open === undefined || item.left - open.left >= MERGE_PCT) {
+      out.push({ reading: item.reading, left: item.left, hidden: 0, provenance: item.provenance });
+      continue;
+    }
+    const worse =
+      MARK_LAYER[item.reading.state] > MARK_LAYER[open.reading.state] ||
+      (MARK_LAYER[item.reading.state] === MARK_LAYER[open.reading.state] &&
+        item.provenance === "dev" &&
+        open.provenance !== "dev");
+    out[out.length - 1] = worse
+      ? { reading: item.reading, left: open.left, hidden: open.hidden + 1, provenance: item.provenance }
+      : { ...open, hidden: open.hidden + 1 };
+  }
+  return out;
 }
 
 /**
@@ -127,9 +230,20 @@ function provenanceOf(reading: ReadingView, devSha: string | null): "dev" | "oth
  *
  * **Not a line, and not a filled span.** Each mark sits where its run finished
  * and says nothing about the time either side of it; the gaps are gaps because
- * nothing was observed there. Provenance is carried by opacity and by a ring on
- * the ones that count, so a branch's green mark cannot be mistaken for dev
- * recovering.
+ * nothing was observed there.
+ *
+ * Provenance is height plus a ring: a full-height ringed bar is a run that
+ * counts, a half-height one is history. Not opacity — that was the first
+ * attempt and it traded away the one property a mark must have.
+ *
+ * ## Two runs can want the same pixel
+ *
+ * A 2px mark on a ~200px day is about fifteen minutes wide, so runs closer
+ * together than that overlap — and with plain DOM order **a later pass paints
+ * over an earlier failure**, which is the reducer's same-millisecond tie bug
+ * wearing a coat of CSS. So marks are bucketed by the pixel they land on and
+ * the WORST state in each bucket is the one drawn, with the count carried into
+ * the tooltip. GPT Sol, Stage 2 review.
  */
 function DayBand({
   readings,
@@ -145,17 +259,16 @@ function DayBand({
   formatTime: (ms: number) => string;
 }): ReactNode {
   const span = Math.max(1, toMs - fromMs);
+  const buckets = bucketMarks(readings, fromMs, span, devSha);
   return (
     /* **The empty track is drawn**, faintly. A day on which nothing ran is a
        real answer and it should look like an empty shelf, not like a row that
        failed to render — which is what a transparent band gave. */
     <div className="tw:relative tw:h-5 tw:w-full tw:rounded tw:border tw:border-rule tw:bg-hover/60">
-      {readings.map((reading) => {
-        const left = Math.min(100, Math.max(0, ((reading.atMs - fromMs) / span) * 100));
-        const provenance = provenanceOf(reading, devSha);
+      {buckets.map(({ reading, left, hidden, provenance }) => {
         return (
           <span
-            key={`${reading.atMs}-${reading.check}-${reading.source}-${reading.commandLine ?? ""}`}
+            key={`${reading.check}-${reading.runId}`}
             className={cx(
               /* **Two pixels, not one.** A 24-hour band is about 200px on a
                  phone, and a 1px mark was invisible in the first screenshot — a
@@ -178,8 +291,10 @@ function DayBand({
                 ? " · on dev"
                 : provenance === "nosha"
                   ? " · reconstructed from a log, no commit"
-                  : " · another commit or a narrowed run"
-            }${reading.durationMs === null ? "" : ` · ${describeDuration(reading.durationMs)}`}`}
+                  : " · another commit, a dirty tree, or a narrowed run"
+            }${reading.durationMs === null ? "" : ` · ${describeDuration(reading.durationMs)}`}${
+              hidden === 0 ? "" : ` · and ${hidden} other run${hidden === 1 ? "" : "s"} at this minute`
+            }`}
           />
         );
       })}
@@ -243,17 +358,43 @@ export function ReadinessPanel({
 }): ReactNode {
   const [view, setView] = useState<ReadinessView | null>(null);
 
-  /* `refreshNonce` is in the dependency list for its effect on identity alone —
-     it changes when somebody presses Refresh, and re-running is the point. */
+  /**
+   * **It polls, and the first version did not.**
+   *
+   * This ran on mount and on Refresh only, and `refreshMs` was parsed and never
+   * used — so a page left open on a phone, which is what this dashboard is for,
+   * would say *dev is green* indefinitely while dev moved and a check failed
+   * underneath it. GPT Sol, Stage 2 review.
+   *
+   * The interval comes from the server rather than a constant here, because the
+   * server is the thing that knows how often it recollects; polling faster than
+   * that fetches the same snapshot repeatedly, and slower shows a stale one for
+   * no reason. It is clamped because a bad number from a future build must not
+   * turn this into a busy loop.
+   */
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
   useEffect(() => {
     let live = true;
-    void api.fetch().then((next) => {
-      if (live) setView(next);
-    });
+    const load = (): void => {
+      void api.fetch().then((next) => {
+        if (live) setView(next);
+      });
+    };
+    load();
+    const everyMs = Math.min(
+      10 * 60_000,
+      Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000),
+    );
+    const timer = setInterval(load, everyMs);
     return () => {
       live = false;
+      clearInterval(timer);
     };
+    /* `view?.refreshMs` deliberately NOT in the deps: it would tear down and
+       rebuild the interval on every successful poll, which is a slow leak of
+       timers and a drifting cadence. The first answer's interval is good enough
+       for the life of the mount. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, refreshNonce]);
 
   const formatTime = (ms: number): string =>
@@ -289,7 +430,11 @@ export function ReadinessPanel({
     else held.push(reading);
   }
 
-  const ageMin = Math.max(0, Math.round((nowMs - view.collectedAtMs) / 60_000));
+  /* **Through the skew, like every other timestamp on this page.** Subtracting a
+     server stamp from the browser clock directly makes a phone that is behind
+     the server clamp the age to zero — concealing exactly the staleness this
+     number exists to reveal. `shiftMsToBrowserClock` is the shared correction. */
+  const ageMin = Math.max(0, Math.round((nowMs - shiftMsToBrowserClock(view.collectedAtMs, skew)) / 60_000));
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">

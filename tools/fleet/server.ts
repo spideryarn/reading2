@@ -207,7 +207,10 @@ let lastReadinessMs = Date.now();
 const readinessApi = readinessRoute({
   snapshot: () => readinessSnapshot,
   windowHours: READINESS_WINDOW_HOURS,
-  refreshMs: REFRESH_MS,
+  /* **READINESS_REFRESH_MS, not REFRESH_MS.** The page polls at whatever this
+     says, so advertising the fleet's 60s cadence for a snapshot recomputed every
+     two minutes had it fetching the same answer twice for every new one. */
+  refreshMs: READINESS_REFRESH_MS,
 });
 
 /**
