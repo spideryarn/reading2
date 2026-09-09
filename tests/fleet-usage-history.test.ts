@@ -12,7 +12,7 @@
  *
  * Specification: docs/plans/260909b-usage-limits-tab-fleet-dashboard-24h-history.md
  */
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +27,12 @@ import {
   openUsageHistoryForWrite,
   worstCaseRetainedHours,
 } from "../tools/fleet/usage-history.js";
-import { MAX_LINE_BYTES, SUMMARY_SCHEMA, type UsageHistoryLine } from "../tools/fleet/usage-history-record.js";
+import {
+  MAX_LINE_BYTES,
+  SUMMARY_SCHEMA,
+  decodeUsageHistoryLine,
+  type UsageHistoryLine,
+} from "../tools/fleet/usage-history-record.js";
 
 const opened: { close(): void }[] = [];
 afterEach(() => {
@@ -153,6 +158,14 @@ describe("appending", () => {
     if (read.kind !== "read") throw new Error("unreadable");
     expect(read.samples).toHaveLength(3);
     expect(read.samples[1]).toMatchObject({ kind: "omitted" });
+
+    const stored = readFileSync(join(dir, LIVE_FILE), "utf8").trimEnd().split("\n");
+    const omitted = decodeUsageHistoryLine(stored[1]!);
+    expect(omitted.kind).toBe("line");
+    if (omitted.kind !== "line") return;
+    expect(omitted.line.pass.kind).toBe("omitted");
+    expect(omitted.line.codex).toMatchObject({ kind: "unknown", retryable: false });
+    expect(Object.hasOwn(omitted.line, "codex")).toBe(true);
   });
 });
 
