@@ -92,6 +92,28 @@ Live values, verbatim, 2026-09-09 07:47 UTC:
 So: **24% of the weekly window used, resetting 2026-09-15 01:23 UTC.** That is the number the
 Overseer has been rationing without.
 
+### Proven from Node, and one asymmetry that would trip the implementer
+
+The spike is `tests/fixtures/codex-usage/capture/spike-app-server-from-node.ts`; both arms run from
+TypeScript, the value arm in 1.1 s and the `unknown` arm under a bogus `CODEX_HOME`.
+
+**`codex app-server` needs stdin to stay OPEN. `codex exec` needs it to reach EOF.** This is the exact
+inversion of [`scripts/run-codex.ts`](../../scripts/run-codex.ts)'s central guarantee — that file
+exists partly because a pipe which never closes wedges `codex exec` forever, so it hands codex a
+finite file as fd 0. Here fd 0 is the *outbound half of a bidirectional protocol*: end it after
+sending `initialize` and the session closes before the reply arrives. Anyone reasoning from
+run-codex.ts's rule — the natural thing to do, since it is the only codex plumbing in the repo — will
+close it and get a hang that looks like a network problem.
+
+Three further things the spike settles, so stage 2 need not rediscover them:
+
+- **Match the reply by its own `id`.** A `remoteControl/status/changed` notification arrives between
+  `initialize` and the answer, so arrival order is not reply order.
+- **`initialize` requires `clientInfo`**, and the `initialized` notification must follow it before the
+  call, or the call is refused.
+- **Kill the process group, not the child.** The child is spawned `detached`, as run-codex.ts does, so
+  a timeout takes any helper it started with it rather than orphaning it to init.
+
 ### The evidence, durably
 
 The payloads above are checked in under
