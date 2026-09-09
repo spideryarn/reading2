@@ -604,10 +604,29 @@ Stage 2's module — round two caught that the first split made Stage 1 un-green
 - [ ] **Merge `origin/dev` first**, then browser-verify — round two's ordering, and it matters
       because the dock is the shared file. Re-verify after any later merge that touches it.
 - [ ] Browser-verified at 390×844 and 1280 by a Sonnet subagent on its own throwaway port
-      (`FLEET_PORT=8791`), never `:8787`'s process, killed by its own pid. **The gating check: on a
-      direct `#decisions` load at 390px, is the active tab visible and reachable?** Plus left, middle
-      and right overflow states of the bar. If the gating check fails, the tab does not ship and this
-      is recorded as *important work left* for Greg (§ The mode).
+      (`FLEET_PORT=8791`), never `:8787`'s process, killed by its own pid.
+
+      **The gating check, corrected: is the active tab visible and reachable on a direct load at
+      390px — measured on the LAST mode in the bar, not on this one.** The first draft asked only
+      about `#decisions`, and that is not the worst case: `decisions` sits seventh of nine, so
+      passing it would have said almost nothing. The worst case is the mode furthest from the scroll
+      origin, which at nine is `deploys`. So three loads: `#sessions` (first), `#decisions`
+      (mid-bar), `#deploys` (**last, and the one that actually tests scroll-into-view**).
+
+      Fields, agreed with `questions-mode-s2` so its ten-mode reading and this nine-mode one are
+      comparable side by side: bar height; whether Refresh sits past the edge; which fit rung is
+      active; whether the active button is reachable without a horizontal drag; and
+      `scrollWidth`/`clientWidth`/**`scrollLeft`** on `.dock`. The three together are what separate
+      *the bar overflows and we scrolled to the right place* from *the bar overflows and the active
+      button is off-screen* — overflow alone is expected and is the honest failure the dock was
+      built to have.
+
+      **Read after the fit rung has settled**, never during the first paint: the rung changes button
+      widths, which is why the scroll effect is keyed on `fitClass` as well as `mode`. If two
+      readings disagree, check this before believing either.
+
+      If the gating check fails, the tab does not ship and this is recorded as *important work left*
+      for Greg (§ The mode).
 - [ ] `npm run typecheck` **on the post-merge tree**, and count the mode entries — a merge can drop
       one with no conflict marker.
 - [ ] The stale mode-count comments, since this work is in those files anyway: `Dock.tsx`'s header
