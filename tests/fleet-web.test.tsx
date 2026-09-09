@@ -43,6 +43,7 @@ import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-cli
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import { freshness } from "../tools/fleet/web/src/Header";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
+import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
 import {
   COLUMN_MIN_PX,
@@ -2229,10 +2230,16 @@ function recordingActions(
   over: Partial<ActionsApi> = {},
 ): {
   api: ActionsApi;
-  calls: { op: string; arg: string; second?: string | boolean }[];
+  /**
+   * `rows` is only ever set by `box`, and it is there for `clear`'s reason: WHAT
+   * THE PAGE SENDS is the whole of what makes a fleet-wide action reach
+   * anybody. A recorder that counted the presses would have gone on passing
+   * through the day the broadcast could not name a single recipient.
+   */
+  calls: { op: string; arg: string; second?: string | boolean; rows?: string }[];
   feeds: () => number;
 } {
-  const calls: { op: string; arg: string; second?: string | boolean }[] = [];
+  const calls: { op: string; arg: string; second?: string | boolean; rows?: string }[] = [];
   let feeds = 0;
   const api: ActionsApi = {
     feed: async () => {
@@ -2276,8 +2283,8 @@ function recordingActions(
       calls.push({ op: "releaseHold", arg: `${holdId}@${version}`, second: gesture });
       return { ok: true, kind: "hold-released", gesture, repeat: false };
     },
-    box: async (actionId, dryRun) => {
-      calls.push({ op: "box", arg: actionId, second: dryRun });
+    box: async (actionId, dryRun, rows) => {
+      calls.push({ op: "box", arg: actionId, second: dryRun, rows: rows.map((r) => r.id).join(",") });
       /* `effect: null` is *this answer described no per-row effect*, which is
          what an empty `result` means. It is REQUIRED rather than optional for
          `delivery`'s reason: a fixture that could omit it would let the
@@ -6027,7 +6034,11 @@ describe("the box, which says what it would do before it does it", () => {
     await act(async () => {});
     await clickSaying("Kill test suites");
 
-    expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true }]);
+    /* `rows: ""` is the Box Health tab having no fleet list to give — its
+       caller has none — and a kill reads `pids` rather than `recipients` in any
+       case. Asserted rather than allowed to be absent, so this stays a visible
+       fact about the panel instead of a silence. */
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true, rows: "" }]);
     expect(container.textContent).toContain("What it would do");
     expect(container.textContent).toContain(KILL_SUITES_WIRE.gate);
   });
@@ -6039,8 +6050,8 @@ describe("the box, which says what it would do before it does it", () => {
     await clickSaying("Yes — kill test suites");
 
     expect(rec.calls.filter((c) => c.op === "box")).toEqual([
-      { op: "box", arg: "kill-test-suites", second: true },
-      { op: "box", arg: "kill-test-suites", second: false },
+      { op: "box", arg: "kill-test-suites", second: true, rows: "" },
+      { op: "box", arg: "kill-test-suites", second: false, rows: "" },
     ]);
     // The stub's answer describes no per-row effect, so "Done." is all there
     // is to say. The two tests below are the answers that do describe one.
@@ -6132,6 +6143,78 @@ describe("the box, which says what it would do before it does it", () => {
     // as a state name in a JSON dump.
     expect(container.textContent).toContain("PART of the message went, and the rest is unaccounted for");
     expect(container.textContent).not.toContain("Done.");
+  });
+
+  /**
+   * **THE JOIN BETWEEN THE PANEL AND THE BODY IT POSTS**, which is the half the
+   * route tests cannot see.
+   *
+   * `tests/fleet-actions-route.test.ts` drives `boxActionBody` into the real
+   * `broadcastRoute` and proves a recipient is selected — but it calls the API
+   * directly, so it stays green on a panel that has stopped handing the rows
+   * over. That is exactly the shape of the defect being closed here: for a day
+   * the builder and the route were each right about their own object and had
+   * never met, and an evening was spent measuring a selection rule that had
+   * never run. So this presses the real button, through the real client, and
+   * reads the bytes that left.
+   *
+   * The values are asserted **against the row itself** rather than against
+   * literals: a client that re-derived the status, or re-read the fleet to make
+   * its claim true, would not match the snapshot it was handed.
+   */
+  it("posts the rows it was given, so a broadcast has somebody to go to", async () => {
+    const posted: Record<string, unknown>[] = [];
+    const spy = (async (_url: string, init?: { body?: string }) => {
+      posted.push(JSON.parse(init?.body ?? "null") as Record<string, unknown>);
+      return {
+        status: 200,
+        json: async () => ({
+          ok: true,
+          op: "broadcast-preview",
+          action: "resource-broadcast",
+          dryRun: true,
+          result: { total: 1, recipients: [], sample: null },
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const feed = parseActionsFeed(actionsWire({ actions: [BROADCAST_WIRE] }));
+    if (feed === null) throw new Error("the fixture feed did not parse");
+    const onScreen = steerable({ id: "$1643", title: "the one on screen" });
+    /* A ROW THAT IS NOT AN ADDRESS — `row` leaves `paneId` and
+       `claudeSessionId` null, which is the shell and the too-old session a real
+       fleet always has a few of. The route refuses the WHOLE request over one
+       of these, so sending the page's rows entirely raw fixed nothing: the live
+       server answered 400 to a body carrying all 23 of them. */
+    const noAddress = row({ id: "$1644", title: "a shell" });
+    act(() =>
+      root.render(
+        <BoxActions
+          feed={feed}
+          api={makeActionsApi(spy)}
+          asked={true}
+          error={null}
+          onChanged={() => {}}
+          rows={[onScreen, noAddress]}
+        />,
+      ),
+    );
+    await clickSaying("Broadcast: ease off, staggered");
+
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.["recipients"]).toEqual([
+      {
+        paneId: onScreen.paneId,
+        sessionId: onScreen.id,
+        claudeSessionId: onScreen.claudeSessionId,
+        panePid: onScreen.panePid,
+        // THE SERVER'S OWN OBJECT, not the parsed `status` this page drew with.
+        status: onScreen.rawStatus,
+      },
+    ]);
+    // AND THE NARROWING IS ON SCREEN. A denominator that quietly shrank between
+    // the page and the request is this stage's own defect one layer up.
+    expect(container.textContent).toContain("1 of the 2 sessions on this page has no pane or no conversation id");
   });
 
   it("offers no Confirm at all when the dry run could not answer", async () => {
@@ -6449,6 +6532,37 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("There is still nothing here to send a message to.");
     // A refusal with a way forward, not a shrug.
     expect(container.textContent).toContain("the broadcast above is the real thing");
+  });
+
+  it("hands the broadcast the rows the tab is showing, which is what makes it reach anybody", async () => {
+    /* **THE LAST HOP, AND IT WAS THE MISSING ONE.** The test above proves the
+       button is drawn; for a day that was the whole of what was proven, and the
+       button could not deliver to a single session because no list of
+       recipients ever left the browser. `broadcastRoute` refuses a request that
+       names nobody on purpose — a fleet-wide message must act on the list the
+       person was looking at — so this tab, which is the one that HAS that list,
+       has to hand it over. Deleting `rows` from the `BoxActionsCard` in
+       OverseerPanel.tsx turns this red; the route half is in
+       tests/fleet-actions-route.test.ts. */
+    const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
+    window.location.hash = "#overseer";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    const shown = [steerable({ id: "$1643" }), steerable({ id: "$1644", paneId: "%2109" })];
+    act(() => feed.push(state({ rows: shown })));
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+    await clickSaying("Yes \u2014 broadcast: ease off, staggered");
+
+    /* BOTH PRESSES, AND THE SECOND ONE IS THE ONE THAT MATTERS. A preview that
+       named two sessions over a send that reached none would be this stage's own
+       defect wearing a receipt, so the confirmed request has to carry exactly
+       the list the preview described. A mutation that dropped the rows from the
+       commit alone survived every other test here. */
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([
+      { op: "box", arg: "resource-broadcast", second: true, rows: "$1643,$1644" },
+      { op: "box", arg: "resource-broadcast", second: false, rows: "$1643,$1644" },
+    ]);
   });
 
   it("draws the Overseer's own two clocks on the tab, straight off the payload", async () => {
@@ -6919,7 +7033,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   /** The box panel, same wiring. */
   function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
     const client = makeActionsApi(fetchImpl);
-    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun) => client.box(actionId, dryRun) });
+    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun, rows) => client.box(actionId, dryRun, rows) });
     window.location.hash = "#health";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
@@ -7103,7 +7217,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   });
 
   it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
-    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false);
+    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false, []);
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
     expect(outcome.delivery.kind).toBe("unknown");
