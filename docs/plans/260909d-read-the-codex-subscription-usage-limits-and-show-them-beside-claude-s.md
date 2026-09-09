@@ -438,6 +438,49 @@ withdrawn finding 3 — worth doing, not needed for headroom); the session-log f
 follow-up, above); the `account/usage/read` daily token series (it works — a year of daily totals — but
 it is not a limit); anything in `run-codex.ts` or the daemon loop beyond its existing `onPass` hook.
 
+## What the full suite caught that the focused suite could not
+
+`npm test` at `f801be5c`: **4 files failed of 948.** Two are the known fresh-worktree bundle failures
+(`cold-start-lazy-imports`, `pdf-bundle-trace` — both "has a build to inspect", environment rather than
+diff). **The other two were real, and neither could have been found by running the new test file
+alone.**
+
+### `fleet-imports` — the reading dragged `src/env.ts` into the fleet dashboard
+
+Stage 2 reused the repo's existing `sanitisedEnv` from `scripts/subagent-cli.ts`, which was the right
+instinct — its documented contract is that withholding the CLI's key is *how* you select a subscription
+credential — and it was still wrong. `subagent-cli.ts` reaches `src/env.ts` through one dynamic
+`import('../src/env.js')` inside `loadRepoEnv`, and `src/env.ts` is on `fleet-imports`'s forbidden
+list beside `src/db.ts` and `src/routes.ts`. The closure is computed over **every file under
+`tools/`**, so the violation fires on the module merely existing, before anything wires it up.
+
+**The fix is an allowlist, not a copy of the denylist.** Copying `sanitisedEnv`'s word lists would
+create a second denylist to drift out of sync with the first, which is worse than either. Instead this
+child gets an explicit allowlist — and the justification is precisely the one `subagent-cli.ts` gives
+for *not* using one: a denylist is right there because a model-driven agent needs "a large and
+unenumerable slice of the environment". `codex app-server` answering one RPC needs `PATH`, `HOME`,
+`CODEX_HOME` and locale plumbing, and nothing else. **The needs are enumerable here, so the safer
+mechanism is available**, and `CODEX_API_KEY` is absent by construction rather than by a matching rule.
+
+That the allowlist is sufficient is a claim about a real process, so it is **verified by running the
+real collector against it**, not by reasoning.
+
+The better long-term shape is to extract `sanitisedEnv`/`isSecretName` into a leaf module both callers
+import, since they are pure and only the module-level `loadRepoEnv` pulls in `src/env.ts`. **That is a
+change to `scripts/subagent-cli.ts`, which this work does not own** — it goes in the debrief.
+
+### `fixture-ids` — a redaction placeholder collided with another test file
+
+`accountId` was redacted to `00000000-0000-0000-0000-000000000000`, which `migration-snapshots.test.ts`
+also declares. That guard flags **any** uuid claimed by two test files, because vitest runs files in
+parallel against one database and whichever tears down first deletes the other's row — passing alone,
+failing together.
+
+Nothing here inserts a database row: this is an OpenAI account id, an opaque string to every parser
+that touches it. The guard offers a `NOT_A_ROW` escape, but taking it would edit a shared test file to
+accommodate a placeholder chosen arbitrarily. **Redacting to a plainly non-uuid string instead** fixes
+it inside this work's own files, cannot collide again, and reads more obviously as a redaction.
+
 ## Sol's plan review, round 1
 
 Verdict: **ready with changes; not ready to build as written** — eight findings, no P0, seven P1 and

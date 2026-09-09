@@ -73,7 +73,26 @@ export function readPayload(body: unknown): QueueView | null {
   if (kind !== "queue") return null;
   if (!Array.isArray(record["rows"]) || !Array.isArray(record["settled"])) return null;
   if (typeof record["version"] !== "string") return null;
-  return body as QueueView;
+  /* Schema 1 is intentionally additive. Older servers omit `priority`, and
+     treating that as unstated is the honest backward-compatible reading;
+     rejecting the whole payload would turn one absent display field into no
+     queue at all. Provenance arrived additively too, so it follows the same
+     null-on-absence rule rather than ever reaching the panel as `undefined`. */
+  const normalizeRow = (row: unknown): unknown => {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) return row;
+    const raw = row as Record<string, unknown>;
+    return {
+      ...raw,
+      priority: typeof raw.priority === "number" ? raw.priority : null,
+      priorityBy: raw.priorityBy === "greg" || raw.priorityBy === "overseer" ? raw.priorityBy : null,
+      priorityAt: typeof raw.priorityAt === "string" ? raw.priorityAt : null,
+    };
+  };
+  return {
+    ...record,
+    rows: record.rows.map(normalizeRow),
+    settled: record.settled.map(normalizeRow),
+  } as QueueView;
 }
 
 /**

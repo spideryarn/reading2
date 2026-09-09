@@ -41,7 +41,10 @@ function env(by: "greg" | "overseer" = "greg", at = "2026-09-19T00:00:00.000Z") 
   return { schema: IDEA_QUEUE_SCHEMA as typeof IDEA_QUEUE_SCHEMA, eventId: `ev-${n}`, commandId: null, at, by };
 }
 
-function added(id: string, over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement } = {}): IdeaEvent {
+function added(
+  id: string,
+  over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement } = {},
+): IdeaEvent {
   return {
     ...env(over.by ?? "greg"),
     kind: "added",
@@ -123,6 +126,32 @@ describe("the payload", () => {
     expect(feed.rows[1]?.ready).toBe(false);
     expect(feed.rows[1]?.why).toContain("nobody has authorised");
     expect(feed.rows[1]?.authorizedRevision).toBeNull();
+  });
+
+  it("carries priority and its provenance on both a queued row and a settled row", () => {
+    const feed = payload(
+      readerFor([
+        added("qi-aaaaaaaa"),
+        { ...env("overseer"), kind: "prioritized", id: "qi-aaaaaaaa", priority: 0.8 },
+        added("qi-bbbbbbbb"),
+        { ...env("greg"), kind: "prioritized", id: "qi-bbbbbbbb", priority: 0.2 },
+        { ...env("overseer"), kind: "done", id: "qi-bbbbbbbb" },
+      ]),
+    );
+    expect(feed.kind).toBe("queue");
+    if (feed.kind !== "queue") return;
+    expect(feed.rows[0]).toMatchObject({
+      id: "qi-aaaaaaaa",
+      priority: 0.8,
+      priorityBy: "overseer",
+      priorityAt: "2026-09-19T00:00:00.000Z",
+    });
+    expect(feed.settled[0]).toMatchObject({
+      id: "qi-bbbbbbbb",
+      priority: 0.2,
+      priorityBy: "greg",
+      priorityAt: "2026-09-19T00:00:00.000Z",
+    });
   });
 
   it("`why` is null exactly when `ready` — the two cannot disagree", () => {

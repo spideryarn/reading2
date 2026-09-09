@@ -54,7 +54,7 @@ if reply is None:
 if redact:
     r = reply.get("result", {})
     if r.get("accountId"):
-        r["accountId"] = "00000000-0000-0000-0000-000000000000"
+        r["accountId"] = "account-id-redacted-not-a-database-row"
     credits = (r.get("rateLimitResetCredits") or {}).get("credits")
     if isinstance(credits, list):
         for i, c in enumerate(credits):

@@ -200,5 +200,11 @@ export function seedEvents(options: { at: string; mint?: () => string }): IdeaEv
     metadata: metadata(seed),
     placement: { at: "back" as const },
     needsGreg: seed.needsGreg === true,
+    /* **THE SEED STATES NO PRIORITY**, and that is the same restraint as `by`.
+       These sixteen are Greg's, and where they sit relative to Overseer tooling
+       and the dashboard is a banding he gave on 2026-09-09 — after this file was
+       written, and over a queue that will hold more than these. Applying it is
+       `overseer-queue set-priorities`, one reviewed command over the live file,
+       rather than a number frozen into a migration. 260909d. */
   }));
 }

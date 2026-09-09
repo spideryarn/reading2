@@ -42,6 +42,7 @@ import { absenceGapReason } from "./usage-absence.js";
 import { groupUsageIncidents, type IncidentInput } from "./usage-feed.js";
 import type {
   CacheObservation,
+  CodexObservation,
   HistoryIncident,
   ScanObservation,
   UsageHistoryLine,
@@ -49,7 +50,7 @@ import type {
   WindowObservation,
 } from "./usage-history-record.js";
 import { LINE_SCHEMA, SUMMARY_SCHEMA } from "./usage-history-record.js";
-import type { RateLimitScan, UsageAccount, UsageCacheReading, UsageReport } from "./wire.js";
+import type { CodexUsageReading, RateLimitScan, UsageAccount, UsageCacheReading, UsageReport } from "./wire.js";
 
 /**
  * What one pass did, structurally.
@@ -156,9 +157,68 @@ export function scanObservationOf(scan: RateLimitScan): ScanObservation {
   return { conclusive: gap === null, why: gap, incidents };
 }
 
+/**
+ * Keep the already-adjudicated Codex reading, but copy it field by field into
+ * the independently owned history shape. The explicit mapping keeps the
+ * persisted choice visible here, and its focused test pins the fields that a
+ * projection could otherwise silently drop.
+ */
+export function codexObservationOf(reading: CodexUsageReading): CodexObservation {
+  if (reading.kind === "unknown") {
+    return { kind: "unknown", why: reading.why, retryable: reading.retryable };
+  }
+  return {
+    kind: "value",
+    accountId: reading.accountId,
+    readAt: reading.readAt,
+    buckets: reading.buckets.map((bucket) => ({
+      limitId: bucket.limitId,
+      limitName: bucket.limitName,
+      windows: bucket.windows.map((window) =>
+        window.kind === "value"
+          ? {
+              kind: "value",
+              slot: window.slot,
+              windowMinutes: window.windowMinutes,
+              usedPercent: window.usedPercent,
+              resetsAt: window.resetsAt,
+              resetsAtMs: window.resetsAtMs,
+            }
+          : {
+              kind: "unknown",
+              slot: window.slot,
+              windowMinutes: window.windowMinutes,
+              why: window.why,
+            },
+      ),
+      planType: bucket.planType,
+      credits:
+        bucket.credits === null
+          ? null
+          : {
+              hasCredits: bucket.credits.hasCredits,
+              unlimited: bucket.credits.unlimited,
+              balance: bucket.credits.balance,
+            },
+      individualLimit:
+        bucket.individualLimit === null
+          ? null
+          : {
+              limit: bucket.individualLimit.limit,
+              used: bucket.individualLimit.used,
+              remainingPercent: bucket.individualLimit.remainingPercent,
+              resetsAt: bucket.individualLimit.resetsAt,
+            },
+      spendControlReached: bucket.spendControlReached,
+      rateLimitReachedType: bucket.rateLimitReachedType,
+    })),
+    resetCredits: reading.resetCredits,
+  };
+}
+
 export function usageHistoryLineFrom(
   input: PassInput,
-  options: { nextDueMs: number; recordedAt: string },
+  options: { nextDueMs: number; recordedAt: string; codex: CodexUsageReading },
 ): UsageHistoryLine {
   const pass: UsagePass =
     input.kind === "collector-failed"
@@ -177,5 +237,6 @@ export function usageHistoryLineFrom(
     recordedAt: options.recordedAt,
     nextDueMs: options.nextDueMs,
     pass,
+    codex: codexObservationOf(options.codex),
   };
 }

@@ -64,6 +64,10 @@ import type {
   UsageLevel,
   UsageSummary,
   UsageWindowCard,
+  QuestionsView,
+  QuestionGap,
+  QuestionItem,
+  QuestionTarget,
 } from "../../wire.js";
 
 export type { AttemptClock };
@@ -90,6 +94,10 @@ export type {
   UsageLevel,
   UsageSummary,
   UsageWindowCard,
+  QuestionsView,
+  QuestionGap,
+  QuestionItem,
+  QuestionTarget,
 };
 
 export type FleetStatus =
@@ -2386,6 +2394,409 @@ export type FleetStateRead = { ok: true; state: FleetState } | { ok: false; why:
 /** The schema this build knows how to read. See `FleetState` on the node side. */
 export const SCHEMA = 1;
 
+/* ------------------------------------------------------ Questions view -- */
+
+/**
+ * The Questions field has two absences which the shared server type cannot
+ * express: an older server omitted it, or this page received it and could not
+ * read it. Both become partial views, never empty complete ones.
+ *
+ * Source references are validated here but retained on failure. Dropping a
+ * dangling card would make a malformed row look exactly like a resolved
+ * absence — the quiet failure this composition exists to prevent.
+ */
+export function parseQuestions(
+  raw: unknown,
+  rows: readonly FleetRow[],
+  attention: AttentionView,
+  unreadableRows: number,
+  skew: ClockSkew,
+): QuestionsView {
+  if (raw === undefined) return { kind: "partial", items: [], gaps: [{ kind: "questions-not-reported" }] };
+  const unreadable = (why: string): QuestionsView => ({
+    kind: "partial",
+    items: [],
+    gaps: [{ kind: "questions-unreadable", why }],
+  });
+  if (!isRecord(raw)) return unreadable("the server sent a Questions view that is not an object");
+
+  const kind = str(raw["kind"]);
+  let parsed: QuestionsView;
+  if (kind === "complete" || kind === "partial") {
+    if (!Array.isArray(raw["items"])) return unreadable(`the ${kind} Questions view has no item list`);
+    const items: QuestionItem[] = [];
+    for (const value of raw["items"]) {
+      const item = parseQuestionItem(value, skew);
+      if (item === null) return unreadable("the Questions view contains an item this page cannot read");
+      items.push(item);
+    }
+    if (kind === "complete") {
+      parsed = { kind: "complete", items };
+    } else {
+      const gaps = parseQuestionGaps(raw["gaps"], skew);
+      if (gaps === null) return unreadable("the partial Questions view has no readable, non-empty gap list");
+      parsed = { kind: "partial", items, gaps };
+    }
+  } else if (kind === "not-observed") {
+    const gaps = parseQuestionGaps(raw["gaps"], skew);
+    if (gaps === null) return unreadable("the not-observed Questions view has no readable, non-empty gap list");
+    parsed = { kind: "not-observed", gaps };
+  } else {
+    return unreadable(`this page does not know the Questions view ${JSON.stringify(kind ?? raw["kind"] ?? null)}`);
+  }
+
+  return resolveQuestionReferences(parsed, rows, attention, unreadableRows);
+}
+
+function parseQuestionItem(raw: unknown, skew: ClockSkew): QuestionItem | null {
+  if (!isRecord(raw)) return null;
+  const kind = str(raw["kind"]);
+  const target = parseQuestionTarget(raw["target"]);
+
+  if (kind === "dialog" || kind === "dialog-unaddressable") {
+    const rowId = nonBlank(raw["rowId"]);
+    if (rowId === null || target === null) return null;
+    if (kind === "dialog" && target.kind === "addressable") return { kind, rowId, target };
+    if (kind === "dialog-unaddressable" && target.kind === "unaddressable") return { kind, rowId, target };
+    return null;
+  }
+
+  if (kind === "prose" || kind === "prose-unaddressable") {
+    const itemId = nonBlank(raw["itemId"]);
+    const excerpt = nonBlank(raw["excerpt"]);
+    const why = nonBlank(raw["why"]);
+    const since = iso(raw["waitingSince"]);
+    const attentionKind = ATTENTION_KINDS.find((candidate) => candidate === raw["attentionKind"]);
+    if (
+      itemId === null ||
+      target === null ||
+      excerpt === null ||
+      why === null ||
+      since === null ||
+      attentionKind === undefined ||
+      !Array.isArray(raw["duplicates"])
+    ) {
+      return null;
+    }
+    const duplicates: QuestionTarget[] = [];
+    for (const value of raw["duplicates"]) {
+      const duplicate = parseQuestionTarget(value);
+      if (duplicate === null) return null;
+      duplicates.push(duplicate);
+    }
+    const common = {
+      itemId,
+      excerpt,
+      why,
+      waitingSince: shiftToBrowserClock(since, skew) ?? since,
+      attentionKind,
+      duplicates,
+    } as const;
+    if (kind === "prose" && target.kind === "addressable") return { kind, target, ...common };
+    if (kind === "prose-unaddressable" && target.kind === "unaddressable") return { kind, target, ...common };
+    return null;
+  }
+  return null;
+}
+
+function parseQuestionTarget(raw: unknown): QuestionTarget | null {
+  if (!isRecord(raw)) return null;
+  const sessionId = nonBlank(raw["sessionId"]);
+  const sessionName = nonBlank(raw["sessionName"]);
+  if (sessionId === null || sessionName === null) return null;
+  if (raw["kind"] === "addressable") return { kind: "addressable", sessionId, sessionName };
+  if (raw["kind"] === "unaddressable") {
+    const why = nonBlank(raw["why"]);
+    return why === null ? null : { kind: "unaddressable", sessionId, sessionName, why };
+  }
+  return null;
+}
+
+function parseQuestionGaps(raw: unknown, skew: ClockSkew): [QuestionGap, ...QuestionGap[]] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const gaps: QuestionGap[] = [];
+  for (const value of raw) {
+    const gap = parseQuestionGap(value, skew);
+    if (gap === null) return null;
+    gaps.push(gap);
+  }
+  return gaps as [QuestionGap, ...QuestionGap[]];
+}
+
+/** Every arm is checked because an unknown cause cannot safely inherit a known one's meaning. */
+function parseQuestionGap(raw: unknown, skew: ClockSkew): QuestionGap | null {
+  if (!isRecord(raw)) return null;
+  const kind = str(raw["kind"]);
+  const why = (): string | null => nonBlank(raw["why"]);
+  const id = (key: "rowId" | "itemId" | "sessionId"): string | null => nonBlank(raw[key]);
+  switch (kind) {
+    case "attention-not-asked":
+    case "checkpoint-absent":
+    case "attention-no-sessions-scanned":
+    case "collection-not-observed":
+    case "questions-not-reported":
+      return { kind };
+    case "checkpoint-unreadable":
+    case "attention-list-unknown":
+    case "collection-failed":
+    case "questions-unreadable": {
+      const reason = why();
+      return reason === null ? null : { kind, why: reason };
+    }
+    case "attention-unreadable": {
+      const reason = why();
+      return reason === null ? null : { kind, why: reason };
+    }
+    case "attention-sessions-unreadable":
+    case "rows-unreadable": {
+      const value = count(raw["count"]);
+      return value === null || value === 0 ? null : { kind, count: value };
+    }
+    case "row-question-unreadable": {
+      const rowId = id("rowId");
+      return rowId === null ? null : { kind, rowId };
+    }
+    case "fleet-snapshot-stale": {
+      const collectedAt = iso(raw["collectedAt"]);
+      return collectedAt === null
+        ? null
+        : { kind, collectedAt: shiftToBrowserClock(collectedAt, skew) ?? collectedAt };
+    }
+    case "checkpoint-stale": {
+      const coordinatorWrittenAt = iso(raw["coordinatorWrittenAt"]);
+      return coordinatorWrittenAt === null
+        ? null
+        : { kind, coordinatorWrittenAt: shiftToBrowserClock(coordinatorWrittenAt, skew) ?? coordinatorWrittenAt };
+    }
+    case "attention-scan-stale": {
+      const scannedAt = iso(raw["scannedAt"]);
+      return scannedAt === null ? null : { kind, scannedAt: shiftToBrowserClock(scannedAt, skew) ?? scannedAt };
+    }
+    case "dialog-reference-unresolved":
+    case "dialog-source-inconsistent": {
+      const rowId = id("rowId");
+      const reason = why();
+      return rowId === null || reason === null ? null : { kind, rowId, why: reason };
+    }
+    case "attention-reference-unresolved": {
+      const itemId = id("itemId");
+      const reason = why();
+      return itemId === null || reason === null ? null : { kind, itemId, why: reason };
+    }
+    default:
+      return null;
+  }
+}
+
+function resolveQuestionReferences(
+  view: QuestionsView,
+  rows: readonly FleetRow[],
+  attention: AttentionView,
+  unreadableRows: number,
+): QuestionsView {
+  const discovered: QuestionGap[] = unreadableRows > 0 ? [{ kind: "rows-unreadable", count: unreadableRows }] : [];
+  if (view.kind !== "not-observed") {
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
+    const attentionItems =
+      attention.kind === "published" && attention.list.kind === "list"
+        ? new Map(attention.list.items.map((item) => [item.id, item]))
+        : new Map<string, AttentionItem>();
+    for (const item of view.items) {
+      switch (item.kind) {
+        case "dialog":
+        case "dialog-unaddressable":
+          resolveDialogReference(item, rowsById.get(item.rowId), discovered);
+          break;
+        case "prose":
+        case "prose-unaddressable":
+          resolveProseReference(item, attentionItems.get(item.itemId), rowsById, discovered);
+          break;
+        default: {
+          const never: never = item;
+          void never;
+        }
+      }
+    }
+  }
+  return downgradeQuestions(view, discovered);
+}
+
+function resolveDialogReference(
+  item: Extract<QuestionItem, { kind: "dialog" | "dialog-unaddressable" }>,
+  row: FleetRow | undefined,
+  gaps: QuestionGap[],
+): void {
+  if (row === undefined || row.question === null) {
+    gaps.push({
+      kind: "dialog-reference-unresolved",
+      rowId: item.rowId,
+      why: row === undefined ? "no parsed row has this id" : "the referenced row has no parsed question",
+    });
+    return;
+  }
+  if (row.question.gate.kind !== "conversation") {
+    gaps.push({ kind: "dialog-source-inconsistent", rowId: item.rowId, why: "the referenced row did not parse as a conversation gate" });
+    return;
+  }
+  /* The server classifier cannot produce `conversation` without readable
+     material. The two fields are parsed independently here, so this explicit
+     cross-field check closes a state the client parser can otherwise invent. */
+  if (row.question.material.kind !== "read") {
+    gaps.push({
+      kind: "dialog-source-inconsistent",
+      rowId: item.rowId,
+      why: `the referenced conversation gate has ${row.question.material.kind} material`,
+    });
+    return;
+  }
+  const shouldAddress = row.paneId !== null && row.claudeSessionId !== null;
+  if (
+    item.target.sessionId !== row.id ||
+    item.target.sessionName !== row.name ||
+    (item.kind === "dialog") !== shouldAddress
+  ) {
+    gaps.push({ kind: "dialog-source-inconsistent", rowId: item.rowId, why: "the target does not match the referenced row's observed address" });
+  }
+}
+
+function resolveProseReference(
+  item: Extract<QuestionItem, { kind: "prose" | "prose-unaddressable" }>,
+  source: AttentionItem | undefined,
+  rowsById: ReadonlyMap<string, FleetRow>,
+  gaps: QuestionGap[],
+): void {
+  const fail = (why: string): void => {
+    gaps.push({ kind: "attention-reference-unresolved", itemId: item.itemId, why });
+  };
+  if (source === undefined || source.evidence.kind !== "prose") {
+    fail(source === undefined ? "no parsed attention item has this id" : "the referenced attention item is not prose");
+    return;
+  }
+  if (
+    item.excerpt !== source.evidence.excerpt ||
+    item.why !== source.evidence.why ||
+    item.waitingSince !== source.waitingSince ||
+    item.attentionKind !== source.kind ||
+    item.target.sessionId !== source.sessionId ||
+    item.target.sessionName !== source.sessionName ||
+    item.duplicates.length !== source.duplicates.length
+  ) {
+    fail("the copied prose observation does not match the attention item it references");
+    return;
+  }
+  const members = [{ sessionId: source.sessionId, sessionName: source.sessionName }, ...source.duplicates];
+  const targets = [item.target, ...item.duplicates];
+  for (let index = 0; index < members.length; index += 1) {
+    const member = members[index];
+    const target = targets[index];
+    if (member === undefined || target === undefined) {
+      fail("the per-member addressability list is incomplete");
+      return;
+    }
+    const row = rowsById.get(member.sessionId);
+    const shouldAddress = row !== undefined && row.paneId !== null && row.claudeSessionId !== null;
+    if (
+      target.sessionId !== member.sessionId ||
+      target.sessionName !== member.sessionName ||
+      (target.kind === "addressable") !== shouldAddress
+    ) {
+      fail("a member's target does not match its attention identity and observed fleet address");
+      return;
+    }
+  }
+}
+
+/**
+ * Add facts found on this side without ever promoting the server's arm.
+ * Deduplication is structural so the same source failure checked twice remains
+ * one sentence rather than a permanent chorus on the eventual panel.
+ */
+function downgradeQuestions(view: QuestionsView, discovered: readonly QuestionGap[]): QuestionsView {
+  if (discovered.length === 0) return view;
+  const existing = view.kind === "complete" ? [] : [...view.gaps];
+  const seen = new Set(existing.map((gap) => JSON.stringify(gap)));
+  for (const gap of discovered) {
+    const key = JSON.stringify(gap);
+    if (!seen.has(key)) {
+      seen.add(key);
+      existing.push(gap);
+    }
+  }
+  const gaps = existing as [QuestionGap, ...QuestionGap[]];
+  if (view.kind === "not-observed") return { kind: "not-observed", gaps };
+  return { kind: "partial", items: view.items, gaps };
+}
+
+/**
+ * Re-establish completeness against the browser's current clock.
+ *
+ * This is a selector rather than a parse-time annotation: a tab left open must
+ * age out even if no new payload arrives. It rechecks the other positive
+ * controls too because the browser, not the server, knows which rows survived
+ * parsing. The direction is downgrade-only by construction.
+ */
+export function questionsAtTime(state: FleetState, now: number): QuestionsView {
+  const gaps: QuestionGap[] = [];
+  if (state.unreadableRows > 0) gaps.push({ kind: "rows-unreadable", count: state.unreadableRows });
+  if (state.collectedAt === null) {
+    gaps.push({ kind: "collection-not-observed" });
+  } else if (questionClockStale(state.collectedAt, now, (state.refreshMs ?? 60_000) * 2.5)) {
+    gaps.push({ kind: "fleet-snapshot-stale", collectedAt: state.collectedAt });
+  }
+  if (state.error !== null) gaps.push({ kind: "collection-failed", why: state.error });
+
+  for (const row of state.rows) {
+    if (row.status.kind === "needs-you" && row.question === null && (!isRecord(row.rawQuestion) || row.rawQuestion["kind"] !== "none")) {
+      gaps.push({ kind: "row-question-unreadable", rowId: row.id });
+    }
+  }
+
+  switch (state.attention.kind) {
+    case "not-asked":
+      gaps.push({ kind: "attention-not-asked" });
+      break;
+    case "checkpoint-absent":
+      gaps.push({ kind: "checkpoint-absent" });
+      break;
+    case "checkpoint-unreadable":
+      gaps.push({ kind: "checkpoint-unreadable", why: state.attention.why });
+      break;
+    case "feed-unreadable":
+      gaps.push({ kind: "attention-unreadable", why: state.attention.why });
+      break;
+    case "published":
+      if (questionClockStale(state.attention.coordinatorWrittenAt, now, 5 * 60_000)) {
+        gaps.push({ kind: "checkpoint-stale", coordinatorWrittenAt: state.attention.coordinatorWrittenAt });
+      }
+      if (questionClockStale(state.attention.list.scannedAt, now, 6 * 60_000)) {
+        gaps.push({ kind: "attention-scan-stale", scannedAt: state.attention.list.scannedAt });
+      }
+      if (state.attention.list.kind === "unknown") {
+        gaps.push({ kind: "attention-list-unknown", why: state.attention.list.why });
+      } else {
+        if (state.attention.list.sessionsScanned === 0) gaps.push({ kind: "attention-no-sessions-scanned" });
+        if (state.attention.list.sessionsUnreadable > 0) {
+          gaps.push({ kind: "attention-sessions-unreadable", count: state.attention.list.sessionsUnreadable });
+        }
+        /* Inbox dialog items are discarded in silence here too, for the reason
+           `composeQuestions` gives at length: a dialog answered between the two
+           observers' passes disagrees as a matter of ordinary operation, and a
+           gap on that put the page in `partial` most of the time. */
+      }
+      break;
+    default: {
+      const never: never = state.attention;
+      void never;
+    }
+  }
+  return downgradeQuestions(state.questions, gaps);
+}
+
+function questionClockStale(value: string, now: number, deadline: number): boolean {
+  const at = Date.parse(value);
+  return !Number.isFinite(at) || at > now || now - at > deadline;
+}
+
 /**
  * The payload off the wire. **Never throws**, because a page that goes blank on
  * a field it did not expect is a page that has stopped telling you about the
@@ -2443,14 +2854,18 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
     if (row === null) unreadableRows += 1;
     else rows.push(row);
   }
-  return {
-    ok: true,
-    state: {
+  const collectedAt = shiftToBrowserClock(str(raw["collectedAt"]), clockSkew);
+  const attention = parseAttention(raw["attention"], clockSkew);
+  const refreshMs =
+    typeof raw["refreshMs"] === "number" && Number.isFinite(raw["refreshMs"]) && raw["refreshMs"] > 0
+      ? raw["refreshMs"]
+      : null;
+  const state: FleetState = {
       clockSkew,
       /* SHIFTED. `collectedAge` subtracts this from the browser's clock, and
          before v0.4j that subtraction crossed two clocks — which is how a phone
          three minutes fast held the STALE banner on permanently. */
-      collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
+      collectedAt,
       tookMs: num(raw["tookMs"], 0),
       error: str(raw["error"]),
       /* **WHICH TMUX SERVER THESE HANDLES BELONG TO.** Every `$…` and `%…` in
@@ -2496,7 +2911,11 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          Never throws and never fails the payload over a bad inbox: a page that
          went blank on it would have stopped saying what is running on the box,
          which is the more important half. */
-      attention: parseAttention(raw["attention"], clockSkew),
+      attention,
+      /* Parsed only after rows and attention, because its references are
+         meaningful only against the independently parsed copies this page will
+         actually render. A dangling reference remains an item plus a gap. */
+      questions: parseQuestions(raw["questions"], rows, attention, unreadableRows, clockSkew),
       /* **IS SUPERVISION STILL WORKING?** — the same join, one field along, and
          it fails the same way: never throws, never fails the payload. A card
          that cannot read the Overseer's status must leave the sessions below it
@@ -2513,10 +2932,13 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */
-      refreshMs:
-        typeof raw["refreshMs"] === "number" && Number.isFinite(raw["refreshMs"]) && raw["refreshMs"] > 0
-          ? raw["refreshMs"]
-          : null,
-    },
+      refreshMs,
+  };
+  return {
+    ok: true,
+    /* Transport can make a server-complete view stale before parsing finishes.
+       The same selector is called again by the eventual render path, so this
+       initial application is not the only clock check. */
+    state: { ...state, questions: questionsAtTime(state, receivedAt) },
   };
 }

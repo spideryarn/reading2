@@ -23,6 +23,7 @@
 import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
 import type { CheckpointFeeds } from "./overseer-status.js";
+import { composeQuestions } from "./questions.js";
 import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed } from "./wire.js";
 
 /**
@@ -91,7 +92,9 @@ export function fleetState(
    * in as many words, which is true of it — it did not look.
    */
   usage: UsageFeed,
+  now: number = Date.now(),
 ): FleetState {
+  const rows = snapshot?.rows ?? [];
   return {
     schema: 1,
     attemptedAt,
@@ -102,8 +105,8 @@ export function fleetState(
        `collectedAt` above, inventing this one here is not a lie with a clock on
        it — it is the only honest reading of it, because composing the payload
        is answering the request. See `servedAt`. */
-    servedAt: new Date().toISOString(),
-    rows: snapshot?.rows ?? [],
+    servedAt: new Date(now).toISOString(),
+    rows,
     tmuxServerPid: snapshot?.tmuxServerPid ?? null,
     // NOT `snapshot?.collectedAt ?? new Date().toISOString()`, however tempting
     // it looks to a caller that wants a string. A timestamp invented here says
@@ -114,6 +117,17 @@ export function fleetState(
     health,
     refreshMs,
     answeringEnabled,
+    /* The pane and inbox projections are composed from the exact values above.
+       In particular this is not a second checkpoint read: `statePayload` hands
+       the one projection it already holds into this function. */
+    questions: composeQuestions({
+      rows,
+      attentionFeed: attention,
+      collectionError: error,
+      collectedAt: snapshot?.collectedAt ?? null,
+      refreshMs,
+      now,
+    }),
   };
 }
 
@@ -187,6 +201,7 @@ export function statePayload(deps: PayloadDeps): string {
       checkpoint.attention,
       checkpoint.overseer,
       checkpoint.usage,
+      Date.now(),
     ),
   );
 }

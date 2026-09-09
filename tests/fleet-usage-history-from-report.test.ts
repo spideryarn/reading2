@@ -8,12 +8,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   cacheObservationOf,
+  codexObservationOf,
   scanObservationOf,
   usageHistoryLineFrom,
   type PassInput,
 } from "../tools/fleet/usage-history-from-report.js";
 import { encodeUsageHistoryLine } from "../tools/fleet/usage-history-record.js";
-import type { RateLimitHit, ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
+import type { CodexUsageReading, RateLimitHit, ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 
 function coverage(over: Partial<ScanCoverage> = {}): ScanCoverage {
   return {
@@ -88,6 +89,54 @@ function report(over: Partial<UsageReport> = {}): UsageReport {
 }
 
 const OPTS = { nextDueMs: 300_000, recordedAt: "2026-09-09T00:50:40.000Z" };
+
+const CODEX: CodexUsageReading = {
+  kind: "value",
+  accountId: "redacted-codex-account",
+  readAt: "2026-09-09T00:50:36.000Z",
+  buckets: [
+    {
+      limitId: "codex",
+      limitName: null,
+      windows: [
+        {
+          kind: "value",
+          slot: "primary",
+          windowMinutes: 10_080,
+          usedPercent: 24,
+          resetsAt: "2026-09-15T01:23:19.000Z",
+          resetsAtMs: 1789435399000,
+        },
+      ],
+      planType: "pro",
+      credits: { hasCredits: false, unlimited: false, balance: "0" },
+      individualLimit: { limit: "100", used: "25", remainingPercent: 75, resetsAt: 1789435399 },
+      spendControlReached: false,
+      rateLimitReachedType: null,
+    },
+  ],
+  resetCredits: 2,
+};
+
+describe("the Codex observation", () => {
+  it("maps the reading without dropping spend-control fields", () => {
+    const observation = codexObservationOf(CODEX);
+    expect(observation).toEqual(CODEX);
+    if (observation.kind !== "value") throw new Error("shape");
+    expect(observation.buckets[0]).toMatchObject({
+      spendControlReached: false,
+      individualLimit: { limit: "100", used: "25", remainingPercent: 75, resetsAt: 1789435399 },
+    });
+  });
+
+  it("keeps a failed collection's reason and retryability", () => {
+    expect(codexObservationOf({ kind: "unknown", why: "fetch failed", retryable: true })).toEqual({
+      kind: "unknown",
+      why: "fetch failed",
+      retryable: true,
+    });
+  });
+});
 
 describe("the cache observation", () => {
   it("keeps every window the file had, including ones it could not read", () => {
@@ -191,7 +240,7 @@ describe("the whole line", () => {
       why: "the fresh scan did not finish",
       at: "2026-09-09T00:50:40.000Z",
     };
-    const line = usageHistoryLineFrom(input, OPTS);
+    const line = usageHistoryLineFrom(input, { ...OPTS, codex: CODEX });
     if (line.pass.kind !== "pass") throw new Error("shape");
     expect(line.pass.publication).toEqual({ decision: "keep-stored", why: "the fresh scan did not finish" });
     expect(line.pass.cache.kind).toBe("attributed");
@@ -203,7 +252,7 @@ describe("the whole line", () => {
        a 30-45 second scan means they are genuinely different numbers. */
     const line = usageHistoryLineFrom(
       { kind: "take-fresh", report: report(), why: "finished", at: "2026-09-09T00:51:20.000Z" },
-      OPTS,
+      { ...OPTS, codex: CODEX },
     );
     if (line.pass.kind !== "pass") throw new Error("shape");
     expect(line.pass.collectedAt).toBe("2026-09-09T00:50:35.000Z");
@@ -213,7 +262,7 @@ describe("the whole line", () => {
   it("maps a collector failure to its own arm, with no collectedAt anywhere", () => {
     const line = usageHistoryLineFrom(
       { kind: "collector-failed", why: "ENOENT", at: "2026-09-09T00:55:00.000Z" },
-      OPTS,
+      { ...OPTS, codex: CODEX },
     );
     expect(line.pass).toEqual({ kind: "collector-failed", at: "2026-09-09T00:55:00.000Z", why: "ENOENT" });
     expect(JSON.stringify(line)).not.toContain("collectedAt");
@@ -227,7 +276,7 @@ describe("the whole line", () => {
       { kind: "keep-stored", report: report(), why: "kept", at: "2026-09-09T00:50:40.000Z" },
       { kind: "collector-failed", why: "boom", at: "2026-09-09T00:50:40.000Z" },
     ] satisfies PassInput[]) {
-      expect(() => encodeUsageHistoryLine(usageHistoryLineFrom(input, OPTS)), input.kind).not.toThrow();
+      expect(() => encodeUsageHistoryLine(usageHistoryLineFrom(input, { ...OPTS, codex: CODEX })), input.kind).not.toThrow();
     }
   });
 });

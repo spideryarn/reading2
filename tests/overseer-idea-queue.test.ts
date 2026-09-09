@@ -20,9 +20,12 @@
  * here reads or writes `~/.overseer/`, which is the live Overseer's store —
  * `withRoot` is the only way a test gets a path.
  */
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -37,9 +40,10 @@ import {
   appendEvents,
   asPlacement,
   currentOrder,
-  envelope,
+  type envelope,
   foldQueue,
   isDispatchable,
+  isPriority,
   mintId,
   parseEvent,
   parseVersion,
@@ -59,6 +63,8 @@ import {
 } from "../tools/overseer/idea-queue.js";
 import { CLUSTERS, seedEvents } from "../tools/overseer/idea-queue-seed.js";
 import { itemWait, queueDepth, throughput } from "../tools/overseer/idea-queue-wait.js";
+import { planPriorities, parsePriorityFile } from "../tools/overseer/idea-queue-priorities.js";
+import { priorityApplyRefusals } from "../tools/overseer/idea-queue-priorities.js";
 
 const roots: string[] = [];
 
@@ -83,6 +89,7 @@ const A = "qi-aaaaaaaa";
 const B = "qi-bbbbbbbb";
 const C = "qi-cccccccc";
 const D = "qi-dddddddd";
+const CLI = fileURLToPath(new URL("../scripts/overseer-queue.ts", import.meta.url));
 
 let tick = 0;
 function at(): string {
@@ -98,7 +105,14 @@ function env(by: "greg" | "overseer" = "greg"): ReturnType<typeof envelope> {
 
 function added(
   id: string,
-  over: { by?: "greg" | "overseer"; placement?: Placement; needsGreg?: boolean; text?: string; title?: string | null; metadata?: IdeaMetadata } = {},
+  over: {
+    by?: "greg" | "overseer";
+    placement?: Placement;
+    needsGreg?: boolean;
+    text?: string;
+    title?: string | null;
+    metadata?: IdeaMetadata;
+  } = {},
 ): IdeaEvent {
   return {
     ...env(over.by ?? "greg"),
@@ -110,6 +124,12 @@ function added(
     placement: over.placement ?? { at: "back" },
     needsGreg: over.needsGreg ?? false,
   };
+}
+
+function runCli(root: string, args: readonly string[]) {
+  return spawnSync(process.execPath, ["--import", "tsx", CLI, ...args, "--root", root], {
+    encoding: "utf8",
+  });
 }
 
 function only(view: QueueView, id: string): IdeaItem {
@@ -522,13 +542,33 @@ describe("parseEvent", () => {
     expect(parseEvent("not json")).toBeNull();
     expect(parseEvent("[]")).toBeNull();
     expect(parseEvent(JSON.stringify({ ...env(), kind: "invented", id: A }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "toString", id: A }))).toBeNull();
   });
 
   it("distinguishes an absent title from a cleared one on an edit", () => {
-    const absent = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A }));
+    const absent = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, needsGreg: true }));
     const cleared = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, title: null }));
     expect(absent && "title" in absent).toBe(false);
     expect(cleared && "title" in cleared).toBe(true);
+  });
+
+  it("refuses every key outside the vocabulary of that event kind", () => {
+    /* One allowed-key rule for every kind, rather than a pair of special cases
+       for `priority`: a newer writer's field must make an older reader stop
+       loudly instead of letting the writer believe half its event happened. */
+    const events: IdeaEvent[] = [
+      added(A),
+      { ...env(), kind: "edited", id: A, text: "changed" },
+      { ...env(), kind: "authorized", id: A, revision: 0 },
+      { ...env(), kind: "moved", id: A, placement: { at: "front" } },
+      { ...env(), kind: "prioritized", id: A, priority: 0.8 },
+      { ...env(), kind: "dispatched", id: A, session: "s", plan: null },
+      { ...env(), kind: "done", id: A },
+      { ...env(), kind: "dropped", id: A, why: null },
+    ];
+    for (const event of events) {
+      expect(parseEvent(JSON.stringify({ ...event, unexpected: "silently ignored" })), event.kind).toBeNull();
+    }
   });
 
   describe("asPlacement", () => {
@@ -628,6 +668,74 @@ describe("the file", () => {
     const lines = readFileSync(join(root, QUEUE_FILE), "utf8").trimEnd().split("\n");
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(parseEvent(line)).not.toBeNull();
+  });
+
+  it("refuses in-memory events that do not survive the exact persistence round trip", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    for (const priority of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 9, -0.1]) {
+      const result = appendEvents([prioritized(A, priority)], { root });
+      expect(result.ok, String(priority)).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe("invalid-event");
+        expect(result.why).toContain("event 0");
+        expect(result.why).toContain("prioritized");
+        expect(result.why).toContain("round trip");
+      }
+      expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+    }
+
+    const valid = appendEvents([prioritized(A, 0.75)], { root });
+    expect(valid.ok).toBe(true);
+    expect(viewOf(readQueue(root))?.items[0]?.priority).toBe(0.75);
+  });
+
+  it("an invalid in-memory first event creates neither the record nor its marker", () => {
+    const root = withRoot();
+    const result = appendEvents([prioritized(A, Number.NaN)], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("invalid-event");
+    expect(existsSync(join(root, QUEUE_FILE))).toBe(false);
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(false);
+    expect(readQueue(root).kind).toBe("never-written");
+  });
+
+  it("a valid but fold-refused first event leaves the queue genuinely never-written", () => {
+    const root = withRoot();
+    const result = appendEvents([prioritized(A, 0.8)], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+    expect(existsSync(join(root, QUEUE_FILE))).toBe(false);
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(false);
+    expect(readQueue(root).kind).toBe("never-written");
+  });
+
+  it("reports a torn-line repair even when the append is subsequently refused", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), '{"kind":"moved","schema":1,"at":"2026');
+
+    const result = appendEvents([{ ...env(), kind: "moved", id: A, placement: { at: "after", anchor: B } }], { root });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("would-break");
+      expect(result.repaired).toMatchObject({ torn: true });
+    }
+  });
+
+  it("the CLI prints a repair notice before reporting a refused append", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), '{"kind":"moved","schema":1,"at":"2026');
+
+    const result = runCli(root, ["move", A, "--by", "overseer", "--after", B]);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toContain("repaired a torn final line first");
+    expect(result.stderr).toContain("would-break");
   });
 
   it("refuses a relative queue directory rather than resolving it against cwd", () => {
@@ -1126,7 +1234,7 @@ describe("round two: an append that would break the record is refused", () => {
   it("refuses `done` on an unknown id", () => {
     const root = withRoot();
     appendEvents([added(A)], { root });
-    const result = appendEvents([{ ...env(), kind: "done", id: "qi-nosuchid" }], { root });
+    const result = appendEvents([{ ...env(), kind: "done", id: B }], { root });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("would-break");
   });
@@ -1153,4 +1261,526 @@ describe("round two: an append that would break the record is refused", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.view.problems).toHaveLength(1);
   });
+
+  /**
+   * **THE MASKING BUG, AND IT IS AN AUTHORISATION BYPASS RATHER THAN A TIDINESS
+   * ONE.** `current` came from `readQueue`, whose problems include the
+   * `unreadable-line` ones; the candidate was folded from `readEvents`, which
+   * drops unparseable lines, with no seed problems. So one malformed line
+   * already in the file made `1 > 1` false and the batch was written.
+   *
+   * The three cases below are the same hole and only the first is about
+   * ordering: **an `authorized` from anybody but Greg, and a `dispatched` for
+   * an id nobody added, would land permanently behind an unrelated parse
+   * error** — in the file whose entire purpose is to say who authorised what.
+   * Found by GPT Sol reviewing this plan, and independently by the session
+   * building decisions-mode, on the same morning.
+   */
+  it.each([
+    ["a priority against an unknown item", () => prioritized(B, 0.9)],
+    ["an authorisation by anybody but Greg", () => ({ ...env("overseer"), kind: "authorized" as const, id: A, revision: 0 })],
+    ["a dispatch of an item nobody added", () => ({ ...env(), kind: "dispatched" as const, id: B, session: "ghost", plan: null })],
+  ])("an existing unreadable line cannot mask %s", (_what, event) => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = appendEvents([event()], { root });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+    /* A refusal that had already written is not a refusal. */
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Priority — 260909d.
+ * ------------------------------------------------------------------ */
+
+function prioritized(id: string, priority: number | null, by: "greg" | "overseer" = "overseer"): IdeaEvent {
+  return { ...env(by), kind: "prioritized", id, priority };
+}
+
+describe("priority is ordering, not content", () => {
+  it("the Overseer setting one bumps no revision and lapses nothing", () => {
+    /* **THE CALL THIS WHOLE FEATURE TURNS ON.** A content edit by anyone but
+       Greg lapses his approval (Sol's P0-2). A priority is the same axis as
+       `moved`, which lapses nothing — so if this ever starts bumping the
+       revision, applying Greg's own banding to sixteen items would hand him
+       sixteen re-approvals to click through. */
+    const view = foldQueue([added(A), prioritized(A, 0.9)]);
+    const item = only(view, A);
+    expect(item.priority).toBe(0.9);
+    expect(item.revision).toBe(0);
+    expect(item.authority).toMatchObject({ kind: "authorized", revision: 0 });
+    expect(isDispatchable(view, item)).toBe(true);
+    expect(view.problems).toEqual([]);
+  });
+
+  it("cannot make an unauthorised item dispatchable, however high it goes", () => {
+    /* Priority moves an item up the LIST. It must not move it past the gate. */
+    const view = foldQueue([added(A, { by: "overseer" }), prioritized(A, 1)]);
+    const item = only(view, A);
+    expect(currentOrder(view)).toEqual([A]);
+    expect(isDispatchable(view, item)).toBe(false);
+    expect(whyNotDispatchable(view, item)).toContain("authoris");
+  });
+
+  it("cannot answer a question only Greg can answer", () => {
+    const view = foldQueue([added(A, { needsGreg: true }), prioritized(A, 1)]);
+    expect(only(view, A).needsGreg).toBe(true);
+    expect(isDispatchable(view, only(view, A))).toBe(false);
+  });
+
+  it("is null until somebody says otherwise — never 0, never 0.5", () => {
+    /* Three candidate defaults and two of them put words in somebody's mouth:
+       0.5 is an opinion nobody expressed, 0 is a judgement nobody made. */
+    expect(only(foldQueue([added(A)]), A).priority).toBeNull();
+  });
+
+  it("a settled item cannot be reprioritised", () => {
+    /* Same guard, same reason, as `moved`: it is out of the ordering, and a
+       write against it is a stale intent getting a defined answer. */
+    const view = foldQueue([added(A), { ...env(), kind: "done", id: A }, prioritized(A, 0.9)]);
+    expect(view.problems.map((p) => p.kind)).toEqual(["illegal-transition"]);
+    expect(only(view, A).priority).toBeNull();
+  });
+
+  it("clearing it puts the item back below every stated one", () => {
+    const view = foldQueue([added(A), added(B), prioritized(A, 0.9), prioritized(B, 0.1), prioritized(A, null)]);
+    expect(currentOrder(view)).toEqual([B, A]);
+    expect(only(view, A).priority).toBeNull();
+  });
+
+  it("says what it did, in the item's own history", () => {
+    const view = foldQueue([added(A), prioritized(A, 0.85), prioritized(A, null)]);
+    const said = only(view, A).history.map((t) => t.what);
+    expect(said).toEqual(["added", "prioritised at 0.85", "priority cleared"]);
+  });
+
+  it("keeps who set the live priority and when on the item, and clears both with it", () => {
+    const set = prioritized(A, 0.85, "overseer");
+    const ranked = only(foldQueue([added(A), set]), A);
+    expect(ranked).toMatchObject({ priority: 0.85, priorityBy: "overseer", priorityAt: set.at });
+
+    const cleared = only(foldQueue([added(A), set, prioritized(A, null, "greg")]), A);
+    expect(cleared).toMatchObject({ priority: null, priorityBy: null, priorityAt: null });
+  });
+});
+
+describe("the queue is ordered by priority, then by placement", () => {
+  it("puts the higher priority first, whatever order they were added in", () => {
+    const view = foldQueue([added(A), added(B), added(C), prioritized(B, 0.9), prioritized(C, 0.5)]);
+    expect(currentOrder(view)).toEqual([B, C, A]);
+  });
+
+  it("the unstated sort below everything stated, even 0.1", () => {
+    const view = foldQueue([added(A), added(B), prioritized(B, 0.1)]);
+    expect(currentOrder(view)).toEqual([B, A]);
+  });
+
+  it("keeps placement order WITHIN a band — the second key, and it is not the id", () => {
+    /* The mutation check lives here: swap the two keys in the comparator and
+       this is the test that reds. `place` still owns the order inside a band,
+       so `--front`/`--before` keep their meaning where they can be seen. */
+    const view = foldQueue([
+      added(A),
+      added(B),
+      added(C),
+      prioritized(A, 0.5),
+      prioritized(B, 0.5),
+      prioritized(C, 0.5),
+      { ...env(), kind: "moved", id: C, placement: { at: "front" } },
+    ]);
+    expect(currentOrder(view)).toEqual([C, A, B]);
+  });
+
+  it("0 is a stated priority and outranks the unstated", () => {
+    /* The reason `null` is not spelled `0`: they are different claims, and
+       this is where the difference is visible. */
+    const view = foldQueue([added(A), added(B), prioritized(B, 0)]);
+    expect(currentOrder(view)).toEqual([B, A]);
+  });
+
+  it("refuses a relative move across priority bands without changing visible order", () => {
+    const view = foldQueue([
+      added(A),
+      added(C),
+      added(B),
+      prioritized(A, 0.9),
+      prioritized(C, 0.9),
+      prioritized(B, 0.1),
+      { ...env(), kind: "moved", id: A, placement: { at: "after", anchor: B } },
+    ]);
+    expect(view.problems).toHaveLength(1);
+    expect(view.problems[0]).toMatchObject({ kind: "illegal-transition" });
+    expect(view.problems[0]?.why).toContain("0.9");
+    expect(view.problems[0]?.why).toContain("0.1");
+    expect(view.problems[0]?.why).toContain("priority");
+    expect(currentOrder(view)).toEqual([A, C, B]);
+  });
+
+  it("front and back still reorder within an exact-priority group", () => {
+    const events: IdeaEvent[] = [
+      added(A),
+      added(B),
+      added(C),
+      prioritized(A, 0.9),
+      prioritized(B, 0.9),
+      prioritized(C, 0.1),
+      { ...env(), kind: "moved", id: B, placement: { at: "front" } },
+    ];
+    const front = foldQueue(events);
+    expect(front.problems).toEqual([]);
+    expect(currentOrder(front)).toEqual([B, A, C]);
+
+    const back = foldQueue([...events, { ...env(), kind: "moved", id: B, placement: { at: "back" } }]);
+    expect(back.problems).toEqual([]);
+    expect(currentOrder(back)).toEqual([A, B, C]);
+  });
+
+  it("counts what is ahead in the order actually shown", () => {
+    /* `waitingAhead` and `itemWait` both walk `view.items`. If the sort lived
+       at the edges instead of in the fold, they would be counting an order
+       nobody sees. */
+    const view = foldQueue([added(A), added(B), prioritized(B, 0.9)]);
+    expect(waitingAhead(view, B)).toBe(0);
+    expect(waitingAhead(view, A)).toBe(1);
+    expect(itemWait(view, only(view, B))).toMatchObject({ kind: "ahead", ahead: 0 });
+    expect(itemWait(view, only(view, A))).toMatchObject({ kind: "ahead", ahead: 1 });
+  });
+});
+
+describe("a priority out of range rejects the line", () => {
+  const base = {
+    schema: IDEA_QUEUE_SCHEMA,
+    eventId: "ev-p",
+    commandId: null,
+    at: "2026-09-09T00:00:00.000Z",
+    by: "greg",
+  };
+
+  it("accepts the ends of the range and null", () => {
+    for (const priority of [0, 1, 0.5, null]) {
+      expect(parseEvent(JSON.stringify({ ...base, kind: "prioritized", id: A, priority }))).not.toBeNull();
+    }
+  });
+
+  it("refuses anything outside it, rather than clamping or ignoring it", () => {
+    /* Clamping turns `1000` into a legitimate-looking top of the queue;
+       ignoring turns a typo into silence. Both are the silent success this
+       module exists against, so a bad line is rejected and becomes a problem. */
+    for (const priority of [1.0000001, -0.1, "0.9", true, {}, []]) {
+      expect(parseEvent(JSON.stringify({ ...base, kind: "prioritized", id: A, priority }))).toBeNull();
+    }
+  });
+
+  it("refuses the two a JSON file cannot even carry", () => {
+    /* `JSON.stringify` writes NaN and Infinity as `null`, which IS a valid
+       priority — so asserting them through `parseEvent` would be a check
+       answering a weaker question than it looks. They are asserted where they
+       can actually arrive: a caller building an event in memory. */
+    expect(isPriority(Number.NaN)).toBe(false);
+    expect(isPriority(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(isPriority(Number.NEGATIVE_INFINITY)).toBe(false);
+    expect(isPriority(undefined)).toBe(false);
+    expect(isPriority(null)).toBe(true);
+    expect(isPriority(0)).toBe(true);
+    expect(isPriority(1)).toBe(true);
+  });
+
+  it("refuses a prioritized event that names no priority at all", () => {
+    expect(parseEvent(JSON.stringify({ ...base, kind: "prioritized", id: A }))).toBeNull();
+  });
+
+  it("refuses any priority key on `added`, including null", () => {
+    const add = (priority: unknown): string =>
+      JSON.stringify({
+        ...base,
+        kind: "added",
+        id: A,
+        text: "an idea",
+        title: null,
+        metadata: EMPTY_METADATA,
+        placement: { at: "back" },
+        priority,
+      });
+    expect(parseEvent(add(0.75))).toBeNull();
+    expect(parseEvent(add(2))).toBeNull();
+    expect(parseEvent(add("high"))).toBeNull();
+    expect(parseEvent(add(null))).toBeNull();
+    const without = JSON.parse(add(null)) as Record<string, unknown>;
+    delete without["priority"];
+    const parsed = parseEvent(JSON.stringify(without));
+    expect(parsed).toMatchObject({ kind: "added" });
+    expect(parsed && "priority" in parsed).toBe(false);
+  });
+
+  it("refuses an empty edit and an edit trying to smuggle priority", () => {
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A, priority: 0.9 }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...base, kind: "edited", id: A, text: "real edit", priority: 0.9 }))).toBeNull();
+  });
+
+  it("a rejected line holds the whole queue, as every rejected line does", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root, expect: VERSION_ZERO });
+    appendFileSync(join(root, QUEUE_FILE), `${JSON.stringify({ ...base, kind: "prioritized", id: A, priority: 9 })}\n`);
+    const view = viewOf(readQueue(root));
+    expect(view?.problems.map((p) => p.kind)).toEqual(["unreadable-line"]);
+    expect(view === null ? [] : view.items.map((i) => isDispatchable(view, i))).toEqual([false]);
+  });
+});
+
+describe("the add CLI composes priority honestly and refuses misleading placement", () => {
+  it("writes added then prioritized in one command when --priority is present", () => {
+    const root = withRoot();
+    const result = runCli(root, ["add", "--by", "greg", "--text", "rank me", "--priority", "0.8"]);
+    expect(result.status, result.stderr).toBe(0);
+    const lines = readFileSync(join(root, QUEUE_FILE), "utf8").trim().split("\n").map((line) => parseEvent(line));
+    expect(lines.map((event) => event?.kind)).toEqual(["added", "prioritized"]);
+    const queue = viewOf(readQueue(root));
+    expect(queue?.items[0]).toMatchObject({ priority: 0.8, priorityBy: "greg" });
+  });
+
+  it("refuses unranked --front, --before and --after when a named ranked item would remain above it", () => {
+    const root = withRoot();
+    appendEvents([added(A), prioritized(A, 0.5)], { root });
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    for (const placement of [["--front"], ["--before", A], ["--after", A]]) {
+      const result = runCli(root, ["add", "--by", "greg", "--text", "placement means what it says", ...placement]);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain(A);
+      expect(result.stderr).toContain("--priority");
+      expect(result.stderr).toContain("--back");
+    }
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("still allows unranked --front when the queue has no ranked items", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const result = runCli(root, ["add", "--by", "greg", "--text", "ordinary front", "--front"]);
+    expect(result.status, result.stderr).toBe(0);
+    const queue = viewOf(readQueue(root));
+    expect(queue?.items.map((item) => item.text)).toEqual(["ordinary front", `the idea called ${A}`]);
+  });
+});
+
+describe("set-priorities: Greg's banding as a file somebody can read", () => {
+  it("reads id, priority and an ignored trailing comment", () => {
+    const parsed = parsePriorityFile(`# Overseer tooling first\n${A} 0.85  # the CLI\n${B} 0.6\n\n${C} 0.15\n`);
+    expect(parsed).toEqual({
+      ok: true,
+      wanted: [
+        { id: A, priority: 0.85 },
+        { id: B, priority: 0.6 },
+        { id: C, priority: 0.15 },
+      ],
+    });
+  });
+
+  it("refuses the WHOLE file for one bad line, naming the line", () => {
+    /* Applying the half it understood is the exact failure the fold refuses:
+       a partial ordering that looks like the one somebody wrote. */
+    const parsed = parsePriorityFile(`${A} 0.85\nqi-nope 0.5\n${C} 0.15\n`);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.why).toContain("line 2");
+  });
+
+  it("refuses an out-of-range priority and a missing one", () => {
+    expect(parsePriorityFile(`${A} 1.5\n`).ok).toBe(false);
+    expect(parsePriorityFile(`${A}\n`).ok).toBe(false);
+    expect(parsePriorityFile(`${A} high\n`).ok).toBe(false);
+  });
+
+  it("refuses the same id twice, because the second is somebody's mistake", () => {
+    const parsed = parsePriorityFile(`${A} 0.2\n${A} 0.8\n`);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.why).toContain(A);
+  });
+
+  it("refuses a file that names nothing", () => {
+    expect(parsePriorityFile("# only a comment\n\n").ok).toBe(false);
+  });
+
+  it("plans a change per item, and no event for one already at that number", () => {
+    const view = foldQueue([added(A), added(B), added(C, { needsGreg: true }), prioritized(B, 0.6)]);
+    const plan = planPriorities(view, [
+      { id: A, priority: 0.85 },
+      { id: B, priority: 0.6 },
+      { id: C, priority: 0.15 },
+      { id: D, priority: 0.4 },
+    ]);
+    expect(plan.changes).toEqual([
+      { id: A, from: null, to: 0.85, needsGreg: false },
+      { id: C, from: null, to: 0.15, needsGreg: true },
+    ]);
+    expect(plan.unchanged.map((u) => u.id)).toEqual([B]);
+    expect(plan.absent).toEqual([D]);
+    expect(plan.unnamed).toEqual([]);
+  });
+
+  it("names the queued items the file says nothing about", () => {
+    const view = foldQueue([added(A), added(B)]);
+    const plan = planPriorities(view, [{ id: A, priority: 0.85 }]);
+    expect(plan.unnamed).toEqual([B]);
+  });
+
+  it("does not plan a change against a settled item", () => {
+    const view = foldQueue([added(A), { ...env(), kind: "done", id: A }]);
+    const plan = planPriorities(view, [{ id: A, priority: 0.85 }]);
+    expect(plan.changes).toEqual([]);
+    expect(plan.absent).toEqual([A]);
+  });
+
+  it("refuses apply for a broken queue and ids absent from the live queue", () => {
+    const broken = foldQueue([added(A), { ...env(), kind: "done", id: B }]);
+    const plan = planPriorities(broken, [
+      { id: A, priority: 0.8 },
+      { id: C, priority: 0.2 },
+    ]);
+    const refusals = priorityApplyRefusals(broken, plan, false);
+    expect(refusals).toHaveLength(2);
+    expect(refusals[0]).toContain("problem");
+    expect(refusals[1]).toContain(C);
+    expect(refusals.join(" ")).not.toContain("unnamed");
+  });
+
+  it("requires unnamed live items to be accepted explicitly", () => {
+    const queue = foldQueue([added(A), added(B)]);
+    const plan = planPriorities(queue, [{ id: A, priority: 0.8 }]);
+    expect(priorityApplyRefusals(queue, plan, false).join(" ")).toContain(B);
+    expect(priorityApplyRefusals(queue, plan, true)).toEqual([]);
+  });
+
+  function priorityFile(root: string, source: string): { path: string; digest: string } {
+    const file = join(root, "priorities.txt");
+    writeFileSync(file, source);
+    return { path: file, digest: createHash("sha256").update(source).digest("hex").slice(0, 12) };
+  }
+
+  function queueVersion(root: string): string {
+    const queue = viewOf(readQueue(root));
+    if (queue === null) throw new Error("test queue should be readable");
+    return spellVersion(queue.version);
+  }
+
+  it("prints a copyable command pinning the raw file, the queue, and any unnamed acceptance", () => {
+    const root = withRoot();
+    appendEvents([added(A), added(B)], { root });
+    const source = `${A} 0.8 # the comment is part of what was reviewed\n`;
+    const file = priorityFile(root, source);
+
+    const dry = runCli(root, ["set-priorities", "--from", file.path, "--by", "overseer"]);
+
+    expect(dry.status, dry.stderr).toBe(0);
+    expect(dry.stdout).toContain(`--expect-version ${queueVersion(root)}`);
+    expect(dry.stdout).toContain(`--expect-file ${file.digest}`);
+    expect(dry.stdout).toContain("--allow-unnamed");
+  });
+
+  it("the CLI refuses apply without --expect-version and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply", "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--expect-version is required");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses apply without --expect-file and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply", "--expect-version", queueVersion(root),
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--expect-file is required");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses a stale queue version and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", "0", "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("queue has moved since the reviewed dry run");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses when even a comment changed after review and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8 # reviewed wording\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+    writeFileSync(file.path, `${A} 0.8 # changed wording\n`);
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("priority file has changed");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses a queue with a problem and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("unresolved problem");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses unnamed live items unless the explicit dry-run flag is present", () => {
+    const root = withRoot();
+    appendEvents([added(A), added(B)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+    const args = [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ];
+
+    const refused = runCli(root, args);
+    expect(refused.status).not.toBe(0);
+    expect(refused.stderr).toContain("--allow-unnamed");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+
+    const accepted = runCli(root, [...args, "--allow-unnamed"]);
+    expect(accepted.status, accepted.stderr).toBe(0);
+    expect(viewOf(readQueue(root))?.items.find((item) => item.id === A)?.priority).toBe(0.8);
+  });
+
 });

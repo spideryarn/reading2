@@ -13,8 +13,11 @@
     "                  `codex_bengalfox` bucket really is. Mapping primary -> five_hour would read",
     "                  the weekly window as five-hourly on the bucket that bills our work.",
     "  limited         `rateLimitReachedType` set and 100% used — the state the Overseer must act on.",
-    "  unknown-window  a duration matching no name this build knows (42 minutes). Named, not dropped,",
-    "                  and not plotted from its unvalidated percentage."
+    "  unknown-window  a duration matching no name this build knows (42 minutes). It stays a VALUE and",
+    "                  is shown by its raw duration: a window we have no friendly label for is still a",
+    "                  real, validated number, and refusing to draw it would hide the one that matters",
+    "                  the day OpenAI adds a window. Only a MISSING or unvalidatable duration is",
+    "                  unknown — see no-duration and no-reset above."
   ],
   "id": 2,
   "result": {
