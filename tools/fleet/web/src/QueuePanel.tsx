@@ -43,7 +43,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Explain, type Tip } from "./Tooltip";
+import { Explain, TipCard, Tooltip, tipText, type Tip } from "./Tooltip";
 import {
   badgeFor,
   depthClauses,
@@ -73,20 +73,245 @@ const WAIT_TIP: Tip = {
   how: "Measured on this queue's own events. A duration would need position × how long an item takes, and 'how long an item takes' is not a number this fleet has — sessions run from ten minutes to six hours, and most sessions were never queue items at all.",
 };
 
+const HISTORY_TIP: Tip = {
+  head: "History",
+  what: "Every touch this item has had, in order, and who made it — added, moved, edited, approved, dispatched, settled.",
+  how: "The reason the queue is an event log rather than a list: provenance is the question a Markdown table could not answer. Nothing is ever rewritten, so an approval that later lapsed is still here, above the edit that lapsed it.",
+};
+
+const SETTLED_TIP: Tip = {
+  head: "Recently settled",
+  what: "Items that are finished or abandoned. They stay on the page rather than disappearing when they stop being work.",
+  how: "Only the recent ones are drawn and the heading says how many older ones are not — an idea that was considered and rejected is worth more here than a gap, because otherwise the next sweep proposes it again.",
+};
+
 const APPROVAL_TIP: Tip = {
   head: "Approval names a revision",
   what: "An item approved and then edited shows as lapsed rather than staying approved.",
   how: "Your own edits re-approve as you make them; an agent's do not, so nothing can be approved small and then quietly enlarged.",
 };
 
+/**
+ * **A card per badge, because the badge is what this tab is for.**
+ *
+ * This file's own header says it: *"A list of queued work is easy and not very
+ * useful. What Greg cannot see anywhere else is why each item is not moving."*
+ * The badge carries that whole answer in one or two words, and until 2026-09-09
+ * nothing on the page said what any of the words meant — the tab had two
+ * tooltips, neither of them on a row.
+ *
+ * **Keyed by the visible label rather than by tone**, because two of the tones
+ * carry two labels each (`settled` is both *done* and *dropped*, `unapproved`
+ * is both *proposal* and *approval lapsed*) and those are exactly the pairs a
+ * reader needs kept apart. That loses the compiler's exhaustiveness check, so
+ * tests/fleet-queue-badge-tips.test.ts drives `badgeFor` over every state it can
+ * reach and asserts each label it produces has a card here — which is a stronger
+ * check than a `Record` anyway, since it also proves the state is reachable.
+ *
+ * Every `how` is quoted down from `tools/overseer/idea-queue.ts` or from
+ * `queue-client.ts` § `badgeFor`, not written here.
+ */
+const BADGE_TIPS: Record<string, Tip> = {
+  ready: {
+    head: "Ready",
+    what: "Authorised, unblocked, and waiting only for a slot. Nothing about this item needs anybody's attention.",
+    how: "The server computed it, using the same test that decides whether an item may actually go out — this page never recomputes that, so the badge and the dispatch gate can never disagree.",
+  },
+  "needs you": {
+    head: "Needs you",
+    what: "Held because it is waiting on an answer from Greg, not because it is unapproved or out of turn.",
+    how: "The only one of the four stuck reasons that is his to clear, which is why it outranks the others on a row that is more than one of them at once. Only he can mark it answered — noticing that something needs him is the coordinator's job, deciding it no longer does is the answer itself.",
+  },
+  proposal: {
+    head: "Proposal",
+    what: "An idea the Overseer wrote down. Nobody has said it may happen.",
+    how: "Authority and progress are different axes here: a proposal can sit at the very front of the queue and still not go out. It becomes real work when Greg authorises it, and only he can.",
+  },
+  "approval lapsed": {
+    head: "Approval lapsed",
+    what: "It was approved, and its words have been edited since — so the approval names something the item no longer says.",
+    how: "Deliberate, and the reason an approval records a revision number rather than a yes: an agent's edit lapses it, Greg's own re-approves as he makes it. Nothing can be approved small and then quietly enlarged.",
+  },
+  running: {
+    head: "Running",
+    what: "Dispatched to a session, which is working on it now. The session's name is in the row when you open it.",
+    how: "It says a session was started, not that anything has landed — the queue records the dispatch, and the work itself finishes in git and in a plan doc rather than here.",
+  },
+  done: {
+    head: "Done",
+    what: "Finished and settled. Kept on the page rather than deleted, under Recently settled.",
+    how: "The queue is an event log, so nothing is ever removed from it — which is what lets it answer who did what, in order, and is why a settled item still has its whole history.",
+  },
+  dropped: {
+    head: "Dropped",
+    what: "Abandoned rather than completed. The reason it was dropped is in the row when you open it.",
+    how: "Also kept, for the same reason as done: an idea that was considered and rejected is worth more on the page than a gap, because otherwise the next sweep proposes it again.",
+  },
+  "on hold": {
+    head: "On hold",
+    what: "Nothing about this item is wrong. The queue file itself has a problem, and while it does, nothing in it is dispatchable.",
+    /* **The word this card may not print is `not approved`**, and that is the
+       same trap Header.tsx's freshness tip names about `STALE`: a test asserts
+       that a queue held by a broken file never says those words anywhere on the
+       page, because saying them is the exact misreport this badge was added to
+       stop — and an explanation that quoted them would satisfy the search on
+       every page and quietly retire the check. The sentence works without them;
+       the check does not. Found by that test, 2026-09-09. */
+    how: "It outranks the row's own reasons, which is why an approved and unblocked item wears it too. Its own count exists because without it these rows were reported as lacking approval — so a queue with one bad line accused twelve perfectly approved items.",
+  },
+};
+
+/**
+ * **The six things that can be wrong with the queue FILE**, as opposed to with
+ * an item in it. Each is drawn as a bare word in a red card beside the server's
+ * own sentence about it, and the words are the record's vocabulary rather than
+ * anybody's English.
+ *
+ * Quoted down from where each is emitted in `tools/overseer/idea-queue.ts`.
+ */
+const PROBLEM_TIPS: Record<string, Tip> = {
+  "unreadable-line": {
+    head: "Unreadable line",
+    what: "A line of the record could not be parsed at all, so whatever it said has not been applied.",
+    how: "The file is append-only and read from the top, so a line nobody can read is a hole in the middle of the history rather than a missing item at the end.",
+  },
+  "unknown-item": {
+    head: "Unknown item",
+    what: "Something happened to an item that was never added — an approval, a move or a dispatch naming an id with no beginning.",
+    how: "Applied to nothing rather than guessed at. It usually means an earlier line is the unreadable one, so the two arrive together.",
+  },
+  "duplicate-item": {
+    head: "Duplicate item",
+    what: "One id was added twice. The first is kept and the second was ignored.",
+    how: "Not last-one-wins: the first `added` is the one whose provenance is real, and letting a later line replace Greg's words is the one edit this file must never make silently.",
+  },
+  "missing-anchor": {
+    head: "Missing anchor",
+    what: "An item was placed before or after another one that is not in the queue, so its position could not be honoured.",
+    how: "The order is a sequence of placements rather than a stored list, which is what makes two writers safe — and what makes a placement against a settled item a fault to report rather than a position to invent.",
+  },
+  "unauthorized-authorization": {
+    head: "Unauthorised authorisation",
+    what: "Somebody other than Greg wrote a line that grants approval, or that says an item no longer needs him.",
+    how: "Refused here rather than in the writers, because the CLI, the HTTP route and a hand-edited file are three entrances and this is the one thing all three pass through. A model must not mint its own approval.",
+  },
+  "illegal-transition": {
+    head: "Illegal transition",
+    what: "Something happened to an item in a state where it cannot happen — dispatched twice, moved after it settled, approved for a revision that has already changed.",
+    how: "Reported rather than applied. A dispatch line in this file reads as permission, so the check is on the transition itself: an approval that names stale words is stale on arrival.",
+  },
+};
+
+/**
+ * **What each of a row's fields is, when it is opened.**
+ *
+ * These are the queue CLI's own flags — `--source`, `--waiting-on`, `--size`,
+ * `--areas`, `--runs` — and the panel's footer tells the reader to use that CLI,
+ * so the labels are spelled the way the flags are and the cards say what
+ * `IdeaMetadata` says about each.
+ *
+ * **`source` and `plan` are two different things and the page used to conflate
+ * them.** The `source` field was drawn under the label *plan*, and the real
+ * `plan` field — the plan doc the dispatched session went on to write — was
+ * never rendered at all. So the row named a field it was not showing and hid
+ * the one the label promised. Found while writing these cards, 2026-09-09.
+ */
+const FACT_TIPS: Record<string, Tip> = {
+  "waiting on": {
+    head: "Waiting on",
+    what: "What has to happen before this can start, in the queue's own words — “a lull”, “the next gateway edit”.",
+    how: "Free text and nothing acts on it: it is a note to a person, not a condition anything evaluates. The badge is what decides whether an item may go out.",
+  },
+  size: {
+    head: "Size",
+    what: "A rough guess at how big the job is — XS through L.",
+    how: "A guess and never a promise, and not what the queue times itself by: sessions here run from ten minutes to six hours, which is why the panel refuses to turn a position into an ETA.",
+  },
+  source: {
+    head: "Source",
+    what: "The plan or doc that already holds the detail, repo-relative — where the idea came from.",
+    how: "Written when the idea was queued, so it points backwards. What the dispatched session goes on to write is the separate `plan` field below, and until 2026-09-09 this one was drawn under that name.",
+  },
+  plan: {
+    head: "Plan",
+    what: "The plan doc the session dispatched to this item wrote for it, recorded at the moment it was dispatched.",
+    how: "Points forwards, unlike `source` above, and exists only once something has actually gone out — so an item with a source and no plan has been thought about and not started.",
+  },
+  runs: {
+    head: "Runs",
+    what: "The reusable instructions the dispatched session is meant to follow, as a path.",
+    how: "A path rather than a copy of the words, so editing that doc changes what the next dispatch does without anything here being rewritten.",
+  },
+  areas: {
+    head: "Areas",
+    what: "The files or directories this touches, used to write the file set into the brief the session is given.",
+    how: "How two sessions are kept out of each other's way, and it is a declaration rather than a lock — nothing stops a session editing outside it, so a brief that gets this wrong costs a merge conflict.",
+  },
+  session: {
+    head: "Session",
+    what: "The name of the session this was dispatched to.",
+    how: "A tmux handle, so it is how to find the work on the box and on the Sessions tab — but names are reused when a session dies, so it identifies a launch rather than a conversation.",
+  },
+};
+
+/**
+ * The card for a badge, and **the retreat when a badge arrives that this build
+ * has no words for.**
+ *
+ * A ninth badge is a change to `badgeFor`, which is checked by a test rather
+ * than by the compiler — so the possibility is real, and the failure to design
+ * for would be a card asserting something about a word it does not know.
+ * Instead it says that plainly and points at the sentence that IS about this
+ * item, which the row draws anyway.
+ */
+export function badgeTip(label: string): Tip {
+  return (
+    BADGE_TIPS[label] ?? {
+      head: label,
+      what: `This build of the dashboard has no description for a “${label}” item.`,
+      how: "It is a state the queue has grown since this page was built. The sentence under the title is the server's own, and it is about this item rather than about the word.",
+    }
+  );
+}
+
+/**
+ * The whole id behind the eight characters on screen.
+ *
+ * The row prints `3v9879qs`; every command in the footer wants `qi-3v9879qs`,
+ * and a reader who types what they can see gets an error rather than an item.
+ */
+function idTip(id: string): Tip {
+  return {
+    head: "This item's id",
+    what: `In full: ${id}. The list drops the shared prefix, which is noise when every row has it.`,
+    how: "It is what the queue's own commands take, so the prefix is not optional there — and it never changes, even as the item is edited, approved, dispatched and settled.",
+  };
+}
+
+/** The same retreat, for a problem the queue file can have that this build cannot name. */
+function problemTip(kind: string): Tip {
+  return (
+    PROBLEM_TIPS[kind] ?? {
+      head: kind,
+      what: `This build of the dashboard has no description for a “${kind}” problem.`,
+      how: "The sentence beside it is the server's own account of what went wrong, and it is the one to act on.",
+    }
+  );
+}
+
 function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boolean }): ReactNode {
   const badge = badgeFor(row, queueHasProblems);
   const tone = BADGE_TONE[badge.tone];
   const [open, setOpen] = useState(false);
+  /* **`source` was labelled `plan`, and `plan` was never drawn.** Two different
+     fields — where the idea came from, and the plan the dispatched session went
+     on to write — and the row named one while showing the other. See
+     `FACT_TIPS` above. */
   const facts: [string, string | null][] = [
     ["waiting on", row.waitingOn],
     ["size", row.size],
-    ["plan", row.source],
+    ["source", row.source],
+    ["plan", row.plan],
     ["runs", row.runs],
     ["areas", row.areas.length === 0 ? null : row.areas.join(", ")],
     ["session", row.dispatchedTo],
@@ -100,7 +325,27 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
         aria-expanded={open}
         className="tw:flex tw:w-full tw:flex-wrap tw:items-start tw:gap-2 tw:p-3 tw:text-left"
       >
-        <Pill tone={tone}>{badge.label}</Pill>
+        {/* **The badge, explained — this tab's own point, and the one element
+            on it that had no card.**
+
+            Not `Explain`, and both halves of why are structural. It renders a
+            `<button>`, and this badge sits *inside* the row's disclosure button
+            — a button in a button is invalid and reads as one control. And a
+            tap here has to expand the row, so the card is `mouseOnly` for the
+            same reason the dock's are: it would otherwise land over the thing
+            the tap just opened.
+
+            What a phone reader gets instead is not nothing. `row.why` under the
+            title is the server's own sentence about this exact item, drawn
+            always; the card adds the vocabulary behind the word, and the same
+            sentence is in the row button's accessible name through the `sr-only`
+            span, which is where a screen reader finds it. */}
+        <Tooltip content={<TipCard tip={badgeTip(badge.label)} />} placement="bottom" mouseOnly>
+          <span>
+            <Pill tone={tone}>{badge.label}</Pill>
+            <span className="tw:sr-only"> — {tipText(badgeTip(badge.label))}</span>
+          </span>
+        </Tooltip>
         <span className="tw:min-w-0 tw:flex-1 tw:text-[13px] tw:text-ink">
           {row.title ?? row.text}
           {/* **The server's sentence, verbatim.** This is the only place the
@@ -116,7 +361,16 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
             <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:text-ink-faint">{row.wait.why}</span>
           ) : null}
         </span>
-        <Mono>{shortId(row.id)}</Mono>
+        {/* The full id, which is what the CLI in the footer wants — the `qi-`
+            prefix is stripped on screen because it is the same on every row,
+            and it is not optional in a command. `mouseOnly` and an `sr-only`
+            sentence, for the same nesting and tap reasons as the badge. */}
+        <Tooltip content={<TipCard tip={idTip(row.id)} />} placement="bottom" mouseOnly>
+          <span>
+            <Mono>{shortId(row.id)}</Mono>
+            <span className="tw:sr-only"> — {tipText(idTip(row.id))}</span>
+          </span>
+        </Tooltip>
       </button>
 
       {open ? (
@@ -129,7 +383,18 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
             {facts.map(([label, value]) =>
               value === null ? null : (
                 <div key={label} className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
-                  <dt className="tw:text-ink-faint">{label}</dt>
+                  {/* Out here in the opened disclosure, not inside the row's
+                      button, so these can be real `Explain` triggers that open
+                      under a finger. */}
+                  <dt className="tw:text-ink-faint">
+                    {FACT_TIPS[label] === undefined ? (
+                      label
+                    ) : (
+                      <Explain tip={FACT_TIPS[label]} placement="bottom">
+                        {label}
+                      </Explain>
+                    )}
+                  </dt>
                   <dd className="tw:min-w-0 tw:break-words tw:text-ink-soft">{value}</dd>
                 </div>
               ),
@@ -149,7 +414,7 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
           {/* **The history, because provenance is why this is an event log.**
               Who did what, in order — the question a Markdown table could not
               answer and the reason the file is shaped the way it is. */}
-          <SectionHeading>History</SectionHeading>
+          <SectionHeading tip={HISTORY_TIP}>History</SectionHeading>
           <ol className="tw:space-y-0.5 tw:text-[12px]">
             {/* **Keyed on content, not on position.** A touch carries no id,
                 and two of them can share a timestamp — a batch appended in one
@@ -258,7 +523,12 @@ export function QueuePanel({
                 differ only in their `why`, so the pair is what identifies one. */}
             {view.problems.map((problem) => (
               <li key={`${problem.kind}-${problem.why}`}>
-                <span className="tw:font-semibold">{problem.kind}</span> — {problem.why}
+                {/* The bare word is the record's vocabulary, not English, and
+                    it is the loudest thing on the tab when it appears. */}
+                <Explain tip={problemTip(problem.kind)} placement="bottom">
+                  <span className="tw:font-semibold">{problem.kind}</span>
+                </Explain>{" "}
+                — {problem.why}
               </li>
             ))}
           </ul>
@@ -291,7 +561,7 @@ export function QueuePanel({
 
       {view.settled.length > 0 ? (
         <>
-          <SectionHeading>
+          <SectionHeading tip={SETTLED_TIP}>
             Recently settled{view.settledWithheld > 0 ? ` (${view.settledWithheld} older not shown)` : ""}
           </SectionHeading>
           {view.settled.map((row) => (

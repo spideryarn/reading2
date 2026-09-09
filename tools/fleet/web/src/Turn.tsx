@@ -38,6 +38,8 @@
  */
 import type { ReactNode } from "react";
 
+import { Explain, type Tip } from "./Tooltip";
+import { instantTip } from "./instant";
 import type { MessageSpeaker, MessageTurn } from "./messages-client";
 import { Mono, cx } from "./ui";
 
@@ -77,14 +79,96 @@ export const SPEAKERS: Record<MessageSpeaker, { label: string; note: string | nu
   },
 };
 
+/**
+ * **A card per speaker, because the label is a claim and the reader cannot
+ * check it.**
+ *
+ * The nine labels above are the distinctions `transcript.ts` verified on disk,
+ * and several of them are unguessable from the words alone: *machinery* and *an
+ * injected reminder* sound like the same thing, *another agent* and *the agent*
+ * differ by one word and by everything, and the two that matter most —
+ * `compact-summary` and `injected` — are machine-written text wearing a
+ * person's role, which is the one mistake this whole vocabulary exists to
+ * prevent.
+ *
+ * **This is a card and not more `note` text** because `note` is already used
+ * for the warning that has to be visible without asking, and six of the nine
+ * carry one. What goes here is the provenance: where the distinction was
+ * measured, and what rounding it to a neighbour would misattribute. Every `how`
+ * below is quoted down from `tools/fleet/transcript.ts` § `TurnSpeaker`, not
+ * written for this file — a tooltip that explains a reading has to say what it
+ * was measured from.
+ *
+ * **Used twice**: on the badge over each message, where the reader meets the
+ * word, and on the filter chips in `FeedPanel`. The badge does nothing when
+ * tapped, so its card opens under a finger; the chips toggle a filter, so
+ * theirs is `mouseOnly` and the label has to stand on its own — which is why
+ * the definitions are also here, on a surface a phone can reach.
+ */
+export const SPEAKER_TIPS: Record<MessageSpeaker, Tip> = {
+  human: {
+    head: "Typed at the pane",
+    what: "Somebody typed this into the session's own terminal. A steer sent from this dashboard lands here too, and deliberately.",
+    how: "Across two real transcripts, only 64 of 389 records wearing a person's role had actually been typed by one — which is why this is a label about where the words entered the session rather than about who composed them.",
+  },
+  assistant: {
+    head: "The agent",
+    what: "The model's own prose: this session's agent, writing to whoever is watching.",
+    how: "A turn here with no words at all is a real state and not a failed read — it called tools and said nothing. Anything the API refused is drawn as its own speaker instead, so a broken run is never mistaken for a quiet one.",
+  },
+  peer: {
+    head: "Another agent",
+    what: "A message a different agent sent over the peer socket, delivered into this session as an ordinary turn. Not a person.",
+    how: "It arrives flagged both as harness-injected and as a peer, and reading the first flag first labelled every one of these an injected reminder — which reads as boilerplate to skip past rather than as a colleague asking for something.",
+  },
+  notification: {
+    head: "Machinery",
+    what: "A subagent finishing, or an auto-continuation. The harness telling the session that something happened.",
+    how: "The largest category by far of what looks like a person speaking: 319 of the 389 user-role records counted on disk were these, which is the measurement the whole nine-way split came out of.",
+  },
+  "compact-summary": {
+    head: "A compaction summary",
+    what: "Claude Code's recap of the conversation so far, written when the context ran out and the older turns were dropped.",
+    how: "It wears a person's role and opens *“This session is being continued from a previous conversation…”* — transcript.ts calls it the single most convincing wrong answer it could give, because it reads exactly like somebody restating the task.",
+  },
+  injected: {
+    head: "An injected reminder",
+    what: "A reminder or caveat the harness put into the conversation. Nobody typed it, and nobody chose to send it.",
+    how: "Machinery wearing a person's role, like a compaction summary. Rounding either of them to *typed at the pane* would put the harness's words in Greg's mouth, which is the specific misattribution this vocabulary exists to stop.",
+  },
+  "api-error": {
+    head: "An API error",
+    what: "A failure from the model API, written into the transcript where the agent's reply would have been.",
+    how: "It reaches the reader as an assistant record and is pulled out into its own speaker here, so a session that fell over is never read as one that answered.",
+  },
+  system: {
+    head: "Claude Code itself",
+    what: "The harness's own notes — records that carry text but come from neither the model nor anybody at the keyboard.",
+    how: "Talk about the session rather than anything in it, which is why it is neither *the agent* nor *machinery*: nothing was delivered to the agent and nothing finished.",
+  },
+  unrecognised: {
+    head: "An unknown speaker",
+    what: "A turn this build of the dashboard has no name for. It is shown, with its words, and left unattributed.",
+    how: "Deliberately not rounded to the nearest familiar speaker. Two of the eight kinds it might be are machine-written text in a person's role, so a guess here would misattribute a message rather than merely describe it vaguely.",
+  },
+};
+
 /** One turn. Text and tool calls, and neither is markup. */
 export function Turn({ turn }: { turn: MessageTurn }): ReactNode {
   const who = SPEAKERS[turn.speaker];
   return (
     <li className="transcript-turn tw:border-t tw:border-rule tw:py-2 tw:first:border-t-0">
       <p className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[11px]">
-        <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
-        {turn.at === null ? null : <span className="tw:text-ink-faint">{turn.at}</span>}
+        {/* No `mouseOnly`: this badge does nothing when tapped, so the finger
+            that wants to know what "an injected reminder" is may have it. */}
+        <Explain tip={SPEAKER_TIPS[turn.speaker]} placement="bottom">
+          <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
+        </Explain>
+        {turn.at === null ? null : (
+          <Explain tip={instantTip(turn.at)} placement="bottom">
+            <span className="tw:text-ink-faint">{turn.at}</span>
+          </Explain>
+        )}
       </p>
       {who.note === null ? null : <p className="tw:mt-0.5 tw:text-[11px] tw:text-ink-faint">{who.note}</p>}
       {turn.text === "" ? (
