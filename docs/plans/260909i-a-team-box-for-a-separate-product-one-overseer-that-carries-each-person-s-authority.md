@@ -4,7 +4,9 @@
 *"Don't implement - wait for instructions from the Overseer."* The research behind it, with GPT 6
 Astra's review, is
 [260909b](../research/260909b-a-shared-team-box-with-one-overseer-several-people-and-several-claude-accounts.md);
-this plan is what changed once Greg answered its questions, and what we would build.
+this plan is what changed once Greg answered its questions, and what we would build. **GPT Sol
+reviewed it the same night** ([260909i-plan-review-sol.md](260909i-plan-review-sol.md)): no P0,
+five P1s, all accepted — § Round 1 review says what each changed.
 
 **It depends on [260909h](260909h-a-reusable-top-level-folder-that-can-become-its-own-repo.md)**,
 the extraction of the Overseer, the dashboard and `gjd-remote` into their own repo, which Greg has
@@ -84,43 +86,76 @@ it, plus a short fixed list of box-keeping powers it applies to everyone alike.*
    Bob ────▶ Ovsr   hand task T to Alice    Bob's (owner)                  done; Alice now owns T
 ```
 
-The rules, each one a line a program can check:
+The rules, each one a line a program can check. **An action needs a *set* of grants, not a
+class** — Sol's first finding, and it changed rules 4 and 5: "deploy Alice's task" needs the
+product owner's grant *and* Alice's, and "pause Bob" is operator authority only when a standing
+policy is the reason. So every request the Overseer handles is an envelope: *who asked, what
+task, which action, which grants that action requires, which policy if any*. The Overseer holds
+the asker's grants and its own policy grants, and the action goes ahead only if the required set
+is covered.
 
-1. **Authority lives in the task, not in the agent and not in the Overseer.** Every task has one
-   owner. An agent's owner is its task's owner. Ownership moves only by the owner handing it over
-   (or adding a helper, if § Still Greg's decides helpers exist).
-2. **A person acting directly** — from the dashboard, or from `gjd-remote` — may act on their own
+1. **Anyone may originate a task they will own.** Creating and dispatching an investigation is
+   neither owner, operator nor product authority — Sol's gap between the classes — so it is its own
+   grant: every person has it, for work at their own priority, within the queue's caps. The task's
+   owner is its author. What priority they may claim is § Still Greg's.
+
+2. **Authority lives in the task, not in the agent and not in the Overseer.** Every task has one
+   owner and an **ownership version** that increments on every hand-over. An agent's owner is its
+   task's owner. Ownership moves only by the owner handing it over (or adding a helper, if § Still
+   Greg's decides helpers exist), or by the administrator reassigning an orphaned task with an
+   audit record. **Every queued effect carries the `taskId` and is re-checked against the current
+   owner at delivery, not only when it was queued** — otherwise Bob's message, queued before he
+   handed the task to Alice, still lands in Alice's agent under Bob's authority.
+3. **A person acting directly** — from the dashboard, or from `gjd-remote` — may act on their own
    tasks. On anyone else's, the dashboard shows the row and refuses the write. *See all, steer own.*
-3. **The Overseer acting for a person carries that person's authority and nothing more.** When
+4. **The Overseer acting for a person carries that person's grants and nothing more.** When
    Alice tells it something, it evaluates the request as Alice: her tasks, her accounts. What Alice
    could not do herself, the Overseer cannot do for her. It does not hold a pool of everyone's
-   authority to be spent on request.
-4. **The Overseer's own authority is the operator list, and it is uniform.** Under standing policy
-   it may pause, resume, compact, kill a wedged shell, close out a finished agent, remove a checked
-   worktree — for anyone's agents, the same way, and logged. None of these changes what a task does.
-   That is the existing gate 3 list with an owner column.
-5. **Product authority is never the Overseer's**, whoever asks. Gate 3 already says so; a team
+   authority to be spent on request. **Free text always requires the target task's owner grant**:
+   a sentence typed into an agent is not classifiable, so it is never an operator action however it
+   is worded.
+5. **The Overseer's own grants are the operator list, each tied to a standing policy, and uniform.**
+   Under a named policy it may pause, resume, compact, kill a wedged shell, close out a finished
+   agent, remove a checked worktree — for anyone's agents, the same way, and logged with the policy
+   id. The same verb without a policy behind it ("pause Bob so my task runs first") is an owner
+   request on Bob's task and is refused into a proposal. **Holds have causes**: an operator hold for
+   load and an owner's own pause are two holds on one agent, and lifting one does not lift the
+   other.
+6. **Product authority is never the Overseer's**, whoever asks. Gate 3 already says so; a team
    changes nothing here except that "Greg" becomes "the product owner", which for this product is
    Greg unless he delegates.
-6. **A refusal is a proposal, not a dead end.** What the Overseer cannot do for Alice it can *put to
+7. **A refusal is a proposal, not a dead end.** What the Overseer cannot do for Alice it can *put to
    the person who can*: a message in Bob's inbox, or the product owner's. Bob accepting makes it
    Bob's request, with Bob's authority. That is the whole hand-over mechanism and it is the same
    shape the Overseer already uses for Greg's vetoes.
 
 **Why this dissolves Greg's confusion.** "I could just tell it to deploy using someone else's
-agents" fails twice, mechanically: deploying needs product authority the Overseer never has (rule 5),
-and someone else's agents need their owner's authority, which the asker does not carry (rule 3). The
+agents" fails twice, mechanically: deploying needs product authority the Overseer never has (rule 6),
+and someone else's agents need their owner's grant, which the asker does not carry (rule 4). The
 Overseer does not have to *judge* who is allowed what; it looks up the task's owner and the action's
-class and the answer falls out. Astra's version of the same principle: *"relaying through the
+required grants and the answer falls out. Astra's version of the same principle: *"relaying through the
 Overseer must not increase the requester's authority."*
 
-**Why one Overseer and not one per person.** A per-person Overseer is what you build when authority
-lives *in the Overseer*, so that each person's is small. Under rules 3 and 4 the one Overseer is
+**When the owner is not there.** An owner asleep for a week, or gone from the team, would block
+every proposal and be the only person able to hand over. So a task has an explicit
+**owner-unavailable** state: the Overseer's operator grants still apply (it can safe-stop the
+agents: commit, push, pause), nothing else proceeds, and the **administrator** (answer 8, still
+open) may reassign it with an audit record. Abandoned work never defaults silently to Greg.
+
+**Why one Overseer and not one per person — and where Greg's instinct was half right.** A per-person Overseer is what you build when authority
+lives *in the Overseer*, so that each person's is small. Under rules 4 and 5 the one Overseer is
 already "Alice's Overseer" when Alice is talking to it: it wears her authority and no one else's.
 What is genuinely shared — load, the test-suite cap, file-set overlap, one page for the phone — must
-be one process anyway, because two of them pause and resume each other's work. So: **one Overseer,
-per-person views** (my tasks, my inbox, my decisions to review). Greg's instinct that the two-tier
-version *"sounds more complicated and less appealing"* is right; it is also unnecessary.
+be one process anyway, because two of them pause and resume each other's work.
+
+But Sol separated two things the word "Overseer" runs together, and the split matters. **One
+operational coordinator** is settled: the daemon and its store, deterministic, box-wide. **One
+model conversation is not**: today the Overseer is one long-lived context, and per-person views do
+nothing to stop Alice's corrections and preferences colouring what it says to Bob. So the shape is
+one coordinator with **one conversation thread per person** (or per task) feeding it, each carrying
+its own envelope — which is Greg's "one Overseer per person, plus an overall one" after all, as
+*conversations* rather than as *authorities*. The two-tier version he found *"more complicated and
+less appealing"* is right to reject as two coordinators, and right to keep as threads.
 
 **And it settles question 4 with question 2.** If only Alice (or the Overseer as Alice) can steer
 Alice's agents, then only Alice's accounts are ever spent by them. "Personal accounts" and "control
@@ -165,11 +200,22 @@ doc already prescribes as the precondition for widening the bind
 ([overseer-direction.md § A5](../project/overseer-direction.md#the-backlog-after-the-wide-review)),
 and it is Google SSO in effect with no login page, cookie or CSRF work of our own.
 
+- **The header is checked against an allowlist of active people, on every route.** Tailscale's
+  own docs say an external user given a shared device receives valid identity headers, so a
+  well-formed login is not membership; the people registry is. And **reads and streams are
+  authenticated too, not only writes** — `/api/live`, `/api/state`, the recent-messages feed, the
+  queue and the decisions are unauthenticated reads today (`server.ts`), and they carry
+  transcripts. Funnel stays off. Sol's fifth finding, both halves.
 - **A request without the header fails closed.** Tagged devices and ssh forwards carry none; a
-  missing identity is *unknown*, never the product owner.
+  missing identity is *unknown*, never the product owner. A loopback caller can forge the header,
+  which Tailscale acknowledges: on one shared Unix user this is enforcement on the supported remote
+  routes, and the next bullet says so.
 - **`gjd-remote` from a laptop** is the secondary route (Greg's answer 3: either, if cheap). One
-  `authorized_keys` line per person carrying `environment="GJD_PRINCIPAL=<login>"`
-  (`PermitUserEnvironment yes`), which the box-side launcher writes into the session's tmux metadata
+  `authorized_keys` line per person carrying `environment="GJD_PRINCIPAL=<login>"`, enabled with
+  the **narrow pattern form `PermitUserEnvironment GJD_PRINCIPAL`** rather than `yes` — `yes` also
+  enables the shared user's `~/.ssh/environment` and arbitrary variables such as `LD_PRELOAD`,
+  which OpenSSH's own man page warns about — with the key file root-owned. The box-side launcher
+  writes it into the session's tmux metadata
   beside `CLAUDE_SESSION_ID` and the account. It is not inherited automatically — a tmux session
   gets the tmux server's environment, not the ssh session's.
 - **It is attribution, not a boundary.** Everyone is one Unix user; a colleague's agent can read
@@ -182,6 +228,17 @@ among the **task owner's** accounts. There is no unflagged fallback to anybody's
 whose principal has no registered account is refused with the sentence that says so. Codex accounts
 follow the same rule with `CODEX_HOME` per account, once OpenAI's concurrency caveat on shared auth
 files is resolved. Pooling (an owner marking an account `shared`) is not built until somebody asks.
+
+**The payer is fixed per execution and is not the owner** — Sol's fourth finding. A running
+session keeps spending the account it was launched on; ownership can move, the payer cannot. So a
+hand-over either keeps the old payer with their explicit consent, or safe-stops and relaunches
+under the new owner's account. Every child of a session — the Codex review a stage ends in, a
+`claude --resume` after a reboot, a helper's launch — inherits `{taskId, accountId, payer grant
+version}` from its parent and refuses to start if any is missing. A task whose owner has Claude
+capacity but no permitted Codex account cannot finish a stage, so the launcher checks *both*
+families are reachable before dispatching. And the Overseer's own coordination, recovery and review
+sessions need a **reserved account with an owner** before Stage 2 can be built, not after — it
+moves from § Still Greg's to the first question there.
 
 ## The queue: every task through the Overseer, ordered by priority
 
@@ -196,54 +253,101 @@ Greg's.
 
 Each ends in a GPT Sol review and a commit, per the house workflow. None starts before
 [260909h](260909h-a-reusable-top-level-folder-that-can-become-its-own-repo.md) Stage 2 has landed
-the code in its own repo, and none touches the Spideryarn box.
+the code in its own repo, and none touches the Spideryarn box. **Ordered around invariants rather
+than fields**, after Sol's P2: each stage makes one thing true that the next relies on, and the
+first one is decisions, not code.
 
-- **Stage 1 — a `Person` in the wire.** `Speaker`, `QueueActor`, `DecisionWireActor` and the
-  decision fold take a `Person` (a login string, validated) instead of `"greg"`. The dashboard
-  server reads `Tailscale-User-Login`, refuses writes without it, and stamps every steer, launch,
-  kill and broadcast. `owner` on sessions (tmux metadata), queue items and decisions.
-- **Stage 2 — owned accounts and the launch rule.** `owner` in the accounts registry;
-  `--account auto` restricted to the task owner's; no unflagged inheritance; the chosen account and
-  owner recorded with the launch.
-- **Stage 3 — the authority check.** One function classifying an action as owner, operator or
-  product, one lookup of the task's owner, applied in the dashboard's write routes and in the
-  Overseer's handling of a person's request. A refused request becomes a proposal in the right
-  inbox. This is where rules 1–6 become code, and it is the stage to review hardest.
-- **Stage 4 — per-person views.** My tasks, my inbox, my decisions to review; the existing
-  Questions and Decisions modes filtered by `Person`.
-- **Stage 5 — the box.** Provision from `infra/hetzner` under a neutral user; invite the team to
-  the tailnet; `tailscale serve` in front of the dashboard; deploy credential kept off the box; two
-  colleagues for a fortnight, measured as above.
+- **Stage 0 — the decisions.** Everything in § Still Greg's that Stages 2 and 4 depend on:
+  the Overseer's reserved account, who sets priority, the administrator, helpers or hand-over
+  only. Written into this plan before anything is built.
+- **Stage 1 — people and authentication, on every route.** A people registry (the allowlist);
+  one middleware that reads `Tailscale-User-Login`, maps it to a `Person`, and fails closed on
+  every read, stream and write; `Speaker`, `QueueActor` and `DecisionWireActor` become
+  `Person`-typed. Nothing about tasks yet.
+- **Stage 2 — durable tasks.** A task record with owner, ownership version, priority, state
+  (including owner-unavailable); `taskId` on sessions (tmux metadata), queue items, steering
+  envelopes and decisions, joined rather than copied; delivery-time re-check of ownership.
+- **Stage 3 — grants and proposals.** The required-grant set per action, the standing-policy id
+  on operator actions, multi-cause holds, free text bound to the owner grant, and the proposal
+  store and inbox a refusal turns into. Hand-over and the administrator's reassign live here.
+  **This is the stage to review hardest, and Sol was right that it is several things**: the
+  grant engine, the proposal lifecycle and the per-route enforcement should land as three
+  reviewed commits.
+- **Stage 4 — payer propagation.** `owner` on accounts; `--account auto` from the task owner's;
+  payer fixed per execution; children, resumes and Codex reviews inherit
+  `{taskId, accountId, payer grant version}`; both families checked before dispatch; the
+  reserved coordination account.
+- **Stage 5 — per-person views and threads.** My tasks, my inbox, my decisions; one conversation
+  thread per person feeding the one coordinator.
+- **Stage 6 — the box.** Provision from `infra/hetzner` under a neutral user; invite the team to
+  the tailnet; `tailscale serve` (HTTPS enabled) in front of the dashboard; deploy credential kept
+  off the box; then, **as its own rollout**, two colleagues for a fortnight measured as above.
 
 ## The simpler option passed over
 
 **See all, steer all, with a name stamp** — what the research doc recommended and Astra endorsed.
-It is less code (no ownership check, no proposals) and matches how a trusting team behaves. Greg
-passed over it because *"it seems conceptually simpler to say that each person can only control
-their own agents"*, and once the Overseer is in the picture that is true: a stamp says who did it,
-but only ownership says what the Overseer may do on whose behalf, and without it every request to
-the Overseer needs a judgement call. The ownership rule costs one lookup and buys a mechanical
-answer.
+It is less code — no ownership lookup, no hand-over, no proposals, no orphan state, no
+delivery-time re-check — and Sol is right that it stays mechanical with the Overseer in the
+picture: *"any authenticated team member may steer any task, with attribution; product and
+box-admin actions keep their separate gates"* needs no judgement call either. An earlier draft of
+this plan called ownership the simpler option; it is not. **It is the preferred policy, and it
+costs more.** Greg chose it because *"it seems conceptually simpler to say that each person can
+only control their own agents"* — simpler for the people, not for the code — and because it is
+what makes "your agents spend only your subscription" true rather than hoped. What it buys is that
+Alice cannot cause spend on Bob's running account or redirect his work without his say-so. **If
+Stage 3 turns out to cost more than the team's trust is worth, the stamp-only option is the
+fallback**, and Stages 1, 2 and 4 are still wanted under it.
 
 **One Overseer per person plus an overall one** — Greg's own alternative in answer 6, passed over
 because under the authority model it is the same thing with an extra process.
 
 ## Still Greg's
 
-Ranked by how much the answer changes the stages above.
+Ranked by how much the answer changes the stages above; the first four are Stage 0.
 
-1. **Who may set priority?** Each person on their own items, with the product owner able to
-   reorder everything; or the product owner alone? (Stage 3.)
-2. **Whose account do the Overseer's own sessions spend?** A team-owned account, or Greg's. It
-   needs an owner like any other. (Stage 2.)
-3. **Helpers, or hand-over only?** Hand-over moves a task wholesale. A helper is a second person
-   with owner authority over one task, added by the owner. Helpers are how "Bob rescues Alice's
-   stalled task while she is away" happens without the Overseer; without them, it happens by Alice
-   handing over first. Hand-over only is simpler; helpers are what answer 7 might want. (Stage 3.)
-4. **Answer 7 — how much intervention feels helpful**: visibility of others' transcripts, suggestions
-   into others' agents, cancellation, extra spend. Under the model each is a proposal to the owner
-   unless the owner delegated it; the question is only whether any should be direct.
-5. **Answer 8 — who is admin, and who operates the box when Greg is away**: sudo, a failed box, an
-   expired login, a departing colleague. A policy statement until it is a Unix-user boundary.
+1. **Whose account do the Overseer's own sessions spend?** A reserved team account, or Greg's. Sol:
+   Stage 4 cannot be built while this is open, because every stage ends in a review that has to
+   bill somebody.
+2. **Who may set priority?** Each person on their own items, with the product owner able to
+   reorder everything; or the product owner alone?
+3. **Who is the administrator** — the person who may reassign an orphaned task, and who operates
+   the box when Greg is away (answer 8): sudo, a failed box, an expired login, a departing
+   colleague. Until Unix users exist this is a name in the registry, not a boundary.
+4. **Helpers, or hand-over only?** Hand-over moves a task wholesale and changes the payer (or
+   relaunches). A helper is a second person with the owner grant on one task, added by the owner,
+   spending the owner's account with the owner's consent. Helpers are how "Bob rescues Alice's
+   stalled task while she is away" happens without her handing over first. Hand-over only is
+   simpler.
+5. **Answer 7 — how much intervention feels helpful**: visibility of others' transcripts,
+   suggestions into others' agents, cancellation, extra spend. Under the model each is a proposal
+   to the owner unless the owner delegated it; the question is only whether any should be direct.
 6. **Is Greg the product owner for the new product**, and what is its production and who deploys
    it? Product authority needs a name.
+
+## Round 1 review: GPT Sol, 2026-09-09
+
+Read-only, at `7e6cd14a`; the full text is [260909i-plan-review-sol.md](260909i-plan-review-sol.md).
+No P0; five P1s and two P2s, every one accepted after checking it against the code:
+
+- **Three classes are neither exhaustive nor exclusive.** Origination fell between them; "deploy
+  Alice's task" needs two grants; "pause" is operator only when a policy is the reason; free text
+  is unclassifiable. → required-grant sets, rule 1 (origination), policy ids on operator actions, free text bound
+  to the owner grant.
+- **Owner copied onto records goes stale.** Steering envelopes carry session ids and no task id
+  (`wire.ts`), so a hand-over would not reach a queued message. → `taskId` joined not copied, an
+  ownership version, re-check at delivery, an owner-unavailable state and an administrator.
+- **One coordinator is settled; one conversation is not.** → threads per person feeding one
+  coordinator; multi-cause holds; the envelope keeps requester, authoriser or policy, relay, scope
+  and reviewer.
+- **Account choice was incomplete across hand-over, children, resume and Codex.** → payer fixed per
+  execution, inherited by every child, both families checked before dispatch, the reserved account
+  promoted to question 1.
+- **Identity: a header is not membership, reads were unauthenticated, `PermitUserEnvironment yes`
+  is too broad.** → allowlist, every route, the narrow pattern form.
+- **Stages ordered around fields, and each hid several changes.** → reordered around invariants,
+  Stage 0 is decisions, Stage 3 lands as three commits.
+- **See-all-steer-all is the simpler option, not the harder one.** → the plan now says so and
+  names it as the fallback.
+
+Sol did not verify the future box's tailnet policy, HTTPS enablement, OpenSSH version, provider
+terms, or anything in the extracted repo, which does not yet exist.
