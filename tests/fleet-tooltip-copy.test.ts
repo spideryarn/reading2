@@ -184,6 +184,46 @@ describe("nothing on this page explains itself by hover alone", () => {
     expect(allowed).toEqual(KNOWN_HOVER_ONLY);
   });
 
+  it("never puts an explanation trigger inside a `<label>`", () => {
+    /* **An accessibility regression introduced by an accessibility
+       improvement**, and it is invisible: everything renders, the card opens,
+       and the control the label was for quietly loses its name.
+
+       `Explain` renders a `<button>`, and a `<button>` is a labelable element.
+       So a `<label>` wrapping `<Explain>Order</Explain>` and then a `<select>`
+       labels the BUTTON — the first labelable descendant — and the select ends
+       up with no accessible name at all. That is what `ListControls` in
+       `SessionsPanel` did for about an hour on 2026-09-09; GPT Sol found it.
+
+       The fix is always the same shape: take the trigger out of the label, and
+       name the control explicitly. So the rule is simply that the two do not
+       nest, which is checkable without a parser and without mounting anything. */
+    const offenders = (source: string): number =>
+      [...source.matchAll(/<label[\s>]/g)].filter((open) => {
+        const close = source.indexOf("</label>", open.index);
+        return close !== -1 && /<Explain[\s>]/.test(source.slice(open.index, close));
+      }).length;
+
+    /* **The check's own check**, because this one is green from the moment it
+       is written and a green test that never could have gone red is not
+       evidence. This is the exact shape the file had before the fix. */
+    expect(offenders('<label>\n<Explain tip={T}>Order</Explain>\n<select /></label>')).toBe(1);
+    expect(offenders('<div>\n<Explain tip={T}>Order</Explain>\n<select /></div>')).toBe(0);
+
+    const found: string[] = [];
+    for (const [name, raw] of components()) {
+      const source = codeOnly(raw);
+      for (const open of [...source.matchAll(/<label[\s>]/g)]) {
+        const close = source.indexOf("</label>", open.index);
+        if (close === -1) continue;
+        if (/<Explain[\s>]/.test(source.slice(open.index, close))) {
+          found.push(`${name}:${source.slice(0, open.index).split("\n").length} — <label> containing <Explain>`);
+        }
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
   it("would still catch one — the blanking keeps attributes and drops prose", () => {
     /* **The check's own check.** `codeOnly` was added because the scan read a
        doc comment that merely mentioned `title=`, and a fix of that shape can
