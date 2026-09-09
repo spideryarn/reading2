@@ -790,16 +790,16 @@ writes the task prompts, runs the tests and the typecheck, reviews, and commits.
 
 ### Stage 1 — the contract and the composition (server side, all pure)
 
-- [ ] `wire.ts`: one additive end block — `QuestionItem`'s four arms, `QuestionsView`'s three, the
+- [x] `wire.ts`: one additive end block — `QuestionItem`'s four arms, `QuestionsView`'s three, the
       gap vocabulary and `QuestionTarget`. Every arm's name and comment says what was **observed**.
-- [ ] `tools/fleet/questions.ts`: `composeQuestions({rows, attentionFeed, collectionError, collectedAt, now})
+- [x] `tools/fleet/questions.ts`: `composeQuestions({rows, attentionFeed, collectionError, collectedAt, now})
       → QuestionsView`, pure, no I/O. The signature carries the collection error and freshness
       because the view promises things the rows alone cannot establish (Sol round two).
-- [ ] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
-- [ ] `web/src/types.ts`: the client's parser; its own gap for *this payload's field was present and
+- [x] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
+- [x] `web/src/types.ts`: the client's parser; its own gap for *this payload's field was present and
       unreadable*; reference resolution against `rows` and `attention`; and the **downgrade** — the
       client may lower `complete` to `partial` and never raise it.
-- [ ] A **payload-size regression fixture** (Sol P2-1), which is meaningful now that items carry
+- [x] A **payload-size regression fixture** (Sol P2-1), which is meaningful now that items carry
       references rather than question text.
 
 Tests, each **watched red first**, and each **routed to the boundary where its state can actually
@@ -807,27 +807,35 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 
 *Server composer, over real pane fixtures:*
 
-- [ ] a **`permission`**-gate and an **`unknown`**-gate dialog → neither becomes a card;
-- [ ] a `conversation` dialog with `no-material` → a card with buttons (the `/loop` menu shape);
-- [ ] two rows showing the same question → **two cards**, one per row (grouping is withdrawn in v1;
+- [x] a **`permission`**-gate and an **`unknown`**-gate dialog → neither becomes a card;
+- [~] a `conversation` dialog with `no-material` → a card with buttons (the `/loop` menu shape).
+      **Left unticked deliberately: this test was not built as written, because the state it
+      describes cannot occur on the server path** — `classifyGate` requires `material.kind ===
+      "read"` before it will return `conversation`. Stage 1 moved the case to the client parser,
+      where a malformed material can actually arrive, and it is a **gap** there rather than a card
+      with buttons. Stage 4 then went further: `isLocallyAnswerableDialog` refuses `no-material`, so
+      a retained item of that shape draws no buttons at all. The bullet is kept, struck rather than
+      deleted, because a plan that quietly loses a requirement it decided against is worse than one
+      that says it changed its mind and why.
+- [x] two rows showing the same question → **two cards**, one per row (grouping is withdrawn in v1;
       § What round three changed, 3);
-- [ ] a `conversation` dialog on a row with no `paneId`, and one with no `claudeSessionId` →
+- [x] a `conversation` dialog on a row with no `paneId`, and one with no `claudeSessionId` →
       `dialog-unaddressable`, with the reason, never buttons;
-- [ ] an inbox **prose** item whose row is now showing a dialog → **both cards kept**; and the same
+- [x] an inbox **prose** item whose row is now showing a dialog → **both cards kept**; and the same
       with a `permission` dialog, where there is no dialog card to stand in its place;
-- [ ] an inbox prose item whose row's execution has been replaced under the same handles → the card
+- [x] an inbox prose item whose row's execution has been replaced under the same handles → the card
       still says *one tap away*, and nothing on it writes;
-- [ ] an inbox prose item with **no row at all** → `prose-unaddressable`, never dropped;
-- [ ] **every gap cause in the table above**, each on its own, and `not-observed`;
-- [ ] **a genuinely empty but partial observation** → must not say *nothing needs you*;
-- [ ] asserted through the same `statePayload` composition `server.ts` calls, never a graph the test
+- [x] an inbox prose item with **no row at all** → `prose-unaddressable`, never dropped;
+- [x] **every gap cause in the table above**, each on its own, and `not-observed`;
+- [x] **a genuinely empty but partial observation** → must not say *nothing needs you*;
+- [x] asserted through the same `statePayload` composition `server.ts` calls, never a graph the test
       rebuilds.
 
 *Client parser, where a malformed payload can actually arrive:*
 
-- [ ] a malformed `gate`, and a malformed `material` → a gap, not an ordinary item;
-- [ ] a dangling row or attention reference → a gap, never a dropped card;
-- [ ] an absent `questions` field (an older server) and a present-but-unreadable one → two different
+- [x] a malformed `gate`, and a malformed `material` → a gap, not an ordinary item;
+- [x] a dangling row or attention reference → a gap, never a dropped card;
+- [x] an absent `questions` field (an older server) and a present-but-unreadable one → two different
       gaps.
 
 **Delegated to Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`) from
@@ -1043,10 +1051,10 @@ That fact lives in their draft at `45a202f3`, not here.
 
 ### Stage 3 — see it, and the queue pointer
 
-- [ ] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
+- [x] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
       server on a free port confirmed from its bind line — never `:8787`, whose process is not to be
       touched. Screenshots land in the repo root, are copied out, and are deleted.
-- [ ] **The ten-mode dock reading, in the method agreed with `decisions-mode`** — § Where the tab
+- [x] **The ten-mode dock reading, in the method agreed with `decisions-mode`** — § Where the tab
       goes has the split and the simulated tenth. Their two corrections, both adopted:
       - **Three loads, not one, and the last mode is the worst case.** Their own gating check was a
         direct `#decisions` load, and they found it proves almost nothing: `decisions` sits seventh
@@ -1062,7 +1070,7 @@ That fact lives in their draft at `45a202f3`, not here.
         overflows and the active button is off screen*. **Overflow on its own is expected** and is
         the honest failure mode the dock was built to have; reporting it as a fault would be the
         wrong number.
-- [ ] **The shared `#deploys` load's prediction, written down before either session measures.**
+- [x] **The shared `#deploys` load's prediction, written down before either session measures.**
       `decisions-mode` proposed the shared load as a cross-check and read a matching pair as *one of
       us sampled before the fit rung settled*. That names one cause for a symptom with at least
       three, and the other two are likelier: **one of us measured a tree with the wrong mode count**
@@ -1079,7 +1087,7 @@ That fact lives in their draft at `45a202f3`, not here.
         result worth having on its own.
       - The **fit rung** at each, reported as a rung rather than as a description. Equal rungs mean
         the expected delta is icon-width, and that is said rather than the 41 being called wrong.
-- [ ] **Which half of that reading depends on `decisions-mode`'s fix, said on the reading itself.**
+- [x] **Which half of that reading depends on `decisions-mode`'s fix, said on the reading itself.**
       Reachability at the last tab is a property of their scroll-into-view, which is on their branch
       and not on `dev`. So the **overflow** half (`scrollWidth` vs `clientWidth`, the fit rung,
       Refresh past the edge, bar height) is taken whenever, and the **reachability** half
@@ -1088,16 +1096,33 @@ That fact lives in their draft at `45a202f3`, not here.
       commit named on every number. Otherwise a failing `#questions` load measures the absence of
       their fix and gets reported as a dock finding, which is the shape of wrong number that ends up
       in a question to Greg.
-- [ ] **The screenshots are looked at by this session, not only reported on.** Delegated
+- [x] **The screenshots are looked at by this session, not only reported on.** Delegated
       descriptions of a layout are wrong often enough to distrust on their own.
-- [ ] Every state from § 3 above forced and looked at individually — including each silence.
-- [ ] The queue pointer with a real count, through `queue-client.ts`'s seam. **Acceptance-critical**
+- [x] Every state from § 3 above forced and looked at individually — including each silence.
+- [x] The queue pointer with a real count, through `queue-client.ts`'s seam. **Acceptance-critical**
       (Sol P1-5): without it the tab's own promise is knowingly false, so if it cannot ship, the tab
       does not.
-- [ ] `docs/project/` — a line under the entry point that owns it, and this plan kept matching the
+- [x] `docs/project/` — a line under the entry point that owns it, and this plan kept matching the
       code.
 
-Status: *not started.*
+**Status: built and green.** The queue pointer landed with the sentence it forces:
+`Nothing needs you.` is now conditional on the queue having been read and found empty, because a
+failed queue read establishes that no **session** needs him, not that nothing does. Six queue arms,
+six sentences, none collapsed into another; the four false-reassurance cases were watched red first.
+
+**What was seen with eyes, and what was not — said plainly because "verified at 390px" would imply
+more than is true.**
+
+- **Seen**: the populated list at 390 × 844 and at 1280 × 800, the `partial` arm with a real gap
+  sentence, the `complete` arm with prose cards, the clamped excerpt, the once-only prose caveat,
+  and the ten-mode dock on three loads.
+- **Not seen, covered only by DOM tests**: **every dialog card, including the option buttons.** The
+  live fleet carried no open `conversation` dialog during any browser pass, so the answering half of
+  this panel has never been drawn against a real menu. The tests cover it thoroughly — the verbatim
+  `rawQuestion` send, the four refused statuses, the sticky refusals, the receipt arms — but no
+  person has looked at it. **That is the first thing to look at when a dialog next appears.**
+- **Not seen**: the forced silences — `not-observed`, the empty `complete`, the hold notice. Each has
+  its own DOM test; none has been looked at in a browser.
 
 ---
 
