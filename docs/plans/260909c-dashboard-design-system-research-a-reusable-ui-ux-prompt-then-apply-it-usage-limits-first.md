@@ -1,6 +1,11 @@
 # A design system for the fleet dashboard: research, a reusable UI/UX prompt, then apply it
 
-**Status as of 2026-09-09: Stages 1–4b and 6 done and on `dev`; 5a, 5b and 7 not started.**
+**Status as of 2026-09-09: DONE ENOUGH TO STOP HERE. Stages 1–4b and 6 done and on `dev` at
+`dd231938`, both review rounds closed; 5a, 5b and 7 not started.** What remains is real but
+optional, and what landed is coherent on its own: a reusable doc, a design vocabulary with tests,
+and the one tab Greg named, rebuilt. The highest-value unstarted thing is the landing surface
+(Stage 5a first — its data contract, which the review split out precisely so it would not be
+guessed at).
 The research, the screenshots, [design-a-screen.md](../reusable/design-a-screen.md), two Sol
 reviews, the type scale, `StatCard`, and the Usage limits rewrite have landed. What remains is the
 landing surface (5a's data contract first, then 5b) and the tab-by-tab sweep, which Sol asked be a
