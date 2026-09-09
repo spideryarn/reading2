@@ -5,6 +5,12 @@ The sibling of [claude-subscriptions.md](claude-subscriptions.md), and the same 
 directory — but almost everything underneath differs, and the differences are why this is a separate
 document rather than a paragraph in that one.
 
+**Two questions, and the box asks the second one.** *Which account does this repo bill?* is answered
+by routing a directory, which is most of this doc. *Which of several accounts should this run spend,
+in a folder where they all apply?* is answered by a pool of homes chosen per process — see
+[a pool of homes](#the-other-mechanism-a-pool-of-homes). The Hetzner box, where one checkout runs a
+fleet and the constraint is capacity rather than billing, wants the second.
+
 **What this can and cannot promise.** Routing chooses a Codex *home*, and therefore which stored
 login is available. It does not by itself choose which *credential* a run spends: an API key or an
 access token in the environment outranks the stored login. Both halves have to be checked, and the
@@ -15,6 +21,12 @@ sections below say how.
 > this doc has existed), and a GPT Sol review that found a silent mis-routing hole in the first draft
 > of the wrapper below. Everything stated as a mechanism was exercised on this machine; where
 > something is inferred or unverified, it says so.
+>
+> **Second pass, 2026-09-09**, still on 0.153.4: the pool sections below were rewritten from that
+> fleet's own wizard, lane registry and usage reader rather than from a description of them, and
+> three things were measured here — that an unauthenticated `CODEX_HOME` 401s rather than falling
+> back, that `codex exec` does not send an ambient `OPENAI_API_KEY`, and that this repo's dispatch
+> sweep passes `CODEX_HOME` through to the child.
 
 ## The mechanism, in one paragraph
 
@@ -85,6 +97,16 @@ exits. This is the one place Codex is *better* than Claude Code, where the same 
 directory called `~` under your CWD and reports you signed out. The directory must also already
 exist — codex will not create it.
 
+**An unauthenticated `CODEX_HOME` does not fall back — it 401s.** Measured here on 0.153.4, from an
+empty home with no key in the environment: `ERROR: unexpected status 401 Unauthorized: Missing bearer
+or basic authentication in header`, after five reconnect attempts. MindstoneRebel measured the same
+thing on 2026-09-04 and depends on it. This is the good outcome and the opposite of the Claude side's
+worry: a mis-pointed home fails loudly at the API rather than quietly spending the default account.
+It is *not* a licence to skip the identity check below, which answers a different question — a home
+signed in to the **wrong** account authenticates perfectly. Note also that the home does not stay
+empty: that failed run left seven sqlite files behind, so "the directory has something in it" proves
+nothing at all.
+
 **A trailing slash is harmless.** `CODEX_HOME=$HOME/.codex/` works, because nothing is hashed. The
 opposite of Claude Code, where a trailing slash is a different Keychain item and so a different
 account.
@@ -100,9 +122,11 @@ quietly leave the routed subscription. The wrapper below refuses to run while it
 `CODEX_API_KEY` takes precedence over a logged-in `auth.json` whenever the variable is set, so a repo
 that exports one has already decided who pays. The `--auth` modes and the fallback order are owned by
 [codex-cli-as-subagent.md § Which credential a run spends](codex-cli-as-subagent.md#which-credential-a-run-spends).
-`OPENAI_API_KEY` compatibility is owned there too, and is worth re-measuring after upgrades rather
-than trusting either document — the 0.153.4 binary lists it alongside the other two as a supported
-auth environment variable, while the measurement on record was taken on 0.149.1.
+`OPENAI_API_KEY` compatibility is owned there too, and is now measured rather than inferred: on
+0.153.4 an ambient `OPENAI_API_KEY` is **not sent at all** by `codex exec`, while `CODEX_API_KEY` is —
+[codex-cli-as-subagent.md § Gotchas](codex-cli-as-subagent.md#gotchas). The 0.153.4 binary
+lists all three as supported auth environment variables, so the string in the binary was not the
+answer; an invalid credential and two different 401s were. Re-measure after upgrades the same way.
 
 The useful discovery is that **`codex doctor --json` will tell you when one of them is set.** With any
 of the three exported, the `auth.credentials` check grows a field naming it:
@@ -305,6 +329,10 @@ exec "$REAL_CODEX" "$@"
 /Users/greg/dev/clientwork:/Users/greg/.codex-client:8f3c…-…-…
 ```
 
+**Name a routed home for the repo, never for a number.** `~/.codex-<n>` is the pool's shape, and a
+fleet dashboard that enumerates accounts by globbing `~/.codex-*` and reading the numeric suffix would
+count a routed client home as a dispatch account, then measure and offer it as spare capacity.
+
 Point `REAL_CODEX` at the stable launcher, never a versioned path, and install the wrapper earlier on
 `PATH` — `~/bin` precedes `/opt/homebrew/bin` here.
 
@@ -362,6 +390,102 @@ dispatch account exists it is never dispatched to, so a sub-agent's rate-limit c
 driving the machine. The reservation is structural rather than a runtime check — account 1 has no
 credential env var at all, so no execution profile can bind it. Accounts 2..9 are minted with
 `CODEX_HOME="$HOME/.codex-$n" codex login --device-auth`.
+
+**With one deliberate exception on the ChatGPT side.** Frontier-tier GPT work *may* spend ChatGPT
+Pro 1, because that account is premium execution capacity rather than an orchestrator seat — Greg,
+2026-09-04: *"High effort GPT can use ChatGPT Pro 1."* The Claude side has no such exemption, because
+Claude Max 1 is the orchestrator's own session credential. Worth copying the shape of the decision as
+well as the decision: the exemption is scoped by **tier**, not by effort, since the cheap GPT rows
+also run at `high` and scoping by effort would have put routine mechanical volume on the premium
+account — the opposite of the intent.
+
+### The four rules that make a pool safe
+
+Each of these was arrived at the hard way over there, and none of them is Codex-specific.
+
+**Anchor the reservation on what a lane *spends*, not on how it authenticates.** Their first version
+enforced "no dispatch reaches account 1" as a list of credential bindings and carriers, and a lane
+that reached the same ChatGPT quota through a *different* carrier on the ambient credential walked
+straight through it — the invariant was false while every test agreed it held. The fix was to state it
+over the funding scope a lane spends, so it catches lanes added later too. Anything you build here
+wants the same shape: **identify the account being billed, not the mechanism doing the billing.**
+
+**Presence of the variable is the activation, and account 1 must not have one.** `CODEX_HOME_<n>`
+being set is what makes an account routable — there is no enable flag — and account 1 is reserved
+*because it has no variable to name it*, which is a property rather than a check something can forget
+to run.
+
+**Count configured accounts, never declared slots.** A slot declared in code but never signed in is
+inert, and it is also never exhausted — so a "have we run out of subscriptions?" question whose
+denominator is the declared list can never answer yes. The denominator is what is actually configured.
+
+**An unusable account must advance, not fail.** These lanes are a capacity preference: an expired or
+revoked account falls through to the next one, because none of them may fail a dispatch another could
+have served. That is the opposite of the routing wrapper's posture earlier in this doc, and
+deliberately so — there, a wrong account is a mis-bill; here, it is a queue.
+
+### Standing one up in a shared folder
+
+Their wizard's Codex branch, reduced to what is portable. Every step is a gate: nothing is written
+until the login exists, and nothing is believed until the value resolves.
+
+```bash
+n=2; dir="$HOME/.codex-$n"
+mkdir -p "$dir"
+CODEX_HOME="$dir" codex login --device-auth          # a link and a short code, so SSH is fine
+[ -f "$dir/auth.json" ] || { echo "login did not complete; nothing changed"; exit 1; }
+
+# The export goes ABOVE the non-interactive guard in the startup file — see below.
+# Then prove it resolves, in the shell a dispatch will actually get:
+[ "$(bash -c "source ~/.bashrc >/dev/null 2>&1; printf %s \"\$CODEX_HOME_$n\"")" = "$dir" ] \
+  || { echo "CODEX_HOME_$n does not resolve to $dir — look for a guard above it, or a later line that wins"; exit 1; }
+
+CODEX_HOME="$dir" codex exec 'reply with OK'         # warm it once, before any fleet: see #42447
+```
+
+Two questions, two answers, and they are not the same one: **is the account configured in the startup
+file, and does *this process* carry it?** A session that started before the exports were added has the
+file but not the environment, and every dispatch it launches spends account 1 while everything on disk
+looks right. Their `check` distinguishes the two by exit code — 0 the environment carries one, 4 the
+file has one and this process does not, 3 none configured — which is the honest way to report a state
+where the fix is "`source` it in the same shell, or restart the session".
+
+**What the dispatcher hands the child is a path, not a token.** Codex has no env-var equivalent of a
+login token — the credential *is* a whole auth home — so a pooled dispatch sets `CODEX_HOME` to that
+home in the child, and unsets `CODEX_API_KEY`, which `codex exec` honours over `auth.json` and which
+is metered. In this repo that is already true and needed no code: `scripts/run-codex.ts` builds the
+child environment with `sanitisedEnv`, which strips variables whose *names* look like credentials, and
+`CODEX_HOME` is not one of them. Checked by calling the exported function rather than by reading it:
+
+```
+sanitisedEnv({CODEX_HOME, CODEX_API_KEY, OPENAI_API_KEY, PATH})  →  {CODEX_HOME, PATH}
+```
+
+So pointing one review at a second ChatGPT subscription, from the same folder as everything else, is
+`CODEX_HOME=$HOME/.codex-2 npx tsx scripts/run-codex.ts …` — with `--auth subscription-first`, which
+withholds the key on the first attempt, so the pooled home's login is what answers.
+
+### Knowing what each account has left
+
+There is no usage endpoint for a ChatGPT account, so a pool cannot ask which member has room —
+it has to read each home. Two ways, and both need the home to have been *used*:
+
+- **Its own session records.** `$CODEX_HOME/sessions/**/*.jsonl`, the lines containing
+  `"rate_limits"`: `payload.rate_limits.primary` and `.secondary`, each with `used_percent`,
+  `window_minutes` and `resets_at` (or `resets_in_seconds`), plus `plan_type` and `credits.balance`.
+  Verified over there against live rollout files on 2026-09-06. No subprocess, no model call.
+- **`codex app-server`, with `CODEX_HOME` set** — which is what [`tools/overseer/codex-usage.ts`](../../tools/overseer/codex-usage.ts)
+  already does here, and it passes `CODEX_HOME` and `HOME` through to the child and takes an
+  `expectedAccountId` that makes a reply from the wrong account unusable rather than merely wrong. So
+  the meter for a pooled account is that tool plus one environment variable.
+
+A never-used home reports nothing either way, which is another reason to warm each one on the day you
+sign it in rather than on the day you need the number.
+
+**And record which account paid.** Their dispatch reports carry a `dispatch_account` field, omitted
+rather than defaulted when no subscription account paid at all. Omitting is the right call: a default
+of "account 1" on a metered run is a claim the run never made, and it is exactly the sort of tidy
+untruth that survives review.
 
 **Their conclusion about the limits of this is worth carrying over.** Keeping a metered key out of a
 "subscription" lane is done by unsetting variables, and four rounds of review each found one more
@@ -463,8 +587,10 @@ dashboard rather than from any document, including this one.
 
 ## What is installed here
 
-Nothing. As of 2026-09-08 this Mac has a single `~/.codex`, no `~/.codex-*` siblings and no codex
-wrapper on `PATH`; the wrapper above was exercised from a scratchpad and left uninstalled. The
+Nothing. As of 2026-09-09 this Mac has a single `~/.codex`, no `~/.codex-*` siblings and no codex
+wrapper on `PATH`; the wrapper above was exercised from a scratchpad and left uninstalled, and no
+pooled home exists on either machine. The pool is the shape the **box** would want, if the constraint
+there turns out to be ChatGPT capacity rather than billing; the Mac's problem is the other one. The
 Claude-side equivalents *are* installed —
 [claude-subscriptions.md § What is installed here](claude-subscriptions.md#what-is-installed-here).
 
@@ -484,3 +610,7 @@ reverse of the Claude case, where the shared default was already the right accou
 - [codex-cli-as-subagent.md](codex-cli-as-subagent.md) — dispatching Codex from a session, the
   `--auth` modes, and the environment sweep the wrapper depends on.
 - [silent-success.md](silent-success.md) — the class most of these traps belong to.
+- `coding-agent-instructions/docs/SETUP_DISPATCH_ACCOUNTS.md` in Greg's MindstoneRebel repo — the
+  pool run in anger: the wizard, the per-family reservation, and the limits they stated rather than
+  hid. `CLAUDE_ACCOUNT_PER_DIRECTORY.md` beside it is the directory half. That submodule is on Greg's
+  Mac only.
