@@ -81,6 +81,7 @@ function view(samples: UsageHistorySample[], over: Partial<Extract<UsageHistoryV
     unsupportedLines: 0,
     recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
     refreshMs: 60_000,
+    latestCodex: { kind: "absent" as const, why: "not part of this chart fixture" },
     ...over,
   };
 }

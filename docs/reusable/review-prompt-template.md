@@ -138,9 +138,14 @@ of what is in scope — the manifest above is.
 
 <The contract in prose. The invariant it must not break. What is deliberately out of scope.>
 
-## What you can and cannot run
+## What you can and cannot run, and what you may change
 
-The tree is read-only; /tmp and the node_modules caches are writable. You can run one test file
+<Code review, the default since 2026-09-09: "You may edit this worktree. Fix what is inside the stage
+under review — each finding red-first, with the test that reproduces it — and leave everything wider
+as a finding for me to decide. Do not commit. List every file you changed at the end." Plan review, or
+a findings-only pass: "The tree is read-only.">
+
+Under the read-only profile: /tmp and the node_modules caches are writable. You can run one test file
 (`npx vitest run tests/<one>.test.ts`) and a script (`node --import tsx <script>`), and you can
 build a throwaway harness under /tmp. You have no network, not even loopback, so anything needing
 Postgres or a local service will skip — those I have run, and the raw output is at <path>.

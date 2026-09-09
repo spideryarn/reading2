@@ -1,8 +1,60 @@
 # Read the Codex subscription's usage limits, and show them beside Claude's
 
-**Status:** stage 1 (research) done and measured; Sol's plan review round 1 in and folded in
-(§ "Sol's plan review"); stages 2–4 not started.
+**Status: all four stages done**, each Sol-reviewed and its findings applied red-then-green. One
+deferral, recorded below. `overseer usage` prints both accounts; the dashboard card needs a restart to
+go live, which is the Overseer's to arrange.
 **Queue item:** `qi-3fdnt4st`. Session `codex-usage`, worktree `codex-usage`.
+
+## What it does now
+
+```
+Claude subscription   seven_day: 76% used, resets 2026-09-15 05:00 UTC
+Codex subscription    headroom  codex
+                      7 days: 32% used, resets 2026-09-15 01:23 UTC
+                      resets    2 full reset credits available
+```
+
+That number moved 24% → 26% → 30% → 32% across the day this was built, which is the counter's liveness
+demonstrated by the thing simply working.
+
+### Reviews, and what they cost
+
+| Round | Verdict | Findings | Applied |
+|---|---|---|---|
+| Plan | ready with changes | 8 (7×P1, 1×P2) | all, one narrowed, one withdrawn as my error |
+| Stage 2 code | land with changes | 7 (2×P1, 5×P2) | all |
+| Stage 3 code | land with changes | 5 (1×P1, 4×P2) | four; one deferred, below |
+| Stage 4 code | land with changes | 6 (4×P1, 2×P2) | all |
+
+No round returned a P0. **Every P1 in the last three rounds was the same shape** — a reading that looks
+usable reaching a rationing decision — and none of them existed at plan stage, which is the argument
+for weighting the code review higher, made concrete.
+
+### Three checks that answered a weaker question than they appeared to
+
+Worth recording together, because it happened three times in one plan and **twice on a test this plan's
+own author had praised in writing**:
+
+1. The "six absences" test built its legacy case by passing a line through *today's* encoder, so it
+   could not fail for the reason it named.
+2. The composition-root assertion was a substring match that a comment anywhere in the file satisfied.
+3. The route→parser→DOM test could not catch a reintroduced browser whitelist, because the selector
+   read the raw record and never went through the parser the test was named for.
+
+The common shape: **the test's actual subject sat one step away from the thing it claimed to guard.**
+Each was found by asking "what mutation should make this red?" and then running it, which is the only
+reliable way to tell the two apart.
+
+### The one deferral
+
+An otherwise-valid reading with no general `codex` bucket collapses to a top-level `unknown`, so
+absence 3 is representable in the persisted format but **not reachable from the producer**. Sol offered
+the preservation; it is deliberately not taken, because preserving those buckets moves the job of
+finding general headroom to the consumer, and a consumer picking the wrong bucket is exactly the
+substitution bug Sol's own stage-2 finding 7 was written to prevent. The decision is safe either way
+today — no general bucket yields `unknown`, never false headroom — so trading a safety property for
+diagnostic detail is the wrong way round. The test and the reports say so rather than claiming a state
+production cannot emit.
 
 ## Why
 
@@ -220,7 +272,7 @@ hold no rate-limit column of any kind. Checked so nobody looks again.
 - [x] Measure the cost of one reading (1.9 s, 117 MB peak RSS)
 - [x] Find the unauthenticated failure arm and its exact message
 - [x] Characterise the shape across history (25,043 snapshots) so the unknown arms are not guesses
-- [ ] Sol reviews this plan
+- [x] Sol reviews this plan
 
 ---
 
@@ -300,10 +352,10 @@ Fake executor for the spawn, so nothing in the suite talks to OpenAI. The protoc
 settled — stdin stays open, match on the reply's own id, `initialized` before the call, kill the group
 — are the collector's contract and each gets a test.
 
-- [ ] Types in `wire.ts`
-- [ ] Pure parsers + tests red, then green
-- [ ] `collectCodexUsage` with a hard timeout, a killed process group, and an asserted child env
-- [ ] Sol code review
+- [x] Types in `wire.ts`
+- [x] Pure parsers + tests red, then green
+- [x] `collectCodexUsage` with a hard timeout, a killed process group, and an asserted child env
+- [x] Sol code review
 
 ### What moved out of v1, and why
 
@@ -390,12 +442,12 @@ reason the design works and is exactly the kind that decays silently, so it gets
 the composition root** rather than an injected fake — an injected fake cannot see whether the real
 things are wired together.
 
-- [ ] `codex?: CodexObservation` on `UsageHistoryLine`, written on every arm
-- [ ] Encode/decode tests, including all six absences and a malformed-Codex-keeps-Claude test
-- [ ] The `run`-side collection, with a composition-root test for the no-overlap invariant
-- [ ] `LINE_SCHEMA` comment reconciled
-- [ ] Size check: the record stays well under `MAX_LINE_BYTES`
-- [ ] Sol code review
+- [x] `codex?: CodexObservation` on `UsageHistoryLine`, written on every arm
+- [x] Encode/decode tests, including all six absences and a malformed-Codex-keeps-Claude test
+- [x] The `run`-side collection, with a composition-root test for the no-overlap invariant
+- [x] `LINE_SCHEMA` comment reconciled
+- [x] Size check: the record stays well under `MAX_LINE_BYTES`
+- [x] Sol code review
 
 ## Stage 4 — show it: `overseer usage` and a second account card
 
@@ -425,11 +477,11 @@ The rest:
 - A short section in [usage-history.md](../project/usage-history.md): the source, that it is a real
   fetch every time, the positional-mapping trap, and that the number is non-monotonic at short range.
 
-- [ ] Client parser + end-to-end test
-- [ ] `overseer usage` renders both, positive control included
-- [ ] Card + `npm run typecheck`, `npm test`, lint on touched files
-- [ ] Sol code review of the whole diff
-- [ ] Debrief to the Overseer
+- [x] Client parser + end-to-end test
+- [x] `overseer usage` renders both, positive control included
+- [x] Card + `npm run typecheck`, `npm test`, lint on touched files
+- [x] Sol code review of the whole diff
+- [x] Debrief to the Overseer
 
 ## Not in scope
 

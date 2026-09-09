@@ -1,6 +1,6 @@
 /**
- * **CAN THIS ACCOUNT AFFORD MORE WORK?** — the usage card, on the Overseer tab
- * beside the one that says whether supervision is running.
+ * **CAN THESE ACCOUNTS AFFORD MORE WORK?** — the Claude and Codex usage cards,
+ * on the Overseer tab beside the one that says whether supervision is running.
  *
  * ## What it is answering
  *
@@ -52,6 +52,7 @@ import type { ReactNode } from "react";
 
 import { zonedLine } from "../../zones.js";
 import { Explain, type Tip } from "./Tooltip";
+import type { CodexBucketView, CodexObservationView, CodexWindowView } from "./usage-history-client";
 import type { ClockSkew, ScanCoverage, UsageIncident, UsageSummary, UsageView, UsageWindowCard } from "./types";
 import { shiftMsToBrowserClock } from "./types";
 import { Card, cx, Pill, StatCard, toneClasses, type StatValue } from "./ui";
@@ -971,7 +972,7 @@ function DueBackCard({ dueBackAt, asOf, skew }: { dueBackAt: string; asOf: numbe
  * this card IS the evidence, so a card that vanishes leaves a reader looking
  * for it with no explanation.
  */
-export function UsageCard({
+function ClaudeUsageCard({
   usage,
   now,
   receivedAt,
@@ -1086,5 +1087,298 @@ export function UsageCard({
         </Note>
       ) : null}
     </Card>
+  );
+}
+
+function codexWindowLabel(window: CodexWindowView): string {
+  if (window.windowMinutes === 300) return "5 hours";
+  if (window.windowMinutes === 10_080) return "7 days";
+  if (window.windowMinutes !== null) return `${window.windowMinutes.toLocaleString("en-GB")} minutes`;
+  return `${window.slot} window (duration unknown)`;
+}
+
+function CodexWindowStat({
+  window,
+  asOf,
+  skew,
+  reached,
+}: {
+  window: CodexWindowView;
+  asOf: number;
+  skew: ClockSkew;
+  reached: boolean;
+}): ReactNode {
+  if (window.kind === "unknown") {
+    return (
+      <StatCard
+        label={codexWindowLabel(window)}
+        value={{ kind: "absent", state: "unknown", why: window.why }}
+        tone="unknown"
+      />
+    );
+  }
+  const reset = untilReset(window.resetsAt, asOf, skew);
+  if (reset.kind !== "ahead") {
+    return (
+      <StatCard
+        label={codexWindowLabel(window)}
+        value={{
+          kind: "absent",
+          state: reset.kind === "unreadable" ? "unavailable" : "unknown",
+          why:
+            reset.kind === "unreadable"
+              ? "the reset instant could not be read"
+              : `this window already reset ${formatDuration(reset.ms)} ago, so its old percentage is not current headroom`,
+        }}
+        tone="unknown"
+      />
+    );
+  }
+  const barWidth = Math.max(0, Math.min(100, window.usedPercent));
+  return (
+    <StatCard
+      label={codexWindowLabel(window)}
+      value={{ kind: "value", text: `${window.usedPercent}% used` }}
+      evidence={
+        <>
+          <span>resets in {formatDuration(reset.ms)}</span>
+          <span className="tw:mt-2 tw:block tw:h-1 tw:overflow-hidden tw:rounded-full tw:bg-rule" aria-hidden="true">
+            <span
+              data-slot="codex-utilization-bar"
+              className="tw:block tw:h-full tw:bg-current"
+              style={{ width: `${barWidth}%` }}
+            />
+          </span>
+        </>
+      }
+      tone={reached ? "alarm" : "idle"}
+      tip={{
+        head: `The ${codexWindowLabel(window)} Codex window`,
+        what: `The source reported ${window.usedPercent}% used, resetting ${whenLine(window.resetsAt)}.`,
+        how: "The duration names this window. Primary and secondary are source positions and mean different durations on different buckets.",
+      }}
+    />
+  );
+}
+
+function bucketWindowCards(bucket: CodexBucketView, asOf: number, skew: ClockSkew): ReactNode {
+  const bySlot = new Map<CodexWindowView["slot"], CodexWindowView[]>();
+  for (const window of bucket.windows) {
+    const values = bySlot.get(window.slot) ?? [];
+    values.push(window);
+    bySlot.set(window.slot, values);
+  }
+  if (bySlot.size === 0) {
+    return (
+      <StatCard
+        label="Headroom"
+        value={{ kind: "absent", state: "unknown", why: `${bucket.limitId} carried no windows` }}
+        tone="unknown"
+      />
+    );
+  }
+  return [...bySlot.entries()].map(([slot, windows]) =>
+    windows.length === 1 ? (
+      <CodexWindowStat
+        key={`${bucket.limitId}:${slot}`}
+        window={windows[0]!}
+        asOf={asOf}
+        skew={skew}
+        reached={bucket.rateLimitReachedType !== null || bucket.spendControlReached === true}
+      />
+    ) : (
+      <StatCard
+        key={`${bucket.limitId}:${slot}`}
+        label={`${slot} window`}
+        value={{
+          kind: "absent",
+          state: "unavailable",
+          why: `${bucket.limitId} carried duplicate ${slot} windows, so neither was chosen`,
+        }}
+        tone="unknown"
+      />
+    ),
+  );
+}
+
+function CodexBucketSection({
+  bucket,
+  general,
+  asOf,
+  skew,
+}: {
+  bucket: CodexBucketView;
+  general: boolean;
+  asOf: number;
+  skew: ClockSkew;
+}): ReactNode {
+  const reached = bucket.rateLimitReachedType;
+  const controlWhy =
+    general && bucket.spendControlReached !== false
+      ? "General headroom is unavailable because spend-control state was reached or unavailable."
+      : general && bucket.individualLimit !== null
+        ? "General headroom is unavailable because an individual spend limit was reported."
+        : null;
+  return (
+    <section className="tw:mt-3">
+      <h3 className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+        {general ? "General headroom" : `Model-specific limit — ${bucket.limitName ?? bucket.limitId}`}
+      </h3>
+      {reached !== null ? (
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+          When this reading was taken, the backend reported a reached limit — {reached.length === 0 ? "type not named" : reached}
+        </p>
+      ) : null}
+      {bucket.spendControlReached === true ? (
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+          When this reading was taken, the backend reported that spend control was reached.
+        </p>
+      ) : null}
+      {controlWhy === null ? (
+        <div className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
+          {bucketWindowCards(bucket, asOf, skew)}
+        </div>
+      ) : (
+        <StatCard
+          label="General headroom"
+          value={{ kind: "absent", state: "unavailable", why: controlWhy }}
+          tone="unknown"
+        />
+      )}
+    </section>
+  );
+}
+
+function CodexUsageCard({
+  codex,
+  asOf,
+  skew,
+}: {
+  codex: CodexObservationView | null;
+  asOf: number;
+  skew: ClockSkew;
+}): ReactNode {
+  if (codex === null) return null;
+  if (codex.kind !== "value") {
+    return (
+      <Card className="tw:mb-3 tw:p-4">
+        <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
+        <div className="tw:mt-3">
+          <StatCard
+            label="General headroom"
+            value={{ kind: "absent", state: codex.kind === "unknown" ? "unavailable" : "unknown", why: codex.why }}
+            tone="unknown"
+          />
+        </div>
+      </Card>
+    );
+  }
+
+  const reading = ago(codex.readAt, asOf, skew);
+  if (reading.ms === null) {
+    return (
+      <Card className="tw:mb-3 tw:p-4">
+        <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
+        <StatCard
+          label="General headroom"
+          value={{
+            kind: "absent",
+            state: "unavailable",
+            why: "the reading instant is in the future or cannot be compared with this page’s clock",
+          }}
+          tone="unknown"
+        />
+      </Card>
+    );
+  }
+  const stale = reading.ms > READING_STALE_MS;
+  const bucketGroups = new Map<string, CodexBucketView[]>();
+  for (const bucket of codex.buckets) {
+    const group = bucketGroups.get(bucket.limitId) ?? [];
+    group.push(bucket);
+    bucketGroups.set(bucket.limitId, group);
+  }
+  const general = bucketGroups.get("codex") ?? [];
+  const other = [...bucketGroups.entries()].filter(([limitId]) => limitId !== "codex");
+
+  return (
+    <Card className="tw:mb-3 tw:p-4">
+      <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
+      <p className={cx("tw:mt-1 tw:text-note", stale ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-faint")}>
+        {codex.accountId === null ? "Account not attributed" : `Account ${codex.accountId}`} · Reading taken {reading.text}
+      </p>
+
+      {general.length === 1 ? (
+        <CodexBucketSection bucket={general[0]!} general asOf={asOf} skew={skew} />
+      ) : (
+        <div className="tw:mt-3">
+          <StatCard
+            label="General headroom"
+            value={{
+              kind: "absent",
+              state: general.length === 0 ? "unknown" : "unavailable",
+              why:
+                general.length === 0
+                  ? "General Codex headroom is unknown because the reading carried no codex bucket. Model-specific limits below do not stand in for it."
+                  : "The reading carried duplicate codex buckets, so neither was chosen as general headroom.",
+            }}
+            tone="unknown"
+          />
+        </div>
+      )}
+
+      {other.map(([limitId, buckets]) =>
+        buckets.length === 1 ? (
+          <CodexBucketSection key={limitId} bucket={buckets[0]!} general={false} asOf={asOf} skew={skew} />
+        ) : (
+          <section key={limitId} className="tw:mt-3">
+            <h3 className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+              Model-specific limit — {limitId}
+            </h3>
+            <StatCard
+              label="Limit"
+              value={{ kind: "absent", state: "unavailable", why: `the reading carried duplicate ${limitId} buckets` }}
+              tone="unknown"
+            />
+          </section>
+        ),
+      )}
+
+      <div className="tw:mt-3">
+        <StatCard
+          label="Full resets available"
+          value={
+            codex.resetCredits === null
+              ? { kind: "absent", state: "unknown", why: "the source did not report reset credits" }
+              : { kind: "value", text: `${codex.resetCredits} reset ${codex.resetCredits === 1 ? "credit" : "credits"}` }
+          }
+          evidence="Shown only; this page never consumes one."
+          tone="idle"
+        />
+      </div>
+    </Card>
+  );
+}
+
+/** The two account readings, kept together so both mounts receive one Codex owner. */
+export function UsageCard({
+  usage,
+  codex,
+  now,
+  receivedAt,
+  skew,
+}: {
+  usage: UsageView | null;
+  codex: CodexObservationView | null;
+  now: number;
+  receivedAt: number | null;
+  skew: ClockSkew;
+}): ReactNode {
+  const asOf = receivedAt === null ? now : Math.max(now, receivedAt);
+  return (
+    <>
+      <ClaudeUsageCard usage={usage} now={now} receivedAt={receivedAt} skew={skew} />
+      <CodexUsageCard codex={codex} asOf={asOf} skew={skew} />
+    </>
   );
 }

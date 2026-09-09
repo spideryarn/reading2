@@ -316,9 +316,13 @@ nothing else has a copy of.
 
   ```
   npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
-    --prompt-file <review-prompt> --output <review-answer>
+    --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
   ```
 
+  Since 2026-09-09 the code reviewer **fixes what it finds** inside the stage and reports anything
+  wider for you to decide; you read its diff, run the gates and commit. The plan review stays
+  read-only (`--sandbox review`). Greg's words and the trade-off are in
+  [codex-cli-as-subagent.md § The house workflow](docs/reusable/codex-cli-as-subagent.md#the-house-workflow-in-this-repo).
   Hand it the evidence — the scoped diff, the results file, the script that produced a number — not
   just the prose. Check each finding yourself; some are wrong. And check a verdict actually arrived,
   exit code *and* answer file, because a review that returned nothing looks exactly like one that

@@ -73,6 +73,7 @@ import type {
 import type { ActionsUi } from "./useActions";
 import { Card, cx } from "./ui";
 import { UsageCard } from "./UsagePanel";
+import type { CodexObservationView } from "./usage-history-client";
 import { formatDuration } from "./view";
 
 /**
@@ -489,6 +490,7 @@ export function OverseerPanel({
   unreadableRows,
   overseer,
   usage,
+  codex,
   now,
   receivedAt,
   skew,
@@ -511,6 +513,8 @@ export function OverseerPanel({
   overseer: OverseerView | null;
   /** What the last usage pass found about the account, or `null` before any payload. */
   usage: UsageView | null;
+  /** The newest persisted Codex attempt, owned once by App for both card mounts. */
+  codex: CodexObservationView | null;
   /** The page's one clock. Every age on screen agrees because they all read this. */
   now: number;
   /** When this browser received the payload, by its own clock — the anchor. */
@@ -532,10 +536,9 @@ export function OverseerPanel({
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
 
       {/* SECOND, and beside the status card rather than on a tab of its own:
-          *is anything watching* and *can the account afford more work* are the
-          two questions you ask before reading anything else here, and the
-          second is the one that explains a fleet of sessions sitting idle. */}
-      <UsageCard usage={usage} now={now} receivedAt={receivedAt} skew={skew} />
+          *is anything watching* and *can either subscription afford more work*
+          are the two questions you ask before reading anything else here. */}
+      <UsageCard usage={usage} codex={codex} now={now} receivedAt={receivedAt} skew={skew} />
 
       <Card className="tw:p-4">
         <h2 className="tw:font-medium">Everything queued, across the fleet</h2>

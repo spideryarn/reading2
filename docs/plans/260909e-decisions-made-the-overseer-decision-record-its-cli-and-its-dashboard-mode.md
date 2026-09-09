@@ -1,19 +1,26 @@
 # "Decisions made" — the Overseer's decision record, its CLI, and its dashboard mode
 
-**Status, 2026-09-09: stages 1–3 built and green; Stage 4 (browser verification) not started, and
-it is the one that decides whether the tab ships.** 183 tests, typecheck exit 0, nothing pushed to
-`dev` yet.
+**Status, 2026-09-09: built, measured and on `dev`.** 202 tests, typecheck exit 0, pushed at
+`692fd230` and continued since. The dock question is **answered by Greg** (§ The joint question) and
+the browser check passed on its worst case. What remains is the debrief.
 
-Reviewed by GPT Sol four times: the plan twice (round one *"needs rethinking"*, two P0s and seven
-P1s; round two *"not yet safe to build exactly as written"*, no P0 and seven P1s), then the
-**implementation** independently — no P0, three P1s, seven P2s, all taken. A fifth review of the
-fixes could not run: Codex's app-server client failed on a read-only filesystem, twice. That is owed
-before the debrief and is recorded in § What the plan-stage reviews changed.
+Reviewed by GPT Sol five times: the plan twice (*"needs rethinking"*, then *"not yet safe as
+written"*), the implementation independently, and the fixes to that — which found **one P1 still
+open and three P2s only partly closed**, all now fixed here. Two attempts at that fifth review had
+failed on a read-only filesystem from inside a sandboxed Codex run; running it from the session
+itself, unsandboxed, is what worked.
 
-**One P1 was mine and is the most instructive thing here**: Stage 2b moved the command-id retry
-check into the CLI for a good reason and dropped half of it in the move, so a *different* decision
-under a reused key exited 0 and silently wrote nothing. Fixed at `86e28e93`, reproduced by hand
-before and after.
+**Two of the P1s in this work were mine, and both are the same mistake twice.** Stage 2b moved the
+command-id retry check into the CLI for a good reason and dropped half of it — a *different*
+decision under a reused key exited 0 and wrote nothing. Fixed at `86e28e93`. The fix then still
+omitted `--by` from the comparison, so the same words filed by a different actor was a retry, and
+the CLI disagreed with the fold, which includes `by`. **Moving a check to a new layer and leaving
+part of it behind** is the class; it happened twice in one session, and both times a reviewer found
+it rather than a test.
+
+**And the defect no test could see:** at 390px the populated row was illegible — the question wrapped
+to about one word per line and its text overflowed under a pill. Every assertion passed, 1280 was
+clean, jsdom has no layout. Found by looking at the picture (§ Stage 4).
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer.md](../project/overseer.md), whose gate 1 this turns from a hand-kept Markdown list into a
@@ -434,7 +441,157 @@ The fleet dashboard has a bar along the bottom with one button per **mode** (a t
 health, Deploys …). It is the only navigation the page has. Two more modes are landing today, taking
 it from eight to ten, and the bar has run out of room on a phone.
 
-### The measurement, and what kind of claim it is
+### ANSWERED by Greg, 2026-09-09: option A, a scrolling strip
+
+> Re dock, use a scrolling strip - borrow/follow/reuse from Spideryarn
+>
+> — Greg, 2026-09-09, relayed by the Overseer
+
+So: **ship the scroll-into-view and the edge fade, and stop there.** No overflow menu, no
+regrouping, no dropped tab. Options B, C and D below are closed; they are kept because the
+measurements that produced them are the reason the answer is informed, and because C — *some of
+these should not be tabs* — is the one that would come back if the bar keeps growing.
+
+**Nothing further is to be built for this: the answer is already implemented, and the work is to
+confirm parity rather than to add a third mechanism.** That risk is real — *"use a scrolling strip"*
+reads like new work — and it was flagged by `questions-mode-s2` and by the Overseer independently.
+
+**The referent is [`src/web/styles/dock.css`](../../src/web/styles/dock.css), and this plan cited
+the wrong file first.** An earlier draft pointed at `narrow-window.css` § `.controls`, which is the
+reading view's *controls* bar — a different scrolling strip that matched a grep. `questions-mode-s2`
+checked the referent rather than assuming, on the grounds that *"reuse the existing X" is the claim
+shape that most often turns out to be about a different X*. The fleet dock is a **port** of
+`dock.css` and `dock-fit.css`, and says so itself at `tailwind.css:365`; `fit.ts:6` says the same of
+the ladder.
+
+**Parity, checked item by item.** On `dev` at `692fd230`:
+
+| the product's pattern | the fleet dock |
+|---|---|
+| `.dock { overflow-x: auto }` **at every width**, never inside a media query | same |
+| `scrollbar-width: none` plus the `::-webkit-scrollbar` rule | same |
+| the gap collapsing so buttons close up and the row scrolls | same |
+| the measured fit ladder dropping labels **before** it scrolls | same (`fit.ts`, ported) |
+| — | **plus** scroll-into-view on the active mode |
+| — | **plus** the edge fades, as masks contributing no width |
+
+The last two do not exist in the product. So the strip is borrowed and complete, and the two
+additions are the half `narrow-window.css`'s own comment says is missing: *"a bar you have to
+discover is scrollable is a poor control, but it beats a button that is not there."* They are
+candidates to flow **back** to the product — a proposal for
+[overseer-queue.md](../project/overseer-queue.md), not work for this plan.
+
+Greg's answer is also consistent with his own call on the product on 2026-08-28 — *"maybe also row
+scrolls sideways if it doesn't fit horizontally"* — which is the quote attached to that very CSS.
+
+**What this work adds is the half the product's own comment says is missing.** That comment
+continues: *"a bar you have to discover is scrollable is a poor control, but it beats a button that
+is not there."* The edge fade is how you discover it, and the scroll-into-view is why you do not
+have to. Neither exists in `src/web/` — the product has no fade and does not scroll its active mode
+into view — so there was nothing to copy for those two, and **they are candidates to flow back the
+other way** ([overseer-queue.md](../project/overseer-queue.md) is where that proposal belongs, not
+this plan).
+
+The one thing that could not be reused even if it were wanted: `tests/fleet-imports.test.ts` forbids
+`tools/` importing `src/`, so "reuse" here can only ever mean the same CSS written again, never a
+shared module. That is the standing cost recorded in
+[fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md), not a new one.
+
+### Lead with this: what happens if we do nothing
+
+**Disable the scroll-into-view, rebuild the client, and load the last tab at 390px. The active
+button's right edge is 416 against a 390 viewport — it is off screen.** Put the fix back and the bar
+scrolls 30px, the edge lands at 386, and the tab you are on is visible.
+
+That is the only number in this section that answers *what happens if nothing is done*. Every table
+below shows a bar that is crowded; this shows **a button that disappears**. `questions-mode-s2`
+asked for it to lead, and it is right to.
+
+It also shows why the check had to be taken on the **last** tab. `#sessions` and `#decisions` pass
+with the fix removed — a check on either would have blessed a build with nothing in it.
+
+### The measurement — now taken, at nine modes and at ten
+
+**Both counts have been measured and the derivation held.** Chrome via `playwright-core`, contexts
+with `hasTouch: true` at 390×844 (`(pointer: coarse)` confirmed true in the page), read after the
+fit rung settled. Nine by this session on `692fd230`; ten by `questions-mode-s2` on that plus its
+own two commits, with `--dock-mode-count` reading 10 in a real browser.
+
+| load | modes | rung | scrollWidth | clientWidth | scrollLeft | active button | Refresh |
+|---|---|---|---|---|---|---|---|
+| `#sessions` | 9 | fit-2 | 479 | 390 | 0 | on screen | **off screen** |
+| `#decisions` | 9 | fit-2 | 484 | 390 | 0 | on screen | **off screen** |
+| `#deploys` (last) | 9 | fit-2 | 475 | 390 | 30 | on screen | **off screen** |
+| `#sessions` | 10 | fit-2 | 519 | 390 | 0 | on screen | **off screen** |
+| `#deploys` | 10 | fit-2 | 515 | 390 | 26 | on screen | **off screen** |
+| `#questions` (last) | 10 | fit-2 | 526 | 390 | 77–82 | on screen, flush | **off screen** |
+
+Ten-mode row measured and reported by `questions-mode-s2`, 2026-09-09.
+
+**Predicted ~41px per mode; measured 40px**, on both shared loads independently
+(`#sessions` 479→519, `#deploys` 475→515). The prediction was registered at `b32acbe3` before either
+session measured. It held because it was the right kind of prediction: the 41 came from
+`.dock-btn { min-width: 2.5rem }` plus the 1px segment hairline, which is what a mode costs **once
+labels are gone** — and both bars are at the last rung, so that is the case it was computed for.
+
+**One method correction, `questions-mode-s2`'s:** `scrollWidth` is not a single number at a given
+mode count. It moves ~9–11px depending on which tab is active, because the active button keeps its
+label at the last rung. Any delta must name its load or it subtracts two numbers that differ for a
+reason unrelated to the mode count.
+
+**Why the shared load is what makes the subtraction trustworthy, which is not obvious.** Holding the
+active tab fixed on both sides makes the label cost *identical and cancelling*: `#sessions` active in
+both (479→519), `#deploys` active in both (475→515). What is left is exactly one mode. And because
+the two shared loads sit at different scroll positions and different bar totals and **still agree at
+40**, that is a genuine replication rather than the same number read twice.
+
+**The comparison that looks natural and cannot be done** is *`#decisions` at nine against
+`#questions` at ten*: different active tabs, so the answer is one mode's width plus or minus a
+label, and unreadable. Written down because somebody will reach for it later —
+`questions-mode-s2`, 2026-09-09.
+
+### ALSO ANSWERED by Greg, 2026-09-09: scrolling to reach Refresh is fine
+
+> It's fine if they need to scroll to see Refresh.
+>
+> — Greg, 2026-09-09, relayed by the Overseer
+
+**Closed, and nothing is built for it.** This was deliberately kept open when the dock's *shape*
+question was answered, because a scrolling strip answers *the bar is full* and does not answer *a
+control is unreachable at rest* — `questions-mode-s2`'s distinction, and it was worth making even
+though the answer turned out the same way. Asking the second question separately is what makes
+"fine" a decision rather than an omission.
+
+The evidence below stays: it is why the question was answerable, and it records that the condition
+predates both new tabs rather than being caused by them.
+
+**One seam this work leaves, stated because it cannot be cleared from here.** The product's dock
+gets focus-scrolling from the browser natively; this one now *also* makes an explicit
+`scrollIntoView` call when the mode or the fit rung changes. The case where they could disagree is a
+rung change (a resize) while a **non-active** button holds keyboard focus: the explicit call would
+pull the bar to the active mode and away from the focused one. No evidence it happens, and it was
+not exercised at 390 — raised by `questions-mode-s2`, who could not see it from their side either.
+Worth a look by whoever is next in `Dock.tsx`; not worth holding this work for.
+
+### The evidence: Refresh has not been reachable since before either tab
+
+This is the thing to put in front of Greg, and neither of our tabs caused it.
+
+- **eight modes** — `readiness-tab`, 06:12Z: Refresh "sits past the edge";
+- **nine modes** — measured here: off screen on all three loads, **including at `scrollLeft: 0`**;
+- **ten modes** — measured by `questions-mode-s2`: off screen at every load.
+
+The mode buttons still work at ten and the active one is always reachable. **The Refresh control is
+not reachable on any load we measured without a deliberate horizontal drag**, and it has been that
+way for at least two tabs longer than this work.
+
+**And the scroll-into-view makes that half worse, which is a trade rather than an improvement.** It
+scrolls toward the active mode; Refresh sits at the tail past every mode; so each time it fires it
+pushes Refresh further away. That is the right trade — the tab you are on is worth more than a
+control that also has a keyboard route and a page reload — but it is a trade, and reporting only the
+half that improved would be the sort of calm number this whole feature exists to distrust.
+
+### What kind of claim the earlier figures were
 
 **Observed**, by session `readiness-tab` at 06:12Z on 2026-09-09, at 390 px on a touch viewport:
 
@@ -514,6 +671,54 @@ worth instrumenting.
 
 **Neither session is asking to build B or C now.** Both are shipping A's fix because a scrolling bar
 should be honest whatever else happens. The question is whether C is worth queueing.
+
+## The nine-mode reading, taken 2026-09-09 on `692fd230`
+
+Measured, not derived. Chrome via `playwright-core`, a context with
+`hasTouch: true` at 390×844 (`(pointer: coarse)` confirmed `true` in the page,
+so this is the bar the 40px floor applies to), read **after the fit rung
+settled**. `questions-mode-s2` takes the ten-mode reading; `#deploys` is the
+shared load.
+
+| load | rung | scrollWidth | clientWidth | overflow | scrollLeft | active fully visible |
+|---|---|---|---|---|---|---|
+| `#sessions` (first) | 2 | 479 | 390 | 89 | 0 | yes |
+| `#decisions` (mid) | 2 | 484 | 390 | 94 | 0 | yes |
+| `#deploys` (**last**) | 2 | 475 | 390 | 85 | **30** | **yes** |
+
+Bar height 48px at every load; Refresh sits **past the right edge** in all three,
+exactly as `readiness-tab` observed at eight; the page itself never scrolls
+sideways. At 1280 there is no overflow at all — `scrollWidth` 1280, all nine
+labelled, nothing clipped.
+
+**The gating check passes, and the counterfactual is why that means something.**
+With the scroll-into-view disabled and the client rebuilt, `#deploys` reads
+`scrollLeft: 0`, active right edge **416** against a 390 viewport,
+`activeFullyVisible: false`. With it, the bar scrolls 30px and the active button
+ends at 386. So the fix is what makes the last tab reachable, measured rather
+than inferred.
+
+**And the corrected gating check earned itself.** `#sessions` and `#decisions`
+pass *either way*. The original check — load `#decisions` and look — would have
+passed against a build with no fix in it and told me nothing.
+
+### The predictions, scored
+
+Committed at `b32acbe3` before any measurement:
+
+- **`clientWidth` identical** — 390 at every load. Holds; the pair will be
+  comparable.
+- **~41px per mode, ~440 at eight → ~481 at nine.** Measured 475–484. **Holds**,
+  within about 1%.
+- **Rung reported as a rung** — rung 2 at every load, so the bar is already
+  icon-only with the active mode keeping its label.
+
+**One thing the prediction did not anticipate, and it matters for the ten-mode
+comparison:** `scrollWidth` varies by *which* mode is active, because the active
+button keeps its label at rung 2 and labels differ in width — 475 with "Deploys"
+against 484 with "Decisions", a 9px spread. So the nine-to-ten delta must be read
+on **the same load**, or label width confounds it. That is why sharing `#deploys`
+was worth doing, and the number to compare against is **475**.
 
 ## Migration: one hand-authored seed, and no importer
 
@@ -734,12 +939,21 @@ debrief.
 1. **A review button on the page needs an identity story.** Until then a decision can only be marked
    reviewed from a terminal. The cheap shape the queue plan already proposes: mutations only from
    allowlisted Greg-device tailnet identities, loopback read-only. One answer unblocks both.
-2. **Only if the browser stage fails**: whether "Decisions made" may live somewhere other than its
-   own tab, if a ninth tab cannot be made reachable at 390px. Not decided here, and not decided by
-   the Overseer either — it would be recorded as *important work left*.
+2. **The runbook's § The log, and the surface Greg reads.** It specifies a ranking by agent-hours
+   that cannot be built honestly (§ What a session reference carries) and an assumptions-only
+   surface that today's widening outgrew. The before/after is in the debrief. **Not the Overseer's
+   to take** — gate 3 forbids it changing a constraint on its own decision log and allows only a
+   proposal; it agreed and logged a correction against its earlier attempt.
 
-*(A third — whether all three classes belong on the first screen — was put to the Overseer and
-**decided** by it under gate 2 on 2026-09-09; see § The record. Reversible by Greg at the debrief.)*
+**Answered and closed on 2026-09-09**, all three within the day:
+
+- *Which classes belong on the first screen* — the Overseer, under gate 2: all three, unreviewed
+  first, newest within that (§ The record). Reversible by Greg.
+- *The dock's shape* — Greg: a scrolling strip, reuse Spideryarn's (§ The joint question). Already
+  implemented; parity confirmed, nothing built.
+- *Refresh unreachable at rest* — Greg: *"It's fine if they need to scroll to see Refresh."*
+- *Whether the tab may live somewhere other than its own tab* — **moot**: the browser stage passed
+  its worst case, so the fallback was never reached.
 
 ## Needs the Overseer
 

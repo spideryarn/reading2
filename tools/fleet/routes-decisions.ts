@@ -32,7 +32,18 @@
  * the exceptional case without adding synchronous compression to the shared
  * dashboard process. More importantly, the input byte ceiling makes the
  * synchronous read and fold defensible in this single Node control-plane
- * process: their worst case is stated before either operation begins.
+ * process.
+ *
+ * **AND THE EXACT STRENGTH OF THAT BOUND, because the first version of this
+ * comment claimed more than the code does.** The size is read with `statSync`
+ * and the file is read afterwards, without the writer's lock — so a process
+ * appending between the two operations can make the read larger than the
+ * ceiling that admitted it. The bound is therefore a guard against a log that
+ * has grown large over time, which is the case it was written for, and **not**
+ * a hard concurrency-safe limit. Holding the lock across both, or reading a
+ * bounded prefix, is what would make it one; neither is done here and saying so
+ * is better than implying a protection that is absent. GPT Sol, reviewing the
+ * fix.
  */
 import { statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";

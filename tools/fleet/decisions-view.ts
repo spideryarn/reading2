@@ -179,12 +179,28 @@ export function projectDecisionCheckpoint(
       why: "the Overseer checkpoint has no usable snapshot staleness bound",
     };
   }
+  /* **BOTH CLOCKS, NOT JUST THE SNAPSHOT'S.** The first version of this checked
+     `lastGoodSnapshotAt` alone, so a checkpoint whose `writtenAt` was a day
+     ahead but whose snapshot read `now` was accepted as current — and a future
+     `writtenAt` is what would then authorise future-dated `verifiedExecution`
+     entries inside it. GPT Sol reproduced exactly that fixture. A clock that is
+     ahead is an error wherever it shows, so both are checked. */
+  const written = Date.parse(projected.writtenAt);
+  const writtenAheadMs = Number.isFinite(written) ? written - now.getTime() : 0;
+  if (writtenAheadMs > CHECKPOINT_CLOCK_SKEW_TOLERANCE_MS) {
+    return {
+      kind: "unavailable",
+      why:
+        `the Overseer checkpoint was written ${Math.round(writtenAheadMs / 1000)}s in the future; ` +
+        "its clock is ahead of this server",
+    };
+  }
   const ageMs = now.getTime() - Date.parse(projected.lastGoodSnapshotAt);
   if (ageMs < -CHECKPOINT_CLOCK_SKEW_TOLERANCE_MS) {
     return {
       kind: "unavailable",
       why:
-        `the Overseer checkpoint is ${Math.round(-ageMs / 1000)}s in the future; ` +
+        `the Overseer checkpoint's snapshot is ${Math.round(-ageMs / 1000)}s in the future; ` +
         "its clock is ahead of this server",
     };
   }

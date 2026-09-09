@@ -258,8 +258,24 @@ describe("execution identity", () => {
     );
     expect(projected.checkpoint).toEqual({
       kind: "unavailable",
-      why: "the Overseer checkpoint is 2s in the future; its clock is ahead of this server",
+      why: "the Overseer checkpoint was written 2s in the future; its clock is ahead of this server",
     });
+  });
+
+  test("a future writtenAt is a clock error even when the snapshot instant looks current", () => {
+    /* The gap the first version of this left: it checked `lastGoodSnapshotAt`
+       alone, so a checkpoint written a day ahead whose snapshot read `now` was
+       accepted as current — and it is the future `writtenAt` that would then
+       authorise future-dated `verifiedExecution.since` values inside it. GPT
+       Sol reproduced this exact fixture against the first fix. */
+    const projected = projectDecisions(
+      view([record("dec-aaaaaaa3", "2026-09-09T10:00:00.000Z")]),
+      checkpoint([], { writtenAt: "2026-09-10T12:00:00.000Z", lastGoodSnapshotAt: "2026-09-09T12:00:00.000Z" }),
+      NOW,
+    );
+    expect(projected.checkpoint).toEqual(
+      expect.objectContaining({ kind: "unavailable", why: expect.stringMatching(/written .* in the future/) }),
+    );
   });
 
   test("tolerates up to two seconds of checkpoint clock skew", () => {
