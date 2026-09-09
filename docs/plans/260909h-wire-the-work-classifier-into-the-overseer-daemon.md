@@ -30,9 +30,20 @@ One line, in the Overseer's own history card:
                 pane: idle · work: GPT review, running 18m
 ```
 
-and, on the row's detail, the evidence that claim rests on: the command line the recogniser matched,
-how deep under the pane it sits, how many processes the walk inspected, and when the process table
-was read.
+and, once the reading is no longer fresh, **a different sentence rather than the same one growing**:
+
+```
+  idle   ≥3h    codex-cli-as-subagent-agent          $2077
+                pane: idle · work: GPT review — was running 18m when checked 1h ago
+```
+
+That distinction is GPT Sol's first finding and it is the difference between a measurement and an
+extrapolation: the elapsed time is computed at the scan and frozen there, so a daemon that has
+accepted nothing for an hour cannot silently turn eighteen observed minutes into seventy-eight
+claimed ones.
+
+On the row's detail: the executable and subcommand the recogniser matched, how deep under the pane
+it sits, how many processes the walk inspected, and when the process table was read.
 
 When the probe fails, the line says **cannot tell** and why. It never says idle.
 
@@ -88,9 +99,11 @@ daemon writes both halves of the same file in the same instant.
   reading would be simultaneous with the `panePid` it describes rather than ~30 s later — strictly
   more accurate, and it would land the answer on the fleet row where `SessionDetail` could show it
   without any join at all. **Not taken**: the roadmap assigns this to the daemon, `collect.ts`
-  belongs to another live agent's stage, and the daemon is where the "one probe per accepted
-  inventory" contract can be tested. Named here because it is the better long-term home and somebody
-  will want it: the cost of moving later is one function and its tests.
+  belongs to another live agent's stage, and the daemon is where the probe contract can be tested.
+  **This bullet first claimed the cost of moving later was "one function and its tests", and that was
+  wrong** — GPT Sol counted `collect.ts`, the fleet row type, the wire type, `observation.ts`'s strict
+  parser, the daemon's ingestion and their contract tests. Round 1 finding 6 below has the corrected
+  reasoning and where the decision now sits.
 - **Add a `work` arm to `SessionState`.** Refused for the reason `work.ts`'s own header gives: that
   union is consumed by exhaustive switches all over `tools/fleet/`, it is the dashboard's word for
   what its own two sources say, and a row can be honestly `idle` and honestly mid-review at the same
@@ -117,58 +130,142 @@ has been idle for six hours wants nothing"*. That filter is exactly what would h
 sessions this stage exists to find. **An idle entry with recognised child work is kept**; an idle
 entry with none, or with a `cannot-tell`, is dropped as before. The rank is unchanged.
 
+**And the card's sentence changes with it**, on Sol's fifth finding. Today it claims *these are the
+ones that have waited longest*, and an idle row admitted for an 18-minute review may sort first
+because it went idle six hours ago — which is not a wait. The card now says what it is: the oldest
+status records worth showing — non-idle sessions, and idle sessions with recognised child work — and
+the tooltip says the order is by pane-status age, not by child-work age.
+
 ## Product default, recorded rather than asked
 
-Greg has not been asked; this is the brief's default and it is what is built:
+Greg has not been asked; this is the brief's default:
 
 > the work line shows the kind and the elapsed time only ("review running 18m"), with the command
 > line in session detail and never any environment or argument that could be a secret.
 
-`ps args` never carries the environment, so that half is free. A command line *can* carry a secret if
-somebody passes one as an argument, so a small bounded redactor blanks the value of any argument
-whose name matches `token|key|secret|password|auth`. That is a positive safety rule of about ten
-lines, not the unbounded recogniser catalogue the roadmap warns against.
+**The first half is built; the second half is not, and GPT Sol is why.** `ps args` never carries the
+environment, so that part is free. But a *redactor* over the argv cannot uphold the promise: quoting
+and argument boundaries are already lost by the time `ps` prints a command line
+([work.ts](../../tools/overseer/work.ts) § `ProcessRow`), a `codex exec` line carries a whole prompt,
+and a ten-line rule over option NAMES misses positional secrets, URLs, headers and any spelling
+nobody thought of. So the full command line is **not persisted at all**. What is kept is the
+executable and its leading subcommand — `codex exec`, `claude`, `node` — plus the recogniser's own
+label, the pid, the depth, the inspected count and the scan clock. That is enough to say what the
+work is and to check it by hand, and it cannot leak an argument.
+
+Adding the full line later is one field and one producer change, if Greg decides the evidence is
+worth the exposure. Recorded so it is a decision rather than an omission.
+
+## Round 1: GPT Sol on the plan
+
+Read-only review, `gpt-5.6-sol`, 2026-09-09. **No P0s; the checkpoint placement was confirmed**, with
+the argument sharpened: putting work on `RegisterEntry` would need either process-observation events
+on every inventory (bloating a durable log with samples) or a register that is partly folded and
+partly overwritten. Seven P1s and two P2s, all of them taken except one, which is deferred with its
+reason:
+
+1. **"running 18m" can become a confident claim about an unobserved hour.** If the daemon accepts
+   nothing for an hour and the browser computes `now − startedAt`, the card says *running 78m* having
+   observed 18m. **Taken:** the elapsed time is computed at the scan and frozen there
+   (`PaneJob.ranForMs`), and the row says which of the two sentences it is — *running 18m* while the
+   scan is fresh, *was running 18m when checked 1h ago* once it is not.
+2. **An optional, retained field lets a stale scan attach to a newer register.** `SessionKey` binds
+   a tmux handle and a launch-time conversation claim; it does not bind a reading to the collection
+   it came from. **Taken:** `OverseerWork` carries `sourceCollectedAt`, and the projection joins only
+   when it equals the checkpoint's `lastGoodSnapshotAt`. A mismatch is an explicit *work unavailable*,
+   never a silent join. The guard is self-enforcing: the accept path always writes work, so a moved
+   `lastGoodSnapshotAt` with an unmoved scan stops joining by itself.
+3. **"Accepted inventory" is the wrong boundary.** `admissible()` can accept and `diff()` can then
+   return `held` — a populated inventory with no readable tmux generation — after which the daemon
+   returns without checkpointing. A probe there is spent and discarded. **Taken:** the contract is
+   *once per inventory that will be checkpointed*, so the probe moves below the `held` check, and
+   `held` joins duplicate, rejected and bare-tick in the zero-calls test.
+4. **The pid-reuse race needs a guard before this may claim positive work.** Co-publication is not
+   simultaneity: the pane pid came from the fleet collection and the process tree comes ~30 s later.
+   Sol offered a strong guard (re-read tmux around the probe) and a nearly free one. **The free one is
+   taken and the strong one is refused:** a pane process whose start is later than the inventory's
+   `collectedAt`, beyond the documented one-second `etimes` tolerance, is `cannot-tell` with a new
+   `pane-younger-than-inventory` cause. Re-reading tmux is refused because it would put an
+   `execFileSync` against the tmux server inside the loop whose whole job is to keep folding when
+   other things are broken — the daemon deliberately reads no tmux, and the honest way to close that
+   gap is finding 6 below, not a second collector in here.
+5. **Keeping work-bearing idle rows breaks the card's stated ranking claim.** An idle row included for
+   its 18-minute review may rank first because it went idle six hours ago, and it has not *waited*
+   six hours. **Taken:** the card's sentence is rewritten to say what it now is — the oldest status
+   records worth showing, non-idle plus idle-with-recognised-work — and the tooltip says the order is
+   by pane-status age, not by child-work age.
+6. **The collector alternative was dismissed too cheaply.** Sol is right that *another agent owns the
+   file today* is a coordination constraint rather than a design reason, right that moving later
+   touches `collect.ts`, the fleet row and wire types, `observation.ts` parsing, daemon ingestion and
+   their contract tests — **not "one function and its tests", which this plan claimed and which was
+   wrong** — and right that its own compromise is the better architecture: *fleet owns the
+   simultaneous sampling and calls the Overseer-owned classifier; the daemon owns persistence and
+   interpretation.* That would also dissolve finding 4 outright, because there would be no gap.
+   **Deferred, not refused.** It crosses three stage-ownership boundaries this stage was explicitly
+   fenced out of, and the roadmap and
+   [overseer-direction.md](../project/overseer-direction.md) both assign work interpretation to the
+   Overseer. Built as briefed, with finding 4's backstop; **the question goes to the Overseer in the
+   debrief with Sol's argument attached**, because it is an architecture call above this stage's pay
+   grade and the third `ps` cadence is what it costs until somebody makes it.
+7. *(P2)* **A failed probe should be one global arm, not N identical pane failures.** It repeats one
+   fact per session and permits mixed states that cannot happen. **Taken:** `OverseerWork` gains a
+   `probe-failed` arm, and only a successful scan carries pane readings. `PaneWork.cannot-tell`
+   stays, for the per-pane causes that really are per-pane.
+8. *(P2)* **The redactor cannot uphold its guarantee.** **Taken** — see the section above; the
+   redactor is gone and the raw command line is not persisted.
+
+Sol also settled the scan clock: on success it is `ProcessTableReading.atMs`, the instant the kernel
+was read, **not** a later `now()`; on failure it is a separately named `attemptedAt`.
 
 ## Stages
 
 ### Stage 1 — the wire shape and the store field
 
-- [ ] `tools/fleet/wire.ts`: `PaneWork`, `PaneJob`, `OverseerWork`, `OverseerPaneWork`. Types only.
+- [ ] `tools/fleet/wire.ts`: `PaneJob`, `PaneWork`, `OverseerPaneWork`, `OverseerWork`. Types only.
+  Three arms on `OverseerWork` — `not-yet-run`, `probe-failed`, `scan` — so a global failure is one
+  fact rather than N (round 1, finding 7); `sourceCollectedAt` on the two that describe a real
+  attempt (finding 2); `ranForMs` frozen on the job (finding 1).
 - [ ] `tools/overseer/store.ts`: `Checkpoint.work`, `CheckpointUpdate.work?`, `workNotYetRun(at)`,
-  and the read-back parse, mirroring `attention` exactly.
+  and the read-back parse, mirroring `attention` exactly — held across writes that carry none, not
+  restored across a restart.
 - [ ] `tests/overseer-store-work.test.ts`: round-trips; absent on a cold store is `not-yet-run` and
-  says so; omitted on an update keeps what is held; a malformed stored value does not become an
+  says so; omitted on an update keeps what is held with its clock unchanged; a restart does not
+  restore one; a malformed stored value degrades to `not-yet-run` with a reason and **never** to an
   empty scan.
 
 **Status:** not started.
 
 ### Stage 2 — the daemon probes once and publishes
 
-- [ ] `tools/overseer/work-reading.ts` (new, pure): `paneWorkOf(WorkReading) → PaneWork` and
-  `scanPaneWork(rows, reading, nowIso) → OverseerWork`, including the redactor.
-- [ ] `tools/overseer/daemon.ts`: `DaemonOptions.probe?`, defaulting to `probeProcessTable`; one
-  call on the accept arm, after `admissible()` and before the checkpoint; `work` carried into
-  `checkpointUpdate()` with the spread idiom.
+- [ ] `tools/overseer/work-reading.ts` (new, pure): `paneWorkOf` and `scanPaneWork`, including the
+  `pane-younger-than-inventory` backstop (finding 4) and the executable/subcommand reduction that
+  replaces the deleted redactor (finding 8).
+- [ ] `tools/overseer/daemon.ts`: `DaemonOptions.probe?`, defaulting to `probeProcessTable`; one call
+  **below the `held` check**, on the path that will actually checkpoint (finding 3); `work` carried
+  into `checkpointUpdate()` with the spread idiom.
 - [ ] `tests/overseer-daemon-work.test.ts`, the integration test the roadmap names: the probe is
-  called **once per accepted fresh inventory** and **not at all** for a duplicate, a rejected
-  payload or a bare tick; the classification reaches `current.json`.
+  called **exactly once per inventory that gets checkpointed**, and **not at all** for a duplicate, a
+  rejected payload, a `held` diff, or a bare tick; the classification reaches `current.json`; a
+  failed and a thrown probe both say why and never say idle.
 - [ ] `tests/overseer-work-reading.test.ts`: deep wrapper tree (the depth-8 codex capture),
-  foreground and background review, missing process table → every pane `cannot-tell`, exited child,
-  pid reuse, no child work. Existing process-tree fixtures plus one disposable positive control.
+  foreground and background review, missing process table, exited child, pid reuse (both the caught
+  case and the recorded uncaught one), no child work, and the safe-command reduction. Existing
+  process-tree fixtures plus one disposable positive control.
 
 **Status:** not started.
 
 ### Stage 3 — the projection and the browser
 
-- [ ] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key; keep
-  idle-with-work; `OverseerRegister` read arm gains `workScannedAt`.
-- [ ] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, `OverseerRegister.workScannedAt`.
-- [ ] `tools/fleet/web/src/types.ts`: parse both, on the browser's clock.
-- [ ] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line and the evidence
-  detail.
+- [ ] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when
+  `sourceCollectedAt` matches `lastGoodSnapshotAt`** (finding 2); keep idle-with-work; restate the
+  card's ranking claim (finding 5).
+- [ ] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, and the register's own work clock.
+- [ ] `tools/fleet/web/src/types.ts`: parse it, on the browser's clock.
+- [ ] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line in **both** its
+  sentences — fresh and stale (finding 1) — and the evidence detail.
 - [ ] `tests/fleet-overseer-status.test.ts` and `tests/fleet-overseer-panel.test.tsx`, including the
-  acceptance fixture: `pane: idle` beside `work: … running 18m`, and a failed probe reading
-  *cannot tell*.
+  acceptance fixture: `pane: idle` beside `work: … running 18m`; the stale sentence; a failed probe
+  reading *cannot tell*; and a `sourceCollectedAt` mismatch refusing the join rather than making it.
 
 **Status:** not started.
 
