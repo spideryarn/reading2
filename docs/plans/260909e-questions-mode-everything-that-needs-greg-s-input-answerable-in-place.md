@@ -739,7 +739,32 @@ Two things follow from the dock being full:
    other: if this lands first the literal is gone and they drop their bump; if theirs lands first
    this replaces a `flex: 9` rather than a `flex: 8`. Their scroll fix does not touch that
    declaration at all, so it merges cleanly against either state.
-2. **Whether the dock should become something else** is **a product question and it is Greg's**. It
+2. **ANSWERED BY GREG, 2026-09-09 — a scrolling strip, and none of the rest.** His words:
+   *"Re dock, use a scrolling strip - borrow/follow/reuse from Spideryarn"*. No More-menu, no
+   grouping, no tab dropped. **So the option this session asked to have added was rejected**: Queued
+   ideas, Decisions and Questions stay three tabs, and the bar stays at ten. Recorded here rather
+   than only in the joint draft because this plan is what proposed the merge.
+
+   **And it needs no build, which is the part worth checking before somebody starts one.** The
+   referent is [`src/web/styles/dock.css`](../../src/web/styles/dock.css) — checked, because
+   `mode-band.css` also matches a grep for horizontal scrolling and is a vertical panel shell rather
+   than a tab strip. The fleet dock is already a **port** of that file, and everything the answer
+   names is on `dev`: `overflow-x: auto` at every width rather than inside a media query
+   ([narrow-windows.md](../project/narrow-windows.md) says why that distinction cost a release),
+   `scrollbar-width: none` and the webkit rule so there is no trough, `.dock-gap` collapsing so the
+   buttons close up and the row scrolls, the measured fit ladder dropping labels *before* it
+   scrolls, and `decisions-mode`'s scroll-into-view and edge fades on top. Greg's answer also
+   matches his own call on the product on 2026-08-28 — *"maybe also row scrolls sideways if it
+   doesn't fit horizontally"* — which is the quote attached to that CSS.
+
+   **What the answer does not settle, and it is not this tab's to carry:** Refresh is off screen at
+   eight, nine and ten modes, including at `scrollLeft: 0`. A scrolling strip answers *the bar is
+   full*; it does not answer *a control is unreachable at rest*. Going to Greg separately, via the
+   Overseer.
+
+   The original framing, kept because the reasoning outlives the answer:
+
+2. **Whether the dock should become something else** was **a product question and Greg's**. It
    is being put to him **once, jointly** — drafted by `decisions-mode` at `45a202f3` § *The joint
    question for Greg: the dock is full*, and carried by whichever of the two sessions debriefs
    second. It is not asked twice from two halves. The option this session asked to have added, and
@@ -1187,8 +1212,11 @@ a filter would make *what is blocking* and *what was decided in my name* one pil
 
 ## Open, and going to Greg rather than being decided here
 
-- **The dock's shape at ten tabs** — joint with `decisions-mode`, drafted by them (§ Where the tab
-  goes).
+- ~~**The dock's shape at ten tabs**~~ — **answered 2026-09-09: a scrolling strip, reusing the
+  product's, which is already what the fleet dock is.** § Where the tab goes has his words and the
+  evidence that it needs no build. **What came out of it and is still open is a different question**,
+  now with Greg via the Overseer: *Refresh is off screen at eight, nine and ten modes, including at
+  rest.* The strip answers the crowding; it does not answer that.
 - **There is no way to ask a session to rewrite a question Greg cannot act on.** The AGENTS.md rule
   landed this morning and the dashboard cannot enforce it for a dialog question, because the message
   route refuses a pane showing a dialog and a queued copy drains only after he has answered. His
