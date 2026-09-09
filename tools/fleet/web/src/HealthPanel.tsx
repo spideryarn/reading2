@@ -32,7 +32,7 @@ import { HealthHistory } from "./HealthHistory";
 import { RawValue } from "./RawValue";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
-import { readHealthStats, type Stat } from "./health-view";
+import { readHealthStats, type Stat, type StatBar } from "./health-view";
 import type { ClockSkew, FleetRow } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, Pill, SectionHeading, cx, toneClasses } from "./ui";
@@ -268,7 +268,59 @@ function StatTile({ stat }: { stat: Stat }): ReactNode {
         </div>
         <div className={cx("tw:mt-0.5 tw:text-[22px] tw:leading-tight tw:font-semibold", tone.ink)}>{stat.value}</div>
         <div className="tw:mt-0.5 tw:text-[12px] tw:break-words tw:text-ink-soft">{stat.sub}</div>
+        {stat.bar === undefined ? null : <Bar bar={stat.bar} tone={stat.tone} />}
       </Card>
     </Explain>
+  );
+}
+
+/**
+ * How full or busy this one is, as a length.
+ *
+ * > if possible show something like a progress bar to indicate visually how
+ * > full/busy things are
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * **`aria-hidden`, and that is not an oversight.** The number above it and the
+ * sub-line beside it already say everything this shape says, in words, and a
+ * second announcement of the same fact is noise in a screen reader rather than
+ * access. The bar is the glance; the text is the carrier. `health-view.ts`
+ * refuses to build one at all when there is no number, so this never draws an
+ * empty track under a dash.
+ *
+ * The ticks are the amber and red cutoffs, from the same constants the chart's
+ * bands use — see `StatBar`. They are drawn OVER the fill, because the question
+ * they answer is "how close is this to trouble", and a mark hidden under the
+ * fill answers it only while the answer is 'not very'.
+ */
+function Bar({ bar, tone }: { bar: StatBar; tone: Stat["tone"] }): ReactNode {
+  const classes = toneClasses(tone);
+  return (
+    <div
+      aria-hidden="true"
+      className="tw:relative tw:mt-2 tw:h-1.5 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-quiet-wash"
+    >
+      <div
+        className={cx("tw:absolute tw:inset-y-0 tw:left-0 tw:rounded-full", classes.pill)}
+        style={{ width: `${(bar.fill * 100).toFixed(1)}%` }}
+      />
+      {bar.marks.map((mark) => (
+        <div
+          key={mark}
+          className="tw:absolute tw:inset-y-0 tw:w-px tw:bg-ink-faint"
+          style={{ left: `${(mark * 100).toFixed(1)}%` }}
+        />
+      ))}
+      {/* **CLIPPED IS NOT FULL.** A bar pinned at the end of its track looks the
+          same whether the value just reached it or is four times past it, and
+          load has no ceiling — so an over-run gets its own mark at the end,
+          the same argument `overCeiling` makes about the chart's fixed axis. */}
+      {bar.over ? (
+        <div className="tw:absolute tw:inset-y-0 tw:right-0 tw:w-1 tw:bg-page">
+          <div className="tw:absolute tw:inset-y-0 tw:right-0 tw:w-px tw:bg-alarm" />
+        </div>
+      ) : null}
+    </div>
   );
 }

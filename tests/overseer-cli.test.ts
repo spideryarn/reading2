@@ -24,6 +24,7 @@ import {
   attentionNotYetRun,
   schedulerNotYetSaid,
   usageNotYetRun,
+  workNotYetRun,
   type Checkpoint,
   type CheckpointRead,
   type RegisterEntry,
@@ -57,6 +58,7 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     // what the store publishes then, and it is not the same as an empty list:
     // *nothing has looked* rather than *nothing needs you*.
     attention: attentionNotYetRun(new Date(NOW - agoMs).toISOString()),
+    work: workNotYetRun(new Date(NOW - agoMs).toISOString()),
     // Same reasoning one field down: a daemon with no usage pass wired in
     // publishes "nothing has looked", never a report saying no limits were found.
     usage: usageNotYetRun(new Date(NOW - agoMs).toISOString()),

@@ -102,9 +102,12 @@ if (PRIVATE.length < 50 || SHARED.length < 3) {
  * GPT Sol, 2026-09-08.
  */
 function workersForThisRun(): number {
-  /* The token exists only to authenticate a refusal back to readiness-run.
-     Consume it before Vitest creates workers, so ordinary test output cannot
-     learn it and impersonate the config-time decision. */
+  /* The token marks a refusal as this config's, so readiness-run can tell it
+     from an accidental copy of the same sentence in later test, fixture or
+     quoted-log output. Consume it before Vitest creates workers, so it is
+     absent from their ordinary inherited environment. That is the whole claim:
+     it is NOT authentication against deliberate same-user code, because Linux
+     keeps the exec-time value in /proc/self/environ whatever this line does. */
   const readinessAdmissionToken = process.env[READINESS_ADMISSION_TOKEN_ENV];
   delete process.env[READINESS_ADMISSION_TOKEN_ENV];
   const nominal = resolveParallelWorkers();

@@ -25,6 +25,7 @@ import {
   readCheckpoint,
   schedulerNotYetSaid,
   usageNotYetRun,
+  workNotYetRun,
   type Checkpoint,
 } from "../tools/overseer/store.js";
 
@@ -59,6 +60,7 @@ function checkpointAt(tickAgoMs: number, snapshotAgoMs: number | null): Checkpoi
     heartbeat: { pid: 4242, instanceId: "i1", startedAt: "2026-09-08T07:00:00.000Z", lastTickAt: writtenAt, ticks: 100 },
     register: [],
     attention: attentionNotYetRun(writtenAt),
+    work: workNotYetRun(writtenAt),
     usage: usageNotYetRun(writtenAt),
     scheduler: schedulerNotYetSaid(writtenAt),
     snapshotStaleAfterMs: null,
@@ -323,6 +325,7 @@ describe("main()", () => {
       heartbeat: { pid: 4242, instanceId: "i1", startedAt: writtenAt, lastTickAt: writtenAt, ticks: 100 },
       register: [],
       attention: attentionNotYetRun(writtenAt),
+      work: workNotYetRun(writtenAt),
       usage: usageNotYetRun(writtenAt),
       scheduler: schedulerNotYetSaid(writtenAt),
       snapshotStaleAfterMs: null,

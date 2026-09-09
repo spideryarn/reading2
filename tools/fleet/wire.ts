@@ -1378,6 +1378,73 @@ export type OverseerRegister =
   | { kind: "read"; total: number; sessions: OverseerSessionHistory[] }
   | { kind: "unreadable"; why: string };
 
+/** One recognised piece of long-running work found under a pane. */
+export type PaneJob = {
+  /** The recogniser's id, as a plain string — the Overseer's vocabulary. A page that refused an id
+   *  it had not heard of would drop the row that had changed. */
+  recogniser: string;
+  /** What to call it to a reader: "GPT review", "headless Claude", "test suite". */
+  label: string;
+  /** When the kernel said it started, or null when it could not be told. Accurate to about a
+   *  SECOND, not a millisecond: `ps etimes` counts whole seconds. Never compare two for equality. */
+  startedAt: string | null;
+  /** How long it had been running WHEN THE TABLE WAS READ. Frozen here on purpose: a browser that
+   *  computed `now - startedAt` would turn eighteen observed minutes into seventy-eight claimed
+   *  ones on a daemon that stopped accepting inventories an hour ago. The reader gets this number
+   *  and the scan's age, and the two together are a measurement rather than an extrapolation. */
+  ranForMs: number | null;
+  /** Unique only for as long as the process lives, so not an identity on its own — kept so a later
+   *  reading has something to check against. */
+  pid: number;
+  /** Hops below the pane process. A `codex exec` dispatched by an agent sits at depth 8 on this box. */
+  depth: number;
+  /** THE EXECUTABLE AND ITS LEADING SUBCOMMAND, AND NOTHING ELSE — `codex exec`, `claude`, `node`.
+   *  The full argv is deliberately not persisted: `ps` has already lost quoting and argument
+   *  boundaries, a `codex exec` line carries a whole prompt, and no redactor over option names can
+   *  promise to catch a positional secret. See the plan's "Product default" section. */
+  command: string;
+};
+
+/** What the tree under one pane was doing, at the instant the table was read. */
+export type PaneWork =
+  /** Could not tell, and why. NEVER to be drawn as idle or as nothing running. */
+  | { kind: "cannot-tell"; cause: string; why: string }
+  /** Looked under the pane and found no recognised work. `inspected` is how many processes the walk
+   *  examined, so "a bare pane" and "twenty-five processes, none recognised" stay different facts —
+   *  the second is how a missing recogniser announces itself. `paneStartedAt` is required on both
+   *  measured arms because without it the delayed scan cannot apply even its limited pid-reuse
+   *  backstop; an unavailable start is `cannot-tell`, never `none`. */
+  | { kind: "none"; inspected: number; paneCommand: string; paneStartedAt: string }
+  /** Found some. `jobs` is non-empty by construction on the producing side. */
+  | { kind: "work"; jobs: readonly PaneJob[]; inspected: number; paneCommand: string; paneStartedAt: string };
+
+/** One pane's reading, tagged with the Overseer's own session key so it can be joined to a register
+ *  entry — the same key, written by the same daemon into the same file at the same instant. */
+export type OverseerPaneWork = { key: string; work: PaneWork };
+
+/**
+ * **WHAT THE FLEET IS ACTUALLY DOING** — one process-table reading, classified per pane.
+ *
+ * ONE CLOCK FOR THE WHOLE SCAN, not one per pane, because there is one `ps`: every pane was decided
+ * from the same reading of the same instant, and a per-pane clock would imply a precision that does
+ * not exist.
+ *
+ * **A FAILED PROBE IS ONE ARM, NOT N IDENTICAL PANE FAILURES.** The first draft gave every pane a
+ * `cannot-tell`, which repeated one fact per session and permitted mixed states that cannot happen —
+ * half the fleet unreadable from a single `ps`. Only a successful scan carries pane readings.
+ *
+ * `sourceCollectedAt` is the `collectedAt` of the inventory this scan was taken FOR. It is what
+ * stops a held reading attaching itself to a newer register: the projection joins only when it
+ * matches the checkpoint's `lastGoodSnapshotAt`, so a scan that has fallen behind stops being drawn
+ * rather than quietly describing sessions it never saw.
+ */
+export type OverseerWork =
+  /** No scan has been taken. `at` is when the file was written, not when anything was read. */
+  | { kind: "not-yet-run"; why: string; at: string }
+  /** A scan was attempted for a real inventory and the process table could not be read. */
+  | { kind: "probe-failed"; why: string; attemptedAt: string; sourceCollectedAt: string }
+  | { kind: "scan"; scannedAt: string; sourceCollectedAt: string; panes: readonly OverseerPaneWork[] };
+
 /** One session as the Overseer remembers it. Ranked by `since`, oldest first. */
 export type OverseerSessionHistory = {
   /** The name the launcher gave it. Recognisable, and not addressable. */

@@ -426,8 +426,16 @@ export function computeVerdict(input: {
     reasons.push(`could not measure memory: ${input.memory.why}`);
   } else {
     // "available near zero" per the doc. 5%/15% are this module's own cutoffs.
-    if (input.memory.availableFraction < 0.05) raise("critical", `available memory is ${(input.memory.availableFraction * 100).toFixed(1)}% of total — near zero`);
-    else if (input.memory.availableFraction < 0.15) raise("strained", `available memory is ${(input.memory.availableFraction * 100).toFixed(1)}% of total`);
+    //
+    // **THE COMPARISON IS ON `availableFraction`; ONLY THE SENTENCE FLIPPED.**
+    // Greg, 2026-09-09: *"always show X% used rather than 100-X% free"* — and
+    // these reasons are read on the dashboard's verdict card, beside five tiles
+    // that now all say "used", so a reason phrased as what is left was the last
+    // place on that page a reader had to turn a number round in their head. The
+    // available figure stays in brackets because it is the measured one and the
+    // one the cutoff is written against.
+    if (input.memory.availableFraction < 0.05) raise("critical", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — only ${(input.memory.availableFraction * 100).toFixed(1)}% available, near zero`);
+    else if (input.memory.availableFraction < 0.15) raise("strained", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — ${(input.memory.availableFraction * 100).toFixed(1)}% available`);
   }
 
   if (input.swap.kind === "unknown") {
