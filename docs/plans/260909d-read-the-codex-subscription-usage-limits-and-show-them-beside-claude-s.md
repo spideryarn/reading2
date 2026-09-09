@@ -92,7 +92,15 @@ Live values, verbatim, 2026-09-09 07:47 UTC:
 So: **24% of the weekly window used, resetting 2026-09-15 01:23 UTC.** That is the number the
 Overseer has been rationing without.
 
-### Four findings that change the design
+### The evidence, durably
+
+The payloads above are checked in under
+[`tests/fixtures/codex-usage/`](../../tests/fixtures/codex-usage/README.md) — two captured real, two
+synthetic and labelled as such — with the capture scripts beside them in `capture/`, so every number
+on this page can be re-taken rather than taken on trust. The `resetsAt` values move on every
+re-capture, which is itself the measurement that the reading is live.
+
+### Six findings that change the design
 
 **1. `primary`/`secondary` are positions, not window names.** On the `codex` bucket `primary` is the
 *weekly* window (10080 min). On the `codex_bengalfox` bucket `primary` is the *five-hour* window
@@ -121,11 +129,21 @@ actions. Surface, never consume.
 ### The fallback source, and the two dead ends
 
 **Fallback: session rollout JSONL.** `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, on
-`event_msg` / `token_count` payloads, carries a `rate_limits` object — the same shape in snake_case.
-Free, and each line carries its own ISO timestamp, so **its age is known** — which is exactly the
-property `usage.ts` relies on for Claude. Measured: 899 of 927 session files carry one, 25,043
-snapshots in total. This is the right fallback when the app-server call cannot run, and it is why the
-reading has a source discriminator rather than one shape.
+`event_msg` / `token_count` payloads, carries a `rate_limits` object — nearly the same shape. Free,
+and each line carries its own ISO timestamp, so **its age is known** — which is exactly the property
+`usage.ts` relies on for Claude. Measured: 899 of 927 session files carry one, 25,043 snapshots in
+total. This is the right fallback when the app-server call cannot run, and it is why the reading has a
+source discriminator rather than one shape.
+
+**5. The two sources spell the same field differently, and not only in case.** The app-server replies
+camelCase with **`windowDurationMins`**; the session log writes snake_case with **`window_minutes`**.
+A parser that assumes a mechanical snake↔camel conversion looks for `windowMinutes`, finds
+`undefined`, and — given finding 1 — every window then acquires its name from its position instead.
+The two shapes get separate parsers, deliberately, rather than one normalising pass.
+
+**6. `usedPercent` is an integer from the app-server (`24`) and a float in the session log (`24.0`).**
+The same number today, not the same type. Whatever holds it must take both and must not assume the
+value arrives rounded.
 
 **Dead end: `codex doctor`.** Hung; killed at 60 s. Not a source.
 
@@ -164,10 +182,11 @@ renderer's side — the repair the 2026-09-08 dashboard postmortem bought.
   fallback's freshness story is different and a renderer must be able to say which it got.
 - No number without its `resetsAt`; no absence rendered as a zero; `why` in words a person can act on.
 
-**Tests red first.** Fixtures from the real payloads above (live, unauthenticated-error,
-session-log, `secondary: null`, a `windowDurationMins: null`, a bucket whose `primary` is the 5 h
-window). The one that must go red before it goes green is **the positional-mapping test**: a bucket
-whose `primary` is 300 min and `secondary` is 10080 min must not report the 300 as the weekly window.
+**Tests red first**, against the checked-in fixtures. The one that must go red before it goes green is
+**the positional-mapping test**: the `reversed` bucket, whose `primary` is 300 min and `secondary` is
+10080 min, must not report the 300-minute window as the weekly one. Then the null-duration,
+null-reset, unrecognised-window, limit-reached and unauthenticated arms, and the session-log parser
+against its own key names (finding 5).
 
 Fake executor for the spawn, so nothing in the suite talks to OpenAI.
 
