@@ -28,7 +28,18 @@
  * by a rule somebody has to remember. It is history, and history is worth
  * having; it is not evidence that dev is green.
  */
-import { readdirSync, readFileSync, openSync, closeSync, readSync, fstatSync, statSync, type Dirent } from "node:fs";
+import {
+  closeSync,
+  fstatSync,
+  openSync,
+  opendirSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+  type Dir,
+  type Dirent,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 import {
@@ -116,10 +127,13 @@ export type ScanOptions = {
   /**
    * Is the tmux session that produced this log still alive?
    *
-   * Optional, and **`undefined` means "we did not look"**, which is treated as
-   * possibly-alive rather than dead — the conservative direction, because
-   * calling a live run void is manufacturing an outage. Supplied by the caller
-   * rather than looked up here: asking tmux belongs off the request path.
+   * Optional, and **`undefined` means "we did not look"**, which falls back to
+   * the quiet window rather than to a guess. Supplied by the caller rather than
+   * looked up here: asking tmux belongs off the request path.
+   *
+   * It does **not** outrank direct observation — see the ladder in
+   * {@link readingFromLog}. A file that is growing right now is being written by
+   * something, whatever a session lookup from a moment ago says.
    */
   isSessionLive?: (logPath: string) => boolean | undefined;
   maxLogs?: number;
@@ -138,8 +152,16 @@ export type ScanResult = {
    * would not parse, with its reason. GPT Sol's P1.7 and P2.
    */
   skippedForBudget: number;
-  /** Entries not even considered, because discovery hit its own bound. */
-  skippedForDiscovery: number;
+  /**
+   * A directory held more entries than the discovery cap, so the listing was
+   * abandoned part way.
+   *
+   * A boolean rather than a count, because once you stop reading a directory you
+   * genuinely do not know how much of it is left — and inventing a number for it
+   * would be exactly the sort of confident wrong figure this feature is built to
+   * avoid. What the page needs is that the answer is incomplete.
+   */
+  discoveryTruncated: boolean;
   unreadable: { file: string; why: string }[];
   /** Directories that could not be listed at all. Not the same as an empty one. */
   unreadableRoots: { root: string; why: string }[];
@@ -249,16 +271,19 @@ export function readingFromLog(
     /**
      * **No `EXIT=` line means "not complete when I looked", not "killed".**
      *
-     * A ladder, and the told answer dominates in BOTH directions:
+     * A ladder, in order of how much each rung actually proves:
      *
-     *  - `sessionLive === true` — somebody looked and the job is alive. Running,
-     *    however long it has been quiet: a suite waiting on a database, or
-     *    grinding through one slow file, prints nothing for a long time.
-     *  - the file grew under the read — running, whatever anything else says.
-     *  - `sessionLive === false` — somebody looked and the job is gone. Void
-     *    straight away; waiting out a timer to agree with an answer we already
-     *    have just delays the truth.
-     *  - `undefined` — nobody looked, so fall back to the quiet window.
+     *  1. **The file grew under the read** — running. Direct observation, and it
+     *     beats everything below: something is writing to this file *now*,
+     *     whatever a session lookup from a moment ago believed.
+     *  2. **`sessionLive === true`** — somebody looked and the job is alive.
+     *     Running, however long it has been quiet: a suite waiting on a
+     *     database, or grinding through one slow file, prints nothing for
+     *     minutes at a time.
+     *  3. **`sessionLive === false`** — somebody looked and the job is gone.
+     *     Void straight away; waiting out a timer to agree with an answer we
+     *     already have only delays the truth.
+     *  4. **`undefined`** — nobody looked, so fall back to the quiet window.
      *
      * Making `undefined` mean *possibly alive* on its own was the first attempt
      * and it was worse than the bug it fixed: with no caller supplying the hook,
@@ -267,8 +292,8 @@ export function readingFromLog(
      */
     const quiet = options.nowMs - contents.mtimeMs;
     const live =
-      options.sessionLive === true ||
       contents.stillMoving ||
+      options.sessionLive === true ||
       (options.sessionLive === undefined && quiet < QUIET_BEFORE_VOID_MS);
     if (live) {
       const started: StartedRecord = { ...common, state: "started" };
@@ -360,7 +385,8 @@ export function discoverLogs(options: {
   maxDiscovered?: number;
 }): {
   candidates: Candidate[];
-  skippedForDiscovery: number;
+  /** True when a directory held more entries than the cap, so we stopped early. */
+  truncated: boolean;
   unreadable: { file: string; why: string }[];
   unreadableRoots: { root: string; why: string }[];
 } {
@@ -369,13 +395,13 @@ export function discoverLogs(options: {
   const unreadableRoots: { root: string; why: string }[] = [];
   const cap = options.maxDiscovered ?? MAX_DISCOVERED;
   let discovered = 0;
-  let skippedForDiscovery = 0;
+  let truncated = false;
 
   for (const root of options.roots) {
     const dir = join(root, LOG_DIR);
-    let entries: Dirent[];
+    let handle: Dir;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      handle = opendirSync(dir);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       /* A checkout with no logs directory has simply never run a job. That is
@@ -383,40 +409,56 @@ export function discoverLogs(options: {
       if (code !== "ENOENT") unreadableRoots.push({ root: dir, why: (err as Error).message });
       continue;
     }
-    for (const entry of entries) {
-      if (!entry.name.endsWith(".log")) continue;
-      /* `isFile()` is false for a FIFO, a socket, a device and a directory.
-         Some filesystems report UNKNOWN, in which case this is false too and we
-         skip — losing a log rather than risking a blocking open. */
-      if (!entry.isFile()) continue;
-      if (discovered >= cap) {
-        skippedForDiscovery += 1;
-        continue;
+    try {
+      for (;;) {
+        if (discovered >= cap) {
+          /* **The cap has to stop the LISTING, not just the stat-ing.** With
+             `readdirSync` it did not: that call materialises every entry before
+             returning, so a directory holding 100,000 logs was fully read and
+             fully walked whatever the cap said, and the bound existed only on
+             paper. `opendirSync` hands back a cursor we can abandon. GPT Sol,
+             round 2, 2026-09-09. */
+          truncated = true;
+          break;
+        }
+        const entry: Dirent | null = handle.readSync();
+        if (entry === null) break;
+        discovered += 1;
+        if (!entry.name.endsWith(".log")) continue;
+        /* `isFile()` is false for a FIFO, a socket, a device and a directory.
+           Some filesystems report UNKNOWN, in which case this is false too and
+           we skip — losing a log rather than risking a blocking open. */
+        if (!entry.isFile()) continue;
+        const path = join(dir, entry.name);
+        try {
+          const stat = statSync(path);
+          if (stat.mtimeMs < options.sinceMs) continue;
+          candidates.push({ path, cwd: root, mtimeMs: stat.mtimeMs });
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          /* Swept away between the listing and the stat: routine, not a hole.
+             Anything else — a permission problem, most likely — is reported,
+             because the rest of this design insists on explicit unreadable arms. */
+          if (code !== "ENOENT") unreadable.push({ file: path, why: (err as Error).message });
+        }
       }
-      discovered += 1;
-      const path = join(dir, entry.name);
+    } finally {
       try {
-        const stat = statSync(path);
-        if (stat.mtimeMs < options.sinceMs) continue;
-        candidates.push({ path, cwd: root, mtimeMs: stat.mtimeMs });
-      } catch (err) {
-        const code = (err as NodeJS.ErrnoException).code;
-        /* Swept away between the listing and the stat: routine, not a hole.
-           Anything else — a permission problem, most likely — is reported,
-           because the rest of this design insists on explicit unreadable arms. */
-        if (code !== "ENOENT") unreadable.push({ file: path, why: (err as Error).message });
+        handle.closeSync();
+      } catch {
+        /* Already closed, or the directory went away under us. */
       }
     }
   }
 
-  return { candidates, skippedForDiscovery, unreadable, unreadableRoots };
+  return { candidates, truncated, unreadable, unreadableRoots };
 }
 
 export function scanLogs(options: ScanOptions): ScanResult {
   const result: ScanResult = {
     readings: [],
     skippedForBudget: 0,
-    skippedForDiscovery: 0,
+    discoveryTruncated: false,
     unreadable: [],
     unreadableRoots: [],
     dedupedAgainstWrapper: 0,
@@ -424,7 +466,7 @@ export function scanLogs(options: ScanOptions): ScanResult {
   const budget = options.maxLogs ?? MAX_LOGS;
 
   const found = discoverLogs(options);
-  result.skippedForDiscovery = found.skippedForDiscovery;
+  result.discoveryTruncated = found.truncated;
   result.unreadable.push(...found.unreadable);
   result.unreadableRoots.push(...found.unreadableRoots);
 
@@ -485,18 +527,35 @@ export function scanLogs(options: ScanOptions): ScanResult {
  * Worktrees are where most of the box's suites actually run, so a scan of the
  * primary alone would show a nearly empty day on a night when a dozen agents
  * were testing continuously.
+ *
+ * Bounded, and it reports both a truncation and a listing failure rather than
+ * returning a short list either way — "there are no worktrees" and "we could not
+ * see the worktrees" are different facts, and only one of them is fine.
  */
-export function checkoutRoots(primary: string): string[] {
+export const MAX_ROOTS = 100;
+
+export function checkoutRoots(primary: string): { roots: string[]; truncated: boolean; why: string | null } {
   const roots = [primary];
   const worktrees = join(primary, ".claude", "worktrees");
+  let truncated = false;
   try {
     for (const name of readdirSync(worktrees, { withFileTypes: true })) {
-      if (name.isDirectory()) roots.push(join(worktrees, name.name));
+      if (!name.isDirectory()) continue;
+      if (roots.length >= MAX_ROOTS) {
+        truncated = true;
+        break;
+      }
+      roots.push(join(worktrees, name.name));
     }
-  } catch {
-    /* No worktrees directory: a checkout nobody has branched from. */
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    /* No worktrees directory is a checkout nobody has branched from — normal,
+       and not a fault. Anything else is a fault, and this used to swallow both
+       identically, so a permissions problem read as "no worktrees" and the scan
+       quietly covered a fraction of the box. */
+    if (code !== "ENOENT") return { roots, truncated: false, why: (err as Error).message };
   }
-  return roots;
+  return { roots, truncated, why: null };
 }
 
 /** `package.json` script bodies for a checkout, or `{}` when it has none we can read. */

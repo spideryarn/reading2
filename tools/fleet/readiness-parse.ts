@@ -17,11 +17,16 @@
  * sentence. So the caller asks for the footer, and a run without one is `void`
  * rather than green.
  *
- * Each footer is the LAST thing its tool prints, on every path — vitest's two
- * tally lines, `typecheck.ts`'s coverage tick, `check.ts`'s verdict sentence.
- * Note that `typecheck.ts` writes its errors to **stderr** and still ends with
- * that tick, so the tick coexists with failures: it proves the run finished, and
- * the exit status is what decides whether it passed.
+ * Each footer is the last thing its tool prints that is worth matching on —
+ * vitest's two tally lines (it prints `Start at` and `Duration` after them),
+ * `typecheck.ts`'s coverage tick, `check.ts`'s verdict sentence. **None of them
+ * is a proof of SUCCESS, only of COMPLETION**: `typecheck.ts` writes its errors
+ * to stderr and prints the tick anyway, so a tick coexists with failures and the
+ * exit status is what decides whether it passed.
+ *
+ * And a footer is not guaranteed on every path — a tool that dies mid-write
+ * prints none, which is the case this is for; what it cannot do is prove a run
+ * finished that did not.
  */
 import { CHECK_KINDS, SCRIPT_FOR_KIND, type CheckKind, type CheckStep, type Counts, type Scope, type TestTally } from "./readiness.js";
 
@@ -237,9 +242,10 @@ export function parseVitest(text: string): { counts: Extract<Counts, { kind: "vi
  * `scripts/typecheck.ts`'s per-project lines and its coverage line.
  *
  * The error count is **supplementary and never the verdict**: that script
- * writes its failures to stderr and its last two lines are always ticks, so the
- * exit status is the only thing that decides. Counting them here is for the
- * page to show, not for anything to conclude from.
+ * writes its failures to stderr and still prints its coverage tick afterwards,
+ * so a tick and a failure coexist and the exit status is the only thing that
+ * decides. Counting them here is for the page to show, not for anything to
+ * conclude from.
  */
 export function parseTypecheck(text: string): { counts: Extract<Counts, { kind: "typecheck" }>; hasFooter: boolean } {
   const clean = stripAnsi(text);

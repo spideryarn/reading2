@@ -158,7 +158,10 @@ export type CheckStep = {
    * noisy advisory, so those two marks are proof. A `✓` is printed for both,
    * and the `── typecheck (gate)` heading that would settle it is hundreds of
    * lines earlier — inside the part of a multi-megabyte log the scanner does
-   * not read. A wrapper record, which holds the whole output, fills it in.
+   * not read — and a wrapper record does not fill it in either: it keeps only
+   * bounded ends of the output, and it does not try to infer a clean row's
+   * gate status from the headings. So `unknown` is what a `✓` row gets from
+   * either source, and the page shows it as unknown.
    *
    * Defaulting to `gate` would promote every clean advisory; defaulting to
    * `advisory` would demote every clean gate. Copying `check.ts`'s own list in
@@ -414,9 +417,9 @@ export function resolveRecord(
  * green ticks. That is not a failing suite and it is certainly not a passing
  * one.
  *
- * Signals are 1..31 on Linux, so 129..159. **128 itself is excluded**: it is
- * what a shell reports for an invalid argument to `exit`, not a signal, and
- * 160+ is nobody's signal.
+ * Linux's signals run to `SIGRTMAX` (64), so 129..192. **128 itself is
+ * excluded**: it is what a shell reports for an invalid argument to `exit`,
+ * not a signal at all.
  */
 export const SIGNALLED_EXIT_MIN = 129;
 /**

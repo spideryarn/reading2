@@ -13,13 +13,16 @@
  * `logs/` is gitignored, so a test pointed at a live one would pass only on this
  * box tonight.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, utimesSync, mkdirSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, utimesSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  checkoutRoots,
+  discoverLogs,
   readingFromLog,
   scanLogs,
   scriptBodiesFor,
@@ -743,6 +746,62 @@ describe("scanning a directory of logs", () => {
     expect(result.readings[0]?.state).toBe("pass");
   });
 
+  it("stops LISTING at the discovery cap, and says the answer is incomplete", () => {
+    /* The cap used to sit after `readdirSync`, which materialises every entry —
+       so a directory of 100,000 logs was fully read and fully walked whatever
+       the cap said, and the bound existed only on paper. GPT Sol, round 2. */
+    for (let i = 0; i < 12; i += 1) put(`d${i}.log`, fixture("vitest-pass.log"), NOW - i * 60_000);
+    const found = discoverLogs({ roots: [root], sinceMs: 0, maxDiscovered: 4 });
+    expect(found.candidates.length).toBeLessThanOrEqual(4);
+    expect(found.truncated).toBe(true);
+
+    const all = discoverLogs({ roots: [root], sinceMs: 0, maxDiscovered: 100 });
+    expect(all.candidates).toHaveLength(12);
+    expect(all.truncated).toBe(false);
+  });
+
+  it("never opens a FIFO, which would block the whole dashboard", () => {
+    /* A single-threaded server that opens a FIFO nobody writes to stops
+       answering anything. `isFile()` excludes it before any open happens, and
+       `statSync` does not block on one either. */
+    const fifo = join(root, "logs", "tmux-jobs", "trap.log");
+    execFileSync("mkfifo", [fifo]);
+    put("real.log", fixture("vitest-pass.log"), NOW - 60_000);
+
+    const found = discoverLogs({ roots: [root], sinceMs: 0 });
+    expect(found.candidates.map((c) => c.path)).not.toContain(fifo);
+    expect(found.candidates).toHaveLength(1);
+  });
+
+  it("reports a directory it could not list, rather than calling it empty", () => {
+    /* "There are no worktrees" and "we could not see the worktrees" are
+       different facts, and this used to swallow both identically. */
+    const locked = mkdtempSync(join(tmpdir(), "readiness-locked-"));
+    mkdirSync(join(locked, "logs", "tmux-jobs"), { recursive: true });
+    chmodSync(join(locked, "logs", "tmux-jobs"), 0o000);
+    try {
+      const found = discoverLogs({ roots: [locked], sinceMs: 0 });
+      expect(found.candidates).toEqual([]);
+      expect(found.unreadableRoots).toHaveLength(1);
+    } finally {
+      chmodSync(join(locked, "logs", "tmux-jobs"), 0o755);
+      rmSync(locked, { recursive: true, force: true });
+    }
+  });
+
+  it("bounds the checkout roots and distinguishes absent from unreadable", () => {
+    const bare = mkdtempSync(join(tmpdir(), "readiness-roots-"));
+    try {
+      /* No `.claude/worktrees` at all: normal, not a fault. */
+      const none = checkoutRoots(bare);
+      expect(none.roots).toEqual([bare]);
+      expect(none.why).toBeNull();
+      expect(none.truncated).toBe(false);
+    } finally {
+      rmSync(bare, { recursive: true, force: true });
+    }
+  });
+
   it("treats a checkout with no logs directory as quiet, not as broken", () => {
     const bare = mkdtempSync(join(tmpdir(), "readiness-bare-"));
     try {
@@ -897,6 +956,99 @@ describe("the readiness verdict", () => {
     expect(out.kind === "not-ready" && out.failing.map((f) => f.check)).toEqual(["test"]);
   });
 
+  it("does NOT let a PARTLY readable failing check expose a stale pass", () => {
+    /* GPT Sol drove this one end to end. The failing check's table names
+       typecheck but not test, so `rows.size > 0` skipped the unreadable branch,
+       no event was emitted for test, and its old pass survived into `ready`.
+       A table we could only partly read is not evidence the rest was fine. */
+    const out = verdict([
+      reading(finished({ check: "test", runId: "t", at: "2026-09-09T10:00:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc", at: "2026-09-09T10:00:00.000Z" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: {
+            kind: "check",
+            steps: [{ name: "typecheck", gate: "unknown", verdict: "clean", findings: null }],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+    expect(out.kind === "unknown" && out.why).toContain("does not say how this check fared");
+  });
+
+  it("does NOT let a `findings` row on a required check stand in for a pass", () => {
+    /* A gate cannot print `findings` under today's check.ts — the label is
+       advisory-only — so if one ever appears it is drift, and drift must read as
+       unsettled rather than quietly leaving the previous pass in place. */
+    const out = verdict([
+      reading(finished({ check: "test", runId: "t", at: "2026-09-09T10:00:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc", at: "2026-09-09T10:00:00.000Z" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "unknown", verdict: "findings", findings: 3 },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+  });
+
+  it("resolves a same-millisecond pass and fail conservatively, not by input order", () => {
+    /* Two runs can finish in the same millisecond. With the pass listed first
+       the reducer used to keep it, so filesystem order decided whether the tree
+       was broken. */
+    const sameMs = "2026-09-09T10:30:00.000Z";
+    const pass = reading(finished({ check: "test", runId: "pass", at: sameMs }));
+    const fail = reading(finished({ check: "test", runId: "fail", at: sameMs, outcome: "fail", exit: 1 }));
+    const tc = reading(finished({ check: "typecheck", runId: "tc" }));
+
+    expect(verdict([pass, fail, tc]).kind).toBe("not-ready");
+    /* And the other way round, because order must not be the tiebreaker. */
+    expect(verdict([fail, pass, tc]).kind).toBe("not-ready");
+  });
+
+  it("keeps a known failure while it is being re-run, rather than going unknown", () => {
+    /* The regression the timeline rewrite introduced: the newest event of ANY
+       kind decided, so starting a rerun turned `not-ready` into `unknown` — and
+       contradicted this file's own stated policy. A check that failed has not
+       stopped having failed because somebody pressed go again. */
+    const out = verdict([
+      reading(finished({ check: "test", runId: "red", at: "2026-09-09T10:00:00.000Z", outcome: "fail", exit: 1 })),
+      resolveRecord(
+        started({ runId: "rerun", check: "test", startedAt: "2026-09-09T10:30:00.000Z" }),
+        Date.parse("2026-09-09T11:00:00.000Z"),
+        () => true,
+      ),
+      reading(finished({ check: "typecheck", runId: "tc" })),
+    ]);
+    expect(out.kind).toBe("not-ready");
+  });
+
+  it("lets a later PASS clear a known failure", () => {
+    const out = verdict([
+      reading(finished({ check: "test", runId: "red", at: "2026-09-09T10:00:00.000Z", outcome: "fail", exit: 1 })),
+      reading(finished({ check: "test", runId: "green", at: "2026-09-09T10:30:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc" })),
+    ]);
+    expect(out.kind).toBe("ready");
+  });
+
   it("treats a failing whole-check whose table is unreadable as unsettling, not convicting", () => {
     const out = verdict([
       reading(finished({ check: "test", runId: "t", at: "2026-09-09T10:00:00.000Z" })),
@@ -913,7 +1065,10 @@ describe("the readiness verdict", () => {
       ),
     ]);
     expect(out.kind).toBe("unknown");
-    expect(out.kind === "unknown" && out.why).toContain("could not be read");
+    /* A wholly unreadable table and a partly readable one are now the same
+       path: neither says how this check fared, and neither is evidence that it
+       was fine. */
+    expect(out.kind === "unknown" && out.why).toContain("does not say how this check fared");
   });
 
   it("lets a NEWER pass settle an older void, rather than staying unsettled for ever", () => {

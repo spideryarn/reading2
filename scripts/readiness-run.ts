@@ -36,9 +36,10 @@
  * ## The exit contract, and why each clause is here
  *
  *  - a child killed by a signal exits **128 + signal**, never 0. `tmux-job.ts`
- *    writes our `$?` into the log as `EXIT=`, and the backfill reads 129..159 as
- *    *killed*, so passing a signal through as 0 would launder an OOM kill into
- *    a passing suite one layer up.
+ *    writes our `$?` into the log as `EXIT=`, and the backfill reads that whole
+ *    range as *killed* (see `SIGNALLED_EXIT_MIN`/`MAX` — it reaches 192, because
+ *    Linux's real-time signals run past 31), so passing a signal through as 0
+ *    would launder an OOM kill into a passing suite one layer up.
  *  - **failing to record is failing.** Disk full, directory unwritable: this
  *    exits non-zero and says so even when the check itself passed. Otherwise
  *    the suite passes, nothing is written, and the dashboard goes on showing
@@ -208,7 +209,12 @@ async function main(): Promise<void> {
        evidence the backfill uses is worth more than one asserted here, and it
        means the scope parser is exercised by every wrapper run rather than only
        by its own fixtures. The banner also lands in the tmux log, where it is
-       the only thing that can tell a targeted run from a full one. */
+       the only thing that can tell a targeted run from a full one.
+
+       What neither can detect is a narrowing written INTO the npm script:
+       `scopeOf` compares the banner against that same body, so both sides would
+       carry it and every run would still read `full`. Nothing local closes
+       that; noticing the script changed is what would. */
     scope: "full" as const,
     commandLine: null as string | null,
     treeAtStart: stampTree(cwd),

@@ -198,6 +198,57 @@ function rowsOfCheck(reading: Reading): Map<CheckKind, "pass" | "fail"> {
  * invalidate them. What was never sound was letting that pass outrank a fresher
  * result.
  */
+/**
+ * One failed `npm run check`, as an event on **every** required timeline.
+ *
+ * **Every required check gets an event — there is no "omit this one".** That
+ * omission was a live false-green path, and GPT Sol drove it end to end:
+ *
+ * > 10:00 test passes on A. 10:00 typecheck passes on A. 10:30 `check` fails on
+ * > A, but its accepted summary contains only `typecheck clean`. Because
+ * > `rows.size > 0` the unreadable-table branch is skipped, no event is emitted
+ * > for test, so its 10:00 pass survives and the verdict is `ready`.
+ *
+ * A table that names some rows and not others is not evidence that the unnamed
+ * ones were fine; it is a table we could only partly read. So a missing row —
+ * or a row whose verdict cannot convict, which under the current `check.ts` a
+ * gate never prints — becomes `unsettled` rather than nothing.
+ */
+function wholeCheckFailureEvents(
+  reading: Reading,
+  required: readonly CheckKind[],
+): { check: CheckKind; event: Event }[] {
+  const rows = rowsOfCheck(reading);
+  return required.map((check) => {
+    const row = rows.get(check);
+    if (row === undefined) {
+      return {
+        check,
+        event: {
+          atMs: reading.atMs,
+          state: "unsettled" as const,
+          reading,
+          why:
+            "a full `npm run check` failed on this commit and its summary does not say how this check " +
+            "fared — a table we could only partly read is not evidence that the rest was fine",
+        },
+      };
+    }
+    return {
+      check,
+      event: {
+        atMs: reading.atMs,
+        state: row,
+        reading,
+        why:
+          row === "pass"
+            ? "clean in a full `npm run check` on this commit"
+            : "failed in a full `npm run check` on this commit",
+      },
+    };
+  });
+}
+
 function timelines(
   readings: readonly Reading[],
   devSha: string,
@@ -212,17 +263,17 @@ function timelines(
   for (const reading of readings) {
     if (!aboutDevTree(reading, devSha).ok) continue;
     const record = reading.record;
-    const settled = reading.state === "pass" || reading.state === "fail";
 
     /* An attempt that reached no verdict unsettles whatever it was an attempt
        AT — including, for a `check` run, every required check at once. */
-    if (!settled) {
+    if (reading.state !== "pass" && reading.state !== "fail") {
       const why =
         reading.state === "running"
           ? "a run on this commit is still going, so the answer is about to change"
           : `a run on this commit is unaccounted for: ${reading.why ?? "it started and never recorded how it ended"}`;
-      const targets = record.check === "check" ? required : [record.check];
-      for (const target of targets) add(target, { atMs: reading.atMs, state: "unsettled", reading, why });
+      for (const target of record.check === "check" ? required : [record.check]) {
+        add(target, { atMs: reading.atMs, state: "unsettled", reading, why });
+      }
       continue;
     }
 
@@ -236,32 +287,8 @@ function timelines(
             why: "a full `npm run check` passed on this commit, and its gates include this one",
           });
         }
-        continue;
-      }
-      /* A FAILED check run. Its table says which gate went red, and that is a
-         real result for that gate — but a table we cannot read tells us only
-         that something failed, which unsettles rather than convicts. */
-      const rows = rowsOfCheck(reading);
-      if (rows.size === 0) {
-        for (const target of required) {
-          add(target, {
-            atMs: reading.atMs,
-            state: "unsettled",
-            reading,
-            why: "a full `npm run check` failed on this commit and its summary table could not be read, so which gate went red is not known here",
-          });
-        }
-        continue;
-      }
-      for (const target of required) {
-        const row = rows.get(target);
-        if (row === undefined) continue;
-        add(target, {
-          atMs: reading.atMs,
-          state: row,
-          reading,
-          why: row === "pass" ? "clean in a full `npm run check` on this commit" : "failed in a full `npm run check` on this commit",
-        });
+      } else {
+        for (const { check, event } of wholeCheckFailureEvents(reading, required)) add(check, event);
       }
       continue;
     }
@@ -277,18 +304,50 @@ function timelines(
 }
 
 /**
- * The newest event on a timeline.
+ * How bad an event is, for resolving two that happened in the same millisecond.
  *
- * By `atMs`, never by position: once a backfill exists, directory order is not
- * time order, and a reader that took the last element would call yesterday the
- * latest. GPT Sol's P1.7.
+ * **A tie must not be broken by input order.** Two runs can finish in the same
+ * millisecond, and with a pass listed before a fail the reducer returned the
+ * pass and the verdict came out green — filesystem order deciding whether the
+ * tree is broken. GPT Sol, 2026-09-09. The worse event wins.
  */
-function newest(events: readonly Event[]): Event | null {
-  let best: Event | null = null;
+const SEVERITY: Record<Event["state"], number> = { pass: 0, unsettled: 1, fail: 2 };
+
+/**
+ * **One timeline to one answer**, with the two rules that make it honest.
+ *
+ * *Newest wins* — by `atMs`, never by position: once a backfill exists,
+ * directory order is not time order, and a reader taking the last element would
+ * call yesterday the latest.
+ *
+ * *A known failure is sticky.* A check that failed and is now being re-run has
+ * not stopped having failed. Reducing on "the newest event of any kind" turned
+ * that into `unknown` the moment somebody retried — worse than the code it
+ * replaced, and a flat contradiction of this file's own stated policy. So the
+ * newest **settled** event decides, and a later unsettled one can only unsettle
+ * a *pass*. GPT Sol's P1 regression, 2026-09-09.
+ */
+function reduceTimeline(events: readonly Event[]): Event | null {
+  let settled: Event | null = null;
+  let unsettled: Event | null = null;
   for (const event of events) {
-    if (best === null || event.atMs > best.atMs) best = event;
+    const slot = event.state === "unsettled" ? unsettled : settled;
+    const better =
+      slot === null ||
+      event.atMs > slot.atMs ||
+      (event.atMs === slot.atMs && SEVERITY[event.state] > SEVERITY[slot.state]);
+    if (!better) continue;
+    if (event.state === "unsettled") unsettled = event;
+    else settled = event;
   }
-  return best;
+
+  if (settled === null) return unsettled;
+  if (settled.state === "fail") return settled;
+  /* A pass, and something later that reached no verdict: not green any more.
+     `>=` rather than `>` so a rerun that landed in the same millisecond as the
+     pass it followed still unsettles it. */
+  if (unsettled !== null && unsettled.atMs >= settled.atMs) return unsettled;
+  return settled;
 }
 
 export function readinessVerdict(input: VerdictInput): Verdict {
@@ -323,12 +382,12 @@ export function readinessVerdict(input: VerdictInput): Verdict {
   const missing: Evidence[] = [];
 
   for (const check of required) {
-    const latest = newest(lines.get(check) ?? []);
+    const latest = reduceTimeline(lines.get(check) ?? []);
     if (latest === null) {
       /* Say WHY there is no event, from the newest reading that mentioned this
          check at all. "It ran on another commit" and "nobody has ever run it"
          are different problems with different fixes. */
-      const nearest = newest(
+      const nearest = reduceTimeline(
         input.readings
           .filter((r) => r.record.check === check)
           .map((r) => ({ atMs: r.atMs, state: "unsettled" as const, reading: r, why: "" })),

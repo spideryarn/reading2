@@ -185,10 +185,12 @@ export function startedAtFromFileName(name: string): number | null {
  * The kernel's start time for a pid — field 22 of `/proc/<pid>/stat`, in clock
  * ticks since boot.
  *
- * **A pid is not an identity; the pair (pid, start time) is.** Field 22 is
- * counted from the END of the line rather than the start, because field 2 is the
- * executable name in parentheses and it may itself contain spaces and brackets —
- * splitting from the left is the classic way to parse this file wrong.
+ * **A pid is not an identity; the pair (pid, start time) is.** Fields are
+ * counted from after the FINAL `)` rather than from the start of the line,
+ * because field 2 is the executable name in parentheses and it may itself
+ * contain spaces and brackets — splitting from the left is the classic way to
+ * parse this file wrong. What follows that `)` begins at field 3, so field 22
+ * is index 19 of it.
  *
  * Null off Linux, or when `/proc` cannot be read; callers fall back to the pid
  * alone and to `PENDING_TRUST_MS`.
