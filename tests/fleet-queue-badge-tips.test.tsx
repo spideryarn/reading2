@@ -72,6 +72,7 @@ function row(over: Partial<QueueRow> = {}): QueueRow {
     plan: "docs/plans/260909c-rich-tooltips-across-the-fleet-dashboard.md",
     droppedWhy: null,
     history: [{ kind: "added", at: "2026-09-09T00:00:00.000Z", by: "greg", what: "added at the front" }],
+    priority: null,
     ...over,
   };
 }

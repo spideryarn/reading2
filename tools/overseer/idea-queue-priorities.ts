@@ -107,10 +107,16 @@ export type PriorityPlan = {
  * queued items the file forgot — and both of those are silent in a diff that
  * only counts writes.
  *
- * `needsGreg` rides along on each change because Greg's banding leaves those
- * *"unchanged in priority"*, and whether a given file honours that is a fact
- * about the file. It is shown rather than enforced: a rule hidden in here would
- * quietly drop lines somebody wrote on purpose.
+ * `needsGreg` rides along on each change **as information, never as a rule** —
+ * the command prints it as a `?` and does nothing else with it.
+ *
+ * An earlier draft had it carrying a rule: that Greg's banding leaves those rows
+ * *"unchanged in priority"*. GPT Sol's P2-2 pointed out that nothing in Greg's
+ * own words says so — he said *"put all the Spideryarn product ideas as
+ * low-priority"*, and four of the sixteen are `needsGreg`. So the file names all
+ * sixteen, and what a row is waiting on stays a separate question from where it
+ * sits in the line. A rule hidden in here would have quietly dropped lines
+ * somebody wrote on purpose.
  */
 export function planPriorities(view: QueueView, wanted: readonly PriorityWish[]): PriorityPlan {
   const live = new Map<string, IdeaItem>(view.items.map((item) => [item.id, item]));
@@ -132,4 +138,28 @@ export function planPriorities(view: QueueView, wanted: readonly PriorityWish[])
     changes.push({ id: wish.id, from: item.priority, to: wish.priority, needsGreg: item.needsGreg });
   }
   return { changes, unchanged, absent, unnamed: view.items.filter((i) => !named.has(i.id)).map((i) => i.id) };
+}
+
+/**
+ * Why a reviewed bulk plan cannot be applied to this view, if anything.
+ *
+ * Kept beside `planPriorities` rather than copied into the CLI so the two
+ * all-or-nothing refusals can be driven without importing a script that runs
+ * on import. Unnamed live items deliberately are not a refusal: the file bands
+ * what Greg chose to band, while `absent` catches the typo-shaped case where a
+ * misspelt id could otherwise leave the intended live item quietly unnamed.
+ */
+export function priorityApplyRefusals(view: QueueView, plan: PriorityPlan): string[] {
+  const refusals: string[] = [];
+  if (view.problems.length > 0) {
+    refusals.push(
+      `the queue has ${view.problems.length} unresolved problem(s). Fix the record before applying a bulk ordering; nothing in a queue with a hole is dispatchable`,
+    );
+  }
+  if (plan.absent.length > 0) {
+    refusals.push(
+      `the priority file names ${plan.absent.join(", ")}, but ${plan.absent.length === 1 ? "that id is" : "those ids are"} absent from the live queue. Fix the typo or remove the stale line before applying`,
+    );
+  }
+  return refusals;
 }

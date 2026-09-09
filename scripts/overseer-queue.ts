@@ -27,7 +27,7 @@
  * `console.log` rather than src/log.ts, per docs/project/logging.md's rule: the
  * destination is a terminal.
  */
-import { writeSync } from "node:fs";
+import { readFileSync, writeSync } from "node:fs";
 
 import { seedEvents } from "../tools/overseer/idea-queue-seed.js";
 import {
@@ -39,8 +39,10 @@ import {
   envelope,
   isDispatchable,
   mintId,
+  parseVersion,
   queueRoot,
   readQueue,
+  sameVersion,
   spellVersion,
   viewOf,
   whyNotDispatchable,
@@ -52,6 +54,12 @@ import {
   type QueueVersion,
   type QueueView,
 } from "../tools/overseer/idea-queue.js";
+import {
+  parsePriorityFile,
+  planPriorities,
+  priorityApplyRefusals,
+  type PriorityPlan,
+} from "../tools/overseer/idea-queue-priorities.js";
 import { itemWait, queueDepth, throughput } from "../tools/overseer/idea-queue-wait.js";
 
 const USAGE = `overseer-queue — the Overseer's queue of ideas
@@ -65,9 +73,12 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
   move <id> --by <who>              --front | --back | --before <id> | --after <id>
   edit <id> --by <who>              [--text T] [--title T] [--source P] [--waiting-on W]
                                     [--size S] [--runs D] [--areas a,b]
+                                    [--priority 0..1 | --clear-priority]
                                     [--needs-greg | --ready]   --ready is GREG'S ONLY
                                     clear a field with --clear-title, --clear-source,
                                     --clear-waiting-on, --clear-size, --clear-runs
+  set-priorities --from <file> --by <who>
+                                    [--apply --expect-version <v>]
   dispatched <id> --by <who> --session <name> [--plan P]
   done <id> --by <who>
   drop <id> --by <who> [--why W]
@@ -79,6 +90,8 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
     authority   proposed, or authorised by Greg FOR A PARTICULAR REVISION
     lifecycle   queued, dispatched, done, dropped
     needs-greg  waiting on an answer rather than on a slot
+
+  Priority orders this list; it decides nothing about whether an item may go out.
 
   So an item only goes out when all of: the queue read cleanly, Greg authorised
   it, he authorised THIS revision, it is still queued, and it is not waiting on
@@ -219,7 +232,11 @@ function describeItem(queue: QueueView, item: IdeaItem, position: number | null)
   }
   const tail = bits.length === 0 ? "" : `\n      ${bits.join(" · ")}`;
   const rank = position === null ? "   " : `${String(position + 1).padStart(2)}.`;
-  return `${rank} ${mark(queue, item)} ${item.id}  ${shown}${tail}`;
+  /* Padded to the width of "unstated", so the titles line up. A ragged column
+     is the same information and a worse list, and this one exists to be
+     scanned: the queue is now ORDERED by this number. */
+  const priority = (item.priority === null ? "unstated" : String(item.priority)).padEnd(8);
+  return `${rank} ${mark(queue, item)} ${item.id}  priority ${priority}  ${shown}${tail}`;
 }
 
 function printList(queue: QueueView): void {
@@ -276,6 +293,14 @@ function printShow(queue: QueueView, id: string): void {
   );
   const why = whyNotDispatchable(queue, item);
   console.log(`dispatchable: ${why === null ? "yes" : `no — ${why}`}`);
+  console.log(
+    `priority: ${
+      item.priority === null
+        ? "unstated"
+        : `${item.priority}` +
+          (item.priorityBy === null || item.priorityAt === null ? "" : ` — set by ${item.priorityBy} at ${item.priorityAt}`)
+    }`,
+  );
   console.log(`wait: ${itemWait(queue, item).why}`);
 
   if (item.title !== null) console.log(`\n${item.title}`);
@@ -401,6 +426,63 @@ function placementFrom(flags: Flags["flags"]): Placement {
   return { at: "back" };
 }
 
+function count(amount: number, singular: string, plural: string): string {
+  return `${amount} ${amount === 1 ? singular : plural}`;
+}
+
+function printPriorityPlan(plan: PriorityPlan): void {
+  const lines = ["Priority plan:", ""];
+  if (plan.changes.length === 0) {
+    lines.push("  no changes");
+  } else {
+    for (const change of plan.changes) {
+      lines.push(
+        `  ${change.id}${change.needsGreg ? " ?" : ""}  ${change.from === null ? "unstated" : change.from} → ${change.to}`,
+      );
+    }
+  }
+  lines.push(
+    "",
+    `${count(plan.changes.length, "change", "changes")} · ` +
+      `${count(plan.unchanged.length, "unchanged", "unchanged")} · ` +
+      `${count(plan.absent.length, "absent", "absent")} · ${count(plan.unnamed.length, "unnamed", "unnamed")}`,
+  );
+  /* **THE COUNTS ALWAYS PRINT; THE EXPLANATIONS ONLY WHEN THERE IS SOMETHING TO
+     EXPLAIN.** The counts are the review — a zero has to be visible, because
+     "no absent ids" is a fact the reviewer needs. The paragraph underneath is
+     help for a state that has not happened, and three of those between somebody
+     and the list of changes is how a review artefact stops being read. */
+  lines.push(
+    `unchanged: ${plan.unchanged.length === 0 ? "none" : plan.unchanged.map((item) => `${item.id} (${item.priority})`).join(", ")}`,
+  );
+  if (plan.absent.length > 0) {
+    lines.push(
+      `absent: ${plan.absent.join(", ")}`,
+      "  Named by the file but not in the live queue; fix a typo or remove a stale line before applying.",
+    );
+  } else {
+    lines.push("absent: none");
+  }
+  if (plan.unnamed.length > 0) {
+    lines.push(
+      `unnamed: ${plan.unnamed.join(", ")}`,
+      "  Queued but not named by the file; these keep their current priority and do not prevent applying.",
+    );
+  } else {
+    lines.push("unnamed: none");
+  }
+  /* Apply refusals exit immediately through `fail`. Write the review artefact
+     synchronously so piping the command cannot lose the plan while preserving
+     the refusal sentence — the exact buffered-output failure `fail` already
+     guards against on stderr. */
+  writeSync(1, `${lines.join("\n")}\n`);
+}
+
+/** A copyable shell word, including paths with spaces or apostrophes. */
+function shellWord(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 function main(): void {
   const parsed = parseArgs(process.argv.slice(2));
   const command = parsed.words[0] ?? "list";
@@ -433,6 +515,69 @@ function main(): void {
       if (got === null) fail(read.kind === "unreadable" ? read.why : `could not read the queue at ${dir}`);
       console.log(`# ${read.path}`);
       for (const item of [...got.items, ...got.settled]) console.log(JSON.stringify(item));
+      return;
+    }
+    case "set-priorities": {
+      const from = str(parsed.flags, "from");
+      if (from === null || from.trim() === "") fail("--from is required: the priority file a person reviewed");
+      const by = actor(parsed.flags);
+      let source: string;
+      try {
+        source = readFileSync(from, "utf8");
+      } catch (cause) {
+        fail(`could not read the priority file ${from}: ${String(cause)}`);
+      }
+      const parsedFile = parsePriorityFile(source);
+      if (!parsedFile.ok) fail(parsedFile.why);
+      const queue = view(dir);
+      const plan = planPriorities(queue, parsedFile.wanted);
+      printPriorityPlan(plan);
+
+      const applying = parsed.flags.get("apply") !== undefined;
+      if (!applying) {
+        if (plan.changes.length === 0) console.log("\nNothing would change, so the dry run wrote nothing.");
+        console.log(
+          `\nTo apply exactly this reviewed version:\n  npx tsx scripts/overseer-queue.ts set-priorities ` +
+            `--from ${shellWord(from)} --by ${by} --apply --expect-version ${spellVersion(queue.version)} ` +
+            `--root ${shellWord(dir)}`,
+        );
+        return;
+      }
+
+      const expectedText = str(parsed.flags, "expect-version");
+      if (expectedText === null) {
+        fail("--expect-version is required with --apply: apply only the queue version whose dry run was reviewed");
+      }
+      const expected = parseVersion(expectedText);
+      if (expected === null) fail(`'${expectedText}' is not a queue version — use the exact value printed by the dry run`);
+      /* Checking here gives a person a direct sentence. Passing the same token
+         into `appendEvents` below is the actual race-safe check: it is compared
+         again under the lock, so a writer arriving after this line is refused
+         rather than slipping between review and apply. */
+      if (!sameVersion(expected, queue.version)) {
+        fail(
+          `the queue has moved since the reviewed dry run: expected ${spellVersion(expected)}, now ` +
+            `${spellVersion(queue.version)}. Nothing was written — dry-run the file again.`,
+        );
+      }
+      const refusals = priorityApplyRefusals(queue, plan);
+      if (refusals.length > 0) fail(`cannot apply this priority plan:\n  ${refusals.join("\n  ")}`);
+      /* Unnamed items are loud in the plan but deliberately do not need an
+         `--allow-unnamed` escape hatch. The file bands what Greg chose to band;
+         `absent` above catches the typo case where a misspelling could hide the
+         intended live item among the legitimately unnamed ones. */
+      if (plan.changes.length === 0) {
+        console.log("\nNothing changed; every named live item already has that priority.");
+        return;
+      }
+      const at = new Date().toISOString();
+      const events: IdeaEvent[] = plan.changes.map((change) => ({
+        ...envelope(by, { at }),
+        kind: "prioritized",
+        id: change.id,
+        priority: change.to,
+      }));
+      write(dir, events, expected, `applied ${count(plan.changes.length, "priority change", "priority changes")}`);
       return;
     }
     case "seed": {
@@ -553,6 +698,7 @@ function main(): void {
       const text = str(parsed.flags, "text");
       const title = str(parsed.flags, "title");
       const metadata = metadataPatch(parsed.flags);
+      const priority = priorityFrom(parsed.flags);
       const needs = parsed.flags.get("needs-greg") !== undefined;
       const ready = parsed.flags.get("ready") !== undefined;
       if (needs && ready) fail("--needs-greg and --ready say opposite things");
@@ -568,11 +714,23 @@ function main(): void {
       /* An edit that names nothing would append a line saying "edited nothing",
          which is noise in a record whose value is that every line means
          something. Six keys is the bare envelope plus `kind` and `id`. */
-      if (Object.keys(event).length <= 7) fail("nothing to change — name a field, or --clear-<field>");
+      const editsContent = Object.keys(event).length > 7;
+      if (!editsContent && priority === undefined) fail("nothing to change — name a field, or --clear-<field>");
       /* **A CONTENT EDIT BY ANYONE BUT GREG LAPSES HIS APPROVAL**, and saying so
          here is the difference between a surprise and a decision. */
       const lapses = by !== "greg" && (text !== null || title !== null || metadata !== undefined);
-      write(dir, [event], queue.version, `edited ${id}${lapses ? " — this LAPSES Greg's authorisation" : ""}`);
+      const events: IdeaEvent[] = editsContent ? [event] : [];
+      if (priority !== undefined) {
+        events.push({ ...envelope(by, { at: event.at }), kind: "prioritized", id, priority });
+      }
+      const editOutcome = `edited ${id}${lapses ? " — this LAPSES Greg's authorisation" : ""}`;
+      const priorityOutcome = `priority ${priority ?? "unstated"}`;
+      write(
+        dir,
+        events,
+        queue.version,
+        priority === undefined ? editOutcome : editsContent ? `${editOutcome}; ${priorityOutcome}` : `${id} ${priorityOutcome}`,
+      );
       return;
     }
     case "dispatched": {

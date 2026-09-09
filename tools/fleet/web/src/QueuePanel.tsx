@@ -91,6 +91,12 @@ const APPROVAL_TIP: Tip = {
   how: "Your own edits re-approve as you make them; an agent's do not, so nothing can be approved small and then quietly enlarged.",
 };
 
+const PRIORITY_TIP: Tip = {
+  head: "Priority",
+  what: "How strongly somebody wants this item done, from 0 to 1. An em dash means nobody has ranked it.",
+  how: "Higher numbers sort first, and an unranked item sorts below every ranked one. This orders the list only: it cannot authorise an item, answer Greg, or make anything dispatchable.",
+};
+
 /**
  * **A card per badge, because the badge is what this tab is for.**
  *
@@ -231,6 +237,7 @@ export const PROBLEM_TIPS: Record<string, Tip> = {
  * the one the label promised. Found while writing these cards, 2026-09-09.
  */
 export const FACT_TIPS: Record<string, Tip> = {
+  priority: PRIORITY_TIP,
   "waiting on": {
     head: "Waiting on",
     what: "What has to happen before this can start, in the queue's own words — “a lull”, “the next gateway edit”.",
@@ -329,6 +336,7 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
        paragraph: this tab's complaint is length. GPT Sol's P1. */
     [badge.label, badgeTip(badge.label).what],
     ["id", row.id],
+    ["priority", row.priority === null ? "unstated — below every ranked item" : String(row.priority)],
     ["waiting on", row.waitingOn],
     ["size", row.size],
     ["source", row.source],
@@ -390,6 +398,15 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
           <span>
             <Mono>{shortId(row.id)}</Mono>
             <span className="tw:sr-only"> — {tipText(idTip(row.id))}</span>
+          </span>
+        </Tooltip>
+        {/* Priority is beside the id because both are compact ordering facts.
+            This is inside the disclosure button, so its card is mouse-only and
+            the opened facts repeat the value for a touch reader. */}
+        <Tooltip content={<TipCard tip={PRIORITY_TIP} />} placement="bottom" mouseOnly>
+          <span className={cx("tw:text-[12px]", row.priority === null ? "tw:text-ink-faint" : "tw:text-ink-soft")}>
+            {row.priority === null ? "—" : row.priority}
+            <span className="tw:sr-only"> — {tipText(PRIORITY_TIP)}</span>
           </span>
         </Tooltip>
       </button>

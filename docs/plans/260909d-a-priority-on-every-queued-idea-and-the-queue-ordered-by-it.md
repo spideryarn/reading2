@@ -159,7 +159,7 @@ Greg's banding is **data, not logic**. Compiling *"Overseer tooling 0.8–0.9, d
 Spideryarn product 0.1–0.2"* into the CLI would make a one-off decision permanent and unreadable, so
 the bands live in a file the Overseer writes and Greg can read.
 
-    overseer-queue set-priorities --from <file> --by <who> [--apply]
+    overseer-queue set-priorities --from <file> --by <who> [--apply --expect-version <v>]
 
 The file is one item per line, because the file **is** the argument Greg reviews and a JSON blob is
 not something anybody reads twice:
@@ -173,14 +173,19 @@ whole file**. Nothing is applied from a file that was half-understood — the sa
 
 Without `--apply` it prints the plan and writes nothing: every item's current priority and its new
 one, the rows it would not change, the ids in the file that are not in the queue, and the queued
-items the file does not name. Rows where `needsGreg` is true are marked `?` in that output, because
-Greg's brief leaves those *"unchanged in priority"* and the reviewer should be able to see at a
-glance whether the file honours that — a fact about the file, checked by eye, rather than a rule
-hidden in the command.
+items the file does not name. The apply command it prints names the exact queue version just read,
+so an item arriving after review cannot be left silently unranked by a different operation.
 
-With `--apply` it appends one `prioritized` event per **changed** item, in one batch under one lock
-against one version. Unchanged items produce no event: a log line that changes nothing is noise in a
-record whose value is that every line means something.
+The banding file names **all sixteen Spideryarn product clusters**, including the ones marked
+`needsGreg`, because Greg's quoted brief says all the product ideas go low. A `?` beside those rows
+is information for the person reviewing the file, not a rule the command enforces: priority orders
+the list and cannot answer the question or make the item dispatchable.
+
+With `--apply`, `--expect-version` is required. It appends one `prioritized` event per **changed**
+item, in one batch under one lock against that reviewed version, and refuses a queue with problems
+or ids in the file that are absent from the live queue. Unnamed live items are shown loudly but are
+allowed: the file bands the items Greg chose to band. Unchanged items produce no event: a log line
+that changes nothing is noise in a record whose value is that every line means something.
 
 ## Stages
 

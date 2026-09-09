@@ -63,6 +63,7 @@ import {
 import { CLUSTERS, seedEvents } from "../tools/overseer/idea-queue-seed.js";
 import { itemWait, queueDepth, throughput } from "../tools/overseer/idea-queue-wait.js";
 import { planPriorities, parsePriorityFile } from "../tools/overseer/idea-queue-priorities.js";
+import { priorityApplyRefusals } from "../tools/overseer/idea-queue-priorities.js";
 
 const roots: string[] = [];
 
@@ -1527,4 +1528,18 @@ describe("set-priorities: Greg's banding as a file somebody can read", () => {
     expect(plan.changes).toEqual([]);
     expect(plan.absent).toEqual([A]);
   });
+
+  it("refuses apply for a broken queue and ids absent from the live queue", () => {
+    const broken = foldQueue([added(A), { ...env(), kind: "done", id: B }]);
+    const plan = planPriorities(broken, [
+      { id: A, priority: 0.8 },
+      { id: C, priority: 0.2 },
+    ]);
+    const refusals = priorityApplyRefusals(broken, plan);
+    expect(refusals).toHaveLength(2);
+    expect(refusals[0]).toContain("problem");
+    expect(refusals[1]).toContain(C);
+    expect(refusals.join(" ")).not.toContain("unnamed");
+  });
+
 });

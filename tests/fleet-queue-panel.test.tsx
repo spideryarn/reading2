@@ -67,7 +67,46 @@ const ROW: QueueRow = {
   plan: null,
   droppedWhy: null,
   history: [{ kind: "added", at: "2026-09-09T00:00:00.000Z", by: "greg", what: "added" }],
+  priority: 0.7,
 };
+
+/**
+ * What a sighted reader actually sees, with the screen-reader spans removed.
+ *
+ * **Written because an assertion that used the raw `textContent` could not
+ * fail.** Every tooltip in a row carries its sentence in a `tw:sr-only` span
+ * that begins " — ", so `toContain("—")` was satisfied by the badge's tooltip
+ * no matter what the priority rendered: the guard for *"an unstated priority is
+ * visibly marked"* passed with the marker deleted. Mutation-checked both ways
+ * after this landed. [silent-success.md](../docs/reusable/silent-success.md).
+ */
+function visibleText(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[class~="tw:sr-only"]')) hidden.remove();
+  return copy.textContent ?? "";
+}
+
+/** A phrase only the priority tooltip says, so the cell can be found by it. */
+const PRIORITY_HINT = "an unranked item sorts below every ranked one";
+
+/**
+ * What the priority reads as on one row, and nothing else on that row.
+ *
+ * **The row as a whole is the wrong thing to assert against**, and both obvious
+ * ways of doing it are guards that cannot fail: every tooltip's `sr-only` span
+ * begins " — ", and the wait sentence *"next in line — nothing authorised…"* is
+ * visible. So a test asking whether the row contains an em dash is answered
+ * *yes* by two other elements, with the priority marker deleted.
+ */
+function priorityCell(button: Element): string {
+  const cell = [...button.querySelectorAll("span")].find(
+    (span) =>
+      !span.matches('[class~="tw:sr-only"]') &&
+      span.querySelector('[class~="tw:sr-only"]')?.textContent?.includes(PRIORITY_HINT) === true,
+  );
+  if (cell === undefined) throw new Error("no priority cell on that row");
+  return visibleText(cell).trim();
+}
 
 const DEPTH: QueueDepth = { dispatchable: 1, needsGreg: 0, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 0, dropped: 0 };
 
@@ -290,6 +329,46 @@ describe("the header", () => {
 });
 
 describe("rows", () => {
+  it("keeps the order supplied by the server, even when priority would sort it differently", async () => {
+    await render(
+      queueView({
+        rows: [
+          { ...ROW, id: "qi-aaaaaaaa", title: "first from server", priority: 0.1 },
+          { ...ROW, id: "qi-bbbbbbbb", title: "second from server", priority: 0.9 },
+        ],
+      }),
+    );
+    const text = container.textContent ?? "";
+    expect(text.indexOf("first from server")).toBeLessThan(text.indexOf("second from server"));
+  });
+
+  it("shows a stated priority and makes an unstated one visibly unstated", async () => {
+    await render(
+      queueView({
+        rows: [ROW, { ...ROW, id: "qi-bbbbbbbb", title: "an unranked idea", priority: null }],
+      }),
+    );
+    const buttons = [...container.querySelectorAll("button")];
+    const ranked = buttons.find((button) => button.textContent?.includes("an idea Greg approved"));
+    const unranked = buttons.find((button) => button.textContent?.includes("an unranked idea"));
+    if (ranked === undefined || unranked === undefined) throw new Error("both rows should have rendered");
+    /* Exact equality on the cell itself, not `toContain` on the row: the point
+       of the assertion is that something is *there*, and a substring check
+       against a whole row is satisfied by the em dashes in its tooltips and its
+       wait sentence. */
+    expect(priorityCell(ranked)).toBe("0.7");
+    expect(priorityCell(unranked)).toBe("—");
+    /* The explanation still has to reach a screen reader, so this one is
+       deliberately asked of the full text rather than the visible half. */
+    expect(unranked.textContent).toContain(PRIORITY_HINT);
+
+    await act(async () => {
+      unranked?.click();
+    });
+    expect(container.textContent).toContain("priority");
+    expect(container.textContent).toContain("unstated — below every ranked item");
+  });
+
   it("opens one to show its facts and its history", async () => {
     await render(queueView());
     /* Collapsed: the history is not on screen. */

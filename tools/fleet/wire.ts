@@ -2945,6 +2945,8 @@ export type QueueRow = {
   plan: string | null;
   droppedWhy: string | null;
   history: QueueTouch[];
+  /** `null` means nobody has ranked it. Ordering only; never part of dispatch authority. */
+  priority: number | null;
 };
 
 /**
