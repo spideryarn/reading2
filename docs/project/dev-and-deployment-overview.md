@@ -103,6 +103,12 @@ reference, and is authoritative wherever the two disagree.
   datum depending on whether it rides the pushed snapshot or wants its own route; why an on-demand
   route may only block the event loop for work whose worst case it can state; and the etiquette for
   a night when several sessions are adding tabs at once.
+- **[usage-history.md](usage-history.md)** — the Usage limits tab's second half: the last 24 hours of
+  Claude's limits, which exists only because nothing else writes them down. Why the daemon writes the
+  store and the dashboard only reads it, why this one has no writer lock when `~/.fleet-health/`
+  does, why recorder health is derived rather than reported across the process boundary, and the
+  eight things the chart may not claim — including why a historical point must never be re-checked
+  against today's clock.
 - **[fleet-recent-messages.md](fleet-recent-messages.md)** — the Recent messages tab, which reads
   every session's transcript at once: why "the last N messages" is a claim the payload has to earn
   rather than a description, the four premises behind it and the six things that demote it, the guard

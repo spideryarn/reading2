@@ -172,18 +172,39 @@ type Event = {
   why: string;
 };
 
-/** `npm run check`'s summary rows, by the check each row is about. */
-function rowsOfCheck(reading: Reading): Map<CheckKind, "pass" | "fail"> {
-  const rows = new Map<CheckKind, "pass" | "fail">();
+/**
+ * What `npm run check`'s summary rows say about each check, **worst row wins.**
+ *
+ * Three decisions, and each is a refusal to be optimistic:
+ *
+ *  - **`clean` is the only pass.** `findings` on a required check is not
+ *    producible by today's `check.ts` — that label is advisory-only — so if one
+ *    appears it is drift, and drift reads as `unsettled` rather than quietly
+ *    leaving an older pass in place.
+ *  - **`did-not-run` is `unsettled`, not a failure.** It means the tool did not
+ *    run, so no verdict about the check exists. Calling that a failing suite is
+ *    a false RED: it sends somebody to look for a bug when what broke was the
+ *    tool. GPT Sol, round 3.
+ *  - **Duplicates take the worst row, not the last.** `test FAILED` followed by
+ *    `test clean` in one table used to resolve to `clean` by arriving later, and
+ *    that produced a green verdict — a table that contradicts itself is not
+ *    evidence that the good half is true.
+ */
+type RowVerdict = "pass" | "fail" | "unsettled";
+
+const ROW_SEVERITY: Record<RowVerdict, number> = { pass: 0, unsettled: 1, fail: 2 };
+
+function rowsOfCheck(reading: Reading): Map<CheckKind, RowVerdict> {
+  const rows = new Map<CheckKind, RowVerdict>();
   const record = reading.record;
   if (record.state !== "finished" || record.counts.kind !== "check") return rows;
   for (const step of record.counts.steps) {
     if (!(CHECK_KINDS as readonly string[]).includes(step.name)) continue;
-    /* Only a `clean` row is a pass. `findings` on an advisory is not a failure
-       and not a pass either — it says nothing about the gate we care about — so
-       it contributes no event rather than a green one. */
-    if (step.verdict === "clean") rows.set(step.name as CheckKind, "pass");
-    else if (step.verdict === "failed" || step.verdict === "did-not-run") rows.set(step.name as CheckKind, "fail");
+    const check = step.name as CheckKind;
+    const verdict: RowVerdict =
+      step.verdict === "clean" ? "pass" : step.verdict === "failed" ? "fail" : "unsettled";
+    const held = rows.get(check);
+    if (held === undefined || ROW_SEVERITY[verdict] > ROW_SEVERITY[held]) rows.set(check, verdict);
   }
   return rows;
 }
@@ -243,7 +264,10 @@ function wholeCheckFailureEvents(
         why:
           row === "pass"
             ? "clean in a full `npm run check` on this commit"
-            : "failed in a full `npm run check` on this commit",
+            : row === "fail"
+              ? "failed in a full `npm run check` on this commit"
+              : "a full `npm run check` on this commit reported neither a pass nor a failure for it — " +
+                "the step did not run, or its table contradicts itself",
       },
     };
   });
@@ -279,12 +303,40 @@ function timelines(
 
     if (record.check === "check") {
       if (reading.state === "pass") {
+        /**
+         * **A passing outer status does not overrule an explicitly non-clean
+         * required row.** This used to emit a pass for every required check
+         * without consulting the table at all, and GPT Sol drove the
+         * consequence to a green verdict:
+         *
+         * > `check` with `outcome: "pass"`, `exit: 0`, and steps
+         * > `test: did-not-run`, `typecheck: clean` … parsed successfully and
+         * > emitted pass evidence for both required checks.
+         *
+         * An ABSENT row is still a pass — `check.ts` prints a row per step, so a
+         * missing one means the table was truncated, and the outer status
+         * already proves the gates ran. What must not happen is a row that says
+         * something *other than clean* being read as clean.
+         */
+        const rows = rowsOfCheck(reading);
         for (const target of required) {
+          const row = rows.get(target);
+          if (row === undefined || row === "pass") {
+            add(target, {
+              atMs: reading.atMs,
+              state: "pass",
+              reading,
+              why: "a full `npm run check` passed on this commit, and its gates include this one",
+            });
+            continue;
+          }
           add(target, {
             atMs: reading.atMs,
-            state: "pass",
+            state: row === "fail" ? "fail" : "unsettled",
             reading,
-            why: "a full `npm run check` passed on this commit, and its gates include this one",
+            why:
+              "a full `npm run check` reported success overall, but its own summary does not show " +
+              "this check clean — the two halves of that record disagree",
           });
         }
       } else {

@@ -1,10 +1,25 @@
 # Readiness: a tab that says whether the tree is green, and has said so for a day
 
-**Status:** Stage 1 in progress. Written 2026-09-09; **Sections 2–5 rewritten the same day after GPT
-Sol's plan review**, which returned *"do not build Stage 1 roughly as written"* and was right. What
-that review changed is recorded in [§ What the first draft got wrong](#what-the-first-draft-got-wrong)
-rather than quietly edited away, because the discarded design is the one somebody will otherwise
-propose again.
+**Status: Stages 1 and 2 are built and on `dev`. Stage 3 is design-only and blocked on Greg.**
+
+Written 2026-09-09; **Sections 2–5 rewritten the same day after GPT Sol's plan review**, which
+returned *"do not build Stage 1 roughly as written"* and was right. What that review changed is
+recorded in [§ What the first draft got wrong](#what-the-first-draft-got-wrong) rather than quietly
+edited away, because the discarded design is the one somebody will otherwise propose again.
+
+**Five review rounds, and every one found a way to render a tree green that was not.** That is the
+single most useful thing to know before touching this code, and
+[§ What five review rounds cost](#what-five-review-rounds-cost-and-why-it-was-worth-it) says why it
+kept happening.
+
+### The one command an agent needs
+
+    npx tsx scripts/tmux-job.ts npx tsx scripts/readiness-run.ts test
+
+That is the only way a run gets recorded with the commit it ran on. A plain `npm test` leaves no
+wrapper reading — it will appear in the tab's history, faded, with no vote. Until the Overseer's
+standing jobs run checks this way, the tab's headline will usually and correctly read *we do not
+know*.
 
 > add a tab for "Readiness" that shows information about the latest tests and type-checking (on dev,
 > when last run, able to trigger/refresh) and anything else you can think of. Ideally shows graphs of
@@ -218,8 +233,10 @@ is required:
    `scope: full`;
 3. `treeAtStart.sha === treeAtEnd.sha === devSha`, and neither end dirty;
 4. all required checks on **that same sha** — or one full `npm run check` pass, which contains them;
-5. no later `started`, `running` or `void` attempt on that sha, which would make the state unknown
-   rather than green.
+5. no later `started`, `running` or `void` attempt on that sha, which makes the state unknown
+   rather than green — **except over a failure**, which is sticky: a check that failed has not
+   stopped having failed because somebody pressed go again, and only a later *settled* pass clears
+   it.
 
 Anything short of all five is **not** "not ready" — it is `unknown`, with the clause that failed
 named in a sentence. A tab that says *unknown, because typecheck has no reading on this commit* is
@@ -245,8 +262,9 @@ which lands in its own tmux log; the scan skips any log naming a runId the store
 What the scan may recover, and nothing else:
 
 - **when it finished** — the file's mtime, and only for a log that has terminated;
-- **how it ended** — the `EXIT=` line; **a signal-like status (129–159) is void, not fail**, because
-  `sh` writes 128+signal and `EXIT=137` under a page of green ticks is the OOM killer;
+- **how it ended** — the `EXIT=` line; **a signal-like status is void, not fail**, because `sh`
+  writes 128 + signal and `EXIT=137` under a page of green ticks is the OOM killer. The range runs
+  to 192, not 159: Linux's real-time signals go past 31;
 - **what it was** — npm's own two banner lines. The second carries the arguments, so
   `> vitest run tests/one.test.ts` and `> tsx scripts/check.ts --fast` are recorded as `narrowed`
   with the command shown, not flattened into the plain check;
@@ -268,8 +286,9 @@ made one request perform 100,000 opens, and **a FIFO named `something.log` block
 which on a single-threaded dashboard is the whole page hanging. Only regular files are considered,
 and the mtime comes from a `stat` rather than an open.
 
-**How many entries and files were skipped is reported**, because a truncated scan that says nothing
-is a scan that turns into "no reading". Likewise a log that looks like a check but would not parse is
+**Truncation is reported** — as a flag rather than a count, because once you abandon a directory
+listing you do not know what is left in it, and a number there would be the confident wrong figure
+this feature exists to avoid. A truncated scan that says nothing turns into "no reading". Likewise a log that looks like a check but would not parse is
 **counted and shown with its reason** — otherwise a format change silently deletes history.
 
 Measured across this box's 14 checkouts: 45 readings in 43 ms.
@@ -395,17 +414,32 @@ we abandon is a real bound. It reports truncation as a **boolean, not a count** 
 reading a directory you do not know what is left, and a number there would be exactly the confident
 wrong figure this feature exists to avoid.
 
-### What three review rounds cost, and why it was worth it
+### What five review rounds cost, and why it was worth it
 
-Every round found at least one way to render a tree green that was not. None of them was visible by
-reading the code — they were all *interactions*: a shortcut versus a newer reading, a table that is
-partly readable, two events in the same millisecond, a cap on the wrong side of a `readdirSync`. The
-lesson for whoever builds Stage 2 is not "be careful"; it is that **this feature's bugs live in the
-seams between two rules that are each correct**, and only an adversary with the code in front of it
-has found them so far.
+Every round found at least one way to render a tree green that was not:
 
-Every fix carries a test that was **watched failing against the previous commit** — thirteen of
-them, checked out and re-run rather than assumed.
+| Round | Found |
+|---|---|
+| plan | the store's atomicity argument, the missing pending record, the ref-mtime claim, and that "ready" was never defined |
+| code 1 | a stale whole-check outranking newer evidence; the wrapper stamping one checkout and running another; `dirty` ignoring untracked files |
+| code 2 | a partly-readable check table exposing a stale pass; same-millisecond ties broken by input order; a rerun erasing a known failure |
+| code 3 | a record whose outcome contradicts its own counts; duplicate rows resolved last-wins; `did-not-run` convicting |
+| code 4 | a *passing* check promoting a non-clean row; a cap counting the wrong thing |
+
+**None was visible by reading the code.** They were all *interactions* — a shortcut versus a newer
+reading, a table that is partly readable, two events in one millisecond, a cap on the wrong side of a
+`readdirSync`. The lesson is not "be careful"; it is that **this feature's bugs live in the seams
+between two rules that are each correct on their own**, and that an adversary with the code in front
+of it found every one of them while re-reading found none.
+
+The severity did converge: rounds 1 and 2 found paths reachable from records the wrapper produces,
+rounds 3 and 4 only from corrupt or hand-written ones. That convergence is the reason to stop, not a
+proof that none remain.
+
+Every fix carries a test that was **watched failing against the previous commit** — seventeen of
+them, checked out and re-run rather than assumed. Two are marked in the source as regression guards
+rather than reproductions, because the fix changed resource use and not output, and no behavioural
+test can see that.
 
 **Three bugs found by building it, none of which reading would have caught.** Written down because
 each is a class rather than a slip:
@@ -426,15 +460,42 @@ each is a class rather than a slip:
 
 ### Stage 2 — the tab
 
-- [ ] `routes-readiness.ts` + `readiness-wiring.ts` (the composition, so a test drives the same
+**Status: built and on `dev`.** The tab renders, `/api/readiness` is proven over HTTP, and the other
+tabs are unharmed (the 405 existing `fleet-web` tests still pass).
+
+- [x] `routes-readiness.ts` + `readiness-wiring.ts` (the composition, so a test drives the same
       function `server.ts` calls — `health-wiring.ts` exists because the first version of that test
       would have stayed green over a route mounted against a different store).
-- [ ] Client parser, panel, graphs; the "no reading" and "unknown" states written first, not last.
-- [ ] The four registrations for `readiness` **and only** `readiness`, plus the `App.tsx` mount, per
+- [x] Client parser, panel, 24 h bands; the "no reading", "unavailable" and "unknown" states written
+      first, not last.
+- [x] The four registrations for `readiness` **and only** `readiness`, plus the `App.tsx` mount, per
       [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) — and
       `expect(MODES).toContain("readiness")` in my own test, because a merge that removes all five
-      registrations at once typechecks clean.
-- [ ] GPT Sol review on the diff, weighted higher than Stage 1's.
+      registrations at once typechecks clean. The test also reads `App.tsx` and `server.ts` as
+      source, for the mount and the route call that no type can check.
+- [ ] GPT Sol review on the Stage 2 diff, weighted higher than Stage 1's.
+
+**Everything expensive is on the timer, not in the request.** git, the scan of every checkout and
+`tmux ls` all run on a two-minute cadence and the route serves a snapshot from memory. A handler that
+spawned git would block the single-threaded server at load 391 — exactly when somebody is trying to
+find out why. The cost is that the answer is up to one refresh old, and `collectedAt` says so.
+
+**Three things the panel refuses to do**, each of them a review round's worth of argument:
+
+1. **It never turns `unknown` into a colour that reads as fine.** Unknown is the common answer on
+   this box, so it gets its own tone, its own sentence, and the failing clause named in it.
+2. **It never draws a reading as coverage.** Marks sit at instants; extending a pass rightwards to
+   the next run would paint hours nobody observed in green.
+3. **It separates the three provenances visually.** A full wrapper run on dev's commit is crisp and
+   ringed; a branch run, a narrowed command and a log reconstruction are faded. Without that, a
+   branch's green mark between two red ones reads as a recovery that never happened — and on this
+   box, where most test runs are bare `npx vitest run`, that would be most of the marks.
+
+**Three legibility bugs that only a screenshot could find**, and worth naming as a class: the band
+had no visible track, so a day on which nothing ran looked like a row that had failed to render; the
+marks were 1px on a ~200px band at 45% opacity, which is drawing your data where nobody can see it;
+and both axis labels read the same clock time, because 24 hours earlier is the same hour and minute.
+No test would have caught any of them.
 
 ### Stage 3 — trigger/refresh
 

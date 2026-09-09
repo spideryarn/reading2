@@ -253,8 +253,12 @@ export function parseTypecheck(text: string): { counts: Extract<Counts, { kind: 
   const errors = [...clean.matchAll(/error TS\d+:/g)].length;
   /* **The coverage line, and only it.** One project line is not a completed
      run — that was `|| projects > 0`, which let a typecheck killed after its
-     first project satisfy the completion guard. That line is the last thing
-     `scripts/typecheck.ts` prints, on every path. */
+     first project satisfy the completion guard.
+
+     It is not printed on every path: `scripts/typecheck.ts` takes an early
+     branch when a project resolves no files at all. That is the right way
+     round — a run that skipped it has not been shown to have finished, and
+     `void` is what a run we cannot vouch for should be. */
   const hasFooter = /^✓ all \d+ source files are covered by some project\s*$/m.test(clean);
   return {
     counts: { kind: "typecheck", projects: projects === 0 ? null : projects, errors },

@@ -40,6 +40,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
 import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-client";
+import type { UsageHistoryApi } from "../tools/fleet/web/src/usage-history-client";
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import type { QueueApi, QueueView } from "../tools/fleet/web/src/queue-client";
 import { freshness } from "../tools/fleet/web/src/Header";
@@ -515,6 +516,7 @@ function mount(
   transport: Transport,
   deploysApi: DeploysApi = recordingDeploys().api,
   queueApi: QueueApi = fakeQueue(),
+  usageHistoryApi: UsageHistoryApi = { window: async () => ({ kind: "unreadable", why: "no history in this fixture" }) },
 ): void {
   act(() =>
     root.render(
@@ -525,6 +527,7 @@ function mount(
         messagesApi={recordingMessages().api}
         deploysApi={deploysApi}
         queueApi={queueApi}
+        usageHistoryApi={usageHistoryApi}
         actionsPollMs={3_600_000}
       />,
     ),
@@ -932,6 +935,68 @@ describe("the usage limits tab", () => {
 
     expect(window.location.hash).toBe("#usage");
     expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("draws the last 24 hours under the card, from its own route", async () => {
+    /* The chart is NOT in the snapshot: it is written by the Overseer daemon and
+       read on its own route, so it costs nothing until somebody opens this tab.
+       This is the missing-mount test for the second half of the panel. */
+    const at = Date.now() - 600_000;
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys().api, fakeQueue(), {
+      window: async () => ({
+        kind: "history",
+        windowHours: 24,
+        fromMs: Date.now() - 24 * 60 * 60 * 1000,
+        toMs: Date.now(),
+        samples: [
+          {
+            kind: "sample",
+            sourceAtMs: at,
+            line: {
+              nextDueMs: 300_000,
+              recordedAt: new Date(at).toISOString(),
+              pass: {
+                kind: "pass",
+                collectedAt: new Date(at).toISOString(),
+                accountUuid: "acct-A",
+                cache: {
+                  kind: "attributed",
+                  accountUuid: "acct-A",
+                  fetchedAt: new Date(at).toISOString(),
+                  windows: [
+                    {
+                      kind: "unknown",
+                      window: "nimbus_quill",
+                      why: "no resets_at, so the utilization (0) cannot be checked",
+                    },
+                  ],
+                },
+                scan: { conclusive: true, why: null, incidents: [] },
+                publication: { decision: "take-fresh", why: "finished" },
+              },
+            },
+          },
+        ],
+        predecessor: null,
+        holes: [],
+        earliestAt: null,
+        rotated: false,
+        unreadableLines: 0,
+        unsupportedLines: 0,
+        recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
+        refreshMs: 60_000,
+      }),
+    });
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("The last 24 hours");
+    /* The unknown window is NAMED with its reason rather than dropped, and never
+       drawn from the unvalidated 0 it carries. */
+    expect(container.textContent).toContain("nimbus_quill");
+    expect(container.textContent).toContain("cannot be checked");
   });
 
   it("shows the SAME reading as the Overseer tab's card, from one payload", async () => {
