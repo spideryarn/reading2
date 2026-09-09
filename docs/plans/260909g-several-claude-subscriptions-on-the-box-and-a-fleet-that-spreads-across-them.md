@@ -277,6 +277,38 @@ drift.
 
 Stage 0 is a spike: throwaway code, findings written up, **no production code lands from it**.
 
+#### Stage 0 part-done: what the `projects/`-sharing spike already showed
+
+Run on the box 2026-09-09 **without a second account**, by giving a second config dir a copy of the
+existing credential and a symlinked `projects/`. The identity half still needs Greg; the *mechanism*
+half did not, and it was worth doing early because it partly contradicts the hope that motivated it.
+
+**What works.** A config dir with `projects/` symlinked to the shared one is fully usable: `claude -p`
+ran under it and **its transcript landed in the shared directory** (2 files → 3), so `--resume`,
+`gjd-remote`'s title lookup and the auto-memory all keep pointing at one place. That is the part
+Sol's idea needed, and it holds.
+
+**What does not follow.** The hope was that each config dir would then carry *its own* usage cache,
+dissolving P0-1. **It did not appear.** After a completed session under the spike dir, that dir had
+`oauthAccount` populated but **no `cachedUsageUtilization` at all**. So a config dir does **not**
+reliably acquire a usage reading merely because work happened under it — at least not from a short
+non-interactive run. Until that is understood, *"each account's dir has its own clean slot"* is an
+assumption, not a mechanism, and Stage 0 must still answer it with a real second account and a real
+session.
+
+**A third finding, which sharpens P0-3 from a different direction.** A config dir holding a valid
+credential but no `.claude.json` reports `loggedIn: true`, `authMethod: "claude.ai"`,
+`subscriptionType: "max"` — and **`email: null, orgId: null, orgName: null`**. Identity therefore
+comes from **config state, not from the credential**. So even the *strong* branch of the Stage 2
+assertion proves "this directory was logged into by X", never "this credential belongs to X". It
+also independently corroborates Sol's reading of the binary in P0-1, from the outside: the account
+label and the credential are separate things throughout.
+
+**Do not read the confounded part as evidence.** The *default* dir's cache did refresh during the
+spike (82% → 85%), but a dozen other sessions were live on the box, so nothing here distinguishes
+"my spike session wrote it" from "the fleet did". It is recorded as unattributable rather than
+reported as a result.
+
 ### Stage 1 — the checklist, and the account registry
 
 **Why first:** the checklist unblocks Greg tonight, and nothing downstream can be *tested against a
