@@ -622,8 +622,37 @@ Stage 2's module — round two caught that the first split made Stage 1 un-green
       built to have.
 
       **Read after the fit rung has settled**, never during the first paint: the rung changes button
-      widths, which is why the scroll effect is keyed on `fitClass` as well as `mode`. If two
-      readings disagree, check this before believing either.
+      widths, which is why the scroll effect is keyed on `fitClass` as well as `mode`.
+
+      **The predictions, written down before either session measures — `questions-mode-s2`'s
+      discipline, and the reason the shared load is worth taking at all.** This session reads at
+      nine modes and that session at ten, and both read `#deploys`, so the two are comparable. A
+      first draft of this said *"if `#deploys` reads the same in both, one of us measured before the
+      rung settled"* — which names one cause for a symptom that has at least three, and the other
+      two are likelier: one of us measured a tree with the wrong mode count (the same bar twice, for
+      an honest reason), or the rung is the same at nine and ten because both are past the last one,
+      in which case the per-mode delta is icon width rather than glyph-plus-label. **A matching pair
+      is evidence that something is wrong, not evidence of which thing.** So, pre-registered:
+
+      - `clientWidth` on `.dock` must be **identical** in both readings (390 at coarse). If it is
+        not, one reading is not at 390×844 coarse and nothing else in the pair is comparable.
+      - `scrollWidth` at ten must exceed `scrollWidth` at nine by **one mode's width — about 41px**,
+        which is the figure this plan derived and the number actually under test. A delta near zero
+        means somebody measured the wrong tree; a delta far from 41 **falsifies the per-mode figure**,
+        which is a result worth having on its own.
+      - The fit rung at nine and at ten, reported **as a rung rather than as a description**. If they
+        are equal, the expected delta is icon width rather than 41px, and we say so rather than
+        calling the 41 wrong.
+
+      That is what makes the shared load capable of coming back false, which is the only version
+      worth the extra measurement.
+
+      **Every number carries the sha it was taken on.** Reachability is a property of the
+      scroll-into-view fix rather than of the bar, so a reading taken without it in the tree would be
+      a true measurement of a false thing — `questions-mode-s2`'s catch. The overflow half
+      (`scrollWidth`/`clientWidth`, the rung, Refresh's position, bar height) is fix-independent and
+      may be taken any time; the reachability half (`scrollLeft`, is the active button on screen) may
+      not.
 
       If the gating check fails, the tab does not ship and this is recorded as *important work left*
       for Greg (§ The mode).
