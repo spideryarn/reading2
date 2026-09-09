@@ -34,7 +34,7 @@
  * pin every one of those distinctions without a browser.
  */
 import type { HealthSampleView, HistoryView } from "./health-history-client";
-import { THRESHOLDS } from "./health-view";
+import { LOAD_BAR_CEILING, MEMORY_USED_PERCENT, THRESHOLDS } from "./health-view";
 import type { Tone } from "./view";
 
 /* ------------------------------------------------------------------ *
@@ -201,8 +201,8 @@ export type SeriesSpec = {
    * never lost; it just stops deciding the scale.
    */
   max: number;
-  /** Where amber and red sit, and which side of them is bad. */
-  bands: { strained: number; critical: number; worseIs: "higher" | "lower" };
+  /** Where amber and red sit. Every series is expressed as consumption, so higher is worse. */
+  bands: { strained: number; critical: number };
   read(sample: HealthSampleView): Reading;
   /**
    * An optional second, BOOLEAN fact about the same reading, drawn as a bar
@@ -289,8 +289,8 @@ export const SERIES: SeriesSpec[] = [
     /* Twice the critical threshold, so the amber band is a quarter of the
        height and the red band the top half. See `max` on SeriesSpec for what a
        fitted axis did to this chart on a day containing load 391. */
-    max: THRESHOLDS.loadRatio.critical * 2,
-    bands: { ...THRESHOLDS.loadRatio, worseIs: "higher" },
+    max: LOAD_BAR_CEILING,
+    bands: { ...THRESHOLDS.loadRatio },
     read: (sample) =>
       readingFrom(sample, "load", (reading) => {
         const ratio = num(reading, "ratio1");
@@ -299,19 +299,37 @@ export const SERIES: SeriesSpec[] = [
   },
   {
     key: "memory",
-    label: "Memory available",
+    /**
+     * **USED, NOT AVAILABLE, SINCE 2026-09-09**, and the flip is worth a note
+     * because it is not only a label.
+     *
+     * > always show X% used rather than 100-X% free
+     * >
+     * > — Greg, 2026-09-09
+     *
+     * This was the one series that ran the other way, on a card where the other
+     * three are all "how much is being consumed" — so its line fell when things
+     * got worse, its bands sat at the bottom of the axis, and its sentence said
+     * "low 36%" beside three that said "peak". The reading it is drawn from is
+     * still `availableFraction`; the complement is taken in `read` and nowhere
+     * else, and the cutoffs come from `MEMORY_USED_PERCENT`, which is the same
+     * cutoff `computeVerdict` applies to the other side of the number.
+     */
+    label: "Memory used",
     unit: "%",
     max: 100,
     bands: {
-      strained: THRESHOLDS.memoryAvailable.strained * 100,
-      critical: THRESHOLDS.memoryAvailable.critical * 100,
-      /* LESS IS WORSE HERE, and it is the one series that runs the other way.
-         Stated rather than inferred, exactly as health-view.ts does for the
-         same reading — an inversion is the kind of thing a shared helper
-         hides. */
-      worseIs: "lower",
+      strained: MEMORY_USED_PERCENT.strained,
+      critical: MEMORY_USED_PERCENT.critical,
     },
-    read: (sample) => readingFrom(sample, "memory", (reading) => fraction(reading, "availableFraction")),
+    read: (sample) =>
+      readingFrom(sample, "memory", (reading) => {
+        const available = fraction(reading, "availableFraction");
+        /* The `unknown` arm passes through untouched: `100 - unknown` is not
+           100, and a complement taken of a reading that was never taken is the
+           confident zero this whole module is built against. */
+        return available.kind === "value" ? { kind: "value", value: 100 - available.value } : available;
+      }),
   },
   {
     key: "swap",
@@ -321,7 +339,6 @@ export const SERIES: SeriesSpec[] = [
     bands: {
       strained: THRESHOLDS.swapUsed.strained * 100,
       critical: THRESHOLDS.swapUsed.critical * 100,
-      worseIs: "higher",
     },
     read: (sample) =>
       readingFrom(sample, "swap", (reading) => fraction(reading, "usedFraction"), {
@@ -347,11 +364,11 @@ export const SERIES: SeriesSpec[] = [
      * Critical here needs `waPercent >= 50` AND `activelySwapping`, which is a
      * combination this band mechanism cannot express — bands are one number on
      * one axis. So the band stops at amber and the combination stays where it
-     * is already computed: the verdict strip above, drawn from the collector's
+     * is already computed: the verdict strip under the charts, drawn from the collector's
      * own stored `verdict.level`. `Number.POSITIVE_INFINITY` says "this series
      * has no red of its own" rather than hiding a number that looks chosen.
      */
-    bands: { strained: THRESHOLDS.ioWait.thrashing, critical: Number.POSITIVE_INFINITY, worseIs: "higher" },
+    bands: { strained: THRESHOLDS.ioWait.thrashing, critical: Number.POSITIVE_INFINITY },
     read: (sample) =>
       readingFrom(sample, "swapActivity", (reading) => {
         const wa = num(reading, "waPercent");
@@ -396,8 +413,8 @@ export type SeriesPlot = {
   /** Where there is legitimately no number — no swap configured, not sampled. */
   absences: (Span & { why: string })[];
   /**
-   * The worst point in the window, **by this series' own direction** — the
-   * highest load, and the LOWEST memory. Null when there were no values.
+   * The worst point in the window — the highest value, because every series is
+   * now expressed as consumption. Null when there were no values.
    *
    * This is what the sentence under each chart says, and it is the single most
    * useful fact on the panel: a 73-second spike at 04:00 is a third of a pixel
@@ -594,18 +611,29 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     plotSeries(spec, samples, isGapStart, toMs, view.refreshMs, endCovered),
   );
 
-  const verdict: VerdictBand[] = samples.map((sample, i) => {
+  /**
+   * Verdicts use the SAME normalized coverage as the gaps above. This is more
+   * than a drawing detail now that the strip prints durations: counting the
+   * older `gapAfterMs` span included minutes the chart explicitly hatched as
+   * unobserved during a fleet backoff. The predecessor can legitimately cover
+   * the left edge, and corrupt holes remove coverage rather than inheriting the
+   * verdict on either side.
+   */
+  const verdictSamples = view.predecessor === null ? samples : [view.predecessor, ...samples];
+  const verdict: VerdictBand[] = verdictSamples.flatMap((sample, i) => {
+    const from = Math.max(sample.atMs, fromMs);
+    const to = Math.min(
+      verdictSamples[i + 1]?.atMs ?? Number.POSITIVE_INFINITY,
+      sample.atMs + coverageMs(sample, view.refreshMs),
+      toMs,
+    );
+    if (to <= from) return [];
     const level = levelOf(sample);
-    return {
-      fromMs: sample.atMs,
-      /* Same rule as `plotSeries`: a verdict covers the interval its sample said
-         to expect, never the silence after it. A `critical` band stretched
-         across a four-hour break would say the box was critical for four hours
-         on the strength of one reading. */
-      toMs: Math.min(samples[i + 1]?.atMs ?? Number.POSITIVE_INFINITY, sample.atMs + gapAfterMs(sample), toMs),
+    return subtractSpans([{ fromMs: from, toMs: to }], holes).map((span) => ({
+      ...span,
       level,
       tone: LEVEL_TONE[level] ?? "unknown",
-    };
+    }));
   });
 
   return {
@@ -718,7 +746,6 @@ function plotSeries(
      so a stale number was labelled "now". */
   let latestCoveredUntil: number | null = null;
 
-  const isWorse = (a: number, b: number): boolean => (spec.bands.worseIs === "lower" ? a < b : a > b);
   const flush = (): void => {
     if (current.length > 0) segments.push(current);
     current = [];
@@ -759,7 +786,7 @@ function plotSeries(
       const point = { atMs: sample.atMs, value: reading.value };
       current.push(point);
       peak = peak === null ? reading.value : Math.max(peak, reading.value);
-      if (worst === null || isWorse(point.value, worst.value)) worst = point;
+      if (worst === null || point.value > worst.value) worst = point;
       latest = point;
       /* `until`, not `coversUntil`: a value's currency also ends where the NEXT
          sample begins. With `coversUntil` a value followed by an unknown reading
