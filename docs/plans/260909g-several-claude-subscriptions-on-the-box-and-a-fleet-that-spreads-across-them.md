@@ -409,10 +409,71 @@ failure would be silent. The mitigations: every failure is *unknown* and never a
 account's number; the cache stays a corroborating second source where it exists (finding 4 shows the
 two agree); and `usage-history.md`'s "absence is never a zero" already covers what to draw.
 
-### Stage 1 — the checklist, and the account registry
+### Stage 1 — the wizard Greg runs, and the account registry
 
-**Why first:** the checklist unblocks Greg tonight, and nothing downstream can be *tested against a
-real second account* until he has run it. The registry is the one new concept everything else reads.
+> **Rewritten 2026-09-09** after Greg ran the checklist by hand and found it fiddly. The registry is
+> unchanged; the `add` command became the thing he actually uses.
+
+Greg, 2026-09-09:
+
+> It was a bit fiddly to add the new accounts, and I think I might have missed some steps. Can you
+> write a CLI script that I can call, that asks me questions, and then does everything for me. It
+> should be idempotent (i.e. if I run it twice for the same account, it just updates as needed).
+
+**`npx tsx scripts/claude-accounts.ts add`**, no flags, asks its way through: the name and email
+(offering defaults from what already exists), creates the dir and its `forceLoginMethod` settings if
+missing, signs in **only if** the account is not already signed in, seeds the dir from the list
+measured in Stage 0, pins identity through `/api/oauth/profile`, writes or updates the registry
+entry, and ends by printing `list`.
+
+**Every question is also a flag** — `--name`, `--email`, `--role`, `--config-dir`, `--yes` — so the
+web UI and the tests drive *the same code path* non-interactively. That is the design constraint that
+stops Stage 5 becoming a second implementation of this.
+
+#### What "idempotent" has to mean, state by state
+
+A second run must be safe, and "safe" is different for each thing it touches. This is the part most
+likely to go wrong silently, so it is enumerated rather than asserted:
+
+| State | A second run must… |
+|---|---|
+| the config dir | create if absent; **never** delete or recreate |
+| `settings.json` | **merge** the keys we own, preserving hand edits; never overwrite the file |
+| the login | **skip entirely** if `auth status` already names the expected email — a re-login rotates a credential live sessions may be using |
+| `projects/` symlink | create only if absent; **refuse loudly if a real directory is there**, never replace it |
+| seeded `.claude.json` keys | merge named keys only; never copy the file wholesale (it carries identity, eligibility caches and live-session state) |
+| the registry entry | update in place, preserving fields it did not write |
+
+**The test that matters is the one already available**: running the wizard against
+`~/.claude-gregmindstone`, where Greg has done the login and skipped the token steps. It must find the
+login present, seed only what is missing, register the account, and change nothing else. That is a
+real before/after, not a fixture, and it goes to Sol as such.
+
+**Nothing may be a no-op that reports success.** Each step prints what it *found* and what it
+*changed* — `already signed in as greg@mindstone.com, skipping login` rather than `✓ login`. This
+repo has a documented failure class of exactly that shape
+([silent-success.md](../reusable/silent-success.md)), and a wizard whose whole value is "you can
+re-run it" is the worst possible place for it.
+
+**I do not run the login step.** It is interactive, it is Greg's credential, and a wrong move rotates
+a live one. The login branch is tested with a fake `claude` on `PATH`; the real run is his.
+
+#### Designed so the Codex version is not a rewrite
+
+Codex accounts are next (queued as `qi-whppvck5`, Greg: *"we're going to want to do all the same
+stuff for Codex account-subscriptions too, as HIGH-BUT-NOT-TOP-priority"*), and they are the same
+shape with different verbs: `CODEX_HOME` instead of `CLAUDE_CONFIG_DIR`, `codex login` instead of
+`claude auth login`, and verification through the app-server `account/rateLimits` read that
+`scripts/overseer.ts usage` already performs.
+
+So the seams that must be **per-family from the start**, rather than Claude details leaking into
+shared code: where an account's state lives (a dir path, but not necessarily named the same),
+how to ask *who is signed in here*, how to *sign in*, how to read *usage*, and what counts as
+seeded. One registry with the `family` column, one wizard with a family question, and those five
+operations behind a per-family interface. Nothing Codex-specific is built now.
+
+**Why the registry first:** it is the one new concept everything else reads, and Stage 0 has already
+established what goes in it.
 
 **Where it lives.** Outside the repo — credentials never go in git:
 
@@ -719,9 +780,21 @@ checklist today, so neither is blocking.
 
 ## Greg's checklist — adding one Claude account
 
+> **SUPERSEDED — do not follow this by hand.** Greg, 2026-09-09, having run it: *"It was a bit
+> fiddly to add the new accounts, and I think I might have missed some steps. Can you write a CLI
+> script that I can call, that asks me questions, and then does everything for me."* So this is now
+> **the wizard's specification**, not his instructions —
+> [Stage 1](#stage-1--the-wizard-greg-runs-and-the-account-registry) is what he runs.
+>
+> **Two things changed since it was written and both would mislead:** steps 4 and 5 minted a
+> `setup-token`, which the config-dir model does not use at all and which Greg should *not* run; and
+> step 3's check is weaker than it looks, because a config dir can hold a valid credential and still
+> report `email: null`. Kept here because the wizard has to do each of these steps correctly, and
+> because the corrections are the record of what was wrong.
+>
 > **Corrected 2026-09-09 after GPT Sol's review**, which found seven defects in the first version —
 > including one that was shell redirection rather than a placeholder, so pasting it would have hung
-> the terminal. Following this version literally has been checked against the box.
+> the terminal.
 
 **Do this once per new account.** Everything here runs *on the box*, **in a tmux pane you can type
 into**. It has to be interactive: two of the steps open a browser login, and there is nobody but you
