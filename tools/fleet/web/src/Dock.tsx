@@ -65,7 +65,7 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
   deploys: Rocket,
 };
 
-const MODE_TIPS: Record<Mode, Tip> = {
+export const MODE_TIPS: Record<Mode, Tip> = {
   sessions: {
     head: "Sessions",
     what: "Every tmux session on the box, worst first: who needs an answer, then what is moving, then everything quiet.",
