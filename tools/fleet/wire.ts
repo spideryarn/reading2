@@ -1805,6 +1805,19 @@ export type FeedSessionRead =
       fileBytes: number;
       /** Tool results the reader skipped, so "silent between two messages" is never implied. */
       toolResultsSkipped: number;
+      /**
+       * How many transcript files matched this conversation id. Anything but 1
+       * means provenance is ambiguous — the reader exposes it for exactly that,
+       * and a feed that showed the turns without it would be picking one file
+       * silently.
+       */
+      copies: number;
+      /**
+       * Lines that would not parse. **1 is normal** — a live session is being
+       * appended to while we read, so the last line can be half-written.
+       * Anything higher means turns may be missing from this session's answer.
+       */
+      recordsUnparseable: number;
     }
   /** No transcript to read. `reason` is the reader's typed code, `why` its sentence. */
   | { kind: "not-found"; reason: string; why: string }
@@ -1818,6 +1831,52 @@ export type FeedSession = {
   title: string | null;
   read: FeedSessionRead;
 };
+
+/**
+ * **WHY THE FEED MIGHT NOT BE THE LAST N MESSAGES AFTER ALL.**
+ *
+ * Identified by `sessionId`, never by name: names are reassigned when a session
+ * dies and two sessions can wear the same one, so a warning keyed by name can
+ * point at the wrong agent.
+ */
+export type FeedCoverageReason = {
+  sessionId: string;
+  /** The name at read time, for printing beside the id. Not an identifier. */
+  name: string;
+  kind:
+    /** The byte budget stopped the walk before this session's newest N, inside the window shown. */
+    | "byte-budget"
+    /** There was a transcript and it could not be read. */
+    | "unreadable"
+    /** This session claims a conversation whose transcript could not be located. */
+    | "no-transcript"
+    /** Turns came back with no placeable timestamp, so they may have displaced dated ones. */
+    | "undated"
+    /** Timestamps went backwards within one session, so "newest" is not a total order there. */
+    | "out-of-order"
+    /** Two rows name the same conversation, so its turns would be counted twice. */
+    | "duplicate-conversation";
+  why: string;
+};
+
+/**
+ * **WHETHER "THE LAST N MESSAGES" IS A CLAIM THIS PAYLOAD CAN ACTUALLY MAKE.**
+ *
+ * The merge is exact — any message among the true newest N must be among its
+ * own session's newest N — but only while four premises hold: the census is
+ * fixed, each message belongs to exactly one session, every session really
+ * supplied its newest N, and local and global "newest" use the same total
+ * order. Each of the reasons above breaks one of them.
+ *
+ * **THIS IS A PROPERTY OF THE WHOLE FEED, NOT AN ADVISORY ROW BESIDE IT.** An
+ * earlier draft listed only the byte-truncated sessions, and GPT Sol's P1
+ * against that design is the reason this type exists: an unreadable session can
+ * contain *all* of the true newest messages, and showing it as one more row in
+ * a census does nothing to stop the main list looking authoritative. So a
+ * client cannot render this feed without meeting the question, and `complete`
+ * is constructible only when every contributor satisfied the invariant.
+ */
+export type FeedCoverage = { kind: "complete" } | { kind: "indeterminate"; reasons: FeedCoverageReason[] };
 
 export type FeedPayload =
   | {
@@ -1847,26 +1906,29 @@ export type FeedPayload =
       /** Every row in the snapshot, readable or not. See `FeedSessionRead`. */
       sessions: FeedSession[];
       /**
-       * The sessions whose incompleteness **actually costs this feed
-       * something**, by name, for the page to print.
-       *
-       * Not simply every `complete: false` session: if a session was cut short
-       * but its oldest returned message is already older than the feed's
-       * cutoff, then everything of its that belongs in this window was read,
-       * and warning about it would be noise. A warning that is usually wrong is
-       * one nobody reads. The condition is computed in routes-recent-feed.ts
-       * and is the one piece of arithmetic here worth a test of its own.
+       * Whether this really is the last `limit` messages. **Required, and the
+       * client may not render the list without consulting it.** See
+       * `FeedCoverage`.
        */
-      mayBeMissing: string[];
+      coverage: FeedCoverage;
       /**
-       * When the snapshot these rows came from was collected, and when this
-       * answer was built.
+       * **THE CENSUS BOUNDARY, WHICH IS THE HONEST CONTRACT.**
        *
-       * Both, because they answer different questions: a session that started
-       * after `collectedAt` **is not in this feed at all**, and nothing else
-       * here would say so.
+       * There is no instant at which this answer describes the fleet. The
+       * roster was collected at `collectedAt`, up to a minute before; the
+       * transcripts were read between `readStartedAt` and `readFinishedAt`. So
+       * a session created after `collectedAt` is absent, one that has since died
+       * is still present and its transcript still reads, and a session read
+       * early may have appended while a later one was being read.
+       *
+       * What this payload actually says is *"the newest turns observed from the
+       * roster collected at C, during reads R0–R1"* — not *"the fleet right
+       * now"*, which is what a single timestamp would imply. GPT Sol's P1 on the
+       * plan; the three fields exist so the page can say the true thing.
        */
       collectedAt: string | null;
+      readStartedAt: string;
+      readFinishedAt: string;
       servedAt: string;
     }
   /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */

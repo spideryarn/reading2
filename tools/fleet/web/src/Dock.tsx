@@ -20,7 +20,7 @@
  * nothing here needs touching — `MODES` in mode.ts is the list, and the bar
  * measures its own fit (fit.ts).
  */
-import { Gauge, ListChecks, Network, RefreshCw, type LucideIcon } from "lucide-react";
+import { Gauge, ListChecks, MessagesSquare, Network, RefreshCw, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -43,6 +43,7 @@ import { cx } from "./ui";
  */
 const MODE_ICONS: Record<Mode, LucideIcon> = {
   sessions: ListChecks,
+  messages: MessagesSquare,
   health: Gauge,
   overseer: Network,
 };
@@ -52,6 +53,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Sessions",
     what: "Every tmux session on the box, worst first: who needs an answer, then what is moving, then everything quiet.",
     how: "Read off the box about once a minute. Open one to see what it is asking, answer it, or say something to it — the dashboard types at the pane, and checks first that the pane is still the one you were shown.",
+  },
+  messages: {
+    head: "Recent messages",
+    what: "The last N messages across every session at once, newest first, filtered by session, speaker or text.",
+    /* **The artefact, not the gesture** — this copy is read on the button, in
+       the panel and by a screen reader, and "pressing this reads every
+       transcript" is false on the surfaces where nothing is being pressed.
+       What it could not have guessed is that the window is a snapshot rather
+       than a live tail, and that it says what it could not read. */
+    how: "A snapshot of the moment it was fetched, not a live tail — and it names the sessions it could not read, so a short list is never mistaken for a quiet fleet.",
   },
   health: {
     head: "Box health",

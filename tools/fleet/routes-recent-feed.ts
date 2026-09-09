@@ -56,8 +56,16 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { gzipSync } from "node:zlib";
 
 import type { FleetRow, FleetSnapshot } from "./collect.js";
-import { readRecentMessages, type RecentMessages } from "./transcript.js";
-import type { FeedAttribution, FeedMessage, FeedPayload, FeedSession, FeedSessionRead } from "./wire.js";
+import { readRecentMessages, type RecentMessages, type TranscriptTurn } from "./transcript.js";
+import type {
+  FeedAttribution,
+  FeedCoverage,
+  FeedCoverageReason,
+  FeedMessage,
+  FeedPayload,
+  FeedSession,
+  FeedSessionRead,
+} from "./wire.js";
 
 export const FEED_PATH = "/api/feed";
 
@@ -126,8 +134,36 @@ export type FeedInput = {
   title: string | null;
   /** `true` when the collector calls this row `working` — the only status the staleness check applies to. */
   working: boolean;
+  /**
+   * The conversation uuid this row claims. **Carried so two rows naming the
+   * same one can be spotted** — that would count one conversation's turns
+   * twice, which breaks "each message belongs to exactly one session" and with
+   * it the exactness of the merge.
+   */
+  claudeSessionId: string | null;
   result: RecentMessages;
 };
+
+/**
+ * **THE GUARD TURN, AND WHY EVERY SESSION IS ASKED FOR ONE MORE THAN IT NEEDS.**
+ *
+ * One API turn is written as up to four JSONL records sharing a `message.id` —
+ * 1497 of 2806 ids in the measured transcript appeared on more than one line —
+ * and `recordsToTurns` coalesces them. So when the byte budget stops the walk
+ * *inside* a shared id, the oldest turn it returns is built from only the
+ * records that happened to fall above the boundary: a real-looking turn with
+ * some of its text and some of its tool calls missing.
+ *
+ * That is invisible to a count. Asking for N and receiving N would say
+ * "complete" while the oldest of those N is a fragment. **So every session is
+ * asked for N+1 and the oldest is discarded whenever the walk did not reach the
+ * start of the file.** The turn below a discarded one is whole by construction:
+ * its records are contiguous and the boundary is below them.
+ *
+ * GPT Sol's P1 on the plan. The cost is one extra turn per session and no
+ * second parser.
+ */
+export const GUARD_TURNS = 1;
 
 /**
  * What the feed may claim about who said this, today.
@@ -161,23 +197,38 @@ export function attributionOf(working: boolean, lastModified: string, nowMs: num
   };
 }
 
-/** One session's read, as the census reports it. */
+/**
+ * The turns this session actually contributes, with the guard turn dropped.
+ *
+ * See `GUARD_TURNS`. When the walk reached the start of the file nothing was
+ * cut, so the oldest turn is whole and all of them are kept.
+ */
+export function contributedTurns(r: Extract<RecentMessages, { kind: "found" }>): TranscriptTurn[] {
+  if (r.reachedStartOfFile || r.turns.length === 0) return r.turns;
+  return r.turns.slice(1);
+}
+
+/** One session's read, as the census reports it. `turns` is post-guard. */
 function readOf(input: FeedInput, limit: number): FeedSessionRead {
   const r = input.result;
   if (r.kind === "not-found") return { kind: "not-found", reason: r.reason, why: r.why };
   if (r.kind === "unreadable") return { kind: "unreadable", path: r.path, why: r.why };
+  const turns = contributedTurns(r);
   return {
     kind: "read",
-    turns: r.turns.length,
-    /* Complete means *we got this session's newest `limit`*. Either the walk
-       reached byte 0 — so there is provably nothing above — or it returned as
-       many turns as were asked for. Anything else is the byte budget having
-       stopped us early, and the feed must not present that as a quiet agent. */
-    complete: r.reachedStartOfFile || r.turns.length >= limit,
+    turns: turns.length,
+    /* Complete means *we got this session's newest `limit`, and the oldest of
+       them is whole*. Either the walk reached byte 0 — so there is provably
+       nothing above — or, after discarding the guard turn, it still has as many
+       as were asked for. Anything else is the byte budget having stopped us
+       early, and the feed must not present that as a quiet agent. */
+    complete: r.reachedStartOfFile || turns.length >= limit,
     lastModified: r.lastModified,
     bytesRead: r.bytesRead,
     fileBytes: r.fileBytes,
     toolResultsSkipped: r.toolResultsSkipped,
+    copies: r.copies,
+    recordsUnparseable: r.recordsUnparseable,
   };
 }
 
@@ -202,26 +253,76 @@ export function mergeFeed(
   messages: FeedMessage[];
   undated: FeedMessage[];
   sessions: FeedSession[];
-  mayBeMissing: string[];
+  coverage: FeedCoverage;
 } {
   const sessions: FeedSession[] = [];
   /* Carried beside each message only until the sort is done. The oldest dated
-     message per session is what decides `mayBeMissing` below. */
+     message per session is what decides whether a truncation matters. */
   const dated: { message: FeedMessage; ms: number; order: number }[] = [];
   const undated: FeedMessage[] = [];
   const oldestBySession = new Map<string, number>();
   const incomplete: { sessionId: string; name: string }[] = [];
+  const reasons: FeedCoverageReason[] = [];
+
+  /* **TWO ROWS NAMING ONE CONVERSATION.** That breaks "each message belongs to
+     exactly one session", so the same turns would be counted twice and the
+     newest N would be padded with duplicates. Detected rather than
+     de-duplicated: which of the two rows is the real one is not this module's
+     to decide, and guessing would hide the fact that something is wrong. */
+  const byConversation = new Map<string, string[]>();
+  for (const input of inputs) {
+    if (input.claudeSessionId === null || input.claudeSessionId === "") continue;
+    const seen = byConversation.get(input.claudeSessionId) ?? [];
+    seen.push(input.sessionId);
+    byConversation.set(input.claudeSessionId, seen);
+  }
+  for (const [conversation, ids] of byConversation) {
+    if (ids.length < 2) continue;
+    for (const sessionId of ids) {
+      reasons.push({
+        sessionId,
+        name: inputs.find((i) => i.sessionId === sessionId)?.name ?? sessionId,
+        kind: "duplicate-conversation",
+        why: `${ids.length} sessions claim the same conversation (${conversation}), so its messages appear more than once and at most one of these rows can be right`,
+      });
+    }
+  }
 
   let order = 0;
   for (const input of inputs) {
     const read = readOf(input, limit);
     sessions.push({ sessionId: input.sessionId, name: input.name, title: input.title, read });
+
+    if (read.kind === "unreadable") {
+      /* **A SESSION WE COULD NOT READ MAY HOLD ALL OF THE NEWEST MESSAGES.**
+         Showing it as one more row in the census does nothing to stop the list
+         above looking authoritative, which is why this is coverage rather than
+         an advisory line. GPT Sol's P1. */
+      reasons.push({ sessionId: input.sessionId, name: input.name, kind: "unreadable", why: read.why });
+    }
+    if (read.kind === "not-found" && read.reason !== "no-claude-session-id") {
+      /* `no-claude-session-id` is deliberately NOT a coverage failure: it is a
+         shell or a scheduled session whose pane is still running `sleep`, and
+         nine of 21 rows on this box are that. Counting them would make coverage
+         permanently indeterminate, and a warning that is always on is one
+         nobody reads. Every other reason means a conversation was claimed and
+         its transcript could not be found, which really is a hole. */
+      reasons.push({ sessionId: input.sessionId, name: input.name, kind: "no-transcript", why: read.why });
+    }
+
     if (input.result.kind !== "found") continue;
     if (read.kind === "read" && !read.complete) {
       incomplete.push({ sessionId: input.sessionId, name: input.name });
     }
     const attribution = attributionOf(input.working, input.result.lastModified, nowMs);
-    for (const turn of input.result.turns) {
+    /* **AN INVERSION MEANS "NEWEST" IS NOT A TOTAL ORDER HERE.** Zero were
+       observed in 955 sampled turns, but a wall-clock adjustment on the box
+       would produce one, and the global sort would then place this session's
+       messages wrongly against every other session's. */
+    let previousMs: number | null = null;
+    let inverted = false;
+    let hasUndated = false;
+    for (const turn of contributedTurns(input.result)) {
       const message: FeedMessage = {
         sessionId: input.sessionId,
         sessionName: input.name,
@@ -241,11 +342,36 @@ export function mergeFeed(
       const ms = msOf(turn.at);
       if (ms === null) {
         undated.push(message);
+        hasUndated = true;
         continue;
       }
+      if (previousMs !== null && ms < previousMs) inverted = true;
+      previousMs = ms;
       dated.push({ message, ms, order: order++ });
       const seen = oldestBySession.get(input.sessionId);
       if (seen === undefined || ms < seen) oldestBySession.set(input.sessionId, ms);
+    }
+
+    if (inverted) {
+      reasons.push({
+        sessionId: input.sessionId,
+        name: input.name,
+        kind: "out-of-order",
+        why: "this session's own timestamps go backwards, so its messages cannot be ordered against the other sessions' reliably",
+      });
+    }
+    if (hasUndated) {
+      /* **AN UNDATED TURN COSTS MORE THAN ITS OWN PLACE.** It was fetched
+         inside this session's newest N, so it displaced a dated turn that was
+         never fetched at all — and that turn may have belonged in the window.
+         Showing the undated ones in a group below is therefore not enough to
+         keep the dated list exact. GPT Sol's P2. */
+      reasons.push({
+        sessionId: input.sessionId,
+        name: input.name,
+        kind: "undated",
+        why: "some of this session's newest turns carry no timestamp, so they cannot be placed in the ordering and an older dated turn of its own may be missing from the window",
+      });
     }
   }
 
@@ -268,19 +394,27 @@ export function mergeFeed(
      read and any incompleteness at all is inside it. */
   const trimmed = dated.length > limit;
   const cutoffMs = trimmed ? (kept[kept.length - 1]?.ms ?? null) : null;
-  const mayBeMissing = incomplete
-    .filter(({ sessionId }) => {
-      if (cutoffMs === null) return true;
-      const oldest = oldestBySession.get(sessionId);
-      /* No dated message at all from a session we know was cut short: we cannot
-         place it relative to the cutoff, so we say so rather than assume it
-         falls outside. */
-      if (oldest === undefined) return true;
-      return oldest > cutoffMs;
-    })
-    .map(({ name }) => name);
+  for (const { sessionId, name } of incomplete) {
+    const oldest = oldestBySession.get(sessionId);
+    /* No dated message at all from a session we know was cut short: we cannot
+       place it relative to the cutoff, so we say so rather than assume it falls
+       outside. */
+    const insideWindow = cutoffMs === null || oldest === undefined || oldest > cutoffMs;
+    if (!insideWindow) continue;
+    reasons.push({
+      sessionId,
+      name,
+      kind: "byte-budget",
+      why: "this session's transcript was cut short by the read budget before its newest messages were all reached, so it may have said more inside this window than is shown",
+    });
+  }
 
-  return { messages, undated: undated.slice(0, limit), sessions, mayBeMissing };
+  /* **`complete` IS CONSTRUCTIBLE ONLY WHEN NOTHING ABOVE FIRED.** Every reason
+     breaks one of the four premises the exactness proof rests on, so the answer
+     to "is this the last N messages" is yes exactly when there are none. */
+  const coverage: FeedCoverage = reasons.length === 0 ? { kind: "complete" } : { kind: "indeterminate", reasons };
+
+  return { messages, undated: undated.slice(0, limit), sessions, coverage };
 }
 
 export type FeedRouteDeps = {
@@ -320,22 +454,27 @@ export async function feedPayload(deps: FeedRouteDeps, limit: number): Promise<F
   }
   const read = deps.read ?? readRow;
   const nowMs = deps.nowMs();
+  const readStartedAt = new Date(nowMs).toISOString();
   /* All at once. Measured at 250 ms and ~10 MB of page cache for 21 rows at
      limit 50, on a box whose transcripts total 65 MB — the byte-bounded reader
      is what makes that safe, not restraint here. **This is not on the collection
      loop** and must never be moved onto it: docs/project/overseer-direction.md
      and the responsive-collection stage of the roadmap both say the collector
-     may not be held by a slow reader. */
+     may not be held by a slow reader.
+
+     `limit + GUARD_TURNS`, never bare `limit` — see `GUARD_TURNS`. */
   const inputs: FeedInput[] = await Promise.all(
     snapshot.rows.map(async (row) => ({
       sessionId: row.id,
       name: row.name,
       title: row.title,
       working: row.status.kind === "working",
-      result: await read(row, limit),
+      claudeSessionId: row.claudeSessionId,
+      result: await read(row, limit + GUARD_TURNS),
     })),
   );
   const merged = mergeFeed(inputs, limit, nowMs);
+  const readFinishedAt = new Date(deps.nowMs()).toISOString();
   return {
     schema: 1,
     kind: "feed",
@@ -343,9 +482,14 @@ export async function feedPayload(deps: FeedRouteDeps, limit: number): Promise<F
     messages: merged.messages,
     undated: merged.undated,
     sessions: merged.sessions,
-    mayBeMissing: merged.mayBeMissing,
+    coverage: merged.coverage,
+    /* The census boundary rather than one instant — see `FeedPayload`. The
+       snapshot was collected up to a minute ago and the files were read over
+       the window below; there is no moment at which this describes the fleet. */
     collectedAt: snapshot.collectedAt,
-    servedAt: new Date(nowMs).toISOString(),
+    readStartedAt,
+    readFinishedAt,
+    servedAt: readFinishedAt,
   };
 }
 

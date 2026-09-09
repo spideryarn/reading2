@@ -25,12 +25,29 @@ Taken tonight against the live fleet from this worktree, read-only, calling `rea
 per row in the running dashboard's own snapshot. 21 rows, of which 12–15 had a conversation id (the
 fleet moved between runs; the other rows are shells and scheduled sessions still running `sleep`).
 
-| per-session `limit` | wall | disk read | turns | text | JSON on the wire |
-|---|---|---|---|---|---|
-| 6 | 43 ms | 3.0 MB | 72 | 14 kB | — |
-| 12 | 199 ms | 5.2 MB | 176 | 28 kB | 83 kB |
-| 50 | 250 ms | 10.2 MB | 579 | 93 kB | 266 kB |
-| 100 | 362 ms | 13.2 MB | 955 | 177 kB | 453 kB |
+**The candidate reads** — one `readRecentMessages` per row, which is what the fan-out costs:
+
+| per-session `limit` | wall | disk read | candidate turns | text |
+|---|---|---|---|---|
+| 6 | 43 ms | 3.0 MB | 72 | 14 kB |
+| 12 | 199 ms | 5.2 MB | 176 | 28 kB |
+| 50 | 250 ms | 10.2 MB | 579 | 93 kB |
+| 100 | 362 ms | 13.2 MB | 955 | 177 kB |
+
+**The actual response**, measured afterwards through `feedPayload` itself — 23 rows, the built
+payload, serialised and gzipped:
+
+| `limit` | wall | messages | JSON | gzipped |
+|---|---|---|---|---|
+| 25 | 234 ms | 25 | 25 kB | 6 kB |
+| 50 | 304 ms | 50 | 40 kB | 8 kB |
+| 100 | 590 ms | 100 | 75 kB | 14 kB |
+
+**The second table exists because the first one was misread**, and the correction matters: an
+earlier draft of this plan quoted *266 kB on the wire at N=50*, which was the size of all 579
+**candidate** turns — but the route serialises only the final 50. GPT Sol caught it (P2.1). The real
+answer is 40 kB, or 8 kB gzipped. The lesson is the ordinary one: a number measured on the input to
+a step is not a number about its output, and it reads just as authoritatively in a table.
 
 Four things follow, and each one decides something below:
 
@@ -41,16 +58,21 @@ Four things follow, and each one decides something below:
    [overseer-direction.md § A higher bar for robustness](../project/overseer-direction.md) and the
    responsive-collection stage of [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) both
    say the collector must never be held by a slow reader.
-2. **The cost that matters is the wire, not the disk.** 266 kB of JSON at N=50, read on a phone over
-   Tailscale. That is the number that decides the refresh cadence and the gzip below — the disk cost
-   never enters into it.
-3. **`at` is sound as a global sort key.** Every one of 955 sampled turns had one; they are ISO UTC
-   on the box's own clock, and within a session they were monotonic with zero inversions. All
-   sessions are the same box and the same clock, so comparing them across sessions is comparing two
-   readings of one clock. **This is the load-bearing assumption of the whole feature**, so it is
-   asserted in the payload rather than trusted: see *Undated turns* below.
+2. **The cost that decides the cadence is the DISK, not the wire.** 8 kB gzipped is nothing; **10 MB
+   of transcript reads every sixty seconds is not**, and that is what polling would buy. So the tab
+   is fetched on demand and on an explicit refresh. Gzip stays because it is four lines and turns 40
+   kB into 8 kB on a phone over Tailscale, but it is a nicety rather than the reason.
+3. **`at` is sound as a global sort key, and the payload no longer trusts it.** Every one of 955
+   sampled turns had one; they are ISO UTC on the box's own clock, and within a session they were
+   monotonic with zero inversions. But *measured true tonight* is not *guaranteed*, so an inversion
+   or an undated turn now demotes the feed's coverage rather than being assumed away — see
+   **Coverage** below.
 4. **Reading more turns per session is nearly free in disk terms** (limit 6 and limit 12 both read
    roughly one 256 kB chunk per session), which is what makes the exact merge below affordable.
+
+**And what the live box says now:** at N=50 over 23 sessions, coverage comes back `complete`. That
+is the check that the honesty machinery is not simply always-on — a warning that never clears is one
+nobody reads, and this one clears.
 
 ## The design
 
@@ -67,14 +89,70 @@ and pads the rest with older messages from quieter sessions, while looking entir
 measurement 4, exactness costs about 5 MB of page cache and 150 ms, so there is no reason to be
 approximate.
 
-**The invariant can still be broken from underneath, and the payload says so when it is.** A session
-whose newest N do not fit in the byte budget comes back short, and a short answer is
-indistinguishable on screen from a quiet agent. So the route computes, per session, whether the
-answer was *complete* — `reachedStartOfFile === true`, or `turns.length >= N` — and the feed carries
-the incomplete ones as a named list. The tab says "may be missing messages from *X*" rather than
-silently ranking a truncated session below a chatty one. This is the
-[silent-success](../reusable/silent-success.md) failure for this feature, written down before it
-happens.
+### Coverage — the proof has four premises, and the payload states whether they held
+
+**This is the part the plan got wrong first, and GPT Sol's P1 is the reason it changed.**
+
+The proof above is valid only while four things are true: the census is fixed, each message belongs
+to exactly one session, every session really supplied its newest N, and local and global "newest"
+use the same total order. The first draft handled exactly one violation — a session cut short by the
+byte budget — and listed those sessions beside the feed as an advisory line.
+
+That is not enough, and the reason is sharp: **an unreadable session can contain all of the true
+newest messages.** Listing it as one more row in a census does nothing to stop the list above
+looking authoritative. So the answer is a property of the *whole feed*:
+
+```
+coverage: { kind: "complete" } | { kind: "indeterminate"; reasons: FeedCoverageReason[] }
+```
+
+`complete` is constructible only when nothing fired. Six things demote it:
+
+| reason | premise it breaks |
+|---|---|
+| `byte-budget` | a session was cut short *inside the window shown* |
+| `unreadable` | there was a transcript and we could not read it |
+| `no-transcript` | a conversation was claimed and its file could not be found |
+| `undated` | a turn with no timestamp displaced a dated one that was never fetched |
+| `out-of-order` | a session's own timestamps go backwards, so "newest" is not a total order |
+| `duplicate-conversation` | two rows name one conversation, so its turns would count twice |
+
+Three details that are decisions rather than bookkeeping:
+
+- **`no-claude-session-id` is deliberately NOT a coverage failure.** It is a shell, or a scheduled
+  session whose pane is still running `sleep`, and nine of 21 rows on this box are that. Counting
+  them would make coverage permanently indeterminate — and a warning that is always on is one nobody
+  reads. Verified against the live box: coverage comes back `complete`.
+- **`byte-budget` still uses the sharper condition.** A session cut short whose oldest returned
+  message is already older than the feed's cutoff has had everything it could contribute read, so it
+  is not named. Same argument: a warning that is usually wrong is one nobody reads.
+- **Reasons are keyed by `sessionId`, not by name.** Names are reassigned when a session dies and two
+  can wear the same one, so a warning keyed by name can point at the wrong agent. Sol's P1 again.
+
+### The guard turn — why every session is asked for N+1
+
+One API turn is written as up to four JSONL records sharing a `message.id` — 1497 of 2806 ids in the
+measured transcript appeared on more than one line — and `recordsToTurns` coalesces them. **So when
+the byte budget stops the walk inside a shared id, the oldest turn returned is built from only the
+records above the boundary**: a real-looking turn with some of its text and tool calls missing, and
+a count of N that says "complete".
+
+GPT Sol's P1.3. The repair needs no second parser: ask every session for **N+1** and discard the
+oldest whenever the walk did not reach the start of the file. The turn below a discarded one is
+whole by construction, because its records are contiguous and the boundary is below them.
+Completeness then reads `reachedStartOfFile || contributed >= N`.
+
+### The census boundary — there is no instant this describes
+
+The roster is up to sixty seconds old when the fan-out starts, and the transcripts are then read over
+~250 ms. So a session created after collection is absent; one that has since died is still present
+and its transcript still reads; and a session read early may have appended while a later one was
+being read. **The answer does not correspond to the fleet at any single moment**, and a lone "as of"
+timestamp would imply a snapshot that never existed.
+
+So the payload carries `collectedAt`, `readStartedAt` and `readFinishedAt`, and the tab prints the
+honest sentence: *the newest turns observed from the roster collected at C, during reads R0–R1.*
+Sol's P1.2.
 
 ### Cadence and byte budget: its own route, its own everything
 
@@ -215,27 +293,56 @@ reverted after:
 
 ### Stage 2 — the client and the feed component
 
-- [ ] `web/src/Turn.tsx` — `Turn` and `SPEAKERS` moved out of `RecentMessages.tsx` **as a new file
+- [x] `web/src/Turn.tsx` — `Turn` and `SPEAKERS` moved out of `RecentMessages.tsx` **as a new file
       only**; the peer that owns `RecentMessages.tsx` deletes its copy and changes one import when
       its own stage is green. Two copies exist harmlessly until then, and neither of us edits the
       other's file.
-- [ ] `web/src/feed-client.ts` — parse with the same four-arm discipline as `messages-client.ts`
-- [ ] `web/src/FeedPanel.tsx` — the list, the filters, expand-in-place
-- [ ] tests, including the newest-first inversion and the "read failed" row
+- [x] `web/src/feed-client.ts` — parse with the same four-arm discipline as `messages-client.ts`
+- [x] `web/src/FeedPanel.tsx` — the list, the filters, expand-in-place
+- [x] `tests/fleet-feed-panel.test.tsx` — 32 tests
 
-*Status: not started.*
+*Status: **done**. 72 tests green across the two new files.*
+
+**The `Turn` extraction ended up as `SPEAKERS` shared and two bodies, which is both peers' advice at
+once.** The owner of `RecentMessages.tsx` asked for the extraction on a correctness argument —
+`SPEAKERS` is a nine-arm map in which `compact-summary` and `injected` are machine-written text
+wearing a person's role, and *"a second renderer that collapses those into `human` … shows a
+fabricated recap as something a person said"*. GPT Sol argued the opposite way (P2.4): the two
+surfaces want different bodies, and one component serving both via a `collapsed` prop is harder to
+read than two small ones.
+
+Both are right about different halves. `Turn.tsx` exports `SPEAKERS` **and** `Turn`, so the peer can
+adopt the component unchanged; the feed imports only `SPEAKERS` and writes its own body, which needs
+provenance, an attribution reading and a collapsed first line that the detail pane does not. The
+hazard the peer named is in the map, and the map has one home.
 
 ### Stage 3 — the tab, and the docs
 
-- [ ] `messages` entries in `MODES`, `MODE_LABELS`, `MODE_ICONS`, `MODE_TIPS`; additive mount in
+- [x] `messages` entries in `MODES`, `MODE_LABELS`, `MODE_ICONS`, `MODE_TIPS`; additive mount in
       `App.tsx`
-- [ ] **re-run the mode tests and `npm run typecheck` on the post-merge tree** — three sessions are
+- [x] **re-ran the mode tests and `npm run typecheck` on the post-merge tree** — three sessions are
       adding entries to the same array and the same four `Record<Mode, …>` maps tonight, and a merge
       can keep both sides' entries or drop one without ever raising a conflict marker. A clean merge
       is not evidence. (Flagged by `usage-limits-tab`; matches this repo's own history.)
-- [ ] a doc under `docs/project/` with a line under its entry point
+- [x] three tests in `tests/fleet-web.test.tsx` updated for the fourth tab
+- [ ] a doc under `docs/project/` with a line under its entry point — **`dashboard-modes-doc` is
+      writing `fleet-dashboard-modes.md` tonight and it already covers adding a tab**, so this stage
+      contributes to that rather than adding a fifth doc. Left to the debrief.
 
-*Status: not started.*
+*Status: **done** bar the doc line.*
+
+**The `App.tsx` mount is the one registration nothing catches**, found by `dashboard-modes-doc` while
+documenting the area: `MODES` and the three `Record<Mode, …>` maps make a half-added mode a compile
+error, but the mount is `mode === "x" ? … : null` rather than an exhaustive switch — so a mode
+registered everywhere else draws a button, switches the hash, and shows an empty page, compiling
+perfectly. There is now a test that renders `App` at `#messages` and asserts the panel appears;
+mutating the arm to `false` turns it red.
+
+**Three tests in `tests/fleet-web.test.tsx` needed updating**, and the third is worth noting because
+it is not arithmetic. Two assert the dock's mode list and its `aria-checked` row, and simply grew an
+entry. The third asserted that the page does **not** say "Recent messages" until a session is opened
+— and the new tab's own button says exactly that, so a whole-page text search stopped meaning what it
+was written to mean. Scoped to `main`, which is the panel area; the dock is a `nav` beside it.
 
 ## Coordination
 

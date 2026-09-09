@@ -20,11 +20,20 @@ import { useMemo, useRef, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
 import { Dock } from "./Dock";
+import { FeedPanel } from "./FeedPanel";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import {
+  FILTER_KEYS,
+  filtersFromParams,
+  httpFeedApi,
+  limitFromParams,
+  paramsFromFilters,
+  type FeedApi,
+} from "./feed-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
@@ -48,6 +57,7 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
+  feedApi = httpFeedApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -69,6 +79,13 @@ export function App({
    * this page measures and the times that chart prints.
    */
   historyApi?: HistoryApi;
+  /**
+   * The cross-agent feed. Injected like the rest, and — like `messagesApi` —
+   * deliberately NOT wrapped in a hook here: it is asked for when the tab is
+   * open rather than polled, so there is no shared feed for this page to hold.
+   * FeedPanel.tsx says why.
+   */
+  feedApi?: FeedApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -187,6 +204,29 @@ export function App({
               onRefresh={feed.refresh}
             />
           </>
+        ) : null}
+        {mode === "messages" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            {/* **THE REGISTRATION NOTHING CATCHES.** The four `Record<Mode, …>`
+                maps make a half-added mode a compile error; this arm does not,
+                because it is a ternary rather than an exhaustive switch. A mode
+                registered everywhere but here draws a button, switches the
+                hash, and shows an empty page. `tests/fleet-feed-panel.test.tsx`
+                asserts this tab renders its panel, which is the only thing that
+                would notice. */}
+            <FeedPanel
+              api={feedApi}
+              limit={limitFromParams(params)}
+              onLimit={(next) => setParam(FILTER_KEYS.limit, next === 50 ? null : String(next))}
+              /* The filters live in the hash for the reason the mode does: this
+                 page is reloaded whenever iOS reclaims the tab, and a filter
+                 that resets every time is one nobody sets. */
+              filters={filtersFromParams(params)}
+              onFilters={(next) => {
+                for (const [key, value] of Object.entries(paramsFromFilters(next))) setParam(key, value);
+              }}
+            />
+          </div>
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">

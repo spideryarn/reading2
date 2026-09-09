@@ -1004,7 +1004,12 @@ describe("the bottom bar", () => {
        just as happily before the change. */
     const feed = manualTransport();
     mount(feed.transport);
-    expect(modeButtons().map((b) => b.textContent)).toEqual(["Sessions", "Box health", "Overseer"]);
+    expect(modeButtons().map((b) => b.textContent)).toEqual([
+      "Sessions",
+      "Recent messages",
+      "Box health",
+      "Overseer",
+    ]);
     expect(container.querySelector("header")?.querySelector(".dock-modes")).toBeNull();
   });
 
@@ -1013,12 +1018,13 @@ describe("the bottom bar", () => {
     mount(feed.transport);
 
     const checked = (): (string | null)[] => modeButtons().map((b) => b.getAttribute("aria-checked"));
-    expect(checked()).toEqual(["true", "false", "false"]);
+    expect(checked()).toEqual(["true", "false", "false", "false"]);
 
     const health = modeButtons().find((b) => b.textContent === "Box health");
     act(() => health?.click());
 
-    expect(checked()).toEqual(["false", "true", "false"]);
+    // Box health is the third button now that Recent messages sits second.
+    expect(checked()).toEqual(["false", "false", "true", "false"]);
     // And the class the stylesheet paints, which is what a sighted reader sees.
     expect(modeButtons().filter((b) => b.classList.contains("on")).map((b) => b.textContent)).toEqual([
       "Box health",
@@ -2089,7 +2095,12 @@ describe("master and detail", () => {
 
     // Before: the list, and no detail.
     expect(container.textContent).toContain("the one I tapped");
-    expect(container.textContent).not.toContain("Recent messages");
+    /* **SCOPED TO `main`, BECAUSE THE DOCK NOW SAYS THESE WORDS TOO.** The
+       cross-agent feed's tab is also called "Recent messages", so a whole-page
+       search for that phrase finds the button at the bottom of the screen and
+       this assertion stops meaning "the detail pane is closed". `main` is the
+       panel area; the dock is a `nav` beside it. */
+    expect(container.querySelector("main")?.textContent).not.toContain("Recent messages");
 
     openSession("the one I tapped");
 

@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import {
   DEFAULT_FEED_LIMIT,
+  GUARD_TURNS,
   MAX_FEED_LIMIT,
   STALE_TRANSCRIPT_MS,
   attributionOf,
@@ -28,6 +29,7 @@ import {
   type FeedInput,
 } from "../tools/fleet/routes-recent-feed.js";
 import type { RecentMessages, TranscriptTurn } from "../tools/fleet/transcript.js";
+import type { FeedCoverage } from "../tools/fleet/wire.js";
 
 const NOW = Date.parse("2026-09-09T01:00:00.000Z");
 
@@ -68,8 +70,23 @@ function found(turns: TranscriptTurn[], over: Partial<Extract<RecentMessages, { 
   };
 }
 
+/** The names a coverage answer blames for a byte-budget gap. */
+function missingNames(coverage: FeedCoverage): string[] {
+  return coverage.kind === "complete"
+    ? []
+    : coverage.reasons.filter((r) => r.kind === "byte-budget").map((r) => r.name);
+}
+
+/** Every reason kind an answer carries, for asserting on the shape of a gap. */
+function reasonKinds(coverage: FeedCoverage): string[] {
+  return coverage.kind === "complete" ? [] : [...new Set(coverage.reasons.map((r) => r.kind))].sort();
+}
+
 function input(sessionId: string, name: string, result: RecentMessages, working = false): FeedInput {
-  return { sessionId, name, title: null, working, result };
+  /* `claudeSessionId` derived from the handle so two fixtures never accidentally
+     collide and trip the duplicate-conversation check. A test that means to
+     collide says so by passing the same one explicitly. */
+  return { sessionId, name, title: null, working, claudeSessionId: `conv-${sessionId}`, result };
 }
 
 describe("limitFrom", () => {
@@ -205,7 +222,7 @@ describe("completeness — a truncated session must not read as a quiet one", ()
       NOW,
     );
     expect(merged.sessions.find((s) => s.name === "truncated")?.read).toMatchObject({ kind: "read", complete: false });
-    expect(merged.mayBeMissing).toEqual(["truncated"]);
+    expect(missingNames(merged.coverage)).toEqual(["truncated"]);
   });
 
   /**
@@ -223,7 +240,15 @@ describe("completeness — a truncated session must not read as a quiet one", ()
         /* Incomplete — asked for 2, got 1, never reached the start of the file
            — but everything it returned is ancient, so every turn it failed to
            read is older still and none of them could be in this window. */
-        input("$1", "truncated", found([turn("2026-09-08T20:00:00.000Z", "t-old")], { reachedStartOfFile: false })),
+        /* Two ancient turns, cut short. The oldest is discarded as the guard
+           turn, leaving one — fewer than the 2 asked for, so incomplete. */
+        input(
+          "$1",
+          "truncated",
+          found([turn("2026-09-08T20:00:00.000Z", "t-guard"), turn("2026-09-08T20:01:00.000Z", "t-old")], {
+            reachedStartOfFile: false,
+          }),
+        ),
         input(
           "$2",
           "busy",
@@ -238,7 +263,7 @@ describe("completeness — a truncated session must not read as a quiet one", ()
       NOW,
     );
     expect(merged.sessions.find((s) => s.name === "truncated")?.read).toMatchObject({ complete: false });
-    expect(merged.mayBeMissing).toEqual([]);
+    expect(merged.coverage).toEqual({ kind: "complete" });
   });
 
   /**
@@ -253,33 +278,42 @@ describe("completeness — a truncated session must not read as a quiet one", ()
       50,
       NOW,
     );
-    expect(merged.mayBeMissing).toEqual(["truncated"]);
+    expect(missingNames(merged.coverage)).toEqual(["truncated"]);
   });
 
   /** Reaching byte 0 is a positive claim that there is nothing above. */
   it("calls a session complete when the walk reached the start of the file", () => {
     const merged = mergeFeed([input("$1", "short", found([turn("2026-09-09T00:40:00.000Z", "t")]))], 50, NOW);
     expect(merged.sessions[0]?.read).toMatchObject({ complete: true });
-    expect(merged.mayBeMissing).toEqual([]);
+    expect(merged.coverage).toEqual({ kind: "complete" });
   });
 
-  /** Getting as many turns as were asked for is the other way to be complete. */
+  /**
+   * Getting as many turns as were asked for is the other way to be complete —
+   * and with the guard turn that means `limit + 1` came back, so that `limit`
+   * survive the discard. See `GUARD_TURNS`.
+   */
   it("calls a session complete when it returned everything that was asked for", () => {
     const merged = mergeFeed(
       [
         input(
           "$1",
           "full",
-          found([turn("2026-09-09T00:40:00.000Z", "a"), turn("2026-09-09T00:41:00.000Z", "b")], {
-            reachedStartOfFile: false,
-          }),
+          found(
+            [
+              turn("2026-09-09T00:39:00.000Z", "guard"),
+              turn("2026-09-09T00:40:00.000Z", "a"),
+              turn("2026-09-09T00:41:00.000Z", "b"),
+            ],
+            { reachedStartOfFile: false },
+          ),
         ),
       ],
       2,
       NOW,
     );
     expect(merged.sessions[0]?.read).toMatchObject({ complete: true });
-    expect(merged.mayBeMissing).toEqual([]);
+    expect(merged.coverage).toEqual({ kind: "complete" });
   });
 });
 
@@ -349,6 +383,198 @@ describe("the arms that must never be merged", () => {
     );
     expect(merged.messages.map((m) => m.text)).toEqual(["dated"]);
     expect(merged.undated.map((m) => m.text)).toEqual(["junk"]);
+  });
+});
+
+describe("coverage — whether 'the last N messages' is a claim this answer can make", () => {
+  /**
+   * **THE FINDING THIS WHOLE FIELD EXISTS FOR.** GPT Sol, on the plan: an
+   * unreadable session *"can contain all of the true newest messages"*, and
+   * *"showing these as rows does not stop the main list looking
+   * authoritative"*. So one unreadable session makes the whole feed
+   * indeterminate, not merely one line in a census.
+   *
+   * Goes red if the unreadable arm stops contributing a reason.
+   */
+  it("is indeterminate when even one session could not be read", () => {
+    const merged = mergeFeed(
+      [
+        input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hello")])),
+        input("$2", "broken", { kind: "unreadable", path: "/x.jsonl", why: "EIO" }),
+      ],
+      10,
+      NOW,
+    );
+    expect(merged.coverage.kind).toBe("indeterminate");
+    expect(reasonKinds(merged.coverage)).toEqual(["unreadable"]);
+    /* And the messages are still served — an indeterminate feed is not a
+       useless one, it is one that must not be described as complete. */
+    expect(merged.messages).toHaveLength(1);
+  });
+
+  /**
+   * **THE ONE `not-found` THAT IS NOT A HOLE.** Nine of 21 rows on the box are
+   * shells and scheduled sessions still running `sleep`. If those counted,
+   * coverage would be permanently indeterminate — and a warning that is always
+   * on is one nobody reads.
+   */
+  it("does not blame a shell for having no conversation", () => {
+    const merged = mergeFeed(
+      [
+        input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "hello")])),
+        input("$2", "a-shell", {
+          kind: "not-found",
+          reason: "no-claude-session-id",
+          why: "this session has no conversation id",
+        }),
+      ],
+      10,
+      NOW,
+    );
+    expect(merged.coverage).toEqual({ kind: "complete" });
+  });
+
+  /** But a session that claims a conversation whose transcript is gone IS a hole. */
+  it("is indeterminate when a claimed conversation's transcript could not be found", () => {
+    const merged = mergeFeed(
+      [
+        input("$1", "alpha", {
+          kind: "not-found",
+          reason: "no-transcript-file",
+          why: "looked in every project directory; no such transcript",
+        }),
+      ],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["no-transcript"]);
+  });
+
+  /**
+   * Two rows naming one conversation breaks "each message belongs to exactly
+   * one session": its turns would be counted twice and pad the newest N with
+   * duplicates. Detected rather than de-duplicated — which of the two rows is
+   * the real one is not this module's to decide.
+   */
+  it("detects two sessions claiming the same conversation rather than double-counting it", () => {
+    const shared = "the-same-conversation";
+    const merged = mergeFeed(
+      [
+        { sessionId: "$1", name: "first", title: null, working: false, claudeSessionId: shared, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
+        { sessionId: "$2", name: "second", title: null, working: false, claudeSessionId: shared, result: found([turn("2026-09-09T00:40:00.000Z", "hello")]) },
+      ],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["duplicate-conversation"]);
+    /* Both rows are named, because either could be the wrong one. */
+    const named = merged.coverage.kind === "indeterminate" ? merged.coverage.reasons.map((r) => r.sessionId).sort() : [];
+    expect(named).toEqual(["$1", "$2"]);
+  });
+
+  /**
+   * A session whose own timestamps go backwards cannot be ordered against the
+   * others, so "newest first" stops being a total order. Zero were observed in
+   * 955 sampled turns; a wall-clock adjustment on the box would produce one.
+   */
+  it("is indeterminate when a session's own timestamps go backwards", () => {
+    const merged = mergeFeed(
+      [
+        input(
+          "$1",
+          "clock-jumped",
+          found([turn("2026-09-09T00:40:00.000Z", "later"), turn("2026-09-09T00:20:00.000Z", "earlier")]),
+        ),
+      ],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["out-of-order"]);
+  });
+
+  /**
+   * **AN UNDATED TURN COSTS MORE THAN ITS OWN PLACE** — GPT Sol's P2. It was
+   * fetched inside this session's newest N, so it displaced a dated turn that
+   * was never fetched at all, and that turn may have belonged in the window.
+   * Showing the undated ones in a group below is not enough to keep the dated
+   * list exact.
+   */
+  it("is indeterminate when a session returned an undated turn", () => {
+    const merged = mergeFeed(
+      [input("$1", "alpha", found([turn(null, "no clock"), turn("2026-09-09T00:40:00.000Z", "dated")]))],
+      10,
+      NOW,
+    );
+    expect(reasonKinds(merged.coverage)).toEqual(["undated"]);
+    /* Still shown, still out of the ordering. */
+    expect(merged.undated.map((m) => m.text)).toEqual(["no clock"]);
+  });
+
+  it("is complete when every session was read whole and nothing was odd", () => {
+    const merged = mergeFeed(
+      [
+        input("$1", "alpha", found([turn("2026-09-09T00:40:00.000Z", "a")])),
+        input("$2", "beta", found([turn("2026-09-09T00:41:00.000Z", "b")])),
+      ],
+      10,
+      NOW,
+    );
+    expect(merged.coverage).toEqual({ kind: "complete" });
+  });
+});
+
+describe("the guard turn", () => {
+  /**
+   * **THE PARTIAL TURN A COUNT CANNOT SEE.** One API turn is written as up to
+   * four records sharing a `message.id`, and the reader coalesces them. When
+   * the byte budget stops the walk inside a shared id, the oldest turn returned
+   * is built from only the records above the boundary — a real-looking turn
+   * missing some of its text and tool calls. Asking for N and getting N would
+   * call that complete.
+   *
+   * GPT Sol's P1. Goes red if `contributedTurns` stops discarding the oldest.
+   */
+  it("discards the oldest turn when the walk did not reach the start of the file", () => {
+    const merged = mergeFeed(
+      [
+        input(
+          "$1",
+          "alpha",
+          found(
+            [
+              turn("2026-09-09T00:38:00.000Z", "possibly-a-fragment"),
+              turn("2026-09-09T00:39:00.000Z", "whole"),
+              turn("2026-09-09T00:40:00.000Z", "also-whole"),
+            ],
+            { reachedStartOfFile: false },
+          ),
+        ),
+      ],
+      10,
+      NOW,
+    );
+    expect(merged.messages.map((m) => m.text)).toEqual(["also-whole", "whole"]);
+  });
+
+  /**
+   * Nothing was cut, so the oldest turn is whole by construction and discarding
+   * it would throw away a real message. Goes red if the guard is applied
+   * unconditionally — which would silently drop the oldest message of every
+   * short conversation on the box.
+   */
+  it("keeps every turn when the walk reached the start of the file", () => {
+    const merged = mergeFeed(
+      [
+        input(
+          "$1",
+          "alpha",
+          found([turn("2026-09-09T00:39:00.000Z", "the very first thing"), turn("2026-09-09T00:40:00.000Z", "second")]),
+        ),
+      ],
+      10,
+      NOW,
+    );
+    expect(merged.messages.map((m) => m.text)).toEqual(["second", "the very first thing"]);
   });
 });
 
@@ -435,7 +661,14 @@ describe("feedPayload", () => {
    * — that is the whole mechanism behind the exact merge. Goes red if a fixed
    * per-session constant creeps back in.
    */
-  it("asks every session for the reader's own limit, which is what makes the merge exact", async () => {
+  /**
+   * The fan-out asks for the reader's own limit — that is what makes the merge
+   * exact — **plus one guard turn**, because the oldest turn a byte-bounded
+   * walk returns can be a fragment of a turn whose other records fell below the
+   * boundary. `GUARD_TURNS` has the argument. Goes red if either the per-session
+   * limit stops tracking the reader's, or the guard is dropped.
+   */
+  it("asks every session for the reader's own limit plus a guard turn", async () => {
     const asked: number[] = [];
     await feedPayload(
       {
@@ -448,7 +681,7 @@ describe("feedPayload", () => {
       },
       37,
     );
-    expect(asked).toEqual([37, 37, 37]);
+    expect(asked).toEqual([37 + GUARD_TURNS, 37 + GUARD_TURNS, 37 + GUARD_TURNS]);
   });
 
   it("carries both clocks, so a session that started after the snapshot is accountable", async () => {
