@@ -564,7 +564,7 @@ describe("the card, against its own clock", () => {
     expect(screen()).toContain("59% left");
   });
 
-  it("does not invent a severity of its own for a nearly-full window", () => {
+  it("does not invent a severity of its own for a window the verdict calls fine", () => {
     /* **THE CARD MAY NOT SECOND-GUESS THE VERDICT.** A draft coloured each
        window by thresholds this file made up — alarm under 10% left, needs
        under 25% — and GPT Sol measured what that costs against the producer's
@@ -584,8 +584,13 @@ describe("the card, against its own clock", () => {
       summary: {
         collectedAt: ago(60_000),
         account: { kind: "value", email: "greg@example.test", accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
-        /* The producer says the account is FINE at 95% of one window. That is
-           its call to make, and the card must not overrule it. */
+        /* **A COMBINATION THE PRODUCER CAN ACTUALLY EMIT.** The first version of
+           this test used 95% used against `ok`, which its 80% threshold cannot
+           produce — the mutation was still caught, but a fixture the real system
+           cannot reach is a test that proves something about nothing. GPT Sol's
+           round-two P2. 75% against `ok` is inside the threshold and is exactly
+           where the withdrawn `left <= 25` rule would have shouted `needs` over
+           a verdict saying the account is fine. */
         level: "ok",
         reasons: [],
         cache: {
@@ -596,7 +601,7 @@ describe("the card, against its own clock", () => {
             {
               kind: "value",
               window: "five_hour",
-              utilizationPercent: 95,
+              utilizationPercent: 75,
               resetsAt: new Date(BASE + 60 * 60_000).toISOString(),
             },
           ],
@@ -607,9 +612,16 @@ describe("the card, against its own clock", () => {
     });
     draw(feed, BASE);
     const value = container.querySelector('[data-slot="stat-value"]');
-    expect(value?.textContent).toBe("5% left");
+    expect(value?.textContent).toBe("25% left");
     expect(value?.className).not.toContain("alarm");
     expect(value?.className).not.toContain("needs");
+    /* **AND NOT THE REASSURING COLOUR EITHER**, which the first fix got wrong:
+       it used the `work` tone, and `work` is this palette's green — the status
+       colour of a session that is running. On a headroom figure green does not
+       read as "measured", it reads as "healthy", so `5% left` would have been
+       drawn as good news. A severity claim in the opposite direction is still a
+       severity claim. */
+    expect(value?.className).not.toContain("work");
   });
 
   it("does not print floating-point debris as the answer to how much is left", () => {
