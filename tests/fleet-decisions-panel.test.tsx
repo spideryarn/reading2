@@ -273,7 +273,11 @@ describe("the record's distinctions are visible", () => {
       unreviewedCount: 12,
       limitBytes: 2_097_152,
     });
-    expect(host.textContent).toContain("too large to show safely");
+    /* The copy names the decisions AND the history they replace, not "the
+       unreviewed decisions", because a small pending successor with a long
+       superseded ancestry trips this same arm. */
+    expect(host.textContent).toContain("too large to send");
+    expect(host.textContent).toContain("superseded history they replace");
     expect(host.textContent).toContain("refused to truncate 12 unreviewed decisions");
   });
 

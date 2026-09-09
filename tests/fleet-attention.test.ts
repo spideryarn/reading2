@@ -489,6 +489,19 @@ const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
     "the queue's own file discipline. Closure: `node:` builtins, `fleet/wire.js` (types only), and `jsonl.ts` + `lock.ts`, which are already here. No store.",
   "idea-queue-wait.ts":
     "pure arithmetic over the queue's items — depth, throughput, how long one has waited. Closure: `fleet/wire.js` (types only) + `idea-queue.ts`.",
+  /* Added 2026-09-09 by `questions-mode`, and — like `idea-queue.ts` above —
+     NOT by the session that introduced the import. The Decisions tab landed on
+     `dev` at `256d59e5`, left this list red, and that session had closed by the
+     time the first recorded readiness run found it. Twice now the equality
+     assertion has turned a silent widening into a decision somebody had to
+     take, which is the whole argument for asserting the SET rather than
+     containment: a containment check would have absorbed both without a word.
+
+     The closure was read rather than assumed: `node:crypto`, `node:fs`,
+     `node:os`, `node:path`, `fleet/wire.js` (types only), and `jsonl.ts` +
+     `lock.ts`, both already permitted here. No store, and nothing new. */
+  "decisions.ts":
+    "the decision record's own file discipline — append, read, repair — for the Decisions tab. Closure: `node:` builtins, `fleet/wire.js` (types only), and `jsonl.ts` + `lock.ts`, which are already here. No store.",
 };
 
 const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);
@@ -585,7 +598,12 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("the seam between the two tools", () => {
-  it("imports exactly two Overseer modules, and they are the two that were argued for", () => {
+  /* **THE NAME NO LONGER CARRIES A COUNT, DELIBERATELY.** It said "exactly two"
+     while the list held eight — written when there were two, and stale by the
+     time three separate sessions had added an entry apiece. A count in a name is
+     a second copy of the thing the assertion already states, and it is the copy
+     nobody updates: the list below is the count, and it answers for itself. */
+  it("imports only the Overseer modules that were argued for, and every one of them was", () => {
     /* **THE CYCLE THIS READER EXISTS TO AVOID, checked rather than remembered.**
      * docs/project/overseer-direction.md: *"`tools/overseer/` already imports
      * `collect.ts` and `status.ts` from `tools/fleet/`, so a `tools/fleet/` that

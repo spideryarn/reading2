@@ -52,7 +52,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { footerRequired, joinEnds, parseBanner, parseOutput, scopeOf, type Banner } from "../tools/fleet/readiness-parse.js";
+import {
+  footerRequired,
+  joinEnds,
+  makeAdmissionRefusalCapture,
+  outcomeAfterAdmissionRefusal,
+  parseBanner,
+  parseOutput,
+  scopeOf,
+  type Banner,
+} from "../tools/fleet/readiness-parse.js";
 import { openReadinessStore, procStartToken, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
 import { stampTree } from "../tools/fleet/readiness-git.js";
 import {
@@ -63,6 +72,7 @@ import {
   type FinishedRecord,
   type StartedRecord,
 } from "../tools/fleet/readiness.js";
+import { READINESS_ADMISSION_TOKEN_ENV } from "../vitest-admission.js";
 
 /** How much of the child's output we keep for the parsers. The rest is passed through and forgotten. */
 const HEAD_BYTES = 8 * 1024;
@@ -176,6 +186,7 @@ async function main(): Promise<void> {
   const root = repoRoot();
   const cwd = root;
   const runId = randomBytes(6).toString("hex");
+  const admissionToken = randomBytes(16).toString("hex");
   const startedAt = new Date();
   const startedMono = process.hrtime.bigint();
 
@@ -232,9 +243,16 @@ async function main(): Promise<void> {
   }
 
   const capture = makeCapture();
+  /* A full check runs Vitest in the middle, so its refusal can be pushed out of
+     both bounded output windows by later advisories. Latch the sentence while
+     it passes rather than pretending the retained fragment is the whole log. */
+  /* Keep the streams separate. A line split across two stderr chunks must not
+     have an unrelated stdout chunk spliced into its middle by arrival order. */
+  const stdoutAdmissionRefusal = makeAdmissionRefusalCapture(admissionToken);
+  const stderrAdmissionRefusal = makeAdmissionRefusalCapture(admissionToken);
   const child = spawn("npm", ["run", script], {
     cwd: root,
-    env: process.env,
+    env: { ...process.env, [READINESS_ADMISSION_TOKEN_ENV]: admissionToken },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -246,10 +264,12 @@ async function main(): Promise<void> {
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (c: string) => {
     capture.push(c);
+    stdoutAdmissionRefusal.push(c);
     process.stdout.write(c);
   });
   child.stderr.on("data", (c: string) => {
     capture.push(c);
+    stderrAdmissionRefusal.push(c);
     process.stderr.write(c);
   });
 
@@ -261,7 +281,9 @@ async function main(): Promise<void> {
   const finishedAt = new Date();
   const durationMs = Number((process.hrtime.bigint() - startedMono) / 1_000_000n);
   const text = capture.text();
-  const { counts, hasFooter } = parseOutput(check, text);
+  const parsed = parseOutput(check, text);
+  let counts = parsed.counts;
+  const { hasFooter } = parsed;
 
   /**
    * Scope, read back off npm's own banner rather than taken on trust.
@@ -303,6 +325,16 @@ async function main(): Promise<void> {
         "conclusion has not been shown to have reached one";
     }
   }
+
+  /* Authenticate `vitest.config.ts`'s refusal rather than trusting ordinary
+     output. A direct test refusal becomes void. For a full check, the test row
+     becomes did-not-run while any earlier real gate failure remains a fail. */
+  ({ outcome, why, counts } = outcomeAfterAdmissionRefusal(
+    { outcome, why },
+    stdoutAdmissionRefusal.why() ?? stderrAdmissionRefusal.why(),
+    check,
+    counts,
+  ));
 
   const finished: FinishedRecord = {
     ...common,

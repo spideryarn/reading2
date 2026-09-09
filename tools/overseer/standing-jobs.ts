@@ -140,7 +140,14 @@ export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
   // **This is the last re-pin a schedule change will ever cause.** From here,
   // editing `schedules.ts` moves nothing here; only an edit to a prompt, a
   // document or a work kind does.
-  "get-ready-to-deploy": "771e433b6d2a",
+  // RE-PINNED 2026-09-09 for a change to § 4 of get-ready-to-deploy.md ONLY:
+  // its `npm run check` became `readiness-run.ts check`, so the sweep's results
+  // are written down where the Readiness tab can read them
+  // (docs/plans/260909f-readiness-checks-recorded-and-run-periodically.md).
+  // The job did not change — same prompt, same document, same `work: session`,
+  // and the same command underneath the wrapper. What it now does that it did
+  // not is leave evidence behind.
+  "get-ready-to-deploy": "d37ae432708c",
   "feedback-sweep": "eb76b675c2ce",
 };
 

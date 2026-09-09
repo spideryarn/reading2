@@ -6,8 +6,10 @@ import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
 import {
   ADMISSION_POLICY_VERSION,
   decideAdmission,
+  markReadinessAdmissionRefusal,
   readMemorySnapshot,
   readReserveBytes,
+  READINESS_ADMISSION_TOKEN_ENV,
   resolveParallelWorkers,
 } from "./vitest-admission.js";
 
@@ -100,6 +102,11 @@ if (PRIVATE.length < 50 || SHARED.length < 3) {
  * GPT Sol, 2026-09-08.
  */
 function workersForThisRun(): number {
+  /* The token exists only to authenticate a refusal back to readiness-run.
+     Consume it before Vitest creates workers, so ordinary test output cannot
+     learn it and impersonate the config-time decision. */
+  const readinessAdmissionToken = process.env[READINESS_ADMISSION_TOKEN_ENV];
+  delete process.env[READINESS_ADMISSION_TOKEN_ENV];
   const nominal = resolveParallelWorkers();
   const decision = decideAdmission({
     nominalWorkers: nominal,
@@ -110,7 +117,9 @@ function workersForThisRun(): number {
      has said no worker fits, and the failure mode this whole file exists to
      stop is a run that starts anyway and takes postgres down with it. It must
      also not look like a red test — the message says so in as many words. */
-  if (decision.kind === "refuse") throw new Error(decision.message);
+  if (decision.kind === "refuse") {
+    throw new Error(markReadinessAdmissionRefusal(decision.message, readinessAdmissionToken));
+  }
   if (decision.kind === "not-applicable") return nominal;
   if (decision.workers < nominal) {
     const gb = (n: number) => `${(n / 1024 ** 3).toFixed(2)} GB`;

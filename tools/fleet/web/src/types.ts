@@ -35,6 +35,11 @@
 import { readAttemptClock, type AttemptClock } from "../../attempt-clock.js";
 import { isAddressableHarness } from "../../execution-token.js";
 import { overseerClaim, parseRole, type SessionRole } from "../../overseer-claim.js";
+import {
+  CHECKPOINT_STALE_MS,
+  FLEET_STALE_CADENCES,
+  SCAN_STALE_MS,
+} from "../../question-freshness.js";
 import { absenceGapReason } from "../../usage-absence.js";
 import type {
   AttentionAnswerability,
@@ -197,6 +202,49 @@ export type FleetGate = { kind: "permission" | "unknown"; why: string } | { kind
 export type FleetQuestion = { prompt: string; options: FleetOption[]; material: FleetMaterial; gate: FleetGate };
 
 /**
+ * The stale-answer identity the server's `sameQuestion` comparison protects.
+ *
+ * `rawQuestion` is already preserved byte-for-byte at the parse boundary so a
+ * steering request can return it. Read the safety fields from that copy rather
+ * than from `FleetQuestion`: its rendering parser deliberately normalises arrow
+ * presses and collapses a key this browser does not know to `unrecognised`, and
+ * either transformation is too lossy for deciding whether local answer state
+ * still belongs to the dialog on screen. Gate, material text and incidental
+ * producer fields are omitted because `sameQuestion` does not compare them.
+ */
+export function questionSafetyKey(rawQuestion: unknown): string {
+  if (!isRecord(rawQuestion) || rawQuestion["kind"] !== "question") return "no-question";
+  const rawMaterial = rawQuestion["material"];
+  let material: unknown;
+  if (!isRecord(rawMaterial)) {
+    material = rawMaterial;
+  } else {
+    switch (rawMaterial["kind"]) {
+      case "read":
+        material = { kind: "read", fingerprint: rawMaterial["fingerprint"] };
+        break;
+      case "no-material":
+        material = { kind: "no-material" };
+        break;
+      case "unreadable":
+        material = { kind: "unreadable", why: rawMaterial["why"] };
+        break;
+      default:
+        material = rawMaterial;
+    }
+  }
+  const rawOptions = rawQuestion["options"];
+  const options = Array.isArray(rawOptions)
+    ? rawOptions.map((option) =>
+        isRecord(option)
+          ? { label: option["label"], consequence: option["consequence"], key: option["key"] }
+          : option,
+      )
+    : rawOptions;
+  return JSON.stringify({ prompt: rawQuestion["prompt"], material, options }) ?? "unserializable-question";
+}
+
+/**
  * **WHICH PERMISSION MODE THE SESSION LAUNCHED IN** — `PaneAutoMode` in
  * tools/fleet/pane.ts, restated for the reason at the top of this file.
  *
@@ -351,6 +399,49 @@ export type FleetRow = {
    */
   rawQuestion: unknown;
 };
+
+/**
+ * The row conditions under which the browser may offer a dialog answer.
+ *
+ * This deliberately mirrors `tools/fleet/steer.ts` § `steerableStatus` and
+ * `checkTarget`, the authorities that recheck the claim before typing. That
+ * Node module cannot be imported into the browser bundle, so its status
+ * allow-list, load-bearing `never`, and address shapes are repeated here.
+ * Gate/material consistency and valid address handles are included so the
+ * reference resolver and the control gate cannot drift apart.
+ */
+const PANE_ID = /^%\d+$/;
+const SESSION_HANDLE = /^\$\d+$/;
+const CLAUDE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isLocallyAnswerableDialog(row: FleetRow): boolean {
+  const statusKind: FleetStatus["kind"] = row.status.kind;
+  switch (statusKind) {
+    case "needs-you":
+    case "working":
+    case "idle":
+      break;
+    case "waiting":
+    case "no-claude":
+    case "shell":
+    case "unknown":
+      return false;
+    default: {
+      const never: never = statusKind;
+      return never;
+    }
+  }
+  return (
+    row.question !== null &&
+    row.question.gate.kind === "conversation" &&
+    row.question.material.kind === "read" &&
+    row.paneId !== null &&
+    PANE_ID.test(row.paneId) &&
+    SESSION_HANDLE.test(row.id) &&
+    row.claudeSessionId !== null &&
+    CLAUDE_UUID.test(row.claudeSessionId)
+  );
+}
 
 /**
  * The whole payload, and enough about it to know whether to believe it.
@@ -2583,6 +2674,20 @@ function parseQuestionGap(raw: unknown, skew: ClockSkew): QuestionGap | null {
       const reason = why();
       return itemId === null || reason === null ? null : { kind, itemId, why: reason };
     }
+    case "eligible-observation-omitted": {
+      const observation = raw["observation"];
+      if (!isRecord(observation)) return null;
+      const observationKind = str(observation["kind"]);
+      if (observationKind === "dialog") {
+        const rowId = nonBlank(observation["rowId"]);
+        return rowId === null ? null : { kind, observation: { kind: "dialog", rowId } };
+      }
+      if (observationKind === "prose") {
+        const itemId = nonBlank(observation["itemId"]);
+        return itemId === null ? null : { kind, observation: { kind: "prose", itemId } };
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -2595,6 +2700,8 @@ function resolveQuestionReferences(
   unreadableRows: number,
 ): QuestionsView {
   const discovered: QuestionGap[] = unreadableRows > 0 ? [{ kind: "rows-unreadable", count: unreadableRows }] : [];
+  const reportedDialogRows = new Set<string>();
+  const reportedProseItems = new Set<string>();
   if (view.kind !== "not-observed") {
     const rowsById = new Map(rows.map((row) => [row.id, row]));
     const attentionItems =
@@ -2605,14 +2712,44 @@ function resolveQuestionReferences(
       switch (item.kind) {
         case "dialog":
         case "dialog-unaddressable":
+          reportedDialogRows.add(item.rowId);
           resolveDialogReference(item, rowsById.get(item.rowId), discovered);
           break;
         case "prose":
         case "prose-unaddressable":
+          reportedProseItems.add(item.itemId);
           resolveProseReference(item, attentionItems.get(item.itemId), rowsById, discovered);
           break;
         default: {
           const never: never = item;
+          void never;
+        }
+      }
+    }
+  }
+  for (const row of rows) {
+    if (row.question?.gate.kind === "conversation" && !reportedDialogRows.has(row.id)) {
+      discovered.push({
+        kind: "eligible-observation-omitted",
+        observation: { kind: "dialog", rowId: row.id },
+      });
+    }
+  }
+  if (attention.kind === "published" && attention.list.kind === "list") {
+    for (const item of attention.list.items) {
+      switch (item.evidence.kind) {
+        case "dialog":
+          break;
+        case "prose":
+          if (!reportedProseItems.has(item.id)) {
+            discovered.push({
+              kind: "eligible-observation-omitted",
+              observation: { kind: "prose", itemId: item.id },
+            });
+          }
+          break;
+        default: {
+          const never: never = item.evidence;
           void never;
         }
       }
@@ -2634,6 +2771,28 @@ function resolveDialogReference(
     });
     return;
   }
+  /* **THE RESOLVER DELIBERATELY DOES NOT ASK `isLocallyAnswerableDialog`, AND
+     THE DISTINCTION IS THE POINT.**
+
+     This function asks *is the payload self-consistent?*; the panel asks *may I
+     offer a button?*. Those are different questions and only the first is a
+     claim about completeness. A gate that says `conversation` beside material
+     that is not `read` is a genuine contradiction — the server's own classifier
+     cannot produce it — and is worth a gap. A row whose STATUS is `unknown` is
+     not a contradiction at all: the composer emits a dialog item for any
+     conversation-gate row whatever its status, so the item is exactly what the
+     payload should contain.
+
+     Conflating them cost a downgrade of the whole view: measured 2026-09-09, a
+     row whose only defect was `status: unknown` turned `complete` into
+     `partial` and put *"This list may be incomplete."* on screen while nothing
+     was missing. `steer.ts § steerableStatus` records that a failing agents
+     call turns EVERY Claude row `unknown` at once, so that fired for every
+     waiting dialog simultaneously — A17, healthy operation spending its life
+     alarming, and the second time this file has had to delete a gap for it.
+
+     The control is still withheld: `canAnswer` in QuestionsPanel.tsx calls the
+     full predicate, which is the consumer that should. */
   if (row.question.gate.kind !== "conversation") {
     gaps.push({ kind: "dialog-source-inconsistent", rowId: item.rowId, why: "the referenced row did not parse as a conversation gate" });
     return;
@@ -2740,7 +2899,7 @@ export function questionsAtTime(state: FleetState, now: number): QuestionsView {
   if (state.unreadableRows > 0) gaps.push({ kind: "rows-unreadable", count: state.unreadableRows });
   if (state.collectedAt === null) {
     gaps.push({ kind: "collection-not-observed" });
-  } else if (questionClockStale(state.collectedAt, now, (state.refreshMs ?? 60_000) * 2.5)) {
+  } else if (questionClockStale(state.collectedAt, now, (state.refreshMs ?? 60_000) * FLEET_STALE_CADENCES)) {
     gaps.push({ kind: "fleet-snapshot-stale", collectedAt: state.collectedAt });
   }
   if (state.error !== null) gaps.push({ kind: "collection-failed", why: state.error });
@@ -2765,10 +2924,10 @@ export function questionsAtTime(state: FleetState, now: number): QuestionsView {
       gaps.push({ kind: "attention-unreadable", why: state.attention.why });
       break;
     case "published":
-      if (questionClockStale(state.attention.coordinatorWrittenAt, now, 5 * 60_000)) {
+      if (questionClockStale(state.attention.coordinatorWrittenAt, now, CHECKPOINT_STALE_MS)) {
         gaps.push({ kind: "checkpoint-stale", coordinatorWrittenAt: state.attention.coordinatorWrittenAt });
       }
-      if (questionClockStale(state.attention.list.scannedAt, now, 6 * 60_000)) {
+      if (questionClockStale(state.attention.list.scannedAt, now, SCAN_STALE_MS)) {
         gaps.push({ kind: "attention-scan-stale", scannedAt: state.attention.list.scannedAt });
       }
       if (state.attention.list.kind === "unknown") {

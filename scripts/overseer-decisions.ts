@@ -413,6 +413,13 @@ function existingSeed(root: string): Extract<DecisionEvent, { kind: "decided" }>
  */
 function authoredContent(event: Extract<DecisionEvent, { kind: "decided" }>): string {
   return JSON.stringify({
+    /* **`by` IS PART OF THE COMMAND, not of the machinery.** It is a
+       self-declaration the whole record rests on, so the same words filed by a
+       different actor is a different command rather than a retry. Leaving it
+       out also made this disagree with the fold, whose `commandPayload`
+       includes it — two layers with different rules for one key, which is the
+       original bug one level down. GPT Sol, reviewing the first fix. */
+    by: event.by,
     class: event.class,
     question: event.question,
     options: event.options,
@@ -567,7 +574,7 @@ export function runParsed(
       if (parsed.commandId !== null) {
         const already = existingDecisionFor(parsed.commandId, root);
         if (already !== null) {
-          const wanted = { ...already, class: input.class, question: input.question, options: input.options, chose: input.chose, why: input.why, advisers: input.advisers, supersedes: input.supersedes, bearsOn: { sessions: input.sessionNames.map((name) => ({ name, execution: { kind: "not-found" } as const })), plan: input.plan } };
+          const wanted = { ...already, by: parsed.by, class: input.class, question: input.question, options: input.options, chose: input.chose, why: input.why, advisers: input.advisers, supersedes: input.supersedes, bearsOn: { sessions: input.sessionNames.map((name) => ({ name, execution: { kind: "not-found" } as const })), plan: input.plan } };
           if (authoredContent(already) !== authoredContent(wanted)) {
             console.error(
               `✗ command id ${parsed.commandId} already recorded a different decision (${already.id}); ` +

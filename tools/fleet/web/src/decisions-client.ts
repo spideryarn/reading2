@@ -1,7 +1,7 @@
 /**
  * The decisions record — `GET /api/decisions`.
  *
- * The server has four arms. This client adds `no-answer`: this browser timed
+ * The server has five arms. This client adds `no-answer`: this browser timed
  * out, could not reach the box, or received bytes it cannot understand. That
  * is kept apart from `never-written` and `unreadable` so a phone's own network
  * trouble never appears in the server's voice.

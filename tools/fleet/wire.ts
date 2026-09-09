@@ -3516,7 +3516,12 @@ export type QuestionGap =
   /** Written only by the browser resolver when a prose id did not resolve to the same parsed attention observation. */
   | { kind: "attention-reference-unresolved"; itemId: string; why: string }
   /** Written only by the browser resolver when independently parsed dialog fields contradict the server-only producer path. */
-  | { kind: "dialog-source-inconsistent"; rowId: string; why: string };
+  | { kind: "dialog-source-inconsistent"; rowId: string; why: string }
+  /** Written only by the browser when the reported item set omits an eligible parsed source observation. */
+  | {
+      kind: "eligible-observation-omitted";
+      observation: { kind: "dialog"; rowId: string } | { kind: "prose"; itemId: string };
+    };
 
 /** Only this arm may support the sentence “nothing needs you”. */
 export type QuestionsView =

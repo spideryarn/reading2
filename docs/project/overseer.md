@@ -75,11 +75,14 @@ in Greg's voice. Free-text slash commands are refused for anyone but him.
 And every decision, assumption and decline goes in the log. **Attribution and logging are one
 principle pointed at two audiences** — the agent now, and Greg in the morning.
 
-> **The decision log is NOT BUILT, as of 2026-09-08.** `~/.overseer/` holds the fleet's events and
-> the daemon's own conditions, and the daemon is that store's single writer. Until the real log
-> exists, write decisions by hand into a dated plan doc — the current one is
-> [260908i](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) — one line each:
-> when, what was decided, who decided it, and *assumption pending Greg* where that is what it is.
+> **The decision log is built, as of 2026-09-09.** It is `~/.overseer/decisions.jsonl`: append-only
+> events with their own lock, written by `npx tsx scripts/overseer-decisions.ts` and rendered by the
+> **Decisions** tab —
+> [260909e](../plans/260909e-decisions-made-the-overseer-decision-record-its-cli-and-its-dashboard-mode.md).
+> `template` prints the shape; `add --file` writes one; `--by` is required and is a self-declaration
+> rather than a proven identity. Only Greg's `reviewed` and `reversed` count, enforced in the fold.
+> [260908i](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) stays as history and
+> is not migrated.
 
 ### 2. Answer facts, route judgement, default the product call
 
