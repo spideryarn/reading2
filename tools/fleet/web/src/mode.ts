@@ -27,7 +27,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export const MODES = ["sessions", "messages", "health", "overseer", "deploys"] as const;
+/**
+ * `usage` sits next to `health` on purpose: one is the box's body and the other
+ * is its budget, and a reader asking "why is everything slow / stalled" checks
+ * both. Appending it would have been a smaller diff and a worse dock.
+ */
+export const MODES = ["sessions", "messages", "health", "usage", "overseer", "deploys"] as const;
 
 export type Mode = (typeof MODES)[number];
 
@@ -35,6 +40,7 @@ export const MODE_LABELS: Record<Mode, string> = {
   sessions: "Sessions",
   messages: "Recent messages",
   health: "Box health",
+  usage: "Usage limits",
   overseer: "Overseer",
   deploys: "Deploys",
 };

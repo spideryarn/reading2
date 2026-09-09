@@ -23,7 +23,7 @@
 import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
 import type { CheckpointFeeds } from "./overseer-status.js";
-import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed } from "./wire.js";
+import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed } from "./wire.js";
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -80,12 +80,24 @@ export function fleetState(
    * A caller with nothing to say passes the arm in as many words.
    */
   overseer: OverseerStatusFeed,
+  /**
+   * **CAN THIS ACCOUNT AFFORD MORE WORK?** — required, for the reason the two
+   * above it are.
+   *
+   * A default here would let a caller drop the account's headroom silently, and
+   * this is the field whose absence is least visible: the card simply is not
+   * drawn, and a page with no usage card looks exactly like a page whose
+   * account is fine. A caller with nothing to say passes `{ kind: "not-asked" }`
+   * in as many words, which is true of it — it did not look.
+   */
+  usage: UsageFeed,
 ): FleetState {
   return {
     schema: 1,
     attemptedAt,
     attention,
     overseer,
+    usage,
     /* The clock read that makes every age on the page comparable. Unlike
        `collectedAt` above, inventing this one here is not a lie with a clock on
        it — it is the only honest reading of it, because composing the payload
@@ -161,8 +173,8 @@ export type PayloadDeps = {
  * goes back to drawing nothing.
  */
 export function statePayload(deps: PayloadDeps): string {
-  /* ONE READ, BOTH FEEDS. Calling `deps.readCheckpoint()` twice would reopen
-     the door this type was changed to close. */
+  /* ONE READ, ALL THREE FEEDS. Calling `deps.readCheckpoint()` twice would
+     reopen the door this type was changed to close. */
   const checkpoint = deps.readCheckpoint();
   return JSON.stringify(
     fleetState(
@@ -174,6 +186,7 @@ export function statePayload(deps: PayloadDeps): string {
       deps.attemptedAt,
       checkpoint.attention,
       checkpoint.overseer,
+      checkpoint.usage,
     ),
   );
 }

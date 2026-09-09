@@ -26,14 +26,26 @@
  * in a test that has none.
  */
 import type { DeploysPayload, DeployVersion } from "../../wire";
+import { zonedLine } from "../../zones";
 
 export const DEPLOYS_URL = "api/deploys";
 
 /** How many the tab asks for first. The server's own default, restated so a caller can widen it. */
 export const FIRST_PAGE = 10;
 
-/** What "show more" asks for. The server clamps at 200. */
+/** How many more rows each "show more" press asks for. */
 export const MORE_PAGE = 60;
+
+/**
+ * The ceiling, restated from the route's own `MAX_LIMIT`.
+ *
+ * Two copies of a number is how they come to disagree, and normally this would
+ * be imported — but `routes-deploys.ts` reaches `node:fs`, so the browser
+ * project cannot see it (wire.ts's header has the measurement). It is a `const`
+ * rather than a magic number so the next person finds this note; the route
+ * clamps regardless, so a disagreement costs a wasted press rather than a bug.
+ */
+export const MAX_LIMIT = 200;
 
 /** How long before deciding an answer is not coming. */
 export const REQUEST_TIMEOUT_MS = 15_000;
@@ -97,8 +109,8 @@ function readPayload(body: unknown): DeploysView {
   return body as DeploysView;
 }
 
-/** The real one. Relative URL, so the tool works behind any host. */
-export function httpDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
+/** A client against a given URL. Relative, so the tool works behind any host. */
+export function makeDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
   return {
     async fetch(limit, signal): Promise<DeploysView> {
       const controller = new AbortController();
@@ -142,6 +154,26 @@ export function httpDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
   };
 }
 
+/**
+ * The real one, built once.
+ *
+ * **A FACTORY CALLED IN A DEFAULT ARGUMENT IS A NEW OBJECT EVERY RENDER**, and
+ * this page re-renders once a second because `useNow` ticks. `DeploysPanel`'s
+ * effect depends on the api's identity, so `api = makeDeploysApi()` as a default
+ * meant: abort the in-flight request and start another, once a second, for as
+ * long as the tab is open — while the box kept working on every abandoned one.
+ * A response slower than a second would never have been accepted at all.
+ *
+ * The tests could not see it because they inject a stable fake, which is exactly
+ * the shape of hole GPT Sol was looking for. Found in review, 2026-09-09.
+ *
+ * So this is a `const`, like `httpHistoryApi` and `httpActionsApi` beside it —
+ * the house pattern, and now for a reason that is written down. `makeDeploysApi`
+ * remains for a caller that needs a different URL; **do not call it in a default
+ * argument.**
+ */
+export const httpDeploysApi: DeploysApi = makeDeploysApi();
+
 /* ------------------------------------------------------------------ *
  * Saying when, and how long ago.
  * ------------------------------------------------------------------ */
@@ -155,16 +187,17 @@ export function httpDeploysApi(url: string = DEPLOYS_URL): DeploysApi {
  * 23:40 UTC is 02:40 Athens *the next day*, and printed bare beside the UTC time
  * it reads as three hours in the past.
  *
- * Until that module is on `dev` this spells the UTC time only, which is true and
- * not yet useful to somebody in Athens. **When it lands, this function's body
- * becomes `return zonedLine(iso) ?? …` and nothing else in this tab changes** —
- * which is the whole reason it is a function here rather than four lines inside
- * the panel's JSX.
+ * **Landed 2026-09-09** (`af1ec002`), and the swap was one line, which is the
+ * whole reason this was a function rather than four lines inside the panel's
+ * JSX. It returns `null` rather than throwing on anything unreadable, and the
+ * panel already draws `null` as "at a time this page cannot read".
  */
 export function deployWhen(iso: string): string | null {
-  const at = Date.parse(iso);
-  if (Number.isNaN(at)) return null;
-  return `${iso.replace("T", " ").replace("Z", "")} UTC`;
+  /* No `zones` argument, so this gets `DISPLAY_ZONES` — UTC, London, Athens.
+     **Pass a set rather than editing that constant** if a caller ever wants a
+     different one: it is Greg's "I'm bouncing between London/Athens" and it is
+     read by the usage card and `scripts/overseer.ts` too. zones.ts says so. */
+  return zonedLine(iso);
 }
 
 /**
@@ -178,7 +211,29 @@ export function ago(iso: string | null, nowMs: number): string | null {
   if (iso === null) return null;
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
-  const seconds = Math.round((nowMs - at) / 1000);
+  return agoFrom(at, nowMs);
+}
+
+/**
+ * The same, from epoch milliseconds — **and it exists to avoid a `Date` that can
+ * throw.**
+ *
+ * `lastFetchAtMs` is a filesystem mtime, and the panel used to render it as
+ * `ago(new Date(ms).toISOString(), now)`. `new Date(x).toISOString()` raises
+ * `RangeError` for an `x` outside ±8.64e15 rather than returning anything odd,
+ * and a `RangeError` thrown during render takes the **whole panel** down, not
+ * one line of it — so a corrupt or absurd mtime on one file would blank the
+ * deploy list and say nothing about why.
+ *
+ * Flagged by session `260908f-roadmap-usage`, which hit the same class twice in
+ * the usage card: an out-of-range instant, and a difference of two individually
+ * valid instants that left the range. **A finiteness check is not enough** —
+ * `1e300` is perfectly finite and still out of range — so this checks the range
+ * itself, and then never builds a `Date` at all.
+ */
+export function agoFrom(atMs: number | null, nowMs: number): string | null {
+  if (atMs === null || !Number.isFinite(atMs) || Math.abs(atMs) > 8.64e15) return null;
+  const seconds = Math.round((nowMs - atMs) / 1000);
   /* A future stamp is a clock disagreement, not a negative age. The box and the
      phone need not agree, and "in 3 minutes" beside a deploy is a puzzle
      nobody should have to solve on a phone. */

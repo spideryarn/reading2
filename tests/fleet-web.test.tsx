@@ -43,6 +43,7 @@ import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-cli
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import { freshness } from "../tools/fleet/web/src/Header";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
+import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
 import {
   COLUMN_MIN_PX,
@@ -240,6 +241,10 @@ function state(over: Partial<FleetState> = {}): FleetState {
        assertion in this file reads. Anything else would have each fixture
        quietly asserting that this server looked at `~/.overseer/`. */
     overseer: { kind: "not-asked" },
+    /* And the account's usage, on the same argument: `not-asked` draws one
+       quiet line on the Overseer tab, and any other default would have every
+       fixture in this file silently claiming a usage pass had run. */
+    usage: { kind: "not-asked" },
     /* Same argument again. `readClockSkew` produces this for a payload with no
        `servedAt`, so a fixture that does not care about clocks gets the state
        the page would really build off an older server — and nothing is shifted.
@@ -354,6 +359,7 @@ function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = 
     recordLines: 74,
     lastGeneratedAt: "2026-09-08T07:06:51Z",
     newestRecordedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+    newestLineRead: true,
     git: healthyGit(),
     servedAtMs: 1_788_912_000_000,
     ...over,
@@ -802,6 +808,73 @@ describe("the modes", () => {
 });
 
 /**
+ * **The Usage limits tab.**
+ *
+ * The same three assertions as Deploys below, plus one this tab needs and the
+ * others do not: it draws the *same* `UsageCard` the Overseer tab draws, from
+ * the same field of the same payload. Mounted twice rather than copied, because
+ * two renderings of one reading is exactly the second interpretation the whole
+ * of tools/overseer/usage.ts exists to prevent.
+ */
+describe("the usage limits tab", () => {
+  it("is registered at all, which is the one thing the types cannot check", () => {
+    /* `Mode` is derived FROM `MODES`, so losing a whole mode and its four map
+       entries in a merge type-checks perfectly and the tab is simply gone. Four
+       sessions were adding modes on the night of 2026-09-08. */
+    expect(MODES).toContain("usage");
+    expect(MODE_LABELS.usage).toBe("Usage limits");
+  });
+
+  it("opens straight into it from the hash", async () => {
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("draws the panel when the button is pressed — the missing-mount test", async () => {
+    /* A mode registered in all four maps with no arm in App.tsx compiles, draws
+       a button, switches the hash, and shows an empty page. Nothing type-checks
+       that ternary. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Usage limits");
+    expect(button, "no Usage limits button in the bar").toBeDefined();
+
+    act(() => button?.click());
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe("#usage");
+    expect(container.textContent).toContain("This server does not report usage");
+  });
+
+  it("shows the SAME reading as the Overseer tab's card, from one payload", async () => {
+    /* The tab is a second mount of `UsageCard`, not a second renderer. If these
+       two ever diverge, one of them is inventing — and the reader has no way to
+       tell which. Checked on the text rather than the props, because the props
+       being equal is what a copy would also satisfy. */
+    const feed = manualTransport();
+    window.location.hash = "#usage";
+    mount(feed.transport);
+    act(() => feed.push(state()));
+    await act(async () => undefined);
+    const onTab = container.textContent ?? "";
+
+    window.location.hash = "#overseer";
+    await act(async () => undefined);
+    const onOverseer = container.textContent ?? "";
+
+    const claim = "The payload arrived and carried no usage reading at all.";
+    expect(onTab).toContain(claim);
+    expect(onOverseer).toContain(claim);
+  });
+});
+
+/**
  * **The Deploys tab.**
  *
  * The three assertions docs/project/fleet-dashboard-modes.md § The test asks
@@ -930,13 +1003,13 @@ describe("the deploys tab", () => {
     expect(container.textContent).toContain("Nothing a reader would notice");
   });
 
-  it("shows a deploy that is not on main as the alarm it is, not as a shrug", async () => {
+  it("shows a DIVERGED deploy as the alarm it is, not as a shrug", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();
-    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "not-ancestor" } } })).api);
+    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "diverged" } } })).api);
     await act(async () => undefined);
 
-    expect(container.textContent).toContain("is not on main");
+    expect(container.textContent).toContain("not in this checkout\u2019s history of main at all");
     expect(container.textContent).toContain("rollback");
   });
 
@@ -975,12 +1048,36 @@ describe("the deploys tab", () => {
     await act(async () => undefined);
 
     expect(deploys.asked).toEqual([10]);
-    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
-    expect(more?.textContent).toContain("73 older deploys");
+    const more = (): HTMLButtonElement | undefined =>
+      [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more()?.textContent).toContain("73 older deploys");
 
-    act(() => more?.click());
+    act(() => more()?.click());
     await act(async () => undefined);
-    expect(deploys.asked).toEqual([10, 60]);
+    expect(deploys.asked).toEqual([10, 70]);
+
+    /* **Pressed twice, because once was not a test of paging.** `showMore` used
+       to `setLimit(MORE_PAGE)` — a jump to 60 that then did nothing on every
+       later press, while the button stayed visible offering more. One press
+       could not see it, and the fake returning one row whatever the limit
+       hid it as well. GPT Sol, 2026-09-09. */
+    act(() => more()?.click());
+    await act(async () => undefined);
+    expect(deploys.asked).toEqual([10, 70, 130]);
+  });
+
+  it("stops asking for more once the record is exhausted", async () => {
+    /* The button must disappear rather than sit there doing nothing — which is
+       what "show more" looked like after the jump-to-60 bug. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys") throw new Error("unreachable");
+    mount(feed.transport, recordingDeploys(() => deploysView({ total: one.versions.length })).api);
+    await act(async () => undefined);
+
+    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more, "no more to show, so no button").toBeUndefined();
   });
 
   it("answers the dock's Refresh button, which claims to refresh the page", async () => {
@@ -1003,6 +1100,32 @@ describe("the deploys tab", () => {
     expect(deploys.asked).toEqual([10, 10]);
     /* And it still refreshes the feed, which was its original job. */
     expect(feed.refreshes()).toBeGreaterThan(0);
+  });
+
+  it("survives an out-of-range fetch time rather than taking the panel down", async () => {
+    /* `lastFetchAtMs` is a filesystem mtime. The panel used to render it as
+       `ago(new Date(ms).toISOString(), now)`, and `toISOString()` raises
+       `RangeError` past ±8.64e15 rather than returning something odd — thrown
+       during render, that blanks the WHOLE panel, so one absurd mtime would
+       hide the deploy list and say nothing about why. Flagged by session
+       `260908f-roadmap-usage`, which hit the same class twice. Note 1e300 is
+       perfectly finite: a finiteness check would not have caught it. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(
+      feed.transport,
+      recordingDeploys(() =>
+        deploysView({
+          git: { ...healthyGit(), main: { ...healthyGit().main, lastFetchAtMs: 1e300 } as never },
+        }),
+      ).api,
+    );
+    await act(async () => undefined);
+
+    /* The list is still there, and the unreadable time says so rather than
+       being silently omitted. */
+    expect(container.textContent).toContain("Release 74");
+    expect(container.textContent).toContain("at an unreadable time");
   });
 
   it("counts the lines it could not read rather than showing a quietly short list", async () => {
@@ -1811,7 +1934,11 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
-        readCheckpoint: () => ({ attention: { kind: "not-asked" }, overseer: { kind: "not-asked" } }),
+        readCheckpoint: () => ({
+          attention: { kind: "not-asked" },
+          overseer: { kind: "not-asked" },
+          usage: { kind: "not-asked" },
+        }),
       }),
     );
     const servedAt = (payload as { servedAt?: unknown }).servedAt;
@@ -2195,10 +2322,16 @@ function recordingActions(
   over: Partial<ActionsApi> = {},
 ): {
   api: ActionsApi;
-  calls: { op: string; arg: string; second?: string | boolean }[];
+  /**
+   * `rows` is only ever set by `box`, and it is there for `clear`'s reason: WHAT
+   * THE PAGE SENDS is the whole of what makes a fleet-wide action reach
+   * anybody. A recorder that counted the presses would have gone on passing
+   * through the day the broadcast could not name a single recipient.
+   */
+  calls: { op: string; arg: string; second?: string | boolean; rows?: string }[];
   feeds: () => number;
 } {
-  const calls: { op: string; arg: string; second?: string | boolean }[] = [];
+  const calls: { op: string; arg: string; second?: string | boolean; rows?: string }[] = [];
   let feeds = 0;
   const api: ActionsApi = {
     feed: async () => {
@@ -2242,8 +2375,8 @@ function recordingActions(
       calls.push({ op: "releaseHold", arg: `${holdId}@${version}`, second: gesture });
       return { ok: true, kind: "hold-released", gesture, repeat: false };
     },
-    box: async (actionId, dryRun) => {
-      calls.push({ op: "box", arg: actionId, second: dryRun });
+    box: async (actionId, dryRun, rows) => {
+      calls.push({ op: "box", arg: actionId, second: dryRun, rows: rows.map((r) => r.id).join(",") });
       /* `effect: null` is *this answer described no per-row effect*, which is
          what an empty `result` means. It is REQUIRED rather than optional for
          `delivery`'s reason: a fixture that could omit it would let the
@@ -5998,7 +6131,11 @@ describe("the box, which says what it would do before it does it", () => {
     await act(async () => {});
     await clickSaying("Kill test suites");
 
-    expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true }]);
+    /* `rows: ""` is the Box Health tab having no fleet list to give — its
+       caller has none — and a kill reads `pids` rather than `recipients` in any
+       case. Asserted rather than allowed to be absent, so this stays a visible
+       fact about the panel instead of a silence. */
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true, rows: "" }]);
     expect(container.textContent).toContain("What it would do");
     expect(container.textContent).toContain(KILL_SUITES_WIRE.gate);
   });
@@ -6010,8 +6147,8 @@ describe("the box, which says what it would do before it does it", () => {
     await clickSaying("Yes — kill test suites");
 
     expect(rec.calls.filter((c) => c.op === "box")).toEqual([
-      { op: "box", arg: "kill-test-suites", second: true },
-      { op: "box", arg: "kill-test-suites", second: false },
+      { op: "box", arg: "kill-test-suites", second: true, rows: "" },
+      { op: "box", arg: "kill-test-suites", second: false, rows: "" },
     ]);
     // The stub's answer describes no per-row effect, so "Done." is all there
     // is to say. The two tests below are the answers that do describe one.
@@ -6103,6 +6240,78 @@ describe("the box, which says what it would do before it does it", () => {
     // as a state name in a JSON dump.
     expect(container.textContent).toContain("PART of the message went, and the rest is unaccounted for");
     expect(container.textContent).not.toContain("Done.");
+  });
+
+  /**
+   * **THE JOIN BETWEEN THE PANEL AND THE BODY IT POSTS**, which is the half the
+   * route tests cannot see.
+   *
+   * `tests/fleet-actions-route.test.ts` drives `boxActionBody` into the real
+   * `broadcastRoute` and proves a recipient is selected — but it calls the API
+   * directly, so it stays green on a panel that has stopped handing the rows
+   * over. That is exactly the shape of the defect being closed here: for a day
+   * the builder and the route were each right about their own object and had
+   * never met, and an evening was spent measuring a selection rule that had
+   * never run. So this presses the real button, through the real client, and
+   * reads the bytes that left.
+   *
+   * The values are asserted **against the row itself** rather than against
+   * literals: a client that re-derived the status, or re-read the fleet to make
+   * its claim true, would not match the snapshot it was handed.
+   */
+  it("posts the rows it was given, so a broadcast has somebody to go to", async () => {
+    const posted: Record<string, unknown>[] = [];
+    const spy = (async (_url: string, init?: { body?: string }) => {
+      posted.push(JSON.parse(init?.body ?? "null") as Record<string, unknown>);
+      return {
+        status: 200,
+        json: async () => ({
+          ok: true,
+          op: "broadcast-preview",
+          action: "resource-broadcast",
+          dryRun: true,
+          result: { total: 1, recipients: [], sample: null },
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const feed = parseActionsFeed(actionsWire({ actions: [BROADCAST_WIRE] }));
+    if (feed === null) throw new Error("the fixture feed did not parse");
+    const onScreen = steerable({ id: "$1643", title: "the one on screen" });
+    /* A ROW THAT IS NOT AN ADDRESS — `row` leaves `paneId` and
+       `claudeSessionId` null, which is the shell and the too-old session a real
+       fleet always has a few of. The route refuses the WHOLE request over one
+       of these, so sending the page's rows entirely raw fixed nothing: the live
+       server answered 400 to a body carrying all 23 of them. */
+    const noAddress = row({ id: "$1644", title: "a shell" });
+    act(() =>
+      root.render(
+        <BoxActions
+          feed={feed}
+          api={makeActionsApi(spy)}
+          asked={true}
+          error={null}
+          onChanged={() => {}}
+          rows={[onScreen, noAddress]}
+        />,
+      ),
+    );
+    await clickSaying("Broadcast: ease off, staggered");
+
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.["recipients"]).toEqual([
+      {
+        paneId: onScreen.paneId,
+        sessionId: onScreen.id,
+        claudeSessionId: onScreen.claudeSessionId,
+        panePid: onScreen.panePid,
+        // THE SERVER'S OWN OBJECT, not the parsed `status` this page drew with.
+        status: onScreen.rawStatus,
+      },
+    ]);
+    // AND THE NARROWING IS ON SCREEN. A denominator that quietly shrank between
+    // the page and the request is this stage's own defect one layer up.
+    expect(container.textContent).toContain("1 of the 2 sessions on this page has no pane or no conversation id");
   });
 
   it("offers no Confirm at all when the dry run could not answer", async () => {
@@ -6420,6 +6629,37 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("There is still nothing here to send a message to.");
     // A refusal with a way forward, not a shrug.
     expect(container.textContent).toContain("the broadcast above is the real thing");
+  });
+
+  it("hands the broadcast the rows the tab is showing, which is what makes it reach anybody", async () => {
+    /* **THE LAST HOP, AND IT WAS THE MISSING ONE.** The test above proves the
+       button is drawn; for a day that was the whole of what was proven, and the
+       button could not deliver to a single session because no list of
+       recipients ever left the browser. `broadcastRoute` refuses a request that
+       names nobody on purpose — a fleet-wide message must act on the list the
+       person was looking at — so this tab, which is the one that HAS that list,
+       has to hand it over. Deleting `rows` from the `BoxActionsCard` in
+       OverseerPanel.tsx turns this red; the route half is in
+       tests/fleet-actions-route.test.ts. */
+    const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
+    window.location.hash = "#overseer";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    const shown = [steerable({ id: "$1643" }), steerable({ id: "$1644", paneId: "%2109" })];
+    act(() => feed.push(state({ rows: shown })));
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+    await clickSaying("Yes \u2014 broadcast: ease off, staggered");
+
+    /* BOTH PRESSES, AND THE SECOND ONE IS THE ONE THAT MATTERS. A preview that
+       named two sessions over a send that reached none would be this stage's own
+       defect wearing a receipt, so the confirmed request has to carry exactly
+       the list the preview described. A mutation that dropped the rows from the
+       commit alone survived every other test here. */
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([
+      { op: "box", arg: "resource-broadcast", second: true, rows: "$1643,$1644" },
+      { op: "box", arg: "resource-broadcast", second: false, rows: "$1643,$1644" },
+    ]);
   });
 
   it("draws the Overseer's own two clocks on the tab, straight off the payload", async () => {
@@ -6890,7 +7130,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   /** The box panel, same wiring. */
   function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
     const client = makeActionsApi(fetchImpl);
-    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun) => client.box(actionId, dryRun) });
+    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun, rows) => client.box(actionId, dryRun, rows) });
     window.location.hash = "#health";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
@@ -7074,7 +7314,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   });
 
   it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
-    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false);
+    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false, []);
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
     expect(outcome.delivery.kind).toBe("unknown");

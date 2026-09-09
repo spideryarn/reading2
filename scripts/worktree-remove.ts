@@ -32,14 +32,20 @@
  *
  * ## Three things this file does that hand-typed git does not
  *
- * **A ghost is an ABSENT path, and nothing here ever passes `--force`.**
- * `ghosts()` in `worktree-admin.ts` counts `!present || prunable`, and unregisters
- * with `--force --force`. Two things were wrong with inheriting that: a *present*
+ * **A ghost is an ABSENT path, it gets the same proof as a live tree, and nothing
+ * here ever passes `--force`.** `ghosts()` in `worktree-admin.ts` counts
+ * `!present || prunable` and unregisters with `--force --force`; a *present*
  * prunable registration is a broken admin link over what may be a full directory,
- * and even a genuine ghost can have its directory put back between the listing and
- * the removal — reproduced, and force-deleted with it. Measured: a plain
- * `git worktree remove` clears an absent registration on its own, so there is no
- * case here that needs a force at all, and git revalidates at the moment it acts.
+ * so that is `UNKNOWN` here and names `git worktree repair`.
+ *
+ * The removal itself went the long way round. Dropping `--force` protected an
+ * unrelated replacement directory but not the original tree moved back. Switching
+ * to `git worktree prune` revalidated at the moment it acted — and takes no path,
+ * so clearing one ghost deleted **another** ghost's `.git/worktrees/<name>` and
+ * with it the only reflog naming a detached commit. Both reproduced by GPT Sol.
+ * So: **scoped** `git worktree remove`, which touches no other registration's
+ * metadata, plus the thing no earlier version did — **read the gone tree's HEAD
+ * reflog and prove it**, because the directory is gone and the metadata is not.
  *
  * **The landed proof is COMPLETE before anything is destroyed, and it includes
  * the reflogs.** `--is-ancestor` on the tip proves only that the tip has landed:
@@ -69,7 +75,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
@@ -454,46 +460,111 @@ export function gitRemoveWorktree(primary: string, worktreePath: string): { ok: 
 }
 
 /**
- * Clear a stale registration with **`git worktree prune`**, not `worktree remove`.
+ * The `.git/worktrees/<name>` directory backing one registration, or `null`.
  *
- * The difference is which question git asks at the moment it acts, and it is the
- * whole of the guard. `worktree remove` on a registered path removes *whatever is
- * there*: if the original worktree is moved back between our classification and
- * the call, git finds a valid tree, accepts it, and deletes it — GPT Sol
- * reproduced exactly that, losing an ignored only-copy file and a detached commit
- * named only by that tree's HEAD reflog. Dropping `--force` protected an
- * *unrelated* replacement directory and not this one. `prune` asks instead
- * whether the registration is *still* stale, and a restored worktree is not —
- * measured: after moving the directory back, `git worktree prune -v` reports
- * nothing and leaves it alone.
+ * Found by matching `gitdir` files rather than by guessing the name from the
+ * path: `git worktree add` derives the admin name from the basename but
+ * de-duplicates it, so `<basename>` is a guess and this is the fact.
  *
- * **Locked first, because prune exempts locked entries by design** — the note in
- * `worktree-admin.ts` says that is how they reached sixteen — and a real Claude
- * worktree is normally locked. Unlocking a registration whose directory is gone
- * cannot lose anything; if the directory came back in the meantime, the prune
- * that follows declines to touch it anyway.
- *
- * Prune takes no path, so it clears every genuinely stale registration rather
- * than only ours. That is acceptable where a bulk *removal* would not be: prune
- * can only ever unregister an absent directory, and it never deletes a file.
+ * Worth having because **a ghost's HEAD reflog is still readable** — the
+ * directory is gone, the metadata is not. Measured:
+ * `git --git-dir=.git/worktrees/<name> reflog show HEAD` lists a detached commit
+ * made in a worktree that no longer exists.
  */
-function pruneGhost(primary: string, entry: WorktreeEntry, steps: string[]): boolean {
-  if (entry.locked) {
-    const un = spawnSync("git", ["worktree", "unlock", entry.path], { cwd: primary, encoding: "utf8" });
-    steps.push(un.status === 0 ? "unlocked the stale registration" : `could not unlock it: ${`${un.stderr ?? ""}`.trim()}`);
+function adminDirFor(primary: string, worktreePath: string): string | null {
+  const common = tryGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], primary);
+  if (common === null) return null;
+  const root = path.join(common, "worktrees");
+  let names: string[];
+  try {
+    names = readdirSync(root);
+  } catch {
+    return null;
   }
-  const pr = spawnSync("git", ["worktree", "prune", "-v"], { cwd: primary, encoding: "utf8" });
-  if (pr.status !== 0) {
-    steps.push(`refused by git: ${`${pr.stdout ?? ""}${pr.stderr ?? ""}`.trim()}`);
+  for (const name of names) {
+    const dir = path.join(root, name);
+    try {
+      const gitdir = readFileSync(path.join(dir, "gitdir"), "utf8").trim();
+      if (path.dirname(gitdir) === worktreePath) return dir;
+    } catch {
+      /* Raced away, or not a worktree admin dir. Neither is ours. */
+    }
+  }
+  return null;
+}
+
+/**
+ * Clear ONE stale registration, having first proved what its reflog names.
+ *
+ * Two mistakes are behind this, and the second is mine rather than inherited.
+ *
+ * **It is not `git worktree prune`.** Prune was the previous fix, chosen because
+ * it revalidates at the moment it acts. It also **takes no path**: it clears every
+ * stale registration, and clearing one deletes `.git/worktrees/<name>` including
+ * that worktree's HEAD reflog. GPT Sol reproduced the consequence — removing ghost
+ * A destroyed ghost B's admin directory, and a detached commit that only B's
+ * reflog named became unreachable. Measured beside it: a **scoped**
+ * `git worktree remove` on the absent path clears A and leaves B's reflog intact.
+ * So the scope matters more than the revalidation, and the doc claim that prune
+ * "cannot delete a file at all" was wrong — it deletes git's own files, which is
+ * exactly where the last name for a commit lives.
+ *
+ * **And a ghost gets the same proof as a live tree**, which no earlier version
+ * did. The directory is gone but the reflog is not, so there is no excuse for
+ * removing the registration without reading it: if it names something the trunk
+ * does not have, this refuses and the metadata stays.
+ *
+ * Unlock first, because `git worktree remove` refuses a locked entry and a real
+ * Claude worktree is always locked; unlocking a registration whose directory is
+ * gone cannot lose anything, and the lock is restored if the removal then fails.
+ *
+ * The residual, named rather than left: between the listing and the call the
+ * original tree could be moved back, and a restored tree that is clean would be
+ * removed. Git refuses over modified and untracked files, so what that costs is
+ * gitignored files in a tree somebody restored in the last few milliseconds.
+ */
+function removeGhost(primary: string, entry: WorktreeEntry, trunkSha: string, steps: string[]): boolean {
+  const admin = adminDirFor(primary, entry.path);
+  if (admin === null) {
+    steps.push(`refused: could not find the admin directory backing ${entry.path}, so its reflog cannot be read`);
     return false;
   }
-  const gone = !listWorktrees(primary).some((e) => e.path === entry.path);
-  steps.push(
-    gone
-      ? `pruned the stale registration at ${entry.path}`
-      : `left ${entry.path} registered — git no longer considers it stale, so something is there now`,
-  );
-  return gone;
+
+  const headLog = tryGit(["--git-dir", admin, "reflog", "show", "HEAD", "--format=%H"]);
+  if (headLog === null) {
+    steps.push(`refused: could not read the HEAD reflog in ${admin}`);
+    return false;
+  }
+  const oids = [...new Set(headLog.split("\n").map((l) => l.trim()).filter((l) => l !== ""))];
+  if (oids.length > 0) {
+    const proof = landedProof(primary, oids, trunkSha);
+    if (proof.kind !== "landed") {
+      steps.push(
+        proof.kind === "not-landed"
+          ? `refused: ${proof.count} commit${proof.count === 1 ? "" : "s"} named only by this gone tree's HEAD reflog are not on origin/${TRUNK_BRANCH}`
+          : `refused: could not prove what this gone tree's reflog names — ${proof.why}`,
+      );
+      return false;
+    }
+    steps.push(`ok   the ${oids.length} commits its HEAD reflog still names are all on origin/${TRUNK_BRANCH}`);
+  }
+
+  const originalLock = entry.lockReason;
+  if (entry.locked) {
+    const un = spawnSync("git", ["worktree", "unlock", entry.path], { cwd: primary, encoding: "utf8" });
+    if (un.status !== 0) {
+      steps.push(`refused: could not unlock the stale registration: ${`${un.stderr ?? ""}`.trim()}`);
+      return false;
+    }
+    steps.push("unlocked the stale registration");
+  }
+
+  /* Scoped, and no --force: git revalidates the path as it acts, and touches no
+     other registration's metadata. */
+  const rm = gitRemoveWorktree(primary, entry.path);
+  steps.push(rm.why);
+  if (!rm.ok && entry.locked) relock(primary, entry.path, originalLock, steps);
+  return rm.ok;
 }
 
 /**
@@ -630,24 +701,23 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   if (reg.kind === "skip") return refuse(steps, `refused: ${reg.why}`);
   if (reg.kind === "unknown") return refuse(steps, `refused: ${reg.why}`, `  ${reg.fix}`);
 
-  if (reg.kind === "ghost") {
-    steps.push(`the directory at ${entry.path} is gone; this is a stale registration`);
-    if (dryRun) {
-      steps.push(`would unregister it, and would leave branch ${branch ?? "(none)"} alone`);
-      return { ok: true, steps };
-    }
-    const pruned = pruneGhost(primary, entry, steps);
-    if (!pruned) return { ok: false, steps };
-    steps.push(`left branch ${branch ?? "(none)"} alone — the tree is gone, but its commits are not this command's to judge`);
-    return { ok: true, steps };
-  }
-
   /* --- a fresh trunk, once, as a sha ----------------------------------- */
   const trunk = fetchTrunkSha(primary);
   if (trunk.kind === "failed") {
     return refuse(steps, `refused: ${trunk.why}`, "  a stale remote-tracking ref answers a question about an hour ago");
   }
   steps.push(`ok   fetched origin/${TRUNK_BRANCH} — ${trunk.sha.slice(0, 8)}`);
+
+  if (reg.kind === "ghost") {
+    steps.push(`the directory at ${entry.path} is gone; this is a stale registration`);
+    if (dryRun) {
+      steps.push(`would prove its HEAD reflog, unregister it, and leave branch ${branch ?? "(none)"} alone`);
+      return { ok: true, steps };
+    }
+    if (!removeGhost(primary, entry, trunk.sha, steps)) return { ok: false, steps };
+    steps.push(`left branch ${branch ?? "(none)"} alone — the tree is gone, but its commits are not this command's to judge`);
+    return { ok: true, steps };
+  }
 
   /* --- would deleting this directory lose anything? -------------------- */
   let found: ReturnType<typeof blockers>;
@@ -723,6 +793,29 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
     const un = spawnSync("git", ["worktree", "unlock", entry.path], { cwd: primary, encoding: "utf8" });
     if (un.status !== 0) return refuse(steps, `refused: could not unlock ${entry.path}: ${`${un.stderr ?? ""}`.trim()}`);
     steps.push(`unlocked ${entry.path}${originalLock === undefined ? "" : ` (was: ${originalLock})`}`);
+  }
+
+  /* --- the proof again, as the last thing before the destructive call ---
+     The first one happened before the unlock, and the unlock is a process spawn
+     wide enough for `git -C <tree>` from anywhere on the box to make a detached
+     commit and check away from it — which our cwd scan cannot see, since that
+     process never enters the directory. Repeating it here does not close the
+     window, it narrows it to the gap between these two calls; GPT Sol named this
+     as the cheapest useful narrowing and it is one `rev-list`.
+
+     **No test covers this, and that is not an oversight.** It only ever differs
+     from the first proof when something changes BETWEEN them, which needs a
+     second process interleaved at an exact point; mutating it away leaves all 45
+     tests green, because the first proof catches everything a single-threaded
+     test can arrange. Named here so the next reader knows it is unguarded rather
+     than assuming the suite has their back. */
+  const again = reachableOids(primary, branch, entry.path);
+  const stillLanded = again.kind === "ok" ? landedProof(primary, again.oids, trunk.sha) : null;
+  if (again.kind !== "ok" || stillLanded === null || stillLanded.kind !== "landed") {
+    steps.push("refused: this tree changed between the first proof and the removal");
+    steps.push(`  ${again.kind === "ok" ? (stillLanded?.kind === "not-landed" ? `${stillLanded.count} commits are not on the trunk now` : "the proof could not be retaken") : again.why}`);
+    if (entry.locked) relock(primary, entry.path, originalLock, steps);
+    return { ok: false, steps };
   }
 
   /* --- git's own judgement, on its own terms --------------------------- */

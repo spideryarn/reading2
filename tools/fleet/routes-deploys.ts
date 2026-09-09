@@ -156,8 +156,15 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
 
   /* One await, one snapshot, one tip. The probe holds the arm for "the record
      names no deploy to measure from" so that the reason a reading is missing
-     lives in one place rather than being invented twice. */
-  const git = await deps.git.snapshot(newest?.sha ?? null);
+     lives in one place rather than being invented twice.
+
+     **A null watermark when the newest LINE did not parse.** `newestDeploy()`
+     would hand back the newest line that *survived*, and comparing against that
+     produces a confident distance from the wrong deploy — a number nobody could
+     tell was wrong. Refusing to measure is the honest answer, and the page says
+     which. GPT Sol's P1 finding 4. */
+  const watermark = read.newestLineRead ? (newest?.sha ?? null) : null;
+  const git = await deps.git.snapshot(watermark);
 
   return {
     schema: 1,
@@ -169,6 +176,7 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
     recordLines: read.lines,
     lastGeneratedAt: lastGeneratedAt(read),
     newestRecordedSha: newest?.sha ?? null,
+    newestLineRead: read.newestLineRead,
     git,
     servedAtMs: deps.nowMs(),
   };
@@ -195,12 +203,30 @@ export function deploysRoute(deps: DeploysRouteDeps): {
         return true;
       }
 
-      /* `void` because the work is async and this never rejects — it catches
-         its own failures and answers 500. An unhandled rejection here would be
-         a request that hangs until the client gives up, which on a phone is
-         indistinguishable from the box being down. The same call
-         `routes-new.ts` makes. */
-      void answer(deps, url, req, res);
+      /* `void` because the work is async, **plus a `catch` because "never
+         rejects" was an assertion rather than a fact.** The try/catch inside
+         `answer` used to end before the gzip and the send, so a throw from
+         `gzipSync`, `writeHead` or `end` escaped as an unhandled rejection and
+         left the request unanswered — which on a phone is indistinguishable
+         from the box being down. GPT Sol, 2026-09-09.
+
+         Nothing is written here: by the time this fires the response may be
+         half-sent, and a second `writeHead` would throw again. Destroying the
+         socket is what tells the client to stop waiting. */
+      void answer(deps, url, req, res).catch((err: unknown) => {
+        try {
+          if (!res.headersSent) {
+            res.writeHead(500, { "content-type": "application/json", "cache-control": "no-store" });
+            res.end(JSON.stringify({ schema: 1, kind: "unreadable", why: "the deploys route failed while answering" }));
+          } else {
+            res.destroy(err instanceof Error ? err : undefined);
+          }
+        } catch {
+          /* The response is beyond saving. Better a dropped socket, which a
+             client sees as a failed request, than a hang. */
+          res.destroy();
+        }
+      });
       return true;
     },
   };

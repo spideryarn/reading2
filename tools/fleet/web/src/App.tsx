@@ -26,6 +26,7 @@ import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { UsageCard } from "./UsagePanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import {
   FILTER_KEYS,
@@ -60,7 +61,7 @@ export function App({
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
   feedApi = httpFeedApi,
-  deploysApi = httpDeploysApi(),
+  deploysApi = httpDeploysApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -271,6 +272,22 @@ export function App({
             />
           </div>
         ) : null}
+        {/* **The same `UsageCard` the Overseer tab draws, mounted a second time
+            rather than copied.** If this tab and that card could disagree, one
+            of them would be a second interpretation of the same bytes — and the
+            whole point of the reading rules in tools/overseer/usage.ts is that
+            there is one. The history chart lands beneath it in a later stage;
+            until then this tab is the card with room around it. */}
+        {mode === "usage" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <UsageCard
+              usage={feed.state === null ? null : feed.state.usage}
+              now={now}
+              receivedAt={feed.receivedAt}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+          </div>
+        ) : null}
         {mode === "overseer" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <OverseerPanel
@@ -284,8 +301,11 @@ export function App({
                  otherwise a rollback puts this tab back to its pre-stage
                  appearance with nothing saying why. GPT Sol's P1. */
               overseer={feed.state === null ? null : feed.state.overseer}
+              /* The same distinction one field along, and for the same reason. */
+              usage={feed.state === null ? null : feed.state.usage}
               now={now}
               receivedAt={feed.receivedAt}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
         ) : null}
