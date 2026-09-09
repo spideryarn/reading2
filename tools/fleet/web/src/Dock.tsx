@@ -25,8 +25,8 @@
  * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
  * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, ShieldCheck, type LucideIcon } from "lucide-react";
-import type { ReactNode, RefObject } from "react";
+import { Gavel, Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, ShieldCheck, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
 import { MODES, MODE_LABELS, type Mode } from "./mode";
@@ -59,6 +59,9 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
      indistinguishable from the pass marks inside the panel. */
   readiness: ShieldCheck,
   overseer: Network,
+  /* A gavel marks a recorded choice to review, rather than a question still
+     waiting to be answered. */
+  decisions: Gavel,
   /* A lightbulb, because the rows are ideas before they are work — and because
      every other glyph in this bar is a machine. */
   ideas: Lightbulb,
@@ -115,6 +118,11 @@ export const MODE_TIPS: Record<Mode, Tip> = {
     head: "Overseer",
     what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",
     how: "The status card computes what it shows, and tells a dead Overseer from a deaf one. The message and broadcast controls type at real sessions — a broadcast spends a turn of a paid model per recipient, so it asks the server what it would do before it does it.",
+  },
+  decisions: {
+    head: "Decisions",
+    what: "Things done in Greg's name that he has not yet reviewed, with the alternatives, trade-offs and reasoning behind each one.",
+    how: "An on-demand snapshot of the Overseer's decision record, read when this tab is shown. Session states are checked against the Overseer checkpoint and say when that check was unavailable.",
   },
   ideas: {
     head: "Queued ideas",
@@ -208,12 +216,76 @@ export function Dock({
   fitClass: string;
   barRef: RefObject<HTMLDivElement | null>;
 }): ReactNode {
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+
+  const updateOverflow = useCallback(() => {
+    const el = barRef.current;
+    if (el === null) return;
+    const { clientWidth, scrollLeft, scrollWidth } = el;
+    const measurable =
+      Number.isFinite(clientWidth) &&
+      Number.isFinite(scrollLeft) &&
+      Number.isFinite(scrollWidth) &&
+      clientWidth > 0 &&
+      scrollWidth > clientWidth + 1;
+    const next = measurable
+      ? {
+          left: scrollLeft > 1,
+          right: scrollLeft + clientWidth < scrollWidth - 1,
+        }
+      : { left: false, right: false };
+    setOverflow((current) =>
+      current.left === next.left && current.right === next.right ? current : next,
+    );
+  }, [barRef]);
+
+  /* Manual scrolling and viewport changes are independent of React state, so
+     they have their own listeners. Zero-sized jsdom elements simply report no
+     affordance; the page never invents overflow from absent layout metrics. */
+  useEffect(() => {
+    const el = barRef.current;
+    if (el === null) return;
+    el.addEventListener("scroll", updateOverflow, { passive: true });
+    window.addEventListener("resize", updateOverflow);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateOverflow);
+    observer?.observe(el);
+    updateOverflow();
+    return () => {
+      el.removeEventListener("scroll", updateOverflow);
+      window.removeEventListener("resize", updateOverflow);
+      observer?.disconnect();
+    };
+  }, [barRef, updateOverflow]);
+
+  /* A passive effect runs after useDockFit's layout measurement. `fitClass`
+     is deliberately a dependency: a rung changes button widths, so the active
+     button's correct nearest edge is unknowable until that rung is applied. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mode and fitClass are deliberate re-run triggers after layout changes.
+  useEffect(() => {
+    const el = barRef.current;
+    const active = el?.querySelector<HTMLButtonElement>(".dock-modes .dock-btn.on");
+    active?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+    updateOverflow();
+    const frame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(updateOverflow) : 0;
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [barRef, fitClass, mode, updateOverflow]);
+
   return (
     /* One `TooltipGroup` around the whole bar: once a card is open its
        neighbours open instantly while the pointer keeps moving, so the row
        reads as one control to point along rather than four separate waits. */
     <TooltipGroup delay={{ open: 240, close: 90 }}>
-      <nav ref={barRef} className={`dock${fitClass}`} aria-label="Fleet views">
+      <nav
+        ref={barRef}
+        className={cx(
+          `dock${fitClass}`,
+          overflow.left && "dock-overflow-left",
+          overflow.right && "dock-overflow-right",
+        )}
+        aria-label="Fleet views"
+      >
         <div className="dock-modes" role="radiogroup" aria-label="Fleet views">
           {MODES.map((m) => (
             <DockMode
