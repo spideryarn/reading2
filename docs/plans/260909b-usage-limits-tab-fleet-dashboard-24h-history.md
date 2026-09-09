@@ -230,6 +230,10 @@ slope.
 
 ### Stage 1 — the tab, current reading only
 
+**Status: ✅ done and on `dev` at `970ef508`** (stage commit `f5092ae1`). 386 fleet-web tests green;
+all three registration points mutation-checked. **One item deferred, not skipped: the browser
+check** — see the bottom of this stage.
+
 No store. The first thing anybody can see, and a safe stopping point by Sol's own assessment.
 
 - [ ] Merge `origin/dev`; confirm the usage card has landed (it was at `d2e37fe4` on
@@ -253,11 +257,20 @@ No store. The first thing anybody can see, and a safe stopping point by Sol's ow
   - Register is the artefact, not the gesture. Do not touch `MODE_TIPS.overseer`.
 - [ ] `App.tsx` — one additive `{mode === "usage" ? … : null}` block
 - [ ] Mount `UsageCard` unchanged (D1). The Overseer tab keeps its card; this is a second mount.
-- [ ] Browser check in a **Sonnet subagent** (Playwright against system Chrome): the tab appears, is
-      keyboard-reachable, renders the real reading, matches the Overseer card field for field
-      including the three unknown windows. Conclusion and one screenshot, not page dumps. It kills
-      **its own** dev-server pid, never `pkill -f vite`, and never touches port 8787.
-- [ ] Focused suites, `npm run typecheck`, commit
+- ⏸ **DEFERRED, not skipped — browser check.** Run it as the **first thing after the five-hour
+      window resets at 02:50 UTC**, before Stage 4. The Overseer's ruling, and the reasoning is
+      sound: a Sonnet browser agent is a real spend of a window whose slope nobody can see, and this
+      tab is a second mount of a card that was browser-checked two hours earlier, so the exposure
+      until then is small and known. **It is still a gap**: tests going green is not evidence a
+      reader can see the tab, and this one is on `dev` unverified in a real browser.
+  - The brief when it runs: the tab appears, is keyboard-reachable, renders the real reading, and
+    matches the Overseer card field for field **including the three unknown windows**. Conclusion
+    and one screenshot, not page dumps. It kills **its own** dev-server pid, never `pkill -f vite`,
+    and never touches port 8787.
+- ✅ Focused suites (386 fleet-web), `npm run typecheck`, committed, merged, pushed
+- 📔 Also corrected `Dock.tsx`'s header, which claimed a new mode needs no change there. True of the
+      bar's layout and fit, false of the two `Record<Mode, …>` maps immediately below it — and this
+      stage is the counter-example.
 
 ### Stage 2 — the codec
 
