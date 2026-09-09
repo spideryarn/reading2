@@ -40,23 +40,52 @@
  *    collapsing the two is how *I could not look* becomes a confident
  *    *there is nobody*.
  *
- * ## Why this reads the claim off the rows alone
+ * ## THE ADDRESS IS VERIFIED AT SEND TIME. THE ROLE IS NOT.
+ *
+ * This comment said, until GPT Sol read it, that a stale row here *"cannot
+ * deliver to the wrong session — it can only produce a refusal"*, on the
+ * grounds that `steer.ts` re-checks pane, session, Claude uuid and pane pid
+ * against live tmux immediately before sending. **That is a verification of the
+ * ADDRESS, not of the ROLE**, and `verifyTarget` never reads the role. The path
+ * it misses:
+ *
+ *   1. the snapshot says session A holds the claim;
+ *   2. A releases it, or B takes it, without A's Claude restarting;
+ *   3. this page has not collected since;
+ *   4. A still has the same pane, session, pid and uuid, and an empty input;
+ *   5. every check passes and the words go to A, which is no longer the
+ *      Overseer.
+ *
+ * So it is stated rather than claimed away. What the address check rules out is
+ * *right words, wrong pane*; what nothing here rules out is *right pane, wrong
+ * occupant of a role*. Two things narrow it and neither closes it: the claim is
+ * recomputed from live props on every render, so the row is the freshest the
+ * page has at the moment of the click rather than one from when the panel
+ * mounted; and the card names the session it is about to speak to, above the
+ * box and again in the receipt. The remaining harm is a line of direction
+ * reaching an agent that has stopped supervising — not a keystroke in a
+ * stranger's pane.
+ *
+ * **The fix, if it ever matters, is a route that re-reads the live claim off
+ * tmux and then delegates to `sendMessage`** — another caller, not another
+ * transport. Out of scope for a text box; written down so it is a decision
+ * rather than an omission.
+ *
+ * ## The one completeness clause this card does apply
  *
  * `Header.tsx` resolves the same claim through `ReadingCompleteness`, because
- * the header **reports** who the Overseer is and a confident wrong answer there
- * is the harm `overseer-claim.ts` was written against.
+ * the header **reports** who the Overseer is. `overseerClaim(rows)` here
+ * defaults to `COMPLETE`, so a payload that dropped rows could hide a second
+ * claimant and this card would happily send to the one it could see. Nothing
+ * downstream catches that — it is not staleness, and the address check has no
+ * opinion about it — so `unreadableRows` comes off the snapshot and a non-zero
+ * count refuses.
  *
- * This card **sends**, and that is a different question. `steer.ts` re-checks
- * the pane, the session, the Claude uuid and the pane pid against live tmux in
- * the moment before the keys go out, so **a stale row here cannot deliver to
- * the wrong session — it can only produce a refusal**, which is rendered. What
- * still has to refuse locally is `contested` and `none`, and both fall out of
- * the rows by themselves.
- *
- * The alternative was threading `completeness` from `Header.tsx` through
- * `App.tsx`, or copying its rule into this file. The second is a worse bug than
- * the one it fixes, and the header stays the one place that reports the claim
- * with completeness applied. docs/plans/260909b-… § D2.
+ * That is **one clause of the header's rule, not a copy of it**: the staleness
+ * clause is already carried by the page-wide STALE banner and by the send-time
+ * address check, and this clause is carried by nothing else. Threading the
+ * whole `ReadingCompleteness` through would be better and needs an export from
+ * a file this session does not own. docs/plans/260909b-… § D2.
  */
 import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
@@ -90,7 +119,21 @@ type Addressee =
  * everything else this card could be tempted to decide, it is checkable from
  * the row itself.
  */
-function addressee(claim: OverseerClaim, rows: readonly FleetRow[]): Addressee {
+function addressee(claim: OverseerClaim, rows: readonly FleetRow[], unreadableRows: number): Addressee {
+  /* **CHECKED BEFORE THE CLAIM, because it is a reason to disbelieve the
+     claim.** A row this payload could not read is as likely as any to be the
+     one holding the claim, or to be a second claimant — and `overseerClaim`
+     cannot know, since it was handed only the rows that survived. See the
+     header for why this one clause is here and the rest of the header's rule is
+     not. */
+  if (unreadableRows > 0) {
+    return {
+      kind: "nobody",
+      why: `${unreadableRows} session row(s) in this payload could not be read.`,
+      detail:
+        "So the claim cannot be settled from it: a row nobody could read is as likely as any to be the Overseer's, or a second claimant's. Nothing is sent until the next collection comes back whole.",
+    };
+  }
   switch (claim.kind) {
     case "none":
       return {
@@ -153,9 +196,16 @@ function addressee(claim: OverseerClaim, rows: readonly FleetRow[]): Addressee {
 
 export function MessageOverseerCard({
   rows,
+  unreadableRows,
   steer = httpSteerApi,
 }: {
   rows: readonly FleetRow[];
+  /**
+   * How many rows in this payload the page could not read. See `addressee` and
+   * the header: a dropped row can hide a second claimant, and this card refuses
+   * rather than sending off a list it knows is short.
+   */
+  unreadableRows: number;
   /** The seam. A test drives this card without a network; the browser gets the default. */
   steer?: SteerApi;
 }): ReactNode {
@@ -172,7 +222,7 @@ export function MessageOverseerCard({
    */
   const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
 
-  const to = addressee(overseerClaim(rows), rows);
+  const to = addressee(overseerClaim(rows), rows, unreadableRows);
 
   const onSend = useCallback(async () => {
     if (to.kind !== "found") return;

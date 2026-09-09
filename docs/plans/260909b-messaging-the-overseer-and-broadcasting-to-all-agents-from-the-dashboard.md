@@ -47,23 +47,51 @@ claim resolution to where the person cannot see it, and it would be a second wri
 The simpler version is a client that says *which* session it is about to speak to and lets the
 existing route do every check.
 
-### D2. The card resolves the claim from `rows` alone, and does not plumb `ReadingCompleteness`
+### D2. The claim is read off the rows — and **`verifyTarget` does not check the role**
 
 `Header.tsx` computes `overseerClaim(state.rows, completeness(state, fresh))` — the full trust
 apparatus, because the header **reports** who the Overseer is, and a confident wrong answer there is
 the harm `overseer-claim.ts` was written against.
 
-This card **sends**. That is a different question, and the difference is the whole of this decision:
-`steer.ts` re-checks paneId, sessionId, the Claude uuid and the pane pid against live tmux in the
-moment before the keys go out, so **a stale row cannot cause a mis-delivery — it can only cause a
-refusal**, which the card renders. What must still refuse here is `contested` (two claimants: picking
-one is how both go on believing they are the Overseer) and `none`, and both come out of
-`overseerClaim(rows)` from the rows by themselves.
+This card **sends**, which is a different question. The first draft of this decision leaned on that
+difference too hard, and claimed a stale row *"cannot cause a mis-delivery — it can only cause a
+refusal"*. **That is false, and the review found the path:**
 
-*Passed over:* exporting `completeness` from `Header.tsx` and threading it through `App.tsx`. It is
-one keyword and it would be defensible, but `Header.tsx` is outside this session's file set, and the
-alternative — a second copy of the trust rule in this panel — is a worse bug than the one it fixes.
-The header remains the one place that reports the claim with completeness applied.
+> `verifyTarget` checks pane, tmux session, pane PID, Claude UUID and competing Claude processes,
+> then returns success; **it never reads `GJD_ROLE`.**
+>
+> 1. Snapshot says session A is Overseer. 2. A releases the role, or B acquires it, without
+> restarting A's Claude. 3. The page remains stale. 4. A still has the same pane/session/PID/Claude
+> UUID and an empty input. 5. Every `verifyTarget` check passes and `sendMessage` types into A,
+> which is no longer the Overseer.
+>
+> — GPT Sol, 2026-09-09
+
+The verification is of the **address**, not of the **role**. What it rules out is *right words, wrong
+pane*; what it does not rule out is *right pane, wrong occupant of a role*. So:
+
+**Stated, not claimed away.** A message addressed to the Overseer can reach the session that held
+the claim when the snapshot was taken. The window is one collection interval — the card recomputes
+the claim from live props on every render, so the row is the freshest one the page has at the moment
+of the click, not one from when the panel mounted — and the card names the session it is about to
+speak to, so a person watching sees which one it was. The harm is a line of direction reaching an
+agent that has stopped supervising, not a keystroke in a stranger's pane.
+
+**Not built, and named so somebody can decide it later**: a server route that re-reads the live claim
+off tmux and then delegates to `sendMessage`. Sol's own framing — *"that is another caller, not
+another transport"* — is the right shape. It is out of scope for a first version of a text box, and
+it is the fix if this ever matters.
+
+**The half that IS closed.** Sol also noted that `overseerClaim(rows)` defaults to `COMPLETE`, so a
+payload that dropped rows could hide a second claimant and the card would happily send to the one it
+could see. That has nothing to do with staleness and nothing downstream catches it, so the panel now
+takes `unreadableRows` off the snapshot and refuses while it is non-zero. It is one clause of
+`Header.tsx`'s rule rather than a copy of it: the staleness clause is covered by the page-wide STALE
+banner and by the send-time address check, and the unreadable-rows clause is covered by nothing else.
+
+*Still passed over:* exporting `completeness` from `Header.tsx` and threading it through. One keyword,
+defensible, and outside this session's file set; the header remains the one place that reports the
+claim with the whole rule applied.
 
 ### D3. The broadcast is a new server route, not a client loop over `/api/steer/message`
 
@@ -104,44 +132,109 @@ What this branch owes the convergence: `routes-broadcast.ts` is written so its f
 single function taking the render callback it would need as the shared one, so the extraction is a
 move rather than a rewrite.
 
-### D5. `working` sessions are skipped, and the receipts say so loudly
+### D5. A working session is QUEUED, not skipped — **reversed after review**
 
-`drainGate` (queue.ts) returns `later` for a working session, on a measured claim: *"keystrokes sent
-to a busy Claude do not queue themselves anywhere useful"*. The existing ease-off broadcast skips
-them. This one does too.
+**What this said first, and why it was wrong.** `drainGate` returns `later` for a working session, on
+a measured claim: *"keystrokes sent to a busy Claude do not queue themselves anywhere useful"*. The
+existing ease-off broadcast skips them, so this one did too, and the plan called enqueue-for-working
+a v2 "blocked by ownership".
 
-That is a real limitation on a box where most sessions are working most of the time, so the receipts
-name every skipped session and why, and the card's headline is *"N of M heard this"* rather than
-"Sent." A broadcast that silently reached nine of thirty-four would be the exact failure the whole
-steer path is written against.
+GPT Sol refused both halves of that, and was right on both:
 
-**The v2 is enqueue-for-working, and it is blocked by ownership rather than by design.**
-`queue.ts` already has `enqueueMessage(target, text, speaker)` and takes free text; a working
-session's line would sit in its queue and drain when it next reaches a prompt. It cannot be done
-from here: the queue is state, mounted as a singleton behind `handleActionRequest`, and reaching the
-same instance needs an export from `routes-actions.ts`, which is not this session's file. Doing it
-from the client instead runs into D3's limiter on the enqueue route. So it is named here and handed
-on.
+> `drainGate` correctly returns `later` for working sessions, but that is an argument for enqueueing
+> static free text, not dropping it. […] **Do not call it a broadcast to all agents while
+> intentionally omitting the busiest ones.**
+>
+> — GPT Sol, 2026-09-09
 
-### D6. One delivery vocabulary, imported rather than declared
+On this box most sessions are working most of the time. A fan-out that omitted them reached about a
+third of the fleet under a control labelled *broadcast to all agents* — a **lie rather than a
+limitation**, which is a different and worse category. And it was not blocked: Sol pointed out that
+`ActionsUi.api.queueMessage` already reaches `/api/actions/session` from the browser today, whose
+limiter is 12 accepted writes per 10s rather than the steer route's 6.
 
-At `claude-agents-dashboard`'s condition, and it is right: every receipt this branch renders is a
-`SteerOutcome` from `steer-client.ts`, with its `DeliveryReading`'s four arms — `none`, `partial`,
-`unknown`, `not-told` — parsed by that file's own `parseDelivery` and `parseVerified`. Nothing here
-declares a second word for what became of a send. Three separate delivery vocabularies have already
-had to be removed from this dashboard, one of them introduced by the stage that was removing the
-previous one.
+**What it does now.** `drainGate` makes three cuts. `now` → typed at the pane. `later` → put in that
+session's own queue, drains at its next prompt. `never` → skipped, carrying `steerableStatus`'s own
+sentence. Every row comes back saying which.
 
-Consequences that fall out of it, and are requirements rather than notes:
+The queue is reached through **one narrow additive export**, `enqueueSharedMessage` in
+`routes-actions.ts`, written exactly like the `drainSharedQueues` beside it and for the reason that
+function's comment already gives: *two `SteeringQueue`s would be two queues, and the one the page can
+see would be the one nothing delivers from.* Added with the owning session's explicit agreement, and
+narrow on purpose — a broadcast route has no business reaching `settle`, `release` or the quarantine
+surface.
 
-- Each recipient in the broadcast response carries **the same fields the steer route already
-  sends** — `{ok:true, verified, sent}` or `{ok:false, code, why, delivery}` — so the client parses a
-  recipient with the same functions it parses a single steer with.
-- **`delivery` is never swallowed.** `sendMessage` returns `partial` and `unknown` for real reasons,
-  and the dashboard's Stage 4 quarantine (held sessions after an ambiguous send) needs every producer
-  to carry it out. This route is the fifth producer.
-- A skipped or unreached recipient is a **refusal**, not a new arm: `drainGate`'s own `why`, with
-  `delivery: "none"`, which is true — nothing left the box.
+Two things that fall out of it and are easy to get wrong:
+
+- **The queue is handed the RAW line.** It stores what it is given and the drain renders the
+  speaker's prefix at delivery; an already-prefixed string arrives as *"Greg says: Greg says: …"*.
+  The send path is the opposite and takes the rendered one, because `sendMessage` renders nothing.
+- **Queueing to a quarantined session is correct and is not an oversight.** A hold blocks at
+  `next()`, not at enqueue, so items accumulate and drain once a person releases it. Refusing to
+  queue would throw away the instruction, which is the thing the quarantine exists to protect.
+
+### D5a. "Submitted", not "heard"
+
+> A successful steer means the tmux calls completed; even `verified` is explicitly a pre-send
+> identity reading, not a delivery receipt.
+>
+> — GPT Sol, 2026-09-09
+
+The plan said the card's headline would be *"N of M heard this"*. Nothing on this box can establish
+that an agent read a line — there is no receipt for a keystroke. The counts are named
+`submitted`, `queued`, `skipped`, `notReached`, and the page's sentence has to use those words.
+
+### D6. One delivery vocabulary — but scheduling is not delivery
+
+The condition, from `claude-agents-dashboard` and right: every receipt this branch renders uses
+`steer-client.ts`'s `SteerOutcome` and its `DeliveryReading` — `none`, `partial`, `unknown`,
+`not-told` — parsed by that file's own functions. Three separate delivery vocabularies have already
+had to be removed from this dashboard, one of them introduced by the stage removing the previous one.
+
+**Where that condition was first applied wrongly, by both of us.** The instruction was to make a
+skipped recipient *"a refusal carrying `drainGate`'s own sentence with `delivery: "none"`, rather
+than a new arm"*, and I agreed. Sol refused it:
+
+> `working/later`, dry-run, and deadline expiry are **orchestration states, not steer refusals**.
+> `later` has no refusal code, and no existing steer code truthfully means "fan-out deadline
+> expired". Encoding these as `{ok:false, code, delivery:"none"}` **creates the second vocabulary
+> while claiming not to.**
+>
+> — GPT Sol, 2026-09-09
+
+The owner withdrew the condition on reading it, and named it as the same mistake it had spent the
+night removing — a keystroke vocabulary describing something that is not keystrokes — *"twice, one
+day apart, by me, in the direction of reuse"*.
+
+**So the union splits in two.** An outer arm says what the fan-out did with the row —
+`would-send` · `would-queue` · `attempted` · `queued` · `skipped` · `not-reached` — and **only
+`attempted` carries a delivery reading**, embedded as the steer route's own response body, whole.
+Scheduling above, delivery below, one vocabulary in each, and the condition's actual purpose met.
+
+Requirements that follow, rather than notes:
+
+- **The steer response is embedded, not rebuilt.** The browser's complete reading lives in a private
+  `post()` inside `steer-client.ts` and includes `status` and `from`; a recipient carrying only
+  `verified` and `delivery` would make the page invent the rest. *"A private parser copied is a twin
+  with a delay fuse."*
+- **`delivery` is never swallowed.** It reaches the wire verbatim, because the quarantine needs every
+  producer to carry it out.
+- **This route opens quarantine holds itself**, on `partial`, `unknown`, `threw`, and on a
+  `delivery: "none"` that `nothingWasSent` refuses to certify. Asked of `nothingWasSent` rather than
+  of `delivery` directly — that function is the one audited place that reads both the summary and the
+  list of tmux calls that completed.
+
+### D6a. A kill switch, and the body limit
+
+Two more from the same review, both taken:
+
+- **`FLEET_BROADCAST_ENABLED`.** *"A kill switch that has to be added under pressure is one that does
+  not exist"* — `routes-steer.ts`'s words about its own. Default on; only an explicit `0` turns it
+  off; **a dry run is never gated**, because seeing what a broadcast would do is exactly what
+  somebody deciding whether to switch it back on needs.
+- **The body cap is the box route's 64 KiB, not the steer route's 16 KiB.** Eighty addresses is
+  around 10 KB, so with the smaller cap the recipient limit was unreachable — and the first version
+  of the test for it "passed" by hitting 413 instead. Both limits now have a test, one either side.
 
 ### D4a. The boundary the shared fan-out must never cross
 

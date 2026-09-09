@@ -209,6 +209,13 @@ export function App({
             <OverseerPanel
               actions={actions}
               rows={rows}
+              /* **A PAYLOAD WITH DROPPED ROWS CANNOT SETTLE THE OVERSEER
+                 CLAIM**, and the panel refuses to send while this is non-zero.
+                 `0` before the first payload is not a claim that nothing was
+                 dropped — there are no rows either, so the card says *no
+                 Overseer session*, which is the honest answer to an empty
+                 fleet. MessageOverseerCard.tsx § the one completeness clause. */
+              unreadableRows={feed.state?.unreadableRows ?? 0}
               /* **`null` BEFORE THE FIRST PAYLOAD, and the payload's own arm
                  after it.** Not `?? { kind: "not-asked" }`, which was here for a
                  review round and collapsed two different silences: *nothing has

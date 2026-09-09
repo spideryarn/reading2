@@ -161,7 +161,7 @@ describe("who the card decides to speak to", () => {
       overseerRow({ id: "$1643", name: "the-overseer" }),
       row({ id: "$2", name: "another-agent" }),
     ];
-    render(<MessageOverseerCard rows={rows} steer={api} />);
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("the-overseer");
 
@@ -177,7 +177,7 @@ describe("who the card decides to speak to", () => {
 
   it("refuses when no session holds the claim, and says that is a real state", () => {
     const { api, calls } = fakeApi(SENT);
-    render(<MessageOverseerCard rows={[row({ id: "$1" }), row({ id: "$2" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[row({ id: "$1" }), row({ id: "$2" })]} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("no Overseer session");
     // No input, because there is nowhere for the words to go. An input over
@@ -189,7 +189,7 @@ describe("who the card decides to speak to", () => {
   it("refuses when two sessions claim it, and names both rather than choosing", () => {
     const { api } = fakeApi(SENT);
     const rows = [overseerRow({ id: "$1", name: "claimant-one" }), overseerRow({ id: "$2", name: "claimant-two" })];
-    render(<MessageOverseerCard rows={rows} steer={api} />);
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("claimant-one");
     expect(text()).toContain("claimant-two");
@@ -202,7 +202,7 @@ describe("who the card decides to speak to", () => {
       overseerRow({ id: "$1643", name: "the-overseer" }),
       row({ id: "$2", role: { kind: "cannot-tell", why: "the collector timed out" } }),
     ];
-    render(<MessageOverseerCard rows={rows} steer={api} />);
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("the collector timed out");
     expect(text()).not.toContain("no Overseer session");
@@ -212,9 +212,33 @@ describe("who the card decides to speak to", () => {
     expect(container.querySelector("textarea")).toBeNull();
   });
 
+  it("refuses while any row in the payload could not be read, even with a clear holder", () => {
+    /**
+     * **A DROPPED ROW IS A REASON TO DISBELIEVE THE CLAIM**, not a gap beside
+     * it. `overseerClaim` was handed only the rows that survived, so it cannot
+     * know that the missing one was a second claimant — and it answers `one`
+     * with complete confidence. Nothing downstream catches this: it is not
+     * staleness, and `verifyTarget` checks an address rather than a role.
+     *
+     * GPT Sol's P1, 2026-09-09. The card sent happily before this.
+     */
+    const { api, calls } = fakeApi(SENT);
+    render(
+      <MessageOverseerCard
+        rows={[overseerRow({ id: "$1643", name: "the-overseer" })]}
+        unreadableRows={2}
+        steer={api}
+      />,
+    );
+
+    expect(text()).toContain("could not be read");
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
   it("refuses a holder with no pane handle, because that is not an address", () => {
     const { api } = fakeApi(SENT);
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643", paneId: null })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643", paneId: null })]} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("no tmux pane handle");
     expect(container.querySelector("textarea")).toBeNull();
@@ -224,7 +248,7 @@ describe("who the card decides to speak to", () => {
 describe("what it says became of the message", () => {
   it("reports the verified address on success, and does not call it a receipt", async () => {
     const { api } = fakeApi(SENT);
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
 
     type("hello");
     await act(async () => {
@@ -246,7 +270,7 @@ describe("what it says became of the message", () => {
       from: "server",
       delivery: { kind: "partial" },
     });
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
 
     type("hello");
     await act(async () => {
@@ -268,7 +292,7 @@ describe("what it says became of the message", () => {
       from: "server",
       delivery: { kind: "none" },
     });
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
 
     type("hello");
     await act(async () => {
@@ -289,7 +313,7 @@ describe("what it says became of the message", () => {
       from: "server",
       delivery: { kind: "not-told" },
     });
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
 
     type("hello");
     await act(async () => {
@@ -302,7 +326,7 @@ describe("what it says became of the message", () => {
 
   it("will not send an empty message", async () => {
     const { api, calls } = fakeApi(SENT);
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
 
     await act(async () => {
       button("Send").click();
@@ -329,7 +353,7 @@ describe("the daemon and the session are not the same thing", () => {
    */
   it("says the words go to the session's pane, not to the daemon", () => {
     const { api } = fakeApi(SENT);
-    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643", name: "the-overseer" })]} steer={api} />);
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643", name: "the-overseer" })]} unreadableRows={0} steer={api} />);
 
     expect(text()).toContain("daemon");
     expect(text()).toContain("pane");

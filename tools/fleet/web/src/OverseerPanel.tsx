@@ -29,15 +29,22 @@
  * heartbeat advances**, because that pair is the whole diagnosis. A dead daemon
  * and a deaf one produce different sentences here.
  *
- * ## What is still not here, and is said rather than mocked
+ * ## The box to send the Overseer a message, which arrived on 2026-09-09
  *
- * **A box to send the Overseer a message.** A daemon existing is not an agent
- * that can receive one: nothing in `tools/overseer/` reads an inbox, and there
- * is no route that would accept such a message. A textarea over that would be
- * the most expensive lie this tool can tell — a page quietly swallowing
- * instructions into nothing. One sentence says so; the Sessions tab is where a
- * sentence reaches an agent today, and the broadcast below is how it reaches
- * all of them.
+ * This section used to say there was none, and that a textarea over a daemon
+ * with no inbox would be *"the most expensive lie this tool can tell — a page
+ * quietly swallowing instructions into nothing"*. **That half is still true and
+ * is why the new card says what it says.** What was wrong was the conclusion:
+ * a daemon existing is indeed not an agent that can receive a message, but the
+ * **Overseer is not only a daemon**. It is a Claude session in a tmux pane,
+ * reachable by the same steer path as every other row on the Sessions tab.
+ *
+ * So `MessageOverseerCard` addresses the *session* — resolved from the claim
+ * rather than picked — and its copy keeps the daemon caveat, because a card
+ * that blurred the two would teach somebody that the checkpoint writer has an
+ * inbox. Greg, 2026-09-08: *"there should be a way to send messages directly to
+ * the Overseer in the Overseer tab, and also to broadcast to all agents"*.
+ * docs/plans/260909b-messaging-the-overseer-and-broadcasting-to-all-agents-from-the-dashboard.md.
  *
  * ## The history is history, and is not joined to anything
  *
@@ -469,12 +476,20 @@ export function OverseerStatusCard({
 export function OverseerPanel({
   actions,
   rows,
+  unreadableRows,
   overseer,
   now,
   receivedAt,
 }: {
   actions: ActionsUi;
   rows: readonly FleetRow[];
+  /**
+   * How many rows in this payload could not be read. Passed through to
+   * `MessageOverseerCard`, which refuses while it is non-zero: a dropped row can
+   * be the one holding the Overseer claim, or a second claimant, and the claim
+   * cannot be settled from a list that is known to be short.
+   */
+  unreadableRows: number;
   /** The Overseer's own state, `not-asked` from a server that does not report it, or `null` before any payload. */
   overseer: OverseerView | null;
   /** The page's one clock. Every age on screen agrees because they all read this. */
@@ -528,7 +543,7 @@ export function OverseerPanel({
           the Overseer is a Claude agent in a pane, reachable by the same steer
           path as everything else. The card below keeps both halves — see its
           header, and docs/plans/260909b-…. */}
-      <MessageOverseerCard rows={rows} />
+      <MessageOverseerCard rows={rows} unreadableRows={unreadableRows} />
     </div>
   );
 }
