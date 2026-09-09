@@ -103,6 +103,11 @@ reference, and is authoritative wherever the two disagree.
   datum depending on whether it rides the pushed snapshot or wants its own route; why an on-demand
   route may only block the event loop for work whose worst case it can state; and the etiquette for
   a night when several sessions are adding tabs at once.
+- **[readiness.md](readiness.md)** — the Readiness tab: whether the commit `origin/dev` is on is
+  known to pass its checks. The one command that makes a run count
+  (`readiness-run.ts`, because a plain `npm test` records nothing), the five clauses a green answer
+  needs, why `unknown` is the common and correct answer, and why "on dev" is never a claim about
+  what is on GitHub now.
 - **[usage-history.md](usage-history.md)** — the Usage limits tab's second half: the last 24 hours of
   Claude's limits, which exists only because nothing else writes them down. Why the daemon writes the
   store and the dashboard only reads it, why this one has no writer lock when `~/.fleet-health/`

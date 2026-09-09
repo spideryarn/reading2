@@ -102,6 +102,8 @@ listed here; the names under each are files in `docs/project/`.
   claim it has to earn) ·
   `usage-history.md` (the last 24 hours of Claude's limits, which exist only because we write them
   down, and the eight things that chart may not claim) ·
+  `readiness.md` (whether the commit dev is on is known to pass its checks — and the one command
+  that makes a run count, because a plain `npm test` records nothing) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
