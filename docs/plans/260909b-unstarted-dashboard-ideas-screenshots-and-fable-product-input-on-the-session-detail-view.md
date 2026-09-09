@@ -56,7 +56,9 @@ So this is a **review-then-build** job with the review as the deliverable:
 - **Screenshot the worktree's own build, not only the live page.** The live server on 8787 runs from
   the primary checkout and lags `dev` by a restart, so reading it as evidence about current code is
   the mistake [§ the runtime record](260908f-overseer-and-fleet-improvement-roadmap.md) already
-  documents. A second read-only instance runs on `127.0.0.1:8799` from this worktree.
+  documents. **This was attempted on `127.0.0.1:8799` and it failed silently — see the retraction in
+  Stage 2. The screenshots are of another worktree's build.** The intention was right; the check on
+  it was not.
 - **The simpler option passed over:** proposing from the docs alone, with no screenshots and no
   Fable. Rejected because the docs describe intent and the screenshots show what a phone actually
   renders — and the 2026-09-08 clutter pass found *3,398px at 390px wide, 31 buttons*, which no
@@ -178,12 +180,60 @@ recorded here so the next sweep does not re-find them, not ranked.
 
 *Status: in progress.*
 
-- [ ] Second read-only dashboard on `127.0.0.1:8799` from this worktree, isolated by
-      `FLEET_HEALTH_DIR` and `FLEET_ANSWER_ENABLED=0`, so it cannot contend with the live one.
+- [!] Second read-only dashboard on `127.0.0.1:8799` from this worktree — **FAILED, and reported
+      success.** `EADDRINUSE`; the port was already another worktree's. See the retraction below.
+      Whoever redoes this: pick a port, then check the **server's own log** for its bind line, never
+      a `curl` of the port.
 - [x] Screenshots at 1280 and 390: Sessions list, Session detail (working, and the row the
       attention inbox is waiting on), Box health, Overseer tab, attention inbox. **16 files** in
       `scratchpad/shots/`.
 - [ ] Fable product input on the screenshots + the Stage 1 table + Greg's quotes.
+
+#### RETRACTION: the screenshots are not of this worktree's build
+
+**My server never bound, and every screenshot in this plan came from somebody else's.** Recorded at
+the top of the evidence rather than in a footnote, because a reader who takes the provenance claim
+at face value will trust these shots more than they deserve.
+
+`scratchpad/fleet8799.log`, which I did not read until the Overseer questioned a finding:
+
+```
+could not bind 127.0.0.1:8799 — listen EADDRINUSE: address already in use 127.0.0.1:8799
+```
+
+`260908f-usage-visibility` already had a dashboard on 8799 from its own worktree. My launcher then
+`curl`ed `http://127.0.0.1:8799/`, got `200` **from their server**, and printed `UP after 2s`.
+
+**This is silent-success in its purest form** ([silent-success.md](../reusable/silent-success.md)):
+the readiness check asked *is something serving on this port* when the only question that mattered
+was *is MY server serving on this port*, and the process's own log had the answer the whole time. It
+is the same shape as [§ the runtime record](260908f-overseer-and-fleet-improvement-roadmap.md)'s
+finding that nothing on the page says which revision it is — and it is why **X1 in the ranking below
+just earned its place twice over**. A build stamp on the page would have caught this in one glance.
+
+**The Overseer's correction stands and is accepted**: the red *"the server published a usage reading
+this page cannot read"* on the Overseer tab is **not on the live page**. 8787's `/api/state` carries
+no `usage` key and serves the pre-usage bundle; what I photographed was
+`260908f-usage-visibility`'s own dev server mid-fix. Retracted, and it should not reach Greg.
+
+**What survives, and how I checked rather than assumed:**
+
+- **Item 1's finding holds, re-verified from source in *this* worktree** — not from a screenshot.
+  `App.tsx:149-188` renders `AttentionPanel` above `SessionsPanel` **unconditionally in `sessions`
+  mode, with no dependence on `selectedId`**, and `SessionsPanel` then draws `NewSessionPanel`, the
+  `N SESSIONS / Order` header and the detail. So the inbox card, the New-session card and the list
+  header sit above the detail whether or not one is selected. That is a fact about `dev`.
+- **L1 survives**, because its two halves never went through that server: `whereLine`'s behaviour I
+  read in this worktree's `view.ts`, and the `/proc` probe I ran directly against live pids. Only
+  the *row list* came from their `/api/state`.
+- **Every census grep** was run in this worktree.
+- **The detail and list layout shots are probably representative but unverified.** In that worktree
+  `SessionDetail.tsx` and `SessionsPanel.tsx` carry an mtime of 23:42, the same as its setup, while
+  `App.tsx` and `OverseerPanel.tsx` were edited at 23:57 — so the two files most of these findings
+  rest on look untouched. **That is an mtime argument, not a diff**, and worktree isolation stops me
+  running git against their tree, so it is weaker evidence than it sounds.
+- **The page heights are of their bundle.** Mostly transcript, so content rather than chrome, but
+  they should be re-measured against a build whose provenance is known before anyone quotes them.
 
 #### What the screenshots measure
 
