@@ -20,6 +20,7 @@
     "check:conflicts": "tsx scripts/conflict-markers.ts",
     "deploy": "tsx scripts/deploy.ts",
     "count-lines": "tsx scripts/count-lines.ts",
+    "fleet:restart": "tsx scripts/fleet-restart.ts",
     "cost": "tsx scripts/ai-cost.ts",
     "ingest": "tsx scripts/stage.ts ingest",
     "extract": "tsx scripts/stage.ts extract",
