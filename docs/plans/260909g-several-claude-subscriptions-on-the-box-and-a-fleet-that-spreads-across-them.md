@@ -35,8 +35,8 @@ later rather than needing a second one.
 | Word | What it means here |
 |---|---|
 | **account** | one Claude subscription, identified by the email signed into it (`greg@rehearsable.ai`) |
-| **config dir** | `~/.claude` by default. Holds the login, the settings, **the session transcripts and the auto-memory**. `CLAUDE_CONFIG_DIR` moves it. |
-| **`setup-token`** | `claude setup-token` mints a long-lived token for an account. Exported as `CLAUDE_CODE_OAUTH_TOKEN`, it makes one *process* bill that account without moving its config dir. |
+| **config dir** | `~/.claude` by default. Holds the login, the settings, **the session transcripts and the auto-memory**. `CLAUDE_CONFIG_DIR` moves it. **This is the mechanism we use.** |
+| **`setup-token`** | mints a long-lived token, injected as `CLAUDE_CODE_OAUTH_TOKEN`. **Not used — Greg should never run it.** Here only because early sections discuss it. |
 | **orchestrator account** | the one the Overseer runs on, which dispatched agents may never spend |
 | **pool account** | an account dispatched sessions draw from |
 | **the window** | a rolling allowance. Two matter: **five-hour** (short spikes) and **seven-day** (the one that freezes the fleet for days) |
@@ -62,7 +62,7 @@ settled. Each one changed the plan.
 3. **`cachedUsageUtilization` is one slot per config dir, not a map per account.** In
    `<config dir>/.claude.json` there is exactly one object: `{fetchedAtMs, accountUuid, utilization}`.
    It carries the uuid of whichever account last wrote it. There is no per-account history in there
-   at all. **This is the finding that shapes deliverable 4** — see [Stage 4](#stage-4-usage-read-per-account).
+   at all. **This is the finding that shapes deliverable 4** — see [Stage 4](#stage-3-usage-read-per-account).
 
 4. **Nothing free refreshes that cache.** `claude auth status` leaves `fetchedAtMs` untouched; the
    reading on the box right now is about five hours stale. Only a real session refreshes it. So an
@@ -74,6 +74,13 @@ settled. Each one changed the plan.
    it does.
 
 ## The mechanism choice, and why
+
+> **⚠ SUPERSEDED — this section chose the pool model, and Stage 0 disproved its premise.**
+> **The decision is [the config-dir model](#the-mechanism-decision-the-config-dir-model)**; there
+> are no `setup-token`s and no `CLAUDE_CODE_OAUTH_TOKEN` anywhere in the design. This section is
+> kept because it records *why* the pool model looked right — the reasoning was sound and the
+> premise (that a per-account config dir would carry its own usage reading) was simply false, which
+> is the sort of thing only a measurement finds. **Do not implement from this section.**
 
 There are two ways to make a process bill a different account, and they are not interchangeable.
 
@@ -98,7 +105,7 @@ transcript would land somewhere the fleet does not look, and its MCP servers wou
 re-authorising. Under (B), all of that is untouched and only the bill moves.
 
 The price of (B) is measurement 3 — the usage cache becomes a shared slot — and
-[Stage 4](#stage-4-usage-read-per-account) is how we pay it.
+[Stage 4](#stage-3-usage-read-per-account) is how we pay it.
 
 **Config dirs still appear, in one narrow role.** Per the doc, each account is signed in *twice on
 purpose*: an `auth login` into its own config dir, which is what lets us read that account's quota
@@ -120,9 +127,33 @@ spending?" has an answer that is written down rather than remembered.
 - The Overseer keeps `greg@rehearsable.ai` as the **orchestrator** account. Dispatched sessions draw
   from the pool and never from it — MindstoneRebel's asymmetric rule, so a runaway agent cannot
   stall the thing that would notice.
-- **A session Greg starts by hand with no `--account` keeps today's behaviour**: the default config
-  dir, the default account, nothing injected. Adding accounts must not change what an unflagged
-  command does.
+- ~~**A session Greg starts by hand with no `--account` keeps today's behaviour.**~~
+  **Overturned by Greg, 2026-09-09 ~21:10Z**, and it is his decision rather than an inference:
+
+  > Can we tweak the new-claude (and new-codex command in future) to use `--account auto` by default?
+
+  **So an unflagged `new-claude` means `--account auto`.** That is a better default than the one this
+  plan assumed: spreading load is the entire point, and a flag nobody remembers to pass spreads
+  nothing. `new-codex` gets the same default when it exists.
+
+  **What makes it safe rather than surprising** — `auto` must degrade to today's behaviour instead of
+  refusing:
+
+  - **no registry file, or no pool accounts → the ambient account**, exactly as today, with one line
+    saying so. A box that has never set any of this up keeps working untouched. This *replaces* the
+    earlier rule that `auto` refuses when there is nothing to choose from — that rule was written
+    when `auto` was opt-in, and as a default it would have broken every unflagged launch on a fresh
+    box.
+  - **with pool accounts → it chooses, and prints which and why.**
+  - **`--account main`** (the orchestrator's registry name) is the explicit way to ask for the
+    ambient account.
+  - **a guard failure still refuses** — a missing state dir or an identity mismatch is a fault, not
+    an absence, and must never fall through to ambient.
+  - **the resolved account is recorded, never the word `auto`**, in both the launch log and the tmux
+    variable — otherwise the durable record says "we asked for whatever" rather than what was spent.
+
+  `dispatch.ts` and `routes-new.ts` therefore need no flag, but **pass `--account auto` explicitly
+  anyway**, so the record says what was asked for rather than relying on a default that might change.
 - **Whether one person may hold several Max subscriptions is Greg's to confirm** with Anthropic's
   terms. Noted once here; not litigated, and not a thing this plan can settle.
 
@@ -374,17 +405,58 @@ session needs it:
 
 | Missing | Needed? |
 |---|---|
-| `mcpServers` — `sentry`, `vercel`, `playwright`, `chrome-devtools` | **Yes.** User-level, so a fresh dir silently loses browser testing and the Sentry/Vercel reads. The repo's own `.mcp.json` is unaffected. |
+| `mcpServers` — `playwright`, `chrome-devtools` only | **Yes**, and only these two. See below. |
+| `mcpServers` — `sentry`, `vercel` | **No — deliberately left out.** See below. |
 | `settings.json`: `model`, `permissions`, `autoMode`, `env` | **Yes** — `permissions` and `autoMode` especially; a fresh dir has a different safety posture and no auto-mode environment. |
 | `settings.json`: `theme`, `tui`, `statusLine`, `agentPushNotifEnabled` | No — cosmetic. |
 | `projects[<repo>].hasTrustDialogAccepted` (4 of 5 entries carry it) | **Yes**, or a session can stop on the trust dialog. |
 | `projects/<slug>/memory/` — 83 files for this repo | **Yes** — this is what the `projects/` symlink is for. |
 | `plugins/` | Probably — plugin-provided skills otherwise vanish. |
-| `hasCompletedOnboarding`, `numStartups`, and ~45 other first-run flags | **Yes**, enough of them to avoid a first-run flow. |
+| `hasCompletedOnboarding` and the few flags a first-run flow actually checks | **Yes** — but see the correction below; "~45 flags" was wrong. |
 
 **This is a script, not a manual step**, and it is Stage 1's job. Seed *surgically* — merge the named
 keys after the login, never copy `.claude.json` wholesale, because it also carries identity,
 eligibility caches and live-session metadata.
+
+##### MCP: configured is not working, so two servers are deliberately not seeded
+
+**Copying `mcpServers` does not make MCP usable.** The server *definitions* live in `.claude.json`,
+but their **OAuth credentials live separately in `.credentials.json`** — so a seeded pool dir would
+list `sentry` and `vercel` and fail to use them. That is the configured-and-unusable shape, which
+reads as working right up until someone needs it.
+
+The Overseer's decision, 2026-09-09, pending Greg:
+
+- **seed only the credential-free servers** — `playwright` and `chrome-devtools`, which is what
+  browser testing needs and is the common case for a dispatched agent;
+- **leave `sentry` and `vercel` out entirely** rather than present and broken. Absent is honest;
+  configured-and-unusable is a trap.
+- **never copy MCP refresh credentials between dirs** — they rotate, and duplicating a rotating
+  credential invites the same class of problem as refreshing an OAuth token behind Claude's back.
+- **the wizard prints one line** saying those two need a `/mcp` login by Greg, under that dir, if a
+  pool session is ever to use them.
+- **Today's answer for a pool session that needs Sentry or Vercel**: say so in its debrief, and the
+  Overseer routes that read to a session on `main`.
+
+##### Two corrections to this list, from Sol's round-2 review
+
+- **The `permissions` worry was overstated.** The user-level settings only add
+  `permissions.defaultMode`; the real ask/deny rules are repo-local, and `gjd-remote` passes
+  `--permission-mode auto` explicitly. **A fresh dir does not widen what a dispatched agent may do.**
+  It does change interactive defaults, and future user-level rules would matter, so it stays on the
+  seed list — but not for the reason first given.
+- **"~45 first-run flags" was unsupported.** Mindstone has already run sessions without most of them.
+  Many are experiment, eligibility, version or account caches that should *not* be copied. Seed only
+  the few a first-run flow actually checks.
+- **Do not copy `settings.json`'s `env` wholesale.** A future credential or provider variable sitting
+  there could defeat account routing entirely. Use a named allowlist.
+
+##### What `projects/` sharing does not cover
+
+`file-history/` and `shell-snapshots/` live **outside** `projects/`, so a conversation resumed under
+a different account keeps its transcript but loses rewind and checkpoint history. **Pin a resume to
+its original account** unless that is separately tested. Plugin manifests also contain absolute
+paths, so copying `plugins/` is not by itself a complete installation.
 
 #### The mechanism decision: the config-dir model
 
@@ -409,10 +481,71 @@ failure would be silent. The mitigations: every failure is *unknown* and never a
 account's number; the cache stays a corroborating second source where it exists (finding 4 shows the
 two agree); and `usage-history.md`'s "absence is never a zero" already covers what to draw.
 
-### Stage 1 — the checklist, and the account registry
+### Stage 1 — the wizard Greg runs, and the account registry
 
-**Why first:** the checklist unblocks Greg tonight, and nothing downstream can be *tested against a
-real second account* until he has run it. The registry is the one new concept everything else reads.
+> **Rewritten 2026-09-09** after Greg ran the checklist by hand and found it fiddly. The registry is
+> unchanged; the `add` command became the thing he actually uses.
+
+Greg, 2026-09-09:
+
+> It was a bit fiddly to add the new accounts, and I think I might have missed some steps. Can you
+> write a CLI script that I can call, that asks me questions, and then does everything for me. It
+> should be idempotent (i.e. if I run it twice for the same account, it just updates as needed).
+
+**`npx tsx scripts/claude-accounts.ts add`**, no flags, asks its way through: the name and email
+(offering defaults from what already exists), creates the dir and its `forceLoginMethod` settings if
+missing, signs in **only if** the account is not already signed in, seeds the dir from the list
+measured in Stage 0, pins identity through `/api/oauth/profile`, writes or updates the registry
+entry, and ends by printing `list`.
+
+**Every question is also a flag** — `--name`, `--email`, `--role`, `--config-dir`, `--yes` — so the
+web UI and the tests drive *the same code path* non-interactively. That is the design constraint that
+stops Stage 5 becoming a second implementation of this.
+
+#### What "idempotent" has to mean, state by state
+
+A second run must be safe, and "safe" is different for each thing it touches. This is the part most
+likely to go wrong silently, so it is enumerated rather than asserted:
+
+| State | A second run must… |
+|---|---|
+| the config dir | create if absent; **never** delete or recreate |
+| `settings.json` | **merge** the keys we own, preserving hand edits; never overwrite the file |
+| the login | **skip entirely** if `auth status` already names the expected email — a re-login rotates a credential live sessions may be using |
+| `projects/` symlink | create only if absent; **refuse loudly if a real directory is there**, never replace it |
+| seeded `.claude.json` keys | merge named keys only; never copy the file wholesale (it carries identity, eligibility caches and live-session state) |
+| the registry entry | update in place, preserving fields it did not write |
+
+**The test that matters is the one already available**: running the wizard against
+`~/.claude-gregmindstone`, where Greg has done the login and skipped the token steps. It must find the
+login present, seed only what is missing, register the account, and change nothing else. That is a
+real before/after, not a fixture, and it goes to Sol as such.
+
+**Nothing may be a no-op that reports success.** Each step prints what it *found* and what it
+*changed* — `already signed in as greg@mindstone.com, skipping login` rather than `✓ login`. This
+repo has a documented failure class of exactly that shape
+([silent-success.md](../reusable/silent-success.md)), and a wizard whose whole value is "you can
+re-run it" is the worst possible place for it.
+
+**I do not run the login step.** It is interactive, it is Greg's credential, and a wrong move rotates
+a live one. The login branch is tested with a fake `claude` on `PATH`; the real run is his.
+
+#### Designed so the Codex version is not a rewrite
+
+Codex accounts are next (queued as `qi-whppvck5`, Greg: *"we're going to want to do all the same
+stuff for Codex account-subscriptions too, as HIGH-BUT-NOT-TOP-priority"*), and they are the same
+shape with different verbs: `CODEX_HOME` instead of `CLAUDE_CONFIG_DIR`, `codex login` instead of
+`claude auth login`, and verification through the app-server `account/rateLimits` read that
+`scripts/overseer.ts usage` already performs.
+
+So the seams that must be **per-family from the start**, rather than Claude details leaking into
+shared code: where an account's state lives (a dir path, but not necessarily named the same),
+how to ask *who is signed in here*, how to *sign in*, how to read *usage*, and what counts as
+seeded. One registry with the `family` column, one wizard with a family question, and those five
+operations behind a per-family interface. Nothing Codex-specific is built now.
+
+**Why the registry first:** it is the one new concept everything else reads, and Stage 0 has already
+established what goes in it.
 
 **Where it lives.** Outside the repo — credentials never go in git:
 
@@ -426,20 +559,44 @@ real second account* until he has run it. The registry is the one new concept ev
 secret, so nothing could print it, log it, or show it on a dashboard. Split, the registry is
 describable in public and only the launcher ever opens a `.token`.
 
-**One entry:**
+**One entry.** Generic fields first, family-specific detail quarantined in `familyData` — Sol's
+round-2 P1, and it is right that `family` alone was not enough: `configDir`, a required `email` and
+a global orchestrator role are all Claude-shaped assumptions a Codex entry cannot follow.
 
 ```jsonc
-{ "name": "main",                       // the handle: `--account main`
-  "family": "claude",                   // "claude" | "codex" — the Codex hook, unused for now
-  "role": "orchestrator",               // "orchestrator" | "pool"
-  "configDir": "/home/greg/.claude",    // where its `auth login` lives; the usage reading comes from here
-  "email": "greg@rehearsable.ai",       // what the assertion must find
-  "tokenPath": null,                    // null for the orchestrator: it is the ambient login
-  "addedAt": "2026-09-09T…" }
+{ "name": "main",
+  "family": "claude",                    // "claude" | "codex"
+  "role": "orchestrator",                // "orchestrator" | "pool" — per family, not global
+  "stateDir": "/home/greg/.claude",      // CLAUDE_CONFIG_DIR here; CODEX_HOME there
+  "providerAccountId": "eddd4c75-…",     // the durable pin — see below
+  "providerTenantId": "ba7a24b8-…",      // the org
+  "displayEmail": "greg@rehearsable.ai", // for humans; never the thing asserted on
+  "addedAt": "2026-09-09T…",
+  "familyData": { } }
 ```
 
-`family` is why a Codex account needs no second registry later. Nothing reads it yet, and Stage 1
-does not act on it — it is a column, not a feature.
+**There is no `tokenPath`, and there must never be one** — the config-dir model has no
+`setup-token`. If you are reading a version of this plan that has one, it predates
+[the mechanism decision](#the-mechanism-decision-the-config-dir-model).
+
+**`providerAccountId` is the pin, and storing it is load-bearing** rather than decorative. Sol:
+*"a config directory can later be logged into as another account. In that case `/usage` would
+correctly answer for the new credential while the registry still labels it as the old account."* The
+directory is not the identity. So the uuid and org are stored, and **re-checked at use time**, not
+just at registration — an identity pinned once and never re-read is a pin that quietly comes loose.
+
+**The invariant for every live read**, which is what actually closes P0-1 and P0-3:
+
+- read the access token **once** into memory, and use that same snapshot for both `/profile` and
+  `/usage` — otherwise the two answers can be about different credentials;
+- fixed `https://api.anthropic.com` origin, **redirects rejected**, ambient/custom base URLs ignored;
+- require account uuid, org uuid and email to match the registry **on every collection**;
+- apply the strongest available equivalent immediately before every paid launch.
+
+Sol's honest caveat, kept because it is the limit of what we know: *"I cannot prove the undocumented
+endpoint's server-side tenancy contract; the two-account result and matching cache are strong
+evidence, not a published guarantee."* And `/usage` carries no identity of its own, so `/profile` is
+load-bearing.
 
 **Note what falls out: the orchestrator's entry describes what already exists.** Registering account
 1 requires no login at all — its config dir is the default one and its credential is the ambient
@@ -450,11 +607,13 @@ behave identically.
 **The reader** (`tools/overseer/accounts.ts`, new, pure-parse + one I/O function, matching
 `usage.ts`'s split):
 
-- validates on read; an unknown `role`, a duplicate `name`, a relative path, or a `pool` entry with
-  no `tokenPath` is **an error, never a skipped line**;
+- validates on read; each of these is **an error, never a skipped line**: an unknown `role`,
+  `family` or `schema`; a duplicate `name`; a relative `stateDir` or one with a trailing slash; a
+  missing required field; a duplicate `stateDir` or `providerAccountId` across two entries;
 - **never falls back to the default account** on any failure — the loud-failure rule this whole
   design rests on;
-- exactly one entry may be `role: "orchestrator"`;
+- exactly one entry may be `role: "orchestrator"` **per family** — the orchestrator invariant is per
+  family, not global, so a Codex orchestrator can coexist with the Claude one;
 - a missing registry file is *not* an error: it means "one account, the ambient login", i.e. today.
 
 **What is checked when.** Reading the registry is a file parse, so it cannot check an email — that
@@ -471,122 +630,210 @@ one-ambient-account reading rather than an error.
 
 ### Stage 2 — the launcher picks an account
 
-`--account <name>` and `--account auto` on both launchers.
+> **Rewritten 2026-09-09** after the mechanism decision. The previous version injected
+> `CLAUDE_CODE_OAUTH_TOKEN` and reused `--auth env`; that was the pool model and it is gone. Sol's
+> round-2 P0-1 was that this section would have had an implementer rebuild the discarded design.
 
-**`scripts/run-claude.ts`** already has almost all of this and the reuse is exact: `--account X`
-resolves the registry, injects that account's token as `CLAUDE_CODE_OAUTH_TOKEN`, and then takes the
-**existing `--auth env` path** — including `authConflict()`, which already refuses when
-`claude auth status` says the run will use the machine's own `claude.ai` login instead. That refusal
-*is* the "a dispatched agent must never silently spend the orchestrator's account" guarantee,
-already written and already tested. `--account` adds one assertion on top: the probe's account must
-be the one the registry named.
+`--account <name>` and `--account auto`, and **`auto` is the default** — Greg, 2026-09-09 ~21:10Z,
+see [the policy section](#policy-this-plan-assumes-overseers-reading-pending-greg). An unflagged
+`new-claude` spreads load; `--account main` is how you ask for the ambient account explicitly.
 
-**`AuthStatus` gains `email`.** `parseAuthStatus()` (`run-claude.ts:445`) reads `authMethod` and
-`apiProvider` today; the JSON also carries `email`, `orgId` and `subscriptionType` (measurement 2).
-Adding `email` is what makes the assertion name an account rather than a method.
+**Because it is the default, `auto` may not refuse for want of choice.** No registry, or no pool
+accounts, resolves to the ambient account with one line saying so — today's behaviour, on a box that
+has set none of this up. A *guard* failure still refuses: an absence is not a fault.
 
-**The one measurement this plan cannot make yet**, because it needs a second account to exist:
-
-> Does `claude auth status --json` report an **email** when the credential is an injected
-> `CLAUDE_CODE_OAUTH_TOKEN` rather than a config-dir login?
-
-Both answers are designed for, and the code takes whichever it finds:
-
-- **If it reports the email** — assert `email === entry.email`. The strong form.
-- **If it reports only `authMethod: "oauth_token"` with no email** — assert
-  `authMethod !== "claude.ai"`, which proves the injected token displaced the ambient login and so
-  proves *we are not spending the orchestrator's account*. That is the safety property that actually
-  matters; the email is then pinned at registration time instead, under the account's own config dir,
-  where measurement 2 says it is always available.
-
-The weaker branch is not a fallback bolted on after a failure — it is chosen once, at Stage 2, from a
-measurement, and recorded here. **A refusal is still a refusal in both branches**: neither arm ever
-proceeds on "could not tell".
-
-**`--account auto`** picks the pool account with the lowest seven-day utilisation, and **never the
-orchestrator**. Its fallback, named here rather than discovered in review: when no pool account has a
-usable seven-day reading — every reading expired or unattributed, which measurement 4 makes an
-ordinary state rather than a fault — it picks the pool account **least recently launched onto**, from
-the launch log, and says so on stdout. It never silently resolves to the orchestrator, and with no
-pool accounts at all it refuses rather than quietly doing what today's command does.
-
-**`scripts/gjd-remote.ts new-claude --account`.** The generated job script gets one line, and **the
-token is not in it**:
+#### The environment is process-scoped, never exported
 
 ```bash
-export CLAUDE_CODE_OAUTH_TOKEN="$(cat -- /home/greg/.claude-accounts/<name>.token)"
+env -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL … \
+    CLAUDE_CONFIG_DIR=/home/greg/.claude-<name> \
+    claude …
 ```
 
-The job script lands in `~/.gjd-remote-work/jobs/`, so writing the token into it would put a
-credential in a file whose whole purpose is to be re-readable afterwards. The name goes in; the
-secret is read at launch, from a 0600 file, as Greg.
+**Not `export`.** `new-claude`'s job script ends `exec bash -l`, so an exported variable persists
+into the login shell left behind after Claude exits, and anything a person then runs in that pane
+silently bills the pool account. Sol caught this in both rounds; it is a one-word difference with a
+wrong-account failure behind it.
 
-Two guards, matching the two that file already runs before it will leave a session standing (the
-`cd` and the `command -v claude` at `gjd-remote.ts:2665-2675`): the token file must exist and be
-non-empty, and the assertion must pass — **on failure the job fails loudly rather than starting a
-session that bills the wrong account.** A session on the wrong account is exactly the shape those
-existing guards exist to prevent, wearing different clothes.
+**And the `ANTHROPIC_*` unset list is part of the guarantee, not tidiness.** An inherited
+credential or provider variable outranks the selected config dir — that ladder is already documented
+in `run-claude.ts`'s own header — so a routed launch that does not clear them is a preference, not a
+pin.
 
-**The account is recorded**, so the dashboard can say which account a session is on. The map found
-that this concept exists nowhere yet: neither `RegisterEntry` (`tools/overseer/store.ts:341-409`) nor
-`SessionMeta` has a field for it. The cheapest correct place is the launch log `appendLog()` already
-writes (`gjd-remote.ts:2754`), which is durable, is already the record of "a launch happened", and is
-**inside this stage's file set**. Adding a field to `RegisterEntry` is the Overseer's own persisted
-table and is left alone — noted for the Overseer as a follow-up rather than reached into.
+#### `scripts/run-claude.ts` has a hole that this stage must close
 
-**Tests, red first:** a fake registry and a fake `claude` on `PATH` that prints a chosen
-`auth status` JSON — so both branches of the measurement above are exercised without a second real
-account; `auto` never returns the orchestrator; `auto` with no readings takes the named fallback;
-an unknown `--account` name refuses; a failing assertion refuses and spends nothing; the generated
-job script **contains the account name and does not contain the token**.
+`claudeEnv()` **deliberately strips `CLAUDE_CONFIG_DIR`** from the child environment
+(`run-claude.ts:395`). That was right when the variable was one person's terminal preference. Under
+this design it means **a session running on pool account B that shells out to `run-claude.ts` gets a
+child on the ambient account** — the orchestrator's, the 85% one — with nothing looking wrong.
+
+So `run-claude.ts` takes `--account <name>` too, resolving the registry itself and constructing the
+child environment explicitly. It must not inherit the parent's routing by accident, and it must not
+silently drop it either: **an unrouted child of a routed parent is a refusal**, not a fallback.
+
+#### The guards, which refuse rather than fall back
+
+In the generated job script, before `claude` runs, in the style of the existing `cd` and
+`command -v claude` guards — both of which exist because a session that starts in a wrong state and
+*looks* fine is this file's recurring failure:
+
+1. the state dir exists and its `projects` link resolves to the shared tree;
+2. `/api/oauth/profile`, using the dir's own credential, returns the **account uuid and org** the
+   registry recorded — not merely an email, and not merely "logged in";
+3. no competing `ANTHROPIC_*` credential or provider variable survives into the child.
+
+Any failure is `FATAL`, no session, via the existing `failTo` mechanism. **None of them may fall
+back to the ambient account** — that is the entire point of the stage.
+
+Sol's fuller refusal list, adopted: missing or invalid registry for explicit *or* auto routing;
+unknown name; wrong family or role; duplicate canonical state dir or provider uuid; missing
+credentials; profile mismatch; wrong or dangling `projects` link; non-first-party effective auth;
+and inability to reserve on the target box.
+
+**One honest gap, named rather than discovered:** a `--wait` launch checks identity now and starts
+Claude hours later, so the check can be stale by the time it spends anything. The guards run inside
+the job script, after the wait, for exactly this reason.
+
+#### Recording which account a session is on
+
+**Not the launch log alone.** `appendLog()` writes under the *invoking* machine's home
+(`gjd-remote.ts:1926`), which is often Greg's Mac — so it can neither drive on-box selection nor
+tell the dashboard anything. The account goes into **versioned tmux metadata** beside
+`CLAUDE_SESSION_ID` (family, account name, provider uuid), with the log as a secondary record.
+Existing v1 metadata keeps being accepted.
+
+#### `--account auto`
+
+Among **pool** accounts of the right family, never the orchestrator. Lowest live seven-day
+utilisation from `/api/oauth/usage`; **`unknown` sorts last and is never treated as 0%**; ties break
+by least-recently-*reserved*. With no eligible pool account it resolves to the **ambient account**
+and says so — see the default rule above.
+
+**A lock alone is not enough, and this is subtle.** Sol: *"A lock that merely serializes 'read
+lowest usage' still sends simultaneous launches to the same account because the usage reading has not
+changed."* Two launches a second apart both read mindstone at 3% and both go there. So under the
+lock we **write a reservation on the box** — account uuid, session uuid, created-at, outcome —
+before releasing it. A failed launch records a failure rather than erasing the attempt.
+Least-recently-reserved is concurrency-safe; a caller-local launch log is not.
+
+**Starvation, which the first design had.** Choosing purely by lowest known reading means an idle
+account whose reading is `unknown` is never chosen, so it never becomes known. Active/reserved load
+and recency are part of normal ranking, not just a tie-break.
+
+#### The call sites, which were the whole point
+
+`tools/overseer/dispatch.ts:126` and `tools/fleet/routes-new.ts:422` build `new-claude` argv with no
+account. **Both pass `--account auto`.** Without this the feature is a no-op that looks installed —
+Sol's round-1 P0-2, and the Overseer has authorised the change.
 
 ### Stage 3 — usage read per account
 
-The collector loops over every registered account's `configDir`, reading
-`<configDir>/.claude.json` through the `claudeJsonPath` parameter that already exists.
+> **Rewritten 2026-09-09** after Stage 0 and Sol's round-2 review. The previous version looped over
+> per-dir caches under the pool model. Both the source and the data model changed.
 
-**Measurement 3 is the constraint, and it is worth restating because it is counter-intuitive.** The
-usage cache is *one slot per config dir*, holding whichever account last wrote it. Under the pool
-model, fleet sessions run under the **shared** `~/.claude`, so that slot is last-writer-wins across
-accounts. Reading it therefore answers "what did the last session to run see?", not "how is each
-account doing?".
+The reading comes from **`/api/oauth/usage`, live, per account**, with identity from `/profile` on
+the same token snapshot. The per-dir cache is **diagnostic only**.
 
-What makes this work anyway is that **each account has its own config dir from Stage 1**, signed in
-by `auth login` — the doc's "signed in twice on purpose". Each account's own dir has its own slot,
-and nothing else writes to it.
+#### A correction to this plan's own evidence
 
-**But measurement 4 says nothing free refreshes a slot** — only a real session does. So an account's
-own dir goes stale the moment that account stops doing work *in that dir*, which under the pool model
-is always. The honest consequences, and the design:
+Stage 0's finding 4 said the live rehearsable reading (85%) agreeing with its cache (85%) was *"two
+joins that could disagree, agreeing"*. **That was overstated, and Sol was right to say so:** the
+cache is itself populated from `/api/oauth/usage`, so the two are the same source at two moments,
+not two independent instruments. The agreement shows the endpoint is self-consistent and that our
+parsing matches the CLI's. It is **not** corroboration that would survive the endpoint changing, and
+it cannot be used as a fallback when the endpoint fails. Recorded rather than quietly dropped,
+because the original claim is in this document and someone will read it.
 
-- **Take the free reading first.** Sample every registered config dir, plus the shared one, and
-  attribute each sample by its `accountUuid` — which `attributeCache()` already refuses to do
-  unsafely. An account that has recently run *anything* has a real reading.
-- **A stale reading is displayed as stale, never as a percentage that looks current.** This is
-  already the house rule, not a new one: `parseUsageWindow()` turns an expired window into
-  `{kind:"expired"}` with **no percentage field at all**, and rule 1 of the eight in
-  [usage-history.md](../project/usage-history.md) is *absence is never a zero*.
-- **No paid refresher in v1.** A tiny `claude -p` under each account's dir would refresh its slot,
-  and MindstoneRebel does something like it — but it bills the very account it measures, it needs a
-  scheduler this box does not have ([cron-scheduler.md](../project/cron-scheduler.md)), and gate 4 of
-  [overseer.md](../project/overseer.md#4-never-spend-what-you-are-rationing-and-the-budget-is-global)
-  says the supervisor must not burn the quota it exists to protect. **Simplest version first**: ship
-  the free reading, and let a real gap justify the paid one. Named here so it is a decision, not an
-  omission.
+#### It does not "slot into" the existing parser
 
-**Rationing.** `overseer usage` prints one block per account, and the Overseer reads **the tightest
-pool account and the orchestrator's separately** — one budget per account, stated per account, which
-is gate 4's principle applied rather than weakened. A pool account near its limit takes that account
-out of `auto`; the orchestrator near its limit is what pauses the fleet.
+Another overstatement of mine, corrected. `parseUsageCache` expects the `.claude.json` envelope —
+`cachedUsageUtilization` wrapping `fetchedAtMs`, `accountUuid` and `utilization`. **`/api/oauth/usage`
+returns the inner utilization object only.** So:
 
-**The doc fix.** `usage-history.md`'s "plausible and **untested**" sentence is replaced by what
-measurement 1 found, dated, with the version it was found on.
+- **`parseUsageWindow()` is directly reusable** — including its rule that an expired window yields a
+  reading with *no percentage field at all*;
+- a new **`parseLiveUsageResponse()`** supplies the envelope: observation time from our own clock,
+  identity from the same-token `/profile` result;
+- **an empty body `{}` is `unknown`, never a successful empty reading**, and the parser requires
+  recognisable expected windows.
 
-**Tests, red first:** fixture `.claude.json` files for two accounts; the loop attributes each to the
-right uuid; a config dir whose slot holds *another* account's uuid is not misattributed (the case
-measurement 3 creates); a missing or unreadable dir is one account's absence, never the whole
-report's failure; `overseer usage --json` grows a per-account array and the existing single-account
-output still parses.
+#### The data model has to become plural, and that is not a loop
+
+Sol's round-2 P0-3, verified: `UsageReport` is singular (`wire.ts:544`), the daemon runs one pass
+(`daemon.ts:313`), the composition root has one Claude collector (`overseer.ts:111`), and one
+account is projected into each history line (`usage-history-from-report.ts:219`).
+
+**Writing alternating existing-format lines for A then B does not work**, and this is the trap worth
+knowing: the chart **cuts every series absent from the current record**
+(`usage-history-series.ts:152`), so an A/B/A/B sequence renders as disconnected points rather than
+two lines. One record must carry *all* accounts.
+
+```text
+ClaudeUsageSnapshot
+  accounts[]     profile + live usage + diagnostic cache, per account
+  globalScan     the shared, unattributed transcript scan
+  collectedAt
+```
+
+**The transcript scan runs once**, not per account. 2.9 GB, and an unlabelled 429 belongs to no
+account: feeding the same rejection into `computeUsageVerdict` once per account would manufacture
+evidence. Attributable 429s need a durable on-box *session uuid → account uuid* record — which
+Stage 2's reservation ledger provides — and everything older or unmatched **stays global**. This is
+already rule 4 of the eight in [usage-history.md](../project/usage-history.md): *rejections are never
+attributed to an account*.
+
+**The file set is therefore bigger than the earlier plan said**: history schema, wire types,
+checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
+JSON, the UI, and their tests.
+
+#### When the endpoint moves, we must find out — containment is not detection
+
+`unknown` stops a wrong number being used. It does not tell anyone the readings have gone quiet, and
+a fleet rationing against permanent `unknown` is a fleet flying blind. Sol's list, adopted:
+
+- a strict parser with red tests for 401/403/404/429, timeout, invalid JSON, `{}` and a changed
+  envelope;
+- per-account last-success and consecutive-failure counts;
+- **a loud correlated alarm when every account fails with the same non-401 error or schema
+  mismatch** — that is the signature of an upgrade moving the endpoint, as against one account's
+  token expiring;
+- `claude-accounts check --live-usage`, non-zero on failure, to be run after every Claude upgrade;
+- first-failure and periodic still-failing logs from the daemon.
+
+The measurements were taken on 2.1.266; Sol confirms 2.1.267 still contains both paths.
+
+#### The 401 policy, which needs a choice rather than a principle
+
+Never refreshing the credential ourselves is settled. But *fail closed on a 401* has a consequence
+worth stating: **an idle account's token expires, so its reading goes `unknown`, so `auto` never
+picks it, so it stays idle.** Sol names the fork, and this plan takes the second arm:
+
+- **(a)** refuse to launch on an account whose `/profile` 401s — safe, and idle accounts eventually
+  become unusable;
+- **(b)** permit the launch from the registered state dir using the **stored** account uuid and org
+  plus the effective-auth checks, having first excluded every competing credential variable, and
+  **record that the launch used the expired-token exception**. Claude's own refresh then happens on
+  startup, and the next collection re-verifies against the server.
+
+**(b), with the exception recorded**, because (a) makes the pool shrink to whichever accounts happen
+to be busy — the opposite of the point. The weaker proof is explicit, logged, and re-checked
+immediately afterwards rather than assumed.
+
+A safe cheap improvement Sol suggests and we take: on a 401, **re-read `.credentials.json` once** in
+case another Claude process has already replaced the token, and retry only then. Never consume the
+refresh token.
+
+#### Rationing
+
+`overseer usage` prints one block per account. The Overseer reads the tightest **pool** account and
+the orchestrator's separately — one budget per account, stated per account.
+
+**A policy question that is not this plan's to settle**, raised in both reviews and referred to Greg
+via the Overseer: gate 4 says supervisor model calls share a budget, but it does not follow that
+exhausting the *orchestrator's* subscription should pause workers spending healthy *pool*
+subscriptions. Sol's recommendation, and mine: reserve the orchestrator account, stop discretionary
+orchestrator model calls when it is tight, and **do not** automatically pause healthy pool workers
+unless their work demonstrably requires orchestrator spend.
 
 ### Stage 4 — Usage Limits: one section per account, and Add account
 
@@ -621,7 +868,7 @@ Greg's separate low-priority tidy (qi-3sr3jht6: *X% used* only, parallel Claude/
 readings collapsed) is **folded in only where it falls out naturally** — the per-account section
 layout is the same work — and not widened into.
 
-**Superseded in part by [Stage 5](#stage-5--a-web-interface-that-drives-the-setup).** Greg asked for
+**Superseded in part by [Stage 5](#stage-5-a-web-interface-that-drives-the-setup).** Greg asked for
 the sub-mode to *drive* the setup rather than print commands, so the read-only version above is now
 the fallback if the pty flow proves brittle — not the target. The per-account section layout is
 unchanged and still belongs here.
@@ -658,20 +905,31 @@ a reason nobody would guess. The full URL survives intact in the **OSC-8 hyperli
 falls back to reassembling the wrapped text, never the other way round — and a test feeds it the
 captured five-chunk transcript from this measurement, so the wrapping case is red before it is green.
 
-**Because `setup-token` is a TUI, a real pty is required** (`node-pty`, or `script` as the boring
-fallback), and "capture the token from the output" means reading a rendered screen rather than a
-line. That is the fragile part, and it is why this is Stage 5: **the registry, the launchers and
-per-account usage all land first**, and the checklist keeps working, so if the pty flow proves too
-brittle we stop here having lost nothing.
+> **The `setup-token` column is now history, not a step.** The config-dir model dropped it, so the
+> web flow drives **one** browser sign-in per account and never handles a token at all. The
+> measurement is kept because it is the record of a real trap, and because it says something general
+> the pty driver still needs: **a Claude TUI wraps its visible URL and only the OSC-8 target is
+> whole.** If a future flow ever drives a TUI subcommand, that is the lesson.
 
-**Each step is its own state**, with its own failure text and a kill button: seed dir → login (URL
-shown, code taken from a form) → assert `auth status --json` names the expected email → `setup-token`
-→ capture the token → write the 0600 file → register. A stuck step is killable; nothing advances on
-"could not tell".
+**A real pty is still required** for `auth login` (`node-pty`, or `script` as the boring fallback),
+though its output is line-oriented and far easier than the TUI above. This remains Stage 5 because it
+is the least blocking work: **the registry, the launchers and per-account usage all land first**, and
+the manual three-step sequence keeps working, so if the pty flow proves brittle we stop here having
+lost nothing.
 
-**The token is never shown and never logged.** It goes from the pty buffer to a 0600 file. The page
-gets "written", not the value; the transcript the page displays is filtered, and the test asserts the
-token does not appear in what is rendered, stored or logged.
+**Each step is its own state**, with its own failure text and a kill button: create dir → login (URL
+shown, code taken from a form) → **verify identity via `/api/oauth/profile`** → seed → register.
+A stuck step is killable; nothing advances on "could not tell".
+
+**It is the wizard with a pty around one step, not a second implementation.** Stage 1's
+`claude-accounts add` takes a flag for every question precisely so this route drives the same code
+path. The only thing the web flow adds is the pty and the form that feeds the pasted code into it.
+
+**No credential is ever rendered, logged or stored by this flow** — there is no token to store, and
+the pty buffer for the login step is filtered before display. The test asserts nothing
+credential-shaped reaches what is rendered, stored or logged, including raw pty buffers, exception
+objects and captured test fixtures — Sol's note that "never logged" has to cover more than the
+browser output.
 
 #### Who may press it — this needs Greg's decision, and it is the reason this stage is last
 
@@ -719,9 +977,81 @@ checklist today, so neither is blocking.
 
 ## Greg's checklist — adding one Claude account
 
+**Once the wizard lands this is one command**, `npx tsx scripts/claude-accounts.ts add`, and the rest
+of this section is its specification rather than your instructions. Until then, here is the correct
+manual sequence — **three steps, and no token**.
+
+> **What changed, and why the earlier version would have wasted your time.** The first draft had you
+> run `claude setup-token` and store a token file. **The design no longer uses tokens at all**, so
+> those steps are not merely unnecessary, they are wrong — please don't run `setup-token`. The
+> earlier version is kept below the line as a record of what was corrected.
+
+**Do this on the box, in a tmux pane you can type into.** One browser sign-in per account: the box
+prints a URL, you open it on your laptop **in a private window** (otherwise you re-authorise the
+account you are already signed into), and paste the code back.
+
+```bash
+ACCT=pool2
+EMAIL='you@example.com'      # the NEW account's email, in quotes
+```
+
+**1. Make its directory**, refusing rather than overwriting if it is already there:
+
+```bash
+test -e "/home/greg/.claude-$ACCT" && echo "already exists — stop, and use the wizard to update it" || {
+  mkdir -p "/home/greg/.claude-$ACCT"
+  printf '{\n  "forceLoginMethod": "claudeai"\n}\n' > "/home/greg/.claude-$ACCT/settings.json"
+}
+```
+
+**2. Sign in:**
+
+```bash
+CLAUDE_CONFIG_DIR="/home/greg/.claude-$ACCT" claude auth login --claudeai --email "$EMAIL"
+```
+
+**3. Check it is the right person:**
+
+```bash
+CLAUDE_CONFIG_DIR="/home/greg/.claude-$ACCT" claude auth status --json
+```
+
+Expect `"loggedIn": true`, `"subscriptionType": "max"`, and **`"email"` showing the new account**. If
+it shows the old one, the private-window step did not take: `claude auth logout` under that same
+`CLAUDE_CONFIG_DIR`, then step 2 again.
+
+**Then stop.** The rest — seeding the directory so a dispatched session has the MCP servers, the
+model, auto mode and the shared memory, pinning the account's uuid, and registering it — is what the
+wizard does, and doing it by hand is what you told us was fiddly. **An account that is signed in but
+not yet registered is harmless**: nothing will dispatch onto it until it is in the registry.
+
+> **A caution about step 3, which is weaker than it looks.** A config dir can hold a valid credential
+> and still report `email: null` — identity comes from `.claude.json`, not from the credential
+> itself, measured on the box. So a `null` email is not proof of anything, and the authoritative
+> check is `/api/oauth/profile`, which the wizard runs. If step 3 shows `null`, don't conclude
+> either way; say so and let the wizard settle it.
+
+---
+
+<details>
+<summary>The superseded first version, kept as the record of what was wrong</summary>
+
+
+> **SUPERSEDED — do not follow this by hand.** Greg, 2026-09-09, having run it: *"It was a bit
+> fiddly to add the new accounts, and I think I might have missed some steps. Can you write a CLI
+> script that I can call, that asks me questions, and then does everything for me."* So this is now
+> **the wizard's specification**, not his instructions —
+> [Stage 1](#stage-1-the-wizard-greg-runs-and-the-account-registry) is what he runs.
+>
+> **Two things changed since it was written and both would mislead:** steps 4 and 5 minted a
+> `setup-token`, which the config-dir model does not use at all and which Greg should *not* run; and
+> step 3's check is weaker than it looks, because a config dir can hold a valid credential and still
+> report `email: null`. Kept here because the wizard has to do each of these steps correctly, and
+> because the corrections are the record of what was wrong.
+>
 > **Corrected 2026-09-09 after GPT Sol's review**, which found seven defects in the first version —
 > including one that was shell redirection rather than a placeholder, so pasting it would have hung
-> the terminal. Following this version literally has been checked against the box.
+> the terminal.
 
 **Do this once per new account.** Everything here runs *on the box*, **in a tmux pane you can type
 into**. It has to be interactive: two of the steps open a browser login, and there is nobody but you
@@ -859,3 +1189,6 @@ adding accounts changes nothing you have not asked to change.
 **Codex/ChatGPT accounts wait for your signal**, as you said. The registry already has a `family`
 column for them, so adding one later is the same shape rather than a second system.
 
+
+
+</details>
