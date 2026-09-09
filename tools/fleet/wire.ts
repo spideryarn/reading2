@@ -20,6 +20,32 @@
  * So: **types only, no runtime values, no imports.** A `const` here would be
  * bundled into the browser; an import here would take the client's project with
  * it.
+ *
+ * ## Adding to this file, when several sessions are doing it at once
+ *
+ * Six sessions have appended here in two days, so the convention matters more
+ * than it looks. **Append a new block at the end; do not reorganise what is
+ * above it.** A rename in this file is invisible to a client that re-declares
+ * the same shape by hand, which is the whole reason the file exists.
+ *
+ * **Open your block with a UNIQUELY NAMED banner, not the bare separator.**
+ * Measured 2026-09-09: two sessions appended disjoint blocks within minutes of
+ * each other and git conflicted them anyway — not on any type, but on the
+ * identical decorative separator line both blocks opened with (a slash-star
+ * banner rule, which cannot be written out here without ending this comment).
+ * The append rule was
+ * written to stop somebody reorganising existing types, and accidentally
+ * guaranteed a textual conflict between two people following it perfectly. A
+ * banner naming the block has nothing in common with anyone else's.
+ *
+ * **If you do have to resolve a conflict here, verify the result rather than
+ * reading it.** Reconstruct as (merge-base + theirs + yours) from the two
+ * parents, then assert that every `export type` name from BOTH sides survives,
+ * and count them. Hand-resolving a long conflict region is exactly where one
+ * declaration goes missing silently, and "keep both blocks" looks so obviously
+ * right that nobody re-counts afterwards. The mirror image has bitten this repo
+ * too: a merge that DUPLICATED a list entry it did not conflict on, with no
+ * markers and every test green.
  */
 
 /* ------------------------------------------------------------------ *
