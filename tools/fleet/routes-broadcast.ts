@@ -77,16 +77,31 @@
  *
  * Three separate delivery vocabularies have had to be removed from this
  * dashboard. So the recipient union splits in two: **an outer arm saying what
- * this fan-out did about the row — attempted, queued, skipped, not-reached —
- * and, on `attempted` only, the steer route's own response embedded whole.**
+ * this fan-out did about the row — attempted, queued, skipped, held,
+ * not-reached — and, on `attempted` only, the steer route's own response
+ * embedded whole.**
  * Scheduling above, delivery below, and only the lower half has a delivery
  * reading in it. Folding `working` and `deadline` into `{ok:false, delivery:
  * "none"}` — which is what this file did first — is inventing a second
  * vocabulary while claiming not to. See `BroadcastRecipient`.
  *
+ * ## NOTHING HERE HOLDS THE TRANSPORT
+ *
+ * This route does not import `sendMessage` and cannot: every keystroke goes
+ * through `send-coordinator.ts`, which asks the quarantine book whether that
+ * session is HELD on the line above the transport call. It has to be that way
+ * round rather than a check this file remembers to make — a hold was recorded
+ * by three producers and enforced by one, and this file was one of the two that
+ * could type into a session the page was drawing as held. `SendAttempt`'s
+ * `held` arm is the outcome; `kind: "held"` below is what a recipient gets.
+ *
+ * The coordinator also owns the two readings this file used to make for itself:
+ * whether an ambiguous failure means *nothing left this process* (`nothingWasSent`,
+ * never `result.delivery` alone) and what to write in the book when it does not.
+ *
  * ## IT MUST NOT HOLD THE SERVER'S ONLY THREAD
  *
- * `sendMessage` is synchronous — three `execFileSync` tmux calls with ten-second
+ * The transport is synchronous — three `execFileSync` tmux calls with ten-second
  * timeouts each — so a fan-out of thirty-six on the box this button exists FOR
  * (load 391, tmux calls timing out) is minutes during which the page, the SSE
  * stream and every other route answer nothing. So the loop hands the event loop
@@ -102,8 +117,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderMessage, type Speaker } from "./actions.js";
-import { sharedQuarantineBook, type QuarantineBook, type UncertainSendReading } from "./quarantine.js";
-import { deliveryGate, nothingWasSent, type EnqueueRefusalRule } from "./queue.js";
+import { deliveryGate, type EnqueueRefusalRule } from "./queue.js";
 /* **THE ONE DOOR TO THE ONE QUEUE.** Written like `drainSharedQueues` beside
    it, and for the reason both that function and server.ts's mount point already
    state: two `SteeringQueue`s would be two queues, and the one the page can see
@@ -122,7 +136,11 @@ import {
   REFUSAL_STATUS,
   type Parsed,
 } from "./routes-steer.js";
-import { checkText, describeSend, sendMessage as realSendMessage, type SteerResult, type SteerTarget } from "./steer.js";
+/* **THE ONLY WAY THIS FILE CAN TYPE AT A PANE**, and there is no transport
+   beside it. `tests/fleet-imports.test.ts` fails if `sendMessage` is imported
+   here again. */
+import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
+import { checkText, describeSend, type SteerTarget } from "./steer.js";
 import type { FleetStatus } from "./status.js";
 import type { Delivery } from "./wire.js";
 
@@ -220,6 +238,23 @@ export type BroadcastRecipient = { sessionId: string; paneId: string } & (
   | { kind: "would-queue" }
   /** Keys went at the pane. The steer response, whole. */
   | { kind: "attempted"; attempt: AttemptedSend }
+  /**
+   * **NOTHING WAS TYPED AT THIS ONE, AND THE TRANSPORT WAS NEVER REACHED.**
+   *
+   * The session is HELD: an earlier send to it came back with nobody able to
+   * account for it, so the literal text may be sitting in that input box with
+   * no Enter behind it, and a broadcast sentence landing behind half of
+   * somebody else's would be read by the agent as one instruction neither
+   * person wrote. `send-coordinator.ts` refuses on the line above the send.
+   *
+   * **A SCHEDULING ARM RATHER THAN AN `attempted` REFUSAL, and that is the same
+   * rule as everything else in this union.** `{ok:false, delivery:"none"}` would
+   * say the send was attempted and refused, when it was never attempted at all
+   * — and `delivery` is the steer route's word for what the TRANSPORT reported.
+   * It is not `skipped` either: that arm means *could never be typed into*, and
+   * a hold is a thing a person releases. `why` is the hold's own sentence.
+   */
+  | { kind: "held"; why: string }
   /** Working, so it went in that session's queue and drains at its next prompt. */
   | { kind: "queued"; position: number }
   /** Could never be typed into — a shell, a dead Claude. `drainGate`'s sentence. */
@@ -246,6 +281,15 @@ export type BroadcastCounts = {
   queued: number;
   /** Rows that could never be typed into. */
   skipped: number;
+  /**
+   * Rows nothing was typed at because that session is HELD.
+   *
+   * **COUNTED, AND SEPARATELY.** A held recipient is neither submitted nor
+   * skipped, and leaving it out of the counts altogether is how a fan-out
+   * reaches most of the fleet and reads as though it reached all of it — the
+   * failure this whole route is written against.
+   */
+  held: number;
   /** Rows the fan-out did not get to before its deadline. */
   notReached: number;
 };
@@ -320,11 +364,19 @@ export type EnqueueForBroadcast =
       | { ok: false; rule: EnqueueRefusalRule; why: string });
 
 export type BroadcastDeps = {
-  sendMessage: typeof realSendMessage;
+  /**
+   * **The only thing here that can type into a pane** — `send-coordinator.ts`.
+   *
+   * There is no `sendMessage` beside it and there must never be one: the
+   * coordinator asks the one book of per-session holds whether this session is
+   * HELD on the line above the transport call, so a broadcast cannot land
+   * behind half a sentence somebody else left in that input box. It owns the
+   * recording too — `deps.send.book()` is the same book the drain consults.
+   * `tests/fleet-compile-guards.test.ts` fails if a transport reappears here.
+   */
+  send: SendCoordinator;
   now: () => number;
   log: (line: string) => void;
-  /** The one book of per-session holds. See the fan-out's hold comment. */
-  quarantine: QuarantineBook;
   /** See `EnqueueForBroadcast`. */
   enqueue: EnqueueForBroadcast;
   /**
@@ -349,10 +401,14 @@ export type BroadcastDeps = {
 
 export function realBroadcastDeps(): BroadcastDeps {
   return {
-    sendMessage: realSendMessage,
+    /* THE SAME BOOK, REACHED THE SAME WAY THE OTHER PRODUCERS REACH IT.
+       `sharedSendCoordinator()` is built over `sharedQuarantineBook()`, so a
+       hold this route opens is one the drain and the page can see, and one the
+       drain opened stops this route. `tests/fleet-send-composition.test.ts`
+       asserts that by identity rather than leaving it to this comment. */
+    send: sharedSendCoordinator(),
     now: () => Date.now(),
     log: (line) => console.log(line),
-    quarantine: sharedQuarantineBook(),
     enqueue: null,
     runEnabled: () => process.env["FLEET_BROADCAST_ENABLED"] !== "0",
     /* `setImmediate` rather than `await null`: a microtask does not let the
@@ -495,47 +551,76 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         continue;
       }
 
+      /* RENDERED HERE, ONE LINE ABOVE THE SEND — not above the loop and not
+         in the parse. A staggered sentence names a wall-clock time, and a
+         fan-out that sat behind thirty ten-second tmux calls would otherwise
+         promise the last recipient a moment that has already passed. Free text
+         does not need this; the caller that this loop is meant to absorb does,
+         and building the seam anywhere else would be building it wrong. */
+      const text = render(index, total);
+
       /**
-       * **A PRODUCER OF AMBIGUOUS SENDS, AND IT IS THE SAME BOOK AS THE OTHERS.**
+       * What this send is, for the coordinator — and therefore for the hold.
        *
+       * **A PRODUCER OF AMBIGUOUS SENDS, AND IT IS THE SAME BOOK AS THE OTHERS.**
        * A `partial` or `unknown` means the literal text may be sitting in that
        * agent's input box with no Enter behind it. `drain.ts` already refuses to
-       * retry such a send; what nothing stops without this is the NEXT queued
+       * retry such a send; what nothing stops without a hold is the NEXT queued
        * item draining onto the end of it, so the agent reads one instruction
-       * neither person wrote. `quarantine.ts` is the leaf every producer reaches.
+       * neither person wrote. That recording is the coordinator's now — it
+       * happens on the line above the transport call, where this loop cannot
+       * forget it.
        *
-       * `what` describes the payload and never contains a word of it.
+       * **AND THE READING GOES THE OTHER WAY TOO**, which is the half this route
+       * was missing: a recipient that is ALREADY held is not typed at, at all.
+       * This file recorded holds and never consulted them, so a broadcast typed
+       * into every session the page was drawing as quarantined.
+       *
+       * `onThrow: "hold"` because there is no lease here to leave open — an
+       * exception out of the transport cannot say whether it happened before the
+       * first keystroke or out of the middle of the sequence, and a hold is the
+       * only record there is. `what` describes the payload by its length and
+       * never contains a word of it: this sentence is stored on the hold, logged
+       * and drawn on a page.
        */
-      const hold = (reading: UncertainSendReading): void => {
-        const opened = deps.quarantine.hold({
-          sessionId: rec.target.sessionId,
-          paneId: rec.target.paneId,
-          claudeSessionId: rec.target.claudeSessionId,
-          reading,
-          origin: "broadcast",
-          what: `broadcast (${render(index, total).length} characters)`,
-        });
-        deps.log(
-          `broadcast: HELD session=${rec.target.sessionId} hold=${opened.id} v${opened.version} reading=${reading}`,
-        );
+      const purpose: SendPurpose = {
+        origin: "broadcast",
+        what: `broadcast (${text.length} characters)`,
+        onThrow: "hold",
+        record: { kind: "book" },
       };
+      const attempt = deps.send.message(rec.target, text, rec.declaredStatus, purpose);
 
-      let result: SteerResult;
-      try {
-        /* RENDERED HERE, ONE LINE ABOVE THE SEND — not above the loop and not
-           in the parse. A staggered sentence names a wall-clock time, and a
-           fan-out that sat behind thirty ten-second tmux calls would otherwise
-           promise the last recipient a moment that has already passed. Free text
-           does not need this; the caller that this loop is meant to absorb does,
-           and building the seam anywhere else would be building it wrong. */
-        result = deps.sendMessage(rec.target, render(index, total), rec.declaredStatus);
-      } catch (e) {
+      if (attempt.kind === "held") {
+        /* **NOTHING WAS TYPED AT THIS ONE**, and the loop carries on to the
+           rest: one session holding half of somebody else's sentence is a
+           reason not to speak to that session, never a reason to say nothing to
+           the other thirty-five. The sentence is the hold's own, so the page
+           reads why rather than a word this file made up. */
+        deps.log(
+          `broadcast: not sent session=${rec.target.sessionId} code=session-held ` +
+            `hold=${attempt.hold.id} v${attempt.hold.version} reading=${attempt.hold.reading}`,
+        );
+        into.set(rec.target.paneId, { ...where, kind: "held", why: attempt.why });
+        continue;
+      }
+
+      /* THE HOLD THIS SEND OPENED, if the coordinator opened one — logged here
+         rather than decided here. Never the standing hold above: that one
+         stopped a send, and this one is a consequence of one. */
+      const opened = attempt.hold;
+      if (opened !== null) {
+        deps.log(
+          `broadcast: HELD session=${rec.target.sessionId} hold=${opened.id} v${opened.version} reading=${opened.reading}`,
+        );
+      }
+
+      if (attempt.kind === "threw") {
         /* A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT: the call may
            have thrown before the first keystroke or out of the middle of the
-           sequence, and nothing here can tell. That is the reason to hold, not
-           a reason to assume the first. */
-        hold("threw");
-        const why = `the delivery module threw: ${(e as Error).message}`;
+           sequence, and nothing here can tell. That is the reason the hold above
+           was opened — `onThrow: "hold"` — not a reason to assume the first. */
+        const why = `the delivery module threw: ${attempt.error.message}`;
         deps.log(`broadcast: FAILED session=${rec.target.sessionId} ${oneLine(why)}`);
         into.set(rec.target.paneId, {
           ...where,
@@ -545,18 +630,15 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         continue;
       }
 
+      const result = attempt.result;
       if (!result.ok) {
-        /* **ASKED OF `nothingWasSent`, NOT OF `result.delivery`.** That function
-           is the one audited place that reads both halves — the summary and the
-           list of tmux calls that completed — and a `delivery: "none"` with a
-           non-empty list is a self-contradicting report whose honest reading is
-           that something went out. Comparing the summary here would be a second
-           opinion, and the more confident of the two. */
-        if (nothingWasSent(result) === null) {
-          hold(
-            result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted",
-          );
-        }
+        /* **THE HOLD ABOVE WAS DECIDED BY `nothingWasSent`, NOT BY
+           `result.delivery`.** That function is the one audited place that reads
+           both halves — the summary and the list of tmux calls that completed —
+           and a `delivery: "none"` with a non-empty list is a self-contradicting
+           report whose honest reading is that something went out. The reading is
+           the coordinator's; a second opinion here would be the more confident
+           of the two. */
         /* `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and
            this file promises no word of it reaches the log. `oneLine`, because a
            refusal's `why` names what it found, and that comes out of another
@@ -595,6 +677,7 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     let submitted = 0;
     let queued = 0;
     let skipped = 0;
+    let held = 0;
     let notReached = 0;
     for (const row of rows) {
       switch (row.kind) {
@@ -607,6 +690,9 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         case "skipped":
           skipped += 1;
           break;
+        case "held":
+          held += 1;
+          break;
         case "not-reached":
           notReached += 1;
           break;
@@ -614,7 +700,7 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
           break;
       }
     }
-    return { asked, submitted, queued, skipped, notReached };
+    return { asked, submitted, queued, skipped, held, notReached };
   }
 
   /**
@@ -878,7 +964,14 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
        a few map writes and cannot block; the sends are `execFileSync` tmux calls
        that may each take ten seconds and may hit the deadline. Doing the slow
        half first would let a deadline swallow the fast half for no benefit —
-       the working sessions would lose a line that cost nothing to store. */
+       the working sessions would lose a line that cost nothing to store.
+
+       **AND A HELD SESSION IS STILL QUEUED FOR, DELIBERATELY.** A hold stops
+       delivery at `SteeringQueue.next()`, not at enqueue: the item waits and
+       goes out when somebody releases the hold. Refusing here would throw
+       away a line because of a fault in a different send. That is why nothing
+       in this loop asks the quarantine book — the half that must ask is the
+       fan-out below, and it asks through the coordinator. */
     const enqueue = deps.enqueue;
     if (enqueue !== null) {
       for (const rec of queueable) {
@@ -933,7 +1026,10 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
        queue-only broadcast whose every enqueue was refused — session full, fleet
        full, double-tap — answered 200 and held the fleet for ten minutes having
        done nothing at all. The cooldown is there to stop the fleet being
-       interrupted twice, and nothing that interrupted nobody has spent it.
+       interrupted twice, and nothing that interrupted nobody has spent it. A
+       fan-out whose every recipient turned out to be HELD is the same case and
+       comes out the same way: the transport was not reached once, so no agent
+       was interrupted and the fleet is not locked out for ten minutes.
 
        Safe at this point for the same reason the `bad-text` rollback is: the
        only thing that can have moved `lastBroadcastAt` since we took it is
@@ -945,7 +1041,7 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     }
     deps.log(
       `broadcast: done asked=${counts.asked} submitted=${counts.submitted} queued=${counts.queued} ` +
-        `skipped=${counts.skipped} notReached=${counts.notReached}`,
+        `skipped=${counts.skipped} held=${counts.held} notReached=${counts.notReached}`,
     );
 
     respond(res, 200, { ok: true, op: "broadcast", result: { counts, recipients: rows } });

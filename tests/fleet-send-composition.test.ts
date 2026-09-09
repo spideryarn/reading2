@@ -31,6 +31,7 @@ import { describe, expect, it } from "vitest";
 
 import { QuarantineBook, sharedQuarantineBook } from "../tools/fleet/quarantine.js";
 import { makeActionRoutes, realActionDeps } from "../tools/fleet/routes-actions.js";
+import { realBroadcastDeps } from "../tools/fleet/routes-broadcast.js";
 import { createRateLimiter, makeSteerRoutes, realSteerDeps } from "../tools/fleet/routes-steer.js";
 import { makeSendCoordinator, sharedSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { SteerResult } from "../tools/fleet/steer.js";
@@ -99,12 +100,14 @@ describe("there is one quarantine book in this process", () => {
   it("is the book BOTH real compositions reach, by identity", () => {
     // Not "a book each". The steering route reaches it through the shared send
     // coordinator; the action routes reach it twice over, once for the queue
-    // that `next()` asks and once for the coordinator the broadcast sends
-    // through. Three paths, one object.
+    // that `next()` asks and once for the coordinator the ease-off broadcast
+    // sends through; the free-text broadcast route reaches it the same way.
+    // Four paths, one object.
     const shared = sharedQuarantineBook();
     expect(realSteerDeps().send.book()).toBe(shared);
     expect(realActionDeps().send.book()).toBe(shared);
     expect(realActionDeps().queue.quarantineBook()).toBe(shared);
+    expect(realBroadcastDeps().send.book()).toBe(shared);
     expect(sharedSendCoordinator().book()).toBe(shared);
   });
 

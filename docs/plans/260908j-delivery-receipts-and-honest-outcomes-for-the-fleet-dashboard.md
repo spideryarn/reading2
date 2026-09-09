@@ -488,6 +488,14 @@ it as **evidence** of why the send stopped, which is a different claim from how 
 `firstSeenGeneration` — its own field, because it is not a claim about the moment of the send — and
 the next distinct one supersedes it. The window is one refresh cycle again rather than indefinite.
 
+**A FIFTH PRODUCER LANDED WHILE THIS WAS BEING WRITTEN, AND THE GUARD CAUGHT IT.** `POST
+/api/broadcast` (`tools/fleet/routes-broadcast.ts`) was merged from another session holding
+`sendMessage` on its own deps, so it could type into a session the page was drawing as held — and
+`tests/fleet-imports.test.ts` went red on it rather than anybody noticing. It now takes a
+`SendCoordinator` like the rest, a held recipient gets its own scheduling arm (`kind: "held"`, its
+own count, and the hold's own sentence — never a refusal claiming `delivery: "none"`, which would
+say a send was attempted that was never made), and the rest of the fan-out still goes out. 2026-09-09.
+
 **Done:** 1,776 fleet tests green across 45 files; typecheck exit 0; nine mutations, nine caught,
 including `shared ??=` → `shared =`, which the review demonstrated the whole suite could sleep
 through. U1 is untouched and is Stage 4b.

@@ -43,6 +43,7 @@ import type {
 } from "../tools/fleet/wire.js";
 import type { DrainDeps } from "../tools/fleet/drain.js";
 import { realActionDeps, type ActionDeps } from "../tools/fleet/routes-actions.js";
+import { realBroadcastDeps, type BroadcastDeps } from "../tools/fleet/routes-broadcast.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
 import { REFUSAL_STATUS, realSteerDeps, type SteerDeps } from "../tools/fleet/routes-steer.js";
 import type { SendCoordinator } from "../tools/fleet/send-coordinator.js";
@@ -413,7 +414,7 @@ describe("the launch record's own shape", () => {
  * `send-coordinator.ts`. A producer that could reach `sendMessage` or
  * `answerQuestion` from its own dependency object could send without ever
  * consulting the book — which is precisely what the direct steer route and the
- * broadcast were doing until the review of Stage 4 found it.
+ * two broadcasts were doing until the review of Stage 4 found it.
  *
  * **A RUNTIME TEST CANNOT SAY THIS.** "There is no such field" is a statement
  * about a type, so the assertion has to be one too: each directive below says
@@ -436,19 +437,22 @@ describe("the transport is the coordinator's and nobody else's", () => {
     type SteerTransport = SteerDeps["sendMessage"];
     // @ts-expect-error the same for answering a dialog, which is keystrokes too.
     type SteerAnswerTransport = SteerDeps["answerQuestion"];
-    // @ts-expect-error and for the broadcast.
+    // @ts-expect-error and for the ease-off broadcast next door.
     type ActionTransport = ActionDeps["sendMessage"];
+    // @ts-expect-error and for the free-text broadcast, which held one until
+    // 2026-09-09 and could therefore type into a session the page showed as HELD.
+    type BroadcastTransport = BroadcastDeps["sendMessage"];
     // @ts-expect-error and for the drain.
     type DrainTransport = DrainDeps["sendMessage"];
-    type Unused = [SteerTransport, SteerAnswerTransport, ActionTransport, DrainTransport];
+    type Unused = [SteerTransport, SteerAnswerTransport, ActionTransport, BroadcastTransport, DrainTransport];
     void (undefined as unknown as Unused);
 
-    // THE PAIRED POSITIVE, built rather than described: all three carry the one
-    // object that can type at a pane, and it is the same type in each.
+    // THE PAIRED POSITIVE, built rather than described: every producer carries
+    // the one object that can type at a pane, and it is the same type in each.
     const coordinators: SendCoordinator[] = [
       realSteerDeps().send,
       realActionDeps().send,
-      realActionDeps().send,
+      realBroadcastDeps().send,
     ];
     for (const c of coordinators) expect(typeof c.message).toBe("function");
     expect(coordinators.every((c) => typeof c.book === "function")).toBe(true);

@@ -47,6 +47,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { enqueueSharedMessage } from "../tools/fleet/routes-actions.js";
 import { makeBroadcastRoutes, type BroadcastDeps, type BroadcastRecipient } from "../tools/fleet/routes-broadcast.js";
+import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 
@@ -116,20 +117,46 @@ const OK: SteerResult = {
 type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 type Queued = { sessionId: string; text: string; speaker: string };
 
-function harness(over: Partial<BroadcastDeps> = {}) {
+/**
+ * A transport, as the tests write one.
+ *
+ * **THE FAKE IS BELOW THE COORDINATOR, NOT INSTEAD OF IT.** The route has no
+ * transport any more — it holds a `SendCoordinator`, which asks the quarantine
+ * book whether a session is HELD on the line above the send. So the harness
+ * builds the REAL coordinator over a fake transport: a test that stubbed the
+ * coordinator would be testing a route that cannot exist, and the check the
+ * quarantine depends on would never run.
+ */
+type FakeTransport = (target: SteerTarget, text: string, declaredStatus: FleetStatus) => SteerResult;
+
+/** The real coordinator, over a fake transport and a book the test can seed. */
+function coordinator(book: QuarantineBook, sendMessage: FakeTransport) {
+  return makeSendCoordinator({
+    book,
+    sendMessage,
+    // Nothing here answers a dialog. A throw rather than a stub, so a route
+    // that started to would be loud rather than quietly fine.
+    answerQuestion: () => {
+      throw new Error("a broadcast never answers a dialog");
+    },
+  });
+}
+
+function harness(over: Partial<BroadcastDeps> & { sendMessage?: FakeTransport } = {}) {
   const calls: Sent[] = [];
   const queued: Queued[] = [];
   const log: string[] = [];
   let clock = 1_000_000;
   const quarantine = new QuarantineBook({ now: () => clock, serverInstanceId: "test-instance" });
+  const { sendMessage, ...rest } = over;
+  const transport: FakeTransport = (target, text, declaredStatus) => {
+    calls.push({ target, text, declaredStatus });
+    return sendMessage === undefined ? OK : sendMessage(target, text, declaredStatus);
+  };
   const deps: Partial<BroadcastDeps> = {
-    sendMessage: (target, text, declaredStatus) => {
-      calls.push({ target, text, declaredStatus });
-      return OK;
-    },
+    send: coordinator(quarantine, transport),
     now: () => clock,
     log: (line) => log.push(line),
-    quarantine,
     enqueue: (target, text, speaker) => {
       queued.push({ sessionId: target.sessionId, text, speaker });
       return { ok: true, position: queued.length };
@@ -138,9 +165,10 @@ function harness(over: Partial<BroadcastDeps> = {}) {
     // Synchronous in tests: the point of the seam is that the DEADLINE can be
     // driven by moving the clock, not by actually waiting.
     yieldToLoop: () => Promise.resolve(),
-    ...over,
+    ...rest,
   };
   return {
+    /** Every call that REACHED the transport. A held recipient leaves none. */
     calls,
     queued,
     log,
@@ -761,6 +789,97 @@ describe("a session left in doubt is held", () => {
   });
 });
 
+describe("a session that is ALREADY held is not typed into", () => {
+  /**
+   * **THE HALF THIS ROUTE WAS MISSING.** It recorded holds and never consulted
+   * one, so a broadcast typed into every session the page was drawing as
+   * quarantined — and the text it typed landed behind whatever half-sentence
+   * was already in that input box, which the agent then reads as one
+   * instruction neither person wrote.
+   *
+   * The check is the coordinator's, on the line above the transport call, and
+   * these go through the real one — see `FakeTransport`.
+   */
+  function holdSession(book: QuarantineBook, sessionId: string, paneId: string): void {
+    book.hold({
+      sessionId,
+      paneId,
+      claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+      reading: "partial",
+      origin: "direct-steer",
+      what: "message (10 characters)",
+    });
+  }
+
+  it("does not reach the transport for the held one, and still delivers to the rest", async () => {
+    holdSession(h.quarantine, "$2", "%2");
+    const r = await post(
+      h.routes,
+      run({ recipients: [recipient({ id: "$1" }), recipient({ id: "$2" }), recipient({ id: "$3" })] }),
+    );
+    expect(r.status).toBe(200);
+
+    /* **NOT ONE KEYSTROKE AT THE HELD SESSION.** The assertion is about the
+       TRANSPORT rather than about the response body: a route that sent and then
+       described it as held would satisfy any reading of the JSON. */
+    expect(h.calls.map((c) => c.target.sessionId)).toEqual(["$1", "$3"]);
+
+    /* **AND THE OTHER TWO STILL GOT THEIRS.** Refusing a whole fan-out over one
+       held session would be a different bug of the same size: thirty-five
+       agents told nothing because of a fault in a thirty-sixth. */
+    expect(attempt(row(r.json, "$1")).ok).toBe(true);
+    expect(attempt(row(r.json, "$3")).ok).toBe(true);
+    expect(result(r.json).counts["submitted"]).toBe(2);
+  });
+
+  it("reports it as held rather than as a refusal that claims nothing was delivered", async () => {
+    holdSession(h.quarantine, "$2", "%2");
+    const r = await post(h.routes, run({ recipients: [recipient({ id: "$1" }), recipient({ id: "$2" })] }));
+    const held = row(r.json, "$2");
+    /* `attempted` would say the send was made and refused, and its `delivery`
+       is the TRANSPORT's word for what happened — which is a word nothing can
+       say here, because the transport was never called. `skipped` is the arm
+       for a session that could never be typed into; a hold is a thing somebody
+       releases. So: its own scheduling arm, counted separately. */
+    expect(held.kind).toBe("held");
+    expect(held.kind === "held" && held.why).toMatch(/nothing was sent/i);
+    // The hold's own sentence, and no word of the message in it.
+    expect(held.kind === "held" && held.why).toContain("input box");
+    expect(held.kind === "held" && held.why).not.toContain("ease off");
+    expect(result(r.json).counts["held"]).toBe(1);
+    expect(result(r.json).counts["skipped"]).toBe(0);
+    expect(result(r.json).counts["submitted"]).toBe(1);
+  });
+
+  it("hands the cooldown back when every recipient was held, because nobody was interrupted", async () => {
+    holdSession(h.quarantine, "$1", "%1");
+    holdSession(h.quarantine, "$2", "%2");
+    const first = await post(h.routes, run());
+    expect(first.status).toBe(200);
+    expect(h.calls).toHaveLength(0);
+    /* Ten minutes of lockout for a broadcast that interrupted nobody would be
+       the cooldown punishing the operator for somebody else's half-sent
+       message. */
+    const second = await post(h.routes, run({ recipients: [recipient({ id: "$3" })] }));
+    expect(second.status).toBe(200);
+    expect(h.calls.map((c) => c.target.sessionId)).toEqual(["$3"]);
+  });
+
+  it("still QUEUES for a held session that is working, because a hold stops delivery and not storage", async () => {
+    /* The two halves pull opposite ways on purpose: the fan-out must not type
+       at a held session, and the queue must still accept for one — the item
+       waits and goes out when somebody releases the hold. Refusing here would
+       throw away a line because of a fault in a different send. */
+    holdSession(h.quarantine, "$2", "%2");
+    const r = await post(
+      h.routes,
+      run({ recipients: [recipient({ id: "$2", status: WORKING }), recipient({ id: "$1" })] }),
+    );
+    expect(row(r.json, "$2").kind).toBe("queued");
+    expect(h.queued.map((q) => q.sessionId)).toEqual(["$2"]);
+  });
+});
+
 describe("it must not hold the server's only thread", () => {
   it("stops at the deadline and names every row it never reached", async () => {
     /* `sendMessage` is synchronous — three execFileSync tmux calls with
@@ -770,14 +889,13 @@ describe("it must not hold the server's only thread", () => {
     const slow = harness({});
     let sent = 0;
     const routes = makeBroadcastRoutes({
-      sendMessage: () => {
+      send: coordinator(slow.quarantine, () => {
         sent += 1;
         slow.tick(40_000);
         return OK;
-      },
+      }),
       now: slow.at,
       log: () => {},
-      quarantine: slow.quarantine,
       enqueue: null,
       runEnabled: () => true,
       yieldToLoop: () => Promise.resolve(),
@@ -805,13 +923,12 @@ describe("it must not hold the server's only thread", () => {
     let sent = 0;
     let clock = 1_000_000;
     const routes = makeBroadcastRoutes({
-      sendMessage: () => {
+      send: coordinator(new QuarantineBook({ now: () => clock, serverInstanceId: "t" }), () => {
         sent += 1;
         return OK;
-      },
+      }),
       now: () => clock,
       log: () => {},
-      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "t" }),
       enqueue: null,
       runEnabled: () => true,
       yieldToLoop: async () => {
@@ -827,10 +944,9 @@ describe("it must not hold the server's only thread", () => {
   it("hands the event loop back between recipients", async () => {
     let yields = 0;
     const routes = makeBroadcastRoutes({
-      sendMessage: () => OK,
+      send: coordinator(new QuarantineBook({ now: () => 1_000_000, serverInstanceId: "t" }), () => OK),
       now: () => 1_000_000,
       log: () => {},
-      quarantine: new QuarantineBook({ now: () => 1_000_000, serverInstanceId: "t" }),
       enqueue: null,
       runEnabled: () => true,
       yieldToLoop: async () => {
