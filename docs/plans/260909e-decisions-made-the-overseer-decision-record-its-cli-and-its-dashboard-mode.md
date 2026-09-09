@@ -387,6 +387,92 @@ mark decisions reviewed in Greg's name — precisely the number the record exist
 CLI writes `reviewed`, and a review button waits on the same identity story the queue's writes wait
 on (§ Needs Greg).
 
+## The joint question for Greg: the dock is full
+
+**Raised once, on behalf of two tabs.** `questions-mode` is landing mode ten while this lands mode
+nine, and it and this session agreed to put the shape question to Greg jointly rather than each
+raising half of it — the Overseer's own practice when two tabs share a question. This draft is
+this session's; `questions-mode` reviews it, and whichever of us debriefs second carries it.
+
+### What this is about, in plain words
+
+The fleet dashboard has a bar along the bottom with one button per **mode** (a tab: Sessions, Box
+health, Deploys …). It is the only navigation the page has. Two more modes are landing today, taking
+it from eight to ten, and the bar has run out of room on a phone.
+
+### The measurement, and what kind of claim it is
+
+**Observed**, by session `readiness-tab` at 06:12Z on 2026-09-09, at 390 px on a touch viewport:
+
+> The dock has run out of rungs: at 390 px coarse-pointer the eight modes fit only as icon buttons
+> and the standalone Refresh sits past the edge; flex-grow cannot help when there is no free space,
+> so a ninth tab makes it worse.
+
+**Derived**, from `tailwind.css` — and stated as a derivation, not a reading, because nobody has yet
+put a ruler on nine or ten. Under `@media (pointer: coarse)` every button has a 40 px floor
+(`.dock-btn { min-width: 2.5rem }`); the active mode keeps its label even at the last fit rung; and
+`.dock` also carries Refresh, two 0.15 rem gaps, a left gutter and a trailing gutter element. That
+puts eight modes at roughly 440 px against a 390 px viewport, with each further mode adding about
+41 px — so ten lands near 520 px.
+
+**The two agree at eight**, which is the useful part: an independent observation and an independent
+derivation reach the same verdict at the count we can actually check. Neither has been measured at
+nine or ten, and `questions-mode` will put a ruler on it during its browser stage.
+
+The bar does not clip — `.dock` has `overflow-x: auto` at every width, deliberately, so the failure
+is an honest drag rather than a silent disappearance. What it does not have is any sign that there
+is more to drag, or any guarantee that the tab you are on is the part you can see.
+
+### What is already being done regardless of the answer
+
+Both sessions are landing a fix that makes a scrolling bar honest: the active mode is scrolled into
+view on load and on change, and an edge fade shows which side has more. That makes ten modes
+**survivable** — you always see where you are, and the bar visibly looks scrollable. It does not make
+ten modes **fit**, and no amount of CSS will.
+
+### The options
+
+**A — Live with a scrolling strip.** Ship the scroll-into-view fix and stop there. A horizontally
+scrolled tab strip is an ordinary mobile pattern (browser tabs, app store categories). *Costs:* you
+never see all ten at once on a phone, and finding a tab you have not used lately means dragging.
+*Gains:* nothing further to build; adding an eleventh mode costs nothing new.
+
+**B — Change the navigation shape.** Either a "More" overflow button holding the tail of the list, or
+a two-row bar on narrow screens. *Costs:* real work in the file every mode author edits, and an
+overflow menu makes the hidden modes second-class — the one you want is always in the menu.
+*Gains:* everything is reachable without dragging, and the count stops mattering.
+
+**C — Some of these should not be tabs.** `questions-mode`'s option, and the one worth thinking about
+hardest, because the bar being full may be a symptom rather than the problem. Ten peers implies ten
+equally important things, and they are not. Candidates, none of them decided:
+
+- **Queued ideas, Decisions and Questions are three views of one thing** — what the Overseer is
+  going to do, what it did in your name, and what it needs from you. They could be one tab with
+  three sub-views, taking the bar from ten to eight.
+- **Readiness and Deploys** both answer *is what we have good enough to ship*.
+- **Usage limits and Box health** — one is the box's body and the other its budget. `mode.ts` says
+  they sit adjacent on purpose, so this is the weakest of the three.
+
+*Costs:* a sub-view layer to build, and someone must decide the groupings — which is a product call,
+not an engineering one. *Gains:* the bar stops growing, and the page starts saying which things are
+peers.
+
+**D — Drop something.** If a tab is not being opened, it is not paying for its 41 px. Nobody is
+measuring which tabs get used, so this cannot be answered today; it becomes answerable if that is
+worth instrumenting.
+
+### What would decide it
+
+- If the phone is where you actually read this, A is the weakest — dragging to find a tab is the
+  thing you would do most.
+- If tabs keep arriving (and they have, four in one night), C is the only option that stops the
+  problem recurring; A and B both postpone it.
+- If the dashboard is mostly a desktop page and the phone is for glancing, A is fine and the rest is
+  not worth building.
+
+**Neither session is asking to build B or C now.** Both are shipping A's fix because a scrolling bar
+should be honest whatever else happens. The question is whether C is worth queueing.
+
 ## Migration: one hand-authored seed, and no importer
 
 **No prose importer.** The lines in
