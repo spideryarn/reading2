@@ -1,0 +1,31 @@
+
+> spideryarn@1.0.0 check
+> tsx scripts/check.ts
+
+
+── typecheck (gate)
+…
+💡 Auto-refactor with AI: npx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring
+🎩 New: Gangsta Agents — discipline your AI coding → gangsta.page
+💖 Support jscpd project → https://opencollective.com/jscpd
+
+============================================================
+summary
+============================================================
+  ✓ typecheck    clean
+  ✓ build        clean
+  ✗ test         FAILED
+  ✓ cycles       clean
+  ✓ chain        clean
+  ✓ committed    clean
+  ! lint         has findings
+      the lint baseline is not clean on purpose — docs/project/linting.md
+  ! knip         has findings
+      unused files/exports/deps are queued, not fixed — promote to a gate when this reaches zero
+  ! complexity   126 finding(s)
+      a high score means 'go and look', never 'this is wrong'
+  ! dupes        308 finding(s)
+      some duplication is honest; read before deduplicating
+
+A gate failed. That means something is newly wrong.
+EXIT=1

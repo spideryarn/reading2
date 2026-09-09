@@ -1,0 +1,11 @@
+Done — codex exec (gpt-5.6-sol, high, review, the ChatGPT subscription).
+Output: /tmp/claude-1000/-home-greg-code-spideryarn2/00000000-0000-4000-8000-000000000000/scratchpad/sol-followup-answer.md
+Activity log (not streamed): /tmp/claude-1000/-home-greg-code-spideryarn2/00000000-0000-4000-8000-000000000000/scratchpad/sol-followup-answer.md.activity.log
+--- output ---
+Choose **D**.
+
+…
+```
+
+I verified the argument handling, queue/work-key behavior, exporter projection, and pure validation command against the source. Per your constraint, I did not execute the Postgres-dependent commands.
+EXIT=0
