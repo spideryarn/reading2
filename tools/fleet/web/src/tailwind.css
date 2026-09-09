@@ -418,6 +418,21 @@
     display: none;
   }
 
+  /* A mask rather than a child: it occupies no space in the flex row, so the
+     fade cannot change `scrollWidth` and feed back into fit.ts's rung choice. */
+  .dock.dock-overflow-left {
+    mask-image: linear-gradient(to right, transparent 0, black 1rem, black 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black 1rem, black 100%);
+  }
+  .dock.dock-overflow-right {
+    mask-image: linear-gradient(to right, black 0, black calc(100% - 1rem), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 1rem), transparent 100%);
+  }
+  .dock.dock-overflow-left.dock-overflow-right {
+    mask-image: linear-gradient(to right, transparent 0, black 1rem, black calc(100% - 1rem), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black 1rem, black calc(100% - 1rem), transparent 100%);
+  }
+
   /* Nothing may shrink; growing into space that is already there is free.
      `flex-shrink: 0` rather than `flex: none`, because `none` also pins
      `flex-grow` and would out-specify the coarse-pointer rule below that lets
