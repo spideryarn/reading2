@@ -470,6 +470,22 @@ Roughly most-useful first.
 Ordered so the value is frontloaded: if the job stopped after Stage 3, Greg has a working Usage
 limits tab showing the current reading, and only the chart is missing.
 
+### A standing constraint on this run: the usage hold
+
+The Overseer put a hold on full suites at 2026-09-09 ~00:05 UTC — `five_hour` was at 40% at 23:50
+UTC and Greg is asleep, so the limit this plan is about is the limit this plan must not spend.
+**Focused suites only until the Overseer says the window is safe**, and be ready for a pause.
+
+Practically: every `npm test` below means *the focused files for that stage* until cleared, and the
+full run is deferred to the end. Fortunately the stage cut already suits this — Stages 1, 2 and 4
+are new files with their own test files, so `npx vitest run tests/fleet-usage-history*.test.ts`
+covers almost everything. `npm run typecheck` is unaffected: it is seconds, and it is the gate that
+actually catches a dropped `Record<Mode, …>` entry.
+
+There is a nice irony worth stating rather than leaving implicit: **this plan cannot verify itself
+tonight for exactly the reason it exists.** If the tab had shipped a week ago, the Overseer would be
+reading the hold off a chart instead of off a single reading with no history behind it.
+
 ### Stage 0: plan, and get it reviewed
 
 - [x] Sonnet research over transcripts, docs and code (two halves, both landed)
