@@ -20,8 +20,10 @@
  *
  * **THE PROMPT IS PROSE, NOT AN ARGUMENT — AND THAT TOOK TWO FIXES, NOT ONE.**
  * It is arbitrary text a person typed into a web page, and it goes to
- * `gjd-remote new-claude -p -`, which reads it from **stdin** — a pipe we
- * write, with `execFile` and an argument array, no shell anywhere in the chain.
+ * `gjd-remote new-claude --account auto -p -`, which reads it from **stdin** —
+ * a pipe we write, with `execFile` and an argument array, no shell anywhere in
+ * the chain. `auto` is explicit so the durable invocation records what this
+ * unattended fleet launch requested, even though it is also the CLI default.
  * So there is nothing to quote and nothing to escape: not for our exec, not for
  * the local shell, not for the ssh, not for the remote `tmux`.
  *
@@ -427,6 +429,8 @@ export function newClaudeArgs(
     script,
     "new-claude",
     ...(req.name === null ? [] : [req.name]),
+    "--account",
+    "auto",
     ...(req.unsafeDir ? ["-d", req.dir] : []),
     "-p",
     "-",

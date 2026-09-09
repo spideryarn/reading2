@@ -45,6 +45,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { isMain } from '../src/is-main.js';
 import {
+  defaultAccountRegistryPath,
+  readAccountRegistry,
+  resolveAccount,
+  type AccountEntry,
+  type RegistryReading,
+} from '../tools/overseer/accounts.js';
+import {
   answerIsUsable, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole, runChild,
   sameWriteTarget, sanitisedEnv, type RunResult,
 } from './subagent-cli.js';
@@ -187,6 +194,7 @@ interface Args {
   passEnv: string[];
   maxPrintChars: number;
   dryRun: boolean;
+  account?: string;
 }
 
 function fail(msg: string): never {
@@ -216,6 +224,7 @@ export function parseArgs(argv: string[]): Args {
       case '--access': out.access = value(flag) as Access; break;
       case '--effort': out.effort = value(flag); break;
       case '--auth': out.auth = value(flag) as Auth; break;
+      case '--account': out.account = value(flag); break;
       // A comma-separated override of the profile's tool list, for the run that needs WebFetch or
       // does not need Bash. `--tools ''` is "no tools at all", which the CLI accepts.
       case '--tools': out.tools = value(flag).split(',').map((t) => t.trim()).filter(Boolean); break;
@@ -239,6 +248,12 @@ export function parseArgs(argv: string[]): Args {
   if (!out.prompt && !out.promptFile) throw new Error('provide --prompt or --prompt-file');
   if (!ACCESS.includes(out.access)) throw new Error(`--access must be one of: ${ACCESS.join(', ')}`);
   if (!AUTH_MODES.includes(out.auth)) throw new Error(`--auth must be one of: ${AUTH_MODES.join(', ')}`);
+  if (out.account !== undefined && !/^[a-z0-9][a-z0-9-]{0,40}$/.test(out.account)) {
+    throw new Error('--account must be a lower-case registry name');
+  }
+  if (out.account !== undefined && out.auth !== 'machine') {
+    throw new Error('--account cannot be combined with --auth env; the two routes could select different credentials');
+  }
   // Validated here rather than by the CLI: `--effort hgih` exits 1 after the process has started,
   // with the reason in a stream nobody reads, and the caller sees a bare non-zero.
   if (!EFFORTS.includes(out.effort)) throw new Error(`--effort must be one of: ${EFFORTS.join(', ')}`);
@@ -246,6 +261,10 @@ export function parseArgs(argv: string[]): Args {
   // make a `machine` run pass a credential while every line about it said otherwise.
   const smuggled = out.passEnv.find((n) => ENV_CREDENTIALS.includes(n));
   if (smuggled) throw new Error(`--pass-env ${smuggled} would override --auth; use --auth env instead`);
+  const routedOverride = out.account === undefined ? undefined : out.passEnv.find(isProviderVar);
+  if (routedOverride) {
+    throw new Error(`--pass-env ${routedOverride} would override --account ${out.account}`);
+  }
   // `--auth env` with nothing to pass is a request that cannot be honoured: Claude carries on down
   // its own ladder and may well charge the machine's login, which is the account the caller was
   // deliberately not using. GPT Sol's F4, 2026-09-06. (Whether the variables it *did* find are the
@@ -400,7 +419,7 @@ export function parseResultEvent(ndjson: string): ClaudeResult | undefined {
  * prediction about what gets billed — `probeAuth` below is what answers that.
  */
 export function claudeEnv(
-  parent: NodeJS.ProcessEnv, auth: Auth, passThrough: string[] = [],
+  parent: NodeJS.ProcessEnv, auth: Auth, passThrough: string[] = [], stateDir?: string,
 ): NodeJS.ProcessEnv {
   const credentials = auth === 'env' ? ENV_CREDENTIALS : [];
   const drop = [
@@ -410,7 +429,42 @@ export function claudeEnv(
     // keep up to date. `passThrough` is re-added afterwards and so still wins.
     ...Object.keys(parent).filter((n) => ANTHROPIC_PREFIX.test(n)),
   ];
-  return sanitisedEnv(parent, [...credentials, ...passThrough], drop);
+  const env = sanitisedEnv(parent, [...credentials, ...passThrough], drop);
+  if (stateDir !== undefined) env.CLAUDE_CONFIG_DIR = stateDir;
+  return env;
+}
+
+export type RunClaudeAccountResolution =
+  | { kind: 'ambient' }
+  | { kind: 'value'; account: AccountEntry }
+  | { kind: 'refused'; why: string };
+
+export function resolveRunClaudeAccount(
+  registry: RegistryReading,
+  requested: string | undefined,
+  parentStateDir: string | undefined,
+): RunClaudeAccountResolution {
+  if (requested !== undefined) {
+    const resolved = resolveAccount(registry, requested);
+    if (resolved.kind === 'refused') return resolved;
+    if (resolved.account.family !== 'claude') {
+      return { kind: 'refused', why: `account ${JSON.stringify(requested)} belongs to ${resolved.account.family}, not claude` };
+    }
+    return { kind: 'value', account: resolved.account };
+  }
+  if (parentStateDir === undefined) return { kind: 'ambient' };
+  if (registry.kind === 'error') return { kind: 'refused', why: `account registry is invalid: ${registry.why}` };
+  if (registry.kind === 'ambient') {
+    return { kind: 'refused', why: 'this parent is routed by CLAUDE_CONFIG_DIR, but no account registry exists for its child' };
+  }
+  const canonical = resolve(parentStateDir);
+  const matches = registry.accounts.filter(
+    (account) => account.family === 'claude' && resolve(account.stateDir) === canonical,
+  );
+  if (matches.length !== 1) {
+    return { kind: 'refused', why: `this parent is routed by CLAUDE_CONFIG_DIR=${parentStateDir}, but no unique Claude account resolves it` };
+  }
+  return { kind: 'value', account: matches[0]! };
 }
 
 /** What `--auth` handed over, by name — never a value. Not a claim about what will be charged. */
@@ -565,7 +619,21 @@ async function main(): Promise<void> {
 
   const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
   const claudeArgs = buildClaudeArgs({ ...args, prompt });
-  const env = claudeEnv(process.env, args.auth, args.passEnv);
+  let account: RunClaudeAccountResolution = { kind: 'ambient' };
+  if (args.account !== undefined || process.env.CLAUDE_CONFIG_DIR !== undefined) {
+    account = resolveRunClaudeAccount(
+      await readAccountRegistry(defaultAccountRegistryPath()),
+      args.account,
+      process.env.CLAUDE_CONFIG_DIR,
+    );
+    if (account.kind === 'refused') fail(account.why);
+  }
+  const env = claudeEnv(
+    process.env,
+    args.auth,
+    args.passEnv,
+    account.kind === 'value' ? account.account.stateDir : undefined,
+  );
   const cwd = resolve(args.repoDir);
 
   // Fresh temp dir per run, so nothing here can ever be a previous run's leftover.

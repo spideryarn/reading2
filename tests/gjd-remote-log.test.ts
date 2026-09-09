@@ -79,6 +79,7 @@ describe("formatLine", () => {
 
   it("round-trips through parseLine", () => {
     const full = rec({
+      account: "pool-two",
       dir: "/home/greg/code/spideryarn2",
       host: "greg@203.0.113.7",
       waitSeconds: 7200,
