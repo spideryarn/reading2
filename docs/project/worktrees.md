@@ -23,7 +23,9 @@ What is built:
 |---|---|
 | [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — so a `SIGKILL`ed holder leaves a file a human must `rm`, and the error message says which. Deliberate: never two writers. |
 | [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()`, which the sweep now uses. |
-| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed, and the removal of one that has. Owns only what one tree cannot see — enumeration, ghosts, the 24h age floor — and asks `worktree:check` everything else. See [Sweeping them up](#sweeping-them-up). |
+| [`scripts/worktree-remove.ts`](../../scripts/worktree-remove.ts) | `npm run worktree:remove` — **the** way a worktree is removed. Re-runs every guard, proves the branch landed before deleting it, and refuses with a reason otherwise. See [Removing one](#removing-one). |
+| [`scripts/worktree-inuse.ts`](../../scripts/worktree-inuse.ts) | Is anybody still in this tree, and is its **owner** the one asking? Reads the `(pid, start)` out of the worktree lock and looks for that pair in the caller's ancestor chain. See [Removing one](#removing-one). |
+| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed. Owns only what one tree cannot see — enumeration, ghosts, the 24h age floor — and asks `worktree:check` everything else. Its `remove` verb now forwards to `worktree:remove`. See [Sweeping them up](#sweeping-them-up). |
 | [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts **`dev` alone** since the flip, and refuses `main` and any `worktree-*` branch by name. Plus `trunkGap`, below. |
 | the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, and fails closed if the trunk cannot be read. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
@@ -277,11 +279,58 @@ moving the trunk to `dev` costs one line in [`scripts/deploy.ts`](../../scripts/
 a rewrite, and why Vercel's git auto-deploy on `main` must stay **on** — the script polls for the
 production build that the push causes.
 
+## Removing one
+
+```bash
+npm run worktree:remove                        # inside the worktree — this one
+npm run worktree:remove -- --branch <name>     # from the primary — that one
+npm run worktree:remove -- --branch <name> --dry-run
+```
+
+**This is the only way to remove a worktree here, and typing the git out by hand is banned.**
+`git branch -d` and `-D` are refused by [`.claude/hooks/protect-shared-tree.sh`](../../.claude/hooks/protect-shared-tree.sh),
+the `PreToolUse` hook that already bans one git verb — and the ban is only fair because this command
+does the job the hand-typed sequence was doing. It re-runs every guard below, unlocks, removes with
+no `--force` so git's own refusal still stands, and **deletes the branch on a proof that every commit
+it has ever pointed at is on `origin/dev`** — the tip and every reflog entry, retaken after the
+worktree is gone, with `git update-ref -d <ref> <expected-oid>` so a branch that moved under it is
+left alone. The script deletes through Node rather than through a shell, so it is out of the hook's
+reach without needing an exemption.
+
+**Its own session may remove a tree the moment it is done; nobody else may, for 24 hours.** That is
+not a courtesy, it is the one thing `/proc` can prove. `claude --worktree` writes the owning session's
+pid *and start time* into the worktree lock, and when that exact pair is in the ancestor chain of the
+process asking, the owner itself is asking. A third party gets the age floor instead, because
+**nothing running in it is not the same fact as finished** — an agent can land an intermediate commit,
+schedule a continuation for an hour's time and exit because the box is loaded, leaving a tree that is
+clean, landed, unlocked by a dead pid, and still wanted.
+
+It is **cooperative evidence, not an unforgeable capability**: another same-uid session could read a
+common ancestor's pid out of `/proc` and write a lock reason naming it. It raises the bar from *any
+agent may delete any tree* to *an agent must deliberately forge a lock*, which is the useful part.
+And it can fail the other way — a supervisor that detached the session from this process tree leaves
+a legitimate owner unauthorised, and waiting out the floor like anybody else.
+
+The recommended flow from inside a Claude session, because removing the directory you are standing in
+leaves your shell in one that no longer exists:
+
+```
+ExitWorktree({action: "keep"})                 # back to the primary; the owning process is still an ancestor
+npm run worktree:remove -- --branch worktree-<name>
+```
+
+**An orphaned branch is a target too.** `--branch <name>` with no worktree on it runs the same proof
+and the same compare-and-swap deletion, so a removal whose branch deletion failed is not a stuck
+state the hook forbids anyone from clearing.
+
 ## Before you remove one
 
 ```bash
-npm run worktree:check          # inside the worktree, before anyone deletes it
+npm run worktree:check          # inside the worktree — the same judgement, read-only
 ```
+
+Everything below is what `worktree:remove` re-runs for you; this is how to ask it yourself, and what
+each refusal means. (The heading is unchanged because six other docs link to it.)
 
 One question — **would deleting this directory lose anything?** — and it fails closed on every part
 of the answer it cannot get. Read-only: it never removes the tree, and it never will, because the
@@ -412,27 +461,60 @@ knowing because both read as alarming and neither means what it appears to.
 - **"this session is not the owner of the worktree …"** — the standard case when you resumed somebody
   else's abandoned tree, which is how most overnight jobs start. Nothing is wrong and there is nothing
   to check. `ExitWorktree({action: "keep"})` to get back to the primary, then
-  `git worktree remove .claude/worktrees/<name>` from there.
+  `npm run worktree:remove -- --branch worktree-<name>` from there.
 
 And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
-somebody's *paid* eval results. Run `worktree:check` first and read what the untracked files are.
+somebody's *paid* eval results.
+
+**So `ExitWorktree` is for leaving a worktree, not for removing one.** `action: "keep"` is the first
+half of the removal flow above — it is what gets your shell out before the directory disappears —
+and `discard_changes: true` is the one path in this repo that bypasses every guard described here.
+Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
+guard whose failure looks like success. If you find yourself reaching for it, run
+`npm run worktree:remove` instead and read what it says.
 
 ### Sweeping them up
 
 ```bash
 npm run worktree:sweep                                    # read-only. Deletes nothing.
-npm run worktree:sweep -- remove --branch <name> --dry-run
-npm run worktree:sweep -- remove --branch <name>
 ```
 
-**`remove` takes one branch and has no bulk form**, and re-runs the whole classification — fresh
-fetch included — before each deletion, so a verdict cannot be carried from an earlier decision into a
-later removal. Three things it owns that `worktree:check` deliberately does not, because they need the
+**The removal itself is [`npm run worktree:remove`](#removing-one).** `worktree:sweep -- remove
+--branch <name>` still works and forwards to it — there is one removal implementation, not two,
+because a cheaper copy of a safety judgement is one whose disagreements with the real one are
+invisible by construction.
+
+**Read `young` as a verdict about the report, not about the tree.** A tree that is clean, landed and
+under the age floor prints as `young — safe, but its own session may remove it; nobody else yet`, and
+no paste-ready command is offered for it. That is the floor's actual job: **stopping this report from
+handing a third party a command that would delete a peer's five-minute-old tree.** If `REMOVABLE` and
+`young` were printed as one word, `REMOVABLE` would quietly come to mean "old enough to advertise"
+rather than "the removal command would accept it", and that is the kind of drift an operator reads
+straight past.
+
+Three things the sweep owns that `worktree:check` deliberately does not, because they need the
 primary's vantage point or would be wrong inside a single tree:
 
 - **Ghosts** — a registration whose directory is gone. Unregistered, but its **branch is left alone**:
   the tree is gone, and its commits are not this command's to judge.
+
+  **A ghost is an *absent* path, and only that** — since 2026-09-09. Both this file and `ghosts()` in
+  `worktree-admin.ts` used to count `!present || prunable`, and git reports `prunable` for a path that
+  still exists: move a worktree away, put anything back at its old path, and you get
+  `prunable gitdir file points to non-existent location` over a directory full of somebody's files.
+  It is now `UNKNOWN`, and names the fix, `git worktree repair <path>`.
+
+  **And `worktree:remove` passes no `--force`, on any path, ever.** That is the part that actually
+  protects files, and it took two rounds to see why. The classification fix above closes nothing on
+  its own: measured, `--force --force` refuses a present-and-prunable path anyway, because git's
+  validator wants `<path>/.git` and that is exactly what is missing there. The case that *does* lose
+  files is a **genuine ghost whose directory comes back** between the listing and the removal — GPT
+  Sol reproduced it, `--force --force` exit 0, directory gone. A classification taken a moment earlier
+  cannot see that, and no amount of re-checking closes a race. What closes it is asking git to
+  revalidate at the moment it acts, which is what removing the force does — and measured, a plain
+  `git worktree remove` clears an absent registration on its own, so nothing here needed the force in
+  the first place.
 - **You are standing in it.**
 - **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
   is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals

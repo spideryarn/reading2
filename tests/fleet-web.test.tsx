@@ -1932,6 +1932,13 @@ function recordingActions(
       calls.push({ op: "clear", arg: sessionId, second: itemIds.join(",") });
       return { ok: true, kind: "queue-cleared", removed: [], keptInFlight: null, unreadable: 0 };
     },
+    /* THE HOLD ID AND THE VERSION ARE THE WHOLE SAFETY ARGUMENT — a release
+       built from a reading two incidents old is refused at the far end — so the
+       recorder keeps both, `clear`'s reasoning one gesture along. */
+    releaseHold: async (holdId, version, gesture) => {
+      calls.push({ op: "releaseHold", arg: `${holdId}@${version}`, second: gesture });
+      return { ok: true, kind: "hold-released", gesture, repeat: false };
+    },
     box: async (actionId, dryRun) => {
       calls.push({ op: "box", arg: actionId, second: dryRun });
       /* `effect: null` is *this answer described no per-row effect*, which is
@@ -4819,7 +4826,14 @@ const BROADCAST_WIRE = {
  * count means. Pass `null` for the old-server case, where the field is absent.
  */
 function queueWire(
-  over: { sessionId?: string; items?: unknown[]; warning?: string | null; deliverable?: number | null } = {},
+  over: {
+    sessionId?: string;
+    items?: unknown[];
+    warning?: string | null;
+    deliverable?: number | null;
+    /** A hold, as `holdWire` builds one. Absent by default: most queues have none. */
+    quarantine?: unknown;
+  } = {},
 ): Record<string, unknown> {
   const items = over.items ?? [];
   const wire: Record<string, unknown> = {
@@ -4827,6 +4841,11 @@ function queueWire(
     items,
     volatile: true,
     since: 1_757_000_000_000,
+    /* `null` RATHER THAN ABSENT by default, because that is what the route
+       actually sends when nothing is held — `snapshot.quarantine` is
+       `holding()`, which is null far more often than not. A fixture that
+       omitted the field would be exercising the old-server path in every test. */
+    quarantine: over.quarantine ?? null,
   };
   if (over.deliverable !== null) {
     wire["deliverable"] =
@@ -4864,6 +4883,35 @@ function itemWire(over: {
   if (over.stale !== null) wire["stale"] = over.stale ?? false;
   if (over.stuck !== null) wire["stuck"] = over.stuck ?? false;
   return wire;
+}
+
+/**
+ * A hold, as `GET /api/actions` sends one — the WIRE shape, so every test goes
+ * through `parseHold` rather than past it.
+ *
+ * The `why` is a real server sentence rather than a placeholder, because two of
+ * the assertions below are about what a person actually reads.
+ */
+function holdWire(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "1a2b3c4d-h1",
+    version: 1,
+    sessionId: "$1643",
+    paneId: "%2108",
+    claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+    serverInstanceId: "1a2b3c4d",
+    tmuxGeneration: 990_001,
+    openedAt: 1_757_000_000_900,
+    lastSendAt: 1_757_000_000_900,
+    incidents: 1,
+    reading: "partial",
+    origin: "queued-delivery",
+    why:
+      "Part of a send to this session arrived and the sequence did not finish (message (42 characters)), " +
+      "so the text may be sitting in its input box with no Enter behind it.",
+    outcome: { kind: "holding" },
+    ...over,
+  };
 }
 
 /** Every button on the page, by its words. */
@@ -5849,9 +5897,160 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "the busy one" })] })));
     await act(async () => {});
 
-    expect(container.textContent).toContain("1 thing is waiting, across 1 session");
+    expect(container.textContent).toContain("1 thing is queued, across 1 session");
     expect(container.textContent).toContain("the busy one");
     expect(container.textContent).toContain("pull latest first");
+    /* **"None of it has been sent yet." IS GONE AND MUST NOT COME BACK.** It
+       was drawn over every queue, including one whose head had been handed over
+       for delivery a second earlier, and — since Stage 4 of 260908j — over a
+       session that may be holding half a message in its input box. */
+    expect(container.textContent).not.toContain("None of it has been sent yet");
+  });
+
+  /* ------------------------------------------------------------------ *
+   * A HELD SESSION, AND THE HOLD WITH NOTHING BEHIND IT.
+   *
+   * docs/plans/260908j § Stage 4. The filter here was `items.length > 0`, and
+   * the commonest hold has no items: one message queued, one ambiguous send,
+   * the item settled and gone. That hold had no row on the page and therefore
+   * no way to press either gesture — a hold nothing can see is a hold nothing
+   * can clear.
+   * ------------------------------------------------------------------ */
+
+  function heldFleet(over: Record<string, unknown> = {}) {
+    return recordingActions(() =>
+      actionsWire({ queues: [queueWire({ sessionId: "$1643", items: [], quarantine: holdWire(over) })] }),
+    );
+  }
+
+  async function mountHeld(rec: ReturnType<typeof recordingActions>): Promise<void> {
+    window.location.hash = "#overseer";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "the held one" })] })));
+    await act(async () => {});
+  }
+
+  it("draws a hold with NO items behind it, which used to be invisible", async () => {
+    const rec = heldFleet();
+    await mountHeld(rec);
+    expect(container.textContent).toContain("the held one");
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+    // THE SERVER'S OWN SENTENCE, not one rebuilt here from `reading`.
+    expect(container.textContent).toContain("may be sitting in its input box");
+    // And the header says how many sessions are in this state.
+    expect(container.textContent).toContain("held after a send nobody can account for");
+  });
+
+  it("never says nothing has been sent over a held session", async () => {
+    const rec = heldFleet();
+    await mountHeld(rec);
+    expect(container.textContent).not.toContain("None of it has been sent yet");
+    expect(container.textContent).not.toMatch(/nothing (has been|was) sent/i);
+  });
+
+  it("offers exactly the two gestures, in the words that make them safe", async () => {
+    const rec = heldFleet();
+    await mountHeld(rec);
+    const card = container.querySelector<HTMLElement>('[aria-label="Held after a send nobody can account for"]');
+    expect(card).not.toBeNull();
+    const labels = [...(card?.querySelectorAll<HTMLButtonElement>("button") ?? [])].map((b) => b.textContent ?? "");
+    expect(labels).toEqual(["I looked at the terminal and saw it", "Abandon the uncertainty"]);
+    /* **SCOPED TO THIS CARD, NOT THE PAGE.** A page-wide assertion would be a
+       false guard: other panels legitimately offer to send things, so it would
+       go red for the wrong reason and — worse — could be made green by moving a
+       button rather than by fixing the copy. */
+    for (const label of labels) {
+      expect(label).not.toMatch(/send|deliver|retry|try again/i);
+    }
+    expect(card?.textContent).toContain("Neither button below sends anything");
+  });
+
+  it("sends the hold's id AND the version it was reading, so a stale page is refused", async () => {
+    const rec = heldFleet({ id: "1a2b3c4d-h7", version: 3 });
+    await mountHeld(rec);
+    await clickSaying("I looked at the terminal and saw it");
+    expect(rec.calls.filter((c) => c.op === "releaseHold")).toEqual([
+      { op: "releaseHold", arg: "1a2b3c4d-h7@3", second: "operator-confirmed" },
+    ]);
+  });
+
+  it("records the operator's claim as a claim, and never as an observation", async () => {
+    const rec = heldFleet();
+    await mountHeld(rec);
+    await clickSaying("I looked at the terminal and saw it");
+    expect(container.textContent).toContain("Recorded.");
+    expect(container.textContent).toContain("kept as your word");
+    expect(container.textContent).toContain("the dashboard observed nothing");
+    expect(container.textContent).toContain("Nothing was typed at the session.");
+  });
+
+  it("abandoning claims nothing in either direction, and says so", async () => {
+    const rec = heldFleet();
+    await mountHeld(rec);
+    await clickSaying("Abandon the uncertainty");
+    expect(rec.calls.filter((c) => c.op === "releaseHold")[0]?.second).toBe("abandoned-unknown");
+    expect(container.textContent).toContain("does not claim either way");
+    // THE HALF THAT IS EASY TO GET WRONG. It must not read as "it was not
+    // delivered" — the same trap the abandon copy one gesture along carries.
+    expect(container.textContent).not.toMatch(/was not delivered|did not arrive|never reached/i);
+  });
+
+  it("says a repeat was already recorded rather than that it has just been done", async () => {
+    const rec = recordingActions(
+      () => actionsWire({ queues: [queueWire({ sessionId: "$1643", items: [], quarantine: holdWire() })] }),
+      {
+        releaseHold: async (_holdId, _version, gesture) => ({ ok: true, kind: "hold-released", gesture, repeat: true }),
+      },
+    );
+    await mountHeld(rec);
+    await clickSaying("Abandon the uncertainty");
+    expect(container.textContent).toContain("That was already recorded.");
+    expect(container.textContent).toContain("changed nothing");
+  });
+
+  it("draws a hold that also has items waiting, above them", async () => {
+    const rec = recordingActions(() =>
+      actionsWire({
+        queues: [
+          queueWire({
+            sessionId: "$1643",
+            items: [itemWire({ id: "q1", payload: { kind: "message", text: "pull latest first" } })],
+            quarantine: holdWire(),
+          }),
+        ],
+      }),
+    );
+    await mountHeld(rec);
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+    expect(container.textContent).toContain("pull latest first");
+  });
+
+  it("keeps the row when the hold itself is unreadable, rather than losing it silently", async () => {
+    // The sharpest version of `itemsUnreadable`'s defect: a `quarantine` this
+    // page cannot parse reads as `null`, which is also what "nothing is held"
+    // looks like — so on a queue with no items the whole row, and both
+    // gestures, would disappear from a session nothing may be sent to.
+    const rec = recordingActions(() =>
+      actionsWire({ queues: [queueWire({ sessionId: "$1643", items: [], quarantine: { id: 7, version: "one" } })] }),
+    );
+    await mountHeld(rec);
+    expect(container.textContent).toContain("the held one");
+    expect(container.textContent).toContain("in a shape this page cannot read");
+    expect(container.textContent).not.toContain("Nothing is waiting anywhere on the box.");
+    // And it offers no gesture, because a release needs an id and a version.
+    expect(buttonLabels()).not.toContain("Abandon the uncertainty");
+  });
+
+  it("does not draw a released hold as one that is still holding", async () => {
+    // The route never sends one today — `snapshot.quarantine` is `holding()` —
+    // but the record exists, and a page that read any hold as a live one would
+    // grey out a session nothing is stopping.
+    const rec = heldFleet({
+      outcome: { kind: "released", gesture: "abandoned-unknown", at: 1_757_000_001_000, what: "…" },
+    });
+    await mountHeld(rec);
+    expect(container.textContent).not.toContain("Nothing is being delivered to this session.");
   });
 
   it("draws a queue whose session is not in the snapshot rather than dropping it", async () => {

@@ -41,6 +41,7 @@ import { createRateLimiter } from "../tools/fleet/routes-steer.js";
    test without this node-lane file acquiring jsdom. */
 import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
 import { makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -176,7 +177,17 @@ function harness(
   const sent: Sent[] = [];
   const logs: string[] = [];
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: over.instanceId ?? INSTANCE });
+  const instanceId = over.instanceId ?? INSTANCE;
+  const queue =
+    over.queue ??
+    new SteeringQueue({
+      now: () => clock,
+      serverInstanceId: instanceId,
+      // A REAL BOOK, sharing this harness's clock and run id. The hold
+      // machinery is tests/fleet-quarantine.test.ts's subject; what this needs
+      // is that `next()` here asks the same question production's does.
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: instanceId }),
+    });
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
@@ -1612,7 +1623,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     let clock = 1_000_000;
     const sent: string[] = [];
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: (target) => {
         sent.push(target.paneId);
         clock += 60_000;

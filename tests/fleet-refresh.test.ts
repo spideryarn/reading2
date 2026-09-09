@@ -24,6 +24,7 @@ import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import type { DrainResult } from "../tools/fleet/drain.js";
 import type { HealthTurn, SampleStamp } from "../tools/fleet/health-history.js";
 import type { HealthReport } from "../tools/fleet/health.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import { collectionStillRunning, refreshOnce, singleFlightCollect, type RefreshDeps } from "../tools/fleet/refresh.js";
 import { makeActionRoutes, type ActionDeps, type ActionRoutes } from "../tools/fleet/routes-actions.js";
@@ -85,7 +86,7 @@ type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 function actionRoutes(): { routes: ActionRoutes; sent: Sent[]; queue: SteeringQueue } {
   let clock = 1_000_000;
   const sent: Sent[] = [];
-  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
   const routes = makeActionRoutes({
     queue,
     sendMessage: (target, text, declaredStatus) => {
@@ -170,7 +171,7 @@ function refreshHarness(over: Partial<RefreshDeps> = {}) {
     publish: () => events.push("publish"),
     drain: () => {
       events.push("drain");
-      return { rows: 0, considered: 0, generation: TMUX_GENERATION, invalidated: 0, outcomes: [] } satisfies DrainResult;
+      return { rows: 0, considered: 0, generation: TMUX_GENERATION, invalidated: 0, quarantined: 0, outcomes: [] } satisfies DrainResult;
     },
     log: (line) => {
       logs.push(line);

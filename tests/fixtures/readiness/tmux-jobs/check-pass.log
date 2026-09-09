@@ -1,0 +1,31 @@
+
+> spideryarn@1.0.0 check
+> tsx scripts/check.ts
+
+
+── typecheck (gate)
+…
+💖 Support jscpd project → https://opencollective.com/jscpd
+
+============================================================
+summary
+============================================================
+  ✓ typecheck    clean
+  ✓ build        clean
+  ✓ test         clean
+  ✓ cycles       clean
+  ✓ chain        clean
+  ✓ conflicts    clean
+  ✓ committed    clean
+  ! lint         has findings
+      the lint baseline is not clean on purpose — docs/project/linting.md
+  ! knip         has findings
+      unused files/exports/deps are queued, not fixed — promote to a gate when this reaches zero
+  ! complexity   157 finding(s)
+      a high score means 'go and look', never 'this is wrong'
+  ! dupes        321 finding(s)
+      some duplication is honest; read before deduplicating
+
+All gates green.
+4 advisory check(s) have findings above — a to-do list, not a verdict.
+EXIT=0

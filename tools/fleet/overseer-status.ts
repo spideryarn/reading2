@@ -377,6 +377,11 @@ function projectScheduler(u: unknown): OverseerScheduler {
   switch (u["kind"]) {
     case "armed":
       return { kind: "armed", why, at };
+    case "blocked":
+      // GPT Sol's S8-7, arriving here as the arm the comment above predicted.
+      // NOT folded into `armed` or `off`: it is the switch on with nothing
+      // runnable, which is the state that used to be reported as `armed`.
+      return { kind: "blocked", why, at };
     case "off":
       return { kind: "off", why, at };
     case "unknown":
