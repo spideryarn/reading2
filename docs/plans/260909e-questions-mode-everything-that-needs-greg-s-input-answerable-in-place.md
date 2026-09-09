@@ -954,6 +954,68 @@ change of key — and a row that never has a token simply never invalidates on t
 same position every other surface on this page is already in. Refusing would withhold the receipt
 from exactly the rows whose sends are most worth reading.
 
+### Stage 4 — closing the independent review
+
+[GPT Sol's independent review](260909e-questions-mode-stage2-review-sol-r2.md) of what actually
+landed, run after Codex's own pass because a model reviewing its own diff on a pre-fix state is the
+weaker check. **No P0; three P1s and two P2s, every one reproduced rather than reasoned.** The task
+is [here](260909e-questions-mode-stage4-codex-task.md).
+
+| ID | The finding | Checked |
+|---|---|---|
+| QM2-01 | `canAnswer` admits rows the answer route refuses — `no-material`, and non-steerable statuses | **Real, and wider than the review.** `steer.ts § steerableStatus` refuses **four** statuses (`waiting`, `no-claude`, `shell`, `unknown`), so the fix is an allow-list with a `never`, not a block-list of the one case found |
+| QM2-02 | The card key carries no question identity, so a new dialog on an unchanged row inherits the old receipt and its dead buttons | Real. This is the **safe** use of the `sameQuestion` fields — a staleness comparison, not the semantic grouping § What round three changed, 3 withdrew |
+| QM2-03 | **The browser never checks for OMITTED items.** A payload with a live dialog row and `items: []` kept `complete` through parse, the ticking clock and the renderer, and printed *Nothing needs you.* | Real, and the most important of the five: the plan's own promise is that the client is the final authority on `complete`, and `resolveQuestionReferences` only ever validates items that are **present** |
+| QM2-04 | The prose no-write guard checks for controls, not for what the click does — a `steer.message` added to it left all 14 tests green | Real |
+| QM2-05 | The answering notice shows on empty and prose-only lists | Real, and its reason is better than mine: on a prose-only list answering happens in Sessions as a **message**, which an answer-hold does not affect, so the banner is misleading rather than merely redundant |
+
+**Two of this session's suspicions were disconfirmed, which is worth as much as the findings.** A
+future `waitingSince` is already corrected by `shiftToBrowserClock` in `parseQuestionItem`, so the
+clock-skew worry was unfounded; and no duplicate-gap path could be reproduced. Dialogs-first
+ordering is held by the server composition test, so a later reversal fails there rather than
+silently.
+
+**The merge resolution was checked by the reviewer independently and is correct** — both sides'
+registrations, both icons, both React imports, `--dock-mode-count` and the overflow classes all
+retained.
+
+#### The dock reading, taken and replicated — 2026-09-09
+
+Both sessions measured on `692fd230` at 390 × 844 coarse, after the fit rung settled. Nine is
+`decisions-mode`'s, ten is this session's with their real label on the tenth.
+
+| load | rung | scrollWidth @9 | scrollWidth @10 | clientWidth | active button | Refresh |
+|---|---|---|---|---|---|---|
+| `#sessions` | `dock-fit-2` | 479 | 519 | 390 | on screen | **off screen** |
+| `#deploys` | `dock-fit-2` | 475 | 515 | 390 | on screen | **off screen** |
+| `#questions` (last of ten) | `dock-fit-2` | — | 526 | 390 | on screen, flush | **off screen** |
+
+**The prediction held: ~41px predicted, 40px measured, on two loads independently.**
+
+**Why that subtraction is trustworthy, which is not obvious and belongs in the joint draft.**
+`scrollWidth` moves with *which tab is active*, because the active button keeps its label under the
+fit ladder — an 11px spread here, 9px there. So a delta between two different active tabs would be
+one mode's width plus or minus a label, and unreadable. Both subtractions hold the active tab fixed,
+so the label cost is identical on each side and cancels. That is why two loads agreeing at 40 is a
+replication rather than the same number twice: they sit at different scroll positions and different
+bar totals and still agree. **The natural-looking comparison — `#decisions` at nine against
+`#questions` at ten — is the one that cannot be done.**
+
+Equal rungs turned out to be the *condition* for the comparison rather than a threat to it: their 41
+was derived from `.dock-btn { min-width: 2.5rem }` plus the hairline, so it was always an icon-width
+figure, and two fully-compacted bars is exactly the case it was computed for.
+
+**Refresh is off screen at eight, nine and ten, and neither tab caused it.** `readiness-tab` had it
+past the edge at eight; `decisions-mode` measured it off screen at the scroll origin at nine; it is
+off screen on every load at ten. A pre-existing dock defect both tabs make one notch worse — so Greg
+is not being asked to choose between them. Their counterfactual is the strongest number either
+session has, and the dock section should lead with it rather than with any table: with the scroll
+disabled and the client rebuilt, `#deploys` at nine reads an active right edge of **416 against a 390
+viewport**. Tables show a crowded bar; that shows a button that disappears. **The fix trades
+Refresh's reachability for the active tab's** — the right trade, and still a trade.
+
+That fact lives in their draft at `45a202f3`, not here.
+
 ### Stage 3 — see it, and the queue pointer
 
 - [ ] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
