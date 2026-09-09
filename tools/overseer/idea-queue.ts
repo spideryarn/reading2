@@ -207,6 +207,52 @@ export type IdeaMetadata = {
 export const EMPTY_METADATA: IdeaMetadata = { source: null, waitingOn: null, size: null, areas: [], runs: null };
 
 /**
+ * **A PRIORITY IS `0`–`1`, OR `null` FOR NOBODY HAS SAID** — and `null` is not
+ * a missing number, it is a different claim.
+ *
+ * Greg, 2026-09-09: *"add a `priority` 0-1 (where 1 is very-high-priority) …
+ * so that important stuff can jump to the top."*
+ *
+ * The three candidate defaults for an item nobody has ranked, and why this is
+ * the only honest one:
+ *
+ *  - `0.5` says *"of middling importance"*, which is an opinion nobody expressed;
+ *  - `0` says *"worthless"*, which is a judgement nobody made;
+ *  - `null` says *"nobody has said"*, which is what is true.
+ *
+ * `comparePriority` then sorts the unstated **below** everything stated, which
+ * also buys a property worth having: a newly added item cannot silently
+ * leapfrog work Greg ranked. The cost is that, once anything is ranked, `add
+ * --front` without a priority would no longer reach the front; the CLI refuses
+ * that misleading command rather than leaving it to be discovered.
+ *
+ * **Out of range REJECTS THE LINE** — see `parseEvent`. Clamping `1000` to `1`
+ * would turn a typo into a legitimate-looking top of the queue, and ignoring it
+ * would turn the same typo into silence. Both are the silent success this
+ * module exists against
+ * ([silent-success.md](../../docs/reusable/silent-success.md)).
+ */
+export function isPriority(u: unknown): u is number | null {
+  return u === null || (typeof u === "number" && Number.isFinite(u) && u >= 0 && u <= 1);
+}
+
+/**
+ * Higher first; the unstated last. **Ordering only — it decides nothing about
+ * whether an item may go out.**
+ *
+ * That separation is the whole basis for priority not lapsing an authorisation
+ * (see `IdeaItem.priority`), so it matters that it is visible here: this
+ * function returns a sort order and touches no other field. `isDispatchable`
+ * has never heard of it.
+ */
+export function comparePriority(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
+/**
  * Where a move puts an item.
  *
  * **ONE PLACEMENT, NOT A REORDERED ARRAY**, which was Sol's answer to the
@@ -275,6 +321,17 @@ export type IdeaEvent = Envelope &
     /** Greg says yes, to the revision named. Nobody else's is honoured. */
     | { readonly kind: "authorized"; readonly id: string; readonly revision: number }
     | { readonly kind: "moved"; readonly id: string; readonly placement: Placement }
+    /**
+     * **ITS OWN KIND, NOT A KEY INSIDE `edited`**, and that is a fix for a bug
+     * rather than a matter of taste.
+     *
+     * The separate kind buys an honest history entry and lets a content edit
+     * and priority change compose atomically without pretending they were one
+     * act. It is **not structural authorisation safety**: GPT Sol's round-two
+     * P2-1 was right that the parser still has to reject `edited { priority }`
+     * and empty edits explicitly. `null` clears it back to unstated.
+     */
+    | { readonly kind: "prioritized"; readonly id: string; readonly priority: number | null }
     | {
         readonly kind: "dispatched";
         readonly id: string;
@@ -322,6 +379,47 @@ export type IdeaItem = {
   readonly authority: Authority;
   readonly lifecycle: Lifecycle;
   readonly needsGreg: boolean;
+  /**
+   * How much somebody wants this done, or `null` for nobody has said —
+   * `isPriority` and `comparePriority` above.
+   *
+   * **PRIORITY IS ORDERING, NOT CONTENT, and that is the call this whole field
+   * turns on.** Every content edit bumps `revision`, and an edit by anyone but
+   * Greg therefore lapses his approval (Sol's P0-2). A priority does neither,
+   * for three reasons:
+   *
+   *  - the queue already has an ordering axis and it lapses nothing — `moved`
+   *    is writable by the Overseer today and bumps no revision, and a priority
+   *    is a coarser spelling of the same intent. `move --front` preserving an
+   *    approval while `--priority 0.9` lapsed it would be incoherent;
+   *  - it grants the Overseer no power it lacks. It already chooses which
+   *    dispatchable item to take (the queue is explicitly not FIFO), and it can
+   *    already move anything to the front. What this adds is that the choice
+   *    becomes durable, attributed and visible instead of living in one
+   *    session's head — strictly more auditable, not less;
+   *  - what must not move does not move. **`isDispatchable` never reads this
+   *    field.** An unauthorised item at `1` sorts to the top of the list and is
+   *    still not dispatchable, and its row still says *proposal*.
+   *
+   * **The residual risk, named rather than waved off: this is a salience
+   * vector.** An Overseer proposal at `0.9` sits at the top of the list Greg
+   * reads on his phone, which is a way of pressing for attention it did not
+   * have before. It is not an authorisation vector, and Greg asked the Overseer
+   * to apply his banding — so every `prioritized` event carries `by`, and *who
+   * pushed this up the list* stays answerable.
+   */
+  readonly priority: number | null;
+  /**
+   * Who set the priority now governing the item's place, and when.
+   *
+   * GPT Sol's P1-5 concern is that the Overseer changing priorities changes
+   * the constraint governing its own choice of what to take next. The work is
+   * still authorised, but that reordering authority has not been explicitly
+   * granted. These fields make the act visible on the row while Greg decides
+   * that governance question, rather than requiring an audit of the history.
+   */
+  readonly priorityBy: IdeaActor | null;
+  readonly priorityAt: string | null;
   /**
    * Bumped by every content edit. **The number an authorisation names**, and
    * what makes "approved, then changed" visible — see the header, Sol's P0-2.
@@ -450,6 +548,9 @@ type Mutable = {
   authority: Authority;
   lifecycle: Lifecycle;
   needsGreg: boolean;
+  priority: number | null;
+  priorityBy: IdeaActor | null;
+  priorityAt: string | null;
   revision: number;
   addedBy: IdeaActor;
   addedAt: string;
@@ -541,6 +642,8 @@ function describeTouch(event: IdeaEvent): string {
       return `authorised revision ${event.revision}`;
     case "moved":
       return `moved ${describePlacement(event.placement)}`;
+    case "prioritized":
+      return event.priority === null ? "priority cleared" : `prioritised at ${event.priority}`;
     case "dispatched":
       return `dispatched as ${event.session}`;
     case "done":
@@ -597,6 +700,13 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           event.by === "greg" ? { kind: "authorized", by: "greg", at: event.at, revision: 0 } : { kind: "proposed" },
         lifecycle: "queued",
         needsGreg: event.needsGreg,
+        /* Priority cannot ride on `added`: an older reader would ignore that
+           key and silently calculate the wrong next item. Every item is born
+           unstated, and a separate `prioritized` event makes an old reader
+           refuse loudly. */
+        priority: null,
+        priorityBy: null,
+        priorityAt: null,
         revision: 0,
         addedBy: event.by,
         addedAt: event.at,
@@ -702,11 +812,56 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           problem("illegal-transition", `${event.id} was moved while ${item.lifecycle}`, event.eventId);
           break;
         }
+        if (event.placement.at === "before" || event.placement.at === "after") {
+          /* Presence comes first: a dropped or never-added anchor remains the
+             existing `missing-anchor` problem, not a misleading priority
+             mismatch against stale state retained in `byId`. */
+          const anchor = byId.get(event.placement.anchor);
+          if (anchor === undefined || !order.includes(event.placement.anchor)) {
+            const placed = place(order, event.id, event.placement);
+            if (!placed.ok) problem("missing-anchor", placed.why, event.eventId);
+            break;
+          }
+          if (anchor.priority !== item.priority) {
+            const shown = (priority: number | null): string => (priority === null ? "null (unstated)" : String(priority));
+            problem(
+              "illegal-transition",
+              `${event.id} has priority ${shown(item.priority)}, while anchor ${anchor.id} has priority ${shown(anchor.priority)}; ` +
+                `set them to exactly the same priority before moving ${event.id} ${event.placement.at} ${anchor.id}, ` +
+                `or use --front/--back to move within ${event.id}'s priority group`,
+              event.eventId,
+            );
+            break;
+          }
+        }
+        /* Front and back deliberately remain placement-array operations. Once
+           the view is sorted, that means front or back within the item's exact
+           priority group — useful and visible without a contradictory anchor. */
         const placed = place(order, event.id, event.placement);
         if (!placed.ok) {
           problem("missing-anchor", placed.why, event.eventId);
           break;
         }
+        item.lastTouchedAt = event.at;
+        item.history.push({ kind: event.kind, at: event.at, by: event.by, what: describeTouch(event) });
+        break;
+      }
+      case "prioritized": {
+        /* **THE SAME GUARD `moved` HAS, FOR THE SAME REASON.** A settled item
+           is out of the ordering, so a priority written against it is a stale
+           intent getting a defined answer — and a defined answer to a stale
+           intent is worse than a refusal, because nothing says it happened.
+
+           Note what is NOT here: no actor check, and no revision bump. Anybody
+           may reorder — that is what `moved` already allows — and reordering is
+           not editing. `changesContent` never sees this event. */
+        if (!IN_PLAY.includes(item.lifecycle)) {
+          problem("illegal-transition", `${event.id} was prioritised while ${item.lifecycle}`, event.eventId);
+          break;
+        }
+        item.priority = event.priority;
+        item.priorityBy = event.priority === null ? null : event.by;
+        item.priorityAt = event.priority === null ? null : event.at;
         item.lastTouchedAt = event.at;
         item.history.push({ kind: event.kind, at: event.at, by: event.by, what: describeTouch(event) });
         break;
@@ -787,6 +942,9 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
     authority: m.authority,
     lifecycle: m.lifecycle,
     needsGreg: m.needsGreg,
+    priority: m.priority,
+    priorityBy: m.priorityBy,
+    priorityAt: m.priorityAt,
     revision: m.revision,
     addedBy: m.addedBy,
     addedAt: m.addedAt,
@@ -798,11 +956,30 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
     history: m.history,
   });
 
-  const items: IdeaItem[] = [];
+  /* **THE ORDER THE QUEUE IS ACTUALLY IN IS DECIDED HERE**, once, rather than
+     at the three edges that render it (`list`, the route, the panel).
+
+     That is the same argument 260909b makes for computing `ready` server-side:
+     three call sites is three chances to forget, and the two that forgot would
+     disagree with the one that did not. It matters more than it looks, because
+     `waitingAhead` and `itemWait` walk this array to say *"N items ahead of
+     it"* — sorted at the edges, they would be counting an order nobody sees.
+
+     `order` itself stays PLACEMENT order and is not touched, so `--front` and
+     `--before` keep their meaning and still decide the order within a band.
+     The index tiebreak is written out rather than leaning on
+     `Array.prototype.sort` being stable: stability would do the job, but the
+     explicit key says what the second key IS to the next reader, and it is what
+     a mutation check swaps. */
+  const placed: IdeaItem[] = [];
   for (const id of order) {
     const item = byId.get(id);
-    if (item !== undefined && IN_PLAY.includes(item.lifecycle)) items.push(freeze(item));
+    if (item !== undefined && IN_PLAY.includes(item.lifecycle)) placed.push(freeze(item));
   }
+  const items: IdeaItem[] = placed
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => comparePriority(a.item.priority, b.item.priority) || a.index - b.index)
+    .map((decorated) => decorated.item);
   const settled = [...byId.values()]
     .filter((m) => !IN_PLAY.includes(m.lifecycle))
     .sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? ""))
@@ -863,6 +1040,43 @@ function asStringOrNull(u: unknown): string | null | undefined {
   if (u === null) return null;
   if (typeof u === "string") return u;
   return undefined;
+}
+
+const EVENT_ENVELOPE_KEYS = ["schema", "eventId", "commandId", "at", "by", "kind", "id"] as const;
+
+/**
+ * The complete top-level vocabulary of each event kind.
+ *
+ * A pair of one-off `priority` checks used to protect only `added` and
+ * `edited`, while `moved`, `authorized` and `done` silently ignored the same
+ * misplaced key. One allowed-key rule prevents that inconsistency for every
+ * field, including fields added later.
+ *
+ * This strictness was checked against the live record on 2026-09-09: 85 lines,
+ * 0 unparseable, and exactly three shapes — `added` with `{at, by, commandId,
+ * eventId, id, kind, metadata, needsGreg, placement, schema, text, title}`,
+ * `authorized` with the envelope plus `revision`, and `dispatched` with the
+ * envelope plus `plan, session`. It invalidates none of them.
+ *
+ * It deliberately also makes a newer writer's extra field fail loudly on an
+ * older reader. Silently applying the understood half would let the writer
+ * believe the whole event happened, and this module chooses loud refusal at
+ * every such version boundary.
+ */
+const EVENT_KEYS: Readonly<Record<IdeaEventKind, readonly string[]>> = {
+  added: [...EVENT_ENVELOPE_KEYS, "text", "title", "metadata", "placement", "needsGreg"],
+  edited: [...EVENT_ENVELOPE_KEYS, "text", "title", "metadata", "needsGreg"],
+  authorized: [...EVENT_ENVELOPE_KEYS, "revision"],
+  moved: [...EVENT_ENVELOPE_KEYS, "placement"],
+  prioritized: [...EVENT_ENVELOPE_KEYS, "priority"],
+  dispatched: [...EVENT_ENVELOPE_KEYS, "session", "plan"],
+  done: EVENT_ENVELOPE_KEYS,
+  dropped: [...EVENT_ENVELOPE_KEYS, "why"],
+};
+
+function hasOnlyEventKeys(json: Record<string, unknown>, kind: IdeaEventKind): boolean {
+  const allowed = EVENT_KEYS[kind];
+  return Object.keys(json).every((key) => allowed.includes(key));
 }
 
 /**
@@ -972,7 +1186,14 @@ export function parseEvent(line: string): IdeaEvent | null {
   const commandId = typeof json["commandId"] === "string" ? json["commandId"] : null;
   const envelope: Envelope = { schema: IDEA_QUEUE_SCHEMA, eventId, commandId, at, by };
 
-  switch (json["kind"]) {
+  const kind = json["kind"];
+  /* `in` would accept inherited names such as `toString`, then hand a function
+     to the allowed-key check and make this supposedly total parser throw. Only
+     the eight own declarations above are event kinds. */
+  if (typeof kind !== "string" || !Object.hasOwn(EVENT_KEYS, kind)) return null;
+  if (!hasOnlyEventKeys(json, kind as IdeaEventKind)) return null;
+
+  switch (kind) {
     case "added": {
       const text = json["text"];
       if (typeof text !== "string" || text.trim() === "") return null;
@@ -1007,6 +1228,10 @@ export function parseEvent(line: string): IdeaEvent | null {
       if (metadata === null) return null;
       if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
       const needsGreg = typeof json["needsGreg"] === "boolean" ? json["needsGreg"] : undefined;
+      /* Every line in an append-only authorisation history must mean
+         something. Accepting no recognised field turns a typo into "edited
+         nothing" and lets the writer believe its intended change happened. */
+      if (text === undefined && title === undefined && metadata === undefined && needsGreg === undefined) return null;
       return {
         ...envelope,
         kind: "edited",
@@ -1026,6 +1251,13 @@ export function parseEvent(line: string): IdeaEvent | null {
       const placement = asPlacement(json["placement"]);
       if (placement === null) return null;
       return { ...envelope, kind: "moved", id, placement };
+    }
+    case "prioritized": {
+      /* **MUST BE PRESENT.** Absent is not "clear it": an event that names no
+         priority is a writer that lost its argument, and treating that as an
+         intentional clear would silently un-rank an item. */
+      if (!("priority" in json) || !isPriority(json["priority"])) return null;
+      return { ...envelope, kind: "prioritized", id, priority: json["priority"] };
     }
     case "dispatched": {
       const session = json["session"];
@@ -1235,9 +1467,43 @@ export type AppendResult =
   | { ok: true; view: QueueView; path: string; repaired: JsonlRepair }
   | {
       ok: false;
-      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break";
+      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break" | "invalid-event";
       why: string;
+      /** Whether opening the record repaired a torn final line, even though this append was refused. */
+      repaired: JsonlRepair;
     };
+
+const NO_REPAIR: JsonlRepair = { torn: false };
+
+/**
+ * Equality for the JSON persistence boundary, not general application data.
+ *
+ * Object key order is immaterial, and an absent key equals an `undefined` key
+ * because JSON omits both. Arrays retain their positions, so `undefined`
+ * inside one does not equal the `null` JSON would write. `NaN` is unequal to
+ * everything including itself: accepting it at this boundary would turn it
+ * into a legitimate `null` on disk and silently clear a priority.
+ */
+function structurallyEqualForPersistence(left: unknown, right: unknown): boolean {
+  if (typeof left === "number" && Number.isNaN(left)) return false;
+  if (typeof right === "number" && Number.isNaN(right)) return false;
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => structurallyEqualForPersistence(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter((key) => right[key] !== undefined);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key) => Object.hasOwn(right, key) && structurallyEqualForPersistence(left[key], right[key]),
+  );
+}
+
+function shownEventKind(event: unknown): string {
+  return isRecord(event) && typeof event["kind"] === "string" ? event["kind"] : "unknown kind";
+}
 
 /**
  * Append events under the lock, then re-read — Sol's P1-1 transaction.
@@ -1260,18 +1526,65 @@ export function appendEvents(
 ): AppendResult {
   const root = options.root ?? queueRoot();
   if (!path.isAbsolute(root)) {
-    return { ok: false, code: "refused", why: `the queue directory must be an absolute path, not '${root}'` };
+    return {
+      ok: false,
+      code: "refused",
+      why: `the queue directory must be an absolute path, not '${root}'`,
+      repaired: NO_REPAIR,
+    };
   }
-  if (events.length === 0) return { ok: false, code: "refused", why: "nothing to append" };
+  if (events.length === 0) return { ok: false, code: "refused", why: "nothing to append", repaired: NO_REPAIR };
+
+  /* **VALIDATE THE BYTES BEFORE TAKING THE LOCK OR TOUCHING THE ROOT.** Field
+     checks alone protect only the fields somebody remembered today. Requiring
+     every encoded line to parse back as the event handed in generalises to
+     every field and every future kind. The structural comparison is essential:
+     `JSON.stringify(NaN)` is `null`, which the parser quite correctly accepts
+     as a priority clear, but it is not the event the caller supplied. Keep the
+     encoded strings: the bytes checked here are the bytes appended below. */
+  const serialized: string[] = [];
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    let line: string;
+    try {
+      const encoded = JSON.stringify(event);
+      if (typeof encoded !== "string") throw new Error("JSON.stringify returned no bytes");
+      line = encoded;
+    } catch (cause) {
+      return {
+        ok: false,
+        code: "invalid-event",
+        why:
+          `event ${index} (${shownEventKind(event)}) failed its persistence round trip: ` +
+          `it could not be encoded as JSON (${String(cause)})`,
+        repaired: NO_REPAIR,
+      };
+    }
+    const parsed = parseEvent(line);
+    if (parsed === null || !structurallyEqualForPersistence(event, parsed)) {
+      return {
+        ok: false,
+        code: "invalid-event",
+        why:
+          `event ${index} (${shownEventKind(event)}) failed its persistence round trip: ` +
+          `the bytes about to be appended do not read back as the event supplied`,
+        repaired: NO_REPAIR,
+      };
+    }
+    serialized.push(line);
+  }
+
   try {
     mkdirSync(root, { recursive: true });
   } catch (cause) {
-    return { ok: false, code: "refused", why: `could not make ${root}: ${String(cause)}` };
+    return { ok: false, code: "refused", why: `could not make ${root}: ${String(cause)}`, repaired: NO_REPAIR };
   }
 
   const lockPath = path.join(root, QUEUE_LOCK_FILE);
   const taken = takeLock(lockPath, options.now ?? (() => new Date()));
-  if (!taken.ok) return { ok: false, code: "locked", why: describeLockRefusal(taken.refusal, lockPath) };
+  if (!taken.ok) {
+    return { ok: false, code: "locked", why: describeLockRefusal(taken.refusal, lockPath), repaired: NO_REPAIR };
+  }
   const lock: HeldLock = taken.lock;
 
   try {
@@ -1280,14 +1593,19 @@ export function appendEvents(
     try {
       repaired = truncateToLastLine(file);
     } catch (cause) {
-      return { ok: false, code: "refused", why: `could not repair ${file}: ${String(cause)}` };
+      return { ok: false, code: "refused", why: `could not repair ${file}: ${String(cause)}`, repaired: NO_REPAIR };
     }
     if (!stillOurs(lock, lockPath)) {
-      return { ok: false, code: "locked", why: "lost the queue lock while repairing the file; nothing was written" };
+      return {
+        ok: false,
+        code: "locked",
+        why: "lost the queue lock while repairing the file; nothing was written",
+        repaired,
+      };
     }
 
     const before = readQueue(root);
-    if (before.kind === "unreadable") return { ok: false, code: "unreadable", why: before.why };
+    if (before.kind === "unreadable") return { ok: false, code: "unreadable", why: before.why, repaired };
     const current = viewOf(before) ?? EMPTY_VIEW;
     if (options.expect !== undefined && !sameVersion(options.expect, current.version)) {
       return {
@@ -1296,15 +1614,9 @@ export function appendEvents(
         why:
           `the queue has moved on: you sent version ${spellVersion(options.expect)} and it is now ` +
           `${spellVersion(current.version)}. Nothing was written — look again before writing.`,
+        repaired,
       };
     }
-
-    /* **THE MARKER GOES DOWN BEFORE THE FIRST RECORD, not after.** Written the
-       other way round, a crash in between leaves a log with no marker — which
-       reads as a brand-new queue, which is the exact false sentence the marker
-       exists to prevent. The opposite order fails safe: a marker with no log is
-       reported as LOST, which is the reading that makes somebody look. */
-    writeInitMarker(root);
 
     /* **FOLD THE CANDIDATE BEFORE WRITING IT, AND REFUSE IF IT WOULD ADD A
        PROBLEM.** GPT Sol's P1-3 in round two, and the sharpest finding of the
@@ -1314,14 +1626,17 @@ export function appendEvents(
        append-only log with no problem-resolution event, the only repair left is
        editing the file by hand — of an authorisation record.
 
-       Comparing counts rather than contents because the existing problems are
-       already in `current`: what is being asked is only *does this batch make
-       it worse*. A queue that already has problems can still be appended to,
-       which matters — otherwise one bad line would freeze the record forever
-       and leave no way to write the note explaining it. */
-    const candidate = foldQueue([...readEvents(root), ...events], []);
-    if (candidate.problems.length > current.problems.length) {
-      const added = candidate.problems.slice(current.problems.length);
+       Compare like with like: parse problems appear on neither side. Including
+       them only in `current` lets one existing unreadable line mask one new fold
+       problem and permanently append an invalid event. A queue that already
+       has problems can still be appended to, which matters — otherwise one bad
+       line would freeze the record forever and leave no way to write the note
+       explaining it. */
+    const existing = readEvents(root);
+    const baseline = foldQueue(existing, []);
+    const candidate = foldQueue([...existing, ...events], []);
+    if (candidate.problems.length > baseline.problems.length) {
+      const added = candidate.problems.slice(baseline.problems.length);
       return {
         ok: false,
         code: "would-break",
@@ -1329,10 +1644,18 @@ export function appendEvents(
           `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
           `record, and an append-only log has no way to take them back — ` +
           added.map((p) => `${p.kind}: ${p.why}`).join("; "),
+        repaired,
       };
     }
 
-    const body = events.map((event) => `${JSON.stringify(event)}\n`).join("");
+    /* **THE MARKER GOES DOWN AFTER VALIDATION AND BEFORE THE FIRST RECORD.**
+       Validation is pure, so putting the marker above it let a refused first
+       append poison an untouched root into reading as LOST. It still precedes
+       the append itself: a crash in the remaining gap fails safe as LOST,
+       while record-first could leave a real log with no proof it had begun. */
+    writeInitMarker(root);
+
+    const body = serialized.map((line) => `${line}\n`).join("");
     const fd = openSync(file, "a");
     try {
       writeAll(fd, body);
@@ -1345,7 +1668,7 @@ export function appendEvents(
     }
 
     const after = readQueue(root);
-    if (after.kind === "unreadable") return { ok: false, code: "unreadable", why: after.why };
+    if (after.kind === "unreadable") return { ok: false, code: "unreadable", why: after.why, repaired };
     return { ok: true, view: viewOf(after) ?? EMPTY_VIEW, path: file, repaired };
   } finally {
     releaseLock(lock, lockPath);

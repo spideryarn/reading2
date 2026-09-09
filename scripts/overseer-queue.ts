@@ -27,17 +27,23 @@
  * `console.log` rather than src/log.ts, per docs/project/logging.md's rule: the
  * destination is a terminal.
  */
+import { createHash } from "node:crypto";
+import { readFileSync, writeSync } from "node:fs";
+
 import { seedEvents } from "../tools/overseer/idea-queue-seed.js";
 import {
   EMPTY_METADATA,
   ID_RULE,
   appendEvents,
   asPlacement,
+  isPriority,
   envelope,
   isDispatchable,
   mintId,
+  parseVersion,
   queueRoot,
   readQueue,
+  sameVersion,
   spellVersion,
   viewOf,
   whyNotDispatchable,
@@ -49,6 +55,12 @@ import {
   type QueueVersion,
   type QueueView,
 } from "../tools/overseer/idea-queue.js";
+import {
+  parsePriorityFile,
+  planPriorities,
+  priorityApplyRefusals,
+  type PriorityPlan,
+} from "../tools/overseer/idea-queue-priorities.js";
 import { itemWait, queueDepth, throughput } from "../tools/overseer/idea-queue-wait.js";
 
 const USAGE = `overseer-queue — the Overseer's queue of ideas
@@ -56,15 +68,19 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
   list                              the queue in order, with why each item is or is not ready
   show <id>                         one item in full: authority, revision, and its history
   add --by <who> --text <words>     [--title T] [--source P] [--waiting-on W] [--size S]
-                                    [--runs D] [--areas a,b] [--needs-greg]
+                                    [--runs D] [--areas a,b] [--needs-greg] [--priority 0..1]
                                     where: --front | --back (default) | --before <id> | --after <id>
   authorize <id> --by greg          Greg says yes to the item AS IT NOW READS
   move <id> --by <who>              --front | --back | --before <id> | --after <id>
   edit <id> --by <who>              [--text T] [--title T] [--source P] [--waiting-on W]
                                     [--size S] [--runs D] [--areas a,b]
+                                    [--priority 0..1 | --clear-priority]
                                     [--needs-greg | --ready]   --ready is GREG'S ONLY
                                     clear a field with --clear-title, --clear-source,
                                     --clear-waiting-on, --clear-size, --clear-runs
+  set-priorities --from <file> --by <who>
+                                    [--apply --expect-version <v> --expect-file <sha>]
+                                    [--allow-unnamed]
   dispatched <id> --by <who> --session <name> [--plan P]
   done <id> --by <who>
   drop <id> --by <who> [--why W]
@@ -76,6 +92,8 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
     authority   proposed, or authorised by Greg FOR A PARTICULAR REVISION
     lifecycle   queued, dispatched, done, dropped
     needs-greg  waiting on an answer rather than on a slot
+
+  Priority orders this list; it decides nothing about whether an item may go out.
 
   So an item only goes out when all of: the queue read cleanly, Greg authorised
   it, he authorised THIS revision, it is still queued, and it is not waiting on
@@ -129,7 +147,10 @@ function parseArgs(argv: readonly string[]): Flags {
 }
 
 function fail(why: string): never {
-  console.error(`✗ ${why}`);
+  /* `process.exit` can discard buffered console output when automation captures
+     stderr through a pipe. Refusals are part of this CLI's safety contract, so
+     write synchronously before exiting rather than returning a silent status 2. */
+  writeSync(2, `✗ ${why}\n`);
   process.exit(2);
 }
 
@@ -213,7 +234,11 @@ function describeItem(queue: QueueView, item: IdeaItem, position: number | null)
   }
   const tail = bits.length === 0 ? "" : `\n      ${bits.join(" · ")}`;
   const rank = position === null ? "   " : `${String(position + 1).padStart(2)}.`;
-  return `${rank} ${mark(queue, item)} ${item.id}  ${shown}${tail}`;
+  /* Padded to the width of "unstated", so the titles line up. A ragged column
+     is the same information and a worse list, and this one exists to be
+     scanned: the queue is now ORDERED by this number. */
+  const priority = (item.priority === null ? "unstated" : String(item.priority)).padEnd(8);
+  return `${rank} ${mark(queue, item)} ${item.id}  priority ${priority}  ${shown}${tail}`;
 }
 
 function printList(queue: QueueView): void {
@@ -270,6 +295,14 @@ function printShow(queue: QueueView, id: string): void {
   );
   const why = whyNotDispatchable(queue, item);
   console.log(`dispatchable: ${why === null ? "yes" : `no — ${why}`}`);
+  console.log(
+    `priority: ${
+      item.priority === null
+        ? "unstated"
+        : `${item.priority}` +
+          (item.priorityBy === null || item.priorityAt === null ? "" : ` — set by ${item.priorityBy} at ${item.priorityAt}`)
+    }`,
+  );
   console.log(`wait: ${itemWait(queue, item).why}`);
 
   if (item.title !== null) console.log(`\n${item.title}`);
@@ -340,16 +373,49 @@ function metadataPatch(flags: Flags["flags"]): Partial<IdeaMetadata> | undefined
  */
 function write(dir: string, events: readonly IdeaEvent[], expect: QueueVersion, said: string): void {
   const result = appendEvents(events, { root: dir, expect });
-  if (!result.ok) fail(`${result.why}${result.code === "stale-version" ? "" : ` [${result.code}]`}`);
   if (result.repaired.torn) {
-    console.log(`⚠ repaired a torn final line first — ${result.repaired.droppedBytes} byte(s) were lost:`);
-    console.log(`  ${result.repaired.droppedText.slice(0, 200)}`);
+    /* A refusal exits immediately below, so buffered console output can vanish
+       from a pipe and hide the irreversible repair. This notice is part of the
+       result, not decoration; write it synchronously like `fail`. */
+    writeSync(
+      1,
+      `⚠ repaired a torn final line first — ${result.repaired.droppedBytes} byte(s) were lost:\n` +
+        `  ${result.repaired.droppedText.slice(0, 200)}\n`,
+    );
   }
+  if (!result.ok) fail(`${result.why}${result.code === "stale-version" ? "" : ` [${result.code}]`}`);
   console.log(`✓ ${said}`);
   console.log(`  ${result.path} · version ${spellVersion(result.view.version)}`);
 }
 
 /** `--front`/`--back`/`--before ID`/`--after ID` to a placement. Defaults to the back. */
+/**
+ * `--priority 0.85`, `--clear-priority`, or neither.
+ *
+ * Three answers, because **"nobody has said" and "0" are different claims** and
+ * one flag cannot carry both — `idea-queue.ts` § `isPriority`. `undefined` is
+ * *do not touch*, `null` is *put it back to unstated*, a number is the number.
+ * Out of range is a refusal here as well as in the parser, so the message is a
+ * sentence rather than a rejected append.
+ */
+function priorityFrom(flags: Flags["flags"]): number | null | undefined {
+  const cleared = flags.get("clear-priority") !== undefined;
+  const given = str(flags, "priority");
+  if (cleared && given !== null) fail("--priority and --clear-priority say different things");
+  if (cleared) return null;
+  if (given === null) return undefined;
+  /* `Number("")` is 0 and `Number(" ")` is 0 — the trap that once made an empty
+     version string parse as *the queue is empty*. An empty flag value cannot
+     reach here (`str` refuses a bare `--priority`), and `isPriority` refuses a
+     NaN, but the two guards are cheap and the failure they prevent is a queue
+     silently topped by a typo. */
+  const value = Number(given);
+  if (given.trim() === "" || !isPriority(value) || value === null) {
+    fail(`--priority must be a number from 0 to 1 (1 is the most urgent), not '${given}'`);
+  }
+  return value;
+}
+
 function placementFrom(flags: Flags["flags"]): Placement {
   const before = str(flags, "before");
   const after = str(flags, "after");
@@ -366,6 +432,63 @@ function placementFrom(flags: Flags["flags"]): Placement {
   }
   if (flags.get("front") !== undefined) return { at: "front" };
   return { at: "back" };
+}
+
+function count(amount: number, singular: string, plural: string): string {
+  return `${amount} ${amount === 1 ? singular : plural}`;
+}
+
+function printPriorityPlan(plan: PriorityPlan): void {
+  const lines = ["Priority plan:", ""];
+  if (plan.changes.length === 0) {
+    lines.push("  no changes");
+  } else {
+    for (const change of plan.changes) {
+      lines.push(
+        `  ${change.id}${change.needsGreg ? " ?" : ""}  ${change.from === null ? "unstated" : change.from} → ${change.to}`,
+      );
+    }
+  }
+  lines.push(
+    "",
+    `${count(plan.changes.length, "change", "changes")} · ` +
+      `${count(plan.unchanged.length, "unchanged", "unchanged")} · ` +
+      `${count(plan.absent.length, "absent", "absent")} · ${count(plan.unnamed.length, "unnamed", "unnamed")}`,
+  );
+  /* **THE COUNTS ALWAYS PRINT; THE EXPLANATIONS ONLY WHEN THERE IS SOMETHING TO
+     EXPLAIN.** The counts are the review — a zero has to be visible, because
+     "no absent ids" is a fact the reviewer needs. The paragraph underneath is
+     help for a state that has not happened, and three of those between somebody
+     and the list of changes is how a review artefact stops being read. */
+  lines.push(
+    `unchanged: ${plan.unchanged.length === 0 ? "none" : plan.unchanged.map((item) => `${item.id} (${item.priority})`).join(", ")}`,
+  );
+  if (plan.absent.length > 0) {
+    lines.push(
+      `absent: ${plan.absent.join(", ")}`,
+      "  Named by the file but not in the live queue; fix a typo or remove a stale line before applying.",
+    );
+  } else {
+    lines.push("absent: none");
+  }
+  if (plan.unnamed.length > 0) {
+    lines.push(
+      `unnamed: ${plan.unnamed.join(", ")}`,
+      "  Queued but not named by the file; applying requires the printed --allow-unnamed acceptance.",
+    );
+  } else {
+    lines.push("unnamed: none");
+  }
+  /* Apply refusals exit immediately through `fail`. Write the review artefact
+     synchronously so piping the command cannot lose the plan while preserving
+     the refusal sentence — the exact buffered-output failure `fail` already
+     guards against on stderr. */
+  writeSync(1, `${lines.join("\n")}\n`);
+}
+
+/** A copyable shell word, including paths with spaces or apostrophes. */
+function shellWord(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 function main(): void {
@@ -400,6 +523,93 @@ function main(): void {
       if (got === null) fail(read.kind === "unreadable" ? read.why : `could not read the queue at ${dir}`);
       console.log(`# ${read.path}`);
       for (const item of [...got.items, ...got.settled]) console.log(JSON.stringify(item));
+      return;
+    }
+    case "set-priorities": {
+      const from = str(parsed.flags, "from");
+      if (from === null || from.trim() === "") fail("--from is required: the priority file a person reviewed");
+      const by = actor(parsed.flags);
+      const applying = parsed.flags.get("apply") !== undefined;
+      let sourceBytes: Buffer;
+      try {
+        sourceBytes = readFileSync(from);
+      } catch (cause) {
+        fail(`could not read the priority file ${from}: ${String(cause)}`);
+      }
+      const source = sourceBytes.toString("utf8");
+      /* Raw bytes deliberately, rather than normalised wishes: the reviewer
+         read the comments too, so “the file you reviewed” means literally
+         those bytes. A shared parser cannot pin two separate reads of a file. */
+      const fileDigest = createHash("sha256").update(sourceBytes).digest("hex").slice(0, 12);
+      if (applying) {
+        const expectedFile = str(parsed.flags, "expect-file");
+        if (expectedFile === null) {
+          fail("--expect-file is required with --apply: apply only the priority file whose dry run was reviewed");
+        }
+        if (!/^[0-9a-f]{12}$/.test(expectedFile)) {
+          fail(`'${expectedFile}' is not a priority-file digest — use the exact value printed by the dry run`);
+        }
+        if (expectedFile !== fileDigest) {
+          fail(
+            `the priority file has changed since the reviewed dry run: expected ${expectedFile}, now ${fileDigest}. ` +
+              `Nothing was written — dry-run the file again.`,
+          );
+        }
+      }
+      const parsedFile = parsePriorityFile(source);
+      if (!parsedFile.ok) fail(parsedFile.why);
+      const queue = view(dir);
+      const plan = planPriorities(queue, parsedFile.wanted);
+      printPriorityPlan(plan);
+
+      if (!applying) {
+        const nothing = plan.changes.length === 0 ? "\nNothing would change, so the dry run wrote nothing.\n" : "";
+        const allowUnnamed = plan.unnamed.length > 0 ? " --allow-unnamed" : "";
+        /* The command is the safety artefact, so write it synchronously just as
+           the plan above and every refusal are. A captured CLI process can exit
+           0 before buffered `console.log` reaches its pipe, which would report
+           a successful dry run without the only command that pins its review. */
+        writeSync(
+          1,
+          nothing +
+          `\nTo apply exactly this reviewed version:\n  npx tsx scripts/overseer-queue.ts set-priorities ` +
+            `--from ${shellWord(from)} --by ${by} --apply --expect-version ${spellVersion(queue.version)} ` +
+            `--expect-file ${fileDigest}${allowUnnamed} --root ${shellWord(dir)}\n`,
+        );
+        return;
+      }
+
+      const expectedText = str(parsed.flags, "expect-version");
+      if (expectedText === null) {
+        fail("--expect-version is required with --apply: apply only the queue version whose dry run was reviewed");
+      }
+      const expected = parseVersion(expectedText);
+      if (expected === null) fail(`'${expectedText}' is not a queue version — use the exact value printed by the dry run`);
+      /* Checking here gives a person a direct sentence. Passing the same token
+         into `appendEvents` below is the actual race-safe check: it is compared
+         again under the lock, so a writer arriving after this line is refused
+         rather than slipping between review and apply. */
+      if (!sameVersion(expected, queue.version)) {
+        fail(
+          `the queue has moved since the reviewed dry run: expected ${spellVersion(expected)}, now ` +
+            `${spellVersion(queue.version)}. Nothing was written — dry-run the file again.`,
+        );
+      }
+      const allowUnnamed = parsed.flags.get("allow-unnamed") !== undefined;
+      const refusals = priorityApplyRefusals(queue, plan, allowUnnamed);
+      if (refusals.length > 0) fail(`cannot apply this priority plan:\n  ${refusals.join("\n  ")}`);
+      if (plan.changes.length === 0) {
+        console.log("\nNothing changed; every named live item already has that priority.");
+        return;
+      }
+      const at = new Date().toISOString();
+      const events: IdeaEvent[] = plan.changes.map((change) => ({
+        ...envelope(by, { at }),
+        kind: "prioritized",
+        id: change.id,
+        priority: change.to,
+      }));
+      write(dir, events, expected, `applied ${count(plan.changes.length, "priority change", "priority changes")}`);
       return;
     }
     case "seed": {
@@ -462,8 +672,23 @@ function main(): void {
       if (text === null || text.trim() === "") fail("--text is required: the idea, in the words you want kept");
       const queue = view(dir);
       const placement = placementFrom(parsed.flags);
+      const priority = priorityFrom(parsed.flags);
+      /* This is a helpfulness refusal about the command a person just typed,
+         not a rule about which histories the fold accepts. An unranked front
+         placement is valid and works exactly as named while every item is
+         unranked; once any item has a stated priority, however, that item will
+         remain above the new one and an exit-zero `--front`/`--before`/`--after`
+         would lie to automation that cannot read an explanatory note. */
+      const rankedAbove = queue.items.find((item) => item.priority !== null);
+      if (typeof priority !== "number" && placement.at !== "back" && rankedAbove !== undefined) {
+        fail(
+          `${rankedAbove.id} (priority ${rankedAbove.priority}) would sit above this unranked item, so ` +
+            `--${placement.at} would not put it where it says. Pass --priority to rank it, or use --back.`,
+        );
+      }
+      const commandId = str(parsed.flags, "command-id");
       const event: IdeaEvent = {
-        ...envelope(by, { commandId: str(parsed.flags, "command-id") }),
+        ...envelope(by, { commandId }),
         kind: "added",
         id: mintId(),
         text,
@@ -472,10 +697,22 @@ function main(): void {
         placement,
         needsGreg: parsed.flags.get("needs-greg") !== undefined,
       };
+      /* Priority cannot be an `added` field: an older reader would ignore it
+         and silently use the wrong order. The pair is one append batch under
+         one lock, so the record gets either both acts or neither. */
+      const events: IdeaEvent[] = [event];
+      if (typeof priority === "number") {
+        /* **BOTH EVENTS CARRY THE SAME `commandId`, deliberately.** It is the
+           idempotency key for a *command*, not for a line, and this is one
+           command — so a future retry that finds the key has to conclude that
+           the whole of it landed, which is exactly right. Minting a second key
+           would let half an add be replayed. */
+        events.push({ ...envelope(by, { at: event.at, commandId }), kind: "prioritized", id: event.id, priority });
+      }
       /* Said out loud, because it is the one thing about this command that is
          not obvious: the Overseer adding an item does not authorise it. */
       const note = by === "overseer" ? " as a PROPOSAL — only Greg can authorise it" : "";
-      write(dir, [event], queue.version, `queued ${event.id} at the ${placement.at}${note}`);
+      write(dir, events, queue.version, `queued ${event.id} at the ${placement.at}${note}`);
       return;
     }
     case "move": {
@@ -493,6 +730,7 @@ function main(): void {
       const text = str(parsed.flags, "text");
       const title = str(parsed.flags, "title");
       const metadata = metadataPatch(parsed.flags);
+      const priority = priorityFrom(parsed.flags);
       const needs = parsed.flags.get("needs-greg") !== undefined;
       const ready = parsed.flags.get("ready") !== undefined;
       if (needs && ready) fail("--needs-greg and --ready say opposite things");
@@ -508,11 +746,23 @@ function main(): void {
       /* An edit that names nothing would append a line saying "edited nothing",
          which is noise in a record whose value is that every line means
          something. Six keys is the bare envelope plus `kind` and `id`. */
-      if (Object.keys(event).length <= 7) fail("nothing to change — name a field, or --clear-<field>");
+      const editsContent = Object.keys(event).length > 7;
+      if (!editsContent && priority === undefined) fail("nothing to change — name a field, or --clear-<field>");
       /* **A CONTENT EDIT BY ANYONE BUT GREG LAPSES HIS APPROVAL**, and saying so
          here is the difference between a surprise and a decision. */
       const lapses = by !== "greg" && (text !== null || title !== null || metadata !== undefined);
-      write(dir, [event], queue.version, `edited ${id}${lapses ? " — this LAPSES Greg's authorisation" : ""}`);
+      const events: IdeaEvent[] = editsContent ? [event] : [];
+      if (priority !== undefined) {
+        events.push({ ...envelope(by, { at: event.at }), kind: "prioritized", id, priority });
+      }
+      const editOutcome = `edited ${id}${lapses ? " — this LAPSES Greg's authorisation" : ""}`;
+      const priorityOutcome = `priority ${priority ?? "unstated"}`;
+      write(
+        dir,
+        events,
+        queue.version,
+        priority === undefined ? editOutcome : editsContent ? `${editOutcome}; ${priorityOutcome}` : `${id} ${priorityOutcome}`,
+      );
       return;
     }
     case "dispatched": {
@@ -569,8 +819,10 @@ function main(): void {
       return;
     }
     default:
-      console.error(`✗ no such command: ${command}\n`);
-      console.error(USAGE);
+      /* Synchronous for the reason `fail` is: `process.exit` discards buffered
+         output when stderr is a pipe, and an exit code with no sentence is the
+         hardest kind of refusal to act on. */
+      writeSync(2, `✗ no such command: ${command}\n\n${USAGE}\n`);
       process.exit(2);
   }
 }
