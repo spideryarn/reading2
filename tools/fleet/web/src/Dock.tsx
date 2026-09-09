@@ -16,11 +16,16 @@
  *
  * **What is NOT here, deliberately.** No drawer, no scrim, no sliding away as
  * you scroll: the product's bar hides itself to give a long article the whole
- * screen, and nothing on this page is a long read. If a fourth mode arrives,
- * nothing here needs touching — `MODES` in mode.ts is the list, and the bar
- * measures its own fit (fit.ts).
+ * screen, and nothing on this page is a long read.
+ *
+ * **A new mode DOES need touching here**, and this comment used to say it did
+ * not. That was true of the bar's layout and fit (fit.ts) and false of the two
+ * `Record<Mode, …>` maps below, which is the half a reader acts on. Adding a
+ * mode is four registrations — `MODES` and `MODE_LABELS` in mode.ts, plus
+ * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
+ * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, ListChecks, Network, RefreshCw, type LucideIcon } from "lucide-react";
+import { Gauge, Hourglass, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -43,8 +48,14 @@ import { cx } from "./ui";
  */
 const MODE_ICONS: Record<Mode, LucideIcon> = {
   sessions: ListChecks,
+  messages: MessagesSquare,
   health: Gauge,
+  /* An hourglass rather than a second dial: `health` already owns `Gauge`, and
+     at dock size two dials are one shape. A limit is a window that runs out and
+     turns over, which is the thing this tab is actually about. */
+  usage: Hourglass,
   overseer: Network,
+  deploys: Rocket,
 };
 
 const MODE_TIPS: Record<Mode, Tip> = {
@@ -53,10 +64,30 @@ const MODE_TIPS: Record<Mode, Tip> = {
     what: "Every tmux session on the box, worst first: who needs an answer, then what is moving, then everything quiet.",
     how: "Read off the box about once a minute. Open one to see what it is asking, answer it, or say something to it — the dashboard types at the pane, and checks first that the pane is still the one you were shown.",
   },
+  messages: {
+    head: "Recent messages",
+    what: "The last N messages across every session at once, newest first, filtered by session, speaker or text.",
+    /* **The artefact, not the gesture** — this copy is read on the button, in
+       the panel and by a screen reader, and "pressing this reads every
+       transcript" is false on the surfaces where nothing is being pressed.
+       What it could not have guessed is that the window is a snapshot rather
+       than a live tail, and that it says what it could not read. */
+    how: "A snapshot of the moment it was fetched, not a live tail — and it names the sessions it could not read, so a short list is never mistaken for a quiet fleet.",
+  },
   health: {
     head: "Box health",
     what: "Load, memory, swap and disk, with a verdict over them.",
     how: "The verdict is the collector's own, and it has a fourth level — a reading nobody could take never renders as a healthy zero.",
+  },
+  usage: {
+    head: "Usage limits",
+    what: "How much of each Claude window has been spent, and every rate-limit rejection we can find in the transcripts.",
+    /* The non-obvious half is the ATTRIBUTION, not the freshness. The cached
+       percentages belong to the account that is logged in; a 429 in a transcript
+       carries no account id at all, and the scan looks back eight days, which
+       may span a /login swap. So "we were limited" and "this account was
+       limited" are different claims, and only the verdict makes the second. */
+    how: "The percentages are a cache the box reads, so an expired window shows as unknown rather than as a number. A rejection is exact, but carries no account — so it says a limit was hit, not whose.",
   },
   /* This said "It is a roadmap, not a feature. Nothing on that panel is live,
      and it says so." Both halves were true when written and neither was by
@@ -68,6 +99,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Overseer",
     what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",
     how: "The status card computes what it shows, and tells a dead Overseer from a deaf one. The message and broadcast controls type at real sessions — a broadcast spends a turn of a paid model per recipient, so it asks the server what it would do before it does it.",
+  },
+  deploys: {
+    head: "Deploys",
+    what: "Every production deploy there is a written record of, newest first: when it shipped, what a reader would have noticed, and the commits behind it.",
+    /* The non-obvious half is that this is a FILE rather than a live reading —
+       and it points at where the staleness is stated rather than promising a
+       freshness here, which is `usage-limits-tab`'s note: a tooltip that says
+       "only as fresh as the last run" invites the question the header already
+       answers with a number. */
+    how: "The record is a committed file, not a call to Vercel — this box has no token for one — so the first line of the tab says how far behind main it has fallen.",
   },
 };
 

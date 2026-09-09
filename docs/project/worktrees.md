@@ -317,17 +317,49 @@ agent may delete any tree* to *an agent must deliberately forge a lock*, which i
 And it can fail the other way — a supervisor that detached the session from this process tree leaves
 a legitimate owner unauthorised, and waiting out the floor like anybody else.
 
-The recommended flow from inside a Claude session, because removing the directory you are standing in
-leaves your shell in one that no longer exists:
+**Run it from inside the tree, before you leave.** That order is not a preference:
 
 ```
-ExitWorktree({action: "keep"})                 # back to the primary; the owning process is still an ancestor
-npm run worktree:remove -- --branch worktree-<name>
+npm run worktree:remove          # inside the worktree. Its lock proves you own it.
+ExitWorktree({action: "keep"})   # and now get the session out
 ```
+
+**`ExitWorktree({action: "keep"})` releases the worktree lock**, and the lock is the entire evidence
+for "its own session is asking". Leave first and you become a third party to your own tree, and the
+24h floor refuses you — measured, on this doc's own worktree, which then had to wait out the floor
+like anybody else. **`EnterWorktree({path})` does not put the lock back**, so there is no undo.
+
+Removing the directory you are standing in leaves your shell in one that no longer exists; the
+command says so and names the primary to `cd` to. That is a smaller problem than losing the proof,
+and `ExitWorktree({action: "keep"})` afterwards puts the session back where it belongs.
 
 **An orphaned branch is a target too.** `--branch <name>` with no worktree on it runs the same proof
 and the same compare-and-swap deletion, so a removal whose branch deletion failed is not a stuck
 state the hook forbids anyone from clearing.
+
+### What it does not guarantee
+
+Four review rounds went into this, and the last one's remaining findings are races and forgeries that
+a synchronous command run by cooperating agents cannot close. They are listed because a guard whose
+limits are unwritten gets trusted past them.
+
+- **Every check is a separate process from the act it guards.** The landed proof is taken, then
+  retaken immediately before the removal, and the branch's checked-out test runs immediately before
+  the deletion — but "immediately before" is a process spawn, not a lock. A peer using
+  `git -C <tree>` from outside can commit into a tree our cwd scan will never see, and a peer can
+  take a branch between the test and the delete. Closing either needs `update-ref --stdin`
+  transactions and an index lock, which is a different design.
+- **The ownership proof and the ambient-daemon allowlist are cooperative.** A same-uid process can
+  read a common ancestor's pid out of `/proc` and forge a lock reason, and it can call
+  `PR_SET_NAME` to call itself `sshd` and be treated as ambient — GPT Sol demonstrated the second.
+  Both raise the bar from *anyone may delete anything* to *you must deliberately lie*, and neither is
+  a boundary. Nothing readable in `/proc` is beyond the process's own control.
+- **The hook is not a shell parser.** `git branch -\D x` and `git branch --de"lete" x` are real
+  deletions that pass it. It catches the shapes people actually type.
+- **`ExitWorktree` bypasses all of it**, as below.
+
+None of these is a reason to type the git out by hand instead: the hand-typed sequence has every one
+of these gaps and none of the guards.
 
 ## Before you remove one
 
@@ -466,16 +498,22 @@ knowing because both read as alarming and neither means what it appears to.
   If HEAD is *not* an ancestor, stop — that is the real version of this warning.
 - **"this session is not the owner of the worktree …"** — the standard case when you resumed somebody
   else's abandoned tree, which is how most overnight jobs start. Nothing is wrong and there is nothing
-  to check. `ExitWorktree({action: "keep"})` to get back to the primary, then
-  `npm run worktree:remove -- --branch worktree-<name>` from there.
+  to check. `npm run worktree:remove` from inside it, then `ExitWorktree({action: "keep"})` — that
+  order, for the reason below. (A tree you resumed was locked by the session that made it, so its
+  lock names a pid that is gone: the lock reads as stale, you are a third party, and the 24h floor
+  applies. That is usually fine, because an abandoned tree is normally well over it.)
 
 And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
-**So `ExitWorktree` is for leaving a worktree, not for removing one.** `action: "keep"` is the first
-half of the removal flow above — it is what gets your shell out before the directory disappears —
-and `discard_changes: true` is the one path in this repo that bypasses every guard described here.
+**So `ExitWorktree` is for leaving a worktree, not for removing one** — and `action: "keep"` is the
+**second** half of the flow above, never the first. It **releases the worktree lock**, which is the
+whole evidence `worktree:remove` reads to know that a tree's own session is asking; leave first and
+you are a third party to your own tree, under the 24h floor, with `EnterWorktree({path})` offering no
+way to put the lock back. Measured the hard way, on the worktree this section was written in.
+
+`discard_changes: true` is the one path in this repo that bypasses every guard described here.
 Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
 guard whose failure looks like success. If you find yourself reaching for it, run
 `npm run worktree:remove` instead and read what it says.
@@ -511,20 +549,25 @@ primary's vantage point or would be wrong inside a single tree:
   `prunable gitdir file points to non-existent location` over a directory full of somebody's files.
   It is now `UNKNOWN`, and names the fix, `git worktree repair <path>`.
 
-  **And `worktree:remove` clears a ghost with `git worktree prune`, not with a removal.** That is the
-  part that actually protects files, and it took three rounds to get right. Dropping `--force` was not
-  enough: a plain `git worktree remove` on a registered path removes *whatever is there*, so a ghost
-  whose **original** worktree is moved back before the call is found valid, accepted, and deleted —
-  GPT Sol reproduced that, losing an ignored only-copy file and a detached commit named only by that
-  tree's HEAD reflog. No force involved. Dropping force protected an *unrelated* replacement
-  directory and not the case that matters.
+  **And since 2026-09-09 a ghost gets the same landed proof a live tree gets.** The directory is gone;
+  its `.git/worktrees/<name>` is not, and a detached commit made in there is named by that reflog and
+  by nothing else. So `worktree:remove` reads it — `git --git-dir=<admin> reflog show HEAD` works fine
+  for a worktree that no longer exists — proves those commits are on the trunk, and refuses if they
+  are not. No earlier version did this, including the hand-typed sequence it replaces.
 
-  `prune` asks the other question — **is this registration still stale?** — and a restored worktree is
-  not. Measured: move the directory back and `git worktree prune -v` reports nothing and leaves it
-  alone. It is also the one operation here that cannot delete a file at all, which is why running it
-  unscoped is acceptable where a bulk *removal* would not be. Locked entries are unlocked first,
-  because prune exempts them by design and a real Claude worktree is always locked — and unlocking a
-  registration whose directory is gone cannot lose anything.
+  **It clears the registration with a scoped `git worktree remove`, and this took three tries.**
+  Dropping `--force` protected an *unrelated* replacement directory but not the original tree moved
+  back. Switching to `git worktree prune` fixed that — prune asks whether the registration is *still*
+  stale — and introduced something worse: **prune takes no path.** Clearing one ghost deletes every
+  stale registration's `.git/worktrees/<name>`, and GPT Sol reproduced a second ghost's reflog going
+  with it, taking the last name for a commit. A scoped removal touches no other registration's
+  metadata; measured beside it, removing ghost A left ghost B's reflog intact where prune did not.
+  The claim that prune "cannot delete a file" was simply wrong: it deletes git's own files, which is
+  where the last name for a commit lives.
+
+  Locked entries are unlocked first, because a removal refuses a locked one and a real Claude worktree
+  is always locked; unlocking a registration whose directory is gone cannot lose anything, and the
+  lock goes back if the removal then fails.
 - **You are standing in it.**
 - **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
   is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals

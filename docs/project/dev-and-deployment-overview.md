@@ -103,6 +103,10 @@ reference, and is authoritative wherever the two disagree.
   `App.tsx` it does not, whether your data rides the pushed snapshot or wants its own route, why a
   tab that writes is two files rather than one, and the etiquette for a night when several sessions
   are adding tabs at once.
+- **[fleet-recent-messages.md](fleet-recent-messages.md)** — the Recent messages tab, which reads
+  every session's transcript at once: why "the last N messages" is a claim the payload has to earn
+  rather than a description, the four premises behind it and the six things that demote it, the guard
+  turn that stops a half-read turn counting as a whole one, and why the tab is never polled.
 - **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
   version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
   those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small

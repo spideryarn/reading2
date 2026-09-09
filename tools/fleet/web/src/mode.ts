@@ -27,14 +27,22 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export const MODES = ["sessions", "health", "overseer"] as const;
+/**
+ * `usage` sits next to `health` on purpose: one is the box's body and the other
+ * is its budget, and a reader asking "why is everything slow / stalled" checks
+ * both. Appending it would have been a smaller diff and a worse dock.
+ */
+export const MODES = ["sessions", "messages", "health", "usage", "overseer", "deploys"] as const;
 
 export type Mode = (typeof MODES)[number];
 
 export const MODE_LABELS: Record<Mode, string> = {
   sessions: "Sessions",
+  messages: "Recent messages",
   health: "Box health",
+  usage: "Usage limits",
   overseer: "Overseer",
+  deploys: "Deploys",
 };
 
 /** Everything the fragment says. `params` is plain, so React can compare it. */
@@ -98,6 +106,7 @@ export function useHashState(): {
   params: Readonly<Record<string, string>>;
   chooseMode: (mode: Mode) => void;
   setParam: (key: string, value: string | null) => void;
+  setParams: (changes: Record<string, string | null>) => void;
 } {
   const [hash, setHash] = useState<string>(() => (typeof window === "undefined" ? "" : window.location.hash));
 
@@ -129,15 +138,39 @@ export function useHashState(): {
     [state.params, write],
   );
 
-  const setParam = useCallback(
-    (key: string, value: string | null) => {
+  /**
+   * **SEVERAL KEYS AT ONCE, AND THE REASON IS A BUG THIS SHIPPED WITH.**
+   *
+   * `setParam` closes over `state.params`. Calling it four times in a row —
+   * which is exactly what a panel with four filter controls does when it writes
+   * a whole filter object — starts each call from the SAME captured snapshot,
+   * so the last write wins and the other three are silently discarded. On the
+   * Recent messages tab that meant "Hide tool calls" persisted (it was last)
+   * and the session, speaker and text filters reverted on the next render, with
+   * nothing on screen to say so.
+   *
+   * The unit tests missed it because they exercised the pure filter/param
+   * converters, which are correct — the fault was in the composition, and no
+   * test drove the composition. GPT Sol's P1 on the code review.
+   *
+   * A `null` value removes its key, exactly as in `setParam`.
+   */
+  const setParams = useCallback(
+    (changes: Record<string, string | null>) => {
       const params: Record<string, string> = { ...state.params };
-      if (value === null || value === "") delete params[key];
-      else params[key] = value;
+      for (const [key, value] of Object.entries(changes)) {
+        if (value === null || value === "") delete params[key];
+        else params[key] = value;
+      }
       write({ mode: state.mode, params });
     },
     [state.mode, state.params, write],
   );
 
-  return { mode: state.mode, params: state.params, chooseMode, setParam };
+  const setParam = useCallback(
+    (key: string, value: string | null) => setParams({ [key]: value }),
+    [setParams],
+  );
+
+  return { mode: state.mode, params: state.params, chooseMode, setParam, setParams };
 }

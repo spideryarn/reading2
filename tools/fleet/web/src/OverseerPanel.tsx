@@ -61,9 +61,18 @@ import { BoxActionsCard, FleetQueues } from "./ActionButtons";
 import { BroadcastCard } from "./BroadcastCard";
 import { MessageOverseerCard } from "./MessageOverseerCard";
 import { Explain } from "./Tooltip";
-import type { FleetRow, OverseerScheduler, OverseerSessionHistory, OverseerStatus, OverseerView } from "./types";
+import type {
+  ClockSkew,
+  FleetRow,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerView,
+  UsageView,
+} from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, cx } from "./ui";
+import { UsageCard } from "./UsagePanel";
 import { formatDuration } from "./view";
 
 /**
@@ -479,8 +488,10 @@ export function OverseerPanel({
   rows,
   unreadableRows,
   overseer,
+  usage,
   now,
   receivedAt,
+  skew,
 }: {
   actions: ActionsUi;
   rows: readonly FleetRow[];
@@ -498,10 +509,14 @@ export function OverseerPanel({
   unreadableRows: number | null;
   /** The Overseer's own state, `not-asked` from a server that does not report it, or `null` before any payload. */
   overseer: OverseerView | null;
+  /** What the last usage pass found about the account, or `null` before any payload. */
+  usage: UsageView | null;
   /** The page's one clock. Every age on screen agrees because they all read this. */
   now: number;
   /** When this browser received the payload, by its own clock — the anchor. */
   receivedAt: number | null;
+  /** For the usage card only, which is the one that draws wall-clock times. See `UsageCard`. */
+  skew: ClockSkew;
 }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
@@ -515,6 +530,12 @@ export function OverseerPanel({
       {/* FIRST, because it is the answer to "can I trust the rest of this
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
+
+      {/* SECOND, and beside the status card rather than on a tab of its own:
+          *is anything watching* and *can the account afford more work* are the
+          two questions you ask before reading anything else here, and the
+          second is the one that explains a fleet of sessions sitting idle. */}
+      <UsageCard usage={usage} now={now} receivedAt={receivedAt} skew={skew} />
 
       <Card className="tw:p-4">
         <h2 className="tw:font-medium">Everything queued, across the fleet</h2>
@@ -533,13 +554,20 @@ export function OverseerPanel({
       </Card>
 
       {/* The same component Box Health draws. One implementation of "say this
-          to everybody", per the plan. */}
+          to everybody", per the plan.
+
+          `rows` IS WHAT MAKES THE BROADCAST REACH ANYBODY. The route refuses a
+          fleet-wide message that names no recipients, on purpose — it must act
+          on the list the person was looking at — and this tab is the one that
+          has that list. See `boxActionBody`. Passed straight through, never
+          re-read. */}
       <BoxActionsCard
         feed={actions.feed}
         api={actions.api}
         asked={actions.asked}
         error={actions.error}
         onChanged={actions.refresh}
+        rows={rows}
       />
 
       {/* **A DAEMON IS NOT A RECIPIENT — AND THE OVERSEER IS NOT ONLY A
