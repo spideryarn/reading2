@@ -93,6 +93,23 @@ as a decision to get it off the blocking list — which is the same act as calmi
 what gate 1 is about. If a decision turns out to have been a question, the honest repair is a record
 here saying so, superseded when Greg answers.
 
+**The symmetric failure is the other tab's, and its defence is better than this one's:**
+
+> The symmetric failure is this tab's, and it is worth naming beside theirs: a *decision* shown as a
+> *question* re-blocks work that was already unblocked, and costs Greg a turn answering something
+> nobody was waiting for. The defence here is structural rather than a rule about reading: **a
+> Questions item is composed only from things that are parked right now** — a live dialog on a pane,
+> or a turn that ended handing over a decision — and never from a record of something that already
+> happened. This panel's composition function cannot reach the decision record at all.
+>
+> — session `questions-mode`, 2026-09-09
+
+**Say the asymmetry out loud, because it is the useful part.** Their boundary holds *by
+construction*: the panel cannot reach this file, so the failure is unreachable rather than
+forbidden. This tab's boundary is only a **rule** — nothing structural stops a question being
+written here as a decision, and the record's `supersedes` is a repair rather than a prevention. That
+is a real difference in kind and this plan should not claim parity it does not have.
+
 ## The five ways the count could lie
 
 Sol's reviews found that "only Greg may review" is one rule guarding one of five doors. All five are
@@ -338,8 +355,14 @@ just this one:
 
 Tested at **left, middle and right overflow**, not only the direct `#decisions` load.
 
-That is a `Dock.tsx` and `tailwind.css` change of maybe thirty lines, and `flex: 8 → 9` goes with it
-for correctness even though it changes nothing at 390. **It is recorded here as a deliberate
+That is a `Dock.tsx` change of maybe thirty lines. **The coarse-pointer share count is deliberately
+NOT touched here:** `questions-mode` is landing the fix `fleet-dashboard-modes.md` § What this costs
+already asks for — `Dock.tsx` setting a `--dock-mode-count` custom property from `MODES.length`, with
+`tailwind.css` reading it — which deletes the hand-kept literal rather than incrementing it, so a
+third tab cannot get it wrong. Bumping `8 → 9` here would only be a line for them to delete, and both
+sessions editing one declaration is the collision neither of us needs. If that fix does not land,
+this session bumps the literal instead; they have undertaken to say so the same day rather than leave
+it to be discovered by watching `dev`. **It is recorded here as a deliberate
 cross-cutting decision rather than slipped in**, because `Dock.tsx` is the file every mode author is
 in. The alternative considered and rejected: a third fit rung that shaves button padding, as the
 product's own bar has — it buys ~11px, which does not close a 360px floor against a 390px viewport,
@@ -360,7 +383,8 @@ verify again after any later merge that touches the dock.
 Six places in three files, per
 [fleet-dashboard-modes.md § The registrations](../project/fleet-dashboard-modes.md#the-registrations):
 `MODES` and `MODE_LABELS` in `mode.ts`; `MODE_ICONS` and `MODE_TIPS` in `Dock.tsx`; the mount in
-`App.tsx`; the share count in `tailwind.css`. Two are checked by nothing.
+`App.tsx`; the share count in `tailwind.css`. Two are checked by nothing — and the sixth is
+`questions-mode`'s to delete, per above, so this stage edits five.
 
 **The data is on-demand, not pushed.** It is a page Greg opens in the morning, not a number the fleet
 needs every 73 seconds, and pushing it would serialise every decision's options and trade-offs to
@@ -449,6 +473,14 @@ equally important things, and they are not. Candidates, none of them decided:
 - **Queued ideas, Decisions and Questions are three views of one thing** — what the Overseer is
   going to do, what it did in your name, and what it needs from you. They could be one tab with
   three sub-views, taking the bar from ten to eight.
+
+  **And the merge is real work rather than a re-parenting of three panels, which is worth knowing
+  before choosing it.** The three have three different **freshness contracts**: Queued ideas is a
+  file read on demand; Decisions is append-only history where a minute's staleness changes nothing;
+  Questions is a join between a roughly two-minute-old judgement and a roughly 73-second-old
+  snapshot, and it is **the only one of the three where being a minute stale changes what Greg does
+  next**. One tab has to present all three honestly or state which part of itself is older. That is
+  the thing a merge has to solve rather than assume — `questions-mode`, 2026-09-09.
 - **Readiness and Deploys** both answer *is what we have good enough to ship*.
 - **Usage limits and Box health** — one is the box's body and the other its budget. `mode.ts` says
   they sit adjacent on purpose, so this is the weakest of the three.
@@ -553,7 +585,8 @@ Stage 2's module — round two caught that the first split made Stage 1 un-green
       vocabulary array stays in the node module with `as const satisfies`.
 - [ ] `decisions-client.ts` with an injectable `DecisionsApi` seam; strict client parsing; a
       *this browser never got an answer* arm distinct from the server's own silences.
-- [ ] `DecisionsPanel.tsx`; the six registrations; the `Dock.tsx` active-into-view scroll and the
+- [ ] `DecisionsPanel.tsx`; **five** of the six registrations (the coarse-pointer share count is
+      `questions-mode`'s to delete); the `Dock.tsx` active-into-view scroll and the
       overflow affordance (§ The mode). Copy: the tab is **things done in Greg's name that he has not
       yet reviewed**, not "decisions the Overseer made" — assumptions are one of the three classes and
       gate 2 says of those that the Overseer *is not deciding*.
