@@ -107,6 +107,11 @@ anything interesting. The projected summary is bounded, because incidents are gr
 transcript paths are not in the history. The raw checkpoint is still on disk for the **current**
 reading, so nothing is lost about now — only about then.
 
+> **AMENDED by Sol F2/F8.** "Not the raw checkpoint" is right; "therefore store the card's
+> projection" was a leap. A UI type is not a durable format, and the list above was not the whole
+> list of what is given up. The persisted record is now **purpose-built and separately versioned** —
+> Stage 2 designs it around the claims the chart makes. See the rulings below.
+
 **D3 — A history line is a loose record, tagged with its provenance.** Copying
 `health-history.ts`, which stores `report: Record<string, unknown>` and pointedly **never re-types
 it** as a `HealthReport`, because those bytes crossed a version boundary. Each usage line carries
@@ -115,6 +120,16 @@ chooses to replay a *raw* line back through `projectUsage` must honour `KNOWN_SC
 checked hard — a schema-2 line replayed as schema 3 would produce a confidently wrong answer with no
 error. We avoid that class entirely by storing the projection, but the provenance field is what
 makes a future migration possible at all.
+
+> **AMENDED by Sol F8, and I had the health precedent backwards.** Health's **writer** takes a typed
+> `HealthReport`; only bytes *read back from disk* become `Record<string, unknown>`. So: **type the
+> write side, keep the read side loose** — the reverse of what this decision said.
+>
+> And `checkpointSchema` is the wrong version to hang the payload on. `projectUsage` can rename or
+> reinterpret a field without the Overseer's checkpoint schema moving at all, after which two lines
+> both saying `checkpointSchema: 2` hold incompatible shapes and nothing can tell them apart. Every
+> line therefore carries a **`summarySchema`** of its own, alongside `checkpointSchema` as
+> provenance.
 
 **D4 — One line per collection pass, three kinds. Hook the pass, never the tick.**
 
@@ -125,6 +140,23 @@ The daemon appends one line per `collectUsage` pass, carrying which of three thi
 `take-fresh` (a new reading), `keep-stored` (the fresh scan fell over and `chooseUsage` republished
 an earlier report — no new reading, and the `why` says so), or a throw. There is **no dedupe key**,
 because the writer is the process that knows.
+
+> **AMENDED by Sol F3/F4/F11, and F4 is a real improvement rather than a correction.**
+>
+> - **"No new reading was taken" is wrong for `keep-stored`.** `chooseUsage` keeps a complete 10:00
+>   report over an *incomplete* 10:05 one — so a fresh observation existed and simply was not
+>   published. The daemon holds it; the dashboard never could. A carry line therefore records the
+>   carry reason **and the discarded fresh observation** (its cache reading and `coverage`), in a
+>   separate labelled arm. A gap becomes "the scan stopped at 40 of 1,835 transcripts" instead of
+>   "something didn't happen".
+> - **There is no universal source instant.** The throw arm is `{kind: "none", at}` and has no
+>   `collectedAt` at all. Requiring one would collapse every failure into the first, drop them all,
+>   or fall back to `writtenAt` and write the same failure every 30 s. Each arm names its own source
+>   instant.
+> - **`collectedAt` is neither monotonic nor unique** — it is `new Date(Date.now()).toISOString()`,
+>   and a wall clock can step backwards. A reader that promises "oldest first" by file order can
+>   reverse its own polyline. Lines carry a separate `recordedAt`, and a clock regression is
+>   surfaced rather than quietly sorted into plausibility.
 
 **The trap that survives the revision**, and the reason this decision is numbered: `TICK_MS = 30_000`
 and the checkpoint is **rewritten on every tick**, so `writtenAt` advances every 30 seconds whether
@@ -161,6 +193,21 @@ without it draws a confident flat line over a scan that opened nothing. Gap widt
 sample's own recorded cadence, the way `history-series.ts` uses `nextDueMs`, not from one assumed
 interval.
 
+> **AMENDED by Sol F10: two absences, not one, and `absenceGapReason` answers only the first.**
+> "Never zero" survives; "route every silence through `absenceGapReason`" does not, because it is
+> answering a different question from the one the chart asks between samples.
+>
+> - **Within a recorded sample**: was this scan's failure to find a 429 believable? That is
+>   `absenceGapReason`'s question, and it is the one it was built for.
+> - **Between samples**: why did the next record never arrive? `absenceGapReason` **cannot know**.
+>   A complete scan at 10:00 establishes "no 429 found" and its predicate returns no gap — but it
+>   says nothing whatever about an hour in which nothing was recorded. Applying it there would join
+>   the utilisation line straight across an unobserved hour, or label the silence "no incidents".
+>
+> The second layer is derived only from source instants and the recorded cadence, and it says
+> nothing more than "nothing was recorded". The two must not be collapsed, however tempting the
+> shared word "absence" is.
+
 **D7 — No three-way collapse.** Inherited from the Stage B Sol reviews: a `null` or ambiguous
 comparison must never collapse into a positive claim. The `contradictsCachedWindow` bug had `null`
 mean both "agree" and "couldn't check", and both callers read it as a live rejection. Any
@@ -172,6 +219,24 @@ rendering, not a fact, and becomes false the moment it is pasted into a doc. His
 epoch milliseconds and ISO instants only. Expiry is re-derived by the *renderer* against its own
 skew-corrected clock — `projectUsage` deliberately takes no clock and reads nothing live, so that a
 server-computed "expired" never ships an answer as old as the payload.
+
+> **AMENDED by Sol F1 — a P0, and the finding I would have shipped.** "Re-derive expiry at render
+> time" is right for the **current card** and **wrong for history**, and the second half was hiding
+> inside the first.
+>
+> The cache says 70% at 10:00, resetting at 12:00. `parseUsageWindow` records a `value`, correctly,
+> because it *was* valid at 10:00. Greg opens the 24-hour chart at 18:00. This decision as written
+> tells the renderer to re-evaluate expiry against 18:00 — so a true, correctly-recorded observation
+> becomes "expired/unknown" and **disappears from the chart**. Every point older than its own window
+> would vanish, which on a five-hour window means most of the day.
+>
+> **Current state and history need different clocks.** The live card evaluates expiry at view time,
+> because a stale "still valid" would be a live lie. A historical point preserves what was true at
+> its own `collectedAt` and is **never re-adjudicated by today's clock**. Stage 2 freezes the
+> verdict at write time for exactly this reason.
+>
+> D8's original rule survives intact for *formatting* — a relative-time string is still a rendering,
+> not a fact. What it must not extend to is *validity*.
 
 **D9 — MOOT since the writer became the daemon (2026-09-09).** There is one daemon by contract, and
 the dashboard reads this store lock-free exactly as it reads `current.json`, so the race below
@@ -465,10 +530,56 @@ Roughly most-useful first.
 - **`git diff` against a base after merging `dev` shows other agents' files as yours.** Scope every
   review diff by explicit path.
 
+## GPT Sol round 1 — rulings
+
+Review at `docs/plans/260909b-usage-limits-tab-plan-review-sol-r1.md`, against revision `924f2209`.
+**Verdict: reframed.** 13 findings, six P0. I accept the reframe: the current-reading tab was sound,
+the history format and the stage order were not. Every finding gets a ruling, including the ones
+I am not taking.
+
+The review could not run any test — its sandbox refused Vite's `node_modules/.vite-temp` — so every
+finding is reasoned from source. It said so plainly, which is what makes the rest usable.
+
+| ID | Sev | Ruling | What changed |
+|---|---|---|---|
+| **F1** | P0 | **Accepted — the best finding in the review.** | D8 amended. History freezes validity at write time; only the live card re-derives expiry. Without this a 10:00 reading vanishes when viewed at 18:00. |
+| **F2** | P0 | **Accepted in substance; the worse half does not apply.** | Stage 2 pins the incident model. `UsageIncident.id` is `` `${window}@${resetsAt}` `` — derived and stable across samples — and `firstHitAt`/`lastHitAt` are real hit instants, so an incident is placed *when it happened*, not at "first observed by history". Sol called this an unpinned dependency and was right to; it is pinned now against `d2e37fe4`. |
+| **F3** | P0 | **Accepted.** | No universal source instant. The throw arm has no `collectedAt`; each arm names its own. |
+| **F4** | P1 | **Accepted, and promoted.** | A carry line now records the *discarded fresh observation*, not just a reason. This is the strongest argument for the daemon writer — better than the dedupe one that actually decided it. |
+| **F5** | P1 | **Already fixed before the review arrived.** | I found and retracted the seam claim myself; Sol confirms it independently. Recorded as confirmation, not as new work. |
+| **F6** | P0 | **Accepted in substance; its crash path is moot by design.** | Retention status (`lastAttemptAt`, `lastSuccessAt`, `failure`, `poisoned`, `lockedOutBy`) is now contract, carried route → client → page: a hole the UI cannot explain is silent data loss. The `refreshLoop`-termination half assumed a request-path writer, which the daemon decision removed — recorded as moot so nobody reintroduces one. |
+| **F7** | P0 | **Accepted, and it corrects my own measurement.** | I sized the cap on a *real* 6.8 KB line while copying a 64 KiB *legal maximum*. 288 × 64 KiB = 18 MiB/day worst case, so an 8 MiB file can rotate in under 11 hours and drop half the requested day. Stage 3 asserts the invariant directly instead of inheriting a constant. |
+| **F8** | P1 | **Accepted — and I had the precedent backwards.** | Health types its *writer* and loosens only on read. `summarySchema` added, separate from `checkpointSchema`. |
+| **F9** | P1 | **Accepted.** | Five concurrency invariants named in Stage 3 rather than inherited by "mirror closely" — including `0700`/`0600`, since the summary carries account identity. |
+| **F10** | P0 | **Accepted.** | D6 amended: scan-absence and recorder-absence are two layers, and `absenceGapReason` answers only the first. |
+| **F11** | P2 | **Accepted.** | `recordedAt` separate from the source instant; clock regressions surfaced, not sorted into plausibility. |
+| **F12** | P2 | **Accepted — it was on my own suspicion list.** | Empty state uses health's narrower wording and claims no "since" it cannot know. |
+| **F13** | P2 | **Accepted, and it is the reframe.** | The stage order is inverted: the tab is now Stage 1. Multi-account softened — "nothing in the store" was too strong, since a switched-away account becomes an opaque UUID; only positively attributed non-null uuids may form a series. |
+
+**Nothing overruled.** That is unusual enough to be worth stating rather than glossed: this was a
+plan review at the right moment, on a design soft enough to change, and the two findings I might
+have argued with (F2's placement horn, F6's crash path) turned out to be answerable with evidence
+rather than argument — one by reading code that had just been committed, one because a decision made
+three hours earlier had already removed the failure.
+
+**What the review cost and bought.** One round, ~13 minutes. It removed a P0 that would have silently
+erased most of every chart older than five hours (F1), a rotation cap that would have thrown away
+half the day it promised (F7), and a stage order that put two invisible stages before the one thing
+Greg asked to see (F13).
+
+### Round 2 will be against a different plan
+
+The design Sol reviewed is not the design being built — the writer moved from the dashboard to the
+daemon *while the review was running*, so its F5 and F6 are arguing with a document I had already
+changed. Round 2 goes against the current revision, and its brief must say so explicitly, or it will
+re-litigate the seam a third time.
+
 ## Stages
 
-Ordered so the value is frontloaded: if the job stopped after Stage 3, Greg has a working Usage
-limits tab showing the current reading, and only the chart is missing.
+Ordered so the value is frontloaded — **properly this time.** The first ordering claimed to
+frontload and did the opposite: it put the store and the route, neither of which anybody can see,
+ahead of the tab. Sol's F13 caught it. If the job now stops after Stage 1, Greg has a working Usage
+limits tab.
 
 ### A standing constraint on this run: the usage hold
 
@@ -488,180 +599,246 @@ reading the hold off a chart instead of off a single reading with no history beh
 
 ### Stage 0: plan, and get it reviewed
 
-- [x] Sonnet research over transcripts, docs and code (two halves, both landed)
 - [x] ~~Settle the writer fork with `260908f-roadmap-usage` — dashboard, on `collectedAt`~~
       — reopened after I checked the seam claim it rested on and found it false
 - [x] Measure the real cost against the live checkpoint rather than inheriting health's numbers
 - [x] Fable arbitrated the reopened fork: **daemon, via an `onPass` callback composed in
       `scripts/overseer.ts`**
 - [x] Commit this doc pre-critique (`924f2209`)
-- [ ] GPT Sol round 1 — **running against `924f2209`**, which is three revisions behind. It was
-      explicitly asked to check the seam claim, so expect it to find independently what Fable and I
-      already found; that is a confirmation, not new work. Anything else it finds is the value.
-- [ ] Fold Sol's findings in, and send round 2 against the **current** revision with the writer
-      change in it — the design it reviewed is not the design being built
+- [x] GPT Sol round 1 (`260909b-usage-limits-tab-plan-review-sol-r1.md`) — **verdict: reframed**,
+      13 findings, six P0. Rulings below; the stage cut and the stored format both changed.
+- [ ] GPT Sol round 2 against the **current** revision, once the reframe is written down
 - [ ] Revise and commit
 
-### Stage 1: the store
+### Stage 1: the tab, current reading only — no store
 
-Net-new leaf module, no UI, no wiring. Mirrors `health-history.ts` closely enough that a reader of
-one can read the other.
+**Moved to the front by Sol's F13, which caught the plan claiming to frontload value while putting
+two invisible stages first.** Stages 1–2 as originally written produced nothing anybody could see
+and were not needed for the tab. This stage is now the first, it is small, and if the job stopped
+here Greg has a working Usage limits tab.
+
+- [ ] Merge `origin/dev` and confirm the usage card has landed (`d2e37fe4` is on
+      `origin/worktree-260908f-usage-visibility`; cite `dev` once it is there, since that branch is
+      a safety copy its author will delete)
+- [ ] Extend `tests/fleet-web.test.tsx`: the fourth mode exists, is labelled, and mounts the panel
+- [ ] `mode.ts` — add `"usage"` to `MODES` and `MODE_LABELS`
+- [ ] `Dock.tsx` — add `MODE_ICONS.usage` and `MODE_TIPS.usage`
+  - **The tip never opens on a phone.** `Dock.tsx` passes `mouseOnly`, so on touch a tap switches
+    the tab and the card never appears; it survives only as `aria-describedby`. Since this page is
+    mostly read on a phone, **the label and the icon must stand alone**. Pick an icon that reads as
+    a limit rather than as a chart, so it is not confused with Box health at a glance.
+  - Tip register is **the artefact, not the gesture** (`dashboard-modes-doc`'s ruling from the code,
+    not Greg's): what you will see here, then where it comes from or what it does not promise.
+  - Do not edit `MODE_TIPS.overseer` — that wording is `overseer-tab-messaging`'s.
+- [ ] `App.tsx` — one additive `{mode === "usage" ? … : null}` block
+- [ ] Mount `UsageCard` from `UsagePanel.tsx` **unchanged** (D1), fed from the same
+      `CheckpointFeeds.usage`. The Overseer tab keeps its card; this is a second mount, not a move.
+  - **Sol's F13 caveat**: confirm the component can genuinely be mounted twice off one feed — no
+    module-level state, no id collisions between the two mounts. Test it, do not assume it.
+- [ ] Browser check in a **Sonnet subagent** (Playwright against system Chrome; this is the box, so
+      Claude-in-Chrome is not available): the tab appears, is reachable by keyboard, renders the
+      real current reading, and matches the Overseer tab's card field for field — including the
+      three unknown windows. Ask for the conclusion and one screenshot, not page dumps. Tell it to
+      kill **its own** dev-server pid, never `pkill -f vite`, and never to touch port 8787.
+- [ ] Focused suites, `npm run typecheck`, commit
+
+### Stage 2: design the persisted record — a typed V1, not the UI's projection
+
+**This stage is new, and it is the reframe.** Sol's central objection (F2, F8) is that storing "the
+projection the card happens to use" is not a format decision at all: it is a bet that a UI type will
+stay suitable for a durable log. The persisted record must be **designed around the claims the chart
+makes**, typed on the write side, and versioned independently of both the checkpoint and the UI.
+
+No production code in this stage beyond the type and its tests — it exists so that Stage 3 cannot
+quietly invent a format.
+
+- [ ] Define `UsageHistoryRecordV1` in a neutral leaf, with **three clocks kept separate** (F1, F3,
+      F10, F11):
+  - `sourceKind` + a discriminator-specific **source instant**: a report carries `collectedAt`, a
+    thrown pass carries the daemon's `at`. **`collectedAt` is not a universal key** — the throw arm
+    of `StoredUsage` (`{kind:"none", at}`) has none, and requiring it would either collapse every
+    failure into the first or drop them all (F3).
+  - `recordedAt` — when this line was appended. Distinct from the source instant, so a clock step
+    is visible rather than silently reordered (F11).
+  - **Event instants belong to the events**: each incident keeps its own `firstHitAt`/`lastHitAt`.
+- [ ] **Freeze validity at write time (F1 — the finding I would have shipped).** D8 says the
+      renderer re-derives expiry against its own clock. That is right for the current card and
+      **wrong for history**: a 70% reading valid at 10:00, resetting at 12:00, would be
+      re-adjudicated at 18:00 and vanish from the chart. So each stored window carries the verdict
+      **as it was at its own `collectedAt`**, and the chart never re-expires a historical point.
+      Only the live card re-derives.
+- [ ] **Pin the incident model, which Sol called a real unpinned dependency (F2).** Now checkable —
+      the card landed at `d2e37fe4`:
+  - `UsageIncident.id` is `` `${window}@${resetsAt}` `` — **derived, stable across samples**, and
+    its own comment says it is "a thing a person points at between two readings"
+    (`usage-feed.ts:188-190`). So the cross-sample key F2 asks for already exists.
+  - `firstHitAt`/`lastHitAt` are real instants taken from the hits (`:196-197`), so an incident is
+    placed at **when it actually happened**, not at "first observed by history". F2's worse horn
+    does not apply.
+  - **Decision: draw each incident once, as a span from `firstHitAt` to `lastHitAt` with its
+    rejection count** — deduped across samples by `id`. Not one mark per sample (which would draw
+    288 rejections for one incident), and not one mark per hit.
+  - **What this gives up, stated:** the distribution of individual hits inside a cluster — 27 hits
+    between first and last become a span and a number. For a 24-hour chart that is arguably the
+    better rendering; if Greg wants the distribution, it is a format change, so it is named here
+    rather than discovered in Stage 5.
+  - **Two cases that must not be silently mishandled:** `firstHitAt` can be `null` when no hit
+    carried a time — such an incident is **listed but unplaced**, never dropped and never pinned to
+    scan time. And an incident's `firstHitAt` may fall **outside** the 24-hour window, because the
+    scan looks back eight days — it must read as "began before this window", never clipped to the
+    left edge as though it started there.
+- [ ] **Version the summary independently (F8).** `summarySchema` on every line, separate from
+      `checkpointSchema`. `projectUsage` can rename a field without the checkpoint schema moving, and
+      two lines both saying `checkpointSchema: 2` could then hold incompatible shapes with no way to
+      tell them apart. Also correct my misreading of health: its **writer** takes a typed
+      `HealthReport`; only bytes read back from disk become `Record<string, unknown>`. Type the
+      write side; keep the read side loose.
+- [ ] **Record the carry decision, not just its consequence (F4).** Sol is right that an unchanged
+      `collectedAt` does not mean no reading was taken: `chooseUsage` keeps a complete 10:00 report
+      over an incomplete 10:05 one, so **a fresh observation existed and was not published**. The
+      daemon has it; the dashboard never would. So a `keep-stored` line carries the carry reason
+      *and* whatever the discarded fresh pass observed — the cache reading and its `coverage` — as a
+      separate, clearly-labelled arm. This is the single strongest reason the writer is the daemon,
+      and it is stronger than the dedupe argument that originally decided it.
+- [ ] Tests for the type: every arm round-trips; a record missing a source instant is rejected at
+      write time rather than written and puzzled over later
+- [ ] `npm run typecheck`, commit
+
+### Stage 3: the store
+
+Net-new leaf module. Mirrors `health-history.ts` — but Sol's F9 is right that "mirror closely" is
+not a specification for invariants the tests never name.
 
 - [ ] Write `tests/fleet-usage-history.test.ts` **first**, and watch it go red:
-  - [ ] a line round-trips: append then read returns the same record
-  - [ ] **one line per pass, three kinds** — a `take-fresh` outcome writes a reading, a
-        `keep-stored` writes a `scan-incomplete` line **carrying `chooseUsage`'s `why`**, and a
-        thrown pass writes a `collector-failed` line. This is D4 and the highest-value test here.
-  - [ ] a `keep-stored` line does **not** carry a utilisation point — it is a gap with a reason, not
-        a repeat of the held reading (the failure this whole design exists to avoid)
-  - [ ] rotation at the byte cap moves live → prev and keeps reading across both
-  - [ ] an over-long single line is truncated, not dropped, and says it was truncated
+  - [ ] one line per pass, three kinds: `take-fresh` writes a reading; `keep-stored` writes a
+        carry line with the reason **and the discarded fresh observation**; a throw writes a
+        `collector-failed` line keyed on the daemon's `at`, not on an absent `collectedAt`
+  - [ ] a `keep-stored` line does **not** contribute a utilisation point to the published series
+  - [ ] **rotation holds 24 hours at the worst legal record size (F7).** The copied 64 KiB per-line
+        cap against 288 readings/day is 18 MiB/day worst case, so an 8 MiB live file can rotate in
+        under eleven hours and leave `prev` holding less than half the requested day. Assert the
+        invariant directly: **one live file holds ≥24 h at the maximum accepted record size and
+        cadence.** Fix by lowering the accepted record size to what a real record needs (measured
+        ~6.8 KB), raising the cap, or both — and let the test decide, not the copied constant.
+  - [ ] a realistic line is ~6.8 KB and under the accepted maximum
+  - [ ] a line whose `summarySchema` is unknown reads back **tagged and skipped**, not
+        reinterpreted (F8)
   - [ ] a corrupt/partial trailing line is counted in `unreadableLines`, not thrown
-  - [ ] **a line built from a realistic reading is ~6.8 KB and under 10 KB** — so the day a line
-        gets fat, the suite says so instead of the 8 MiB cap silently shrinking from 4 days to one
-  - [ ] a line whose `checkpointSchema` is **not** the current one still reads back, tagged, rather
-        than being dropped or silently reinterpreted (D3 provenance — the case that matters the day
-        the checkpoint schema moves, which `260908g` makes live)
-  - [ ] `OVERSEER_STORE_DIR` redirects the whole store, so a test never touches the real
-        `~/.overseer/` (the daemon's own override; **not** a new `FLEET_USAGE_DIR` — that idea died
-        with the dashboard-writer design)
+  - [ ] **the concurrency invariants Sol listed (F9)**, each named rather than inherited:
+    - two processes both proving the old pid dead — the loser must stop writing (`stillOurs` before
+      every repair *and* every append, not only at claim)
+    - the lock is released after a post-claim open/repair failure
+    - a partial write poisons, so the next line is not welded onto corrupt bytes
+    - a read retries if `prev` changes underneath it during rotation
+    - directory `0700` / file `0600` — **the summary carries account identity**
+  - [ ] `OVERSEER_STORE_DIR` redirects the whole store, so no test touches the real `~/.overseer/`
 - [ ] Write `tools/fleet/usage-history.ts`: `openUsageHistory(dir, options)`, append + bounded read.
-  - Line shape: `{schema: 1, at, collectedAt, checkpointSchema, accountUuid, intervalMs,
-    kind: "reading" | "scan-incomplete" | "collector-failed", why?, summary?: Record<string, unknown>}`
-  - `summary` stays a loose record (D3). Do **not** re-type it as `UsageSummary`.
-  - `intervalMs` is recorded per line so gap width comes from the collector's own cadence, mirroring
-    health's `nextDueMs` (D6) — never from an interval assumed at read time.
-  - Reuse `../overseer/jsonl.js` and `../overseer/lock.js` rather than copying them, as
-    `health-history.ts:81-82` already does. **No lock is taken on the read path.**
+      Reuse `../overseer/jsonl.js` and `../overseer/lock.js` rather than copying them, as
+      `health-history.ts:81-82` already does.
 - [ ] Green, then **mutate the finished code and check the suite notices** (silent-success)
-- [ ] `npm run typecheck`, lint the touched files, commit
+- [ ] `npm run typecheck`, lint, commit
 
-### Stage 2: the writer hook, and the read route
-
-Two halves that meet nowhere except the file on disk, which is the point.
+### Stage 4: the writer hook, and the read route
 
 **The write side — a callback, not an import.**
 
 - [ ] Write `tests/overseer-daemon-usage-pass.test.ts` first — **the join test**, which must fail if
-      `onPass` is not actually called. The health version of this test exists precisely because
-      separately-tested pieces were once wired to nothing.
-  - [ ] `onPass` fires once per **pass**, with the right arm for each of `take-fresh`,
-        `keep-stored` and a throw
-  - [ ] **it does not fire on a tick.** Drive several `checkpointUpdate()`s with no usage pass and
-        assert zero calls — this is the `writtenAt` trap relocated, and the one test that would
-        catch it coming back.
-- [ ] `tools/overseer/daemon.ts`: add `onPass?` to `DaemonOptions.usage` (already `{intervalMs?,
-      run}` at `:331`), called at the three sites around `:712-729`. **~5 lines, importing nothing
-      from `tools/fleet/`.** Hand this to `260908f-roadmap-exec-identity` as a one-line request
-      rather than editing their file under them; do not proceed until they have it.
-- [ ] `scripts/overseer.ts`: compose `openUsageHistory` + the projection + the append, next to the
-      existing `usage: { run: … }` at `:975`. **This is the composition root and the only place the
-      coupling lives.** Note Fable's correction: `projectUsage` takes a parsed *checkpoint* and
-      pulls in `node:fs` via `attention.ts`, so either wrap the report in a
-      `{schema, writtenAt, usage}` envelope here, or call `groupUsageIncidents` plus the smaller
-      pieces. Decide which when the file is in front of you, and write down which and why.
+      `onPass` is never called:
+  - [ ] fires once per **pass**, with the right arm for `take-fresh`, `keep-stored` and a throw
+  - [ ] **does not fire on a tick.** Drive several `checkpointUpdate()`s with no usage pass and
+        assert zero calls — the `writtenAt` trap relocated, and the one test that catches it coming
+        back.
+- [ ] `tools/overseer/daemon.ts`: add `onPass?` to `DaemonOptions.usage` (already
+      `{intervalMs?, run}`), called at the three sites around the usage timer. ~5 lines, importing
+      nothing from `tools/fleet/`. **Re-read the file first** — `260908f-roadmap-exec-identity` has
+      changed the `diff()` call site and its import list, so line numbers have moved. They have
+      agreed I make this edit myself once they land, and will ping.
+- [ ] `scripts/overseer.ts`: compose `openUsageHistory` + the projection + the append beside the
+      existing `usage: { run: … }`. **The composition root, and the only place the coupling lives.**
+      `projectUsage` takes a parsed *checkpoint* and is Node-only via `attention.ts`, so wrap the
+      report in a `{schema, writtenAt, usage}` envelope here or call `groupUsageIncidents` plus the
+      smaller pieces; write down which and why.
+- [ ] **Retention status is part of the contract, not a nicety (F6).** An append that fails must
+      never leave the chart with an unexplained hole. Carry `lastAttemptAt`, `lastSuccessAt`,
+      `failure`, `poisoned`, `lockedOutBy` — the fields health already tracks — from the store,
+      through the route, into the client, and onto the page. A hole the UI cannot explain is silent
+      data loss.
+  - Sol's associated crash path is **moot now the writer is the daemon** — nothing appends on
+    `/api/state`, so an append failure cannot reject `publish()` or kill `refreshLoop`. Record that
+    it was moot by design rather than fixed, so nobody reintroduces a request-path writer.
 
 **The read side — no writer, no lock.**
 
 - [ ] Write `tests/fleet-usage-history-route.test.ts` first, against a pure `usageHistoryPayload`:
   - [ ] `hours` clamped to `[24, 168]`; junk `hours` falls back rather than throwing
-  - [ ] an **empty** store returns the "no history yet" arm carrying an instant — never an empty
-        series that a chart would draw as a flat line at zero (D6)
-  - [ ] holes are reported as holes, and a `scan-incomplete` line is a hole **with a reason**
+  - [ ] an **empty** store returns the "nothing recorded" arm — never an empty series a chart would
+        draw as a flat line at zero
+  - [ ] **the empty state does not claim a "since" it cannot know (F12).** An empty file has no
+        first line; process start moves the claim forward on every restart, and the checkpoint's
+        `collectedAt` may predate the recorder by days. Use health's narrower wording — *"Nothing
+        recorded in the last 24 hours; this fills in as the recorder runs."* Once non-empty,
+        distinguish "collecting since" from "retained data begins", which differ after a rotation.
+  - [ ] holes are reported as holes, and a carry line is a hole **with a reason**
   - [ ] an unreadable store returns `{kind: "unreadable", why}`
   - [ ] the read takes **no lock** and works while the daemon is mid-append
+  - [ ] `retention` is present in the payload and asserted, not optional
 - [ ] `tools/fleet/routes-usage-history.ts`: `GET /api/usage/history?hours=N`, gzip above 8 KiB
-- [ ] Mount it in `server.ts` — one line, additive, announced to the Overseer first
-- [ ] Focused suites green, `npm test`, `npm run typecheck`, commit
+- [ ] Mount in `server.ts` — one line, additive, announced to the Overseer first
+- [ ] Focused suites, `npm run typecheck`, commit
 
-**Sequencing note.** The write side needs another session's file and the read side does not. If
-`daemon.ts` is not free when this stage starts, build the read side first against a hand-written
-fixture store — the format is settled in Stage 1, so nothing blocks.
+**Sequencing.** The write side needs another session's file; the read side does not. If `daemon.ts`
+is not free, build the read side first against a fixture store — the format is frozen in Stage 2.
 
-### Stage 3: the tab, current reading only
+### Stage 5: the last 24 hours
 
-The first stage Greg can see. Ends with a genuinely useful tab even if Stage 4 never lands.
-
-- [ ] Extend `tests/fleet-web.test.tsx`: the fourth mode exists, is labelled, and mounts the panel
-- [ ] `mode.ts:30` — add `"usage"` to `MODES` and `MODE_LABELS`
-- [ ] `Dock.tsx:42-64` — add `MODE_ICONS.usage` and `MODE_TIPS.usage`. (The file header says
-      "nothing here needs touching"; that is true of the bar's layout logic only, and both records
-      are `Record<Mode, …>` so they must be extended. Do not edit `MODE_TIPS.overseer` — that
-      wording belongs to session `overseer-tab-messaging` tonight.)
-  - **The tip never opens on a phone.** `Dock.tsx` passes `mouseOnly`, so on touch a tap switches
-    the tab and the card never appears; it survives only as the button's `aria-describedby`. Since
-    this page is mostly read on a phone, **the label and the icon must stand alone** and nothing
-    load-bearing may live only in the tip. "Usage limits" carries itself; pick an icon that reads as
-    a limit rather than as a chart, so it is not confused with Box health at a glance.
-  - Tip register is **the artefact, not the gesture**: first sentence is what you will see here,
-    second is where it comes from or what it does not promise. Switching a tab spends nothing, so a
-    "opening this runs X" framing would be false as well as unhelpful. (Session
-    `dashboard-modes-doc`'s ruling from the code, not Greg's — if he overturns it, this tip changes
-    with everyone else's.) Draft: *what* — the limits we are up against and how they moved today;
-    *how* — read from the Overseer's own 5-minute pass, so it is only as fresh as the last one, and
-    a rejection cannot be tied to an account.
-- [ ] `App.tsx:207-220` — one additive `{mode === "usage" ? … : null}` block. Keep it to that;
-      `dashboard-titles-descriptions-detail` also has a small edit here.
-- [ ] Mount `UsageCard` from `UsagePanel.tsx` **unchanged** (D1), fed from the same
-      `CheckpointFeeds.usage`. The Overseer tab keeps its card; this is a second mount, not a move.
-- [ ] Browser check in a **Sonnet subagent** (Playwright against system Chrome — this is the box, so
-      Claude-in-Chrome is not available): the tab appears, is reachable by keyboard, renders the
-      real current reading, and matches the Overseer tab's card field for field. Ask for the
-      conclusion and one screenshot, not the page dumps. Tell it to kill **its own** dev-server pid,
-      never `pkill -f vite`, and not to touch port 8787.
-- [ ] Suites green, typecheck, commit
-
-### Stage 4: the last 24 hours
-
-- [ ] Write `tests/fleet-usage-history-series.test.ts` first — this is where D5/D6 live or die:
-  - [ ] an `unattributed` cache arm (no windows at all) breaks the utilisation line; it does **not**
-        become 0
-  - [ ] an `unknown` arm likewise
-  - [ ] a gap longer than the recorded cadence renders as a gap, and the gap's reason comes from
-        `absenceGapReason`, not from a local re-derivation
+- [ ] Write `tests/fleet-usage-history-series.test.ts` first — where the honesty rules live or die:
+  - [ ] **two independent absence layers, never conflated (F10).** *Within* a sample: value,
+        unknown/unattributed cache, or a scan whose no-hit result is inconclusive — this is where
+        `absenceGapReason` applies. *Between* samples: "nothing was recorded", derived only from
+        source instants and the recorded cadence. `absenceGapReason` **cannot** say why the next
+        record never arrived, and using it there would join the utilisation line across an
+        unobserved hour or label the silence "no incidents".
+  - [ ] an `unattributed` cache arm (no windows at all) breaks the line; it does not become 0
+  - [ ] a historical point is **not** re-expired against the viewing clock (F1)
   - [ ] "before history began" is its own labelled region, distinct from a hole
-  - [ ] rejections are **not** grouped by account, and the series carries no `accountUuid`
-  - [ ] utilisation **is** grouped by account
-  - [ ] **an unrecognised window name (`nimbus_quill` is live on this box today) is rendered as a
-        named row in the unknown state — never dropped, and never plotted from its unvalidated
-        `utilizationPercent: 0`**
-- [ ] `tools/fleet/web/src/usage-history-client.ts` (parse + poll the wire payload) and
-      `usage-history-series.ts` (the pure absence-classification layer) — mirroring
-      `health-history-client.ts` / `history-series.ts`
-- [ ] `tools/fleet/web/src/UsageHistory.tsx` — hand-rolled inline `<svg>`, labels in HTML beside it,
-      mirroring `HealthHistory.tsx`. Two series drawn differently (D5): utilisation as lines per
-      window, rejections as marks on the shared axis, explicitly labelled as unattributed clusters.
-- [ ] Times via `zonedReadings` from `zones.ts` — do not format an instant by hand
-- [ ] Browser check in a Sonnet subagent, including the **empty-history** state, which is what a
-      fresh box actually shows
-- [ ] Suites green, `npm test`, `npm run typecheck`, commit
+  - [ ] an incident appears **once**, spanning `firstHitAt`→`lastHitAt`, deduped by `id` across
+        every sample that carried it
+  - [ ] an incident with `firstHitAt: null` is listed but unplaced; one beginning before the window
+        reads as beginning before it, not at the left edge
+  - [ ] rejections carry **no** `accountUuid` and are not split by account
+  - [ ] utilisation **is** grouped by account, and **only positively attributed, non-null uuids form
+        a series** — nulls must never merge into one apparent account (F13)
+  - [ ] an unrecognised window (`nimbus_quill`, `spend`, `member_dashboard_available` are all live
+        on this box) is a named row in the unknown state — never dropped, never plotted from its
+        unvalidated `utilizationPercent: 0`
+- [ ] `usage-history-client.ts` (parse + poll, validating `retention`) and `usage-history-series.ts`
+      (the pure absence-classification layer)
+- [ ] `UsageHistory.tsx` — hand-rolled inline `<svg>`, labels in HTML beside it, mirroring
+      `HealthHistory.tsx`. Times via `zonedReadings` from `zones.ts`; never format an instant by hand.
+- [ ] Browser check in a Sonnet subagent, **including the empty-history state**, which is what this
+      box actually shows on the first run
+- [ ] Focused suites, `npm run typecheck`, commit
 
-### Stage 5: docs, and the multi-account writeup
+### Stage 6: docs, and the multi-account writeup
 
 - [ ] `docs/project/overseer-direction.md` — add a row for `~/.overseer/usage.jsonl` to the seam
-      table. The table's existing claim that *"the daemon is the only writer of any of them"* stays
-      true, so this is an addition and not a rewrite. **This file's wording is a rule**, so the edit
-      goes to Greg one approved set at a time per `edit-important-docs.md` — prepare the
-      before/after and put it in the debrief rather than landing it unilaterally.
-  - Worth proposing to Greg in the same set, since it is the question that cost this plan two hours:
-    a sentence saying what the `tools/fleet` ↔ `tools/overseer` rule actually is. It is **weight and
-    the store cycle, not direction** — `jsonl.ts` and `lock.ts` cross freely because they import
-    only `node:*`, while a fleet module importing `readCheckpoint` would close a cycle and drag the
-    daemon's graph into the process you reach for when something else is broken. Two sessions got
-    this wrong tonight in opposite directions, which is the evidence that it is not written down
-    anywhere findable.
-- [ ] A line for the new tab under the entry point that owns the reading view / dashboard docs, so
+      table. Its claim that *"the daemon is the only writer of any of them"* stays true, so this is
+      an addition, not a rewrite. **This file's wording is a rule**, so it goes to Greg as a
+      before/after via the Overseer, per `edit-important-docs.md`.
+  - In the same set, propose a sentence saying what the `tools/fleet` ↔ `tools/overseer` rule
+    actually is — **weight and the store cycle, not direction**. And quote the *mechanism*, not just
+    the rule, because what went wrong twice in one night was not ignorance of it: both sessions
+    reported a **one-directional check as a two-directional conclusion**. The usable form, which the
+    card's author put well: *name the scope you actually searched inside the sentence that reports
+    the result.* "Nothing in `tools/overseer/` imports X" is a claim a reader can size; "the seam is
+    one-way" is one they cannot.
+- [ ] A line for the new tab under the entry point that owns the dashboard docs, so
       `tests/doc-links.test.ts` stays green (signposting needs no approval)
-  - **Cite by symbol, never `path:NNN`, in anything under `docs/project/`** — `doc-links.test.ts`
-    rejects line-number citations in evergreen docs. Line numbers are fine in this plan, which is a
-    record rather than documentation.
-  - Cross-check against `docs/project/fleet-dashboard-modes.md` (session `dashboard-modes-doc`,
-    landing tonight) rather than duplicating it — that doc owns "how to add a mode", so this one
-    links to it and describes only the usage tab itself.
-- [ ] Write the appendix below into whichever `docs/project/` doc owns usage, per "a plan is a
-      record, not the documentation"
-- [ ] `npm run check` last (~26 min, silent until done) — read its verdict, do not gate the commit
-      on it
+  - **Cite by symbol, never `path:NNN`** in anything under `docs/project/`.
+  - Link to `docs/project/fleet-dashboard-modes.md` rather than duplicating it — that doc owns "how
+    to add a mode"; this one describes only the usage tab.
+- [ ] Write the appendix below into whichever `docs/project/` doc owns usage
+- [ ] `npm run check` last (~26 min) — **only once the Overseer clears the usage hold**
 
 ## Appendix: what a second account would need
 
