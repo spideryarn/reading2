@@ -13,6 +13,17 @@ still asks Greg about anything that outlives the branch.
 >
 > — Greg, 2026-09-08
 
+> **This table is still the queue, and a machine-readable one is being built beside it.**
+> [260909b](../plans/260909b-queued-ideas-mode-the-overseer-queue-as-ndjson.md) turns it into an
+> append-only NDJSON file with a CLI (`npx tsx scripts/overseer-queue.ts --help`) and, later, a
+> dashboard mode — because Greg asked to reorder, edit and see the wait from his phone. **Nothing has
+> been cut over: this file is what gate 3 reads until `overseer.md` says otherwise**, and that switch
+> is one approved change rather than a migration, so that there is never a moment with two sources of
+> authorisation. What the new file adds is a test to replace *"is it in the queue?"*, which stops
+> being enough once the Overseer can write the queue: an item goes out only if the file read cleanly,
+> **Greg** authorised it, he authorised **the revision it now says**, it is still queued, and it is
+> not waiting on him.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is

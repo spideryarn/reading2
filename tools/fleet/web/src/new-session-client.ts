@@ -107,20 +107,20 @@ function parseNotification(v: unknown): NotifyState | null {
     }
     case "cannot-tell":
       return { kind, why };
-    case "submitted": {
-      const paneId = str(v["paneId"]);
-      if (to === null || paneId === null) return null;
-      return { kind, to, paneId };
+    case "queued": {
+      const position = v["position"];
+      if (to === null || typeof position !== "number") return null;
+      return { kind, to, position };
     }
-    case "refused": {
-      const code = str(v["code"]);
-      const delivery = str(v["delivery"]);
-      if (to === null || code === null) return null;
-      if (delivery !== "none" && delivery !== "partial" && delivery !== "unknown") return null;
-      return { kind, to, code, why, delivery };
+    case "not-queued": {
+      /* `rule` travels rather than being flattened into `why`: a full queue is
+         a fact about THIS recipient and `bad-text` is a fact about the MESSAGE,
+         and a page that could not tell them apart could render neither
+         honestly. */
+      const rule = str(v["rule"]);
+      if (to === null || rule === null) return null;
+      return { kind, to, rule, why };
     }
-    case "unknown":
-      return to === null ? null : { kind, to, why };
     default:
       return null;
   }
