@@ -1412,7 +1412,7 @@ describe("POST /api/actions/box — killing", () => {
     // 5001 was shown and still matches. 5002 was shown and has since stopped
     // matching (it is not in the scan). 5005 matches now and was never shown.
     const after = [suites[0] as ProcRecord, proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })];
-    const { io, ran } = fakeIo({ procs: (scan) => (scan === 0 ? suites : after) });
+    const { io, ran } = fakeIo({ procs: (scan) => (scan < 2 ? suites : after) });
     const { routes } = harness({ io });
     const r = await previewAndConfirm(routes, { actionId: "kill-test-suites" });
     expect(r.status).toBe(200);
@@ -1428,7 +1428,7 @@ describe("POST /api/actions/box — killing", () => {
   it("kills nothing when nothing on the confirmed list still matches", async () => {
     const { io, ran } = fakeIo({
       procs: (scan) =>
-        scan === 0 ? [suites[0] as ProcRecord] : [proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })],
+        scan < 2 ? [suites[0] as ProcRecord] : [proc({ pid: 5005, comm: "node-MainThread", args: VITEST_ARGS })],
     });
     const { routes } = harness({ io });
     const r = await previewAndConfirm(routes, { actionId: "kill-test-suites" });
@@ -2535,6 +2535,33 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
     ]);
   });
 
+  it("does not join one process's displayed candidate to its replacement's start token", async () => {
+    const before = proc({ pid: 5001, comm: "node-MainThread", args: `${VITEST_ARGS} --name=before` });
+    const replacement = proc({ pid: 5001, comm: "node-MainThread", args: `${VITEST_ARGS} --name=replacement` });
+    const box = fakeIo({
+      procs: (scanIndex) => [scanIndex === 0 ? before : replacement],
+      // The replacement lands after the discovery scan and before the first
+      // start-token read. Both reads therefore name the replacement.
+      start: () => ({ read: true, ticks: 900_001 }),
+    });
+    const h = harness({ io: box.io });
+
+    const shown = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "dry-run" } }),
+    );
+    const candidates = (shown.json.result as { candidates: { args: string }[] }).candidates;
+    expect(candidates.map((candidate) => candidate.args)).toEqual([replacement.args]);
+    const preview = previewFrom(shown);
+
+    const confirmed = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }),
+    );
+    expect(confirmed.status).toBe(200);
+    expect(box.ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
+  });
+
   it("speaks to exactly the previewed recipients, in order", async () => {
     const h = harness();
     const preview = await broadcastPreview(h);
@@ -2554,6 +2581,8 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
 
     const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body }));
     expect(r.json.code).toBe("preview-mismatch");
+    expect(String(r.json.why)).toContain("action");
+    expect(String(r.json.why)).not.toContain("material submitted");
     expect(box.ran).toEqual([]);
   });
 
@@ -2609,6 +2638,20 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
     expect(liveBox.ran).toEqual([]);
   });
 
+  it("does not claim a different server existed when only the receipt's instance field changed", async () => {
+    const box = fakeIo({ procs: suites });
+    const h = harness({ io: box.io });
+    const preview = await killPreview(h);
+    const body = confirmation("kill-test-suites", preview);
+    (body.preview as Record<string, unknown>).serverInstanceId = "not-this-instance";
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body }));
+    expect(r.json.code).toBe("other-instance");
+    expect(String(r.json.why)).toContain("claims a different server run");
+    expect(String(r.json.why)).not.toContain("was minted by a different run");
+    expect(box.ran).toEqual([]);
+  });
+
   it("refuses a changed process token", async () => {
     const box = fakeIo({ procs: suites });
     const h = harness({ io: box.io });
@@ -2618,7 +2661,49 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
 
     const r = await call(h.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview, material) }));
     expect(r.json.code).toBe("preview-mismatch");
+    expect(String(r.json.why)).toContain("material submitted");
+    expect(String(r.json.why)).not.toContain("wrong action");
     expect(box.ran).toEqual([]);
+  });
+
+  it("compares echoed material as JSON, so response normalisation cannot make its own preview unconfirmable", async () => {
+    const h = harness();
+    const raw =
+      `{"actionId":"resource-broadcast","mode":"dry-run","speaker":"greg","recipients":[` +
+      `{"paneId":"%1","sessionId":"$1","claudeSessionId":"${CLAUDE_ID}","panePid":424242,` +
+      `"status":{"kind":"idle","diagnostic":-0}}]}`;
+    const shown = await call(h.routes, fakeReq({ url: "/api/actions/box", body: raw }));
+    const preview = previewFrom(shown);
+
+    const normalized = (preview.material.recipients as { status: { diagnostic: number } }[])[0];
+    expect(normalized?.status.diagnostic).toBe(0);
+    const confirmed = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", preview) }),
+    );
+
+    expect(confirmed.status).toBe(200);
+    expect(h.sent.map((x) => x.target.paneId)).toEqual(["%1"]);
+  });
+
+  it("confirms a deeply nested JSON status that the preview response successfully returned", async () => {
+    const h = harness();
+    const depth = 2_000;
+    const nested = `${"[".repeat(depth)}0${"]".repeat(depth)}`;
+    const raw =
+      `{"actionId":"resource-broadcast","mode":"dry-run","speaker":"greg","recipients":[` +
+      `{"paneId":"%1","sessionId":"$1","claudeSessionId":"${CLAUDE_ID}","panePid":424242,` +
+      `"status":{"kind":"idle","diagnostic":${nested}}}]}`;
+    const shown = await call(h.routes, fakeReq({ url: "/api/actions/box", body: raw }));
+    const preview = previewFrom(shown);
+
+    const confirmed = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", preview) }),
+    );
+
+    expect(confirmed.status).toBe(200);
+    expect(h.sent.map((x) => x.target.paneId)).toEqual(["%1"]);
   });
 
   it("does not spend rate-limit capacity on a mismatched envelope", async () => {
@@ -2659,7 +2744,9 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
   it("does not signal a pid whose start token changed while the preview was open", async () => {
     const box = fakeIo({
       procs: [suites[0] as ProcRecord],
-      start: (pid, readIndex) => ({ read: true, ticks: pid * 100 + readIndex }),
+      // The two preview-bracketing reads agree; the confirmation's final read
+      // observes the replacement.
+      start: (pid, readIndex) => ({ read: true, ticks: pid * 100 + (readIndex < 2 ? 0 : 1) }),
     });
     const h = harness({ io: box.io });
     const preview = await killPreview(h);
@@ -2741,6 +2828,50 @@ describe("POST /api/actions/box — server-minted preview receipts", () => {
     const goneByCap = await call(capped.routes, fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", first) }));
     expect(goneByCap.json.code).toBe("preview-unknown");
     expect(box.ran).toEqual([]);
+  });
+
+  it("never evicts a claimed tombstone to make room for unclaimed previews", async () => {
+    const box = fakeIo({ procs: [suites[0] as ProcRecord] });
+    const h = harness({ io: box.io });
+    const spent = await broadcastPreview(h);
+    const submitted = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", spent) }),
+    );
+    expect(submitted.status).toBe(200);
+
+    for (let i = 0; i < 32; i++) {
+      await killPreview(h);
+      h.tick(1);
+    }
+
+    const replayed = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: confirmation("resource-broadcast", spent) }),
+    );
+    expect(replayed.json.code).toBe("preview-already-used");
+    expect(h.sent.map((x) => x.target.paneId)).toEqual(["%1", "%2"]);
+  });
+
+  it("refuses to mint beyond the hard cap when every slot is a live tombstone", async () => {
+    const box = fakeIo({ procs: [suites[0] as ProcRecord] });
+    const h = harness({ io: box.io });
+    for (let i = 0; i < 32; i++) {
+      const preview = await killPreview(h);
+      const confirmed = await call(
+        h.routes,
+        fakeReq({ url: "/api/actions/box", body: confirmation("kill-test-suites", preview) }),
+      );
+      expect(confirmed.status).toBe(200);
+      h.tick(1);
+    }
+
+    const overCap = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "dry-run" } }),
+    );
+    expect(overCap.json.code).toBe("rate-limited");
+    expect(overCap.json).not.toHaveProperty("preview");
   });
 
   it("refuses the retired bare-pids request instead of ignoring it", async () => {

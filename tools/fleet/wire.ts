@@ -3556,7 +3556,7 @@ export type FleetActionMaterial =
       kind: "kill";
       /** Full identity. These, and only these, may be confirmed. */
       confirmable: readonly KillIdentity[];
-      /** Shown so the person can see what was left out, and why. Never submitted. */
+      /** Echoed for equality and display, but never admitted to the signal target list. */
       excluded: readonly { pid: number; why: string }[];
     }
   | {
@@ -3576,7 +3576,7 @@ export type BroadcastRecipientClaim = {
   sessionId: string;
   claudeSessionId: string | null;
   panePid: number | null;
-  /** The server's own status object, verbatim off the snapshot. */
+  /** The client's raw status claim, retained verbatim from the preview request. */
   status: unknown;
   /** The stagger this row was shown. Bound, so the delivered wait cannot differ from the read one. */
   minutes: number | null;

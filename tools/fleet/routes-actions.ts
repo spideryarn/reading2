@@ -22,9 +22,10 @@
  * browser can know what is running on this box, so the candidate list comes
  * from `ps` here. A preview binds each confirmable pid to its start tick and
  * boot, and the run INTERSECTS those identities with a fresh rule scan: the
- * scan authorises, and the shown identities bound. A process that stopped
- * matching is not signalled, and one that started matching after the preview
- * is not either. The final identity read narrows the remaining window; the
+ * scan authorises, and the shown identities bound. A process that no longer
+ * matches at that fresh scan is not signalled, and one that started matching
+ * after the preview is not either. The rule's mutable inputs can still change
+ * after the scan. The final identity read narrows a different window; the
  * pidfd-sized race it cannot close is named beside that read.
  *
  * WHAT ACTUALLY HAPPENS WHERE:
@@ -53,7 +54,6 @@ import { readlinkSync } from "node:fs";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isDeepStrictEqual } from "node:util";
 
 import {
   actionById,
@@ -602,6 +602,44 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 
 function asString(v: unknown): string | null {
   return typeof v === "string" ? v : null;
+}
+
+/**
+ * Compare the values JSON actually carries, without recursive descent.
+ *
+ * Both operands crossed a JSON boundary: the stored arm came from the preview
+ * request and the submitted arm came back in the confirmation. Node's
+ * `isDeepStrictEqual` is stricter than that wire contract (`-0` differs from
+ * `0`) and recursively overflows on a valid, sub-cap nested value. This walks
+ * the same data iteratively and treats the two spellings of JSON zero alike.
+ */
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  const pending: [unknown, unknown][] = [[left, right]];
+  while (pending.length > 0) {
+    const pair = pending.pop() as [unknown, unknown];
+    const [a, b] = pair;
+    if (a === b) continue;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+
+    const aArray = Array.isArray(a);
+    const bArray = Array.isArray(b);
+    if (aArray !== bArray) return false;
+    if (aArray && bArray) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i += 1) pending.push([a[i], b[i]]);
+      continue;
+    }
+
+    const aRecord = a as Record<string, unknown>;
+    const bRecord = b as Record<string, unknown>;
+    const keys = Object.keys(aRecord);
+    if (keys.length !== Object.keys(bRecord).length) return false;
+    for (const key of keys) {
+      if (!Object.hasOwn(bRecord, key)) return false;
+      pending.push([aRecord[key], bRecord[key]]);
+    }
+  }
+  return true;
 }
 
 /**
@@ -1511,9 +1549,27 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     return requestedExpired;
   }
 
-  function mintPreview(actionId: string, material: FleetActionMaterial): FleetActionPreview {
+  function mintPreview(
+    actionId: string,
+    material: FleetActionMaterial,
+  ): { ok: true; preview: FleetActionPreview } | { ok: false; why: string; retryAfterMs: number } {
     const at = deps.now();
     purgeExpired(at);
+    if (previews.size >= MAX_ACTION_PREVIEWS) {
+      const oldestFresh = [...previews].find(([, entry]) => entry.state === "fresh");
+      if (oldestFresh !== undefined) {
+        previews.delete(oldestFresh[0]);
+      } else {
+        const expiresAt = Math.min(...[...previews.values()].map((entry) => entry.preview.expiresAt));
+        return {
+          ok: false,
+          why:
+            `all ${MAX_ACTION_PREVIEWS} preview slots are retaining already-submitted receipts until they expire; ` +
+            "wait before asking for another preview",
+          retryAfterMs: Math.max(1, expiresAt - at),
+        };
+      }
+    }
     const preview: FleetActionPreview = {
       schema: "fleet-action-preview/1",
       previewId: `${deps.serverInstanceId}-p${nextPreview++}`,
@@ -1523,12 +1579,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       material,
     };
     previews.set(preview.previewId, { preview, state: "fresh" });
-    while (previews.size > MAX_ACTION_PREVIEWS) {
-      const oldest = previews.keys().next().value as string | undefined;
-      if (oldest === undefined) break;
-      previews.delete(oldest);
-    }
-    return preview;
+    return { ok: true, preview };
   }
   /**
    * WHERE THE NEXT DRAIN PASS STARTS. Server-lifetime state, built here rather
@@ -2093,15 +2144,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       refuse(
         res,
         "other-instance",
-        `${claim.previewId} was minted by a different run of this dashboard; that run is gone, and nothing is being held on its account. ` +
+        `${claim.previewId} claims a different server run from this dashboard, so it cannot name a preview held here. ` +
           "Reload the page, look at the current preview, and confirm that one if it is still right.",
       );
       return null;
     }
 
     // Purging is the first table operation. Its return preserves the difference
-    // between "expired just now" and "this run never had it" without retaining
-    // dead receipts.
+    // between "expired while this table still held it" and "not held now"
+    // without retaining dead receipts; an unclaimed preview may also have been
+    // evicted for capacity.
     const requestedExpired = purgeExpired(deps.now(), claim.previewId);
     if (requestedExpired) {
       refuse(res, "preview-expired", `${claim.previewId} expired; preview '${r.action.id}' again and read the current list before confirming`);
@@ -2122,19 +2174,47 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     const parsedMaterial = parseActionMaterial(r.material);
     const materialKind = r.action.effect === "broadcast" ? "broadcast" : r.action.effect === "enacted" ? "kill" : null;
-    if (
-      claim.actionId !== r.action.id ||
-      claim.actionId !== entry.preview.actionId ||
-      entry.preview.actionId !== r.action.id ||
-      materialKind === null ||
-      !parsedMaterial.ok ||
-      parsedMaterial.value.kind !== materialKind ||
-      !isDeepStrictEqual(parsedMaterial.value, entry.preview.material)
-    ) {
+    if (claim.actionId !== r.action.id) {
       refuse(
         res,
         "preview-mismatch",
-        `the action or material submitted for ${claim.previewId} is not the preview this server minted; preview '${r.action.id}' again and confirm without changing it`,
+        `the preview claim names '${claim.actionId}', but this request asks for '${r.action.id}'; preview the action you mean and confirm that receipt`,
+      );
+      return null;
+    }
+    if (claim.actionId !== entry.preview.actionId || entry.preview.actionId !== r.action.id) {
+      refuse(
+        res,
+        "preview-mismatch",
+        `${claim.previewId} belongs to '${entry.preview.actionId}', not '${r.action.id}'; preview the action you mean and confirm that receipt`,
+      );
+      return null;
+    }
+    if (materialKind === null) {
+      refuse(res, "preview-mismatch", `'${r.action.id}' has no confirmable box material; preview the action again`);
+      return null;
+    }
+    if (!parsedMaterial.ok) {
+      refuse(
+        res,
+        "preview-mismatch",
+        `the material submitted for ${claim.previewId} is malformed: ${parsedMaterial.why}. Preview '${r.action.id}' again and confirm without changing it`,
+      );
+      return null;
+    }
+    if (parsedMaterial.value.kind !== materialKind) {
+      refuse(
+        res,
+        "preview-mismatch",
+        `the material submitted for ${claim.previewId} is '${parsedMaterial.value.kind}', but '${r.action.id}' needs '${materialKind}' material; preview it again`,
+      );
+      return null;
+    }
+    if (!sameJsonValue(parsedMaterial.value, entry.preview.material)) {
+      refuse(
+        res,
+        "preview-mismatch",
+        `the material submitted for ${claim.previewId} differs from the material this server previewed; preview '${r.action.id}' again and confirm without changing it`,
       );
       return null;
     }
@@ -2285,23 +2365,26 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       refuse(res, "box-unreadable", scan.why);
       return;
     }
-    const parents = new Map<number, number>(scan.procs.map((p) => [p.pid, p.ppid]));
-    const chosen = selectForKill(scan.procs, policy, { selfPid: deps.io.selfPid(), parents });
-    const byPid = new Map(scan.procs.map((p) => [p.pid, p]));
-    const candidates: KillCandidate[] = chosen.map((c) => {
-      const p = byPid.get(c.pid);
-      return {
-        pid: c.pid,
-        rule: c.rule,
-        why: c.why,
-        comm: p?.comm ?? "",
-        // Bounded: a command line can be a kilobyte of arguments, and the page
-        // is a phone.
-        args: (p?.args ?? "").slice(0, 200),
-        rssKiB: p?.rssKiB ?? 0,
-        etimeSeconds: p?.etimeSeconds ?? 0,
-      };
-    });
+    const candidatesFrom = (procs: readonly ProcRecord[]): KillCandidate[] => {
+      const parents = new Map<number, number>(procs.map((p) => [p.pid, p.ppid]));
+      const chosen = selectForKill(procs, policy, { selfPid: deps.io.selfPid(), parents });
+      const byPid = new Map(procs.map((p) => [p.pid, p]));
+      return chosen.map((c) => {
+        const p = byPid.get(c.pid);
+        return {
+          pid: c.pid,
+          rule: c.rule,
+          why: c.why,
+          comm: p?.comm ?? "",
+          // Bounded: a command line can be a kilobyte of arguments, and the page
+          // is a phone.
+          args: (p?.args ?? "").slice(0, 200),
+          rssKiB: p?.rssKiB ?? 0,
+          etimeSeconds: p?.etimeSeconds ?? 0,
+        };
+      });
+    };
+    const candidates = candidatesFrom(scan.procs);
 
     if (r.mode === "dry-run") {
       const boot = deps.io.readBootIdentity();
@@ -2310,12 +2393,45 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         refuse(res, "box-unreadable", `the box boot identity could not be read, so no process identity can be confirmed: ${boot.why}`);
         return;
       }
+      // Bracket the candidate snapshot with process identity. Without both
+      // sides, a pid can turn over after `ps` and the preview joins the old
+      // process's displayed command/rule to the replacement's start token.
+      const before = new Map(candidates.map((candidate) => [candidate.pid, deps.io.readProcessStart(candidate.pid)]));
+      const settledScan = await deps.io.listProcesses();
+      if (!settledScan.ok) {
+        deps.log(`action box: refused code=box-unreadable action=${action.id} why=${settledScan.why}`);
+        refuse(res, "box-unreadable", `the process table could not be re-read while identities were being confirmed: ${settledScan.why}`);
+        return;
+      }
+      const firstPids = new Set(candidates.map((candidate) => candidate.pid));
+      const settledByPid = new Map(
+        candidatesFrom(settledScan.procs)
+          .filter((candidate) => firstPids.has(candidate.pid))
+          .map((candidate) => [candidate.pid, candidate]),
+      );
+      const displayed = candidates.map((candidate) => settledByPid.get(candidate.pid) ?? candidate);
       const confirmable: { pid: number; startTicks: number; bootId: string }[] = [];
       const excluded: { pid: number; why: string }[] = [];
       for (const candidate of candidates) {
-        const start = deps.io.readProcessStart(candidate.pid);
-        if (start.read) confirmable.push({ pid: candidate.pid, startTicks: start.ticks, bootId: boot.id });
-        else excluded.push({ pid: candidate.pid, why: start.why });
+        const start = before.get(candidate.pid);
+        if (start === undefined || !start.read) {
+          excluded.push({ pid: candidate.pid, why: start?.why ?? "the process identity was not read" });
+          continue;
+        }
+        if (!settledByPid.has(candidate.pid)) {
+          excluded.push({ pid: candidate.pid, why: "the process no longer matched the rule when the preview was confirmed" });
+          continue;
+        }
+        const after = deps.io.readProcessStart(candidate.pid);
+        if (!after.read) {
+          excluded.push({ pid: candidate.pid, why: after.why });
+          continue;
+        }
+        if (after.ticks !== start.ticks) {
+          excluded.push({ pid: candidate.pid, why: "the pid changed process while the preview was being built" });
+          continue;
+        }
+        confirmable.push({ pid: candidate.pid, startTicks: after.ticks, bootId: boot.id });
       }
       if (confirmable.length > MAX_KILL_PIDS) {
         deps.log(
@@ -2329,9 +2445,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         return;
       }
       const material: FleetActionMaterial = { kind: "kill", confirmable, excluded };
-      const envelope = mintPreview(action.id, material);
+      const minted = mintPreview(action.id, material);
+      if (!minted.ok) {
+        deps.log(`action box: refused code=rate-limited action=${action.id} why=preview-capacity`);
+        refuse(res, "rate-limited", minted.why, undefined, {
+          "retry-after": String(Math.max(1, Math.ceil(minted.retryAfterMs / 1000))),
+        });
+        return;
+      }
       const planned = planKillProcesses(action, { pids: confirmable.map((c) => c.pid), cwd: deps.primaryDir() });
-      deps.log(`action box: DRY-RUN action=${action.id} candidates=${candidates.length} scanned=${scan.procs.length}`);
+      deps.log(`action box: DRY-RUN action=${action.id} candidates=${displayed.length} scanned=${settledScan.procs.length}`);
       respond(res, 200, {
         ok: true,
         op: "dry-run",
@@ -2340,12 +2463,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         // named here rather than left for a reader to infer from `op`. See
         // § What a box action answers, above `boxRoute`.
         dryRun: true,
-        preview: envelope,
+        preview: minted.preview,
         result: {
           steps: planned.ok ? planned.plan.steps : [],
-          candidates,
-          scanned: scan.procs.length,
-          unreadable: scan.unreadable,
+          candidates: displayed,
+          scanned: settledScan.procs.length,
+          unreadable: settledScan.unreadable,
         },
       });
       return;
@@ -2369,9 +2492,10 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       skipped.push({ pid: identity.pid, why: "it was on the list you confirmed and no longer matches the rule" });
     }
 
-    // This closes the minutes-wide case where a preview stays open while the
-    // box turns over. It does not close the exit-and-pid-reuse gap between this
-    // read and `kill`; that durable fix is a pidfd, which Node cannot open
+    // This detects turnover that happened while the preview was open. It does
+    // not close the exit-and-pid-reuse gap after EACH candidate's read: for an
+    // early candidate that gap also includes the remaining identity reads and
+    // earlier signal steps. The durable fix is a pidfd, which Node cannot open
     // without a native dependency or helper binary.
     const boot = deps.io.readBootIdentity();
     if (!boot.read) {
@@ -2551,13 +2675,20 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         });
       }
       const first = deliverable[0];
-      const envelope = mintPreview(action.id, { kind: "broadcast", speaker, recipients: claims });
+      const minted = mintPreview(action.id, { kind: "broadcast", speaker, recipients: claims });
+      if (!minted.ok) {
+        deps.log(`action box: refused code=rate-limited action=${action.id} why=preview-capacity`);
+        refuse(res, "rate-limited", minted.why, undefined, {
+          "retry-after": String(Math.max(1, Math.ceil(minted.retryAfterMs / 1000))),
+        });
+        return;
+      }
       respond(res, 200, {
         ok: true,
         op: "broadcast-preview",
         action: action.id,
         dryRun: true,
-        preview: envelope,
+        preview: minted.preview,
         result: {
           total,
           recipients: outcomes,
