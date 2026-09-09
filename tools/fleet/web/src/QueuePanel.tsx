@@ -114,12 +114,12 @@ const APPROVAL_TIP: Tip = {
 export const BADGE_TIPS: Record<string, Tip> = {
   ready: {
     head: "Ready",
-    what: "Authorised, unblocked, and next in line for a slot. Nothing about this item is waiting on anybody.",
+    what: "Authorised, unblocked, and waiting only for a slot. Every item in that state wears this, not just the one at the front.",
     /* **This said the page never recomputes the verdict, and the page does.**
        `badgeFor` derives the badge here, from the item's three axes; it does
        not read `row.ready` at all. What arrives computed is the SENTENCE under
        the title, and that is the one the dispatch gate uses. GPT Sol's P0. */
-    how: "The badge is worked out on this page from the item's lifecycle, its authority and whether it is waiting on Greg. The sentence under the title is the server's own dispatch verdict, and that is the one that actually decides whether an item may go out.",
+    how: "Worked out on this page from the item's lifecycle, its authority, whether it is waiting on Greg, and whether the queue file itself has problems. It does not read the free-text “waiting on” field, so a ready item can still carry one. What actually decides a dispatch is the server's own verdict, which the page renders as the sentence under a title — and which is absent here precisely because there is nothing to say.",
   },
   "needs you": {
     head: "Needs you",
@@ -127,7 +127,7 @@ export const BADGE_TIPS: Record<string, Tip> = {
        first, so an item that is also a proposal or lapsed wears it. Saying "not
        because it is unapproved" asserted something the badge cannot support. */
     what: "Waiting on an answer from Greg. It may be unapproved or out of turn as well — this simply outranks those, because it is the only one he can clear.",
-    how: "Only he can mark it answered: noticing that something needs him is the coordinator's job, and deciding it no longer does is the answer itself.",
+    how: "Only he can mark it answered: noticing that something needs him is the coordinator's job, and deciding it no longer does is the answer itself. It is not the only pile that needs him — approving a proposal, or renewing a lapsed approval, is his alone as well.",
   },
   proposal: {
     head: "Proposal",
@@ -188,7 +188,7 @@ export const PROBLEM_TIPS: Record<string, Tip> = {
   "unknown-item": {
     head: "Unknown item",
     what: "Something happened to an item that was never added — an approval, a move or a dispatch naming an id with no beginning.",
-    how: "Applied to nothing rather than guessed at. Any event naming an id that was never added produces it — including, but not only, one whose `added` line is elsewhere in the file and could not be read.",
+    how: "Applied to nothing rather than guessed at. Anything that happens TO an item — an approval, a move, a dispatch — names an id that must already have been added; an `added` line is how one begins and is not this. It can mean the `added` line is elsewhere in the file and could not be read.",
   },
   "duplicate-item": {
     head: "Duplicate item",
@@ -207,7 +207,7 @@ export const PROBLEM_TIPS: Record<string, Tip> = {
        says so outright: any process running as this user can append `by:
        "greg"`. So this is about what the record says, never about who typed
        it, and the card must not imply the second. GPT Sol's P0. */
-    how: "Checked in the fold rather than in the writers, because the CLI, the HTTP route and a hand-edited file are three entrances and all three fold. It is a governance constraint and not an OS boundary: the actor on a line is what that line claims, not proof of who wrote it.",
+    how: "Checked when the record is read rather than when it is written, because a rule enforced at one entrance has an unguarded second one — the CLI and a hand-edited file both reach this file, and the dashboard cannot, being read-only. It is a governance constraint and not an OS boundary: the actor on a line is what that line claims, never proof of who wrote it.",
   },
   "illegal-transition": {
     head: "Illegal transition",

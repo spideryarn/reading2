@@ -109,7 +109,7 @@ export const SPEAKER_TIPS: Record<MessageSpeaker, Tip> = {
   human: {
     head: "Typed at the pane",
     what: "Somebody typed this into the session's own terminal. A steer sent from this dashboard lands here too, and deliberately.",
-    how: "Across two real transcripts, 64 of 389 records wearing a person's role were classified here and the other 325 were machinery of one kind or another. It says where the words entered the session, never who composed them: a steer and Greg at the keyboard look the same to a transcript.",
+    how: "Across two real transcripts, 64 of 389 records wearing a person's role were classified here; the other 325 were 321 notifications and four messages from another agent. It says where the words entered the session, never who composed them: a steer and Greg at the keyboard look the same to a transcript.",
   },
   assistant: {
     head: "The agent",
