@@ -29,6 +29,11 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Command, InvalidArgumentError } from "commander";
+
+import { renderRootHelp } from "../tools/overseer/cli-help.js";
+import { addMine, cliStatePath, readCliState, removeMine, updateCliState, whyNotASessionName } from "../tools/overseer/cli-state.js";
+
 import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
 import {
   runOverseer,
@@ -811,32 +816,45 @@ function whenEpoch(ms: number): string {
   return when(new Date(ms).toISOString());
 }
 
-const HELP = [
-  "overseer — the fleet's history, and the daemon that records it",
-  "",
-  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention] [--no-usage]",
-  "  npx tsx scripts/overseer.ts status",
-  "  npx tsx scripts/overseer.ts reconcile-jobs --why '<what you checked>'",
-  "  npx tsx scripts/overseer.ts events [--limit N]",
-  "  npx tsx scripts/overseer.ts notes [--limit N]",
-  "  npx tsx scripts/overseer.ts usage [--since-hours N] [--max-transcripts N] [--json]",
-  "  npx tsx scripts/overseer.ts attention [--max-calls N] [--dry] [--json]",
-  "                                        [--capture-to DIR | --panes DIR] [--out FILE] [--write]",
-  "",
+/** How the usage rows name this script, and what a person types. */
+const INVOCATION = "npx tsx scripts/overseer.ts";
+
+/**
+ * The paragraphs the parser cannot generate.
+ *
+ * Everything here is a thing Commander does not know: what a command costs, who
+ * decides whether it is armed, and which of two similar-looking switches is the
+ * one that spends money. The usage rows between them come out of the registered
+ * commands — `tools/overseer/cli-help.ts` says why the two halves are split.
+ */
+const HELP_PROSE_AFTER: readonly string[] = [
   `The store is $OVERSEER_STORE_DIR, or ~/.overseer. The dashboard is ${DEFAULT_FLEET_URL} unless --url says otherwise.`,
-  "",
-  "`attention` reads every live pane and says what needs Greg. --dry makes no model calls and no",
-  "paid pass. It does NOT write the store's memory unless you pass --write: the daemon holds the",
-  "lock and this command does not honour it, so two writers is the default you do not want.",
-  "",
-  `THE SCHEDULER IS OFF unless ${JOBS_ENABLED_VAR}=1. Armed, it dispatches the standing jobs in`,
-  "docs/project/overseer.md as real Claude sessions on this box, so turning it on is Greg's",
-  "decision and not a side effect of starting the daemon. `status` says which it is.",
-  "",
-  `${RULES_ENABLED_VAR}=1 is the OTHER arming: the deterministic rules and nothing else. A daemon`,
-  "started that way is handed no session dispatcher at all, so it cannot start a Claude session and",
-  "cannot spend anything. It is the switch to use to watch a rule fire.",
-].join("\n");
+  [
+    "`attention` reads every live pane and says what needs Greg. --dry makes no model calls and no",
+    "paid pass. It does NOT write the store's memory unless you pass --write: the daemon holds the",
+    "lock and this command does not honour it, so two writers is the default you do not want.",
+  ].join("\n"),
+  [
+    `THE SCHEDULER IS OFF unless ${JOBS_ENABLED_VAR}=1. Armed, it dispatches the standing jobs in`,
+    "docs/project/overseer.md as real Claude sessions on this box, so turning it on is Greg's",
+    "decision and not a side effect of starting the daemon. `status` says which it is.",
+  ].join("\n"),
+  [
+    `${RULES_ENABLED_VAR}=1 is the OTHER arming: the deterministic rules and nothing else. A daemon`,
+    "started that way is handed no session dispatcher at all, so it cannot start a Claude session and",
+    "cannot spend anything. It is the switch to use to watch a rule fire.",
+  ].join("\n"),
+];
+
+/** The root help, rows and all. A function because the rows come from the program. */
+export function help(): string {
+  return renderRootHelp({
+    program: buildProgram(),
+    prefix: INVOCATION,
+    title: "overseer — the fleet's history, and the daemon that records it",
+    after: HELP_PROSE_AFTER,
+  });
+}
 
 /**
  * **What the daemon will be given as a scheduler, and whether it is armed.**
@@ -953,53 +971,327 @@ function fleetUrl(env: NodeJS.ProcessEnv): string {
   return env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL;
 }
 
-function flag(argv: readonly string[], name: string): string | undefined {
-  const at = argv.indexOf(name);
-  return at === -1 ? undefined : argv[at + 1];
+/**
+ * A positive finite number, or a refusal Commander turns into a usage error.
+ *
+ * **The refusal is the whole point of the function.** `Number("nope")` is `NaN`,
+ * `Number("")` is `0` and `Number(undefined)` is `NaN` — all of which used to
+ * sail through `Number(flag(argv, …) ?? default)` and silently disable the bound
+ * they were meant to set (GPT Sol's finding 10 on the earlier hand-rolled
+ * parser). A flag that quietly does the opposite of what it says is worse than
+ * no flag.
+ *
+ * `integer` is separate because some of these are COUNTS. `--max-transcripts
+ * 0.5` passed the positive check and then `slice(0, 0.5)` selected zero
+ * transcripts: a flag that reads as "scan at most half a file" and behaves as
+ * "scan nothing". `--since-hours` stays fractional on purpose; half an hour is
+ * a sensible window.
+ */
+export function positiveNumber(name: string, opts: { integer?: boolean } = {}): (raw: string) => number {
+  return (raw: string): number => {
+    const value = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(value) || value <= 0) {
+      throw new InvalidArgumentError(`${name} must be a positive number, got ${JSON.stringify(raw)}`);
+    }
+    if (opts.integer === true && !Number.isInteger(value)) {
+      throw new InvalidArgumentError(`${name} counts whole things, so it must be a whole number, got ${JSON.stringify(raw)}`);
+    }
+    return value;
+  };
 }
 
 /**
- * A numeric flag that must be a positive finite number, or an explicit refusal.
+ * **What the command line MEANT**, separated from doing it.
  *
- * Three arms rather than `number | undefined`, because "not given" and "given
- * as nonsense" have to lead to different behaviour: the first takes the
- * default, the second must stop. `Number("nope")` is `NaN`, `Number("")` is 0
- * and `Number(undefined)` is `NaN` — all of which used to sail through and
- * silently disable the bound they were meant to set.
+ * A discriminated union rather than the `argv` array the bodies below used to
+ * re-scan for themselves. Two things fall out of that, and the second is why it
+ * is worth a type:
+ *
+ * - **A test can ask what a command line parses to** without a store, a
+ *   dashboard or a daemon. There was no such test before, because there was
+ *   nothing to ask.
+ * - **A flag that is not read cannot be spelled.** `--max-transcipts` used to
+ *   be a silent no-op; now it is an unknown option and Commander says so.
+ *
+ * Absent is absent: the optional fields here are genuinely missing rather than
+ * `undefined`, because `exactOptionalPropertyTypes` tells those apart and the
+ * daemon's options object depends on the difference.
  */
-function positiveNumberFlag(
-  argv: readonly string[],
-  name: string,
-  opts: { integer?: boolean } = {},
-): { kind: "absent" } | { kind: "value"; value: number } | { kind: "invalid"; why: string } {
-  const at = argv.indexOf(name);
-  if (at === -1) return { kind: "absent" };
-  const raw = argv[at + 1];
-  if (raw === undefined || raw.startsWith("--")) return { kind: "invalid", why: `${name} needs a number after it` };
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return { kind: "invalid", why: `${name} must be a positive number, got ${JSON.stringify(raw)}` };
+export type Parsed =
+  | { command: "status" }
+  | { command: "events"; limit: number }
+  | { command: "notes"; limit: number }
+  | {
+      command: "attention";
+      maxCalls: number;
+      dry: boolean;
+      json: boolean;
+      write: boolean;
+      out: string | null;
+      panes: string | null;
+      captureTo: string | null;
+    }
+  | { command: "usage"; json: boolean; sinceHours?: number; maxTranscripts?: number }
+  | { command: "reconcile-jobs"; why: string }
+  | { command: "run"; attention: boolean; usage: boolean; url?: string; tickMs?: number }
+  | { command: "mine"; action: "list" }
+  | { command: "mine"; action: "add" | "rm"; name: string };
+
+/**
+ * The grammar, and nothing else — no store is opened and no environment is read
+ * while this is built, so `help()` can build one purely to print its rows.
+ *
+ * Every action does one thing: hand its parsed shape to `sink`. The work is in
+ * `runParsed`. Commander is the parser here and not the program.
+ */
+export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command {
+  const program = new Command();
+  program
+    .name("overseer")
+    // Commander's own help would be a reference page; ours is a briefing with
+    // generated rows in it. `help()` is the renderer, and this is what `-h` and
+    // an unknown command both print.
+    .helpOption(false)
+    .addHelpCommand(false)
+    .exitOverride();
+
+  program.command("status").description("is the daemon alive, and what does it know").action(() => sink({ command: "status" }));
+
+  program
+    .command("events")
+    .description("what the fleet did")
+    .option("--limit <n>", "how many to print", positiveNumber("--limit", { integer: true }), 40)
+    .action((opts: { limit: number }) => sink({ command: "events", limit: opts.limit }));
+
+  program
+    .command("notes")
+    .description("what the Overseer's own day was like")
+    .option("--limit <n>", "how many to print", positiveNumber("--limit", { integer: true }), 40)
+    .action((opts: { limit: number }) => sink({ command: "notes", limit: opts.limit }));
+
+  program
+    .command("attention")
+    .description("read every live pane and say what needs Greg")
+    .option("--max-calls <n>", "bound on paid model calls", positiveNumber("--max-calls", { integer: true }), DEFAULT_MAX_CALLS)
+    .option("--dry", "no model calls and no paid pass", false)
+    .option("--json", "the list as JSON", false)
+    .option("--write", "write the store's memory (the daemon holds its lock; you do not)", false)
+    .option("--out <file>", "write the list here")
+    .option("--panes <dir>", "read captured panes from here instead of tmux")
+    .option("--capture-to <dir>", "capture live panes into here first")
+    .action((opts: { maxCalls: number; dry: boolean; json: boolean; write: boolean; out?: string; panes?: string; captureTo?: string }) =>
+      sink({
+        command: "attention",
+        maxCalls: opts.maxCalls,
+        dry: opts.dry,
+        json: opts.json,
+        write: opts.write,
+        out: opts.out ?? null,
+        panes: opts.panes ?? null,
+        captureTo: opts.captureTo ?? null,
+      }),
+    );
+
+  program
+    .command("usage")
+    .description("how close the shared account is to a limit")
+    .option("--since-hours <n>", "how far back to scan", positiveNumber("--since-hours"))
+    .option("--max-transcripts <n>", "how many transcripts to read", positiveNumber("--max-transcripts", { integer: true }))
+    .option("--json", "the report as JSON", false)
+    .action((opts: { sinceHours?: number; maxTranscripts?: number; json: boolean }) =>
+      sink({
+        command: "usage",
+        json: opts.json,
+        ...(opts.sinceHours === undefined ? {} : { sinceHours: opts.sinceHours }),
+        ...(opts.maxTranscripts === undefined ? {} : { maxTranscripts: opts.maxTranscripts }),
+      }),
+    );
+
+  program
+    .command("reconcile-jobs")
+    .description("clear a held occurrence ledger, once, with a reason")
+    // MANDATORY, not defaulted. This clears a hold that exists because nobody
+    // can tell whether some job already ran, and the reason goes into the store
+    // for whoever later asks why a job ran twice.
+    .requiredOption("--why <what you checked>", "what you looked at before deciding")
+    .action((opts: { why: string }) => sink({ command: "reconcile-jobs", why: opts.why }));
+
+  // THE LIST THE OTHER SUBCOMMANDS READ. One noun, three verbs, and `mine` with
+  // no verb lists — the brief asked for `ls-mine` as well, and two spellings for
+  // one noun is the drift this CLI exists to remove.
+  const mine = program.command("mine").description("the sessions this Overseer is looking after");
+  mine.command("list", { isDefault: true }).description("print them").action(() => sink({ command: "mine", action: "list" }));
+  mine
+    .command("add")
+    .argument("<name>", "a session name")
+    .description("start looking after one")
+    .action((name: string) => sink({ command: "mine", action: "add", name }));
+  mine
+    .command("rm")
+    .argument("<name>", "a session name")
+    .description("stop looking after one")
+    .action((name: string) => sink({ command: "mine", action: "rm", name }));
+
+  program
+    .command("run")
+    .description("the daemon")
+    .option("--url <url>", "the dashboard to collect from")
+    .option("--tick-ms <n>", "how often to collect", positiveNumber("--tick-ms", { integer: true }))
+    // `--no-x` is Commander's negation form: the option is `attention`, default
+    // true, and `--no-attention` turns it off. Same switch, same spelling, and
+    // now the parser rather than an `argv.includes` knows about it.
+    .option("--no-attention", "do not run the paid attention pass")
+    .option("--no-usage", "do not scan for usage limits")
+    .action((opts: { url?: string; tickMs?: number; attention: boolean; usage: boolean }) =>
+      sink({
+        command: "run",
+        attention: opts.attention,
+        usage: opts.usage,
+        ...(opts.url === undefined ? {} : { url: opts.url }),
+        ...(opts.tickMs === undefined ? {} : { tickMs: opts.tickMs }),
+      }),
+    );
+
+  return program;
+}
+
+/**
+ * A command line in, one of three answers out.
+ *
+ * `help` is a request, not a failure, and exits 0; `error` is a refusal and
+ * exits 1 with the same prose help underneath it, because a person who typed a
+ * flag wrong is exactly the person who needs the rows.
+ */
+export type ParseOutcome =
+  | { kind: "run"; parsed: Parsed }
+  | { kind: "help" }
+  | { kind: "error"; why: string };
+
+export function parseArgv(argv: readonly string[]): ParseOutcome {
+  // NO ARGUMENT MEANS `status`. Kept from the hand-rolled parser: bare
+  // `overseer` is the thing the Overseer types most, and Commander's default
+  // for an empty line is its own help.
+  const words = argv.length === 0 ? ["status"] : [...argv];
+  const first = words[0];
+  if (first === "--help" || first === "-h" || first === "help") return { kind: "help" };
+
+  let parsed: Parsed | undefined;
+  const program = buildProgram((p) => {
+    parsed = p;
+  });
+  // Commander writes to stdout/stderr by default; here every word it produces
+  // has to come back as a value, so the caller decides what is an error and
+  // what is help.
+  //
+  // **AND ON EVERY SUBCOMMAND, not only the program.** A subcommand copies its
+  // parent's settings *at the moment it is created*, so a `configureOutput`
+  // applied afterwards reaches the root and nothing under it — which is how
+  // `error: unknown option '--max-transcipts'` went on being printed to the
+  // real stderr by a function whose whole job is to return the message instead.
+  // Found by a test run's output, not by an assertion, which is why there is now
+  // an assertion.
+  let written = "";
+  const capture = {
+    writeOut: (s: string) => {
+      written += s;
+    },
+    writeErr: (s: string) => {
+      written += s;
+    },
+  };
+  // RECURSIVE, because `mine add` is two levels down and inherits from `mine`,
+  // not from the root.
+  const applyCapture = (command: Command): void => {
+    command.configureOutput(capture);
+    for (const child of command.commands) applyCapture(child);
+  };
+  applyCapture(program);
+  try {
+    program.parse(words, { from: "user" });
+  } catch (cause) {
+    const why = cause instanceof Error ? cause.message : String(cause);
+    return { kind: "error", why: written.trim() === "" ? why : written.trim() };
   }
-  if (opts.integer === true && !Number.isInteger(value)) {
-    return { kind: "invalid", why: `${name} counts whole transcripts, so it must be a whole number, got ${JSON.stringify(raw)}` };
+  if (parsed === undefined) {
+    // Commander parsed something and no action fired — an empty subcommand
+    // line. Said as a refusal rather than a silent exit 0.
+    return { kind: "error", why: `no command in ${JSON.stringify(words.join(" "))}` };
   }
-  return { kind: "value", value };
+  return { kind: "run", parsed };
 }
 
 async function main(argv: readonly string[]): Promise<number> {
-  const command = argv[0] ?? "status";
-  if (command === "--help" || command === "-h" || command === "help") {
-    console.log(HELP);
+  const outcome = parseArgv(argv);
+  if (outcome.kind === "help") {
+    console.log(help());
     return 0;
   }
+  if (outcome.kind === "error") {
+    console.error(`✗ ${outcome.why}\n\n${help()}`);
+    return 1;
+  }
+  return await runParsed(outcome.parsed);
+}
+
+/**
+ * The `mine` list: print it, or change it by one name.
+ *
+ * **Every arm says what it did or what it refused**, including "it was already
+ * there". A no-op that prints nothing is indistinguishable from a write that
+ * failed, and this list is the input to `closeout` — a name silently missing
+ * from it is a worktree nobody removes.
+ */
+export function runMine(root: string, parsed: Extract<Parsed, { command: "mine" }>): number {
+  if (parsed.action === "list") {
+    const read = readCliState(root);
+    if (read.kind === "unusable") {
+      console.error(`✗ ${read.why} — ${cliStatePath(root)}`);
+      return 1;
+    }
+    const mine = read.kind === "absent" ? [] : read.state.mine;
+    // NOT an empty print. "Nothing is mine" and "the file is not there yet" are
+    // both legitimate and neither is a blank screen.
+    if (mine.length === 0) console.log(`no sessions in ${cliStatePath(root)} — nothing is being looked after`);
+    for (const name of mine) console.log(name);
+    return 0;
+  }
+
+  const why = whyNotASessionName(parsed.name);
+  if (why !== null) {
+    console.error(`✗ ${why}`);
+    return 1;
+  }
+  // THE WHOLE READ-MODIFY-WRITE IS INSIDE THE LOCK. `changed` is decided in
+  // there too, so "it was already on the list" is a fact about the state we then
+  // wrote — decided outside, it would be a fact about a state somebody else had
+  // already replaced.
+  let already = false;
+  const out = updateCliState(root, (state) => {
+    const edit = parsed.action === "add" ? addMine(state, parsed.name) : removeMine(state, parsed.name);
+    already = !edit.changed;
+    return edit.state;
+  });
+  if (!out.ok) {
+    console.error(`✗ ${out.why}`);
+    return 1;
+  }
+  if (already) {
+    console.log(parsed.action === "add" ? `${parsed.name} was already on the list` : `${parsed.name} was not on the list`);
+    return 0;
+  }
+  console.log(`${parsed.action === "add" ? "added" : "removed"} ${parsed.name} — ${out.state.mine.length} session(s) now`);
+  return 0;
+}
+
+async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
 
-  switch (command) {
+  switch (parsed.command) {
     case "status":
       console.log(statusLines(root, Date.now(), await readOverseerClaim(fleetUrl(process.env))).join("\n"));
       return 0;
     case "events": {
-      const tail = readEventTail(root, Number(flag(argv, "--limit") ?? 40));
+      const tail = readEventTail(root, parsed.limit);
       // "0 events" and "no store" are not the same sentence, and printing
       // nothing at all would be a third thing that looks like both.
       if (tail.total === 0) console.log(`no events in ${join(root, EVENTS_FILE)}`);
@@ -1008,7 +1300,7 @@ async function main(argv: readonly string[]): Promise<number> {
       return 0;
     }
     case "notes": {
-      const read = readNotes(root, Number(flag(argv, "--limit") ?? 40));
+      const read = readNotes(root, parsed.limit);
       if (read.notes.length === 0) console.log("the Overseer has written nothing about itself yet");
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
       return 0;
@@ -1016,52 +1308,39 @@ async function main(argv: readonly string[]): Promise<number> {
     case "attention":
       return await runAttentionCommand({
         root,
-        maxCalls: Number(flag(argv, "--max-calls") ?? DEFAULT_MAX_CALLS),
-        dry: argv.includes("--dry"),
-        json: argv.includes("--json"),
+        maxCalls: parsed.maxCalls,
+        dry: parsed.dry,
+        json: parsed.json,
         // READ-ONLY BY DEFAULT, and `--write` is the opt-in — GPT Sol's second
         // round. The daemon holds the store's lock and this command does not
         // honour it, so a hand run against a live daemon's root was a second
         // writer on `attention.json`: an atomic rename stops a torn file and does
         // nothing about a lost update or a duplicated call. Refusing by default
         // costs a person nothing (the daemon is the producer) and cannot be wrong.
-        write: argv.includes("--write"),
-        out: flag(argv, "--out") ?? null,
-        panes: flag(argv, "--panes") ?? null,
-        captureTo: flag(argv, "--capture-to") ?? null,
+        write: parsed.write,
+        out: parsed.out,
+        panes: parsed.panes,
+        captureTo: parsed.captureTo,
       });
     case "usage": {
       // A command rather than a daemon block for the same reason the header
       // gives for the rest of this file: there is no scheduler here yet, and the
       // honest simplest version of "how close are we to a limit" is something a
       // person or another agent can run and read. It does not touch the store.
-      // `Number(flag)` used to go straight into the options, so
-      // `--max-transcripts nope` produced NaN, every comparison against it was
-      // false, and the bound silently vanished — GPT Sol's finding 10. A flag
-      // that quietly does the opposite of what it says is worse than no flag.
-      const sinceHours = positiveNumberFlag(argv, "--since-hours");
-      // INTEGER, because this one is a COUNT. `--max-transcripts 0.5` passed the
-      // positive-number check and then `slice(0, 0.5)` selected zero
-      // transcripts — a flag that reads as "scan at most half a file" and
-      // behaves as "scan nothing". GPT Sol's round-2 finding 7. `--since-hours`
-      // stays fractional on purpose; half an hour is a sensible window.
-      const maxTranscripts = positiveNumberFlag(argv, "--max-transcripts", { integer: true });
-      if (sinceHours.kind === "invalid") {
-        console.error(`✗ ${sinceHours.why}\n\n${HELP}`);
-        return 1;
-      }
-      if (maxTranscripts.kind === "invalid") {
-        console.error(`✗ ${maxTranscripts.why}\n\n${HELP}`);
-        return 1;
-      }
+      //
+      // The nonsense-number arms that used to live here are now `positiveNumber`
+      // above, which refuses at parse time — so a bad `--max-transcripts` never
+      // reaches this body at all, rather than reaching it as `NaN`.
       const report = await collectUsage({
-        ...(sinceHours.kind === "absent" ? {} : { sinceMs: sinceHours.value * 3600_000 }),
-        ...(maxTranscripts.kind === "absent" ? {} : { maxTranscripts: maxTranscripts.value }),
+        ...(parsed.sinceHours === undefined ? {} : { sinceMs: parsed.sinceHours * 3600_000 }),
+        ...(parsed.maxTranscripts === undefined ? {} : { maxTranscripts: parsed.maxTranscripts }),
       });
-      if (argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+      if (parsed.json) console.log(JSON.stringify(report, null, 2));
       else console.log(usageLines(report).join("\n"));
       return 0;
     }
+    case "mine":
+      return runMine(root, parsed);
     case "reconcile-jobs": {
       // THE ONE WAY OUT OF A HELD SCHEDULER, and it is deliberately a person's
       // act rather than a setting. A start that could not reconstruct the
@@ -1072,10 +1351,15 @@ async function main(argv: readonly string[]): Promise<number> {
       // It writes a file the NEXT start consumes and deletes. Not an env var:
       // one left set turns "somebody decided this once" into "the protection is
       // off for ever".
-      const why = flag(argv, "--why");
-      if (why === undefined || why.trim() === "") {
+      //
+      // ABSENT `--why` is Commander's `requiredOption` now; what it cannot
+      // refuse is `--why ''`, because an empty string is a value it was given.
+      // That check stays here, with its own sentences, because a blank reason is
+      // the shape somebody types to get past the flag.
+      const why = parsed.why;
+      if (why.trim() === "") {
         console.error(
-          "✗ reconcile-jobs needs --why \"<what you checked>\".\n" +
+          "✗ reconcile-jobs needs --why \"<what you checked>\", and a blank reason is not one.\n" +
             "  This clears a hold that exists because nobody can tell whether some job already ran.\n" +
             "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
             "  it is written into the store and read by whoever asks why a job ran twice.",
@@ -1102,7 +1386,6 @@ async function main(argv: readonly string[]): Promise<number> {
           controller.abort();
         });
       }
-      const tickMs = flag(argv, "--tick-ms");
       // The attention pass is wired in HERE rather than inside the daemon,
       // because it reads tmux and calls a paid model and daemon.ts does neither.
       // With no key it is absent, and the store then publishes a list that says
@@ -1111,14 +1394,12 @@ async function main(argv: readonly string[]): Promise<number> {
       // one — which is exactly when the persisted WAITS must be dropped, because a
       // first-seen instant cannot span a gap nobody watched. The verdicts survive
       // it; see `memoryForEpoch`.
-      const attentionRun = argv.includes("--no-attention")
-        ? null
-        : attentionRunner(root, `daemon-${randomUUID()}`);
+      const attentionRun = parsed.attention ? attentionRunner(root, `daemon-${randomUUID()}`) : null;
       if (attentionRun === null) {
         console.log(
-          argv.includes("--no-attention")
-            ? "attention: off (--no-attention)"
-            : "attention: off — OPENROUTER_API_KEY is not set, so nothing will look at what needs you",
+          parsed.attention
+            ? "attention: off — OPENROUTER_API_KEY is not set, so nothing will look at what needs you"
+            : "attention: off (--no-attention)",
         );
       }
       // The usage scan is wired in here for the same reason, and it needs NO
@@ -1133,7 +1414,7 @@ async function main(argv: readonly string[]): Promise<number> {
       // hurry, and a narrowed scan is exactly what `absenceGap` refuses to call
       // conclusive — so a daemon that quietly took them would publish `unknown`
       // for ever and look broken.
-      const usageOff = argv.includes("--no-usage");
+      const usageOff = !parsed.usage;
       if (usageOff) console.log("usage: off (--no-usage)");
 
       /*
@@ -1174,11 +1455,11 @@ async function main(argv: readonly string[]): Promise<number> {
       }
       const outcome = await runOverseer({
         root,
-        baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
+        baseUrl: parsed.url ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
         signal: controller.signal,
         // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
         // apart, and absent is what "take the default" means.
-        ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
+        ...(parsed.tickMs === undefined ? {} : { tickMs: parsed.tickMs }),
         ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
         ...(usageOff ? {} : { usage: { run: () => collectUsage(), onPass: usageRetention.onPass } }),
         // ABSENT rather than present-and-empty when disarmed: an absent `jobs`
@@ -1211,9 +1492,14 @@ async function main(argv: readonly string[]): Promise<number> {
         }
       }
     }
-    default:
-      console.error(`unknown command ${JSON.stringify(command)}\n\n${HELP}`);
-      return 1;
+    default: {
+      // EXHAUSTIVE, and the compiler says so. The old `default` arm printed
+      // "unknown command", which is now Commander's job at parse time — by the
+      // time we are here the command is one of the union's members, and a new
+      // member that nobody wired up must not compile.
+      const never: never = parsed;
+      throw new Error(`unhandled command ${JSON.stringify(never)}`);
+    }
   }
 }
 
