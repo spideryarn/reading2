@@ -14,7 +14,7 @@
  * box tonight.
  */
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, utimesSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,6 +38,8 @@ import {
 } from "../tools/fleet/readiness-parse.js";
 import {
   openReadinessStore,
+  procStartToken,
+  processStillAlive,
   recordFileName,
   startedAtFromFileName,
   type ReadinessStore,
@@ -69,6 +71,7 @@ function finished(over: Partial<FinishedRecord> = {}): FinishedRecord {
     startedAt: "2026-09-09T10:00:00.000Z",
     pid: 4242,
     host: "box",
+    procStartToken: "12345",
     cwd: "/repo",
     check: "test",
     scope: "full",
@@ -95,6 +98,7 @@ function started(over: Partial<StartedRecord> = {}): StartedRecord {
     startedAt: "2026-09-09T10:00:00.000Z",
     pid: 4242,
     host: "box",
+    procStartToken: "12345",
     cwd: "/repo",
     check: "test",
     scope: "full",
@@ -136,9 +140,18 @@ describe("what an exit status means", () => {
     }
   });
 
-  it("does not treat 128 or 160 as signals, because no signal produces them", () => {
+  it("covers the real-time signals too, which run past 31 on Linux", () => {
+    /* This used to stop at 159 on the grounds that "signals are 1..31". Linux's
+       real-time signals go to 64, so a shell status of 162 is signal 34 — a
+       kill, drawn as a red suite. GPT Sol, 2026-09-09. */
+    expect(outcomeFromExit(162).outcome).toBe("void");
+    expect(outcomeFromExit(192).outcome).toBe("void");
+  });
+
+  it("does not treat 128 or 193 as signals, because no signal produces them", () => {
+    /* 128 is a shell's "invalid argument to exit", not a signal at all. */
     expect(outcomeFromExit(128).outcome).toBe("fail");
-    expect(outcomeFromExit(160).outcome).toBe("fail");
+    expect(outcomeFromExit(193).outcome).toBe("fail");
   });
 });
 
@@ -210,6 +223,44 @@ describe("a run that started and never finished", () => {
     const r = reading(started(), false);
     expect(r.state).toBe("void");
     expect(r.why).toContain("killed before it could");
+  });
+
+  it("is VOID when the pid exists but is a DIFFERENT process", () => {
+    /* GPT Sol's P1.2: a pid is not an identity. Recycled within the trust
+       window, an unrelated process makes a dead run read as running for ever,
+       and the tab reports a suite in progress that nobody is running. */
+    const record = started({ procStartToken: "12345" });
+    const recycled = resolveRecord(record, Date.parse("2026-09-09T11:00:00.000Z"), (r) => {
+      /* What `processStillAlive` does: the pid is there, the start token is not
+         the one we recorded. */
+      return r.procStartToken === "99999";
+    });
+    expect(recycled.state).toBe("void");
+  });
+
+  it("reads this process as alive, and a pid that cannot exist as not", () => {
+    /* Drives the real `processStillAlive` rather than a stub, because the whole
+       value of the start token is that it talks to /proc. */
+    const mine = started({ pid: process.pid, host: hostname(), procStartToken: procStartToken(process.pid) });
+    expect(processStillAlive(mine)).toBe(true);
+
+    /* Same process, a token from a different boot: not us. */
+    expect(processStillAlive({ ...mine, procStartToken: "1" })).toBe(false);
+
+    /* A pid nothing can own. */
+    expect(processStillAlive({ ...mine, pid: 0x7ffffff0, procStartToken: null })).toBe(false);
+  });
+
+  it("does not call a live run void merely because no token was recorded", () => {
+    /* An ABSENT token is not a MISMATCH. Treating it as one would call every
+       run from an older build, or from a box with no readable /proc, dead. */
+    const noToken = started({ pid: process.pid, host: hostname(), procStartToken: null });
+    expect(processStillAlive(noToken)).toBe(true);
+  });
+
+  it("refuses a record from another box, where a pid means nothing", () => {
+    const elsewhere = started({ pid: process.pid, host: "some-other-box", procStartToken: null });
+    expect(processStillAlive(elsewhere)).toBe(false);
   });
 
   it("stops believing a pid at all after the trust window, whatever the kernel says", () => {
@@ -427,6 +478,27 @@ describe("reading a check's own output", () => {
     expect(byName.get("typecheck")?.verdict).toBe("clean");
   });
 
+  it("needs BOTH of vitest's tally lines, not either", () => {
+    /* A process cut between them has not printed its whole footer. */
+    expect(parseVitest(" Test Files  2 passed (2)\n").hasFooter).toBe(false);
+    expect(parseVitest("      Tests  371 passed (371)\n").hasFooter).toBe(false);
+    expect(parseVitest(" Test Files  2 passed (2)\n      Tests  371 passed (371)\n").hasFooter).toBe(true);
+  });
+
+  it("needs typecheck's coverage line, not merely one project line", () => {
+    /* `|| projects > 0` let a typecheck killed after its first project satisfy
+       the completion guard — the guard letting through what it exists to catch. */
+    expect(parseTypecheck("✓ src/web/tsconfig.json  (309 files)\n").hasFooter).toBe(false);
+    expect(parseTypecheck(fixture("typecheck-pass.log")).hasFooter).toBe(true);
+    /* Its errors go to stderr and the tick still prints, so a FAILING run has a
+       footer too — the footer proves it finished, the exit status decides. */
+    expect(parseTypecheck(fixture("typecheck-fail.log")).hasFooter).toBe(true);
+  });
+
+  it("recognises --offline's differently-worded conclusion", () => {
+    expect(parseCheckTable("All gates green, minus the database suites.\n").hasFooter).toBe(true);
+  });
+
   it("requires check's verdict sentence, not merely its table", () => {
     expect(parseCheckTable(fixture("check-pass.log")).hasFooter).toBe(true);
     expect(parseCheckTable(fixture("check-fail.log")).hasFooter).toBe(true);
@@ -436,6 +508,27 @@ describe("reading a check's own output", () => {
   it("counts typecheck's projects and errors without letting errors be the verdict", () => {
     expect(parseTypecheck(fixture("typecheck-pass.log")).counts).toEqual({ kind: "typecheck", projects: 3, errors: 0 });
     expect(parseTypecheck(fixture("typecheck-fail.log")).counts).toEqual({ kind: "typecheck", projects: 3, errors: 2 });
+  });
+
+  it("requires EXIT= to be the FINAL line, not merely present somewhere", () => {
+    /* GPT Sol's P1.4: a check that prints an EXIT=-shaped line of its own and
+       then carries on — or hangs — would otherwise read as a completed pass.
+       tmux-job.ts writes this line and nothing after it. */
+    expect(parseExitLine("EXIT=0\nstill going\n")).toBeNull();
+    expect(parseExitLine("some output\nEXIT=0\n")).toBe(0);
+    expect(parseExitLine("some output\nEXIT=0\n\n  \n")).toBe(0);
+  });
+
+  it("does not double-count a small log whose bytes exceed its characters", () => {
+    /* The doubling bug, second time: joinEnds compares against string lengths,
+       and the backfill first handed it stat.size in BYTES. A log of vitest ticks
+       is three bytes per character, so neither whole-window branch fired.
+       GPT Sol's P1.5. */
+    const whole = fixture("typecheck-pass.log");
+    const bytes = Buffer.byteLength(whole, "utf8");
+    expect(bytes).toBeGreaterThan(whole.length);
+    /* Told in characters, as the contract now says: one copy. */
+    expect(parseTypecheck(joinEnds(whole, whole, whole.length)).counts.projects).toBe(3);
   });
 
   it("takes the LAST EXIT= line, and none when there is none", () => {
@@ -516,6 +609,38 @@ describe("reconstructing a run from a tmux-job log", () => {
     expect("reading" in truncated && truncated.reading.state).toBe("void");
   });
 
+  it("calls a run void when told its session is gone, without waiting out the timer", () => {
+    /* Sol's P1.3: the plan claimed "with no live session" and the code checked
+       only mtime. The told answer now decides, in both directions. */
+    const told = readingFromLog(
+      "/repo/logs/tmux-jobs/dead.log",
+      { head: fixture("vitest-in-progress.log"), text: fixture("vitest-in-progress.log"), mtimeMs: NOW - 5_000, stillMoving: false },
+      { cwd: "/repo", nowMs: NOW, scriptBodies: { test: "vitest run" }, sessionLive: false },
+    );
+    expect("reading" in told && told.reading.state).toBe("void");
+    expect("reading" in told && told.reading.why).toContain("session that was writing it is gone");
+  });
+
+  it("keeps a run alive when told its session is alive, however long it has been quiet", () => {
+    /* A suite waiting on a database prints nothing for a long time, and calling
+       that killed manufactures an outage. */
+    const told = readingFromLog(
+      "/repo/logs/tmux-jobs/slow.log",
+      { head: fixture("vitest-in-progress.log"), text: fixture("vitest-in-progress.log"), mtimeMs: long_ago, stillMoving: false },
+      { cwd: "/repo", nowMs: NOW, scriptBodies: { test: "vitest run" }, sessionLive: true },
+    );
+    expect("reading" in told && told.reading.state).toBe("running");
+  });
+
+  it("is still going if the file grew under the read, whatever it appears to end with", () => {
+    const moving = readingFromLog(
+      "/repo/logs/tmux-jobs/growing.log",
+      { head: fixture("vitest-pass.log"), text: fixture("vitest-pass.log"), mtimeMs: long_ago, stillMoving: true },
+      { cwd: "/repo", nowMs: NOW, scriptBodies: { test: "vitest run" } },
+    );
+    expect("reading" in moving && moving.reading.state).toBe("running");
+  });
+
   it("skips logs that are not checks at all", () => {
     expect(fromFixture("overseer-daemon.log")).toEqual({ skip: "not-a-check" });
     expect(fromFixture("codex-run.log")).toEqual({ skip: "not-a-check" });
@@ -564,7 +689,7 @@ describe("scanning a directory of logs", () => {
       sinceMs: NOW - 24 * 3600 * 1000,
       nowMs: NOW,
       knownRunIds,
-      scriptBodies: { test: "vitest run", check: "tsx scripts/check.ts" },
+      scriptBodiesFor: () => ({ test: "vitest run", check: "tsx scripts/check.ts" }),
     });
 
   it("finds the checks and leaves everything else alone", () => {
@@ -596,7 +721,7 @@ describe("scanning a directory of logs", () => {
       sinceMs: NOW - 24 * 3600 * 1000,
       nowMs: NOW,
       knownRunIds: new Set(),
-      scriptBodies: { test: "vitest run" },
+      scriptBodiesFor: () => ({ test: "vitest run" }),
       maxLogs: 2,
     });
     expect(result.readings).toHaveLength(2);
@@ -611,7 +736,7 @@ describe("scanning a directory of logs", () => {
       sinceMs: NOW - 24 * 3600 * 1000,
       nowMs: NOW,
       knownRunIds: new Set(),
-      scriptBodies: { test: "vitest run" },
+      scriptBodiesFor: () => ({ test: "vitest run" }),
       maxLogs: 1,
     });
     expect(result.readings).toHaveLength(1);
@@ -626,7 +751,7 @@ describe("scanning a directory of logs", () => {
         sinceMs: 0,
         nowMs: NOW,
         knownRunIds: new Set(),
-        scriptBodies: {},
+        scriptBodiesFor: () => ({}),
       });
       expect(result.unreadableRoots).toEqual([]);
       expect(result.readings).toEqual([]);
@@ -715,8 +840,115 @@ describe("the readiness verdict", () => {
   });
 
   it("accepts one full `npm run check` in place of the separate checks", () => {
-    const whole = verdict([reading(finished({ check: "check", runId: "chk" }))]);
+    const whole = verdict([reading(finished({ check: "check", runId: "chk", counts: { kind: "check", steps: [] } }))]);
     expect(whole.kind).toBe("ready");
+  });
+
+  it("does NOT let an old whole-check pass outrank a newer failing test", () => {
+    /* GPT Sol's P0.1, first form. The whole-check shortcut used to return
+       `ready` before the newer evidence was looked at. A run of `npm run check`
+       IS a run of the test gate, so it belongs on the test timeline rather than
+       in a row of its own that can disagree with it by age. */
+    const out = verdict([
+      reading(finished({ check: "check", runId: "chk", at: "2026-09-09T10:00:00.000Z", counts: { kind: "check", steps: [] } })),
+      reading(finished({ check: "test", runId: "later", at: "2026-09-09T10:30:00.000Z", outcome: "fail", exit: 1 })),
+    ]);
+    expect(out.kind).toBe("not-ready");
+  });
+
+  it("does NOT let an old whole-check pass outrank a newer VOID test", () => {
+    const out = verdict([
+      reading(finished({ check: "check", runId: "chk", at: "2026-09-09T10:00:00.000Z", counts: { kind: "check", steps: [] } })),
+      resolveRecord(
+        started({ runId: "running", check: "test", startedAt: "2026-09-09T10:30:00.000Z" }),
+        Date.parse("2026-09-09T11:00:00.000Z"),
+        () => false,
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+  });
+
+  it("does NOT let old standalone passes outrank a newer failing whole-check", () => {
+    /* Sol's P0.1, second form: the shortcut is skipped because the newest
+       whole-check is not a pass, and the stale standalone passes are then the
+       newest test/typecheck readings. The failing table has to reach the
+       per-check timelines. */
+    const out = verdict([
+      reading(finished({ check: "test", runId: "t", at: "2026-09-09T10:00:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc", at: "2026-09-09T10:00:00.000Z" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "gate", verdict: "failed", findings: null },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("not-ready");
+    expect(out.kind === "not-ready" && out.failing.map((f) => f.check)).toEqual(["test"]);
+  });
+
+  it("treats a failing whole-check whose table is unreadable as unsettling, not convicting", () => {
+    const out = verdict([
+      reading(finished({ check: "test", runId: "t", at: "2026-09-09T10:00:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc", at: "2026-09-09T10:00:00.000Z" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: { kind: "none" },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+    expect(out.kind === "unknown" && out.why).toContain("could not be read");
+  });
+
+  it("lets a NEWER pass settle an older void, rather than staying unsettled for ever", () => {
+    /* The inverse defect Sol found at the same place: `unsettled` used to mean
+       "any unsettled attempt in the window", not "the latest word on this
+       check". An old kill followed by a good run is a good run. */
+    const out = verdict([
+      resolveRecord(
+        started({ runId: "dead", check: "test", startedAt: "2026-09-09T09:00:00.000Z" }),
+        Date.parse("2026-09-09T11:00:00.000Z"),
+        () => false,
+      ),
+      reading(finished({ check: "test", runId: "good", at: "2026-09-09T10:00:00.000Z" })),
+      reading(finished({ check: "typecheck", runId: "tc", at: "2026-09-09T10:00:00.000Z" })),
+    ]);
+    expect(out.kind).toBe("ready");
+  });
+
+  it("refuses a persisted record whose outcome and exit status disagree", () => {
+    /* Sol's P0.3: `{"outcome":"pass","exit":1}` used to parse, and two of them
+       produce a green verdict. It has to be UNREADABLE, which routes into the
+       unknown arm rather than past it. */
+    expect(parseRunRecord(JSON.stringify({ ...finished(), outcome: "pass", exit: 1 }))).toBeNull();
+    expect(parseRunRecord(JSON.stringify({ ...finished(), outcome: "fail", exit: 0 }))).toBeNull();
+    expect(parseRunRecord(JSON.stringify({ ...finished(), outcome: "fail", exit: 137 }))).toBeNull();
+  });
+
+  it("refuses a tree stamp with no explicit `dirty`, which would parse as clean and vote", () => {
+    const noDirty = { ...finished(), treeAtStart: { kind: "known", sha: SHA_A, branch: "dev" } };
+    expect(parseRunRecord(JSON.stringify(noDirty))).toBeNull();
+  });
+
+  it("refuses a tree stamp whose sha is not a sha", () => {
+    const short = { ...finished(), treeAtEnd: { kind: "known", sha: "abc123", branch: "dev", dirty: false } };
+    expect(parseRunRecord(JSON.stringify(short))).toBeNull();
   });
 
   it("goes UNKNOWN when any record could not be read", () => {

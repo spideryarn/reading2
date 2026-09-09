@@ -38,8 +38,13 @@ the failure available here — a page that renders *nothing was recorded* as *ev
 1. **Pass.** A check ran to completion and exited 0.
 2. **Fail.** It ran to completion and exited non-zero.
 3. **Void.** It started and we do not know how it ended. Four ways in, and they are not the same:
-   the log has no `EXIT=` line; the exit is a shell's 128+signal, which is a kill and not a verdict;
-   **the wrapper itself died before it could record anything**; or the tree changed under the run.
+   the log has no `EXIT=` line; the exit is a shell's 128 + signal, which is a kill and not a verdict;
+   the exit is 0 but the check never printed its own summary, so nothing shows it reached a
+   conclusion; or **the wrapper itself died before it could record anything**.
+
+   **A tree that changed under the run is not void** — this said it was, and it is worth being
+   precise: such a run reached a real verdict, and what it cannot do is claim that verdict was about
+   any commit. That is § 5's business, not this list's.
 4. **Running.** It started and has not finished. Its own state, because "no terminal record yet" and
    "no terminal record ever" are different, and only the first resolves itself.
 5. **No reading.** Nobody ran the check. Cannot be written down — the thing that would write it is
@@ -255,11 +260,19 @@ And two refusals:
   a grace window is `running`; only a log that has been quiet past it, with no live session, is
   `void`. The file is `stat`ed again after reading, so head and tail cannot come from two states.
 
-Bounds, because this reads a directory a dozen agents write to continuously: filter by mtime first,
-newest first, at most 200 files, the first 2 KiB and last 8 KiB of each. **How many files and
-directories were skipped is reported**, because a truncated scan that says nothing is a scan that
-turns into "no reading". Likewise a log that looks like a check but would not parse is **counted and
-shown with its reason** — otherwise a format change silently deletes history.
+Bounds, because this reads a directory a dozen agents write to continuously, and **two of them, at
+two different stages**: at most 5,000 directory entries are even looked at, and at most 200 of those
+are read (newest first, the first 2 KiB and last 8 KiB of each). The second bound alone was not
+enough — discovery opened every `*.log` before truncating, so a directory holding 100,000 of them
+made one request perform 100,000 opens, and **a FIFO named `something.log` blocks `open` outright**,
+which on a single-threaded dashboard is the whole page hanging. Only regular files are considered,
+and the mtime comes from a `stat` rather than an open.
+
+**How many entries and files were skipped is reported**, because a truncated scan that says nothing
+is a scan that turns into "no reading". Likewise a log that looks like a check but would not parse is
+**counted and shown with its reason** — otherwise a format change silently deletes history.
+
+Measured across this box's 14 checkouts: 45 readings in 43 ms.
 
 ---
 
@@ -308,21 +321,74 @@ nothing).
 
 ### Stage 1 — the record
 
-- [x] `readiness.ts` — the reading type, its per-field parser, signalled-exit handling, `scope`.
-- [ ] `readiness-store.ts` — per-run atomic files, the `started`/`finished` states, read-time
+**Status: built and pushed as `37a21805`, awaiting the Sol code review.** 67 tests;
+`npm run typecheck` clean across four projects.
+
+- [x] `readiness.ts` — the record shapes, the per-field parser, signalled-exit handling, `scope`.
+- [x] `readiness-store.ts` — per-run atomic files, the `started`/`finished` states, read-time
       resolution of a pending record, retention by age.
-- [ ] `readiness-git.ts` — the tree stamp, the observed dev sha, ancestry keyed on both shas, the
-      timer-driven snapshot with its `unknown` arm.
-- [ ] `readiness-parse.ts` — the banner, vitest, typecheck and check-table parsers.
-- [ ] `readiness-backfill.ts` — the bounded read-time scan, its dedup, its skip counters.
-- [ ] `readiness-verdict.ts` — § 5's conjunction, pure.
-- [ ] `scripts/readiness-run.ts` — the wrapper: pending-before-spawn, bounded head/tail capture
+- [x] `readiness-git.ts` — the tree stamp, the observed dev sha, ancestry keyed on both shas, the
+      snapshot with its `unknown` arm.
+- [x] `readiness-parse.ts` — the banner, vitest, typecheck and check-table parsers, and `joinEnds`.
+- [x] `readiness-backfill.ts` — the bounded read-time scan, its dedup, its skip counters.
+- [x] `readiness-verdict.ts` — § 5's conjunction, pure.
+- [x] `scripts/readiness-run.ts` — the wrapper: pending-before-spawn, bounded streaming capture
       (**not** `spawnSync`'s buffered output, which under OOM conditions kills the run it measures),
       the exit contract.
-- [ ] Red-first: a log with no `EXIT=` records `void`/`running`, never `pass`. Watch it fail.
-- [ ] Red-first: a `started` record whose pid is gone reads as `void`, not as absence.
-- [ ] Red-first: the § 5 conjunction refuses tests-on-A + typecheck-on-B.
-- [ ] `npm test`, `npm run typecheck`, lint the touched files. GPT Sol review of the code.
+- [x] A log with no `EXIT=` records `void` or `running`, never `pass`.
+- [x] A `started` record whose pid is gone reads as `void`, not as absence — **proven against a real
+      SIGKILL**, not only in a test: the wrapper killed four seconds in leaves a pending record, and
+      the store reads it back as void.
+- [x] The § 5 conjunction refuses tests-on-A + typecheck-on-B.
+- [x] `npm run typecheck`, the focused suites, lint on the touched files.
+- [x] GPT Sol review of the code, and its findings triaged — see below.
+
+**The code review found three more false-green paths, and they are fixed.** Verdict was again *"do
+not build Stage 2 yet"*, and again it was right. The three:
+
+1. **An old `npm run check` pass outranked every newer result.** The shortcut returned `ready`
+   before newer evidence was looked at; and in its mirror image, a *failing* newer check run left
+   stale standalone passes as the newest test/typecheck readings. Both come from one mistake —
+   modelling a `check` run as a row of its own, when it **is** a run of the test and typecheck
+   gates. Now every reading is decomposed into events on **one timeline per required check**, and
+   each timeline is reduced by taking its newest event. Nine tests, each verified red against the
+   previous code.
+2. **The wrapper stamped one checkout and executed another.** It recorded `process.cwd()` while npm
+   ran in the script's own root. One resolved root is now used for the stamp, the record, the
+   `package.json` and the child.
+3. **`dirty` ignored untracked files.** A source file imported but never committed makes the working
+   tree compile and the commit not — the exact failure `npm run typecheck:committed` exists for — and
+   both stamps would have said clean. `--untracked-files=normal`.
+
+And in the persistence parser, three records that could vote and should not have been readable at
+all: `{"outcome":"pass","exit":1}`, a tree stamp with no `dirty` field (which defaulted to clean),
+and a `sha` that was not a sha. An unreadable record already forces `unknown`; being lenient about
+these quietly routed around that.
+
+Also fixed: the wrapper exiting 0 after recording a `void`; a hand-written signal table that turned
+SIGABRT and SIGSEGV into SIGTERM; exit statuses 160–192, which are real-time signals on Linux and
+were being read as ordinary failures; `joinEnds` being handed **bytes** where it compares
+**characters**, which reintroduced the double-counting for any log containing a `✓`; `EXIT=`
+matching anywhere rather than as the terminal line; footers accepted on half the evidence; unbounded
+scan discovery and a FIFO named `*.log` that would block the dashboard outright; and a pending record
+identified by pid alone, which a recycled pid turns into a run that is "still going" for ever.
+
+**Three bugs found by building it, none of which reading would have caught.** Written down because
+each is a class rather than a slip:
+
+1. **The store wrote filenames its own reader skipped.** A `runId` under four characters produced a
+    name `startedAtFromFileName` refused, so the record was written, appeared on disk, and was
+    invisible to every read — with the wrapper exiting 0 to say all was well. `put` now refuses a
+    name it cannot read back. *Class: two functions that have to agree about a format, and only one
+    of them enforcing it.*
+2. **The head and tail windows overlap.** For output smaller than both bounds, every line reached
+    the parsers twice: a typecheck of four projects reported eight, and `npm run check`'s table
+    would have arrived with every step duplicated. `joinEnds` takes the total length. *Class: a
+    wrong number that looks plausible.*
+3. **Most test runs on this box are `npx vitest run`, not `npm test`.** The first backfill
+    classified only npm banners and was therefore nearly blind. A bare vitest banner is now a test
+    run of `unknown` scope — history, with no vote. *Class: a design validated against the output it
+    was designed from.*
 
 ### Stage 2 — the tab
 
