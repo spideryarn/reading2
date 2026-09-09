@@ -45,14 +45,14 @@
  *    yesterday's green — a silent success inside the tool built to catch them.
  */
 import { spawn } from "node:child_process";
-import { hostname } from "node:os";
+import { constants, hostname } from "node:os";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { footerRequired, joinEnds, parseBanner, parseOutput, scopeOf, type Banner } from "../tools/fleet/readiness-parse.js";
-import { openReadinessStore, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
+import { openReadinessStore, procStartToken, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
 import { stampTree } from "../tools/fleet/readiness-git.js";
 import {
   CHECK_KINDS,
@@ -69,6 +69,8 @@ const TAIL_BYTES = 64 * 1024;
 
 /** Exit status for "the check may well have been fine, but we could not write it down". */
 export const EXIT_NOT_RECORDED = 70;
+
+const { signals } = constants;
 
 const RUNNABLE = CHECK_KINDS.filter((k) => k !== "other");
 
@@ -111,7 +113,11 @@ function makeCapture(): { push(chunk: string): void; head(): string; text(): str
   };
 }
 
-/** The repo root, from this file rather than from `cwd`, which may be anywhere. */
+/**
+ * The checkout this script belongs to — **the tree that will actually be
+ * tested**, and therefore the one stamped and recorded. Derived from this
+ * file's own location rather than from `cwd`, which may be anywhere.
+ */
 function repoRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
@@ -149,8 +155,25 @@ async function main(): Promise<void> {
   const check = asked as Exclude<CheckKind, "other">;
   const script = SCRIPT_FOR_KIND[check];
 
-  const cwd = process.cwd();
+  /**
+   * **ONE root, used for everything.**
+   *
+   * This recorded and stamped `process.cwd()` while running npm in
+   * `repoRoot()`, and those are not the same directory when the script is
+   * invoked by path from somewhere else. GPT Sol's P0.2:
+   *
+   * > invoke `/readiness-tab/scripts/readiness-run.ts` while cwd is clean
+   * > checkout A at the dev SHA; the script lives in checkout B, which is dirty
+   * > or on another commit. Both stamps inspect A. The suite executes in B. A
+   * > passing record votes as clean evidence about A.
+   *
+   * The tree that gets tested is the one npm runs in, which is the checkout
+   * this script belongs to — so that is the one stamped, recorded and used for
+   * `package.json`. `cwd` is now irrelevant to the result, which is the property
+   * that makes the record mean something.
+   */
   const root = repoRoot();
+  const cwd = root;
   const runId = randomBytes(6).toString("hex");
   const startedAt = new Date();
   const startedMono = process.hrtime.bigint();
@@ -174,6 +197,9 @@ async function main(): Promise<void> {
     startedAt: startedAt.toISOString(),
     pid: process.pid,
     host: hostname(),
+    /* Taken now, of ourselves: it is what lets a reader tell "that pid is this
+       run" from "that pid is somebody else's process wearing the same number". */
+    procStartToken: procStartToken(process.pid),
     cwd,
     check: check as CheckKind,
     /* Full by construction — we run the bare script with no extra arguments —
@@ -297,10 +323,26 @@ async function main(): Promise<void> {
     process.exit(EXIT_NOT_RECORDED);
   }
 
-  /* A signal becomes 128+n rather than 0, so the layer above sees a kill. */
+  /* A signal becomes 128+n rather than 0, so the layer above sees a kill.
+     `os.constants.signals` is the real table — the hand-written one this used to
+     carry turned SIGABRT, SIGSEGV, SIGPIPE and everything else into SIGTERM. */
   if (ended.signal !== null) {
-    const numbers: Partial<Record<string, number>> = { SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGKILL: 9, SIGTERM: 15 };
-    process.exit(128 + (numbers[ended.signal] ?? 15));
+    const number = (signals as Record<string, number | undefined>)[ended.signal];
+    process.exit(128 + (number ?? 15));
+  }
+
+  /**
+   * **A recorded `void` must not exit 0**, even when the child did.
+   *
+   * The child exiting 0 without printing its own footer is exactly the
+   * silent-success case the footer rule exists for — and passing its 0 through
+   * meant tmux wrote `EXIT=0`, the caller saw success, and only the record
+   * disagreed. GPT Sol's P1.1. The record and the exit status now say the same
+   * thing.
+   */
+  if (outcome === "void") {
+    console.error(`readiness-run: recorded VOID — ${why ?? "the run did not reach a conclusion"}`);
+    process.exit(EXIT_NOT_RECORDED);
   }
   process.exit(ended.code ?? EXIT_NOT_RECORDED);
 }

@@ -30,7 +30,7 @@ import {
 } from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
-import type { ExecutionReading, Pause } from "./wire.js";
+import type { ExecutionReading, Pause, SessionDescription } from "./wire.js";
 import {
   readBootIdentity,
   readExecutionIdentity,
@@ -40,6 +40,8 @@ import {
   type ProcessStartTicks,
   type UptimeReading,
 } from "./execution-identity.js";
+import { describeKey } from "./describe-pass.js";
+import { descriptionsRoot, readDescriptionMemory } from "./describe-store.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
 import { classifyPaneHarness } from "../overseer/harness.js";
 import { probeProcessTable } from "../overseer/work-probe.js";
@@ -185,6 +187,20 @@ export type FleetRow = {
    * `permissionMode`: a collection that never ran the pass says so.
    */
   execution: ExecutionReading;
+  /**
+   * What this session is ABOUT, in a sentence — generated, cached, and joined on
+   * here rather than in the browser.
+   *
+   * **The join happens server-side on purpose.** Matching a description to a row
+   * needs the execution token and the verified conversation id, and a client
+   * doing that would be a second hand-written copy of the identity rule — the
+   * twin this area keeps repairing. Here the snapshot's own reading is in scope.
+   *
+   * Starts at `not-yet-described`, on the same rule as `pause` and `execution`: a
+   * collection that has not joined the descriptions says so rather than showing
+   * a blank that reads as a session with nothing to say.
+   */
+  description: SessionDescription;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -413,6 +429,14 @@ export function toRows(
         cause: "not-probed",
         why: "this collection did not probe the process table, so nothing has looked at what is executing in this pane",
       } as ExecutionReading,
+      /* AND ONCE MORE. `not-yet-described` rather than an empty string: Greg
+         ruled out an empty string dressed as a description, and a row that
+         nobody has described yet is a different fact from a session with
+         nothing to say. `readDescriptions` fills it in. */
+      description: {
+        kind: "not-yet-described",
+        why: "this collection has not joined the generated descriptions yet",
+      } as SessionDescription,
       // A session the status pass did not cover is `unknown` with a reason, not a
       // default that reads as calm. There is no legitimate way to get here — the
       // two lists come from one parse — so if it ever shows up on the page, the
@@ -788,6 +812,12 @@ export async function collect(): Promise<FleetSnapshot> {
      fail without costing us the board — see `readPauses`. */
   await readPauses(rows);
 
+  /* AND ONE FOR WHAT EACH SESSION IS ABOUT. It only READS a file the describe
+     pass wrote elsewhere — no model call happens here, deliberately: a
+     collection has a deadline and a gateway does not respect it. Same rule as
+     `readPauses`: a failure here must not cost the board. */
+  readDescriptions(rows);
+
   return { ...snapshot, collectedAt: new Date().toISOString(), tookMs: Date.now() - startedAt };
 }
 
@@ -924,6 +954,67 @@ export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}):
         why: `deriving this session's execution identity threw: ${cause instanceof Error ? cause.message : String(cause)}`,
       };
     }
+  }
+}
+
+/**
+ * JOIN THE GENERATED DESCRIPTIONS ONTO THE ROWS.
+ *
+ * **It reads a file and nothing else.** The describing — the transcript reads
+ * and the model calls — happens in `describe-pass.ts` on the server's own
+ * cadence, because a collection has a deadline and a gateway does not respect
+ * it. This is the cheap half.
+ *
+ * **A FAILURE HERE MUST NOT COST THE BOARD**, the same rule `readPauses` states:
+ * every row already carries `not-yet-described`, so a missing or unreadable file
+ * leaves the fleet exactly as legible as it was and says so on each row.
+ *
+ * **The key check is the point.** A record is used only when its execution token
+ * matches the row's *current* one — so a pane re-used for a second conversation
+ * misses, and the previous conversation's description is unreachable rather than
+ * merely unrendered.
+ */
+export function readDescriptions(rows: FleetRow[], root: string = descriptionsRoot()): void {
+  let read: ReturnType<typeof readDescriptionMemory>;
+  try {
+    read = readDescriptionMemory(root);
+  } catch (err) {
+    for (const row of rows) {
+      row.description = {
+        kind: "cannot-tell",
+        why: `the descriptions file could not be read: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+    return;
+  }
+
+  if (read.kind === "absent") return; // Every row already says it has not been described.
+  if (read.kind === "unusable") {
+    for (const row of rows) row.description = { kind: "cannot-tell", why: `the descriptions file is unusable: ${read.why}` };
+    return;
+  }
+
+  for (const row of rows) {
+    const eligible = describeKey({
+      id: row.id,
+      name: row.name,
+      claudeSessionId: row.claudeSessionId,
+      dir: row.meta.version === 1 ? row.meta.dir : null,
+      execution: row.execution,
+    });
+    if (eligible === null) continue;
+    const record = read.memory.records.get(eligible.key);
+    if (record === undefined) continue;
+    /* The key already carries the token, so this is a belt-and-braces check on a
+       file another process wrote — a record filed under one key and holding
+       another is a corrupted memory, refused rather than rendered. */
+    if (record.executionToken !== eligible.token) continue;
+    row.description = {
+      kind: "described",
+      title: record.described.title,
+      description: record.described.description,
+      describedAt: record.describedAt,
+    };
   }
 }
 

@@ -2963,3 +2963,40 @@ export type QueueFeed =
       /** Where the file is, so a person can go and look at it. */
       path: string;
     };
+
+/* ------------------------------------------------------------------ *
+ * What a session is about, in a sentence.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A generated description of one session, or an honest account of why there
+ * isn't one.
+ *
+ * Greg, 2026-09-09: *"For each session, provide a 1-2-sentence description of
+ * what it's about, and show in the Session List."*
+ *
+ * **`not-yet-described` is the normal state for a while, and it is not an
+ * error.** A description needs a *verified* execution identity, and every row
+ * reads `unknown` until the dashboard and the daemon have been restarted onto
+ * the code that produces one. So its wording has to be informative rather than
+ * apologetic, or a page that is merely new will read as broken.
+ *
+ * **There is no arm carrying an empty string.** Greg ruled that out by name — a
+ * model that answered a different question routinely returns the right shape
+ * with empty strings in it, and publishing one is a row saying nothing
+ * confidently.
+ */
+export type SessionDescription =
+  | {
+      kind: "described";
+      /** A short display title. **Never renames the tmux session** — that name is an address. */
+      title: string;
+      /** One or two sentences: what this session is FOR. */
+      description: string;
+      /** When it was generated, so a reader can age it. */
+      describedAt: string;
+    }
+  /** The pass has not reached this session yet, or has nothing to describe it from. */
+  | { kind: "not-yet-described"; why: string }
+  /** We know why there is no description and it is worth saying. */
+  | { kind: "cannot-tell"; why: string };

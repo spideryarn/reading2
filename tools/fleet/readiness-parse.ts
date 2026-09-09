@@ -2,18 +2,26 @@
  * **Reading a check's own output back**: what npm said it was running, and what
  * the tool said it found.
  *
- * Shared by the wrapper (`scripts/readiness-run.ts`), which holds the whole
- * output, and by the backfill (`readiness-backfill.ts`), which holds only the
- * two ends of a log. So everything here works on a **fragment** and says so when
- * it could not find what it wanted — never a zero, which is a measurement.
+ * Shared by the wrapper (`scripts/readiness-run.ts`) and the backfill
+ * (`readiness-backfill.ts`). **Neither holds the whole output** — both keep a
+ * bounded head and a bounded tail and join them with {@link joinEnds}, because a
+ * full `npm run check` prints megabytes. So everything here works on a
+ * **fragment** and says so when it could not find what it wanted — never a
+ * zero, which is a measurement.
  *
  * ## The rule these parsers exist to enforce
  *
- * **`EXIT=0` alone is not a pass.** For `test` and `check`, a coherent terminal
- * footer has to be there too: a nested process can die while an outer wrapper
- * exits 0, which is `docs/reusable/silent-success.md` in one sentence. So the
- * caller asks for the footer, and a run without one is `void` rather than green.
- * GPT Sol's P1.4, 2026-09-09.
+ * **`EXIT=0` alone is not a pass.** For `test`, `typecheck` and `check` a
+ * coherent terminal footer has to be there too: a nested process can die while
+ * an outer wrapper exits 0, which is `docs/reusable/silent-success.md` in one
+ * sentence. So the caller asks for the footer, and a run without one is `void`
+ * rather than green.
+ *
+ * Each footer is the LAST thing its tool prints, on every path — vitest's two
+ * tally lines, `typecheck.ts`'s coverage tick, `check.ts`'s verdict sentence.
+ * Note that `typecheck.ts` writes its errors to **stderr** and still ends with
+ * that tick, so the tick coexists with failures: it proves the run finished, and
+ * the exit status is what decides whether it passed.
  */
 import { CHECK_KINDS, SCRIPT_FOR_KIND, type CheckKind, type CheckStep, type Counts, type Scope, type TestTally } from "./readiness.js";
 
@@ -45,10 +53,18 @@ export function stripAnsi(text: string): string {
  *
  * `total` is the length of everything that went past, which only the producer
  * knows. When it fits, the head alone IS everything.
+ *
+ * **`total` MUST be in the same unit as the strings — JavaScript characters,
+ * not bytes.** The backfill first passed `stat.size` and compared it against
+ * `head.length`, which reintroduced the doubling for any log with multibyte
+ * characters in it: vitest prints `✓` at three bytes and one character, so a
+ * small green log has a byte size larger than its character length, neither
+ * whole-window branch fires, and the file is concatenated with itself. The same
+ * bug, wearing a unit mismatch. GPT Sol's P1.5.
  */
-export function joinEnds(head: string, tail: string, total: number): string {
-  if (total <= head.length) return head;
-  if (total <= tail.length) return tail;
+export function joinEnds(head: string, tail: string, totalChars: number): string {
+  if (totalChars <= head.length) return head;
+  if (totalChars <= tail.length) return tail;
   return `${head}\n…\n${tail}`;
 }
 
@@ -120,8 +136,14 @@ export function parseBanner(head: string): Banner | null {
  * be told from a full one.
  *
  * **Read from `package.json` rather than copied here.** A copy is a second
- * source of truth that nothing keeps in step, and the day somebody adds a flag
- * to the `test` script every full run silently becomes `narrowed`.
+ * source of truth that nothing keeps in step.
+ *
+ * What this compares is the banner against **that same file**, so it detects
+ * arguments npm was given at the call site (`npm test -- one.test.ts`) and NOT a
+ * narrowing written into the script itself — if the `test` script grew a path,
+ * both sides would carry it and every run would still read `full`. That is a
+ * real limit and there is no local evidence that would close it; what would is
+ * somebody noticing the script changed.
  */
 export function scopeOf(banner: Banner, scriptBodies: Readonly<Record<string, string>>): Scope {
   if (banner.commandLine === null) return "unknown";
@@ -137,15 +159,23 @@ export function scopeOf(banner: Banner, scriptBodies: Readonly<Record<string, st
 /**
  * The `EXIT=<n>` line `scripts/tmux-job.ts` appends, or null when there is none.
  *
- * The **last** one in the fragment: a log can contain the string in its own
- * output (this file's tests do), and the one that decides is the one the job
- * wrapper wrote at the end.
+ * **It has to be the LAST non-blank line, not merely the last match.** A check
+ * that prints `EXIT=0` in its own output and then carries on — or hangs — would
+ * otherwise be read as a completed pass while it was still running. GPT Sol's
+ * P1.4. `tmux-job.ts` writes this line and nothing after it, so requiring it to
+ * be terminal costs nothing and closes the hole.
+ *
+ * This does not stand alone: the caller also treats a file whose size changed
+ * under the read as still moving, whatever it appears to end with.
  */
-export function parseExitLine(tail: string): number | null {
-  const matches = [...stripAnsi(tail).matchAll(/^EXIT=(-?\d+)\s*$/gm)];
-  const last = matches[matches.length - 1];
-  if (last === undefined) return null;
-  const value = Number(last[1]);
+export function parseExitLine(text: string): number | null {
+  const lines = stripAnsi(text).split("\n");
+  let last = lines.length - 1;
+  while (last >= 0 && (lines[last] ?? "").trim() === "") last -= 1;
+  if (last < 0) return null;
+  const match = /^EXIT=(-?\d+)$/.exec((lines[last] ?? "").trim());
+  if (match === null) return null;
+  const value = Number(match[1]);
   return Number.isFinite(value) ? value : null;
 }
 
@@ -193,7 +223,10 @@ export function parseVitest(text: string): { counts: Extract<Counts, { kind: "vi
     if (/^\s*Test Files\s/.test(line)) files = parseTally(line) ?? files;
     else if (/^\s*Tests\s/.test(line)) tests = parseTally(line) ?? tests;
   }
-  return { counts: { kind: "vitest", files, tests }, hasFooter: files !== null || tests !== null };
+  /* **Both lines, not either.** A process cut between `Test Files` and `Tests`
+     has not printed its whole footer, and treating half of one as proof of
+     completion is the guard letting through exactly what it exists to catch. */
+  return { counts: { kind: "vitest", files, tests }, hasFooter: files !== null && tests !== null };
 }
 
 /* ------------------------------------------------------------------ *
@@ -212,7 +245,11 @@ export function parseTypecheck(text: string): { counts: Extract<Counts, { kind: 
   const clean = stripAnsi(text);
   const projects = [...clean.matchAll(/^[✓✗]\s+\S*tsconfig\S*\.json\b/gm)].length;
   const errors = [...clean.matchAll(/error TS\d+:/g)].length;
-  const hasFooter = /^✓ all \d+ source files are covered by some project\s*$/m.test(clean) || projects > 0;
+  /* **The coverage line, and only it.** One project line is not a completed
+     run — that was `|| projects > 0`, which let a typecheck killed after its
+     first project satisfy the completion guard. That line is the last thing
+     `scripts/typecheck.ts` prints, on every path. */
+  const hasFooter = /^✓ all \d+ source files are covered by some project\s*$/m.test(clean);
   return {
     counts: { kind: "typecheck", projects: projects === 0 ? null : projects, errors },
     hasFooter,
@@ -270,7 +307,9 @@ export function parseCheckTable(text: string): { counts: Extract<Counts, { kind:
   /* The verdict sentence, not the table — `check.ts` prints the table before
      deciding, so a run killed between the two leaves a complete-looking table
      under no conclusion at all. */
-  const hasFooter = /^(All gates green\.|A gate failed\.)/m.test(clean);
+  /* `--offline` says "All gates green, minus the database suites." — a real
+     conclusion in different words, and one this used not to recognise. */
+  const hasFooter = /^(All gates green|A gate failed\.)/m.test(clean);
   return { counts: { kind: "check", steps }, hasFooter };
 }
 
