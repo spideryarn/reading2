@@ -89,10 +89,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
        limited" are different claims, and only the verdict makes the second. */
     how: "The percentages are a cache the box reads, so an expired window shows as unknown rather than as a number. A rejection is exact, but carries no account — so it says a limit was hit, not whose.",
   },
+  /* This said "It is a roadmap, not a feature. Nothing on that panel is live,
+     and it says so." Both halves were true when written and neither was by
+     2026-09-09: the status card computes everything it shows, and the tab now
+     carries two controls that type at real sessions. A tip that describes a
+     panel as inert is worse than no tip on the one tab where pressing something
+     costs money. */
   overseer: {
     head: "Overseer",
-    what: "What this tool is meant to become: a coordinator agent rather than a person with a mouse.",
-    how: "It is a roadmap, not a feature. Nothing on that panel is live, and it says so.",
+    what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",
+    how: "The status card computes what it shows, and tells a dead Overseer from a deaf one. The message and broadcast controls type at real sessions — a broadcast spends a turn of a paid model per recipient, so it asks the server what it would do before it does it.",
   },
   deploys: {
     head: "Deploys",

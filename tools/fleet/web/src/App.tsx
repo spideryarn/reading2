@@ -293,6 +293,19 @@ export function App({
             <OverseerPanel
               actions={actions}
               rows={rows}
+              /* **A PAYLOAD WITH DROPPED ROWS CANNOT SETTLE THE OVERSEER CLAIM,
+                 AND CANNOT BACK A CONTROL LABELLED "ALL AGENTS".** Both cards
+                 refuse while this is non-zero.
+
+                 **`null` BEFORE A COLLECTION, NOT `0`.** This was `?? 0`, and
+                 GPT Sol was right that it is exactly the defect this branch
+                 keeps removing: zero is a MEASUREMENT — *we read every row and
+                 dropped none* — and before the first payload nothing has been
+                 read at all. It prevented a send either way, so nothing was
+                 misdelivered; it was still an unmeasured claim wearing a
+                 measured claim's clothes. MessageOverseerCard.tsx § the one
+                 completeness clause. */
+              unreadableRows={feed.state === null ? null : feed.state.unreadableRows}
               /* **`null` BEFORE THE FIRST PAYLOAD, and the payload's own arm
                  after it.** Not `?? { kind: "not-asked" }`, which was here for a
                  review round and collapsed two different silences: *nothing has

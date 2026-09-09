@@ -42,6 +42,7 @@ import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
+import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
@@ -460,6 +461,16 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Enacted actions are off by default (`FLEET_ACT_ENABLED=1`), so what is live
   // here today is the catalogue, the queue and the dry runs.
   if (handleActionRequest(req, res)) return;
+
+  // One free-text line to every live Claude session — the Overseer tab's
+  // broadcast. A SECOND write path, mounted beside the first two rather than
+  // folded into either: the steer route's per-pane rate limiter is calibrated
+  // for a person typing at one session and would refuse a fan-out at its sixth
+  // recipient, and the action vocabulary's broadcast carries a reviewed
+  // sentence rather than arbitrary prose. routes-broadcast.ts § the header says
+  // which of those two this is eventually meant to absorb, and where the
+  // authority boundary between them has to stay.
+  if (handleBroadcastRequest(req, res)) return;
 
   // Dictation. The only route here that takes AUDIO, which is a class of
   // payload nothing else on this server handles — so it is neither logged nor
