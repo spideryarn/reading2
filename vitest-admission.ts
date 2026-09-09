@@ -69,9 +69,18 @@ import { join } from "node:path";
 export const ADMISSION_POLICY_VERSION = 1;
 
 /**
- * A readiness wrapper gives Vitest a one-run token so the wrapper can tell
- * this config's refusal from identical words printed by a test or fixture.
- * The config consumes the variable before workers inherit their environment.
+ * A readiness wrapper gives Vitest a one-run token so the wrapper can tell this
+ * config's refusal from identical words printed by a test or fixture. The
+ * config consumes the variable before workers inherit their environment.
+ *
+ * **A collision marker, not a secret.** `delete process.env[…]` does not remove
+ * a value from `/proc/self/environ` on Linux — measured 2026-09-09, GPT Sol's
+ * RR2-03 — so anything running in Vitest's own process, the config or a global
+ * setup file, can still recover it. What it rules out is an *accident*: a test,
+ * a fixture or a quoted log line printing the refusal sentence by coincidence.
+ * It is not a defence against deliberate code in our own suite, and it could
+ * not be by this mechanism. Nothing needs it to be — see
+ * docs/plans/260909g-readiness-runner-git-env-and-preparation-latch.md.
  */
 export const READINESS_ADMISSION_TOKEN_ENV = "SPIDERYARN_READINESS_ADMISSION_TOKEN";
 export const READINESS_ADMISSION_MARKER_PREFIX = "READINESS_ADMISSION_REFUSAL=";

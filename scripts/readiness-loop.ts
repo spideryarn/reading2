@@ -11,15 +11,41 @@
  * § "Where the periodic runner lives, and why not the daemon". The cost is no
  * supervision across a reboot or tmux-server exit; the Readiness tab makes that
  * absence visible by returning to unknown when fresh evidence stops arriving.
+ *
+ * ## What a green here does NOT claim, and it is narrower than it looks
+ *
+ * A pass says the commit's checks passed **against this box's database**, not
+ * against a schema built only from that commit's own migrations. Every worktree
+ * on the box shares one local Supabase, and `scripts/db-migrate.ts` passes
+ * `allowHistoricalExtras: isLocal` — so a ledger row belonging to no migration
+ * in this commit's journal is a warning here, not a refusal. The consequence:
+ *
+ *   1. `origin/dev` is B, whose code declares a column but whose commit left the
+ *      migration out.
+ *   2. Another worktree C adds that migration and applies it locally. C is not
+ *      on `origin/dev`.
+ *   3. This runner prepares B. B's migrator tolerates C's ledger row.
+ *   4. `db:check` finds the column, B's tests pass **against C's schema**, and B
+ *      is recorded green.
+ *
+ * GPT Sol's F5, 2026-09-09, established. Not fixed here, deliberately: the two
+ * repairs are a database of this runner's own, or holding the migration
+ * advisory lock across the whole 26-minute check — which would block every other
+ * agent's tests on the box for that long. Both are somebody else's to authorise,
+ * so the claim is weakened instead and the choice is with Greg. See
+ * docs/plans/260909g-readiness-runner-git-env-and-preparation-latch.md
+ * § "The shared local database can be ahead of the commit under test".
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   closeSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   unlinkSync,
 } from "node:fs";
@@ -35,15 +61,24 @@ import {
 } from "../vitest-admission.js";
 import {
   decideTick,
-  initialPreparationNeeds,
+  initialPreparationState,
+  preparationTarget,
   preparationAfterChanges,
   TICK_INTERVAL_MS,
-  type PreparationNeeds,
+  type PreparationState,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
-import { primaryCheckout, snapshotDev, stampTree, type DevSnapshot } from "../tools/fleet/readiness-git.js";
+import {
+  GIT_TIMEOUT_MS,
+  gitEnv,
+  primaryCheckout,
+  snapshotDev,
+  stampTree,
+  type DevSnapshot,
+} from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
+import type { TreeStamp } from "../tools/fleet/readiness.js";
 import { collectHealth } from "../tools/fleet/health.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
@@ -57,7 +92,7 @@ const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 export const CHECK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 export const TERMINATION_GRACE_MS = 10 * 1000;
 
-type CommandResult = {
+export type CommandResult = {
   status: number | null;
   signal: NodeJS.Signals | null;
   stdout: string;
@@ -163,7 +198,26 @@ function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
   return localDatabaseEnv(process.env, readFileSync(path.join(runner, ".env.local"), "utf8"));
 }
 
-function run(
+/**
+ * The environment the expensive check itself is launched with.
+ *
+ * **A named function rather than an expression inside the `spawn` call**, because
+ * this is the caller that was missed. Every other subprocess here goes through
+ * {@link runCommand}, which scrubs; this one built its own environment and so
+ * handed git's inherited location overrides straight to `npm run check`. GPT
+ * Sol's F1, 2026-09-09: `scripts/conflict-markers.ts` takes its tracked-file
+ * inventory from git, so a poisoned check reads its file list out of a
+ * *different* checkout, misses the file with the conflict markers in it, and
+ * passes — and that pass is then recorded as a fact about this commit.
+ *
+ * Naming it is the point. A scrub spelled out at each call site is a scrub
+ * somebody adds a fourth call site without.
+ */
+export function readinessCheckEnv(runner: string): NodeJS.ProcessEnv {
+  return gitEnv(runnerLocalDatabaseEnv(runner));
+}
+
+export function runCommand(
   cwd: string,
   command: string,
   args: readonly string[],
@@ -175,7 +229,7 @@ function run(
     encoding: "utf8",
     timeout,
     maxBuffer: 32 * 1024 * 1024,
-    env: { ...sourceEnv, GIT_TERMINAL_PROMPT: "0" },
+    env: gitEnv(sourceEnv),
     stdio: ["ignore", "pipe", "pipe"],
   });
   return {
@@ -203,6 +257,143 @@ function usefulOutput(result: CommandResult): string {
   return `exit ${result.status ?? "unknown"}`;
 }
 
+/**
+ * **Is this directory the checkout it claims to be?** Three questions, because
+ * one is not enough.
+ *
+ * A clean environment cannot overrule repository-local `core.worktree`, which
+ * can send a merge into another directory despite the requested `cwd`. So the
+ * first check is that git's own `--show-toplevel` canonicalises to the path we
+ * asked about.
+ *
+ * That alone is not enough, and the plan for this work was wrong to say it was.
+ * Git derives `--show-toplevel` from the directory *containing* the `.git`
+ * pointer, so a pointer file copied here from another repository passes the
+ * top-level check while every ref — `origin/dev` included — comes from that
+ * other repository. The runner would then fast-forward to a foreign commit and
+ * record it under its own path. Hence the backlink check: a linked worktree's
+ * administration directory points back at that exact pointer file.
+ *
+ * The third only applies when an expected repository is supplied: comparing
+ * `--git-common-dir` rejects a worktree that is internally consistent but
+ * registered to a different repository altogether.
+ *
+ * GPT Sol, 2026-09-09, in a review that timed out before it could report; this
+ * reasoning is reconstructed from the diff it left.
+ */
+export function runnerWorktreeProblem(
+  runner: string,
+  exec: typeof runCommand = runCommand,
+  expectedRepository?: string,
+): string | null {
+  const requestedText = path.resolve(runner);
+  let requested: string;
+  try {
+    requested = realpathSync(requestedText);
+  } catch (error) {
+    return `runner path ${requestedText}; Git top-level unavailable because the runner path could not be canonicalised: ${(error as Error).message}`;
+  }
+
+  const result = exec(
+    runner,
+    "git",
+    ["rev-parse", "--path-format=absolute", "--show-toplevel"],
+    GIT_TIMEOUT_MS,
+  );
+  if (!commandSucceeded(result)) {
+    return `runner path ${requested}; Git top-level unavailable: ${usefulOutput(result)}`;
+  }
+
+  const reportedText = result.stdout.trim();
+  if (reportedText === "") {
+    return `runner path ${requested}; Git reported top-level <empty>, so it could not be canonicalised`;
+  }
+  let reported: string;
+  try {
+    reported = realpathSync(reportedText);
+  } catch (error) {
+    return `runner path ${requested}; Git reported top-level ${reportedText || "<empty>"}, which could not be canonicalised: ${(error as Error).message}`;
+  }
+  if (requested !== reported) {
+    return `runner path ${requested}; Git reported top-level ${reported}. Refusing to fetch or fast-forward a different work tree`;
+  }
+
+  const pointerProblem = linkedWorktreePointerProblem(requested);
+  if (pointerProblem !== null) return pointerProblem;
+
+  if (expectedRepository !== undefined) {
+    const commonArgs = ["rev-parse", "--path-format=absolute", "--git-common-dir"];
+    const expectedCommonResult = exec(expectedRepository, "git", commonArgs);
+    const runnerCommonResult = exec(requested, "git", commonArgs);
+    if (!commandSucceeded(expectedCommonResult)) {
+      return `expected repository ${expectedRepository}; Git common directory unavailable: ${usefulOutput(expectedCommonResult)}`;
+    }
+    if (!commandSucceeded(runnerCommonResult)) {
+      return `runner path ${requested}; Git common directory unavailable: ${usefulOutput(runnerCommonResult)}`;
+    }
+    const expectedCommonText = expectedCommonResult.stdout.trim();
+    const runnerCommonText = runnerCommonResult.stdout.trim();
+    if (expectedCommonText === "" || runnerCommonText === "") {
+      return `runner path ${requested}; Git reported an empty common directory for ${expectedCommonText === "" ? "the expected repository" : "the runner"}`;
+    }
+    try {
+      const expectedCommon = realpathSync(expectedCommonText);
+      const runnerCommon = realpathSync(runnerCommonText);
+      if (expectedCommon !== runnerCommon) {
+        return `runner path ${requested}; Git common directory ${runnerCommon} does not match expected repository ${expectedCommon}`;
+      }
+    } catch (error) {
+      return `runner path ${requested}; Git common directory could not be canonicalised: ${(error as Error).message}`;
+    }
+  }
+  return null;
+}
+
+function linkedWorktreePointerProblem(requested: string): string | null {
+  const dotGit = path.join(requested, ".git");
+  let dotGitKind: ReturnType<typeof lstatSync>;
+  try {
+    dotGitKind = lstatSync(dotGit);
+  } catch (error) {
+    return `runner path ${requested}; ${dotGit} could not be inspected: ${(error as Error).message}`;
+  }
+  /* A primary checkout has a .git directory. A linked worktree has a pointer
+     file, and its administration directory points back to that exact file.
+     Checking the backlink catches a copied pointer: --show-toplevel still
+     reports `requested` in that state, while every ref comes from the other
+     repository. */
+  if (dotGitKind.isDirectory()) return null;
+  if (!dotGitKind.isFile()) {
+    return `runner path ${requested}; ${dotGit} is neither a repository directory nor a linked-worktree pointer`;
+  }
+  let pointerText: string;
+  try {
+    pointerText = readFileSync(dotGit, "utf8").trim();
+  } catch (error) {
+    return `runner path ${requested}; ${dotGit} could not be read: ${(error as Error).message}`;
+  }
+  const match = /^gitdir:\s*(.+)$/.exec(pointerText);
+  if (match?.[1] === undefined) {
+    return `runner path ${requested}; ${dotGit} is not a linked-worktree gitdir pointer`;
+  }
+  const adminText = path.resolve(requested, match[1]);
+  try {
+    const admin = realpathSync(adminText);
+    const backlinkText = readFileSync(path.join(admin, "gitdir"), "utf8").trim();
+    if (backlinkText === "") {
+      return `runner path ${requested}; linked-worktree backlink is empty`;
+    }
+    const backlink = realpathSync(path.resolve(admin, backlinkText));
+    const pointer = realpathSync(dotGit);
+    if (backlink !== pointer) {
+      return `runner path ${requested}; linked-worktree backlink resolves to ${backlink}, not ${pointer}`;
+    }
+  } catch (error) {
+    return `runner path ${requested}; linked-worktree pointer or backlink could not be canonicalised: ${(error as Error).message}`;
+  }
+  return null;
+}
+
 function requireCommand(
   cwd: string,
   command: string,
@@ -210,7 +401,7 @@ function requireCommand(
   label: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
 ): CommandResult {
-  const result = run(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv);
+  const result = runCommand(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv);
   if (!commandSucceeded(result)) throw new Error(`${label} failed: ${usefulOutput(result)}`);
   return result;
 }
@@ -234,7 +425,7 @@ function setupHasEnv(output: string): boolean {
 }
 
 function runSetup(runner: string): CommandResult {
-  return run(runner, "npx", ["tsx", "scripts/worktree-setup.ts"]);
+  return runCommand(runner, "npx", ["tsx", "scripts/worktree-setup.ts"]);
 }
 
 export function worktreeAddArgs(runner: string, branchExists: boolean): string[] {
@@ -244,7 +435,7 @@ export function worktreeAddArgs(runner: string, branchExists: boolean): string[]
 }
 
 function runnerBranchExists(primary: string): boolean {
-  const result = run(primary, "git", ["show-ref", "--verify", "--quiet", `refs/heads/${RUNNER_BRANCH}`]);
+  const result = runCommand(primary, "git", ["show-ref", "--verify", "--quiet", `refs/heads/${RUNNER_BRANCH}`]);
   if (result.error !== null || result.signal !== null || (result.status !== 0 && result.status !== 1)) {
     throw new Error(`checking for the runner branch failed: ${usefulOutput(result)}`);
   }
@@ -260,6 +451,11 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
     return runner;
   }
 
+  const primaryProblem = runnerWorktreeProblem(primary);
+  if (primaryProblem !== null) {
+    throw new Error(`refusing to create the runner from an unexpected primary worktree: ${primaryProblem}`);
+  }
+
   /* A new branch starts from the ref just fetched; an existing one is attached
      without `-B`, whose reset semantics would violate the fast-forward-only
      contract. setup has its own ordinary merge, so we make that a no-op below
@@ -272,6 +468,10 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
     worktreeAddArgs(runner, runnerBranchExists(primary)),
     "creating the runner worktree",
   );
+  const createdProblem = runnerWorktreeProblem(runner, runCommand, primary);
+  if (createdProblem !== null) {
+    throw new Error(`the newly-created runner worktree is not the requested checkout: ${createdProblem}`);
+  }
   /* An existing dedicated branch may lag origin/dev. Advance it before setup,
      whose reusable freshener permits an ordinary merge; making that merge a
      no-op is how this runner keeps its stricter fast-forward-only contract. */
@@ -297,27 +497,22 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
   return runner;
 }
 
-function changedPaths(runner: string, before: string, after: string): Set<string> {
-  if (before === after) return new Set();
-  const diff = requireCommand(
-    runner,
-    "git",
-    ["diff", "--name-only", before, after, "--", "package-lock.json", "drizzle", "tools/fleet/web", "vite.fleet.config.ts"],
-    "reading the files changed by the fast-forward",
-  );
-  return new Set(diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== ""));
-}
-
 /**
  * **`npm run check` has an undeclared prerequisite, and without this the runner
  * would record a permanent false red.**
  *
- * `tests/fleet-decisions-route.test.ts` reads `tools/fleet/web/dist`, and
- * `check`'s build step is `build:client && build:api` — `build:fleet` is in
- * neither. So the test fails in any checkout where nobody happened to run that
- * by hand, which a machine-made worktree never does. Measured on 2026-09-09: it
- * failed in this runner's first recorded check and passed immediately after
- * `npm run build:fleet`.
+ * `tests/fleet-decisions-route.test.ts` imports `tools/fleet/server.ts`, and
+ * that module refuses at startup unless `tools/fleet/web/dist/index.html`
+ * exists. `check`'s build step is `build:client && build:api` — `build:fleet` is
+ * in neither. So the test fails in any checkout where nobody happened to run
+ * that by hand, which a machine-made worktree never does. Measured on
+ * 2026-09-09: it failed in this runner's first recorded check and passed
+ * immediately after `npm run build:fleet`.
+ *
+ * (This paragraph used to say the test *read* `dist`. It does not, and the
+ * difference matters to anyone trying to fix it: nothing rebuilds when the
+ * built content is stale, because nothing reads the content at all — an
+ * `index.html` from any past build satisfies it. GPT Sol's F8, 2026-09-09.)
  *
  * That is the same class `scripts/check.ts`'s own header says it fixed once for
  * `api-dist` — *"npm run check was red on a clean checkout for everybody who had
@@ -333,14 +528,128 @@ function changedPaths(runner: string, before: string, after: string): Set<string
  * into the suite would manufacture the permanent false red this exists to
  * prevent.
  */
-function ensureFleetClient(runner: string, rebuild: boolean): void {
+export function ensureFleetClient(
+  runner: string,
+  rebuild: boolean,
+  exec: typeof runCommand = runCommand,
+): void {
   const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
   if (!rebuild && existsSync(entry)) return;
-  const built = run(runner, "npm", ["run", "build:fleet"]);
+  /* An old entry cannot prove this build wrote anything, and an entry emitted
+     before a failed build must not make the next tick trust that failure. */
+  if (existsSync(entry)) unlinkSync(entry);
+  const built = exec(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
-    throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}`);
+    let cleanup = "";
+    try {
+      if (existsSync(entry)) unlinkSync(entry);
+    } catch (error) {
+      cleanup = `; its incomplete entry could not be removed: ${(error as Error).message}`;
+    }
+    throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}${cleanup}`);
   }
   if (!existsSync(entry)) throw new Error(`build:fleet exited 0 but did not create ${entry}`);
+}
+
+export type PreparationDeps = {
+  exec: (cwd: string, command: string, args: readonly string[], sourceEnv?: NodeJS.ProcessEnv) => CommandResult;
+  buildFleetClient: (runner: string, rebuild: boolean) => void;
+  databaseEnv: (runner: string) => NodeJS.ProcessEnv;
+  /** A sha only names the prepared files when the clean tree is still there. */
+  stamp: (cwd: string) => TreeStamp;
+};
+
+function preparationChanges(
+  runner: string,
+  preparedFor: string | null,
+  target: string,
+  exec: PreparationDeps["exec"],
+): readonly string[] | null {
+  if (preparedFor === null) return null;
+  const diff = exec(runner, "git", [
+    "diff", "--name-only", preparedFor, target, "--",
+    ".npmrc", "npm-shrinkwrap.json", "package.json", "package-lock.json", "drizzle",
+    "tools/fleet", "src/web", "vite.fleet.config.ts",
+  ]);
+  if (commandSucceeded(diff)) {
+    return diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  }
+  console.error(
+    `readiness-loop: could not classify preparation changes from ${preparedFor} to ${target}: ` +
+      `${usefulOutput(diff)}; preparing everything`,
+  );
+  return null;
+}
+
+function latchPreparation(
+  preparation: PreparationState,
+  target: string,
+  tree: TreeStamp,
+): boolean {
+  if (tree.kind === "known" && !tree.dirty && tree.sha === target) {
+    /* The sha is evidence only after every preparation step succeeded and
+       the files they read are still a clean checkout of that exact sha. */
+    preparation.preparedFor = target;
+    return true;
+  }
+  preparation.preparedFor = null;
+  const found = tree.kind === "unknown"
+    ? `the tree could not be stamped: ${tree.why}`
+    : `the tree was at ${tree.sha}${tree.dirty ? " and dirty" : ""}`;
+  console.error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
+  return false;
+}
+
+export function prepareRunner(
+  runner: string,
+  preparation: PreparationState,
+  /** The sha to prepare for, or null when a failed fast-forward or unknown
+      stamp means this tick must not advance the latch. */
+  target: string | null,
+  deps: PreparationDeps = {
+    exec: (cwd, command, args, sourceEnv) =>
+      runCommand(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv),
+    buildFleetClient: ensureFleetClient,
+    databaseEnv: runnerLocalDatabaseEnv,
+    stamp: stampTree,
+  },
+): void {
+  if (target === null) return;
+  const shouldPrepare = preparation.preparedFor !== target;
+  if (shouldPrepare) {
+    const changed = preparationChanges(runner, preparation.preparedFor, target, deps.exec);
+    preparation.needs = preparationAfterChanges(preparation.needs, changed);
+    if (preparation.needs.dependencies) {
+      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline", "--dry-run=false"]);
+      if (!commandSucceeded(installed)) {
+        throw new Error(`installing dependencies for the runner checkout failed: ${usefulOutput(installed)}`);
+      }
+    }
+    if (preparation.needs.migrations) {
+      /* This deterministic runner is local-only: the injected environment
+         strips the shell values that can select and authorise a remote
+         database. A failed migration stays pending because the migrator's own
+         ledger preflight is the authority on whether retrying may change it. */
+      const migrated = deps.exec(runner, "npm", ["run", "db:migrate"], deps.databaseEnv(runner));
+      if (!commandSucceeded(migrated)) {
+        throw new Error(`applying local database migrations failed: ${usefulOutput(migrated)}`);
+      }
+    }
+  }
+
+  deps.buildFleetClient(runner, preparation.needs.fleetClient);
+
+  if (shouldPrepare) {
+    if (latchPreparation(preparation, target, deps.stamp(runner))) {
+      /* Keep every classified need pending until the whole attempt latches.
+         Otherwise B can install successfully, fail later, then leave its
+         modules under an A latch; an A..C diff that happens to be empty would
+         wrongly bless C without repairing B's partial derived state. */
+      preparation.needs = { dependencies: false, migrations: false, fleetClient: false };
+    }
+  } else {
+    preparation.needs.fleetClient = false;
+  }
 }
 
 function databaseProblem(result: CommandResult): string | null {
@@ -397,7 +706,7 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   try {
     const child = spawn("npx", ["tsx", "scripts/readiness-run.ts", "check"], {
       cwd: runner,
-      env: runnerLocalDatabaseEnv(runner),
+      env: readinessCheckEnv(runner),
       stdio: ["ignore", fd, fd],
       detached: process.platform !== "win32",
     });
@@ -439,60 +748,32 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
 
 async function tick(
   runner: string,
+  expectedRepository: string,
   store: ReadinessStore,
-  preparation: PreparationNeeds,
+  preparation: PreparationState,
   assertLock: () => void,
 ): Promise<void> {
   assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
-  const before = stampTree(runner);
+  let fastForwardProblem = runnerWorktreeProblem(runner, runCommand, expectedRepository);
 
-  const fetch = run(runner, "git", ["fetch", "origin", "dev"]);
-  let fastForwardProblem: string | null = null;
-  if (!commandSucceeded(fetch)) {
-    fastForwardProblem = `git fetch origin dev failed: ${usefulOutput(fetch)}`;
-  } else {
-    const merge = run(runner, "git", ["merge", "--ff-only", "origin/dev"]);
-    if (!commandSucceeded(merge)) fastForwardProblem = `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
+  if (fastForwardProblem === null) {
+    const fetch = runCommand(runner, "git", ["fetch", "origin", "dev"]);
+    if (!commandSucceeded(fetch)) {
+      fastForwardProblem = `git fetch origin dev failed: ${usefulOutput(fetch)}`;
+    } else {
+      const merge = runCommand(runner, "git", ["merge", "--ff-only", "origin/dev"]);
+      if (!commandSucceeded(merge)) fastForwardProblem = `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
+    }
   }
 
   const dev = snapshotDev(runner, nowIso);
-  let changed = new Set<string>();
   const afterMerge = stampTree(runner);
-  if (
-    fastForwardProblem === null &&
-    before.kind === "known" &&
-    afterMerge.kind === "known"
-  ) {
-    changed = changedPaths(runner, before.sha, afterMerge.sha);
-    Object.assign(preparation, preparationAfterChanges(preparation, [...changed]));
-    if (preparation.dependencies) {
-      requireCommand(runner, "npm", ["ci", "--prefer-offline"], "installing dependencies for the runner checkout");
-      preparation.dependencies = false;
-    }
-    if (preparation.migrations) {
-      /* This deterministic runner is local-only: strip the two shell values
-         that can deliberately select and authorise a remote database, then
-         let db:migrate load the copied .env.local. db:check below decides
-         whether this box is now usable. A failed
-         migration remains pending and is retried: the migrator's own ledger
-         preflight is the authority on whether retrying may change anything. */
-      requireCommand(
-        runner,
-        "npm",
-        ["run", "db:migrate"],
-        "applying local database migrations",
-        runnerLocalDatabaseEnv(runner),
-      );
-      preparation.migrations = false;
-    }
-  }
+  const target = preparationTarget(fastForwardProblem, afterMerge, dev);
+  prepareRunner(runner, preparation, target);
 
-  ensureFleetClient(runner, preparation.fleetClient);
-  preparation.fleetClient = false;
-
-  const db = run(
+  const db = runCommand(
     runner,
     "npm",
     ["run", "--silent", "db:check"],
@@ -546,6 +827,11 @@ async function main(): Promise<number> {
   const once = argv.includes("--once");
 
   const root = repoRoot();
+  const rootProblem = runnerWorktreeProblem(root);
+  if (rootProblem !== null) {
+    console.error(`readiness-loop: the checkout containing this script is not internally consistent: ${rootProblem}`);
+    return 1;
+  }
   const primary = primaryCheckout(root);
   if ("why" in primary) {
     console.error(`readiness-loop: could not find the primary checkout: ${primary.why}`);
@@ -585,7 +871,7 @@ async function main(): Promise<number> {
 
   try {
     const runner = ensureRunnerWorktree(primary.path, new Date().toISOString());
-    const preparation = initialPreparationNeeds();
+    const preparation = initialPreparationState();
     const assertLock = (): void => {
       if (held === null) throw new LostLoopLockError(`this process no longer holds ${lockPath}`);
       requireHeldLoopLock(held, lockPath);
@@ -596,7 +882,7 @@ async function main(): Promise<number> {
       /**
        * **One bad tick must not end the loop.**
        *
-       * `tick` throws on a failed `npm ci` or an unreadable diff, and this used
+       * `tick` throws on failed preparation such as `npm ci`, and this used
        * to let that reach the outer catch — which returns, so a single
        * transient failure would stop the runner *for every later commit* and
        * leave the tab silently ageing into `unknown` with nothing to say why.
@@ -610,7 +896,7 @@ async function main(): Promise<number> {
        * person who asked for one tick wants its status.
        */
       try {
-        await tick(runner, opened.store, preparation, assertLock);
+        await tick(runner, primary.path, opened.store, preparation, assertLock);
       } catch (error) {
         if (error instanceof LostLoopLockError) throw error;
         if (once) throw error;
