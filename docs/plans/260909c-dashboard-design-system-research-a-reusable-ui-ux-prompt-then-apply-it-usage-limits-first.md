@@ -244,6 +244,35 @@ knows*); that session stays idle.
       invented.
 - [ ] Design and build it.
 
+#### What the data can already support, from the captured snapshot
+
+Read off the fixture capture rather than assumed, so the design starts from what exists:
+
+| Question | What exists today | What is missing |
+|---|---|---|
+| **Needed from me?** | `state.attention.list.items` — the Overseer's ranked inbox, 1 item in this capture, each with `kind`, `waitingSince`, prose evidence and the session it belongs to. Plus `queue.depth.needsGreg` (1) and `queue.depth.unauthorized` (5 proposals nobody has authorised) | Nothing, for a v1. The two sources have never been drawn on one screen |
+| **Anything blocked?** | Queue rows carry `wait` / `waitingOn` / `ready`; the usage verdict says whether the account is rate-limited; readiness carries a red-gate verdict; sessions carry `question` and `pause` | **There is no field that says a session is blocked.** `status` is `working` / `idle` / `shell` — the pane's state, not the work's ([overseer-direction.md § `idle` is the bug](../project/overseer-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work)). Blocked-ness has to be assembled from the inbox's judgement plus the queue's `waitingOn`, and the landing must say which of the two it used |
+| **Where do things stand?** | Per-session `description` and `title`; `readiness.verdict` and `dev` (including `dev → main: 323 commits not deployed`); `deploys.versions[0]` | **No "last wrote" or "last commit" per session.** The transcript path is on the page, so an `mtime` `stat` would give the first without a read — but that is a server change and the server is not mine ([260909b item 3](260909b-unstarted-dashboard-ideas-screenshots-and-fable-product-input-on-the-session-detail-view.md#3-the-misdirection-proxies-which-no-screen-shows-at-all)). Named as missing; not invented |
+
+#### The dock has run out of rungs — and a ninth tab makes it worse
+
+Reported by session `readiness-tab` via the Overseer, 2026-09-09. **Not yet independently checked by
+me** — my screenshots were taken with a fine pointer, so the `@media (pointer: coarse)` branch never
+fired and they cannot confirm or deny it. Recorded as their measurement, to be reproduced before it
+is designed against:
+
+> At 390px with a coarse pointer the eight modes fit only as 40px icon buttons with the active label
+> kept, and the standalone Refresh button then sits at x≈399, past the edge, reachable only by
+> scrolling the bar sideways. `flex-grow` cannot help: at 448px of content in a 390px bar there is
+> no free space to distribute, so the `.dock-modes` share weight is inert in exactly this case.
+
+If it reproduces, it belongs here rather than in a CSS patch, because there is no rung below "labels
+off": **a bar that grows one button per mode has no next step**, and the fix is a different shape —
+an overflow, or a landing surface that demotes several tabs to a drill-in. That is the same
+conclusion the three questions push towards, which is a reason to believe it rather than a
+coincidence: if one screen answers *needed from me / blocked / where things stand*, several of the
+eight tabs stop being top-level navigation.
+
 ### Stage 6 — Usage limits, the tab Greg named
 
 - [ ] Restyle against the doc. Before/after pair at both widths in this plan.
@@ -254,15 +283,50 @@ knows*); that session stays idle.
 Each with a before/after pair, the gates, and a Sol code review. Order decided after Stage 4's
 ranking.
 
-## Ownership and the live collisions
+## Ownership: what was agreed, with whom, on 2026-09-09
 
-Mine now: `UsagePanel.tsx`, `UsageHistory.tsx`, `usage-history-series.ts`. Mine per tab as I reach
-it, **by announcement**: `tailwind.css`, `ui.tsx`, `Dock.tsx`, `App.tsx`, `AttentionPanel.tsx` and
-the other panels.
+Four sessions were messaged by name before any shared file was touched, and all four replied. The
+agreements, so the next agent does not have to re-negotiate them:
 
-Live in the same files tonight, to be messaged **by name** before Stage 5 or 6 touches their tab:
-`dashboard-tooltips` (tooltips across every panel), `deploys-ui` (`DeploysPanel.tsx`),
-`readiness-tab` (`ReadinessPanel.tsx`), `claude-agents-dashboard` (`ActionButtons.tsx`, parts of
-`SessionDetail.tsx`). The Overseer arbitrates a disagreement.
+| With | Agreed |
+|---|---|
+| `dashboard-tooltips` | **Their tooltips land on a tab first, my restyle after** — a restyle that moves prose into a card changes what an `Explain` is attached to. Their order: Recent messages → Queued ideas → Sessions/masthead → Overseer. **Usage limits, Readiness and Deploys are unclaimed by them and mine to take now** |
+| `deploys-ui` | Deploys stays in the sweep; they message me when their rework lands and I do the visual pass **on top of it**, not underneath. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against |
+| `readiness-tab` | Theirs until they say otherwise; I offered two changes rather than making them |
+| `claude-agents-dashboard` | `ActionButtons.tsx` and the detail's action machinery stay theirs; **the narrow-width layout question in `App.tsx` is mine**. An extraction of shared shapes out of `ActionButtons.tsx` is welcome *after* Stages 5–6, on the condition that the copy tests move with the components and **no string is tidied on the way** — several are worded around what the code can and cannot know, and the awkward ones are awkward on purpose |
+
+**And a correction I did not have: `SessionDetail.tsx` is owned by neither of us.** It went to
+`dashboard-titles-descriptions-detail` for the same re-layout Stage 5 describes. To be agreed with
+them, not with `claude-agents-dashboard`, and Stage 5 sequences behind them.
+
+### Three things from those replies that change the work
+
+- **`ui.tsx` moved under me while I was planning** (`ac48cb43`, merged here). `SectionHeading` now
+  takes an optional `tip?: Tip`. So `StatCard` should take one too and pass it to `Explain` — every
+  future stat then carries its own card for free, and `HealthPanel`'s tiles already source a `tip`
+  from `health-view.ts` waiting for somewhere to put it.
+- **`tests/fleet-tooltip-copy.test.ts` now fails any new `title=` attribute** in
+  `tools/fleet/web/src/`. Deliberate — it is the hover-only regression. Do not edit the allow-list.
+- **`deploys-client.ts` exports `localZone()`, `deployLocalWhen()`, `deployDays()`, `dayLabel()`** as
+  shared vocabulary, encoding a rule worth keeping: *a clock time is never drawn without its zone
+  label beside it.* Anything here needing a device-zone time takes them from there rather than
+  writing a second one.
+
+### And a design correction worth more than the layout it was about
+
+I put the co-visible contradiction — the attention card and the detail describing one session
+differently on one screen — as a layout problem to be solved by moving the detail up.
+`claude-agents-dashboard`'s answer, which I accept:
+
+> Moving the detail up so they are never co-visible would **hide the contradiction rather than
+> resolve it**, and it would be worse than the current state, where at least you can see it.
+
+They disagree because they have different clocks: the attention feed is the coordinator's
+checkpoint, the detail is this server's snapshot, and both are honest. So the fix is that each says
+which moment it describes. That is the same conclusion Fable reached from the other direction in
+[260909b item 2](260909b-unstarted-dashboard-ideas-screenshots-and-fable-product-input-on-the-session-detail-view.md#2-the-inboxs-judgement-about-this-session-becomes-section-1-of-its-detail)
+— *two sources disagreeing, both named, is the honest form* — and it is the augmentation principle
+again: **never hide that a decision was made, or who made it.** Stage 5 must not implement Fable's
+item 1 in a way that quietly drops item 2.
 
 Not mine at all: server files, `wire.ts`, `tools/overseer/**`, `src/web/**`.
