@@ -41,12 +41,14 @@ Four things, and the fourth is the one nothing checks:
 | `MODE_LABELS` | `mode.ts` | the one place the mode is spelled for a person |
 | `MODE_ICONS` | `Dock.tsx` | **not decoration**: at the bar's narrowest rung the glyph is all that is left of a button that is not the active one. House defaults are 16px at `strokeWidth={1.75}` — [icons.md](icons.md) |
 | `MODE_TIPS` | `Dock.tsx` | the two-sentence card. [§ The card on the button](#the-card-on-the-button) |
-| the mount | `App.tsx` | `{mode === "yours" ? <YourPanel … /> : null}` beside the other three |
+| the mount | `App.tsx` | `{mode === "yours" ? <YourPanel … /> : null}` beside the ones already there |
 
 **`MODES` is the array; the other three are `Record<Mode, …>` rather than partials, so
 `npm run typecheck` catches a half-added mode.** That is a design property somebody could remove
 without noticing what it bought — a `Partial<Record<…>>` here would let a mode ship with no icon, no
-label and no card, and the page would draw a nameless button.
+label and no card, and the page would draw a nameless button. **"Half-added" is the exact claim**:
+`Mode` is derived from `MODES`, so the compiler cannot see a mode removed from all four at once
+([§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once)).
 
 > That the maps are `Record<Mode, …>` rather than partials is the load-bearing detail worth stating
 > in your doc: it means `npm run typecheck` catches a half-added mode, so a new mode cannot be
@@ -92,6 +94,18 @@ the thing that is forbidden here**, and it is cheapest to discover before you ha
 
 That last sentence is the general rule and not a detail of one tab. A second reader of a product
 artefact will drift, and a fixture cannot tell you it has: only a test that reads the real file can.
+
+**And "reads the real file" is not enough on its own** — the version of that check quoted above was
+*one accepted version per non-blank line*, and GPT Sol's objection to it is the useful part: a count
+passes while the two readers disagree about **every field**. Yours can default a field, drop an
+entry, or derive a different meaning from the same bytes, and the tally still matches. So parse the
+real file with **both** readers and compare, entry by entry, every field your panel draws.
+
+That is possible because of one thing worth knowing outright: **a test-only import of the product
+module is legal.** `fleet-imports.test.ts` walks the graph rooted at `tools/`, not at `tests/`, so
+your test may import the canonical parser to compare against even though your panel may not. Without
+that, the obvious conclusion is that the strong check cannot be written at all — `deploys-tab`,
+2026-09-09.
 
 If the answer pushes a coupling onto a path rather than a type, say so in your plan — it is a
 trade-off Greg should inherit knowingly rather than find later.
@@ -187,10 +201,10 @@ the voice of whoever failed to answer.
 the first is what a reader could have guessed by pressing it, the second is what they could not.
 
 **The register is the artefact, not the gesture** — *what you will see here* and *where it comes from
-or what it does not promise*, never *"opening this runs X"*. Read the three tips already in
-`Dock.tsx` before writing a fourth: Sessions says what the list is and then that it is read off the
-box about once a minute; Box health says which readings and then that the verdict has a fourth level;
-Overseer says what the tab is for and then that nothing on it is live. Switching a tab spends
+or what it does not promise*, never *"opening this runs X"*. Read the tips already in `Dock.tsx`
+before writing yours: Sessions says what the list is and then that it is read off the box about once
+a minute; Box health says which readings and then that the verdict has a fourth level; Overseer says
+what the tab is for and then that nothing on it is live. Switching a tab spends
 nothing, so a gesture framing would be false as well as unhelpful.
 
 **And the card does not open on a phone.** `Dock.tsx` passes `mouseOnly` — and only here, because a
@@ -206,12 +220,20 @@ are *the modes* and *the bottom bar*, and both are short. The page is driven
 through `manualTransport()` and `feed.push(state({…}))` — no clock, no network — and
 `window.location.hash` is set **before** `mount` to open straight into a mode.
 
-Three assertions earn their place for a new mode:
+Four assertions earn their place for a new mode:
 
-1. the hash opens into it (`window.location.hash = "#yours"`, then something only your panel draws);
-2. pressing the button writes `#yours` and draws the panel — this is the one that catches a missing
+1. `expect(MODES).toContain("yours")` — the only one that goes red when a clean merge removes your
+   mode outright, which the `Record<Mode, …>` types cannot see
+   ([§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once));
+2. the hash opens into it (`window.location.hash = "#yours"`, then something only your panel draws);
+3. pressing the button writes `#yours` and draws the panel — this is the one that catches a missing
    `App.tsx` arm;
-3. the panel's empty state says which nothing it is, rather than drawing nothing.
+4. the panel's empty state says which nothing it is, rather than drawing nothing.
+
+**Derive from `MODES`; never hard-code the list of labels.** Two bottom-bar tests spelled the three
+modes out and so went red on the next tab to land, in a file four sessions were editing at once —
+`deploys-tab` changed them to derive on 2026-09-09. A test that hard-codes the vocabulary makes
+every later mode author's first experience a red suite that is nothing to do with them.
 
 **A mode with its own route needs a third suite of its own** — `tests/fleet-deploys-route.test.ts` is
 one. Drive it through the same composition the server calls rather than through a route the test
@@ -239,7 +261,20 @@ Settled by the Overseer on 2026-09-09, after three sessions queued on one file, 
 
 The failure that rule is built against is the quiet one: two agents adding entries to the same array
 and the same three maps merge **cleanly**, and a merge can keep both sides' entries or drop one
-without ever raising a marker. Nothing about a clean merge is evidence here; the `Record` types are.
+without ever raising a marker.
+
+**But the typecheck half of that rule is weaker than it sounds, and this is the correction worth
+reading twice.** `Mode` is `(typeof MODES)[number]` — *derived from* the array, not declared beside
+it. So the compiler compares the maps against whatever `MODES` currently says, and a merge that
+drops your mode from the array **and** its three map entries leaves every `Record<Mode, …>`
+perfectly well typed, with your tab simply gone. Typecheck catches a **half**-added mode. It cannot
+catch a **fully removed** one, because after the removal there is nothing left to disagree.
+
+The check that does catch it is an explicit `expect(MODES).toContain("yours")` in your own test —
+one line, and the only assertion in the file that goes red when your mode vanishes from a merge
+nobody had a conflict in. Add it with the rest ([§ The test](#the-test)).
+
+Found by `deploys-tab` and GPT Sol, 2026-09-09, against the rule as originally written here.
 
 > A dropped `MODES` entry makes the maps over-specified and a dropped map entry makes them
 > under-specified, so **`npm run typecheck` catches it — but only if you run it on the post-merge

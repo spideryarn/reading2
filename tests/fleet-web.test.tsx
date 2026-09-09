@@ -39,6 +39,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
+import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-client";
+import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import { freshness } from "../tools/fleet/web/src/Header";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
@@ -284,6 +286,80 @@ function state(over: Partial<FleetState> = {}): FleetState {
  * effects, and a transport whose teardown did nothing would leave two of these
  * running with nothing on screen to say so.
  */
+/**
+ * A deploy record that answers whatever the test says.
+ *
+ * Injected into `<App>` like every other seam here, so no test in this file can
+ * reach `fetch` — the panel's default is the real HTTP client, and a suite that
+ * quietly made real requests would pass while telling you nothing.
+ */
+function recordingDeploys(
+  replyOf: () => DeploysView = () => deploysView(),
+): { api: DeploysApi; asked: number[] } {
+  const asked: number[] = [];
+  const api: DeploysApi = {
+    fetch: async (limit) => {
+      asked.push(limit);
+      return replyOf();
+    },
+  };
+  return { api, asked };
+}
+
+/** A healthy git snapshot. Spread it when overriding one reading, so the other two survive. */
+function healthyGit(): Extract<DeploysView, { kind: "deploys" }>["git"] {
+  return {
+    main: {
+      kind: "ref",
+      sha: "8985e7b682d197e6eb48c9c5dfd07eb30eccd57c",
+      committedAt: "2026-09-09T00:32:12Z",
+      lastFetchAtMs: 1_788_912_000_000,
+    },
+    ancestry: { kind: "ancestor" },
+    commitsSince: { kind: "count", commits: 287 },
+  };
+}
+
+/** A readable record with one deploy in it, and anything the caller overrides. */
+function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = {}): DeploysView {
+  return {
+    schema: 1,
+    kind: "deploys",
+    versions: [
+      {
+        version: "2026-09-08T05:32:17Z",
+        release: 74,
+        deploymentId: "dpl_test",
+        sha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+        previousSha: "3b4d32f0a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        commitCount: 137,
+        invisible: false,
+        changelogReadable: true,
+        unreadableEntries: 0,
+        generatedAt: "2026-09-08T07:06:51Z",
+        entries: [
+          {
+            section: "headline",
+            title: "Hover cards on links",
+            body: "See where a link goes before you follow it.",
+            where: "/read",
+            commits: [],
+          },
+        ],
+      },
+    ],
+    total: 74,
+    limit: 10,
+    unreadable: [],
+    recordLines: 74,
+    lastGeneratedAt: "2026-09-08T07:06:51Z",
+    newestRecordedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+    git: healthyGit(),
+    servedAtMs: 1_788_912_000_000,
+    ...over,
+  };
+}
+
 function manualTransport(): {
   transport: Transport;
   push: (next: FleetState) => void;
@@ -384,7 +460,7 @@ afterEach(() => {
  * thought it was exercising. The handful of tests that DO want the real wire
  * stub `fetch` and render `<App>` themselves.
  */
-function mount(transport: Transport): void {
+function mount(transport: Transport, deploysApi: DeploysApi = recordingDeploys().api): void {
   act(() =>
     root.render(
       <App
@@ -392,6 +468,7 @@ function mount(transport: Transport): void {
         rename={fakeRename()}
         actionsApi={recordingActions().api}
         messagesApi={recordingMessages().api}
+        deploysApi={deploysApi}
         actionsPollMs={3_600_000}
       />,
     ),
@@ -724,6 +801,224 @@ describe("the modes", () => {
   });
 });
 
+/**
+ * **The Deploys tab.**
+ *
+ * The three assertions docs/project/fleet-dashboard-modes.md § The test asks
+ * for, and the second of them is the one that earns its place: `MODES`,
+ * `MODE_LABELS`, `MODE_ICONS` and `MODE_TIPS` are all `Record<Mode, …>` and the
+ * compiler catches a half-registered mode — but **the mount in `App.tsx` is a
+ * plain ternary and nothing type-checks it**. A mode registered in all four with
+ * no arm there compiles, draws a button, switches the hash, and shows an empty
+ * page.
+ */
+describe("the deploys tab", () => {
+  it("is registered at all, which is the one thing the types cannot check", () => {
+    /* **`Record<Mode, …>` cannot catch a whole mode being lost.** `Mode` is
+       derived FROM `MODES`, so a merge that drops `"deploys"` from the array and
+       its entries from the four maps leaves every `Record<Mode, …>` perfectly
+       typed and the tab simply gone. Three sessions added a mode on the night of
+       2026-09-08 and git merges these additions with no conflict marker, so
+       "typecheck and count by eye" was the plan until GPT Sol pointed out that
+       the typecheck proves nothing here. This is the assertion instead. */
+    expect(MODES).toContain("deploys");
+    expect(MODE_LABELS.deploys).toBe("Deploys");
+  });
+
+  it("opens straight into it from the hash", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport);
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("Release 74");
+    expect(container.textContent).toContain("Hover cards on links");
+  });
+
+  it("draws the panel when the button is pressed — the missing-mount test", async () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Deploys");
+    expect(button, "no Deploys button in the bar").toBeDefined();
+
+    act(() => button?.click());
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe("#deploys");
+    expect(container.textContent).toContain("Release 74");
+  });
+
+  it("says how stale the record is, and does not present the number as undeployed work", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport);
+    await act(async () => undefined);
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("287");
+    expect(text).toContain("later non-merge commits");
+    expect(text).toContain("cached");
+    expect(text).toContain("may already have deployed");
+    expect(text).toContain("This view cannot tell which");
+
+    /* **The wording is load-bearing, and the check has to be about the CLAIM
+       rather than about a phrase.** "287 commits not yet deployed" would be
+       false — main is only ever written by a deploy — and it is the sentence a
+       later edit would find punchier. But *"a mix of deploys not yet written up
+       and a tip not yet deployed"* is true and says the opposite, and a blunt
+       `not.toContain("not yet deployed")` fails on it: the first version of this
+       assertion did exactly that, and the thing it caught was correct copy.
+       So what is forbidden is the NUMBER being given that reading directly.
+       routes-deploys.ts § The claim in the header. */
+    for (const lie of [
+      /\d+\s+commits?\s+(that are\s+)?(not yet|awaiting|pending|un)deploy/i,
+      /\d+\s+commits?\s+behind\s+production/i,
+      /\d+\s+undeployed/i,
+    ]) {
+      expect(text, `the count must not be described as undeployed work: ${lie}`).not.toMatch(lie);
+    }
+  });
+
+  it.each([
+    [
+      "the server could not read the record",
+      { kind: "unreadable", why: "there is no deploy record at /nope" } as DeploysView,
+      ["could not be read", "/nope", "statement about this dashboard"],
+    ],
+    [
+      "this browser got no answer",
+      { kind: "no-answer", why: "no answer in 15s" } as DeploysView,
+      ["did not get an answer from the box", "no answer in 15s"],
+    ],
+  ])("says WHICH nothing it is when %s", async (_name, reply, expected) => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(() => reply).api);
+    await act(async () => undefined);
+
+    for (const phrase of expected) expect(container.textContent).toContain(phrase);
+  });
+
+  it("tells an empty record apart from an unreadable one", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(
+      feed.transport,
+      recordingDeploys(() => deploysView({ versions: [], total: 0, recordLines: 0 })).api,
+    );
+    await act(async () => undefined);
+
+    /* We READ it and it is empty — which must not draw as either failure, and
+       must not draw as a blank panel that reads "nothing has ever shipped". */
+    expect(container.textContent).toContain("read and holds no deploys");
+    expect(container.textContent).not.toContain("could not be read");
+  });
+
+  it("draws a quiet deploy as quiet rather than as an empty card", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const quiet = deploysView();
+    if (quiet.kind !== "deploys") throw new Error("unreachable");
+    const only = quiet.versions[0];
+    if (only === undefined) throw new Error("unreachable");
+    mount(
+      feed.transport,
+      recordingDeploys(() => deploysView({ versions: [{ ...only, entries: [], invisible: true }] })).api,
+    );
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("Nothing a reader would notice");
+  });
+
+  it("shows a deploy that is not on main as the alarm it is, not as a shrug", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys(() => deploysView({ git: { ...healthyGit(), ancestry: { kind: "not-ancestor" } } })).api);
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("is not on main");
+    expect(container.textContent).toContain("rollback");
+  });
+
+  it("says a git reading failed rather than drawing a zero", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(
+      feed.transport,
+      recordingDeploys(() =>
+        deploysView({
+          git: {
+            ...healthyGit(),
+            commitsSince: { kind: "unknown", why: "git rev-list took longer than 5000ms" },
+            ancestry: { kind: "unknown", why: "fatal: bad object" },
+          },
+        }),
+      ).api,
+    );
+    await act(async () => undefined);
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("could not be measured");
+    expect(text).toContain("git rev-list took longer than 5000ms");
+    expect(text).toContain("could not be checked");
+    /* The specific collapse this guards: a failed count rendering as "0
+       commits ... behind", which is the most reassuring possible way to say we
+       have no idea. */
+    expect(text).not.toContain("0 commits on main");
+  });
+
+  it("asks for more when there are more, and says how many", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const deploys = recordingDeploys();
+    mount(feed.transport, deploys.api);
+    await act(async () => undefined);
+
+    expect(deploys.asked).toEqual([10]);
+    const more = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Show more"));
+    expect(more?.textContent).toContain("73 older deploys");
+
+    act(() => more?.click());
+    await act(async () => undefined);
+    expect(deploys.asked).toEqual([10, 60]);
+  });
+
+  it("answers the dock's Refresh button, which claims to refresh the page", async () => {
+    /* The button's tooltip presents it as the page's refresh control. Until
+       2026-09-09 it refreshed the fleet feed only, so on this tab pressing it
+       did nothing — indistinguishable from a broken button, on the one page
+       whose job is to say whether things are broken. Sol's P2 finding 9. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const deploys = recordingDeploys();
+    mount(feed.transport, deploys.api);
+    await act(async () => undefined);
+    expect(deploys.asked).toEqual([10]);
+
+    const refresh = [...container.querySelectorAll("button")].find((b) => b.textContent === "Refresh");
+    expect(refresh, "no Refresh button").toBeDefined();
+    act(() => refresh?.click());
+    await act(async () => undefined);
+
+    expect(deploys.asked).toEqual([10, 10]);
+    /* And it still refreshes the feed, which was its original job. */
+    expect(feed.refreshes()).toBeGreaterThan(0);
+  });
+
+  it("counts the lines it could not read rather than showing a quietly short list", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    mount(
+      feed.transport,
+      recordingDeploys(() => deploysView({ unreadable: ["line 12: does not parse"], recordLines: 75 })).api,
+    );
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("1 of 75 lines in the record could not be read");
+    expect(container.textContent).toContain("line 12: does not parse");
+  });
+});
+
 describe("box health, whose shape belongs to somebody else", () => {
   it("says absent rather than drawing an empty panel", () => {
     window.location.hash = "#health";
@@ -1000,11 +1295,17 @@ describe("the bottom bar", () => {
   it("puts the mode switch in the bar at the bottom rather than in the masthead", () => {
     /* The move is the whole point of the port: on a phone the top of the screen
        is the furthest thing from a thumb. Asserted structurally, because a test
-       that only found the three buttons somewhere on the page would have passed
-       just as happily before the change. */
+       that only found the buttons somewhere on the page would have passed just
+       as happily before the change.
+
+       **Derived from `MODES` rather than written out.** Four sessions added a
+       tab on the night of 2026-09-08 and a hand-typed list here goes red for
+       each of them, in a file they are all editing — a conflict that teaches
+       nobody anything. What is actually being asserted is that the bar draws
+       every mode, in order, with its label, and that is what this now says. */
     const feed = manualTransport();
     mount(feed.transport);
-    expect(modeButtons().map((b) => b.textContent)).toEqual(["Sessions", "Box health", "Overseer"]);
+    expect(modeButtons().map((b) => b.textContent)).toEqual(MODES.map((m) => MODE_LABELS[m]));
     expect(container.querySelector("header")?.querySelector(".dock-modes")).toBeNull();
   });
 
@@ -1012,13 +1313,15 @@ describe("the bottom bar", () => {
     const feed = manualTransport();
     mount(feed.transport);
 
+    /** `aria-checked` down the bar, as the mode at `index` being the live one. */
+    const onlyOn = (index: number): string[] => MODES.map((_, i) => (i === index ? "true" : "false"));
     const checked = (): (string | null)[] => modeButtons().map((b) => b.getAttribute("aria-checked"));
-    expect(checked()).toEqual(["true", "false", "false"]);
+    expect(checked()).toEqual(onlyOn(MODES.indexOf("sessions")));
 
     const health = modeButtons().find((b) => b.textContent === "Box health");
     act(() => health?.click());
 
-    expect(checked()).toEqual(["false", "true", "false"]);
+    expect(checked()).toEqual(onlyOn(MODES.indexOf("health")));
     // And the class the stylesheet paints, which is what a sighted reader sees.
     expect(modeButtons().filter((b) => b.classList.contains("on")).map((b) => b.textContent)).toEqual([
       "Box health",
