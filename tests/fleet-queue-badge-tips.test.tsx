@@ -223,6 +223,30 @@ describe("a row's fields say which is which", () => {
     expect((source as Tip).what).not.toBe((plan as Tip).what);
   });
 
+  it("shows the badge's meaning and the whole id VISIBLY, for a reader with no pointer", async () => {
+    /* **The fix this protects is for a sighted phone reader**, and the two
+       assertions that were here did not protect it: both were satisfied by the
+       `sr-only` sentences that already existed, so deleting the two new `facts`
+       rows would have kept them green. GPT Sol's P2, second round.
+
+       So this reads the visible `<dd>` values out of the opened disclosure, on a
+       READY item — the case where `row.why` is null and there is otherwise no
+       visible sentence about the badge at all. */
+    await mount(view([row({ lifecycle: "queued", needsGreg: false, why: null } as Partial<QueueRow>)]));
+    const openRow = container.querySelector("button[aria-expanded]");
+    act(() => (openRow as HTMLButtonElement).click());
+
+    const pairs = new Map<string, string>();
+    for (const cell of container.querySelectorAll("dt")) {
+      const value = cell.parentElement?.querySelector("dd")?.textContent ?? "";
+      /* The `dt` carries an `Explain`'s sr-only sentence too, so the label is
+         the text before the em dash it inserts. */
+      pairs.set((cell.textContent ?? "").split(" — ")[0]?.trim() ?? "", value);
+    }
+    expect(pairs.get("ready")).toBe(badgeTip("ready").what);
+    expect(pairs.get("id")).toBe("qi-3v9879qs");
+  });
+
   it("gives the whole id behind the eight characters the row prints", async () => {
     await mount(view([row()]));
     const text = container.textContent ?? "";

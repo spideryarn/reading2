@@ -290,7 +290,7 @@ export const CLAIM_TIPS: Record<"one" | "none" | "contested" | "cannot-tell", Ti
        showing three. */
     head: "More than one claimant",
     what: "Two or more sessions say they are the Overseer. That is a fault to report.",
-    how: "Never resolved by picking one: choosing between claimants is how each of them goes on believing it holds the role. It is the one verdict that survives an incomplete reading, because rows nobody could read could only add claimants.",
+    how: "Never resolved by picking one: choosing between claimants is how each of them goes on believing it holds the role. It survives rows that could not be read — those could only add claimants — but not a snapshot too old to describe now, which answers that it cannot tell instead.",
   },
   "cannot-tell": {
     head: "Overseer unknown",
@@ -299,7 +299,7 @@ export const CLAIM_TIPS: Record<"one" | "none" | "contested" | "cannot-tell", Ti
        than two known holders — a stale snapshot, a failed collection, no
        collection yet, or a row whose role could not be read.
        overseer-claim.ts § the truth table. */
-    how: "Any uncertainty at all forces it when fewer than two holders are known: a snapshot too old to describe now, a collection that has not finished or failed, or rows dropped because they could not be read. One holder plus one unreadable row is not single ownership — the unreadable row could be a second claimant, and exactly one is the whole promise.",
+    how: "Any uncertainty at all forces it when fewer than two holders are known: a snapshot too old to describe now, a collection that has not finished or failed, rows dropped because they could not be read, or a row that is here but whose role could not be. One holder plus one row of any of those is not single ownership — that row could be a second claimant, and exactly one is the whole promise.",
   },
 };
 

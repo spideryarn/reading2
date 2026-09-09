@@ -118,8 +118,17 @@ function components(): [string, string][] {
  * `title=` in between would have vanished. **A guard that goes quiet is worse
  * than one that cries wolf**, so the trade is now the other way round: a
  * `title=` inside a string literal WOULD be reported, and that is a loud
- * one-line diagnosis rather than a silent miss. A real parse (a TypeScript/JSX
- * AST walk) would beat both and is what to reach for if this ever gets fiddly.
+ * one-line diagnosis rather than a silent miss.
+ *
+ * **The trade above is still not fully achieved, and saying so is the point.**
+ * GPT Sol, second round: the scanner now mistakes a comment delimiter INSIDE a
+ * string, a regex or JSX text for a real comment — after `const marker = "/*";`
+ * everything through the next `*​/` is blanked, a genuine `title=` among it
+ * included. It also cannot see a title arriving through `{...props}`, through
+ * `createElement`, or through a capitalised forwarding component that puts it on
+ * a host element itself. **So this is a good tripwire and not a proof.** A
+ * TypeScript/JSX AST walk is what closes both, and is what to reach for the next
+ * time this needs to be trusted rather than merely consulted.
  */
 function codeOnly(source: string): string {
   const out = source.split("");
@@ -340,10 +349,12 @@ describe("the shape of a card, over every tip that can be reached from a module"
        read. What it catches is the other direction: an import quietly dropped in
        a refactor, which leaves every assertion below passing over a shorter
        list. The three rules under it are only worth what this number is. */
-    /* Set just under the real count, so dropping ANY ONE of the imported maps
-       fails. A floor of 60 against ~70 reachable tips did not do that, which
-       GPT Sol pointed out was the stated purpose unmet. */
-    expect(everyTip().length).toBeGreaterThanOrEqual(68);
+    /* **Just under the real count, so dropping ANY ONE of the imported maps
+       fails.** This was 60 and then 68 against a true 76, and both of those let
+       an eight-entry map — `MODE_TIPS`, `BADGE_TIPS` — disappear whole while
+       still passing, which is precisely what it exists to catch. GPT Sol had to
+       say so twice. Raise it when a map is added; it is meant to be edited. */
+    expect(everyTip().length).toBeGreaterThanOrEqual(74);
   });
 
   it("gives each one a head, a what and a how", () => {
