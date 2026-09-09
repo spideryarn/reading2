@@ -166,10 +166,12 @@ describe("Commander grammar", () => {
     expect(JSON.parse(json)).toEqual(expect.objectContaining(payload()));
   });
 
-  test("list is not a Stage 1 command", () => {
-    const result = run(tempRoot(), ["list"]);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/unknown command/i);
+  test("list accepts its class, pending-only, and JSON filters", () => {
+    const parsed = parseArgv(["list", "--class", "decision", "--unreviewed", "--json"]);
+    expect(parsed).toEqual({
+      kind: "run",
+      parsed: { command: "list", class: "decision", unreviewed: true, json: true },
+    });
   });
 });
 
@@ -326,5 +328,109 @@ describe("reading and Greg's two write commands", () => {
     const root = tempRoot();
     expect(run(root, ["reviewed", "dec-aaaaaaaa"]).status).not.toBe(0);
     expect(run(root, ["reversed", "dec-aaaaaaaa"]).status).not.toBe(0);
+  });
+});
+
+describe("list and historical seed", () => {
+  test("seed is idempotent by command id and preserves historical decision identity", () => {
+    const root = tempRoot();
+
+    const first = run(root, ["seed"]);
+    const firstRaw = readFileSync(join(root, DECISIONS_FILE), "utf8");
+    const firstEvent = JSON.parse(firstRaw) as Record<string, unknown>;
+    const second = run(root, ["seed"]);
+
+    expect(first.status).toBe(0);
+    expect(second.status).toBe(0);
+    expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(firstRaw);
+    expect(records(root)).toHaveLength(1);
+    expect(firstEvent["commandId"]).toBe("seed-2026-09-09-0812-claude-agents-dashboard-stage-6");
+    expect(firstEvent["decidedAt"]).toBe("2026-09-09T08:12:00Z");
+    expect(firstEvent["at"]).not.toBe(firstEvent["decidedAt"]);
+    expect(firstEvent).toMatchObject({
+      by: "overseer",
+      class: "decision",
+      question:
+        "`claude-agents-dashboard` asked whether to continue its mechanical Stage 6 (catalogue → `wire.ts`) with Stage 5 blocked on the SessionDetail re-layout.",
+      options: [
+        {
+          name: "Stop now and leave Stage 6 to a later session",
+          tradeoffs: "Costs a fresh session's context to pick it up later.",
+        },
+        {
+          name: "Continue as it was",
+          tradeoffs: "A Claude session writing mechanical code against a 76% weekly window.",
+        },
+        {
+          name: "Continue with Codex implementing",
+          tradeoffs: "Bills the ChatGPT window at 24%.",
+        },
+      ],
+      chose: {
+        option: "Continue with Codex implementing",
+        note: "Terra, mechanical; then debrief and stop.",
+      },
+      why:
+        "The work is specified and mechanical, the session holds the context, and Greg's standing answer this morning is to delegate implementation to GPT.",
+      advisers: ["nobody"],
+      supersedes: null,
+    });
+    expect(firstEvent["bearsOn"]).toEqual({
+      sessions: [
+        {
+          name: "claude-agents-dashboard",
+          execution: { kind: "unavailable", why: "seeded from the hand-kept log" },
+        },
+      ],
+      plan: null,
+    });
+  });
+
+  test("list states unavailable aggregates as a sentence, never as zero", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    writeFileSync(join(root, DECISIONS_FILE), `${readFileSync(join(root, DECISIONS_FILE), "utf8")}not-json\n`);
+
+    const result = run(root, ["list"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/counts? (?:is|are) unavailable/i);
+    expect(result.stdout).toMatch(/seven days.*unavailable/i);
+    expect(result.stdout).not.toMatch(/not yet reviewed:\s*0\b/i);
+  });
+
+  test("list calls an unreviewed superseded record superseded, never reviewed", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    const successor = {
+      ...payload(),
+      supersedes: "dec-dashstg6",
+    };
+    const file = join(root, "successor.json");
+    writeFileSync(file, JSON.stringify(successor));
+    expect(run(root, ["add", "--file", file, "--by", "overseer"]).status).toBe(0);
+
+    const result = run(root, ["list"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/SUPERSEDED\s+dec-dashstg6/);
+    expect(result.stdout).not.toMatch(/REVIEWED\s+dec-dashstg6/);
+  });
+
+  test("list applies class and pending filters to the shared projected rows", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+
+    const wrongClass = run(root, ["list", "--class", "assumption", "--json"]);
+    const pending = run(root, ["list", "--class", "decision", "--unreviewed", "--json"]);
+    expect(wrongClass.status).toBe(0);
+    expect((JSON.parse(wrongClass.stdout) as { records: unknown[] }).records).toEqual([]);
+    expect((JSON.parse(pending.stdout) as { records: Array<{ record: { id: string } }> }).records.map((item) => item.record.id)).toEqual([
+      "dec-dashstg6",
+    ]);
+
+    expect(run(root, ["reviewed", "dec-dashstg6", "--by", "greg"]).status).toBe(0);
+    const afterReview = run(root, ["list", "--unreviewed", "--json"]);
+    expect((JSON.parse(afterReview.stdout) as { records: unknown[] }).records).toEqual([]);
   });
 });

@@ -34,6 +34,16 @@ import { fileURLToPath } from "node:url";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  executionRefFor,
+  isPendingReview,
+  projectDecisionCheckpoint,
+  projectDecisions,
+  type DecisionCheckpointInput,
+  type DecisionsProjection,
+  type ProjectedDecision,
+  type ProjectedSessionState,
+} from "../tools/fleet/decisions-view.js";
+import {
   DECISIONS_FILE,
   ID_RULE,
   appendEvents,
@@ -53,7 +63,7 @@ import {
   type DecisionView,
   type SessionRef,
 } from "../tools/overseer/decisions.js";
-import { readCheckpoint, storeRoot, type RegisterEntry } from "../tools/overseer/store.js";
+import { readCheckpoint, storeRoot } from "../tools/overseer/store.js";
 
 const TEMPLATE = `// Copy this to a file, replace the examples, then run:
 // npx tsx scripts/overseer-decisions.ts add --file <that-file> --by overseer
@@ -71,6 +81,10 @@ const TEMPLATE = `// Copy this to a file, replace the examples, then run:
   "supersedes": null
 }`;
 
+const HISTORICAL_SEED_ID = "dec-dashstg6";
+const HISTORICAL_SEED_COMMAND_ID = "seed-2026-09-09-0812-claude-agents-dashboard-stage-6";
+const HISTORICAL_SEED_DECIDED_AT = "2026-09-09T08:12:00Z";
+
 function actor(value: string): DecisionActor {
   if (value === "greg" || value === "overseer") return value;
   throw new InvalidArgumentError(`actor must be 'greg' or 'overseer', not '${value}'`);
@@ -81,9 +95,16 @@ function decisionId(value: string): string {
   throw new InvalidArgumentError(`'${value}' is not a decision id (they look like dec-a3k9mq2p)`);
 }
 
+function decisionClass(value: string): DecisionClass {
+  if (value === "assumption" || value === "decision" || value === "decline") return value;
+  throw new InvalidArgumentError(`class must be 'assumption', 'decision', or 'decline', not '${value}'`);
+}
+
 export type Parsed =
   | { command: "template" }
   | { command: "add"; file: string; by: DecisionActor; commandId: string | null }
+  | { command: "list"; class: DecisionClass | null; unreviewed: boolean; json: boolean }
+  | { command: "seed" }
   | { command: "show"; id: string }
   | { command: "export" }
   | { command: "reviewed"; id: string; by: DecisionActor; note: string | null }
@@ -105,6 +126,23 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
     .action((opts: { file: string; by: DecisionActor; commandId?: string }) =>
       sink({ command: "add", file: opts.file, by: opts.by, commandId: opts.commandId ?? null }),
     );
+
+  program
+    .command("list")
+    .description("list decisions in review order")
+    .option("--class <class>", "only assumption, decision, or decline", decisionClass)
+    .option("--unreviewed", "only decisions still pending Greg's review")
+    .option("--json", "print the shared projection as JSON")
+    .action((opts: { class?: DecisionClass; unreviewed?: boolean; json?: boolean }) =>
+      sink({
+        command: "list",
+        class: opts.class ?? null,
+        unreviewed: opts.unreviewed ?? false,
+        json: opts.json ?? false,
+      }),
+    );
+
+  program.command("seed").description("apply the one hand-authored historical decision").action(() => sink({ command: "seed" }));
 
   program
     .command("show")
@@ -259,63 +297,165 @@ function parseAddInput(text: string): AddInput {
   };
 }
 
-type RegisterLookup =
-  | { readonly kind: "available"; readonly entries: readonly RegisterEntry[] }
-  | { readonly kind: "unavailable"; readonly why: string };
-
-function registerEntries(env: NodeJS.ProcessEnv, nowMs: number = Date.now()): RegisterLookup {
+function checkpointInput(env: NodeJS.ProcessEnv): DecisionCheckpointInput {
   try {
     const read = readCheckpoint(storeRoot(env));
-    if (read.kind === "absent") return { kind: "unavailable", why: "the Overseer checkpoint is absent" };
+    if (read.kind === "absent") return { kind: "absent" };
     if (read.kind === "unusable") {
-      return { kind: "unavailable", why: `the Overseer checkpoint is unreadable (${read.why}: ${read.detail})` };
+      return { kind: "unreadable", why: `${read.why}: ${read.detail}` };
     }
-    const checkpoint = read.checkpoint;
-    if (checkpoint.lastGoodSnapshotAt === null) {
-      return { kind: "unavailable", why: "the Overseer checkpoint has no accepted snapshot" };
-    }
-    if (checkpoint.snapshotStaleAfterMs === null) {
-      return { kind: "unavailable", why: "the Overseer checkpoint has no snapshot staleness bound" };
-    }
-    const ageMs = nowMs - Date.parse(checkpoint.lastGoodSnapshotAt);
-    if (ageMs > checkpoint.snapshotStaleAfterMs) {
-      return {
-        kind: "unavailable",
-        why:
-          `the Overseer checkpoint is stale (${Math.round(ageMs / 1000)}s old; ` +
-          `its bound is ${Math.round(checkpoint.snapshotStaleAfterMs / 1000)}s)`,
-      };
-    }
-    return { kind: "available", entries: checkpoint.register };
+    return { kind: "json", json: read.checkpoint };
   } catch (cause) {
     // A bad store setting or unreadable checkpoint is an unavailable identity
     // source, not permission to invent one and not a reason to lose the record.
-    return { kind: "unavailable", why: `the Overseer checkpoint could not be read: ${String(cause)}` };
+    return { kind: "unreadable", why: `the checkpoint could not be read: ${String(cause)}` };
   }
 }
 
 function resolveSessions(names: readonly string[], env: NodeJS.ProcessEnv): SessionRef[] {
-  const lookup = registerEntries(env);
-  if (lookup.kind === "unavailable") {
-    return names.map((name) => ({ name, execution: { kind: "unavailable", why: lookup.why } }));
-  }
+  const checkpoint = projectDecisionCheckpoint(checkpointInput(env));
+  const freshness = checkpoint.kind === "current" ? { kind: "current" } as const : checkpoint;
+  const register = checkpoint.kind === "current" ? checkpoint.register : [];
   return names.map((name) => {
-    const matches = lookup.entries.filter((entry) => entry.name === name);
-    if (matches.length > 1) {
-      const why = `session ${name} is ambiguous in the register (${matches.length} entries)`;
-      console.log(`${why}; stored execution unavailable`);
-      return { name, execution: { kind: "unavailable", why } };
+    const execution = executionRefFor(name, register, freshness);
+    if (execution.kind === "unavailable" && /ambiguous/i.test(execution.why)) {
+      console.log(`${execution.why}; stored execution unavailable`);
     }
-    const match = matches[0];
-    if (match === undefined) return { name, execution: { kind: "not-found" } };
-    if (match.verifiedExecution === null) {
-      return {
-        name,
-        execution: { kind: "unavailable", why: `the register has no verified execution for session ${name}` },
-      };
-    }
-    return { name, execution: { kind: "verified", ...match.verifiedExecution } };
+    return { name, execution };
   });
+}
+
+function historicalSeedFields() {
+  return {
+    kind: "decided" as const,
+    id: HISTORICAL_SEED_ID,
+    decidedAt: HISTORICAL_SEED_DECIDED_AT,
+    class: "decision" as const,
+    question:
+      "`claude-agents-dashboard` asked whether to continue its mechanical Stage 6 (catalogue → `wire.ts`) with Stage 5 blocked on the SessionDetail re-layout.",
+    options: [
+      {
+        name: "Stop now and leave Stage 6 to a later session",
+        tradeoffs: "Costs a fresh session's context to pick it up later.",
+      },
+      {
+        name: "Continue as it was",
+        tradeoffs: "A Claude session writing mechanical code against a 76% weekly window.",
+      },
+      {
+        name: "Continue with Codex implementing",
+        tradeoffs: "Bills the ChatGPT window at 24%.",
+      },
+    ],
+    chose: {
+      option: "Continue with Codex implementing",
+      note: "Terra, mechanical; then debrief and stop.",
+    },
+    why:
+      "The work is specified and mechanical, the session holds the context, and Greg's standing answer this morning is to delegate implementation to GPT.",
+    advisers: ["nobody"] as const,
+    bearsOn: {
+      sessions: [
+        {
+          name: "claude-agents-dashboard",
+          execution: { kind: "unavailable" as const, why: "seeded from the hand-kept log" },
+        },
+      ],
+      plan: null,
+    },
+    supersedes: null,
+  };
+}
+
+function sameHistoricalSeed(event: DecisionEvent): boolean {
+  if (event.kind !== "decided") return false;
+  const expected = historicalSeedFields();
+  return JSON.stringify({ ...event, schema: undefined, eventId: undefined, commandId: undefined, at: undefined, by: undefined }) ===
+    JSON.stringify({ ...expected, schema: undefined, eventId: undefined, commandId: undefined, at: undefined, by: undefined });
+}
+
+function existingSeed(root: string): Extract<DecisionEvent, { kind: "decided" }> | null {
+  let text: string;
+  try {
+    text = readFileSync(path.join(root, DECISIONS_FILE), "utf8");
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw cause;
+  }
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const event = parseEvent(line);
+    if (event?.commandId !== HISTORICAL_SEED_COMMAND_ID) continue;
+    if (!sameHistoricalSeed(event) || event.kind !== "decided" || event.by !== "overseer") {
+      throw new Error(`command id ${HISTORICAL_SEED_COMMAND_ID} is already used by a different event`);
+    }
+    return event;
+  }
+  return null;
+}
+
+function seedEvent(root: string): Extract<DecisionEvent, { kind: "decided" }> {
+  const existing = existingSeed(root);
+  if (existing !== null) {
+    return { ...existing, eventId: envelope("overseer").eventId };
+  }
+  return {
+    ...envelope("overseer", { commandId: HISTORICAL_SEED_COMMAND_ID }),
+    ...historicalSeedFields(),
+  };
+}
+
+function formatAge(ageMs: number): string {
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function sessionStateText(state: ProjectedSessionState): string {
+  if (state.kind !== "unavailable") return state.kind;
+  if (state.why.kind === "checkpoint-unavailable") return "unavailable (checkpoint unavailable)";
+  return `unavailable (${state.why.detail})`;
+}
+
+function printDecision(item: ProjectedDecision): void {
+  const { record } = item;
+  const reviewState = record.reviewed ? "REVIEWED" : record.supersededBy === null ? "UNREVIEWED" : "SUPERSEDED";
+  console.log(`${reviewState}  ${record.id}  ${record.class}  ${formatAge(item.ageMs)} old`);
+  console.log(record.question);
+  for (const option of record.options) console.log(`  ${option.name}: ${option.tradeoffs}`);
+  console.log(`Chose: ${record.chose.option}${record.chose.note === null ? "" : ` — ${record.chose.note}`}`);
+  console.log(`Why: ${record.why}`);
+  console.log(`Advised by: ${record.advisers.join(", ")}`);
+  if (record.bearsOn.plan !== null) console.log(`Plan: ${record.bearsOn.plan}`);
+  if (item.sessions.length > 0) {
+    console.log(`Sessions: ${item.sessions.map((session) => `${session.name} — ${sessionStateText(session.state)}`).join("; ")}`);
+  }
+  if (record.supersededBy !== null) console.log(`Superseded by: ${record.supersededBy}`);
+  if (record.reversed) console.log(`Reversed${record.reversedWhy === null ? "" : `: ${record.reversedWhy}`}`);
+}
+
+function printList(projection: DecisionsProjection, records: readonly ProjectedDecision[]): void {
+  console.log(`Composed at ${projection.composedAt}`);
+  if (projection.checkpoint.kind === "unavailable") {
+    console.log(`Session register unavailable: ${projection.checkpoint.why}`);
+  }
+  if (projection.aggregates.kind === "unavailable") {
+    console.log(`Not-yet-reviewed count is unavailable: ${projection.aggregates.why}`);
+    console.log(`Trailing seven days: counts are unavailable for the same reason.`);
+  } else {
+    console.log(`Not yet reviewed: ${projection.aggregates.notYetReviewed}`);
+    const recent = projection.aggregates.trailingSevenDays;
+    console.log(
+      `Trailing seven days: ${recent.decisions} decisions, ${recent.reviews} reviews, ${recent.reversals} reversals`,
+    );
+  }
+  if (records.length === 0) {
+    console.log("No matching decisions.");
+    return;
+  }
+  for (const item of records) printDecision(item);
 }
 
 function requireView(root: string): DecisionView {
@@ -366,6 +506,22 @@ export function runParsed(
       };
       return appendOne(event, root);
     }
+    case "list": {
+      const projection = projectDecisions(requireView(root), checkpointInput(env));
+      const records = projection.records.filter(
+        (item) =>
+          (parsed.class === null || item.record.class === parsed.class) &&
+          (!parsed.unreviewed || isPendingReview(item.record)),
+      );
+      if (parsed.json) {
+        console.log(JSON.stringify({ ...projection, records }, null, 2));
+      } else {
+        printList(projection, records);
+      }
+      return 0;
+    }
+    case "seed":
+      return appendOne(seedEvent(root), root);
     case "show": {
       const record = requireView(root).records.find((candidate) => candidate.id === parsed.id);
       if (record === undefined) {
