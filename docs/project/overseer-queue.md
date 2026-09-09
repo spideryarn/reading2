@@ -29,6 +29,22 @@ still asks Greg about anything that outlives the branch.
 > can promote it — which is what the two sections of this file have meant all along, now enforced
 > rather than remembered.
 
+> **Every item now carries a `priority`, 0–1, and the queue is ordered by it** —
+> [260909d](../plans/260909d-a-priority-on-every-queued-idea-and-the-queue-ordered-by-it.md), from
+> Greg on 2026-09-09: *"important stuff can jump to the top … focus on tooling for Overseer first,
+> then web dashboard, and Spideryarn product stuff at the bottom."* An item nobody has ranked sorts
+> **below** every ranked one, because *"nobody has said"* is not the same claim as `0.5` or `0`.
+>
+> **Priority is ordering, not authority.** It cannot make an item dispatchable, answer a question
+> only Greg can answer, or carry his approval onto changed words — `isDispatchable` never reads it.
+> What it does change is the constraint governing what the Overseer takes next, which is a
+> reordering authority nobody has explicitly granted: every priority carries who set it and when, so
+> the choice is auditable while that question is open.
+>
+> Greg's banding is applied with `overseer-queue set-priorities --from <file>`, which prints a plan
+> and writes nothing until `--apply`, and then only against the queue version *and* the file bytes
+> that were reviewed.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is
