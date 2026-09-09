@@ -340,6 +340,14 @@ output still parses.
 One section per Claude account, then Codex, **each laid out the same**: percentage used, when it
 resets, the graph. The chart layer needs no change — it already plots per account and window.
 
+**A pool account's reading is labelled for what it is.** Measurement 4 means the honest sentence is
+*"as of the last session that ran on it"*, with the age — and that is what the tab says, rather than
+a number smoothed into looking current. The Overseer's instruction, 2026-09-09, on being shown
+measurement 3: *"if the honest per-account reading is 'as of the last session that ran on it', say so
+on the tab rather than smoothing it."* It is also rule 1 of the eight in
+[usage-history.md](../project/usage-history.md) — *absence is never a zero* — applied to a reading
+that is present but old.
+
 **The Add-account sub-mode shows commands; it does not run them.** Not a limitation to apologise
 for, three reasons:
 
@@ -360,10 +368,83 @@ Greg's separate low-priority tidy (qi-3sr3jht6: *X% used* only, parallel Claude/
 readings collapsed) is **folded in only where it falls out naturally** — the per-account section
 layout is the same work — and not widened into.
 
-**This stage is the one most likely to be handed on.** It is the largest, it is the least blocking
-(Greg can add accounts and the fleet can spread across them with Stages 1-3 alone), and it lives in
-`tools/fleet/web/`, which other agents move through. If the window is tight when Stages 1-3 land,
-this goes back to the queue as its own item rather than being half-built.
+**Superseded in part by [Stage 5](#stage-5--a-web-interface-that-drives-the-setup).** Greg asked for
+the sub-mode to *drive* the setup rather than print commands, so the read-only version above is now
+the fallback if the pty flow proves brittle — not the target. The per-account section layout is
+unchanged and still belongs here.
+
+### Stage 5 — a web interface that drives the setup
+
+Greg, 2026-09-09, relayed by the Overseer, after the checklist above was sent to him:
+
+> could we build a web interface to make that easier for me (to setup the new Claude
+> account-subscriptions)?
+
+So the Add-account sub-mode **drives the flow** rather than printing commands at him. It cannot
+remove the sign-in — he still opens a URL and pastes one code, twice per account — but it can remove
+the terminal, the paths, the `chmod`, and the chance of pasting a token into the wrong place.
+
+**Measured first, before any of it was designed** — the Overseer asked for this and it was the right
+call, because one of the two answers is a trap. Both run under a throwaway config dir on the box,
+2026-09-09, 2.1.266, in a pty via `script -q -c`; neither login was completed and the probe directory
+was deleted afterwards.
+
+| | `claude auth login --claudeai --email X` | `claude setup-token` |
+|---|---|---|
+| headless in a pty | **works** | **works** |
+| output shape | plain lines | **a full Ink TUI** — alternate screen, bracketed paste, mouse and kitty-keyboard modes |
+| the URL | printed whole, twice (an OSC-8 hyperlink and a plain one) | **visible text wrapped across five 80-column chunks** |
+| waits for input | yes — `Paste code here if prompted >`, blocking on stdin | same prompt, inside the TUI |
+| OAuth scopes | `org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload` | `user:inference` only |
+| `--email` | lands in the URL as `login_hint=` | no equivalent flag |
+
+**The trap, and it would have shipped.** `setup-token` wraps the *visible* URL across five lines, so
+naive line-scraping yields a **truncated OAuth URL** — a link that looks fine and fails on click, for
+a reason nobody would guess. The full URL survives intact in the **OSC-8 hyperlink target**
+(`ESC ] 8 ; id=… ; <url> BEL`), repeated whole on every chunk. So the extractor parses OSC-8 and
+falls back to reassembling the wrapped text, never the other way round — and a test feeds it the
+captured five-chunk transcript from this measurement, so the wrapping case is red before it is green.
+
+**Because `setup-token` is a TUI, a real pty is required** (`node-pty`, or `script` as the boring
+fallback), and "capture the token from the output" means reading a rendered screen rather than a
+line. That is the fragile part, and it is why this is Stage 5: **the registry, the launchers and
+per-account usage all land first**, and the checklist keeps working, so if the pty flow proves too
+brittle we stop here having lost nothing.
+
+**Each step is its own state**, with its own failure text and a kill button: seed dir → login (URL
+shown, code taken from a form) → assert `auth status --json` names the expected email → `setup-token`
+→ capture the token → write the 0600 file → register. A stuck step is killable; nothing advances on
+"could not tell".
+
+**The token is never shown and never logged.** It goes from the pty buffer to a 0600 file. The page
+gets "written", not the value; the transcript the page displays is filtered, and the test asserts the
+token does not appear in what is rendered, stored or logged.
+
+#### Who may press it — this needs Greg's decision, and it is the reason this stage is last
+
+**This route mints a credential.** The dashboard has no login and sits on loopback plus the tailnet,
+so as it stands *anyone who can reach the port* could start an OAuth flow and add an account. That is
+a materially bigger boundary than anything else on the page, which reads state and at most steers a
+session.
+
+The existing envelope for enacted actions is `FLEET_ACT_ENABLED=1` plus an explicit `confirm: true`
+(`tools/fleet/routes-actions.ts:1230,1313`), off by default, and this stage adopts it. **The honest
+statement of the boundary:** that gate makes the route *deliberate* — nobody trips it by accident,
+and it is off unless the server was started for it — but it is **not authentication**. It does not
+distinguish Greg from anyone else on the tailnet. The identity question 260909b left open is the same
+one, and it is not this plan's to close.
+
+**Options for Greg, plainly:**
+
+- **(a) Ship it behind `FLEET_ACT_ENABLED`, as above.** Cheapest, matches every other write on the
+  page. The boundary is "whoever is on the tailnet, when the flag is on".
+- **(b) The same, plus a one-time secret** Greg pastes into the page, checked per request. Small,
+  boring, and makes the boundary "whoever Greg gave the string to". Perhaps twenty lines.
+- **(c) Leave it printing commands** (the original Stage 4 design) and skip the pty entirely.
+
+**Recommendation: (b).** The gap between "deliberate" and "authenticated" is the whole difference for
+a route that mints credentials, and (b) closes it for about the cost of the form it already needs.
+This is a *needs Greg* item — recorded here rather than decided.
 
 ## File set
 
@@ -373,7 +454,12 @@ Mine: `tools/overseer/accounts.ts` (new), `tools/overseer/usage.ts`, `scripts/cl
 [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md)),
 `docs/project/usage-history.md` (the one stale sentence), this plan, and their tests.
 
-Stage 4 adds `tools/fleet/web/src/UsagePanel.tsx` and the six mode registers.
+Stage 4 adds `tools/fleet/web/src/UsagePanel.tsx` and the six mode registers. Stage 5 adds a route
+under `tools/fleet/` and the pty driver.
+
+**Stages 4 and 5 are the ones to hand on if the window runs short.** Stages 1-3 are what make the
+fleet able to spread across accounts at all; 4 and 5 make it pleasant. Greg can add accounts with the
+checklist today, so neither is blocking.
 
 **Not mine:** `tools/overseer/store.ts`'s `RegisterEntry` (the Overseer's persisted table),
 `infra/`, anything Codex-account-specific, and the logging in itself.
