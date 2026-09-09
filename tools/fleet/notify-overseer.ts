@@ -22,16 +22,44 @@
  * with nothing relating the two, which is the twin that cost this project four
  * dropped fields in one night.
  *
- * ## Never the word "sent"
+ * ## It is QUEUED, not sent — and that is the whole delivery design
  *
- * **Nothing on this box can observe reception.** `sendMessage` types keystrokes
- * at a pane; whether the agent read them, whether the Enter landed, and whether
- * the text concatenated with something half-typed are all outside what we can
- * see. So the outcome vocabulary is the one that path already returns —
- * `none | partial | unknown` on failure — and success is **`submitted`**, which
- * claims exactly what happened. `partial` is the one to read twice: the text
- * landed and the Enter did not, so it is sitting unsent in the Overseer's input
- * box and will be prepended to whatever it types next.
+ * This module hands the line to the shared steering queue and stops. It does not
+ * type at a pane, and it could not: since `send-coordinator.ts`, `sendMessage`
+ * is private to that file and every producer goes through the coordinator, whose
+ * point is that the quarantine check and the transport call are adjacent with
+ * nothing between them. A send from here, in a child process to keep it off the
+ * event loop, would have carried its **own** quarantine book — so the hold check
+ * would read empty and this notice could type a second sentence into a session
+ * already held behind half of one. Duplicate keystrokes are the one thing that
+ * neighbourhood forbids.
+ *
+ * Queueing dissolves that rather than mitigating it: `enqueueSharedMessage`
+ * makes no tmux calls, so nothing blocks, and `drain.ts` delivers on the refresh
+ * loop through the coordinator with the hold check in-process where it belongs.
+ * It is also what Greg named — *"route it through the existing steer machinery
+ * (`queue.ts`/`drain.ts` deliver keystrokes to a pane) rather than a new
+ * sender"*.
+ *
+ * **So the success arm is `queued`, and it claims exactly that much.** Nothing
+ * here can say the Overseer was told; the queue's own surface says what became
+ * of the keystrokes. A launch record that went stale claiming a delivery would
+ * be worse than one that says plainly where it put the thing.
+ *
+ * ## THE ROLE CAN MOVE BETWEEN QUEUEING AND DELIVERY, AND WE ACCEPT IT
+ *
+ * Who holds `overseer` is resolved here, at enqueue; the drain delivers up to
+ * ~73 s later. If the role changes hands in between — the holder releasing it
+ * while staying in the same pane — the note reaches the **former** Overseer, and
+ * nothing in the delivery path would notice, because process identity is not
+ * current role ownership.
+ *
+ * That is accepted rather than solved, and the licence is the arm's own rule:
+ * this is a **report**, nobody is being asked for anything, so a misroute
+ * delivers a stale fact to a peer instead of an instruction to the wrong agent.
+ * **The moment anything sent under the `dashboard` speaker is an instruction,
+ * this reasoning collapses along with the prefix** — which is the same reason
+ * the arm splits rather than softens. Overseer's decision, 2026-09-09.
  *
  * ## Three things that are not the same as "no holder"
  *
@@ -49,9 +77,8 @@
  *    open, the input box is not empty, the pane moved. Carries the refusal code
  *    and the `Delivery` word.
  */
-import { renderMessage } from "./actions.js";
 import type { OverseerClaim } from "./overseer-claim.js";
-import type { Delivery, Speaker } from "./wire.js";
+import type { NotifyOutcomeView, Speaker } from "./wire.js";
 
 /**
  * What became of one notification.
@@ -60,19 +87,14 @@ import type { Delivery, Speaker } from "./wire.js";
  * word would be a state without a cause — the shape this codebase keeps having
  * to repair.
  */
-export type NotifyOutcome =
-  /** The keystrokes went to the pane. NOT "delivered", NOT "sent" — see the header. */
-  | { kind: "submitted"; to: string; paneId: string }
-  /** The snapshot was readable and nobody holds the `overseer` role. */
-  | { kind: "no-holder" }
-  /** More than one session claims it. Reported, never resolved here. */
-  | { kind: "contested"; names: readonly string[] }
-  /** We could not establish who holds it, or could not address them. */
-  | { kind: "cannot-tell"; why: string }
-  /** We found the holder and the send would not go. */
-  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
-  /** The send threw or the deadline expired after an effect may have begun. */
-  | { kind: "unknown"; to: string; why: string };
+/**
+ * What became of one notification.
+ *
+ * Declared once, in `wire.ts`, because the launch record carries it to the
+ * browser — a second declaration here is the twin that cost this area four
+ * dropped fields in one night.
+ */
+export type NotifyOutcome = NotifyOutcomeView;
 
 /** The speaker this module sends as, and the only one it may use. */
 export const NOTIFY_SPEAKER: Speaker = "dashboard";
@@ -176,23 +198,30 @@ export type NotifyDeps = {
   claim: OverseerClaim;
   /** The rows of that same snapshot, so the holder's address comes from one reading. */
   rows: readonly AddressableRow[];
-  send: (target: {
-    paneId: string;
-    sessionId: string;
-    claudeSessionId: string;
-    panePid: number | null;
-  }, text: string, declaredStatus: unknown) => Promise<
-    { ok: true } | { ok: false; code: string; why: string; delivery: Delivery }
-  >;
+  /**
+   * Hand one line to the shared steering queue.
+   *
+   * **The text is RAW and must stay raw.** `enqueueMessage` calls
+   * `renderMessage` itself — to apply the slash rule and to length-check *with*
+   * the prefix, which counts towards the limit — and `drain.ts` renders again at
+   * delivery. Handing it an already-prefixed string prefixes it twice, which
+   * reads as clumsy rather than as a bug and fails nothing, so a test asserts
+   * the raw form rather than trusting this comment.
+   */
+  enqueue: (
+    target: { sessionId: string; claudeSessionId: string },
+    text: string,
+    speaker: Speaker,
+  ) => { ok: true; position: number } | { ok: false; rule: string; why: string };
 };
 
 /**
- * Resolve the holder, compose the line, send it, and say what became of it.
+ * Resolve the holder, hand the line to the queue, and say what became of it.
  *
- * **The claim is re-read by the caller immediately before this runs** (F8): a
- * holder can release the role between the snapshot and delivery while staying in
- * the same pane, and every one of `sendMessage`'s guards would still pass —
- * process identity is not current role ownership.
+ * **Synchronous work only.** Nothing here touches a pane, a process or the
+ * network, so it cannot stall the dashboard — which is the whole reason this is
+ * an enqueue rather than a send. It stays `async` because the caller's seam is
+ * async and because a future binding may want to be.
  */
 export async function notifyOverseer(deps: NotifyDeps, line: string): Promise<NotifyOutcome> {
   const { claim } = deps;
@@ -211,50 +240,35 @@ export async function notifyOverseer(deps: NotifyDeps, line: string): Promise<No
     };
   }
 
-  /* Through the shared attribution machinery, never around it. A refusal here
-     is a real answer: `renderMessage` turns down a slash command from anyone
-     but Greg, and a notice that began with one would be a command we did not
-     mean to send. */
-  const rendered = renderMessage(line, NOTIFY_SPEAKER);
-  if (!rendered.ok) {
-    return { kind: "cannot-tell", why: `the notice could not be composed: ${rendered.why}` };
-  }
+  /* THE RAW LINE AND THE SPEAKER, NOT A RENDERED STRING. `enqueueMessage`
+     applies `renderMessage` itself — for the slash rule, and to length-check
+     WITH the prefix, which counts towards the limit — and `drain.ts` renders
+     again at delivery. Handing it something already prefixed prefixes it twice,
+     which reads as clumsy rather than as a bug and fails nothing, so the test
+     asserts the raw form rather than trusting this comment.
 
-  try {
-    const result = await deps.send(
-      {
-        paneId: row.paneId,
-        sessionId: row.id,
-        claudeSessionId: row.claudeSessionId,
-        panePid: row.panePid,
-      },
-      rendered.text,
-      row.status,
-    );
-    if (result.ok) return { kind: "submitted", to: row.name, paneId: row.paneId };
-    return { kind: "refused", to: row.name, code: result.code, why: result.why, delivery: result.delivery };
-  } catch (e) {
-    /* NOT `refused`. A throw after the send began cannot distinguish "nothing
-       happened" from "half of it did", and calling that a refusal would be the
-       one claim we are never allowed to make. */
-    return { kind: "unknown", to: row.name, why: e instanceof Error ? e.message : String(e) };
-  }
+     The attribution is not lost by staying out of it: the speaker travels, and
+     the queue is where it is applied. */
+  const result = deps.enqueue({ sessionId: row.id, claudeSessionId: row.claudeSessionId }, line, NOTIFY_SPEAKER);
+  if (result.ok) return { kind: "queued", to: row.name, position: result.position };
+  /* `rule` travels rather than being flattened: a full queue is a fact about
+     THIS recipient and `bad-text` is a fact about the MESSAGE, and a record that
+     could not tell them apart could render neither honestly. */
+  return { kind: "not-queued", to: row.name, rule: result.rule, why: result.why };
 }
 
 /** One line for the launch record and the log. Never the message text. */
 export function describeNotify(outcome: NotifyOutcome): string {
   switch (outcome.kind) {
-    case "submitted":
-      return `submitted to ${outcome.to} at ${outcome.paneId} — nothing here can tell whether it was read`;
+    case "queued":
+      return `queued for ${outcome.to}, position ${outcome.position} — the queue says what becomes of it, not this record`;
+    case "not-queued":
+      return `the queue would not take it for ${outcome.to} (${outcome.rule}): ${outcome.why}`;
     case "no-holder":
-      return "not sent: nobody holds the overseer role";
+      return "nothing queued: nobody holds the overseer role";
     case "contested":
-      return `not sent: ${outcome.names.length} sessions claim the overseer role (${outcome.names.join(", ")})`;
+      return `nothing queued: ${outcome.names.length} sessions claim the overseer role (${outcome.names.join(", ")})`;
     case "cannot-tell":
-      return `not sent: ${outcome.why}`;
-    case "refused":
-      return `refused by ${outcome.to} (${outcome.code}): ${outcome.why} — keystrokes: ${outcome.delivery}`;
-    case "unknown":
-      return `it is not known whether anything reached ${outcome.to}: ${outcome.why}`;
+      return `nothing queued: ${outcome.why}`;
   }
 }

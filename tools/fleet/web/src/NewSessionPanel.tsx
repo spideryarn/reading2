@@ -127,6 +127,56 @@ function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | 
 }
 
 /**
+ * WHETHER THE OVERSEER WAS TOLD, AND WHAT "TOLD" HONESTLY MEANS HERE.
+ *
+ * Greg asked that starting a session from the web UI notify the Overseer. The
+ * dashboard does not type at a pane to do it — it hands one line to the shared
+ * steering queue, and the drain delivers it on a later refresh through the same
+ * coordinator every other producer uses. So the best case this can report is
+ * **queued**, and it says that rather than implying a delivery: what became of
+ * the keystrokes is the queue's story, and its own surface tells it.
+ *
+ * **Every arm is drawn, including the quiet ones.** Nobody holding the role is a
+ * real answer — it is what a box looks like after a reboot — and it is a
+ * different fact from not being able to tell who holds it. A card that showed
+ * only the happy case would leave a reader assuming the Overseer knows.
+ *
+ * `starting` and `failed` draw nothing: nothing has been attempted yet, and a
+ * launch that never started has nobody to tell.
+ */
+function NotifiedLine({ progress }: { progress: LaunchRecord["progress"] }): ReactNode {
+  if (progress.state !== "started") return null;
+  const n = progress.notification;
+
+  const said = ((): { text: string; tone: "soft" | "faint" | "unknown" } => {
+    switch (n.kind) {
+      case "pending":
+        return { text: "Telling the Overseer…", tone: "faint" };
+      case "queued":
+        return {
+          text: `Queued for ${n.to} — position ${n.position}. It goes out on a later refresh; this page cannot say whether it was read.`,
+          tone: "soft",
+        };
+      case "not-queued":
+        return { text: `Not queued for ${n.to} (${n.rule}): ${n.why}`, tone: "unknown" };
+      case "no-holder":
+        return { text: "Nobody holds the Overseer role, so nothing was queued.", tone: "unknown" };
+      case "contested":
+        return {
+          text: `${n.names.length} sessions claim the Overseer role (${n.names.join(", ")}), so nothing was queued.`,
+          tone: "unknown",
+        };
+      case "cannot-tell":
+        return { text: `Could not tell who to notify: ${n.why}`, tone: "unknown" };
+    }
+  })();
+
+  const colour =
+    said.tone === "unknown" ? "tw:text-unknown-ink" : said.tone === "faint" ? "tw:text-ink-faint" : "tw:text-ink-soft";
+  return <p className={cx("tw:mt-1 tw:text-[13px] tw:break-words", colour)}>{said.text}</p>;
+}
+
+/**
  * How to say "this went in through `-d`" without claiming it started.
  *
  * A `Record` over the closed `LaunchState` rather than a ternary, so that a
@@ -165,6 +215,8 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
       {record.note === null ? null : (
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-ink-soft">{record.note}</p>
       )}
+      <NotifiedLine progress={record.progress} />
+
       {/* **WHERE IT ACTUALLY STARTED, WHEN THAT IS NOT WHERE IT WAS ASKED TO.**
           The header above promises that "the record that comes back says which
           directory was used, which is the half that matters" — and until
