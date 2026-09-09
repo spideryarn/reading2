@@ -1,17 +1,22 @@
 /**
- * The periodic readiness runner's decisions, without git, tmux, a database or
- * /proc. Every input is a reading the impure loop can take; this file only asks
- * what those readings mean.
+ * The periodic readiness runner's decisions and unattended process boundaries.
+ * Decision tests stay pure; the Git-boundary tests use throwaway repositories
+ * because a fake cannot prove that inherited location overrides really win.
  */
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   decideAdmission,
   FIXED_RUN_PEAK_BYTES,
   markReadinessAdmissionRefusal,
   PER_WORKER_PEAK_BYTES,
+  READINESS_ADMISSION_TOKEN_ENV,
 } from "../vitest-admission.js";
 import {
   decideTick,
@@ -39,11 +44,60 @@ import {
 import {
   CHECK_TIMEOUT_MS,
   localDatabaseEnv,
+  readinessCheckEnv,
+  runCommand,
+  runnerWorktreeProblem,
   TERMINATION_GRACE_MS,
   requireHeldLoopLock,
   waitForReadinessChild,
   worktreeAddArgs,
 } from "../scripts/readiness-loop.js";
+import { checkChildEnv } from "../scripts/readiness-run.js";
+import {
+  GIT_LOCATION_ENV,
+  gitEnv,
+  makeRelationCache,
+  stampTree,
+} from "../tools/fleet/readiness-git.js";
+
+const scratchDirectories: string[] = [];
+
+function git(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync("git", [...args], { cwd, env, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr || `git ${args[0]} exited ${result.status}`);
+  return result.stdout.trim();
+}
+
+function makeRepo(name: string, branch: string, body: string): { root: string; sha: string } {
+  const root = mkdtempSync(path.join(tmpdir(), `readiness-${name}-`));
+  scratchDirectories.push(root);
+  git(root, ["init", "--quiet", "-b", branch]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  writeFileSync(path.join(root, "fixture.txt"), body);
+  git(root, ["add", "--", "fixture.txt"]);
+  git(root, ["commit", "--quiet", "-m", `${name} fixture`]);
+  return { root, sha: git(root, ["rev-parse", "HEAD"]) };
+}
+
+function withGitPoison<T>(elsewhere: string, action: () => T): T {
+  const beforeDir = process.env.GIT_DIR;
+  const beforeWorkTree = process.env.GIT_WORK_TREE;
+  process.env.GIT_DIR = path.join(elsewhere, ".git");
+  process.env.GIT_WORK_TREE = elsewhere;
+  try {
+    return action();
+  } finally {
+    if (beforeDir === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = beforeDir;
+    if (beforeWorkTree === undefined) delete process.env.GIT_WORK_TREE;
+    else process.env.GIT_WORK_TREE = beforeWorkTree;
+  }
+}
+
+afterEach(() => {
+  for (const directory of scratchDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
 
 const NOW_MS = Date.parse("2026-09-09T18:00:00.000Z");
 const SHA_A = "3333333333333333333333333333333333333333";
@@ -315,6 +369,125 @@ describe("runner preparation follows the checked-out state", () => {
 });
 
 describe("the unattended process boundary", () => {
+  it("stamps its requested repository when inherited git variables point elsewhere", () => {
+    const home = makeRepo("home", "home-branch", "home contents\n");
+    const elsewhere = makeRepo("elsewhere", "elsewhere-branch", "different contents\n");
+    expect(home.sha).not.toBe(elsewhere.sha);
+
+    withGitPoison(elsewhere.root, () => {
+      const poisoned = git(home.root, ["-C", home.root, "rev-parse", "HEAD"]);
+      expect(poisoned).toBe(elsewhere.sha);
+
+      expect(stampTree(home.root)).toEqual({
+        kind: "known",
+        sha: home.sha,
+        branch: "home-branch",
+        dirty: false,
+      });
+    });
+  });
+
+  it("runs commands in its requested repository despite inherited git variables", () => {
+    const home = makeRepo("command-home", "command-home-branch", "command home\n");
+    const elsewhere = makeRepo("command-elsewhere", "command-elsewhere-branch", "command elsewhere\n");
+
+    withGitPoison(elsewhere.root, () => {
+      const result = runCommand(home.root, "git", ["rev-parse", "HEAD"]);
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(home.sha);
+    });
+  });
+
+  it("resolves ancestry in its requested repository despite inherited git variables", () => {
+    const home = makeRepo("relation-home", "relation-home-branch", "relation one\n");
+    const firstSha = home.sha;
+    writeFileSync(path.join(home.root, "fixture.txt"), "relation two\n");
+    git(home.root, ["add", "--", "fixture.txt"]);
+    git(home.root, ["commit", "--quiet", "-m", "second relation fixture"]);
+    const secondSha = git(home.root, ["rev-parse", "HEAD"]);
+    const elsewhere = makeRepo("relation-elsewhere", "relation-elsewhere-branch", "unrelated\n");
+
+    withGitPoison(elsewhere.root, () => {
+      expect(makeRelationCache(home.root).relate(firstSha, secondSha)).toEqual({
+        kind: "behind-dev",
+        behind: 1,
+      });
+    });
+  });
+
+  it("builds one git environment that removes every location override", () => {
+    const source: NodeJS.ProcessEnv = { KEEP_ME: "yes" };
+    for (const name of GIT_LOCATION_ENV) source[name] = `poison-${name}`;
+
+    const env = gitEnv(source);
+
+    for (const name of GIT_LOCATION_ENV) expect(env).not.toHaveProperty(name);
+    expect(env).toMatchObject({
+      KEEP_ME: "yes",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_OPTIONAL_LOCKS: "0",
+    });
+    expect(source).toHaveProperty("GIT_DIR", "poison-GIT_DIR");
+  });
+
+  /* The two spawns that launch the check itself, asked for their real
+     environments rather than pattern-matched in the source. Both build it
+     through a named function that the spawn call then uses, so what is asserted
+     here is what production hands the child. */
+  it("scrubs the environment the check itself is launched with", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-check-env-"));
+    scratchDirectories.push(runner);
+    writeFileSync(
+      path.join(runner, ".env.local"),
+      "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54362/postgres\n",
+    );
+    const elsewhere = makeRepo("check-env-elsewhere", "check-env-branch", "check env\n");
+
+    withGitPoison(elsewhere.root, () => {
+      for (const name of GIT_LOCATION_ENV) {
+        expect(readinessCheckEnv(runner)).not.toHaveProperty(name);
+        expect(checkChildEnv("0123456789abcdef0123456789abcdef")).not.toHaveProperty(name);
+      }
+      /* Both must still carry what they exist to carry. */
+      expect(readinessCheckEnv(runner).DATABASE_URL).toBe(
+        "postgres://postgres:postgres@127.0.0.1:54362/postgres",
+      );
+      expect(checkChildEnv("0123456789abcdef0123456789abcdef")[READINESS_ADMISSION_TOKEN_ENV]).toBe(
+        "0123456789abcdef0123456789abcdef",
+      );
+      /* The premise: process.env really is poisoned while all that is true. */
+      expect(process.env.GIT_DIR).toBe(path.join(elsewhere.root, ".git"));
+    });
+  });
+
+  it("refuses a core.worktree redirect before tick can fetch or merge", () => {
+    const home = makeRepo("redirect-home", "redirect-home-branch", "redirect home\n");
+    const elsewhere = makeRepo("redirect-elsewhere", "redirect-elsewhere-branch", "redirect elsewhere\n");
+    git(home.root, ["config", "core.worktree", elsewhere.root]);
+    expect(git(home.root, ["-C", home.root, "rev-parse", "--path-format=absolute", "--show-toplevel"]))
+      .toBe(elsewhere.root);
+
+    const problem = runnerWorktreeProblem(home.root);
+    expect(problem).toContain("Git reported top-level");
+    expect(problem).toContain(home.root);
+    expect(problem).toContain(elsewhere.root);
+
+    /* A guard nothing calls is not a guard, and `tick` spawns too much to drive
+       from here. So this reads the source: the call has to come before the two
+       commands it exists to hold back. It will break on an innocent reshuffle of
+       those lines, which is the price of the only check available; the message
+       says what to look at when it does. */
+    const source = readFileSync(new URL("../scripts/readiness-loop.ts", import.meta.url), "utf8");
+    const guard = source.indexOf("runnerWorktreeProblem(runner)");
+    const fetches = source.indexOf('runCommand(runner, "git", ["fetch"');
+    const merges = source.indexOf('runCommand(runner, "git", ["merge"');
+    expect(
+      guard !== -1 && fetches > guard && merges > guard,
+      "tick() must call runnerWorktreeProblem(runner) before it fetches or fast-forwards — " +
+        `found guard at ${guard}, fetch at ${fetches}, merge at ${merges} in scripts/readiness-loop.ts`,
+    ).toBe(true);
+  });
+
   it("never resets the dedicated branch while recreating its worktree", () => {
     expect(worktreeAddArgs("/repo/runner", false)).toEqual([
       "worktree", "add", "-b", "readiness-checks", "/repo/runner", "origin/dev",

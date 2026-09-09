@@ -20,6 +20,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   unlinkSync,
 } from "node:fs";
@@ -41,7 +42,14 @@ import {
   type PreparationNeeds,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
-import { primaryCheckout, snapshotDev, stampTree, type DevSnapshot } from "../tools/fleet/readiness-git.js";
+import {
+  GIT_TIMEOUT_MS,
+  gitEnv,
+  primaryCheckout,
+  snapshotDev,
+  stampTree,
+  type DevSnapshot,
+} from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
 import { collectHealth } from "../tools/fleet/health.js";
@@ -163,7 +171,26 @@ function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
   return localDatabaseEnv(process.env, readFileSync(path.join(runner, ".env.local"), "utf8"));
 }
 
-function run(
+/**
+ * The environment the expensive check itself is launched with.
+ *
+ * **A named function rather than an expression inside the `spawn` call**, because
+ * this is the caller that was missed. Every other subprocess here goes through
+ * {@link runCommand}, which scrubs; this one built its own environment and so
+ * handed git's inherited location overrides straight to `npm run check`. GPT
+ * Sol's F1, 2026-09-09: `scripts/conflict-markers.ts` takes its tracked-file
+ * inventory from git, so a poisoned check reads its file list out of a
+ * *different* checkout, misses the file with the conflict markers in it, and
+ * passes — and that pass is then recorded as a fact about this commit.
+ *
+ * Naming it is the point. A scrub spelled out at each call site is a scrub
+ * somebody adds a fourth call site without.
+ */
+export function readinessCheckEnv(runner: string): NodeJS.ProcessEnv {
+  return gitEnv(runnerLocalDatabaseEnv(runner));
+}
+
+export function runCommand(
   cwd: string,
   command: string,
   args: readonly string[],
@@ -175,7 +202,7 @@ function run(
     encoding: "utf8",
     timeout,
     maxBuffer: 32 * 1024 * 1024,
-    env: { ...sourceEnv, GIT_TERMINAL_PROMPT: "0" },
+    env: gitEnv(sourceEnv),
     stdio: ["ignore", "pipe", "pipe"],
   });
   return {
@@ -203,6 +230,45 @@ function usefulOutput(result: CommandResult): string {
   return `exit ${result.status ?? "unknown"}`;
 }
 
+/**
+ * A clean environment cannot overrule repository-local `core.worktree`, which
+ * can send a merge into another directory despite the requested `cwd`. This is
+ * deliberately the narrower filesystem guard: it does not validate a linked
+ * worktree's `.git` `gitdir:` pointer. Redirected metadata with the correct
+ * work tree can move a branch ref, but cannot write another checkout's files,
+ * and nothing in this runner authors that pointer by hand.
+ */
+export function runnerWorktreeProblem(runner: string): string | null {
+  const requestedText = path.resolve(runner);
+  let requested: string;
+  try {
+    requested = realpathSync(requestedText);
+  } catch (error) {
+    return `runner path ${requestedText}; Git top-level unavailable because the runner path could not be canonicalised: ${(error as Error).message}`;
+  }
+
+  const result = runCommand(
+    runner,
+    "git",
+    ["rev-parse", "--path-format=absolute", "--show-toplevel"],
+    GIT_TIMEOUT_MS,
+  );
+  if (!commandSucceeded(result)) {
+    return `runner path ${requested}; Git top-level unavailable: ${usefulOutput(result)}`;
+  }
+
+  const reportedText = result.stdout.trim();
+  let reported: string;
+  try {
+    reported = realpathSync(reportedText);
+  } catch (error) {
+    return `runner path ${requested}; Git reported top-level ${reportedText || "<empty>"}, which could not be canonicalised: ${(error as Error).message}`;
+  }
+  return requested === reported
+    ? null
+    : `runner path ${requested}; Git reported top-level ${reported}. Refusing to fetch or fast-forward a different work tree`;
+}
+
 function requireCommand(
   cwd: string,
   command: string,
@@ -210,7 +276,7 @@ function requireCommand(
   label: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
 ): CommandResult {
-  const result = run(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv);
+  const result = runCommand(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv);
   if (!commandSucceeded(result)) throw new Error(`${label} failed: ${usefulOutput(result)}`);
   return result;
 }
@@ -234,7 +300,7 @@ function setupHasEnv(output: string): boolean {
 }
 
 function runSetup(runner: string): CommandResult {
-  return run(runner, "npx", ["tsx", "scripts/worktree-setup.ts"]);
+  return runCommand(runner, "npx", ["tsx", "scripts/worktree-setup.ts"]);
 }
 
 export function worktreeAddArgs(runner: string, branchExists: boolean): string[] {
@@ -244,7 +310,7 @@ export function worktreeAddArgs(runner: string, branchExists: boolean): string[]
 }
 
 function runnerBranchExists(primary: string): boolean {
-  const result = run(primary, "git", ["show-ref", "--verify", "--quiet", `refs/heads/${RUNNER_BRANCH}`]);
+  const result = runCommand(primary, "git", ["show-ref", "--verify", "--quiet", `refs/heads/${RUNNER_BRANCH}`]);
   if (result.error !== null || result.signal !== null || (result.status !== 0 && result.status !== 1)) {
     throw new Error(`checking for the runner branch failed: ${usefulOutput(result)}`);
   }
@@ -336,7 +402,7 @@ function changedPaths(runner: string, before: string, after: string): Set<string
 function ensureFleetClient(runner: string, rebuild: boolean): void {
   const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
   if (!rebuild && existsSync(entry)) return;
-  const built = run(runner, "npm", ["run", "build:fleet"]);
+  const built = runCommand(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
     throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}`);
   }
@@ -397,7 +463,7 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   try {
     const child = spawn("npx", ["tsx", "scripts/readiness-run.ts", "check"], {
       cwd: runner,
-      env: runnerLocalDatabaseEnv(runner),
+      env: readinessCheckEnv(runner),
       stdio: ["ignore", fd, fd],
       detached: process.platform !== "win32",
     });
@@ -446,15 +512,17 @@ async function tick(
   assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
+  let fastForwardProblem = runnerWorktreeProblem(runner);
   const before = stampTree(runner);
 
-  const fetch = run(runner, "git", ["fetch", "origin", "dev"]);
-  let fastForwardProblem: string | null = null;
-  if (!commandSucceeded(fetch)) {
-    fastForwardProblem = `git fetch origin dev failed: ${usefulOutput(fetch)}`;
-  } else {
-    const merge = run(runner, "git", ["merge", "--ff-only", "origin/dev"]);
-    if (!commandSucceeded(merge)) fastForwardProblem = `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
+  if (fastForwardProblem === null) {
+    const fetch = runCommand(runner, "git", ["fetch", "origin", "dev"]);
+    if (!commandSucceeded(fetch)) {
+      fastForwardProblem = `git fetch origin dev failed: ${usefulOutput(fetch)}`;
+    } else {
+      const merge = runCommand(runner, "git", ["merge", "--ff-only", "origin/dev"]);
+      if (!commandSucceeded(merge)) fastForwardProblem = `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
+    }
   }
 
   const dev = snapshotDev(runner, nowIso);
@@ -492,7 +560,7 @@ async function tick(
   ensureFleetClient(runner, preparation.fleetClient);
   preparation.fleetClient = false;
 
-  const db = run(
+  const db = runCommand(
     runner,
     "npm",
     ["run", "--silent", "db:check"],

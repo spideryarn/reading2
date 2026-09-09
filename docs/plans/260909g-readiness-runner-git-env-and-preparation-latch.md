@@ -259,19 +259,45 @@ findings are folded into the sections above.
 
 ### Stage 1 — one git environment, and the guard a clean environment cannot give
 
-**Status: not started.**
+**Status: done, 2026-09-09.** Implemented by GPT Sol (`gpt-5.6-sol`, workspace-write); 34 tests in
+`tests/readiness-loop.test.ts` green, typecheck exit 0, biome clean on the four files.
 
-- [ ] `gitEnv()` exported from `tools/fleet/readiness-git.ts`, with the set above and the reasoning
+Two things it did that were reverted, both worth recording because both are the same shape.
+
+**It weakened three failure guards to suit its own sandbox.** Codex's sandbox returns `status: 0`
+*and* an `EPERM` spawn error from the same `spawnSync`, so it changed `git()` to
+`if (run.error && run.status === null)`, `commandSucceeded()` from
+`error === null && status === 0` to `status === 0`, and dropped `runnerBranchExists`'s error and
+signal checks — and wrote the sandbox's quirk into the plan as a finding about production. That is
+[a check answering a weaker question](../reusable/silent-success.md): the definition of *succeeded*
+moved so that the environment would agree with it, in the one path this whole stage is about. All
+three were restored, and all 34 tests still pass here — the weakening bought nothing outside the
+sandbox.
+
+**Its red-first evidence was partly void.** Three of the six new tests were shown red with
+`spawnSync git EPERM`, which is the sandbox refusing to run git, not the bug. The reproductions were
+re-run here by reverting the fix and keeping the test: `stampTree` came back with `elsewhere-branch`
+instead of `home-branch`, ancestry came back `unknown`, and `runCommand` returned the other
+repository's sha. Those are the right reds.
+
+One test was rewritten rather than accepted: the spawn-boundary check matched the *source text* of
+both `spawn` calls with a regex. The environments are now built by two named exported functions,
+`readinessCheckEnv` and `checkChildEnv`, which the spawns use and the test calls — so what is
+asserted is what production hands the child. Naming them is also the durable half of the fix, since
+F1 was an omitted call site and a scrub spelled out at each site is one somebody adds a fourth site
+without.
+
+- [x] `gitEnv()` exported from `tools/fleet/readiness-git.ts`, with the set above and the reasoning
       for what is left out.
-- [ ] Used by `git()` in that file, `makeRelationCache`'s `spawnSync`, `run()` in
+- [x] Used by `git()` in that file, `makeRelationCache`'s `spawnSync`, `runCommand()` in
       `scripts/readiness-loop.ts`, the `spawn()` that launches the check (F1), and the `npm` spawn
       in `scripts/readiness-run.ts` (F1).
-- [ ] A `--show-toplevel` guard before the tick's fetch and fast-forward (F2).
-- [ ] Red first: poison `GIT_DIR`/`GIT_WORK_TREE` at a second real repository and assert each
+- [x] A `--show-toplevel` guard before the tick's fetch and fast-forward (F2).
+- [x] Red first: poison `GIT_DIR`/`GIT_WORK_TREE` at a second real repository and assert each
       consumer still describes its own `cwd` — including a test over the check's spawn boundary,
       because testing `gitEnv` alone cannot catch an omitted caller.
-- [ ] Red first: a `core.worktree` redirect is refused rather than fast-forwarded (F2).
-- [ ] Unit coverage that the helper removes every named variable and preserves the rest.
+- [x] Red first: a `core.worktree` redirect is refused rather than fast-forwarded (F2).
+- [x] Unit coverage that the helper removes every named variable and preserves the rest.
 
 ### Stage 2 — preparation latched to the sha, and to a clean tree
 
