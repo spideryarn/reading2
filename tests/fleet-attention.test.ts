@@ -460,7 +460,29 @@ describe("readAttention", () => {
  * docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md as work for a
  * later stage, and it is too large to do inside one.
  */
-const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["harness.ts", "jsonl.ts", "lock.ts", "work-probe.ts", "work.ts"];
+/**
+ * **A MAP, SO A NEW ENTRY CANNOT BE ADDED WITHOUT SAYING WHY IT QUALIFIES.**
+ *
+ * It was an array of five bare strings, with the reasons in the prose above —
+ * and a reader who scrolled to the list saw five names and no way to tell which
+ * argument covered which. The `usage-limits-tab` session made the point while
+ * writing this rule into `overseer-direction.md`: the list's LENGTH is a
+ * consequence of the store rule rather than a limit of its own, and nothing in
+ * a bare array says that to anybody.
+ *
+ * A value is not optional here, so the next addition answers for itself at the
+ * point of being added rather than in a paragraph somebody has to find.
+ */
+const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
+  "jsonl.ts": "a leaf: append, truncate-to-last-line, atomic write. Imports nothing back.",
+  "lock.ts": "a leaf: take, hold, release. `health-history.ts` uses it rather than copying it, and says so.",
+  "work.ts": "the pure process-table parser and classifier. Its whole closure is `fleet/claude-argv.js`, which is a true leaf.",
+  "work-probe.ts": "the `ps` adapter for the above. Closure: `node:child_process` + `work.ts`.",
+  "harness.ts":
+    "names what is holding a pane, purely, over an injected table. Closure: `claude-argv.js` + `wire.js` (types only) + `work.ts`.",
+};
+
+const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. Build output excluded. */
 /**
