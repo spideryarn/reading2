@@ -160,6 +160,15 @@ function read(over: Record<string, unknown> = {}): FleetState {
   return parsed.state;
 }
 
+function readProseState(): FleetState {
+  const source = proseSource();
+  return read({
+    rows: [wireRow({ status: { kind: "idle" }, question: { kind: "none" } })],
+    attention: attention([source]),
+    questions: { kind: "complete", items: [wireProseItem()] },
+  });
+}
+
 function manualTransport(): { transport: Transport; push: (state: FleetState) => void } {
   let sink: TransportSink | null = null;
   return {
@@ -411,6 +420,25 @@ describe("which empty answer the view has earned", () => {
     expect(host.textContent).toContain("no queue file has been written yet");
     expect(host.textContent).not.toContain("Nothing needs you.");
   });
+
+  it("does not reassure when a reported item set omits a live dialog or prose observation", async () => {
+    const dialogOmitted = read({ questions: { kind: "complete", items: [] } });
+    drawPanel(dialogOmitted.questions, dialogOmitted.rows, { queueApi: queueApi(queueView()) });
+    await act(async () => {});
+    expect(host.textContent).toContain("This list may be incomplete");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+
+    const source = proseSource();
+    const proseOmitted = read({
+      rows: [wireRow({ status: { kind: "idle" }, question: { kind: "none" } })],
+      attention: attention([source]),
+      questions: { kind: "complete", items: [] },
+    });
+    drawPanel(proseOmitted.questions, proseOmitted.rows, { queueApi: queueApi(queueView()) });
+    await act(async () => {});
+    expect(host.textContent).toContain("This list may be incomplete");
+    expect(host.textContent).not.toContain("Nothing needs you.");
+  });
 });
 
 describe("the queued ideas pointer", () => {
@@ -543,6 +571,49 @@ describe("dialog answers", () => {
     expect(recorder.calls).toHaveLength(0);
   });
 
+  it.each([
+    ["waiting", { kind: "waiting", secondsLeft: 30 }],
+    ["no-claude", { kind: "no-claude" }],
+    ["shell", { kind: "shell", busy: false }],
+    ["unknown", { kind: "unknown", why: "the status pass failed" }],
+  ] as const)("withholds controls and never calls the seam for %s rows", (_name, status) => {
+    const state = read({ rows: [wireRow({ status })] });
+    const recorder = apiReturning(SENT);
+    drawPanel(state.questions, state.rows, { steer: recorder.api });
+
+    expect(optionButtons().filter((button) => !button.disabled)).toHaveLength(0);
+    act(() => optionButtons()[0]?.click());
+    expect(recorder.calls).toHaveLength(0);
+  });
+
+  it("withholds controls and never calls the seam for a conversation gate with no material", () => {
+    const question = { ...RAW_QUESTION, material: { kind: "no-material" } };
+    const state = read({ rows: [wireRow({ question })] });
+    const recorder = apiReturning(SENT);
+    drawPanel(state.questions, state.rows, { steer: recorder.api });
+
+    expect(optionButtons().filter((button) => !button.disabled)).toHaveLength(0);
+    act(() => optionButtons()[0]?.click());
+    expect(recorder.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["pane id", { paneId: "pane-one" }, undefined],
+    ["session id", { id: "session-one" }, { kind: "complete", items: [wireDialogItem("session-one")] }],
+    ["conversation id", { claudeSessionId: "not-a-uuid" }, undefined],
+  ] as const)("withholds controls and never calls the seam for a malformed %s", (_name, rowChanges, questions) => {
+    const state = read({
+      rows: [wireRow(rowChanges)],
+      ...(questions === undefined ? {} : { questions }),
+    });
+    const recorder = apiReturning(SENT);
+    drawPanel(state.questions, state.rows, { steer: recorder.api });
+
+    expect(optionButtons().filter((button) => !button.disabled)).toHaveLength(0);
+    act(() => optionButtons()[0]?.click());
+    expect(recorder.calls).toHaveLength(0);
+  });
+
   it("keeps state for the same execution token and discards it for a replacement", async () => {
     const recorder = apiReturning(SENT);
     const first = read();
@@ -566,6 +637,51 @@ describe("dialog answers", () => {
     });
     drawPanel(replaced.questions, replaced.rows, { steer: recorder.api });
     expect(host.textContent).not.toContain("Sent.");
+  });
+
+  it("discards a receipt and repeat lock when the question changes on the same execution", async () => {
+    const recorder = apiReturning(SENT);
+    const first = read();
+    drawPanel(first.questions, first.rows, { steer: recorder.api });
+    await act(async () => optionButtons()[0]?.click());
+    expect(host.textContent).toContain("Sent.");
+
+    const nextQuestion = {
+      ...RAW_QUESTION,
+      prompt: "Which deployment should run next?",
+      material: { kind: "read", text: "Choose the deployment", fingerprint: "material-2" },
+      options: [
+        { label: "Dev", consequence: "once", key: { via: "digit", digit: "1" } },
+        { label: "Production", consequence: "persistent", key: { via: "digit", digit: "2" } },
+      ],
+    };
+    const second = read({ rows: [wireRow({ question: nextQuestion })] });
+    drawPanel(second.questions, second.rows, { steer: recorder.api });
+
+    expect(host.textContent).toContain("Which deployment should run next?");
+    expect(host.textContent).not.toContain("Sent.");
+    expect(optionButtons().filter((button) => !button.disabled)).toHaveLength(2);
+  });
+
+  it("discards a receipt when only an unfamiliar raw option key changes", async () => {
+    const withKey = (via: string) => ({
+      ...RAW_QUESTION,
+      options: [
+        { ...RAW_QUESTION.options[0], key: { via, chord: "Enter" } },
+        RAW_QUESTION.options[1],
+      ],
+    });
+    const recorder = apiReturning(SENT);
+    const first = read({ rows: [wireRow({ question: withKey("future-a") })] });
+    drawPanel(first.questions, first.rows, { steer: recorder.api });
+    await act(async () => optionButtons()[0]?.click());
+    expect(host.textContent).toContain("Sent.");
+
+    const second = read({ rows: [wireRow({ question: withKey("future-b") })] });
+    drawPanel(second.questions, second.rows, { steer: recorder.api });
+
+    expect(host.textContent).not.toContain("Sent.");
+    expect(optionButtons().filter((button) => !button.disabled)).toHaveLength(2);
   });
 
   it("reports success, partial delivery and unknown delivery without inviting a blind repeat", async () => {
@@ -612,22 +728,68 @@ describe("dialog answers", () => {
     expect(silent).not.toBe(disabled);
     expect(optionButtons()).toHaveLength(0);
   });
+
+  it("does not show an answering hold for an empty list", async () => {
+    drawPanel(
+      { kind: "complete", items: [] },
+      [],
+      { answeringEnabled: { kind: "disabled" }, queueApi: queueApi(queueView()) },
+    );
+    await act(async () => {});
+    expect(host.textContent).toContain("Nothing needs you.");
+    expect(host.textContent).not.toContain("server has declared an answering hold");
+  });
+
+  it("does not show an answering hold for a prose-only list", () => {
+    const prose = readProseState();
+    drawPanel(prose.questions, prose.rows, { answeringEnabled: { kind: "disabled" } });
+    expect(host.querySelector('[data-question-kind="prose"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("server has declared an answering hold");
+  });
+
+  it("shows an answering hold when a dialog would otherwise carry option buttons", () => {
+    const dialog = read();
+    drawPanel(dialog.questions, dialog.rows, { answeringEnabled: { kind: "disabled" } });
+    expect(host.textContent).toContain("server has declared an answering hold");
+    expect(optionButtons()).toHaveLength(0);
+  });
 });
 
 describe("prose stays observational", () => {
   function proseState(): FleetState {
-    const source = proseSource();
-    return read({ attention: attention([source]), questions: { kind: "complete", items: [wireProseItem()] } });
+    return readProseState();
   }
 
-  it("renders no writing control on a prose card", () => {
+  it("navigates from a prose card without calling either writing seam", () => {
+    vi.setSystemTime(NOW);
+    window.location.hash = "#questions?sel=%24old&selpid=999";
     const state = proseState();
-    drawPanel(state.questions, state.rows);
+    const calls = { messages: 0, answers: 0 };
+    const recordingSteer: SteerApi = {
+      message: async () => {
+        calls.messages += 1;
+        return SENT;
+      },
+      answer: async () => {
+        calls.answers += 1;
+        return SENT;
+      },
+    };
+    const feed = manualTransport();
+    mountApp(feed.transport, recordingSteer);
+    act(() => feed.push(state));
     const card = host.querySelector<HTMLElement>('[data-question-kind="prose"]');
     expect(card).not.toBeNull();
     expect(card?.querySelector("textarea")).toBeNull();
     expect([...(card?.querySelectorAll<HTMLButtonElement>("button") ?? [])].filter((button) => !button.disabled)).toHaveLength(0);
     expect(card?.textContent).toContain("duplicate-agent");
+    act(() => card?.click());
+    const hash = decodeURIComponent(window.location.hash);
+    expect(hash).toContain("#sessions");
+    expect(hash).toContain("sel=$1");
+    expect(hash).not.toContain("selpid");
+    expect(calls.messages).toBe(0);
+    expect(calls.answers).toBe(0);
   });
 
   /**

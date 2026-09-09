@@ -11,14 +11,16 @@ import { QuestionCard } from "./SessionParts";
 import { SteerReceipt } from "./SteerReceipt";
 import { httpQueueApi, type QueueApi, type QueueView } from "./queue-client";
 import { httpSteerApi, sentTarget, type SentTarget, type SteerApi, type SteerOutcome } from "./steer-client";
-import type {
-  AnsweringReading,
-  AttentionKind,
-  FleetRow,
-  QuestionGap,
-  QuestionItem,
-  QuestionTarget,
-  QuestionsView,
+import {
+  isLocallyAnswerableDialog,
+  questionSafetyKey,
+  type AnsweringReading,
+  type AttentionKind,
+  type FleetRow,
+  type QuestionGap,
+  type QuestionItem,
+  type QuestionTarget,
+  type QuestionsView,
 } from "./types";
 import { Card, Mono, Pill, cx } from "./ui";
 import { formatDuration, type Tone } from "./view";
@@ -37,7 +39,11 @@ function itemKey(item: QuestionItem, row: FleetRow | undefined): string {
   switch (item.kind) {
     case "dialog":
     case "dialog-unaddressable":
-      return `${item.kind}:${item.rowId}:${executionKey(row)}`;
+      /* This is the stale-answer safety use of `sameQuestion`'s fields, not
+         semantic grouping. The plan withdrew that grouping explicitly in
+         § What round three changed, 3; remounting here only asks whether the
+         question on screen is still the one that owns this local receipt. */
+      return JSON.stringify([item.kind, item.rowId, executionKey(row), questionSafetyKey(row?.rawQuestion)]);
     case "prose":
     case "prose-unaddressable":
       return `${item.kind}:${item.itemId}:${executionKey(row)}`;
@@ -89,6 +95,17 @@ function GapSentence({ gap }: { gap: QuestionGap }): ReactNode {
       return <>This browser could not resolve the prose observation <Mono>{gap.itemId}</Mono>: {gap.why}.</>;
     case "dialog-source-inconsistent":
       return <>This browser found contradictory dialog data for <Mono>{gap.rowId}</Mono>: {gap.why}.</>;
+    case "eligible-observation-omitted":
+      switch (gap.observation.kind) {
+        case "dialog":
+          return <>This browser found a live dialog on <Mono>{gap.observation.rowId}</Mono> that was missing from the reported Questions items.</>;
+        case "prose":
+          return <>This browser found prose observation <Mono>{gap.observation.itemId}</Mono> that was missing from the reported Questions items.</>;
+        default: {
+          const never: never = gap.observation;
+          return JSON.stringify(never);
+        }
+      }
     default: {
       const never: never = gap;
       return JSON.stringify(never);
@@ -171,7 +188,7 @@ function AnswerableDialog({ item, row, question, answeringEnabled, steer }: {
     answeringEnabled.kind === "enabled" &&
     stickyRefusal === null &&
     !repeatUnsafe &&
-    question.gate.kind === "conversation" &&
+    isLocallyAnswerableDialog(row) &&
     row.paneId !== null &&
     row.claudeSessionId !== null &&
     item.target.sessionId === row.id &&
@@ -492,6 +509,8 @@ export function QuestionsPanel({
   }, [queueApi, refreshNonce]);
 
   const sessionsQuiet = view?.kind === "complete" && view.items.length === 0;
+  const hasDialogItem =
+    view !== null && view.kind !== "not-observed" && view.items.some((item) => item.kind === "dialog");
   let body: ReactNode;
   if (view === null) {
     body = (
@@ -549,7 +568,7 @@ export function QuestionsPanel({
           to somebody who has not spoken, which is the same fabrication the
           default exists to prevent, one level along. The notice explains why
           cards have no buttons; with no view there are no cards. */}
-      {view === null ? null : <AnsweringNotice reading={answeringEnabled} />}
+      {hasDialogItem ? <AnsweringNotice reading={answeringEnabled} /> : null}
       {body}
       <QueuePointer view={queue} onOpenQueue={onOpenQueue} sessionsQuiet={sessionsQuiet} />
     </section>

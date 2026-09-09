@@ -12,6 +12,11 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  CHECKPOINT_STALE_MS,
+  FLEET_STALE_CADENCES,
+  SCAN_STALE_MS,
+} from "../tools/fleet/question-freshness.js";
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import { parsePane, type PaneQuestion } from "../tools/fleet/pane.js";
 import { composeQuestions } from "../tools/fleet/questions.js";
@@ -350,6 +355,47 @@ describe("composeQuestions: every silence remains distinct", () => {
 
   it("returns a complete empty view only with fresh positive controls from both sources", () => {
     expect(compose()).toEqual({ kind: "complete", items: [] });
+  });
+});
+
+describe("Questions freshness policy has one runtime home", () => {
+  it("is imported by both the server composer and browser selector", () => {
+    const server = readFileSync(path.resolve(import.meta.dirname, "../tools/fleet/questions.ts"), "utf8");
+    const client = readFileSync(path.resolve(import.meta.dirname, "../tools/fleet/web/src/types.ts"), "utf8");
+    for (const name of ["FLEET_STALE_CADENCES", "CHECKPOINT_STALE_MS", "SCAN_STALE_MS"]) {
+      expect(server).toContain(name);
+      expect(client).toContain(name);
+    }
+    expect(server).toContain('from "./question-freshness.js"');
+    expect(client).toContain('from "../../question-freshness.js"');
+
+    const thresholdCases = [
+      {
+        gap: "fleet-snapshot-stale",
+        at: (age: number) => compose({ refreshMs: 137_000, collectedAt: new Date(NOW - age).toISOString() }),
+        deadline: 137_000 * FLEET_STALE_CADENCES,
+      },
+      {
+        gap: "checkpoint-stale",
+        at: (age: number) => compose({
+          attentionFeed: published([], { coordinatorWrittenAt: new Date(NOW - age).toISOString() }),
+        }),
+        deadline: CHECKPOINT_STALE_MS,
+      },
+      {
+        gap: "attention-scan-stale",
+        at: (age: number) => compose({
+          attentionFeed: published([], {
+            list: { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: new Date(NOW - age).toISOString() },
+          }),
+        }),
+        deadline: SCAN_STALE_MS,
+      },
+    ] as const;
+    for (const current of thresholdCases) {
+      expect(gapKinds(current.at(current.deadline))).not.toContain(current.gap);
+      expect(gapKinds(current.at(current.deadline + 1))).toContain(current.gap);
+    }
   });
 });
 
