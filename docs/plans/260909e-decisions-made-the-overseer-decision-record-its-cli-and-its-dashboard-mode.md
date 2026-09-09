@@ -1,19 +1,26 @@
 # "Decisions made" — the Overseer's decision record, its CLI, and its dashboard mode
 
-**Status, 2026-09-09: stages 1–3 built and green; Stage 4 (browser verification) not started, and
-it is the one that decides whether the tab ships.** 183 tests, typecheck exit 0, nothing pushed to
-`dev` yet.
+**Status, 2026-09-09: built, measured and on `dev`.** 202 tests, typecheck exit 0, pushed at
+`692fd230` and continued since. The dock question is **answered by Greg** (§ The joint question) and
+the browser check passed on its worst case. What remains is the debrief.
 
-Reviewed by GPT Sol four times: the plan twice (round one *"needs rethinking"*, two P0s and seven
-P1s; round two *"not yet safe to build exactly as written"*, no P0 and seven P1s), then the
-**implementation** independently — no P0, three P1s, seven P2s, all taken. A fifth review of the
-fixes could not run: Codex's app-server client failed on a read-only filesystem, twice. That is owed
-before the debrief and is recorded in § What the plan-stage reviews changed.
+Reviewed by GPT Sol five times: the plan twice (*"needs rethinking"*, then *"not yet safe as
+written"*), the implementation independently, and the fixes to that — which found **one P1 still
+open and three P2s only partly closed**, all now fixed here. Two attempts at that fifth review had
+failed on a read-only filesystem from inside a sandboxed Codex run; running it from the session
+itself, unsandboxed, is what worked.
 
-**One P1 was mine and is the most instructive thing here**: Stage 2b moved the command-id retry
-check into the CLI for a good reason and dropped half of it in the move, so a *different* decision
-under a reused key exited 0 and silently wrote nothing. Fixed at `86e28e93`, reproduced by hand
-before and after.
+**Two of the P1s in this work were mine, and both are the same mistake twice.** Stage 2b moved the
+command-id retry check into the CLI for a good reason and dropped half of it — a *different*
+decision under a reused key exited 0 and wrote nothing. Fixed at `86e28e93`. The fix then still
+omitted `--by` from the comparison, so the same words filed by a different actor was a retry, and
+the CLI disagreed with the fold, which includes `by`. **Moving a check to a new layer and leaving
+part of it behind** is the class; it happened twice in one session, and both times a reviewer found
+it rather than a test.
+
+**And the defect no test could see:** at 390px the populated row was illegible — the question wrapped
+to about one word per line and its text overflowed under a pill. Every assertion passed, 1280 was
+clean, jsdom has no layout. Found by looking at the picture (§ Stage 4).
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer.md](../project/overseer.md), whose gate 1 this turns from a hand-kept Markdown list into a
@@ -434,6 +441,62 @@ The fleet dashboard has a bar along the bottom with one button per **mode** (a t
 health, Deploys …). It is the only navigation the page has. Two more modes are landing today, taking
 it from eight to ten, and the bar has run out of room on a phone.
 
+### ANSWERED by Greg, 2026-09-09: option A, a scrolling strip
+
+> Re dock, use a scrolling strip - borrow/follow/reuse from Spideryarn
+>
+> — Greg, 2026-09-09, relayed by the Overseer
+
+So: **ship the scroll-into-view and the edge fade, and stop there.** No overflow menu, no
+regrouping, no dropped tab. Options B, C and D below are closed; they are kept because the
+measurements that produced them are the reason the answer is informed, and because C — *some of
+these should not be tabs* — is the one that would come back if the bar keeps growing.
+
+**Nothing further is to be built for this: the answer is already implemented, and the work is to
+confirm parity rather than to add a third mechanism.** That risk is real — *"use a scrolling strip"*
+reads like new work — and it was flagged by `questions-mode-s2` and by the Overseer independently.
+
+**The referent is [`src/web/styles/dock.css`](../../src/web/styles/dock.css), and this plan cited
+the wrong file first.** An earlier draft pointed at `narrow-window.css` § `.controls`, which is the
+reading view's *controls* bar — a different scrolling strip that matched a grep. `questions-mode-s2`
+checked the referent rather than assuming, on the grounds that *"reuse the existing X" is the claim
+shape that most often turns out to be about a different X*. The fleet dock is a **port** of
+`dock.css` and `dock-fit.css`, and says so itself at `tailwind.css:365`; `fit.ts:6` says the same of
+the ladder.
+
+**Parity, checked item by item.** On `dev` at `692fd230`:
+
+| the product's pattern | the fleet dock |
+|---|---|
+| `.dock { overflow-x: auto }` **at every width**, never inside a media query | same |
+| `scrollbar-width: none` plus the `::-webkit-scrollbar` rule | same |
+| the gap collapsing so buttons close up and the row scrolls | same |
+| the measured fit ladder dropping labels **before** it scrolls | same (`fit.ts`, ported) |
+| — | **plus** scroll-into-view on the active mode |
+| — | **plus** the edge fades, as masks contributing no width |
+
+The last two do not exist in the product. So the strip is borrowed and complete, and the two
+additions are the half `narrow-window.css`'s own comment says is missing: *"a bar you have to
+discover is scrollable is a poor control, but it beats a button that is not there."* They are
+candidates to flow **back** to the product — a proposal for
+[overseer-queue.md](../project/overseer-queue.md), not work for this plan.
+
+Greg's answer is also consistent with his own call on the product on 2026-08-28 — *"maybe also row
+scrolls sideways if it doesn't fit horizontally"* — which is the quote attached to that very CSS.
+
+**What this work adds is the half the product's own comment says is missing.** That comment
+continues: *"a bar you have to discover is scrollable is a poor control, but it beats a button that
+is not there."* The edge fade is how you discover it, and the scroll-into-view is why you do not
+have to. Neither exists in `src/web/` — the product has no fade and does not scroll its active mode
+into view — so there was nothing to copy for those two, and **they are candidates to flow back the
+other way** ([overseer-queue.md](../project/overseer-queue.md) is where that proposal belongs, not
+this plan).
+
+The one thing that could not be reused even if it were wanted: `tests/fleet-imports.test.ts` forbids
+`tools/` importing `src/`, so "reuse" here can only ever mean the same CSS written again, never a
+shared module. That is the standing cost recorded in
+[fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md), not a new one.
+
 ### Lead with this: what happens if we do nothing
 
 **Disable the scroll-into-view, rebuild the client, and load the last tab at 390px. The active
@@ -487,7 +550,22 @@ the two shared loads sit at different scroll positions and different bar totals 
 label, and unreadable. Written down because somebody will reach for it later —
 `questions-mode-s2`, 2026-09-09.
 
-### THE FINDING: Refresh has not been reachable since before either tab
+### STILL OPEN, and not closed by Greg's answer: Refresh is unreachable at rest
+
+**A scrolling strip is the right answer to *the bar is full*. It is not an answer to *a control is
+unreachable at rest*, and the second should not be marked answered by the first.**
+`questions-mode-s2`'s point, and it is right: the dock's *shape* is settled; this is a different
+question with its own evidence below, and the Overseer is putting it to Greg separately.
+
+**One seam this work leaves, stated because it cannot be cleared from here.** The product's dock
+gets focus-scrolling from the browser natively; this one now *also* makes an explicit
+`scrollIntoView` call when the mode or the fit rung changes. The case where they could disagree is a
+rung change (a resize) while a **non-active** button holds keyboard focus: the explicit call would
+pull the bar to the active mode and away from the focused one. No evidence it happens, and it was
+not exercised at 390 — raised by `questions-mode-s2`, who could not see it from their side either.
+Worth a look by whoever is next in `Dock.tsx`; not worth holding this work for.
+
+### The evidence: Refresh has not been reachable since before either tab
 
 This is the thing to put in front of Greg, and neither of our tabs caused it.
 

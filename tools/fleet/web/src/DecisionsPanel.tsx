@@ -291,11 +291,17 @@ export function DecisionsPanel({
     return (
       <Card className="tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:p-3">
         <p className="tw:text-[13px] tw:font-semibold tw:text-alarm-ink">
-          The unreviewed decisions are too large to show safely.
+          The decisions that must be shown are too large to send.
         </p>
         <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">{view.why}</p>
         <p className="tw:mt-2 tw:text-[12px] tw:text-alarm-ink">
-          The server refused to truncate {view.unreviewedCount} unreviewed decisions at its {view.limitBytes}-byte limit.
+          {/* **NOT "the unreviewed decisions are too large".** A small pending
+              successor with a long superseded ancestry trips this same arm, and
+              blaming the unreviewed rows would send somebody looking at the
+              wrong thing. What did not fit is the unreviewed rows PLUS the
+              history they cannot be understood without. GPT Sol's note. */}
+          The server refused to truncate {view.unreviewedCount} unreviewed decisions, or the superseded history
+          they replace, at its {view.limitBytes}-byte limit.
         </p>
         <ComposedAt instant={view.composedAt} />
       </Card>
