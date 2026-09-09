@@ -622,6 +622,10 @@ export async function feedPayload(deps: FeedRouteDeps, limit: number): Promise<F
     readStartedAt,
     readFinishedAt,
     servedAt: readFinishedAt,
+    /* **WHICH WORLD THESE `$…` HANDLES BELONG TO.** The page joins them to the
+       session list from `/api/state`, and a handle only means something inside
+       one tmux server — wire.ts § `FeedPayload.tmuxServerPid`. */
+    tmuxServerPid: snapshot.tmuxServerPid,
   };
 }
 

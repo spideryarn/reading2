@@ -142,7 +142,7 @@ export function App({
      died. An age that only moves when data arrives is an age that freezes at
      the exact moment it matters. */
   const now = useNow();
-  const { mode, params, chooseMode, setParam, setParams } = useHashState();
+  const { mode, params, chooseMode, setParam, setParams, go } = useHashState();
   /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
      presents it as the page's refresh control, and until 2026-09-09 it called
      `feed.refresh()` only — so on a panel with its own route, pressing it did
@@ -160,6 +160,19 @@ export function App({
      that resets every time is one nobody bothers to set. mode.ts § the hash. */
   const order = parseOrdering(params["order"]);
   const selectedId = params["sel"] ?? null;
+  /**
+   * Which tmux server the selected handle belongs to, when whoever wrote the URL
+   * said — see `onOpenSession` below.
+   *
+   * **A missing one is not a mismatch.** A hand-typed `#sessions?sel=$1643`, a
+   * link from before this existed, or a tap on the list itself all arrive
+   * without it, and those must go on resolving exactly as they did. Only a
+   * `selpid` that is present AND disagrees is evidence, and only that refuses.
+   */
+  const selectedPid = ((): number | null => {
+    const raw = Number(params["selpid"]);
+    return Number.isSafeInteger(raw) && raw > 0 ? raw : null;
+  })();
 
   const fresh = freshness({
     state: feed.state,
@@ -210,7 +223,10 @@ export function App({
                  just-arrived checkpoint against the clock it fell asleep with —
                  AttentionPanel.tsx § `ageMs`. */
               receivedAt={feed.receivedAt}
-              onSelect={(id) => setParam("sel", id)}
+              /* Same as the list below: a card tapped here names a row from the
+                 snapshot on screen, so any `selpid` left by an earlier arrival
+                 from the feed is cleared rather than left to contradict it. */
+              onSelect={(id) => setParams({ sel: id, selpid: null })}
             />
             {/* **`collected` is not `rows.length > 0`, and that is the point.**
                 An empty list is only a claim about the box once a collection has
@@ -234,7 +250,12 @@ export function App({
               order={order}
               onOrder={(next) => setParam("order", next === "status" ? null : next)}
               selectedId={selectedId}
-              onSelect={(id) => setParam("sel", id)}
+              selectedPid={selectedPid}
+              /* A tap on the list is a selection made against the snapshot on
+                 screen, so there is nothing to carry and nothing to check — the
+                 stale `selpid` from an earlier arrival is cleared rather than
+                 left to disagree with a handle it no longer describes. */
+              onSelect={(id) => setParams({ sel: id, selpid: null })}
               steer={steer}
               rename={rename}
               actions={actions}
@@ -269,6 +290,71 @@ export function App({
                    `setParams`. */
                 setParams(paramsFromFilters(next));
               }}
+              /* **THE MODE AND THE SELECTION IN ONE WRITE, for the reason one
+                 line up.** `chooseMode("sessions")` followed by
+                 `setParam("sel", id)` is the same closed-over-snapshot bug: the
+                 second starts from params the first never reached, so one of
+                 the two halves is silently thrown away and the reader lands
+                 either on an unselected list or on the feed they were already
+                 looking at. `go` is the single write — mode.ts § `go`.
+
+                 The feed's own filters ride along untouched, which is what
+                 makes the browser's Back button land on the filtered feed
+                 rather than on a reset one. */
+              /* **THE WORLD TRAVELS WITH THE HANDLE.** `sel` is a tmux session
+                 handle and means nothing without the server it belongs to, so
+                 `selpid` goes with it and `SessionsPanel` declines to resolve
+                 the one against a snapshot of the other. Without this the pid
+                 check on the feed row was cosmetic: it proved the join safe and
+                 then discarded the proof, leaving the destination to match
+                 `$1643` against whatever tmux server it was looking at by the
+                 time it rendered. GPT Sol's P0 on the code review.
+
+                 **A feed that named no server sends no `selpid`, and therefore
+                 selects nothing** — the reader lands on the Sessions list
+                 instead of on a guess. */
+              onOpenSession={(id, tmuxServerPid) =>
+                tmuxServerPid === null
+                  ? go("sessions", { sel: null, selpid: null })
+                  : go("sessions", { sel: id, selpid: String(tmuxServerPid) })
+              }
+              /* **THE SAME ROWS THE SESSIONS TAB DRAWS, so the two tabs cannot
+                 say different things about one session.** Not a field on
+                 `/api/feed`: a status there would be a second reading of the
+                 same tmux output, on a different cadence, kept in step by
+                 nothing.
+
+                 **THREE ARMS, AND `rows: []` IS THE LEAST OF THEM.** An empty
+                 array is a measurement — *we read the fleet and it holds
+                 nobody* — so it may not stand in for the two silences either
+                 side of it. `collectedAt === null` is the one that is easy to
+                 miss: the server answers a perfectly good payload with no rows
+                 for the ten seconds a first collection takes, and reading "not
+                 in the session list" off that would call every session on the
+                 box absent. It is the same distinction `SessionsPanel` draws
+                 between "No sessions." and "Collecting…" a few lines below.
+                 GPT Sol's P0 on the plan; feed-client.ts § `SessionListReading`. */
+              sessions={
+                feed.state === null
+                  ? { kind: "not-arrived" }
+                  : feed.state.collectedAt === null
+                    ? { kind: "not-collected" }
+                    : {
+                        kind: "collected",
+                        rows: feed.state.rows,
+                        /* The count that decides whether "not in the list" is a
+                           claim or a maybe: a payload that dropped rows it could
+                           not parse cannot say a session is absent. */
+                        unreadableRows: feed.state.unreadableRows,
+                        /* And the one that decides whether the join may happen
+                           at all — wire.ts § `FeedPayload.tmuxServerPid`. */
+                        tmuxServerPid: feed.state.tmuxServerPid,
+                      }
+              }
+              /* One clock for the page, so this tab's ages tick with every
+                 other age on screen — and go on ticking when the poll dies. */
+              now={now}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
         ) : null}

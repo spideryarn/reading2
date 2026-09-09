@@ -218,10 +218,18 @@ making the important thing loud is the same gesture as making a caveat invisible
 
 ### Type, and numbers
 
-- [ ] **A defined scale, hand-picked, with steps ≥ ~25% apart.** Closer than that and two steps stop
-      reading as two levels. Small jumps are worth having low in the scale where legibility changes;
-      precision high in the scale is wasted.
+- [ ] **A defined scale, hand-picked. Steps that must read as *levels* want ≥ ~25% between them**;
+      closer than that and two sizes stop being two levels.
       ([Refactoring UI](https://gist.github.com/selcukcihan/b9418596a98abfcd4bbc622550820cc5))
+- [ ] **Separate the levels from the density variants, and do not claim one rule covers both.** A
+      dense screen legitimately wants two or three sizes close together at the bottom — secondary
+      text, captions, labels — which are *not* further demotions and are separated by weight, colour
+      or position rather than size. Three well-separated levels plus two density variants is an
+      honest scale; five sizes described as five evenly-spaced steps is a claim a reader can measure
+      and disprove. Say which of your sizes are which.
+- [ ] **Check the top of the scale against the root font size.** A "heading" step that equals the
+      body size is not a step, and this is easy to ship: it looks fine wherever it also gets weight
+      and colour, and does nothing wherever it doesn't.
 - [ ] **Ad-hoc arbitrary sizes are the smell.** If the codebase is full of one-off pixel values, the
       scale does not exist yet, and adding one more will not help.
 - [ ] **Two weights are usually enough**, and nothing below 400 for UI text — light weights read as

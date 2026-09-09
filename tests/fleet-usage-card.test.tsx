@@ -241,30 +241,28 @@ describe("the join, all five hops", () => {
        changed and is pinned directly instead: **one incident row**, whatever
        else the card grows around it (plan 260909c). */
     expect(container.querySelectorAll('[data-slot="usage-provenance"] li').length).toBe(1);
-    /* Two stats: the one cached window that carries a real reading, and — new
-       on 2026-09-09 — **when work can actually resume**, which is the number
-       this whole card exists to deliver and which used to be reachable only by
-       reading an incident row's third line. It is drawn from `dueBackAt`, the
-       window that frees up LAST, so a reader who acts on it is not caught out by
-       a second window still in force. */
-    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(2);
+    /* Three stats: both cached windows — one with a reading, one without — and
+       — new on 2026-09-09 — **when work can actually resume**, which is the
+       number this whole card exists to deliver and which used to be reachable
+       only by reading an incident row's third line. It is drawn from
+       `dueBackAt`, the window that frees up LAST, so a reader who acts on it is
+       not caught out by a second window still in force. */
+    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(3);
     expect(screen()).toContain("Work can resume in");
-    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
-       number, so it is not headroom and gets no card — but the count is on the
-       face of the page and the entry and its own reason are one tap behind it.
-       An absence folded away *without* a count is the exact failure this rewrite
-       exists to avoid, so both halves are pinned rather than the fold alone. */
-    expect(screen()).toContain("1 more cache entry carried no usable number");
+    /* **`nimbus_quill` GETS ITS OWN CARD, and no window is folded away.** A
+       draft folded the windows that never carried a number into a disclosure;
+       it was withdrawn on GPT Sol's UL-03 because it partitioned by epistemic
+       state when only relevance justified it, and `UsageWindowName` is `string`
+       so nothing in the data says which windows are ancillary. Pinned here so
+       the idea cannot come back without this assertion being read. */
+    expect(container.querySelectorAll('[data-slot="stat-absent"]').length).toBe(1);
     expect(screen()).toContain("nimbus_quill");
     expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
-    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
-       number, so it is not headroom and does not get a card — but the count is
-       on the face of the page and the entry and its reason are behind the
-       disclosure. An absence folded away without a count would be the exact
-       failure this rewrite exists to avoid, so both halves are pinned. */
-    expect(screen()).toContain("1 more cache entry carried no usable number");
-    expect(screen()).toContain("nimbus_quill");
-    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
+    /* **THE CACHE'S OWN AGE, WHICH IS NOT THE READING'S.** A fresh pass can
+       republish a cache fetched hours earlier, so a card showing only
+       `collectedAt` makes a stale percentage read as freshly taken — Sol's
+       UL-04, found by diffing the old render against the new one. */
+    expect(screen()).toContain("cached 10m ago");
     expect(screen().match(/five_hour has not reset yet/g)).toHaveLength(1);
     expect(screen()).toContain("five_hour has not reset yet");
     /* **AND IT DOES NOT SAY "IN FORCE".** Only the verdict may claim the
@@ -346,6 +344,13 @@ describe("the card, against its own clock", () => {
     expect(screen()).toContain("The limit that stopped this account has since reset.");
     expect(screen()).toContain("Every rejection this scan found names a window that has already reset.");
     expect(screen()).toContain("cleared");
+    /* **AND IT DOES NOT ALSO SAY "Work can resume in — Unknown".** The first
+       draft drew that card here, reading the same passed instant the headline
+       had just resolved, and answering `Unknown` to a question the sentence
+       above had answered. Two components disagreeing about one instant in view
+       of each other. GPT Sol's UL-01, 2026-09-09 — and this test is what was
+       missing, since it asserted the headline and never looked at the card. */
+    expect(screen()).not.toContain("Work can resume in");
   });
 
   it("shows the unreset window in full and counts the ones that have already gone", () => {
@@ -557,6 +562,95 @@ describe("the card, against its own clock", () => {
        for — so the derived number can be checked against the source one. */
     expect(screen()).toContain("41%");
     expect(screen()).toContain("59% left");
+  });
+
+  it("does not invent a severity of its own for a nearly-full window", () => {
+    /* **THE CARD MAY NOT SECOND-GUESS THE VERDICT.** A draft coloured each
+       window by thresholds this file made up — alarm under 10% left, needs
+       under 25% — and GPT Sol measured what that costs against the producer's
+       actual default of 80% used: at 75% the card would shout `needs` while the
+       verdict still said `ok`, and at 90% `alarm` against a producer saying only
+       `approaching`. A card contradicting the sentence above it is the second
+       interpretation of one measurement this file's header forbids.
+
+       **This is the mutation the rest of the suite could not see.** Re-adding
+       those thresholds left all fourteen tests green, because every other
+       assertion is about words and this one is about colour. Asserted on the
+       ink class, which is the only place the invented severity could show.
+       GPT Sol's UL-05, 2026-09-09. */
+    const feed = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: "greg@example.test", accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        /* The producer says the account is FINE at 95% of one window. That is
+           its call to make, and the card must not overrule it. */
+        level: "ok",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            {
+              kind: "value",
+              window: "five_hour",
+              utilizationPercent: 95,
+              resetsAt: new Date(BASE + 60 * 60_000).toISOString(),
+            },
+          ],
+        },
+        limits: { kind: "none", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    draw(feed, BASE);
+    const value = container.querySelector('[data-slot="stat-value"]');
+    expect(value?.textContent).toBe("5% left");
+    expect(value?.className).not.toContain("alarm");
+    expect(value?.className).not.toContain("needs");
+  });
+
+  it("does not print floating-point debris as the answer to how much is left", () => {
+    /* **`100 - 99.99` IS `0.010000000000005116`.** Both parsers require a
+       finite value in [0, 100], so the complement can never be negative, NaN or
+       over 100 — but it can be sixteen digits of noise in the largest text on
+       the card, which is the one place on this page a reader is meant to look
+       first. GPT Sol's UL-06, 2026-09-09. Rounded to one place, then trailing
+       zeroes dropped: 42 stays `42`, and 0.01 becomes `0`, which is the safe
+       direction because it does not overstate the headroom. */
+    const feed = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: "greg@example.test", accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        level: "approaching",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            {
+              kind: "value",
+              window: "five_hour",
+              utilizationPercent: 99.99,
+              resetsAt: new Date(BASE + 60 * 60_000).toISOString(),
+            },
+          ],
+        },
+        limits: { kind: "none", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    draw(feed, BASE);
+    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("0% left");
+    expect(screen()).not.toContain("0.0100000");
+    /* The producer's own number survives beside the derived one, so the
+       rounding can be checked rather than trusted. */
+    expect(screen()).toContain("99.99% used");
   });
 
   it("will not draw another account's percentages under this account's name", () => {
