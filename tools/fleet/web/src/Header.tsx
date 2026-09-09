@@ -215,14 +215,86 @@ export function freshness(args: {
 }
 
 /** One count in the tally. Rendered only when it is non-zero. */
-function Count({ n, label, className }: { n: number; label: string; className?: string }): ReactNode {
+function Count({
+  n,
+  label,
+  className,
+  tip,
+}: {
+  n: number;
+  label: string;
+  className?: string;
+  tip: Tip;
+}): ReactNode {
   if (n === 0) return null;
   return (
-    <span className={cx("tw:whitespace-nowrap", className)}>
+    <Explain tip={tip} placement="bottom" className={cx("tw:whitespace-nowrap", className)}>
       <span className="tw:font-mono tw:font-semibold">{n}</span> {label}
-    </span>
+    </Explain>
   );
 }
+
+/**
+ * **What the four numbers in the masthead are counting.**
+ *
+ * They are the three triage bands plus `unknown`, and three of the four words
+ * appear nowhere else on the page: a row's own badge says `idle`, `shell`,
+ * `waiting 4m` or `no agent`, and **none of them says `quiet`**. So a reader
+ * cannot map the tally onto the list below it by looking, which is what makes
+ * this the first thing on the page worth a card.
+ *
+ * The bands are Greg's, out of overseer-direction.md, and `view.ts` § `tally`
+ * and § `triageBand` are where each of these sentences comes from.
+ */
+export const COUNT_TIPS: Record<"needsYou" | "working" | "quiet" | "unknown", Tip> = {
+  needsYou: {
+    head: "Need you",
+    what: "Sessions blocked on a person — a permission prompt, a question, a dialog waiting for an answer.",
+    how: "The first question this page is built to answer, which is why these sort to the top of the list whatever else is happening. Read off each session's own terminal, so it is a good guess rather than something the box reported.",
+  },
+  working: {
+    head: "Working",
+    what: "Sessions that are moving: an agent is mid-turn, with nothing waiting on anybody.",
+    how: "The second band, and the reason the list has three rather than seven — a screen with more ranks than that is one nobody reads the bottom of.",
+  },
+  quiet: {
+    head: "Quiet",
+    what: "Everything else, in one number: idle agents, sessions sleeping until a time, shells with no agent in them at all.",
+    /* **The word is this tally's own and appears on no row**, which is exactly
+       what a reader gets stuck on: they look for a `quiet` badge in the list and
+       there is none. Saying so is the whole value of this card. */
+    how: "A band rather than a status — no row anywhere on the page says “quiet”. The list spells out which kind each one is, because *sleeping until 4pm* and *nobody is home* are different things to find out at midnight.",
+  },
+  unknown: {
+    head: "Unknown",
+    what: "Sessions the box could not answer a question about at all. Counted beside the others rather than inside them.",
+    how: "One failed call turns every agent row unknown at once, and a masthead reading “0 need you” over eleven unanswerable rows is the exact lie this page is built not to tell. These are also inside the quiet band's list; the number is here so it cannot be missed.",
+  },
+};
+
+/** The four states the Overseer line can be in, and what each of them costs. */
+export const CLAIM_TIPS: Record<"one" | "none" | "contested" | "cannot-tell", Tip> = {
+  one: {
+    head: "The Overseer",
+    what: "The session supervising all the others. The box is meant to have exactly one, and this is it.",
+    how: "It is a claim the session makes in the tmux server's own environment, not a role anything grants — so this says which session believes it holds it, checked against a snapshot fresh enough to be worth believing.",
+  },
+  none: {
+    head: "No Overseer session",
+    what: "Nobody currently holds the claim. This is a real answer, not a blank.",
+    how: "What the box looks like after a reboot: the claim lives in the tmux server's memory and dies with it. Nothing else on this page would say so, and every agent on the box goes unsupervised until a session takes it.",
+  },
+  contested: {
+    head: "Two claimants",
+    what: "More than one session says it is the Overseer. That is a fault, and both of them are acting on it.",
+    how: "Never resolved by picking one: choosing between two claimants is how both go on believing they are it. It has to be settled on the box, by stopping one.",
+  },
+  "cannot-tell": {
+    head: "Overseer unknown",
+    what: "This page will not answer the question, and says why rather than guessing.",
+    how: "Either the snapshot is too old to describe now — two holders an hour ago do not prove two holders, since killing one is what somebody would have done — or rows were dropped that could not be read, any of which could be the holder's.",
+  },
+};
 
 /**
  * The width everything on the page agrees on.
@@ -286,21 +358,35 @@ function OverseerLine({ state, fresh }: { state: FleetState; fresh: Freshness })
     case "one":
       return (
         <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-soft">
-          Overseer: <span className="tw:font-semibold tw:text-ink">{claim.name}</span>
+          <Explain tip={CLAIM_TIPS.one} placement="bottom">
+            Overseer: <span className="tw:font-semibold tw:text-ink">{claim.name}</span>
+          </Explain>
         </p>
       );
     case "none":
-      return <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-faint">no Overseer session</p>;
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-faint">
+          <Explain tip={CLAIM_TIPS.none} placement="bottom">
+            no Overseer session
+          </Explain>
+        </p>
+      );
     case "contested":
       return (
         <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
-          {claim.names.length} sessions claim to be the Overseer: {claim.names.join(", ")}
+          <Explain tip={CLAIM_TIPS.contested} placement="bottom">
+            {claim.names.length} sessions claim to be the Overseer: {claim.names.join(", ")}
+          </Explain>
         </p>
       );
     case "cannot-tell":
       return (
+        /* The `why` is the page’s own sentence about THIS payload and stays
+           visible; the card is what the state means in general. */
         <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
-          Overseer unknown — {claim.why}
+          <Explain tip={CLAIM_TIPS["cannot-tell"]} placement="bottom">
+            Overseer unknown — {claim.why}
+          </Explain>
         </p>
       );
     default: {
@@ -349,10 +435,10 @@ export function Header({
               eleven unanswerable rows is exactly the lie this tool exists to
               avoid. */}
           <div className="tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-0.5 tw:text-[13px] tw:text-ink-soft">
-            <Count n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
-            <Count n={counts.working} label="working" className="tw:text-work-ink" />
-            <Count n={counts.other - counts.unknown} label="quiet" />
-            <Count n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
+            <Count tip={COUNT_TIPS.needsYou} n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
+            <Count tip={COUNT_TIPS.working} n={counts.working} label="working" className="tw:text-work-ink" />
+            <Count tip={COUNT_TIPS.quiet} n={counts.other - counts.unknown} label="quiet" />
+            <Count tip={COUNT_TIPS.unknown} n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
           </div>
 
           {/* The age, and the card that says what "stale" means and when we

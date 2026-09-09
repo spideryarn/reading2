@@ -221,6 +221,46 @@
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
+
+  /* ------------------------------------------------------- the type scale --
+   *
+   * **Five steps, hand-picked, each at least ~25% from its neighbour** — the
+   * rule in docs/reusable/design-a-screen.md, and the reason this exists at
+   * all. A census on 2026-09-09 found 356 of the client's 368 sizing utilities
+   * sitting between 10px and 13px: a 3px band, in which nothing can be dominant
+   * because nothing is bigger than anything else.
+   *
+   * The steps are not invented. `HealthPanel`'s stat tiles were already the
+   * only place on the page where the number that matters is the biggest thing
+   * in its box, and `answer`/`label`/`note` are that tile's three sizes, named.
+   *
+   *   answer  22px   the one thing the screen exists to say. AT MOST ONE per
+   *                  card, and a screen with three is a screen with no answer.
+   *   lead    15px   a headline sentence, or a card's title. The body size, so
+   *                  it is what an unstyled element already gets.
+   *   body    13px   ordinary text: rows, sentences, values that are not THE
+   *                  value.
+   *   note    12px   evidence under a value, provenance, coverage, ids.
+   *   label   11px   uppercase section labels and the caps line over a stat.
+   *
+   * There is deliberately no sixth step, and nothing below 11px: 10px appears
+   * three times in the client today and every one of them is a note that lost
+   * an argument with a layout.
+   *
+   * Emitted as `--text-*`, so Tailwind gives us `tw:text-answer` and friends
+   * alongside its own `text-sm`. Sizes only — WEIGHT AND COLOUR ARE NOT PART OF
+   * THE STEP, because emphasis wants two dimensions moving together and
+   * welding them to the size would take that choice away at every call site. */
+  --text-answer: 22px;
+  --text-answer--line-height: 1.15;
+  --text-lead: 15px;
+  --text-lead--line-height: 1.35;
+  --text-body: 13px;
+  --text-body--line-height: 1.45;
+  --text-note: 12px;
+  --text-note--line-height: 1.4;
+  --text-label: 11px;
+  --text-label--line-height: 1.3;
 }
 
 /* --------------------------------------------------------------- base -- */

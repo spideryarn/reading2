@@ -42,10 +42,11 @@
  * Every string drawn here is agent-authored text. React escapes it; nothing
  * here adds markup. `Turn.tsx` draws the turns and carries the same rule.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 
-import { SPEAKERS } from "./Turn";
-import { Explain } from "./Tooltip";
+import { SPEAKERS, SPEAKER_TIPS } from "./Turn";
+import { Explain, TipCard, Tooltip, TooltipGroup } from "./Tooltip";
+import { instantTip } from "./instant";
 import {
   NO_FILTERS,
   applyFilters,
@@ -125,18 +126,29 @@ function Chip({
   onClick,
   children,
   label,
+  ...rest
 }: {
   on: boolean;
   onClick: () => void;
   children: ReactNode;
   label: string;
-}): ReactNode {
+  /**
+   * **Everything else goes on the `<button>`, and the `ref` is the reason.**
+   *
+   * A `Tooltip` around a chip clones it and hands it a merged `ref` plus its
+   * hover and focus handlers. Tooltip.tsx's header names the failure exactly:
+   * *"a trigger that swallows the ref opens nothing at all — with no error, and
+   * looking exactly like a page with no tooltips on it."* This component ate
+   * both until 2026-09-09, because it declared four props and dropped the rest.
+   */
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "aria-label">): ReactNode {
   return (
     <button
       type="button"
       aria-pressed={on}
       aria-label={label}
       onClick={onClick}
+      {...rest}
       className={cx(
         "tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:rounded-full tw:border tw:px-2.5",
         "tw:text-[12px] tw:whitespace-nowrap tw:transition-colors",
@@ -250,8 +262,22 @@ function Row({ row }: { row: FeedRow }): ReactNode {
     <li className="tw:border-t tw:border-rule tw:py-2 tw:first:border-t-0">
       <p className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[11px]">
         <Mono>{row.sessionName}</Mono>
-        <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
-        {row.turn.at === null ? null : <span className="tw:text-ink-faint">{row.turn.at}</span>}
+        {/* The same card the detail pane's turns carry, from the same map —
+            `SPEAKERS` and `SPEAKER_TIPS` are both in Turn.tsx for the reason
+            this file's header gives about the map itself. */}
+        <Explain tip={SPEAKER_TIPS[row.turn.speaker]} placement="bottom">
+          <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
+        </Explain>
+        {row.turn.at === null ? null : (
+          /* **The raw ISO is deliberate and it is also unreadable.** `wire.ts`
+             § `FeedTurn.at` keeps it on the box's clock, exactly as the
+             transcript wrote it, so it can be compared against a log line —
+             and nothing on the row said what time of day that is in either of
+             the two cities Greg reads this in. */
+          <Explain tip={instantTip(row.turn.at, "This message was written")} placement="bottom">
+            <span className="tw:text-ink-faint">{row.turn.at}</span>
+          </Explain>
+        )}
         {row.attribution.kind === "suspect" ? (
           <Explain tip={{ ...ATTRIBUTION_TIP, how: row.attribution.why }} placement="bottom">
             <span className="tw:font-semibold tw:text-alarm-ink">may not be this session</span>
@@ -433,16 +459,26 @@ export function FeedPanel({
 
       {/* Speaker chips. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:gap-1.5">
-        {FILTERABLE.map((s) => (
-          <Chip
-            key={s}
-            on={filters.speakers.includes(s)}
-            onClick={() => onFilters({ ...filters, speakers: toggle(filters.speakers, s) })}
-            label={`Show only ${SPEAKERS[s].label}`}
-          >
-            {SPEAKERS[s].label}
-          </Chip>
-        ))}
+        {/* **`mouseOnly`, and this is the one place on the tab that needs it.**
+            A tap on a chip toggles the filter, so a card opening at the same
+            time would land over the list the tap just changed — the dock's
+            argument exactly (Dock.tsx). The cost is that these nine definitions
+            are unreachable on a phone, which is why the same map is also on the
+            badge over every message, where a tap does nothing and the card
+            opens under a finger. */}
+        <TooltipGroup delay={{ open: 240, close: 90 }}>
+          {FILTERABLE.map((s) => (
+            <Tooltip key={s} content={<TipCard tip={SPEAKER_TIPS[s]} />} placement="top" mouseOnly>
+              <Chip
+                on={filters.speakers.includes(s)}
+                onClick={() => onFilters({ ...filters, speakers: toggle(filters.speakers, s) })}
+                label={`Show only ${SPEAKERS[s].label}`}
+              >
+                {SPEAKERS[s].label}
+              </Chip>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
 
       {/* Session chips, from the sessions present in this window. */}
