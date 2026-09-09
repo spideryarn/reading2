@@ -50,6 +50,7 @@
  * possible. `throughput` is what will measure it, and until then it says how far
  * off that is.
  */
+import type { QueueDepth, QueueItemWait, QueueThroughput, QueueWindow } from "../fleet/wire.js";
 import { isDispatchable, type IdeaItem, type QueueView } from "./idea-queue.js";
 
 /** The two windows. Short enough to notice a change, long enough to have anything in it. */
@@ -58,26 +59,16 @@ export const WINDOWS_DAYS: readonly number[] = [7, 30];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * How deep the queue is, split by **why** each item is not moving.
+ * How deep the queue is, split by why each item is not moving.
  *
- * The split is the useful part. A single number conflates *nobody has got to it*
- * with *it is waiting on you*, and only one of those is Greg's to fix — which
- * makes the second the one worth putting in front of him.
+ * **The type lives in [`wire.ts`](../fleet/wire.ts)** — it crosses the HTTP
+ * boundary, so it has one home there and an alias here, rather than the twin
+ * declaration that file's header is about. The argument for the split, and the
+ * rule that the four fields partition the rows, is written at `QueueDepth`.
  */
-export type QueueDepth = {
-  /** Authorised, unblocked, waiting for a slot. The only ones a rate would apply to. */
-  readonly dispatchable: number;
-  /** Waiting on Greg for an answer, not on a slot. */
-  readonly needsGreg: number;
-  /** Proposals nobody has authorised, and approvals lapsed by a later edit. */
-  readonly unauthorized: number;
-  /** Running now. */
-  readonly dispatched: number;
-  readonly done: number;
-  readonly dropped: number;
-};
+export type Depth = QueueDepth;
 
-export function queueDepth(view: QueueView): QueueDepth {
+export function queueDepth(view: QueueView): Depth {
   let dispatchable = 0;
   let needsGreg = 0;
   let unauthorized = 0;
@@ -106,38 +97,16 @@ export function queueDepth(view: QueueView): QueueDepth {
   };
 }
 
-/** What went out in one window. */
-export type Window = {
-  readonly days: number;
-  /** Items dispatched in the window. */
-  readonly dispatched: number;
-  /** Items that finished in the window. */
-  readonly done: number;
-};
+/** What went out in one window. Aliased from `wire.ts`. */
+export type Window = QueueWindow;
 
 /**
- * What the queue has actually done, per window — **measured on the queue
- * itself**, from its own events.
+ * What the queue has actually done, per window — measured on the queue itself.
  *
- * Not from the fleet's session log, which is the mistake the header is about:
- * an item's `dispatched` event is the event being predicted, so counting those
- * measures the right population.
+ * Aliased from `wire.ts`, where the argument for `duration` having exactly one
+ * arm is written out.
  */
-export type Throughput = {
-  readonly windows: readonly Window[];
-  /** Every dispatch this queue has ever recorded. The sample a future estimate would use. */
-  readonly dispatchesEver: number;
-  /** Every completion. */
-  readonly completionsEver: number;
-  /**
-   * Whether there is yet enough of this queue's own history to say anything
-   * about duration — and, while there is not, the sentence saying so.
-   *
-   * **A separate field rather than a number the caller compares**, so that the
-   * page cannot accidentally render a confident figure by forgetting a `<`.
-   */
-  readonly duration: { readonly kind: "not-enough"; readonly why: string };
-};
+export type Throughput = QueueThroughput;
 
 /** How many completions it would take before a duration is worth computing. */
 export const ENOUGH_COMPLETIONS = 8;
@@ -186,21 +155,10 @@ export function throughput(view: QueueView, nowMs: number, windowsDays: readonly
 }
 
 /**
- * What can be said about one item's wait.
- *
- * Four arms, and none of them is a duration. **Naming which kind of "I cannot
- * say" this is** follows the house rule
- * ([fleet-dashboard-modes.md](../../docs/project/fleet-dashboard-modes.md)): a
- * reading nobody could take must never render as a confident value, and the
- * several ways of having nothing to say must not collapse into one. *Running*,
- * *waiting on you*, and *nobody has approved it* send a reader to three
- * different actions; "unknown" sends them nowhere.
+ * What can be said about one item's wait. Aliased from `wire.ts`, where the
+ * four arms and the reason they are not collapsed are argued.
  */
-export type ItemWait =
-  | { readonly kind: "ahead"; readonly ahead: number; readonly why: string }
-  | { readonly kind: "running"; readonly session: string | null; readonly why: string }
-  | { readonly kind: "needs-greg"; readonly waitingOn: string | null; readonly why: string }
-  | { readonly kind: "not-authorized"; readonly why: string };
+export type ItemWait = QueueItemWait;
 
 export function itemWait(view: QueueView, item: IdeaItem): ItemWait {
   if (item.lifecycle === "dispatched") {

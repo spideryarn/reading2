@@ -41,6 +41,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../tools/fleet/web/src/App";
 import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-client";
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
+import type { QueueApi, QueueView } from "../tools/fleet/web/src/queue-client";
 import { freshness } from "../tools/fleet/web/src/Header";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
 import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
@@ -469,7 +470,48 @@ afterEach(() => {
  * thought it was exercising. The handful of tests that DO want the real wire
  * stub `fetch` and render `<App>` themselves.
  */
-function mount(transport: Transport, deploysApi: DeploysApi = recordingDeploys().api): void {
+/**
+ * A queue API that answers without a network.
+ *
+ * **Injected into `mount` rather than left to default**, because `QueuePanel`'s
+ * own default is `httpQueueApi`, which calls `fetch` — and a suite that quietly
+ * made real requests would pass while telling you nothing about the seam it
+ * thought it was exercising. Every other panel here is stubbed for the same
+ * reason.
+ */
+function fakeQueue(view?: QueueView): QueueApi {
+  return {
+    fetch: () =>
+      Promise.resolve(
+        view ?? {
+          schema: 1,
+          kind: "queue",
+          version: "2.ev-2",
+          rows: [],
+          settled: [],
+          settledWithheld: 0,
+          depth: { dispatchable: 0, needsGreg: 0, unauthorized: 0, dispatched: 0, done: 0, dropped: 0 },
+          throughput: {
+            windows: [
+              { days: 7, dispatched: 0, done: 0 },
+              { days: 30, dispatched: 0, done: 0 },
+            ],
+            dispatchesEver: 0,
+            completionsEver: 0,
+            duration: { kind: "not-enough", why: "nothing has been through this queue yet" },
+          },
+          problems: [],
+          path: "/tmp/fake/queue.jsonl",
+        },
+      ),
+  };
+}
+
+function mount(
+  transport: Transport,
+  deploysApi: DeploysApi = recordingDeploys().api,
+  queueApi: QueueApi = fakeQueue(),
+): void {
   act(() =>
     root.render(
       <App
@@ -478,6 +520,7 @@ function mount(transport: Transport, deploysApi: DeploysApi = recordingDeploys()
         actionsApi={recordingActions().api}
         messagesApi={recordingMessages().api}
         deploysApi={deploysApi}
+        queueApi={queueApi}
         actionsPollMs={3_600_000}
       />,
     ),
@@ -807,6 +850,38 @@ describe("the modes", () => {
     const feed = manualTransport();
     mount(feed.transport);
     expect(container.textContent).toContain("Everything queued, across the fleet");
+  });
+
+  /**
+   * **`toContain` is the assertion a clean merge cannot defeat.**
+   * `MODE_LABELS`, `MODE_ICONS` and `MODE_TIPS` are `Record<Mode, …>`, so
+   * dropping one of them is a type error — but dropping the `MODES` entry
+   * itself just narrows `Mode`, and every map then satisfies its own type while
+   * the tab has silently gone. Four sessions were editing this file on the
+   * night of 2026-09-08, which is exactly when that happens.
+   * docs/project/fleet-dashboard-modes.md § When several sessions add a tab.
+   */
+  it("keeps `ideas` in the vocabulary", () => {
+    expect(MODES).toContain("ideas");
+  });
+
+  it("opens into Queued ideas from the hash", () => {
+    window.location.hash = "#ideas";
+    const feed = manualTransport();
+    mount(feed.transport);
+    expect(container.textContent).toContain("Reading the queue");
+  });
+
+  /* **The one that catches a missing `App.tsx` arm** — the fifth registration,
+     and the only one no type can see. Pressing the button must write the hash
+     AND draw something. */
+  it("draws the Queued ideas panel when its button is pressed", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Queued ideas");
+    act(() => button?.click());
+    expect(window.location.hash).toBe("#ideas");
+    expect(container.textContent).toContain("Reading the queue");
   });
 });
 
