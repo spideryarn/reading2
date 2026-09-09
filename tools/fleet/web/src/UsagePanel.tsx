@@ -1213,6 +1213,12 @@ function CodexBucketSection({
   skew: ClockSkew;
 }): ReactNode {
   const reached = bucket.rateLimitReachedType;
+  const controlWhy =
+    general && bucket.spendControlReached !== false
+      ? "General headroom is unavailable because spend-control state was reached or unavailable."
+      : general && bucket.individualLimit !== null
+        ? "General headroom is unavailable because an individual spend limit was reported."
+        : null;
   return (
     <section className="tw:mt-3">
       <h3 className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
@@ -1220,15 +1226,25 @@ function CodexBucketSection({
       </h3>
       {reached !== null ? (
         <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
-          Rate limit reached — {reached.length === 0 ? "the backend did not name its type" : reached}
+          When this reading was taken, the backend reported a reached limit — {reached.length === 0 ? "type not named" : reached}
         </p>
       ) : null}
       {bucket.spendControlReached === true ? (
-        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">The account&rsquo;s spend control has been reached.</p>
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+          When this reading was taken, the backend reported that spend control was reached.
+        </p>
       ) : null}
-      <div className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
-        {bucketWindowCards(bucket, asOf, skew)}
-      </div>
+      {controlWhy === null ? (
+        <div className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
+          {bucketWindowCards(bucket, asOf, skew)}
+        </div>
+      ) : (
+        <StatCard
+          label="General headroom"
+          value={{ kind: "absent", state: "unavailable", why: controlWhy }}
+          tone="unknown"
+        />
+      )}
     </section>
   );
 }
@@ -1259,7 +1275,23 @@ function CodexUsageCard({
   }
 
   const reading = ago(codex.readAt, asOf, skew);
-  const stale = reading.ms === null || reading.ms > READING_STALE_MS;
+  if (reading.ms === null) {
+    return (
+      <Card className="tw:mb-3 tw:p-4">
+        <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
+        <StatCard
+          label="General headroom"
+          value={{
+            kind: "absent",
+            state: "unavailable",
+            why: "the reading instant is in the future or cannot be compared with this page’s clock",
+          }}
+          tone="unknown"
+        />
+      </Card>
+    );
+  }
+  const stale = reading.ms > READING_STALE_MS;
   const bucketGroups = new Map<string, CodexBucketView[]>();
   for (const bucket of codex.buckets) {
     const group = bucketGroups.get(bucket.limitId) ?? [];

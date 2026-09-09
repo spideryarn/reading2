@@ -9,16 +9,18 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usageHistoryPayload } from "../tools/fleet/routes-usage-history.js";
 import type { CodexObservation, CodexWindowObservation } from "../tools/fleet/usage-history-record.js";
 import type { UsageHistoryReader, UsageHistorySample } from "../tools/fleet/usage-history.js";
+import { useUsageHistoryView } from "../tools/fleet/web/src/UsageHistory";
 import { UsageCard } from "../tools/fleet/web/src/UsagePanel";
 import {
   newestCodexObservation,
   parseUsageHistory,
   type CodexObservationView,
+  type UsageHistoryApi,
   type UsageHistoryView,
 } from "../tools/fleet/web/src/usage-history-client";
 import { CLOCK_SKEW_UNMEASURED } from "../tools/fleet/web/src/types";
@@ -41,6 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
 });
 
 function codex(over: Partial<Extract<CodexObservation, { kind: "value" }>> = {}): Extract<CodexObservation, { kind: "value" }> {
@@ -136,6 +139,33 @@ function screen(): string {
   return (container.textContent ?? "").replace(/\s+/g, " ");
 }
 
+function historyView(latestCodex: CodexObservationView): Extract<UsageHistoryView, { kind: "history" }> {
+  return {
+    kind: "history",
+    windowHours: 24,
+    fromMs: NOW - 86_400_000,
+    toMs: NOW,
+    samples: [],
+    predecessor: null,
+    holes: [],
+    earliestAt: null,
+    rotated: false,
+    unreadableLines: 0,
+    unsupportedLines: 0,
+    recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
+    refreshMs: 60_000,
+    latestCodex,
+  };
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("route payload → browser parser → Codex account card", () => {
   it("keeps the additive Codex field and renders it even when the Claude pass failed", () => {
     const view = routeView([sample(codex())]);
@@ -146,6 +176,63 @@ describe("route payload → browser parser → Codex account card", () => {
     expect(screen()).toContain("24% used");
     expect(screen()).toContain("Reading taken 2h ago");
     expect(screen()).toContain("2 reset credits");
+  });
+
+  it("does not trust Codex from a sample whose Claude pass makes the whole sample unreadable", () => {
+    const store: UsageHistoryReader = {
+      read: () => ({
+        kind: "read",
+        samples: [sample(codex({ buckets: [{ ...codex().buckets[0]!, windows: [valueWindow({ usedPercent: 0 })] }] }))],
+        predecessor: null,
+        holes: [],
+        earliestAt: READ_AT,
+        rotated: false,
+        unreadableLines: 0,
+        unsupportedLines: 0,
+        files: 1,
+      }),
+    };
+    const raw = JSON.parse(JSON.stringify(usageHistoryPayload({ store, refreshMs: 60_000, nowMs: () => NOW }, 24))) as {
+      samples: { line: { pass: unknown } }[];
+    };
+    raw.samples[0]!.line.pass = null;
+
+    const view = parseUsageHistory(raw);
+    expect(view.kind === "history" ? view.samples : []).toHaveLength(0);
+    draw(newestCodexObservation(view));
+
+    expect(screen()).toContain("newest history sample was unreadable");
+    expect(screen()).not.toContain("0% used");
+  });
+});
+
+describe("usage-history polling order", () => {
+  it("does not let an older request overwrite a newer response", async () => {
+    vi.useFakeTimers();
+    const first = deferred<UsageHistoryView>();
+    const second = deferred<UsageHistoryView>();
+    let calls = 0;
+    const api: UsageHistoryApi = {
+      window: () => {
+        calls += 1;
+        return calls === 1 ? first.promise : second.promise;
+      },
+    };
+    const Probe = () => {
+      const view = useUsageHistoryView({ api, refreshNonce: 0, active: true });
+      return <p>{view?.kind === "history" ? view.latestCodex.kind : view?.kind ?? "loading"}</p>;
+    };
+    act(() => root.render(<Probe />));
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(calls).toBe(2);
+
+    second.resolve(historyView({ kind: "unknown", why: "newer failure", retryable: true }));
+    await act(async () => undefined);
+    expect(screen()).toBe("unknown");
+
+    first.resolve(historyView(codex()));
+    await act(async () => undefined);
+    expect(screen()).toBe("unknown");
   });
 });
 
@@ -289,7 +376,48 @@ describe("Codex card claims", () => {
 
   it("states a reached limit instead of letting the percentage imply headroom", () => {
     draw(codex({ buckets: [{ ...codex().buckets[0]!, rateLimitReachedType: "weekly" }] }));
-    expect(screen()).toMatch(/rate limit reached.*weekly/i);
+    expect(screen()).toMatch(/reported a reached limit.*weekly/i);
+  });
+
+  it("time-qualifies backend limit states after their window has reset", () => {
+    const past = new Date(NOW - 60_000).toISOString();
+    draw(codex({
+      readAt: new Date(NOW - 60 * 60_000).toISOString(),
+      buckets: [{
+        ...codex().buckets[0]!,
+        rateLimitReachedType: "weekly",
+        windows: [valueWindow({ resetsAt: past, resetsAtMs: Date.parse(past) })],
+      }],
+    }));
+    expect(screen()).toContain("When this reading was taken, the backend reported a reached limit — weekly");
+    expect(screen()).toContain("already reset 1m ago");
+
+    draw(codex({ buckets: [{ ...codex().buckets[0]!, spendControlReached: true }] }));
+    expect(screen()).toContain("When this reading was taken, the backend reported that spend control was reached.");
+  });
+
+  it.each([
+    [
+      "unknown spend-control state",
+      { spendControlReached: null },
+      "spend-control state was reached or unavailable",
+    ],
+    [
+      "an individual spend limit",
+      {
+        spendControlReached: false,
+        individualLimit: { limit: "10", used: "10", remainingPercent: 0, resetsAt: Math.floor(NOW / 1000) },
+      },
+      "an individual spend limit was reported",
+    ],
+  ])("withholds general percentages when the persisted reading carries %s", (_name, over, why) => {
+    const general = { ...codex().buckets[0]!, ...over, windows: [valueWindow({ usedPercent: 0 })] };
+    const view = routeView([sample(codex({ buckets: [general] }))]);
+    draw(newestCodexObservation(view));
+
+    expect(screen()).toContain("General headroom");
+    expect(screen()).toContain(why);
+    expect(screen()).not.toContain("0% used");
   });
 
   it("re-derives live expiry and does not display an expired percentage", () => {
@@ -297,6 +425,13 @@ describe("Codex card claims", () => {
     draw(codex({ buckets: [{ ...codex().buckets[0]!, windows: [valueWindow({ usedPercent: 91, resetsAt: past, resetsAtMs: Date.parse(past) })] }] }));
     expect(screen()).toContain("already reset");
     expect(screen()).not.toContain("91% used");
+  });
+
+  it("withholds decision numbers when the reading instant is in the future", () => {
+    draw(codex({ readAt: new Date(NOW + 60 * 60_000).toISOString(), resetCredits: 2 }));
+    expect(screen()).toContain("reading instant is in the future or cannot be compared");
+    expect(screen()).not.toContain("24% used");
+    expect(screen()).not.toContain("2 reset credits");
   });
 
   it("rejects duplicate bucket ids and duplicate slots instead of picking the first", () => {

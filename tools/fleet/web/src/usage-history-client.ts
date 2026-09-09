@@ -256,22 +256,17 @@ function hasOwn(record: Record<string, unknown>, key: string): boolean {
 }
 
 function codexAttempt(raw: unknown): CodexObservationView {
-  const sample = obj(raw);
-  if (sample === null) return { kind: "unknown", why: "the newest history sample was unreadable", retryable: false };
-  if (sample["kind"] === "unsupported") {
-    return { kind: "unknown", why: "the newest history sample was written by an unsupported build", retryable: false };
-  }
-  if (sample["kind"] === "omitted") {
-    return { kind: "unknown", why: `the newest history sample was omitted: ${str(sample["why"]) ?? "no reason was recorded"}`, retryable: false };
-  }
-  const line = obj(sample["line"]);
-  if (sample["kind"] !== "sample" || line === null) {
+  const sample = parseSample(raw);
+  if (sample === null) {
     return { kind: "unknown", why: "the newest history sample was unreadable", retryable: false };
   }
-  if (!hasOwn(line, "codex")) {
-    return { kind: "absent", why: "this history record predates Codex usage collection" };
+  if (sample.kind === "unsupported") {
+    return { kind: "unknown", why: "the newest history sample was written by an unsupported build", retryable: false };
   }
-  return parseCodex(line["codex"]);
+  if (sample.kind === "omitted") {
+    return { kind: "unknown", why: `the newest history sample was omitted: ${sample.why}`, retryable: false };
+  }
+  return sample.line.codex ?? { kind: "absent", why: "this history record predates Codex usage collection" };
 }
 
 function parseWindow(raw: unknown): UsageWindowView | null {

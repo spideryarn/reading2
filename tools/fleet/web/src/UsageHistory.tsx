@@ -53,9 +53,11 @@ export function useUsageHistoryView({
   useEffect(() => {
     if (!active) return;
     let live = true;
+    let newestRequest = 0;
     const load = (): void => {
+      const request = ++newestRequest;
       void api.window(WINDOW_HOURS).then((next) => {
-        if (!live) return;
+        if (!live || request !== newestRequest) return;
         setView(next);
         if (next.kind === "history" && next.refreshMs > 0) setRefreshMs(next.refreshMs);
       });

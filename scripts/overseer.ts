@@ -161,6 +161,17 @@ function codexBucketLines(bucket: CodexValueReading["buckets"][number], general:
   }
   if (bucket.spendControlReached === true) out.push("          SPEND CONTROL REACHED");
 
+  const controlWhy =
+    general && bucket.spendControlReached !== false
+      ? "General headroom is unavailable because spend-control state was reached or unavailable."
+      : general && bucket.individualLimit !== null
+        ? "General headroom is unavailable because an individual spend limit was reported."
+        : null;
+  if (controlWhy !== null) {
+    out.push(`          could not tell — ${controlWhy}`);
+    return out;
+  }
+
   const slots = new Map<string, typeof bucket.windows>();
   for (const window of bucket.windows) {
     const group = slots.get(window.slot) ?? [];
