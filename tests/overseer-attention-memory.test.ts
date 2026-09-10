@@ -50,6 +50,7 @@ const MEMORY: AttentionMemory = {
       {
         fingerprint: "abc",
         classifiedAt: "2026-09-08T09:00:00.000Z",
+        promptVersion: 1,
         verdict: {
           kind: "question" as const,
           topic: "shall I push",
@@ -176,6 +177,54 @@ describe("the parser, which must be total — GPT Sol's finding 3", () => {
     });
     expect(parseAttentionMemory(good).kind).toBe("memory");
   });
+
+  test("reads a memory written before prompt versions existed, with every verdict STALE rather than refused", () => {
+    // Plan 260910f D3. Refusing the whole file would be safe and expensive — a
+    // fleet's worth of calls to learn nothing new. The verdicts are about text
+    // and are still true; what is unknown is only which prompt made them, and
+    // "unknown" is never the active version, so every one is re-read first
+    // while it goes on placing its card.
+    const legacy = {
+      schema: ATTENTION_MEMORY_SCHEMA,
+      epoch: "e",
+      waits: {},
+      verdicts: {
+        abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", verdict: { kind: "no-question", why: "w" } },
+        def: {
+          fingerprint: "def",
+          classifiedAt: "2026-09-08T09:00:00.000Z",
+          verdict: { kind: "question", topic: "t", why: "w", attentionKind: "other", answerability: { kind: "phone" } },
+        },
+      },
+    };
+    const read = parseAttentionMemory(legacy);
+    expect(read.kind).toBe("memory");
+    if (read.kind !== "memory") return;
+    expect([...read.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([null, null]);
+  });
+
+  test("keeps the prompt version a verdict was made under across the round trip", () => {
+    const root = tempRoot();
+    writeAttentionMemory(root, MEMORY);
+    const read = readAttentionMemory(root);
+    if (read.kind !== "memory") throw new Error("expected a memory");
+    expect(read.memory.verdicts.get("abc")?.promptVersion).toBe(1);
+  });
+
+  test.each([["a string", "1"], ["zero", 0], ["a fraction", 1.5], ["negative", -1]])(
+    "refuses a prompt version that is %s, because a corrupted version would read as current",
+    (_name, promptVersion) => {
+      const bad = {
+        schema: ATTENTION_MEMORY_SCHEMA,
+        epoch: "e",
+        waits: {},
+        verdicts: {
+          abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion, verdict: { kind: "no-question", why: "w" } },
+        },
+      };
+      expect(parseAttentionMemory(bad).kind).toBe("unusable");
+    },
+  );
 
   test("refuses a classifiedAt that is not an instant", () => {
     const bad = {

@@ -281,6 +281,42 @@ describe("reference resolution can only downgrade", () => {
     expect(state.questions).toMatchObject({ kind: "complete" });
   });
 
+  it("parses the stopped-judge gap and re-derives it from a `limited` inbox on its own clock", () => {
+    /* Plan 260910f D6: the server composer names the stop; the browser both
+       parses that gap strictly and re-derives it from the attention it parsed
+       itself, so a server that forgot it still cannot make the view complete. */
+    const stopped = { kind: "exhausted", why: "the day's ceiling would be crossed", until: "2026-09-10T00:00:00.000Z" };
+    const limited = {
+      kind: "published",
+      coordinatorWrittenAt: FRESH,
+      list: { kind: "limited", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: FRESH, stopped },
+    };
+    const withGap = read({
+      attention: limited,
+      questions: {
+        kind: "partial",
+        items: [dialogItem()],
+        gaps: [{ kind: "attention-judgement-stopped", why: stopped.why, until: stopped.until }],
+      },
+    });
+    expect(gapKinds(withGap)).toContain("attention-judgement-stopped");
+    const forgot = read({ attention: limited, questions: { kind: "complete", items: [dialogItem()] } });
+    expect(questionsAtTime(forgot, NOW).kind).toBe("partial");
+    const again = questionsAtTime(forgot, NOW);
+    expect(again.kind === "complete" ? [] : again.gaps.map((g) => g.kind)).toContain("attention-judgement-stopped");
+    /* A gap with no instant is not one this page can draw. */
+    const broken = parseFleetState(
+      payload({
+        attention: limited,
+        questions: { kind: "partial", items: [dialogItem()], gaps: [{ kind: "attention-judgement-stopped", why: "x" }] },
+      }),
+      NOW,
+    );
+    expect(broken.ok && broken.state.questions.kind !== "complete" ? broken.state.questions.gaps.map((g) => g.kind) : []).toContain(
+      "questions-unreadable",
+    );
+  });
+
   it("never promotes server partial or not-observed views", () => {
     const partial = read({
       questions: { kind: "partial", items: [dialogItem()], gaps: [{ kind: "collection-failed", why: "earlier failure" }] },

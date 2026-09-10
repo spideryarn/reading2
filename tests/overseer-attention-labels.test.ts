@@ -15,9 +15,11 @@
  * change to the grep, to `readTurnTail`, to `parsePane`, or to a fixture shows
  * up here as a diff rather than as a better-looking evaluation.
  *
- * D11: `out-of-scope-for-this-detector` is counted and NEVER scored. An
+ * D12: `out-of-scope-for-this-detector` is counted and NEVER scored. An
  * expected-negative counts toward precision; these are cases a question
- * detector is structurally blind to, so counting them would flatter it.
+ * detector is structurally blind to, so counting them would flatter it. It
+ * means misdirection and only misdirection — concluded work is scored, and a
+ * debrief that holds a cleanup decision is a question.
  *
  * The fixtures whose names do not begin `ended-`, `mid-turn-` or
  * `no-input-box-` are HAND-WRITTEN: sanitised prose in the shape of real
@@ -126,6 +128,14 @@ describe("parseLabels — strict, because a mislabel is a wrong number later", (
     ["a missing why", [{ ...good, why: "" }]],
     ["a path that climbs out", [{ ...good, file: "../secrets.txt" }]],
     ["a duplicate file", [good, good]],
+    // D12: concluded work is SCORED. Only misdirection is out of scope, so an
+    // out-of-scope entry filed as concluded work is the relabelling mistake the
+    // plan review (Sol's F7) caught, and the parser refuses it rather than
+    // letting it quietly shrink the scored set.
+    [
+      "out of scope filed as concluded work",
+      [{ ...good, case: "out-of-scope-for-this-detector", recipient: null, category: "concluded" }],
+    ],
   ])("refuses %s", (_name, raw) => {
     expect(() => parseLabels(raw)).toThrow();
   });
@@ -167,6 +177,7 @@ describe("the mechanical inbox — what it says without a model", () => {
     "overseer-turn-tails/rhetorical-mid-explanation-export-manifest.txt": "nothing",
     "overseer-turn-tails/concluded-clean-debrief.txt": "nothing",
     "overseer-turn-tails/concluded-premature-gates-skipped.txt": "nothing",
+    "overseer-turn-tails/concluded-holds-cleanup-decision.txt": "nothing",
     "overseer-turn-tails/background-review-sol-in-tmux.txt": "nothing",
     "overseer-turn-tails/background-review-waiting-on-agent.txt": "nothing",
     "overseer-turn-tails/wrong-task-hard-version-in-primary.txt": "nothing",
@@ -183,8 +194,8 @@ describe("the mechanical inbox — what it says without a model", () => {
 
   it("scores to the pinned summary", () => {
     expect(summariseMechanical(score)).toBe(
-      "mechanical catches 3 of 8 questions and raises 1 false alarm over 9 no-question turns; " +
-        "2 of 24 labelled items are out of scope for this detector and not scored; " +
+      "mechanical catches 3 of 9 questions and raises 1 false alarm over 9 no-question turns; " +
+        "2 of 25 labelled items are out of scope for this detector and not scored; " +
         "1 of 1 permission defect seen as a permission dialog",
     );
   });

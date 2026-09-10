@@ -350,13 +350,30 @@ function attentionLines(register: readonly RegisterEntry[], nowMs: number): stri
 export function inboxLines(list: AttentionList, nowMs: number): string[] {
   if (list.kind === "unknown") return [`inbox       COULD NOT TELL — ${list.why}`];
   const age = describeAge(nowMs - Date.parse(list.scannedAt));
-  if (list.items.length === 0) return [`inbox       nothing needs you, out of ${list.sessionsScanned} sessions looked at ${age} ago`];
+  // `limited`: the model was refused (plan 260910f D6). Its items print as a
+  // list's do, under a line saying so — and an empty one NEVER prints "nothing
+  // needs you", which is the sentence the arm exists to withhold.
+  const stopped =
+    list.kind === "limited"
+      ? [`            NOT EVERY SESSION IS BEING JUDGED — ${list.stopped.why}, until ${when(list.stopped.until)}`]
+      : [];
+  if (list.items.length === 0) {
+    if (list.kind === "limited") {
+      return [
+        `inbox       nothing found among the sessions judged, out of ${list.sessionsScanned} looked at ${age} ago`,
+        ...stopped,
+      ];
+    }
+    return [`inbox       nothing needs you, out of ${list.sessionsScanned} sessions looked at ${age} ago`];
+  }
   const lines =
-    list.sessionsUnreadable === 0
+    list.sessionsUnreadable === 0 && list.kind === "list"
       ? [`inbox       ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`]
       : [
           `inbox       AT LEAST ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`,
-          `            ${list.sessionsUnreadable} session(s) could not be judged at all, so there may be more`,
+          ...(stopped.length > 0
+            ? stopped
+            : [`            ${list.sessionsUnreadable} session(s) could not be judged at all, so there may be more`]),
         ];
   for (const item of list.items) {
     const waited = describeAge(nowMs - Date.parse(item.waitingSince));

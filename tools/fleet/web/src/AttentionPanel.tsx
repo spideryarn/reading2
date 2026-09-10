@@ -168,6 +168,30 @@ function ageMs(at: string, asOf: number): number | null {
 }
 
 /**
+ * THE ONE LINE A `limited` LIST GETS — the model was refused by the day budget
+ * or a quota cooldown (plan 260910f D6), so some sessions were not judged.
+ *
+ * It passes Fable's ten-second test, which is why it is on screen rather than a
+ * tap away: until `until`, a session that is waiting on you may simply not be
+ * here, so it changes whether you go and look at the sessions below yourself.
+ * The WHY is the producer's own sentence, like `unknown`'s, because "the day's
+ * ceiling is spent" and "the gateway said 429" are different things to do
+ * about. `until` is already on this browser's clock (types.ts shifts it).
+ */
+function stoppedSentence(stopped: Extract<AttentionList, { kind: "limited" }>["stopped"], asOf: number): string {
+  const at = Date.parse(stopped.until);
+  const when = !Number.isFinite(at)
+    ? "a time this page could not read"
+    : new Date(at).toLocaleString([], {
+        // The weekday only when it is not today's, so the usual case stays short.
+        ...(new Date(at).toDateString() === new Date(asOf).toDateString() ? {} : { weekday: "short" as const }),
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+  return `Not every session is being judged — ${stopped.why}, until ${when}.`;
+}
+
+/**
  * A quiet one-line state, with the detail one tap away.
  *
  * Every arm of this panel that is NOT a list of cards renders through here, so
@@ -422,6 +446,21 @@ function Published({
 
        Both parsers refuse a list whose unreadable count exceeds its scanned
        count, so the subtraction cannot print a negative. */
+    /* **A STOPPED JUDGE'S EMPTY LIST IS THE CASE THE `limited` ARM EXISTS FOR.**
+       Nothing found among the few the budget let us judge is not "nothing is
+       waiting on you", so the stop line replaces the reassurance, for the same
+       reason as the two branches above. Plan 260910f D6. */
+    if (list.kind === "limited") {
+      return (
+        <Note
+          head="Not every session is being judged"
+          what={`The model that judges prose questions was refused — ${list.stopped.why}.`}
+          how={`The pass looked at ${list.sessionsScanned} sessions and could not judge ${list.sessionsUnreadable} of them. Drawn dialogs are still watched, and answers the model had already given still count, but a session that ended its turn with a question in prose may not be here until the model is allowed to look again.`}
+        >
+          {stoppedSentence(list.stopped, asOf)}
+        </Note>
+      );
+    }
     if (list.sessionsUnreadable > 0) {
       const judged = list.sessionsScanned - list.sessionsUnreadable;
       return (
@@ -454,7 +493,7 @@ function Published({
      inside the headline. `sessionsUnreadable` counts sessions we TRIED to judge
      and could not — never one we correctly skipped — so this is off on almost
      every pass, which is what keeps it from becoming wallpaper. */
-  const floor = list.sessionsUnreadable > 0;
+  const floor = list.sessionsUnreadable > 0 || list.kind === "limited";
 
   return (
     <section>
@@ -474,7 +513,12 @@ function Published({
         </Note>
       ) : null}
 
-      {floor ? (
+      {/* ONE caveat line, never two: on a `limited` list the stop line says
+          everything the floor line would and why, so it takes that line's
+          place rather than stacking under it. */}
+      {list.kind === "limited" ? (
+        <p className="tw:px-1 tw:pb-2 tw:text-[12px] tw:text-ink-faint">{stoppedSentence(list.stopped, asOf)}</p>
+      ) : floor ? (
         <p className="tw:px-1 tw:pb-2 tw:text-[12px] tw:text-ink-faint">
           {list.sessionsUnreadable} of {list.sessionsScanned} could not be judged, so there may be more.
         </p>

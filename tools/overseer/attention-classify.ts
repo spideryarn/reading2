@@ -27,6 +27,13 @@
  *    back as a number.** A pass that quietly looked at four of thirty would draw
  *    a calm inbox for a loud fleet, which is the failure this project keeps
  *    meeting (docs/reusable/silent-success.md).
+ *  - **A day ceiling above that, shared by every process** — `model-budget.ts`,
+ *    plan 260910f D4. `classifyTail` is reached only through it, daemon or hand
+ *    run, and a test says so about the whole tree. What this file contributes
+ *    is the two numbers the budget reserves against and that the request
+ *    actually enforces: `MAX_COMPLETION_TOKENS`, sent as `max_tokens`, and an
+ *    input bound, `clipForClassifier`, from which `WORST_CASE_PROMPT_TOKENS`
+ *    follows.
  *
  * ## The gateway, and the one import we cannot make
  *
@@ -48,6 +55,7 @@
  * asked something it did not, on a surface with no answer control at all.
  */
 import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
+import { MAX_TAIL_CHARS } from "./turn-tail.js";
 
 /**
  * The model. A second copy of `QUICK_MODEL_OPENROUTER`'s value, deliberately.
@@ -65,6 +73,34 @@ import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
 export const ATTENTION_CLASSIFIER_MODEL = "openai/gpt-5.6-luna";
 
 export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+/**
+ * WHICH PROMPT a verdict came from — half of the cache key (plan 260910f D3).
+ *
+ * The key must cover everything the model is shown, and that is the tail and
+ * the prompt: the fingerprint covers the first and this covers the second. A
+ * verdict made under another version is STALE, not absent — it still places
+ * its card, as it did before versions existed, and is re-read first when the
+ * budget allows (`planClassifications`). Bump this whenever `buildClassifierPrompt`
+ * or `parseVerdict` changes what a verdict means.
+ *
+ * One version today. Stage 2 adds a proposal-aware prompt as version 2, chosen
+ * per pass, and hands the pass the version it chose (`AttentionPassOptions.promptVersion`)
+ * — so there is no second prompt here yet, only the plumbing that will carry it.
+ */
+export const CLASSIFIER_PROMPT_VERSION = 1;
+
+/**
+ * The most one call may write back, sent to the gateway as `max_tokens`.
+ *
+ * It is a CAP THE REQUEST ENFORCES, not an estimate, and that is why the day
+ * budget can reserve against it (model-budget.ts): a worst case that relies on
+ * the model choosing to be brief is not a worst case. The answer is a small
+ * JSON object, well under two hundred tokens; the rest is headroom for a model
+ * that reasons before it answers. A reply cut off at the cap does not parse and
+ * comes back `unreadable` — loud, and never cached.
+ */
+export const MAX_COMPLETION_TOKENS = 1_000;
 
 /**
  * What the model was asked, and what came back.
@@ -85,7 +121,17 @@ export type ClassifierVerdict =
       answerability: AttentionAnswerability;
     }
   | { kind: "no-question"; why: string }
-  | { kind: "unreadable"; why: string };
+  | { kind: "unreadable"; why: string }
+  /**
+   * The gateway said no on grounds of money or rate — HTTP 402 or 429 (plan
+   * 260910f D5).
+   *
+   * Its own arm rather than `unreadable` with the status in the prose, because
+   * something has to ACT on it: the budget turns it into a cooldown, so the next
+   * forty tails are not each asked to be refused in turn. The pass treats it
+   * exactly as it treats `unreadable` — not a judgement, never cached.
+   */
+  | { kind: "quota-refused"; status: 402 | 429; why: string };
 
 /**
  * The verdicts that may be REMEMBERED — everything except `unreadable`.
@@ -105,24 +151,46 @@ export type ClassifierVerdict =
  * through the door marked "upgrade". Now the arm cannot be constructed, so
  * neither the writer nor the reader can express it.
  */
-export type CacheableVerdict = Exclude<ClassifierVerdict, { kind: "unreadable" }>;
+export type CacheableVerdict = Exclude<ClassifierVerdict, { kind: "unreadable" } | { kind: "quota-refused" }>;
+
+/** The one test for "may this be remembered", so the pass and the budget cannot disagree about it. */
+export function isCacheable(verdict: ClassifierVerdict): verdict is CacheableVerdict {
+  return verdict.kind === "question" || verdict.kind === "no-question";
+}
 
 /** A verdict, with the key it was computed under, so a stale one is detectable rather than invisible. */
 export type CachedVerdict = {
-  /** The `tailFingerprint` this verdict is about. If it does not match, the verdict is stale. */
+  /** The `tailFingerprint` this verdict is about. If it does not match, the verdict is corrupt. */
   fingerprint: string;
   classifiedAt: string;
+  /**
+   * The `CLASSIFIER_PROMPT_VERSION` it was produced under. `null` for a verdict
+   * written before versions existed: unknown, which is never the active version,
+   * so such a verdict is stale — read, used, and re-read first — rather than
+   * refused (plan 260910f D3; attention-memory.ts parses it).
+   */
+  promptVersion: number | null;
   verdict: CacheableVerdict;
 };
 
 export type TailToClassify = { sessionId: string; fingerprint: string; tail: string };
 
 export type ClassificationPlan = {
-  /** One entry per DISTINCT fingerprint we are about to pay for. */
+  /**
+   * One entry per DISTINCT fingerprint we are about to pay for: the stale
+   * re-reads first, then fresh tails, `maxCalls` in all.
+   */
   toCall: readonly TailToClassify[];
-  /** Fingerprints answered from the cache. */
+  /** Fingerprints answered from the cache under the active prompt version. */
   cached: readonly { fingerprint: string; verdict: CachedVerdict }[];
-  /** Distinct fingerprints the budget would not stretch to. Reported, never hidden. */
+  /**
+   * Fingerprints whose cached verdict came from ANOTHER prompt version — every
+   * one of them, whether or not this pass reaches it. They still place their
+   * cards (stale is not absent, D3), and the ones within `maxCalls` are also in
+   * `toCall`. Never in `overBudget`: a tail with an answer is not unjudged.
+   */
+  stale: readonly { fingerprint: string; verdict: CachedVerdict; tail: TailToClassify }[];
+  /** Distinct fresh fingerprints the budget would not stretch to. Reported, never hidden. */
   overBudget: readonly TailToClassify[];
 };
 
@@ -132,30 +200,45 @@ export type ClassificationPlan = {
  * Deterministic about which tails it drops when the budget binds — sorted by
  * fingerprint — so a budget does not shuffle the fleet between passes and a card
  * does not appear and disappear because the scan order changed.
+ *
+ * **Stale re-reads go ahead of fresh tails** (D3), which is a trade worth
+ * naming: a stale card is ON SCREEN on an answer the active prompt never gave,
+ * while a fresh tail is merely not yet judged and already counted as such. So
+ * the pass that switches prompt versions spends its first calls refreshing what
+ * it is showing, and the catch-up takes a few passes rather than one.
  */
 export function planClassifications(input: {
   tails: readonly TailToClassify[];
   cache: ReadonlyMap<string, CachedVerdict>;
   maxCalls: number;
+  /** The prompt version this pass will ask under. A verdict from any other is stale. */
+  promptVersion: number;
 }): ClassificationPlan {
   const distinct = new Map<string, TailToClassify>();
   for (const t of input.tails) if (!distinct.has(t.fingerprint)) distinct.set(t.fingerprint, t);
 
   const cached: { fingerprint: string; verdict: CachedVerdict }[] = [];
+  const stale: { fingerprint: string; verdict: CachedVerdict; tail: TailToClassify }[] = [];
   const fresh: TailToClassify[] = [];
   for (const [fingerprint, tail] of distinct) {
     const hit = input.cache.get(fingerprint);
     // The cache's key is IN the record, so this is a check rather than an
     // assumption. A record filed under one fingerprint and holding another is a
     // corrupted memory, and it is refused here instead of being rendered.
-    if (hit !== undefined && hit.fingerprint === fingerprint) cached.push({ fingerprint, verdict: hit });
-    else fresh.push(tail);
+    if (hit === undefined || hit.fingerprint !== fingerprint) fresh.push(tail);
+    else if (hit.promptVersion === input.promptVersion) cached.push({ fingerprint, verdict: hit });
+    else stale.push({ fingerprint, verdict: hit, tail });
   }
+  stale.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
   fresh.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+  const budget = Math.max(0, input.maxCalls);
+  const rereads = stale.slice(0, budget).map((s) => s.tail);
+  const freshCalls = fresh.slice(0, budget - rereads.length);
   return {
-    toCall: fresh.slice(0, Math.max(0, input.maxCalls)),
+    toCall: [...rereads, ...freshCalls],
     cached,
-    overBudget: fresh.slice(Math.max(0, input.maxCalls)),
+    stale,
+    overBudget: fresh.slice(freshCalls.length),
   };
 }
 
@@ -214,6 +297,43 @@ export function buildClassifierPrompt(tail: string): { system: string; user: str
   const user = ["Here is the tail of the turn, between the markers.", "", "<<<TURN", tail, "TURN>>>"].join("\n");
   return { system, user };
 }
+
+const CLIP_MARKER = "\n[… cut here: the rest would not fit the classifier's input bound …]\n";
+
+/**
+ * The input, cut to at most `MAX_TAIL_CHARS` — the bound the day budget's worst
+ * case is computed from.
+ *
+ * A turn tail is already cut to that (turn-tail.ts), but a DIALOG's text carries
+ * its material, which can be a whole diff, and a worst case that holds only for
+ * the usual caller is not one. **Both ends are kept**: a dialog's prompt is at
+ * the start and its options at the end, and a turn does its asking at the end.
+ */
+export function clipForClassifier(text: string): string {
+  if (text.length <= MAX_TAIL_CHARS) return text;
+  const keep = MAX_TAIL_CHARS - CLIP_MARKER.length;
+  const head = Math.floor(keep / 2);
+  return `${text.slice(0, head)}${CLIP_MARKER}${text.slice(text.length - (keep - head))}`;
+}
+
+/** Role markers and the like that the chat template adds around the two messages. Generous; it is tokens, not money. */
+const CHAT_TEMPLATE_TOKENS = 64;
+
+/**
+ * The most prompt tokens one call can be charged for, which the day budget
+ * reserves before the call is made.
+ *
+ * **A bound, not an estimate**: a byte-level tokenizer never makes a token of
+ * less than one byte, UTF-8 spends at most three bytes per UTF-16 unit, and the
+ * longest prompt this file can build is the system prompt plus a clipped input.
+ * So `3 × (its length in UTF-16 units)` plus the template can only over-count —
+ * roughly ten times the ~1,500 a real call measures, which is the price of a
+ * number nobody has to hope about.
+ */
+export const WORST_CASE_PROMPT_TOKENS = (() => {
+  const longest = buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS));
+  return 3 * (longest.system.length + longest.user.length) + CHAT_TEMPLATE_TOKENS;
+})();
 
 const KINDS: readonly string[] = ["irreversible", "product", "technical", "other"];
 
@@ -419,16 +539,21 @@ export type ClassifierOptions = {
 /**
  * One call. Returns a verdict and what it cost, and never throws.
  *
- * A network failure, a 429 and a wedged socket all come back as `unreadable`
- * with the reason in words, because from the pass's point of view they are the
- * same thing — a session we could not read — and it counts them as such rather
- * than as a quiet zero.
+ * A network failure and a wedged socket come back as `unreadable` with the
+ * reason in words, because from the pass's point of view they are the same
+ * thing — a session we could not read — and it counts them as such rather than
+ * as a quiet zero. A 402 or 429 is the one failure with its own arm,
+ * `quota-refused`, because the budget has to act on it (D5).
+ *
+ * **Reach it through `model-budget.ts`**, never directly: the day ceiling is
+ * only a ceiling while nothing can get past it (plan 260910f D4), and
+ * tests/overseer-model-budget.test.ts fails if any other file names this.
  */
 export async function classifyTail(
   tail: string,
   options: ClassifierOptions,
 ): Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }> {
-  const { system, user } = buildClassifierPrompt(tail);
+  const { system, user } = buildClassifierPrompt(clipForClassifier(tail));
   const doFetch = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
@@ -447,6 +572,9 @@ export async function classifyTail(
         ],
         response_format: { type: "json_object" },
         temperature: 0,
+        // THE CAP THE BUDGET RESERVES AGAINST. Without it the "worst case" in
+        // model-budget.ts would be a hope about the model's brevity.
+        max_tokens: MAX_COMPLETION_TOKENS,
         // Ask the gateway what it charged, rather than multiplying a price table
         // of our own that would go stale without saying so.
         usage: { include: true },
@@ -455,6 +583,14 @@ export async function classifyTail(
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      // An error ANSWER from the gateway is not billed, so its spend is one
+      // call and no money — unlike the `catch` below, where nobody answered.
+      if (res.status === 402 || res.status === 429) {
+        return {
+          verdict: { kind: "quota-refused", status: res.status, why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
+          spend: { ...NO_SPEND, calls: 1 },
+        };
+      }
       return {
         verdict: { kind: "unreadable", why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
         spend: { ...NO_SPEND, calls: 1 },
@@ -478,9 +614,13 @@ export async function classifyTail(
     };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
+    // UNPRICED, not free. A timeout or a dropped socket can happen after the
+    // request reached the model, so it may have been billed and nobody said
+    // for how much — `callCost`'s third case by another route. The budget
+    // settles an unpriced call at its worst case.
     return {
       verdict: { kind: "unreadable", why: `the call failed: ${why}` },
-      spend: { ...NO_SPEND, calls: 1 },
+      spend: { ...NO_SPEND, calls: 1, unpricedCalls: 1 },
     };
   } finally {
     clearTimeout(timer);

@@ -11,13 +11,17 @@
  * Pure: no files, no tmux, no gateway. The test reads the fixtures and hands
  * them in.
  *
- * ## D11: out of scope is counted, never scored
+ * ## D12: out of scope is counted, never scored
  *
  * `out-of-scope-for-this-detector` marks misdirection — an agent confidently on
  * the wrong task, or declaring done with its gates skipped. A question detector
  * is structurally blind to those, so they are excluded from precision and
  * recall in both directions: counting them as expected-negatives would flatter
  * it, counting them as misses would punish it for a job it was never given.
+ *
+ * **Concluded work is NOT out of scope**, and the parser enforces it (see
+ * `CATEGORIES_FOR`): a debrief ending on an optional offer is a negative, and
+ * one holding a genuine cleanup decision is a question.
  */
 import { grantsPermission, parsePane } from "../fleet/pane.js";
 import { readTurnTail } from "./turn-tail.js";
@@ -69,7 +73,12 @@ export type AttentionLabel =
 const CATEGORIES_FOR: Record<LabelCase, readonly LabelCategory[]> = {
   question: ["question-no-mark", "question-with-mark"],
   "no-question": ["rhetorical", "concluded", "background-review"],
-  "out-of-scope-for-this-detector": ["wrong-task", "concluded"],
+  // D12: out of scope means MISDIRECTION and nothing else. `concluded` was
+  // allowed here, which let "done — I skipped the gates" be filed as concluded
+  // work and so let concluded work drift out of the scored set — the mistake
+  // Sol's F7 found in the plan. A debrief is scored; misdirection wearing one is
+  // `wrong-task`.
+  "out-of-scope-for-this-detector": ["wrong-task"],
   "permission-defect": ["permission-defect"],
   "not-an-ended-turn": ["mid-turn", "not-claude"],
 };
@@ -182,7 +191,7 @@ export type MechanicalScore = {
   questions: { total: number; caught: number; missed: number };
   /** Labelled non-questions it surfaces anyway. */
   noQuestion: { total: number; falseAlarms: number };
-  /** D11: counted, and what the mechanical inbox did with them, but in no precision or recall. */
+  /** D12: counted, and what the mechanical inbox did with them, but in no precision or recall. */
   outOfScope: { total: number; flagged: number };
   permissionDefects: { total: number; seenAsPermission: number };
   notAnEndedTurn: { total: number; flagged: number };

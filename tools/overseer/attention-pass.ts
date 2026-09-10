@@ -47,10 +47,12 @@
  * doing twice. The model calls are the cost, and they are bounded by `maxCalls`
  * and made once per DISTINCT tail rather than once per session.
  */
-import type { AttentionAnswerability, AttentionList } from "../fleet/wire.js";
+import type { AttentionAnswerability, AttentionJudgementStopped, AttentionList } from "../fleet/wire.js";
 import { grantsPermission, parsePane, type PaneQuestion } from "../fleet/pane.js";
 import {
   addSpend,
+  CLASSIFIER_PROMPT_VERSION,
+  isCacheable,
   NO_SPEND,
   planClassifications,
   type CachedVerdict,
@@ -60,6 +62,7 @@ import {
 } from "./attention-classify.js";
 import { EMPTY_ATTENTION_MEMORY, type AttentionMemory } from "./attention-memory.js";
 import { buildAttentionList, rememberWaits, type AttentionObservation } from "./attention.js";
+import type { ClassifyOutcome } from "./model-budget.js";
 import { readTurnTail } from "./turn-tail.js";
 
 /** A session to look at. `paneId` is the address; a session without one cannot be read. */
@@ -100,16 +103,36 @@ export type PassBreakdown = {
   overBudget: number;
   /** Distinct tails answered from the memory rather than from the gateway. */
   fromCache: number;
+  /**
+   * Distinct tails whose remembered verdict came from another prompt version
+   * (plan 260910f D3). They place their cards all the same, and are re-read
+   * ahead of fresh tails; not a failure, and not in `sessionsUnreadable`.
+   */
+  stale: number;
+  /** Distinct tails the day budget or a cooldown did not let us ask about. Each is also unjudged. */
+  budgetRefused: number;
 };
 
 export type AttentionPassOptions = {
   sessions: readonly SessionToScan[];
   /** Injected so the pass can be run against captured panes. Throwing means the pane went away. */
   capture: (paneId: string) => string;
-  classify: (tail: string) => Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }>;
+  /**
+   * One tail, one answer — or `notCalled` when the day budget refused
+   * (model-budget.ts). In production this is `paidClassifier`, and nothing else
+   * reaches the transport.
+   */
+  classify: (tail: string) => Promise<ClassifyOutcome>;
   memory?: AttentionMemory;
   /** The hard ceiling on model calls in one pass. Enforced, not promised. */
   maxCalls: number;
+  /**
+   * The prompt version `classify` asks under, which is half of the cache key
+   * (D3). Absent means today's single prompt. Stage 2's proposal-aware prompt
+   * passes its own version here, and must: a verdict filed under the wrong
+   * version would be answered from memory by the wrong prompt.
+   */
+  promptVersion?: number;
   now: () => Date;
 };
 
@@ -142,7 +165,10 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     verdictsUnreadable: 0,
     overBudget: 0,
     fromCache: 0,
+    stale: 0,
+    budgetRefused: 0,
   };
+  const promptVersion = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
 
   const material: Material[] = [];
   for (const session of options.sessions) {
@@ -193,43 +219,67 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     fingerprint: m.fingerprint,
     tail: m.kind === "dialog" ? m.text : m.tail,
   }));
-  const plan = planClassifications({ tails, cache: memory.verdicts, maxCalls: options.maxCalls });
+  const plan = planClassifications({ tails, cache: memory.verdicts, maxCalls: options.maxCalls, promptVersion });
   breakdown.fromCache = plan.cached.length;
+  breakdown.stale = plan.stale.length;
   breakdown.overBudget = plan.overBudget.length;
 
   const verdicts = new Map<string, CachedVerdict>();
   for (const hit of plan.cached) verdicts.set(hit.fingerprint, hit.verdict);
+  // STALE IS NOT ABSENT — plan 260910f D3. A verdict from another prompt version
+  // is still true about its text, so it places its card exactly as it did before
+  // versions existed. If its re-read below succeeds it is replaced; if the
+  // re-read fails, or the budget refuses it, it stands. Treating it as absent
+  // would make every question vanish into "at least N" on the pass that changed
+  // the prompt.
+  for (const hit of plan.stale) verdicts.set(hit.fingerprint, hit.verdict);
   let spend: ClassifierSpend = NO_SPEND;
   // Every tail we did not get a usable answer about, with the reason. This is
   // what stops a failed pass drawing as a calm one — GPT Sol's finding 1.
   const unclassified: string[] = plan.overBudget.map(
     (t) => `${t.fingerprint}: the budget of ${options.maxCalls} call(s) did not reach it`,
   );
+  // THE DAY BUDGET'S ANSWER (D4–D6). The first datable refusal is what makes
+  // this pass `limited`; any refusal stops the asking, because the next reserve
+  // would say the same and each ask costs a lock round-trip for nothing.
+  let stopped: AttentionJudgementStopped | null = null;
+  let refusedBecause: string | null = null;
   for (const tail of plan.toCall) {
-    const answer = await options.classify(tail.tail);
-    spend = addSpend(spend, answer.spend);
-    if (answer.verdict.kind === "unreadable") {
-      // NOT CACHED, and that is the half that made finding 1 lethal rather than
-      // transient. A 429 filed under the tail's fingerprint would be answered
-      // from memory on every later pass, costing nothing and repeating the same
-      // wrong silence for as long as the agent said nothing new.
-      //
-      // **A failure is a reason to look again, never a fact to remember.** The
-      // general form, which is why this is not tidiness: *a wrong answer that is
-      // cheap to repeat outlives the condition that caused it.* The 429 lasted a
-      // second; the memory of it would have lasted until that agent spoke again,
-      // and the cost of re-asking was the only thing that could have ended it.
-      unclassified.push(`${tail.fingerprint}: ${answer.verdict.why}`);
-      continue;
+    if (refusedBecause === null) {
+      const outcome = await options.classify(tail.tail);
+      if (!("notCalled" in outcome)) {
+        spend = addSpend(spend, outcome.spend);
+        if (isCacheable(outcome.verdict)) {
+          verdicts.set(tail.fingerprint, {
+            fingerprint: tail.fingerprint,
+            classifiedAt: nowIso,
+            promptVersion,
+            verdict: outcome.verdict,
+          });
+          continue;
+        }
+        // NOT CACHED, and that is the half that made finding 1 lethal rather than
+        // transient. A 429 filed under the tail's fingerprint would be answered
+        // from memory on every later pass, costing nothing and repeating the same
+        // wrong silence for as long as the agent said nothing new.
+        //
+        // **A failure is a reason to look again, never a fact to remember.** The
+        // general form, which is why this is not tidiness: *a wrong answer that is
+        // cheap to repeat outlives the condition that caused it.* The 429 lasted a
+        // second; the memory of it would have lasted until that agent spoke again,
+        // and the cost of re-asking was the only thing that could have ended it.
+        breakdown.verdictsUnreadable += 1;
+        // A stale verdict still answers for this tail, so it is not unjudged.
+        if (!verdicts.has(tail.fingerprint)) unclassified.push(`${tail.fingerprint}: ${outcome.verdict.why}`);
+        continue;
+      }
+      const refusal = outcome.notCalled;
+      refusedBecause = refusal.kind === "stopped" ? refusal.stopped.why : refusal.why;
+      if (refusal.kind === "stopped") stopped = refusal.stopped;
     }
-    verdicts.set(tail.fingerprint, {
-      fingerprint: tail.fingerprint,
-      classifiedAt: nowIso,
-      verdict: answer.verdict,
-    });
+    breakdown.budgetRefused += 1;
+    if (!verdicts.has(tail.fingerprint)) unclassified.push(`${tail.fingerprint}: not asked — ${refusedBecause}`);
   }
-
-  breakdown.verdictsUnreadable = unclassified.length - breakdown.overBudget;
 
   // SESSIONS, NOT FINGERPRINTS — GPT Sol's second round. Two sessions that ended
   // their turns identically share one tail and one call, which is the whole
@@ -285,6 +335,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     unclassified,
     sessionsUnreadable: sessionsWeCouldNotJudge(breakdown, unclassifiedSessions),
     scannedAt: nowIso,
+    stopped,
   });
   return { list, memory: { waits, verdicts, epoch: memory.epoch }, breakdown, spend };
 }

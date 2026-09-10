@@ -782,7 +782,50 @@ export type AttentionList =
       sessionsUnreadable: number;
       scannedAt: string;
     }
-  | { kind: "unknown"; why: string; scannedAt: string };
+  | { kind: "unknown"; why: string; scannedAt: string }
+  /**
+   * **THE MODEL WAS STOPPED, NOT MERELY RATIONED** — the day budget or a quota
+   * cooldown refused at least one paid call this pass (plan 260910f, D4–D6).
+   * The items are still real — dialogs are observed, and cached verdicts,
+   * stale ones included, still place theirs — and `sessionsUnreadable` counts
+   * the tails the refusal left unjudged, exactly as it does on `list`.
+   *
+   * **A NEW ARM RATHER THAN A FIELD ON `list`, and the reason is the older
+   * readers.** All three parsers of this type (store.ts, tools/fleet/attention.ts,
+   * web/src/types.ts) project the fields they know and ignore the rest, so a
+   * `stopped` field on `{kind:"list", items:[]}` would reach an older dashboard
+   * as *nothing is waiting on you* — the one sentence a stopped judge must never
+   * produce. An unknown KIND, by contrast, every older parser already rejects
+   * into its loud `unknown`. GPT Sol's F2 on the plan.
+   *
+   * `list` keeps exactly its old meaning — fully judged within the pass's own
+   * per-pass budget — so a list from an older producer needs no reinterpreting.
+   * The per-pass catch-up after a fleet-wide restart is ordinary operation and
+   * stays a `list` with `sessionsUnreadable`; this arm is only for a refusal.
+   */
+  | {
+      kind: "limited";
+      /** Already sorted, like `list`'s. May be empty, and an empty one is NOT a calm fleet. */
+      items: readonly AttentionItem[];
+      sessionsScanned: number;
+      sessionsUnreadable: number;
+      scannedAt: string;
+      stopped: AttentionJudgementStopped;
+    };
+
+/**
+ * Why the model pass was refused, and when it may be tried again.
+ *
+ * `exhausted` is the day's ceiling (or a ledger that cannot be trusted, which is
+ * refused for the rest of the UTC day rather than reset); `cooling-down` is the
+ * gateway's own 402/429, backed off. `until` is an instant, never a duration,
+ * so every reader converts it once rather than each doing its own arithmetic.
+ */
+export type AttentionJudgementStopped = {
+  kind: "exhausted" | "cooling-down";
+  why: string;
+  until: string;
+};
 
 /* ------------------------------------------------------------------ *
  * Why a session is not doing anything, which is three facts wearing one word.
@@ -3675,7 +3718,9 @@ export type QuestionGap =
   | {
       kind: "eligible-observation-omitted";
       observation: { kind: "dialog"; rowId: string } | { kind: "prose"; itemId: string };
-    };
+    }
+  /** Written by either composer when the attention pass published `limited`: the model was refused, so prose went unjudged until `until`. */
+  | { kind: "attention-judgement-stopped"; why: string; until: string };
 
 /** Only this arm may support the sentence “nothing needs you”. */
 export type QuestionsView =

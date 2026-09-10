@@ -216,16 +216,40 @@ fixes get one narrow 20-minute check, then Fable, and no further round.
       alarm in 9 non-questions** (a rhetorical question at the end of a turn). The three it catches
       all end in `?` — two `overseer`, one `self` — so **every question for Sol, Fable or Greg in the
       set is invisible without a model**, which is the case for this stage in one line.
-- [ ] **1b.** Relabel per D12 (the premature-done fixture's category is misdirection) and add one
+- [x] **1b.** Relabel per D12 (the premature-done fixture's category is misdirection) and add one
       positive: a debrief holding a cleanup decision.
-- [ ] **1c. Prompt version in the key** (D3): stale-not-absent, re-read first; failures uncached.
-- [ ] **1d. The ledger** (D4, D5): `model-budget.ts` with lock, init marker, reserve/settle,
+- [x] **1c. Prompt version in the key** (D3): stale-not-absent, re-read first; failures uncached.
+- [x] **1d. The ledger** (D4, D5): `model-budget.ts` with lock, init marker, reserve/settle,
       `max_tokens`, cooldown, the CLI and the daemon both through it. Tests race a daemon-shaped and a
       CLI-shaped caller on one ledger, crash between reserve and settle, cross UTC midnight, delete
       and corrupt an initialised ledger, and move the clock backwards; none may exceed or reset.
-- [ ] **1e. The `limited` arm** (D6) through `wire.ts`, the three parsers, `questions.ts` and the
+- [x] **1e. The `limited` arm** (D6) through `wire.ts`, the three parsers, `questions.ts` and the
       panel's one line. A test per parser: the new producer's `limited` read by the parser as it was
       before this stage (the arm rejected into `unknown`), and by the new one.
+
+**1b–1e, as built** (Opus subagent; every listed test seen red, most by mutating the code after it
+went green). Where it departed from the brief, each accepted:
+
+- **`closed: {why, at} | null` on the ledger** — the "full ledger saying why" for a lost or torn day.
+- **A third refusal, `unavailable`** — the budget lock could not be taken, or the write failed. The
+  tail goes unjudged and the list stays a `list` with *at least N*, because there is no honest `until`
+  to publish a `limited` against.
+- **`classifyTail` clips over-long input, keeping both ends** (a dialog's material can be a whole
+  diff), so the worst-case prompt bound holds; **a call that dies in flight settles as unpriced at the
+  worst case**, since it may have been billed; a 402/429 or other error response settles at $0.
+- **Constants**: `MAX_COMPLETION_TOKENS` 1,000 (sent as `max_tokens`), `WORST_CASE_CALL_USD` $0.01;
+  the 3M-token ceiling is prompt plus completion.
+- `ATTENTION_MEMORY_SCHEMA` not bumped (a pre-version memory reads with every verdict stale; the
+  comment says why). An empty `limited` list publishes as `limited`, not `unknown` — it is already
+  loud. A stale verdict whose re-read fails keeps its card.
+- **Two files outside the brief**, both forced by exhaustive switches over `AttentionList.kind`:
+  `tools/overseer/status-cli.ts` (`inboxLines`) and `tools/fleet/web/src/QuestionsPanel.tsx`.
+- **Not covered by a test**: `runAttentionCommand` end to end (it needs tmux). That a `--no-write`
+  hand run still goes through the budget rests on a structural test that only
+  `attention-classify.ts` and `model-budget.ts` name `classifyTail` anywhere in the tree.
+- Lint is advisory here: `Published` in `AttentionPanel.tsx` now trips
+  `noExcessiveCognitiveComplexity` with the `limited` branch added; the rest of the file-level
+  findings are the repo's `u["kind"]` idiom and pre-existing `useYield`s.
 
 ### Stage 2 — the proposal
 

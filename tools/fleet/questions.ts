@@ -123,7 +123,14 @@ function observeAttention(
         case "unknown":
           gaps.push({ kind: "attention-list-unknown", why: feed.list.why });
           return false;
-        case "list": {
+        case "list":
+        case "limited": {
+          /* A `limited` list composes exactly as a `list` does — its items are
+             real — and adds one gap naming the stop, because a judge that was
+             refused cannot support "nothing else is waiting". Plan 260910f D6. */
+          if (feed.list.kind === "limited") {
+            gaps.push({ kind: "attention-judgement-stopped", why: feed.list.stopped.why, until: feed.list.stopped.until });
+          }
           if (feed.list.sessionsScanned === 0) gaps.push({ kind: "attention-no-sessions-scanned" });
           if (feed.list.sessionsUnreadable > 0) {
             gaps.push({ kind: "attention-sessions-unreadable", count: feed.list.sessionsUnreadable });

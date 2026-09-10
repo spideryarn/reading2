@@ -72,6 +72,16 @@ const LIST: AttentionList = {
   scannedAt: "2026-09-08T12:40:00.000Z",
 };
 
+/** The same pass, with the model refused by the day budget part-way through. */
+const LIMITED: AttentionList = {
+  kind: "limited",
+  items: LIST.kind === "list" ? LIST.items : [],
+  sessionsScanned: 32,
+  sessionsUnreadable: 4,
+  scannedAt: "2026-09-08T12:40:00.000Z",
+  stopped: { kind: "exhausted", why: "the day's ceiling of $1.50 would be crossed", until: "2026-09-09T00:00:00.000Z" },
+};
+
 describe("the attention list on the checkpoint", () => {
   test("it goes out and comes back whole", () => {
     const root = tempRoot();
@@ -84,6 +94,55 @@ describe("the attention list on the checkpoint", () => {
     expect(read.kind).toBe("checkpoint");
     if (read.kind !== "checkpoint") return;
     expect(read.checkpoint.attention).toEqual(LIST);
+  });
+
+  test("a `limited` list — the model was refused — goes out and comes back whole", () => {
+    // Plan 260910f D6: a stopped model pass is its own arm, so this parser has to
+    // know it, every field, strictly, the way it knows `list`.
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIMITED });
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("unreachable");
+    expect(read.checkpoint.attention).toEqual(LIMITED);
+    // …and the status line says the judge was stopped rather than that the
+    // fleet is calm.
+    expect(inboxLines(read.checkpoint.attention, Date.parse("2026-09-08T12:41:00.000Z")).join("\n")).toContain(
+      "NOT EVERY SESSION IS BEING JUDGED",
+    );
+  });
+
+  test("a `limited` list with a malformed `stopped` degrades to `unknown`, never to a list", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    for (const stopped of [undefined, { kind: "exhausted", why: "spent" }, { kind: "tired", why: "x", until: LIST.scannedAt }, { kind: "exhausted", why: "", until: LIST.scannedAt }]) {
+      const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      raw["attention"] = { ...LIMITED, stopped };
+      writeFileSync(path, JSON.stringify(raw, null, 2));
+      const read = readCheckpoint(root);
+      if (read.kind !== "checkpoint") throw new Error("unreachable");
+      expect(read.checkpoint.attention.kind, JSON.stringify(stopped)).toBe("unknown");
+    }
+  });
+
+  test("an arm this reader does not know is rejected into `unknown` — which is how an OLDER reader meets `limited`", () => {
+    // The compatibility half of D6. We cannot run the old build, so this pins
+    // the behaviour it had and still has: an unknown kind is a loud `unknown`,
+    // never read as the `list` fields it happens to carry. That is the whole
+    // reason `limited` is a new kind rather than a field on `list` — a field
+    // would have been dropped and the empty list drawn as calm.
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    raw["attention"] = { ...LIMITED, kind: "limited-v2", items: [] };
+    writeFileSync(path, JSON.stringify(raw, null, 2));
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("unreachable");
+    expect(read.checkpoint.attention.kind).toBe("unknown");
   });
 
   test("a write that carries no new list keeps the one already published", () => {

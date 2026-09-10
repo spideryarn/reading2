@@ -23,15 +23,21 @@ import { describe, expect, it } from "vitest";
 
 import {
   ATTENTION_CLASSIFIER_MODEL,
+  CLASSIFIER_PROMPT_VERSION,
+  MAX_COMPLETION_TOKENS,
+  WORST_CASE_PROMPT_TOKENS,
   addSpend,
   buildClassifierPrompt,
   callCost,
+  classifyTail,
+  clipForClassifier,
   describeCost,
   parseVerdict,
   planClassifications,
   type CachedVerdict,
   type ClassifierSpend,
 } from "../tools/overseer/attention-classify.js";
+import { MAX_TAIL_CHARS } from "../tools/overseer/turn-tail.js";
 
 describe("parseVerdict — a malformed answer is refused, never guessed at", () => {
   it("reads a well-formed verdict that says a question was asked", () => {
@@ -130,6 +136,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
   const verdict: CachedVerdict = {
     fingerprint: "aaaa",
     classifiedAt: "2026-09-08T13:00:00.000Z",
+    promptVersion: CLASSIFIER_PROMPT_VERSION,
     verdict: { kind: "no-question", why: "a status report" },
   };
 
@@ -138,6 +145,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
       tails: [{ sessionId: "$1", fingerprint: "aaaa", tail: "x" }],
       cache: new Map([["aaaa", verdict]]),
       maxCalls: 10,
+      promptVersion: CLASSIFIER_PROMPT_VERSION,
     });
     expect(plan.toCall).toEqual([]);
     expect(plan.cached).toHaveLength(1);
@@ -149,6 +157,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
       tails: [{ sessionId: "$1", fingerprint: "bbbb", tail: "x" }],
       cache: new Map([["aaaa", verdict]]),
       maxCalls: 10,
+      promptVersion: CLASSIFIER_PROMPT_VERSION,
     });
     expect(plan.toCall).toHaveLength(1);
   });
@@ -163,6 +172,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
       ],
       cache: new Map(),
       maxCalls: 10,
+      promptVersion: CLASSIFIER_PROMPT_VERSION,
     });
     expect(plan.toCall).toHaveLength(1);
   });
@@ -178,6 +188,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
       ],
       cache: new Map(),
       maxCalls: 2,
+      promptVersion: CLASSIFIER_PROMPT_VERSION,
     });
     expect(plan.toCall).toHaveLength(2);
     expect(plan.overBudget).toHaveLength(1);
@@ -189,9 +200,122 @@ describe("planClassifications — the budget is enforced, not promised", () => {
       { sessionId: "$1", fingerprint: "a1", tail: "1" },
       { sessionId: "$2", fingerprint: "a2", tail: "2" },
     ];
-    const one = planClassifications({ tails, cache: new Map(), maxCalls: 2 });
-    const other = planClassifications({ tails: [...tails].reverse(), cache: new Map(), maxCalls: 2 });
+    const one = planClassifications({ tails, cache: new Map(), maxCalls: 2, promptVersion: CLASSIFIER_PROMPT_VERSION });
+    const other = planClassifications({ tails: [...tails].reverse(), cache: new Map(), maxCalls: 2, promptVersion: CLASSIFIER_PROMPT_VERSION });
     expect(other.toCall.map((t) => t.fingerprint)).toEqual(one.toCall.map((t) => t.fingerprint));
+  });
+});
+
+describe("the prompt version — a stale verdict is not an absent one (plan 260910f D3)", () => {
+  const old: CachedVerdict = {
+    fingerprint: "zz",
+    classifiedAt: "2026-09-08T13:00:00.000Z",
+    promptVersion: null,
+    verdict: { kind: "question", topic: "t", why: "w", attentionKind: "other", answerability: { kind: "phone" } },
+  };
+  const tails = [
+    { sessionId: "$1", fingerprint: "aa", tail: "fresh" },
+    { sessionId: "$2", fingerprint: "zz", tail: "stale" },
+  ];
+
+  it("keeps a verdict from another version as stale, and re-reads it AHEAD of fresh tails", () => {
+    // "aa" sorts before "zz", so fingerprint order alone would call the fresh
+    // tail first. The stale one goes first because it is already on screen on
+    // an answer the active prompt never gave.
+    const plan = planClassifications({ tails, cache: new Map([["zz", old]]), maxCalls: 1, promptVersion: CLASSIFIER_PROMPT_VERSION });
+    expect(plan.stale.map((s) => s.fingerprint)).toEqual(["zz"]);
+    expect(plan.cached).toEqual([]);
+    expect(plan.toCall.map((t) => t.fingerprint)).toEqual(["zz"]);
+    expect(plan.overBudget.map((t) => t.fingerprint)).toEqual(["aa"]);
+  });
+
+  it("never files a stale verdict as over budget — it still has an answer to place its card", () => {
+    const plan = planClassifications({ tails, cache: new Map([["zz", old]]), maxCalls: 0, promptVersion: CLASSIFIER_PROMPT_VERSION });
+    expect(plan.stale).toHaveLength(1);
+    expect(plan.overBudget.map((t) => t.fingerprint)).toEqual(["aa"]);
+  });
+
+  it("answers from memory only a verdict made under the active version", () => {
+    const current = { ...old, promptVersion: CLASSIFIER_PROMPT_VERSION };
+    const plan = planClassifications({ tails, cache: new Map([["zz", current]]), maxCalls: 1, promptVersion: CLASSIFIER_PROMPT_VERSION });
+    expect(plan.cached.map((c) => c.fingerprint)).toEqual(["zz"]);
+    expect(plan.stale).toEqual([]);
+    expect(plan.toCall.map((t) => t.fingerprint)).toEqual(["aa"]);
+  });
+
+  it("treats a verdict from a NEWER version as stale too, so a rollback re-reads rather than trusts", () => {
+    const newer = { ...old, promptVersion: CLASSIFIER_PROMPT_VERSION + 1 };
+    const plan = planClassifications({ tails, cache: new Map([["zz", newer]]), maxCalls: 1, promptVersion: CLASSIFIER_PROMPT_VERSION });
+    expect(plan.stale).toHaveLength(1);
+  });
+});
+
+describe("classifyTail — what goes on the wire (plan 260910f D4, D5)", () => {
+  function gateway(response: () => Response | Promise<Response>): { bodies: Record<string, unknown>[]; fetchImpl: typeof fetch } {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return response();
+    }) as typeof fetch;
+    return { bodies, fetchImpl };
+  }
+  const answer = (): Response =>
+    new Response(
+      JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ asked: false, why: "a status report" }) } }],
+        usage: { prompt_tokens: 900, completion_tokens: 20, cost: 0.0003 },
+      }),
+      { status: 200 },
+    );
+
+  it("sends a hard output cap as `max_tokens`, the number the budget reserves against", async () => {
+    const { bodies, fetchImpl } = gateway(answer);
+    await classifyTail("a tail", { apiKey: "k", fetchImpl });
+    // Positive first: `undefined === undefined` would pass this for a request
+    // that sent no cap at all.
+    expect(MAX_COMPLETION_TOKENS).toBeGreaterThan(0);
+    expect(bodies[0]?.["max_tokens"]).toBe(MAX_COMPLETION_TOKENS);
+  });
+
+  it.each([402, 429])("reports a %i as a quota refusal, which the budget turns into a cooldown", async (status) => {
+    const { fetchImpl } = gateway(() => new Response("slow down", { status }));
+    const result = await classifyTail("a tail", { apiKey: "k", fetchImpl });
+    expect(result.verdict).toMatchObject({ kind: "quota-refused", status });
+  });
+
+  it("keeps every other failure `unreadable`", async () => {
+    const { fetchImpl } = gateway(() => new Response("upstream fell over", { status: 500 }));
+    expect((await classifyTail("a tail", { apiKey: "k", fetchImpl })).verdict.kind).toBe("unreadable");
+  });
+
+  it("counts a call that died in flight as UNPRICED, because it may still have been billed", async () => {
+    const { fetchImpl } = gateway(() => {
+      throw new Error("socket hang up");
+    });
+    const result = await classifyTail("a tail", { apiKey: "k", fetchImpl });
+    expect(result.verdict.kind).toBe("unreadable");
+    expect(result.spend.unpricedCalls).toBe(1);
+  });
+
+  it("clips an over-long input, keeping both ends, so the worst case it is reserved at holds", async () => {
+    // A dialog's text carries its material, which can be a whole diff, so the
+    // pass can hand this more than a turn tail. The head keeps a dialog's
+    // prompt and the end keeps its options and a turn's closing sentence.
+    const { bodies, fetchImpl } = gateway(answer);
+    await classifyTail(`HEAD${"x".repeat(MAX_TAIL_CHARS * 3)}TAIL`, { apiKey: "k", fetchImpl });
+    const messages = bodies[0]?.["messages"] as { content: string }[];
+    const user = messages[1]?.content ?? "";
+    expect(user.length).toBeLessThanOrEqual(buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS)).user.length);
+    expect(user).toContain("HEAD");
+    expect(user).toContain("TAIL");
+  });
+
+  it("reserves at least the UTF-8 bytes of the largest prompt it can send, since a token is at least a byte", () => {
+    const worst = clipForClassifier("€".repeat(MAX_TAIL_CHARS * 2));
+    const prompt = buildClassifierPrompt(worst);
+    expect(Buffer.byteLength(prompt.system, "utf8") + Buffer.byteLength(prompt.user, "utf8")).toBeLessThanOrEqual(
+      WORST_CASE_PROMPT_TOKENS,
+    );
   });
 });
 

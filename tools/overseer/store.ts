@@ -106,7 +106,16 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
-import type { AttentionItem, AttentionList, ConversationReading, OverseerWork, PaneJob, PaneWork, StoredUsage } from "../fleet/wire.js";
+import type {
+  AttentionItem,
+  AttentionJudgementStopped,
+  AttentionList,
+  ConversationReading,
+  OverseerWork,
+  PaneJob,
+  PaneWork,
+  StoredUsage,
+} from "../fleet/wire.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -2177,7 +2186,13 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
       ? { kind: "unknown", why: u["why"], scannedAt }
       : bad("an unknown list with no reason");
   }
-  if (u["kind"] !== "list") return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
+  // `limited` is read as strictly as `list`, and it is its own KIND for the
+  // reason in wire.ts: an older reader rejects an unknown kind here, loudly,
+  // where a field it did not know would have been dropped. Plan 260910f D6.
+  const kind = u["kind"];
+  if (kind !== "list" && kind !== "limited") {
+    return bad(`kind ${JSON.stringify(kind)} is none of "list", "limited" or "unknown"`);
+  }
   if (!isNonNegativeInteger(u["sessionsScanned"])) return bad("sessionsScanned is not a count");
   // ABSENT IS NOT ZERO, and reading it as zero was the bug a cross-family review
   // of the dashboard's half found here. The first version reasoned correctly that
@@ -2206,13 +2221,27 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
     if (item === null) return bad("an item is not one this build can read");
     items.push(item);
   }
-  return {
-    kind: "list",
-    items,
-    sessionsScanned: u["sessionsScanned"],
-    sessionsUnreadable: unreadable,
-    scannedAt,
-  };
+  if (kind === "list") {
+    return {
+      kind: "list",
+      items,
+      sessionsScanned: u["sessionsScanned"],
+      sessionsUnreadable: unreadable,
+      scannedAt,
+    };
+  }
+  const stopped = parseJudgementStopped(u["stopped"]);
+  if (stopped === null) return bad("a limited list does not say why the model was stopped, or until when");
+  return { kind: "limited", items, sessionsScanned: u["sessionsScanned"], sessionsUnreadable: unreadable, scannedAt, stopped };
+}
+
+/** Every field of `AttentionJudgementStopped`, or `null`. A blank `why` is refused: it IS the line a reader sees. */
+function parseJudgementStopped(u: unknown): AttentionJudgementStopped | null {
+  if (!isRecord(u)) return null;
+  const { kind, why, until } = u;
+  if (kind !== "exhausted" && kind !== "cooling-down") return null;
+  if (typeof why !== "string" || why.trim() === "" || !isIsoTimestamp(until)) return null;
+  return { kind, why, until };
 }
 
 /**

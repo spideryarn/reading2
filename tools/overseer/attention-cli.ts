@@ -29,7 +29,6 @@ import { writeFileSync } from "node:fs";
 import type { AttentionList } from "../fleet/wire.js";
 import {
   ATTENTION_CLASSIFIER_MODEL,
-  classifyTail,
   NO_SPEND,
   planClassifications,
   describeCost,
@@ -55,6 +54,7 @@ import {
   tmuxServerGeneration,
 } from "./attention-probe.js";
 import { policyGaps } from "./attention.js";
+import { describeBudget, modelBudget, paidClassifier } from "./model-budget.js";
 
 /**
  * How many model calls one pass may make.
@@ -145,12 +145,18 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
     return 1;
   }
 
+  // THE SAME DAY BUDGET AS THE DAEMON'S, in the same store root — plan 260910f
+  // D4, and the bypass GPT Sol's F1 found. A hand run is not a free run: it
+  // reserves and settles against the one ledger, whatever `--write` says,
+  // because `--write`/`--no-write` governs the attention MEMORY and nothing
+  // else. `--dry` makes no calls, so it only reads the ledger.
+  const budget = modelBudget({ root: options.root });
   const result = await runAttentionPass({
     sessions,
     capture,
     classify: options.dry
       ? async () => ({ verdict: { kind: "unreadable", why: "--dry: no model was asked" }, spend: NO_SPEND })
-      : async (tail) => classifyTail(tail, { apiKey: apiKey ?? "" }),
+      : paidClassifier(budget, { apiKey: apiKey ?? "" }),
     memory,
     maxCalls: options.dry ? 0 : options.maxCalls,
     now: () => new Date(),
@@ -171,6 +177,7 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
     list: result.list,
     breakdown: result.breakdown,
     spend: result.spend,
+    budget: budget.read(),
     model: options.dry ? null : ATTENTION_CLASSIFIER_MODEL,
   };
   if (options.out !== null) writeFileSync(options.out, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
@@ -184,18 +191,38 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
   for (const line of describeBreakdown(result.breakdown, options.dry)) console.log(line);
   console.log("");
   console.log(describeSpend(result.spend, options.dry, dryCallsThatWouldBePaidFor(result.breakdown)));
+  // The ledger line, right under what this run spent: the day's total against
+  // its ceiling, and whether the next call would be refused.
+  console.log(describeBudget(budget.read()));
   for (const gap of policyGaps(result.list)) console.log(`\n  policy gap: ${gap}`);
   return 0;
 }
 
-/** In `--dry` every distinct tail is unpaid-for, which is exactly what a real pass would cost cold. */
+/**
+ * In `--dry` every distinct fresh tail is unpaid-for, and every stale verdict
+ * would be re-read — together, what a real pass would ask for, before `maxCalls`.
+ */
 function dryCallsThatWouldBePaidFor(b: PassBreakdown): number {
-  return b.overBudget;
+  return b.overBudget + b.stale;
 }
 
 export function describeList(list: AttentionList): readonly string[] {
   if (list.kind === "unknown") return [`could not tell what needs you: ${list.why}`];
+  // `limited` — the day budget or a quota cooldown refused the model (plan
+  // 260910f D6). The items print as a list's do, under this line; an empty one
+  // never says "nothing needs you".
+  const stopped =
+    list.kind === "limited"
+      ? [`NOT EVERY SESSION IS BEING JUDGED (${list.stopped.kind}) — ${list.stopped.why}, until ${list.stopped.until}`]
+      : [];
   if (list.items.length === 0) {
+    if (list.kind === "limited") {
+      return [
+        `nothing found among the sessions judged, out of ${list.sessionsScanned} scanned at ${list.scannedAt} ` +
+          `(${list.sessionsUnreadable} could not be judged)`,
+        ...stopped,
+      ];
+    }
     // Never a blank line. An empty inbox with a count beside it is a calm fleet;
     // an empty inbox alone reads as one whether or not anything looked.
     return [`nothing needs you, out of ${list.sessionsScanned} sessions scanned at ${list.scannedAt}`];
@@ -207,9 +234,10 @@ export function describeList(list: AttentionList): readonly string[] {
   // field must not phrase it two ways: the one that sounds more certain is the
   // one a person will quote.
   const lines =
-    list.sessionsUnreadable === 0
+    list.sessionsUnreadable === 0 && list.kind === "list"
       ? [`${list.items.length} thing(s) need you, out of ${list.sessionsScanned} sessions scanned:`]
       : [
+          ...stopped,
           `AT LEAST ${list.items.length} thing(s) need you, out of ${list.sessionsScanned} sessions scanned ` +
             `(${list.sessionsUnreadable} could not be judged at all, so there may be more):`,
         ];
@@ -248,7 +276,8 @@ export function describeBreakdown(b: PassBreakdown, dry: boolean): readonly stri
     dry
       ? `  ${b.overBudget} distinct tails a real pass would have paid to classify`
       : `  ${b.questionsFound} questions found, ${b.fromCache} answered from memory, ` +
-        `${b.verdictsUnreadable} verdicts unreadable, ${b.overBudget} left for the next pass`,
+        `${b.stale} from an older prompt (re-read first), ${b.verdictsUnreadable} verdicts unreadable, ` +
+        `${b.budgetRefused} refused by the day budget, ${b.overBudget} left for the next pass`,
   ];
 }
 
@@ -293,6 +322,10 @@ export { planClassifications };
 export function attentionRunner(root: string, instance: string): (() => Promise<AttentionList>) | null {
   const apiKey = process.env["OPENROUTER_API_KEY"];
   if (apiKey === undefined || apiKey === "") return null;
+  // The day budget, in the root this daemon holds — the same ledger a hand run
+  // of `overseer attention` reserves against (plan 260910f D4). Stateless apart
+  // from the directory, so one per runner is enough.
+  const budget = modelBudget({ root });
   return async () => {
     // THE EPOCH IS THIS RUN **AND** THE TMUX GENERATION — GPT Sol's second round.
     // A per-process epoch is not enough: a daemon can outlive a tmux restart
@@ -314,7 +347,7 @@ export function attentionRunner(root: string, instance: string): (() => Promise<
     const result = await runAttentionPass({
       sessions: listSessions(),
       capture: capturePane,
-      classify: async (tail) => classifyTail(tail, { apiKey }),
+      classify: paidClassifier(budget, { apiKey }),
       memory,
       maxCalls: DEFAULT_MAX_CALLS,
       now: () => new Date(),

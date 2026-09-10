@@ -136,8 +136,15 @@
     "file": "overseer-turn-tails/concluded-premature-gates-skipped.txt",
     "case": "out-of-scope-for-this-detector",
     "recipient": null,
-    "why": "Declares itself done having skipped the full suite and the review; wrong, but it asks nothing, so a question detector is blind to it by design (D11).",
-    "category": "concluded"
+    "why": "Declares itself done having skipped the full suite and the review: misdirection wearing a debrief. It asks nothing, so a question detector is blind to it by design (D12).",
+    "category": "wrong-task"
+  },
+  {
+    "file": "overseer-turn-tails/concluded-holds-cleanup-decision.txt",
+    "case": "question",
+    "recipient": "greg",
+    "why": "A clean debrief whose last lines hold an irreversible cleanup decision in a full stop: removing the worktree would delete data nothing else has a copy of, and it waits for the word (D12).",
+    "category": "question-no-mark"
   },
   {
     "file": "overseer-turn-tails/background-review-sol-in-tmux.txt",

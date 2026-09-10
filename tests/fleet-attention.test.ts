@@ -221,6 +221,48 @@ describe("readAttention", () => {
     }
   });
 
+  it("reads a `limited` list — the model was refused — whole, `stopped` and all", () => {
+    /* Plan 260910f D6. Items and counts as for `list`, plus why the judge was
+       stopped and until when. */
+    const root = tempRoot();
+    const limited: AttentionList = {
+      kind: "limited",
+      items: [ITEM],
+      sessionsScanned: 32,
+      sessionsUnreadable: 5,
+      scannedAt: LIST.scannedAt,
+      stopped: { kind: "cooling-down", why: "the gateway returned 429", until: "2026-09-08T13:10:00.000Z" },
+    };
+    writeCheckpoint(root, { attention: limited });
+    expect(readAttention(root)).toEqual({ kind: "published", list: limited, coordinatorWrittenAt: WRITTEN_AT });
+  });
+
+  it("degrades a `limited` list with a malformed `stopped` to `unknown`", () => {
+    for (const stopped of [
+      undefined,
+      { kind: "cooling-down", why: "429" },
+      { kind: "asleep", why: "429", until: "2026-09-08T13:10:00.000Z" },
+      { kind: "cooling-down", why: " ", until: "2026-09-08T13:10:00.000Z" },
+      { kind: "cooling-down", why: "429", until: "soon" },
+    ]) {
+      const root = tempRoot();
+      writeCheckpoint(root, { attention: { ...LIST, kind: "limited", stopped } });
+      expect(readAttention(root), JSON.stringify(stopped)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    }
+  });
+
+  it("rejects a list kind it does not know into `unknown` — which is how an OLDER reader meets `limited`", () => {
+    /* The compatibility half of D6, pinned on the behaviour the old build had:
+       we cannot run it, but its rule is this rule. A new KIND is refused loudly;
+       a new FIELD would have been dropped, and an empty list with a `stopped`
+       field drawn as a calm fleet. */
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      attention: { ...LIST, items: [], kind: "limited-v2", stopped: { kind: "exhausted", why: "x", until: WRITTEN_AT } },
+    });
+    expect(readAttention(root)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+  });
+
   it("refuses a list with no `sessionsUnreadable`, because zero is a claim", () => {
     /* **This is where we part company with the store's own parser**, which
        comments that a producer lacking the field "made no claim either way" and

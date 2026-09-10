@@ -56,6 +56,14 @@ export const ATTENTION_MEMORY_FILE = "attention.json";
  * Nothing else reads this file — it is the pass talking to its future self — so
  * the version is here to make a shape change an explicit refusal rather than a
  * silent misread of somebody's fields.
+ *
+ * **NOT bumped for `promptVersion` (plan 260910f D3), and the reason is exact.**
+ * An older reader ignores the field and takes every verdict as its own prompt's.
+ * Every verdict THIS build writes is version 1, which IS that older reader's
+ * prompt, so it reads them rightly — poorer by one field, not wrong. The day a
+ * second prompt version writes verdicts here, a pre-version reader would take
+ * them for its own, and THAT change must bump this. Bumping now would buy
+ * nothing and cost a fleet's worth of calls on every downgrade.
  */
 export const ATTENTION_MEMORY_SCHEMA = 1;
 
@@ -183,7 +191,19 @@ export function parseAttentionMemory(u: unknown): AttentionMemoryRead {
     }
     const verdict = parseCachedVerdict(r["verdict"]);
     if (verdict === null) return { kind: "unusable", why: `the verdict for ${k} is not a verdict this build knows` };
-    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], verdict });
+    // ABSENT IS STALE, NOT CORRUPT — plan 260910f D3. A memory written before
+    // prompt versions existed holds verdicts that are still true about their
+    // text; only which prompt made them is unknown. `null` is never the active
+    // version, so each one goes on placing its card and is re-read first.
+    // Refusing the file instead would cost a fleet's worth of calls and lose
+    // nothing. A version that is PRESENT and not a version is corruption, and is
+    // refused like every other field here: a mangled one might read as current.
+    const rawVersion = r["promptVersion"];
+    let promptVersion: number | null;
+    if (rawVersion === undefined || rawVersion === null) promptVersion = null;
+    else if (typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0) promptVersion = rawVersion;
+    else return { kind: "unusable", why: `the verdict for ${k} names prompt version ${JSON.stringify(rawVersion)}, which is not a version` };
+    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], promptVersion, verdict });
   }
   return { kind: "memory", memory: { waits, verdicts, epoch } };
 }

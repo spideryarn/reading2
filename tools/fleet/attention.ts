@@ -411,8 +411,14 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
     const why = nonBlank(u["why"]);
     return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
   }
-  if (u["kind"] !== "list") {
-    return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
+  /* `limited` (plan 260910f D6) is parsed as strictly as `list` — the same
+     fields, plus `stopped`. It is a KIND rather than a field on `list` because
+     of the branch below: an older copy of this reader rejects an unknown kind
+     into `unknown`, whereas a new field would have been ignored and an empty
+     list from a stopped judge drawn as a calm fleet. */
+  const kind = u["kind"];
+  if (kind !== "list" && kind !== "limited") {
+    return bad(`kind ${JSON.stringify(kind)} is none of "list", "limited" or "unknown"`);
   }
 
   const sessionsScanned = count(u["sessionsScanned"]);
@@ -451,7 +457,20 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
      has waited; two halves that both sort are two halves that disagree about
      what is at the top, and the half with the model calls is the one that can
      see why. */
-  return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  if (kind === "list") return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  const stopped = parseStopped(u["stopped"]);
+  if (stopped === null) return bad("a limited list does not say why the model was stopped, or until when");
+  return { kind: "limited", items, sessionsScanned, sessionsUnreadable, scannedAt, stopped };
+}
+
+/** Every field, `nonBlank` for the `why` because the page draws it as the whole line. */
+function parseStopped(u: unknown): Extract<AttentionList, { kind: "limited" }>["stopped"] | null {
+  if (!isRecord(u)) return null;
+  const kind = u["kind"];
+  if (kind !== "exhausted" && kind !== "cooling-down") return null;
+  const why = nonBlank(u["why"]);
+  const until = iso(u["until"]);
+  return why === null || until === null ? null : { kind, why, until };
 }
 
 const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "technical", "other"];

@@ -20,7 +20,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import type { ClassifierVerdict } from "../tools/overseer/attention-classify.js";
-import { NO_SPEND } from "../tools/overseer/attention-classify.js";
+import { CLASSIFIER_PROMPT_VERSION, NO_SPEND } from "../tools/overseer/attention-classify.js";
+import type { AttentionMemory } from "../tools/overseer/attention-memory.js";
+import type { ClassifyOutcome } from "../tools/overseer/model-budget.js";
 import {
   breakdownBalances,
   runAttentionPass,
@@ -586,6 +588,21 @@ describe("dialogs, which are observed rather than inferred", () => {
     expect(result.list.items[0]?.evidence.kind).toBe("dialog");
   });
 
+  it("carries the drawn options, in the order the harness drew them, even when the model is refused", async () => {
+    const { sessions, capture } = fleetOf([["asks", fleetPane("dialog-ask-user-question.txt")]]);
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async (): Promise<ClassifyOutcome> => ({
+        notCalled: { kind: "stopped", stopped: { kind: "exhausted", why: "spent", until: "2026-09-09T00:00:00.000Z" } },
+      }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    if (result.list.kind !== "limited") throw new Error(`expected limited, got ${result.list.kind}`);
+    expect(result.list.items[0]?.evidence.kind).toBe("dialog");
+  });
+
   it("carries the drawn options, in the order the harness drew them", async () => {
     const { sessions, capture } = fleetOf([["asks", fleetPane("dialog-ask-user-question.txt")]]);
     const result = await runAttentionPass({
@@ -600,5 +617,177 @@ describe("dialogs, which are observed rather than inferred", () => {
     expect(evidence?.kind).toBe("dialog");
     if (evidence?.kind !== "dialog") return;
     expect(evidence.options.length).toBeGreaterThan(1);
+  });
+});
+
+describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
+  const EXHAUSTED = {
+    kind: "exhausted" as const,
+    why: "the day's ceiling of $1.50 would be crossed",
+    until: "2026-09-09T00:00:00.000Z",
+  };
+  const refuse = async (): Promise<ClassifyOutcome> => ({ notCalled: { kind: "stopped", stopped: EXHAUSTED } });
+
+  /** The same memory, as if every verdict in it had been made under a prompt this build does not run. */
+  function staleOf(memory: AttentionMemory): AttentionMemory {
+    return { ...memory, verdicts: new Map([...memory.verdicts].map(([k, v]) => [k, { ...v, promptVersion: null }])) };
+  }
+
+  async function remembered(): Promise<AttentionMemory> {
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const first = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    return first.memory;
+  }
+
+  it("publishes `limited` when the budget refused a call, with the dialog it observed still on it", async () => {
+    const { sessions, capture } = fleetOf([
+      ["asks", pane("ended-prose-question-shut-it-down.txt")],
+      ["dialog", fleetPane("dialog-ask-user-question.txt")],
+    ]);
+    const result = await runAttentionPass({ sessions, capture, classify: refuse, maxCalls: 10, now: NOW });
+    expect(result.list.kind).toBe("limited");
+    if (result.list.kind !== "limited") return;
+    expect(result.list.stopped).toEqual(EXHAUSTED);
+    expect(result.list.items.map((i) => i.evidence.kind)).toEqual(["dialog"]);
+    // Both went unjudged — the prose tail entirely, the dialog's rank.
+    expect(result.list.sessionsUnreadable).toBe(2);
+    expect(breakdownBalances(result.breakdown)).toBe(true);
+  });
+
+  it("publishes `limited` even when nothing was found, never an empty list and never `unknown`", async () => {
+    // An empty `list` would be "nothing needs you"; `unknown` would hide WHY and
+    // until when. The arm exists for exactly this pass.
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({ sessions, capture, classify: refuse, maxCalls: 10, now: NOW });
+    expect(result.list).toMatchObject({ kind: "limited", items: [], sessionsUnreadable: 1, stopped: EXHAUSTED });
+  });
+
+  it("keeps a cached question's card when the budget refuses the rest", async () => {
+    const memory = await remembered();
+    const { sessions, capture } = fleetOf([
+      ["asks", pane("ended-prose-question-shut-it-down.txt")],
+      ["new", pane("ended-prose-question-recogniser-fixes.txt")],
+    ]);
+    const result = await runAttentionPass({ sessions, capture, classify: refuse, memory, maxCalls: 10, now: NOW });
+    expect(result.list.kind).toBe("limited");
+    if (result.list.kind !== "limited") return;
+    expect(result.list.items.map((i) => i.sessionName)).toEqual(["asks"]);
+    expect(result.list.sessionsUnreadable).toBe(1);
+  });
+
+  it("stops asking at the first refusal, and counts every tail it did not reach", async () => {
+    const { sessions, capture } = fleetOf([
+      ["a", pane("ended-prose-question-shut-it-down.txt")],
+      ["b", pane("ended-prose-question-recogniser-fixes.txt")],
+      ["c", pane("ended-prose-no-question-status-report.txt")],
+    ]);
+    let attempts = 0;
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async (): Promise<ClassifyOutcome> => {
+        attempts += 1;
+        return attempts === 1 ? { verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } } : refuse();
+      },
+      maxCalls: 10,
+      now: NOW,
+    });
+    expect(attempts).toBe(2);
+    expect(result.breakdown.budgetRefused).toBe(2);
+    expect(result.list).toMatchObject({ kind: "limited", sessionsUnreadable: 2 });
+  });
+
+  it("leaves the per-pass catch-up a `list`: that is ordinary operation, not a stop", async () => {
+    const { sessions, capture } = fleetOf([
+      ["a", pane("ended-prose-question-shut-it-down.txt")],
+      ["b", pane("ended-prose-question-recogniser-fixes.txt")],
+    ]);
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 1,
+      now: NOW,
+    });
+    expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 1 });
+  });
+
+  it("treats a budget it could not consult as unjudged tails, not as a stop it cannot date", async () => {
+    // A held or unreadable budget lock is neither the day's ceiling nor the
+    // gateway's cooldown, and the wire's `stopped` has no honest `until` for it.
+    // So the tails are unjudged — counted, and loud through the counts — and
+    // the list is the list it would otherwise be.
+    const { sessions, capture } = fleetOf([
+      ["dialog", fleetPane("dialog-ask-user-question.txt")],
+      ["asks", pane("ended-prose-question-shut-it-down.txt")],
+    ]);
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async (): Promise<ClassifyOutcome> => ({ notCalled: { kind: "unavailable", why: "the budget lock is held" } }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 2 });
+  });
+
+  it("places a stale verdict's card and re-reads it FIRST", async () => {
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([
+      ["asks", pane("ended-prose-question-shut-it-down.txt")],
+      ["new", pane("ended-prose-question-recogniser-fixes.txt")],
+    ]);
+    const asked: string[] = [];
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async (tail) => {
+        asked.push(tail);
+        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } };
+      },
+      memory,
+      maxCalls: 1,
+      now: NOW,
+    });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain("Say the word and I'll shut it down.");
+    expect(result.breakdown.stale).toBe(1);
+    expect(result.breakdown.overBudget).toBe(1);
+    // …and what it re-read is filed under the prompt that read it.
+    expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([CLASSIFIER_PROMPT_VERSION]);
+  });
+
+  it("keeps a stale verdict's card when its re-read fails, and does not count it unjudged", async () => {
+    // D3: stale is not absent. Treating a failed re-read as absent would make a
+    // question vanish on the very pass that tried to refresh it.
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async () => ({ verdict: { kind: "unreadable", why: "not JSON" }, spend: { ...NO_SPEND, calls: 1 } }),
+      memory,
+      maxCalls: 10,
+      now: NOW,
+    });
+    expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 0 });
+    if (result.list.kind !== "list") return;
+    expect(result.list.items).toHaveLength(1);
+    expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([null]);
+  });
+
+  it("keeps a stale verdict's card when the budget refuses its re-read", async () => {
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({ sessions, capture, classify: refuse, memory, maxCalls: 10, now: NOW });
+    expect(result.list).toMatchObject({ kind: "limited", sessionsUnreadable: 0 });
+    if (result.list.kind !== "limited") return;
+    expect(result.list.items).toHaveLength(1);
   });
 });
