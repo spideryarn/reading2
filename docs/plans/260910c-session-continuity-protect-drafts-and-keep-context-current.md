@@ -1,6 +1,6 @@
 # Session continuity: protect drafts and keep context current
 
-**Status:** in progress · revision 3 of the plan, after GPT Sol refused revision 1 and Fable
+**Status:** finished · revision 3 of the plan, after GPT Sol refused revision 1 and Fable
 arbitrated · worktree `session-continuity` · branch `worktree-session-continuity`
 
 **Where it stands, 2026-09-10.** Pushed to `dev` at `536b1b68` after all 95 `tests/fleet-*` files
@@ -21,11 +21,18 @@ the Playwright traps doc (`7411ca37`), **the verified Stages 2+4 fixes (`16e5402
 fix (`32389249`)** — all pushed to `dev` at `5e8df0da`, after all 100 fleet and doc-link test files
 passed on the tree merged with `origin/dev` and typecheck was exit 0. **The browser check passed
 every Stage 1–4 bullet.** **Stages 2, 4 and 5 are closed**: 2 and 4 on an independent Opus
-verification of GPT Sol's fixes from a review killed at its timeout, 5 on one Sol round. **Committed
-with this status line:** F29, the limit that verification found, and F30, the one F29's implementer
-found — both built by Opus, red-first, with no cross-family review. **F31**, found last and
-deliberately not fixed, is the named follow-up where the drafts chain stops. **Still to do:** the
-full suite, and the debrief. **For Greg:** the
+verification of GPT Sol's fixes from a review killed at its timeout, 5 on one Sol round. **Last
+code commit, `7c1dbbf0`:** F29, the limit that verification found, and F30, the one F29's
+implementer found — both built by Opus, red-first, with no cross-family review. **F31**, found last
+and deliberately not fixed, is the named follow-up where the drafts chain stops. **Finished.** The
+recorded full suite (`readiness-run.ts test`, on `7c1dbbf0` merged with `origin/dev`) passed 991 of
+995 files, with 1 skipped. Of its three reds, two were the fresh-worktree environment
+(`cold-start-lazy-imports`, `pdf-bundle-trace`: no `api-dist/`), and the third, `doc-links`, was two
+anchors in the action-receipts plan `260910d`, which its author fixed on `dev` (`62168da3`).
+After two more merges of `origin/dev`, which brought that session's server code, every
+`tests/fleet-*` and `tests/overseer-*` file passed (143 of 143), `doc-links` passed, and
+`npm run typecheck` was exit 0. The recorded typecheck was exit 0 too. **Not yet live:** everything
+since the 14:50Z restart needs a dashboard restart, which is the Overseer's call. **For Greg:** the
 Sessions text filter and the page's touch targets, below.
 
 **One P3 note on Stage 5's F80 fix, left as it is:** its `rejectedStart` helper in
