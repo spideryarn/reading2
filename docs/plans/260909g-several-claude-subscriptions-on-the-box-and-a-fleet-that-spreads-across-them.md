@@ -511,7 +511,7 @@ likely to go wrong silently, so it is enumerated rather than asserted:
 |---|---|
 | the config dir | create if absent; **never** delete or recreate |
 | `settings.json` | **merge** the keys we own, preserving hand edits; never overwrite the file |
-| the login | **skip entirely** if `auth status` already names the expected email — a re-login rotates a credential live sessions may be using |
+| the login | **skip entirely** if `/api/oauth/profile` already names the expected email — a re-login rotates a credential live sessions may be using |
 | `projects/` symlink | create only if absent; **refuse loudly if a real directory is there**, never replace it |
 | seeded `.claude.json` keys | merge named keys only; never copy the file wholesale (it carries identity, eligibility caches and live-session state) |
 | the registry entry | update in place, preserving fields it did not write |
@@ -529,6 +529,26 @@ re-run it" is the worst possible place for it.
 
 **I do not run the login step.** It is interactive, it is Greg's credential, and a wrong move rotates
 a live one. The login branch is tested with a fake `claude` on `PATH`; the real run is his.
+
+**The predicate is the profile, not `auth status`** — corrected 2026-09-10, and the plan said the
+wrong thing until then. A config dir can hold a valid credential and still report `email: null`,
+because identity comes from `.claude.json` rather than from the credential; so an `auth status` email
+is not evidence of who owns the credential. `/api/oauth/profile` is.
+
+**As built, the matrix fails closed in five directions** rather than the four specified, and the
+extra one is the important one:
+
+| state | what happens |
+|---|---|
+| profile matches the expected email | **skip** the login, and say so |
+| profile names someone else | **refuse**; the credential is not replaced |
+| profile unavailable **but a credential is present** | **refuse, and do not replace it** — names the recovery (`claude auth logout`, then re-run) |
+| `auth status` itself unreadable | **refuse** — it could not prove the account is logged out |
+| genuinely logged out, no credential | offer the login, then **re-verify the profile afterwards** |
+
+The third row is what stops an expired token (a 401, which is routine) from triggering a re-login
+that rotates a credential the fleet is using. The fourth is stricter than asked for and right: not
+being able to *prove* logged-out is not the same as being logged out.
 
 #### Designed so the Codex version is not a rewrite
 
@@ -802,6 +822,49 @@ attributed to an account*.
 **The file set is therefore bigger than the earlier plan said**: history schema, wire types,
 checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
 JSON, the UI, and their tests.
+
+#### `sessions/` is shared too, and why that was not optional
+
+`<config dir>/sessions/<pid>.json` is **two things at once**: the listing behind
+`claude agents --json`, and the peer registry behind `SendMessage`/`ListAgents` — it carries `name`,
+`messagingSocketPath` and `sessionId`. The sockets themselves already live in the shared
+`/run/user/1000/cc-socks/`; only this listing was per config dir.
+
+So an unshared pool session was **invisible and mute**: `running-but-unlisted` in the register, and
+unable to message the Overseer at all. For a dispatched agent whose job ends in a debrief, that is
+close to fatal.
+
+**Sharing is safe here for the reason sharing memory would not be.** These files are pid-keyed and
+pids are unique on a box, so each has exactly one writer; the record also carries `procStart` and
+`pidDomain`, so the CLI disambiguates pid reuse itself. That is the opposite of `MEMORY.md`, where
+many writers share one path. **This plan had that backwards at first** — it cited pid-keying as the
+hazard, when pid-keying is precisely what makes it safe.
+
+**Proven live, 2026-09-10**, on two sessions that were already running:
+
+| | ambient `claude agents --json` |
+|---|---|
+| 02:04:14, before the re-seed | **10** — neither pool session |
+| 02:04:40, after | **12** — `admission-visibility` and `resource-history` by name |
+
+**No restart**, because the migration copies the existing records across before swapping the
+directory. Without that copy, re-seeding would have made two working sessions *vanish* rather than
+appear — the opposite of the bug being fixed.
+
+And from the pool session itself: `ListAgents` went from **2 rows, both Remote Control, no local
+sessions at all** to **13 peers**, and a `SendMessage` to the Overseer that had failed at ~00:50Z
+with *"No agent named 'Overseer' is reachable"* now succeeds. It also confirmed the shared
+`projects/` works **in both directions** — it loaded ~70 auto-memory files and wrote one back.
+
+##### The cheap tell, if this ever recurs
+
+The failure was not silent, but it was **ambiguous in the worst way**: *"No agent named 'Overseer' is
+reachable"* reads as *that peer has gone*, not as *you cannot see any peer*. A session hunting a
+missing Overseer will not find a seeding fault.
+
+**The diagnostic that is unambiguous — `admission-visibility`'s, and worth more than the error
+message — is `ListAgents` showing zero local sessions on a box that plainly has a dozen.** Absence of
+everything is a different claim from absence of one thing, and only the first names the real fault.
 
 #### The attribution proof, measured 2026-09-10 on live sessions
 

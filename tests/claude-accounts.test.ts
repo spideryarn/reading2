@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -24,6 +24,30 @@ function tempRoot(): string {
   const root = mkdtempSync(path.join(tmpdir(), "claude-accounts-test-"));
   roots.push(root);
   return root;
+}
+
+function snapshotTree(root: string): unknown[] {
+  const snapshot: unknown[] = [];
+  const visit = (current: string, relative: string): void => {
+    const info = lstatSync(current);
+    const common = { path: relative || ".", mode: info.mode & 0o777, mtimeMs: info.mtimeMs };
+    if (info.isSymbolicLink()) {
+      snapshot.push({ ...common, kind: "symlink", target: readlinkSync(current) });
+      return;
+    }
+    if (info.isDirectory()) {
+      snapshot.push({ ...common, kind: "directory" });
+      for (const name of readdirSync(current).sort()) visit(path.join(current, name), path.join(relative, name));
+      return;
+    }
+    snapshot.push({
+      ...common,
+      kind: "file",
+      sha256: createHash("sha256").update(readFileSync(current)).digest("hex"),
+    });
+  };
+  visit(root, "");
+  return snapshot;
 }
 
 function entry(name: string, role: "pool" | "orchestrator" = "pool"): AccountEntry {
@@ -86,6 +110,23 @@ function seedFixture(root: string): { source: string; target: string } {
     }),
   );
   return { source, target };
+}
+
+function wizardSeedFixture(root: string): void {
+  const { source } = seedFixture(root);
+  symlinkSync(source, path.join(root, ".claude"));
+  copyFileSync(path.join(source, ".claude.json"), path.join(root, ".claude.json"));
+}
+
+function matchingProfile(configDir: string, email = "pool@example.com") {
+  return {
+    kind: "value" as const,
+    accountUuid: "uuid-pool",
+    email,
+    orgId: "org-pool",
+    configDir,
+    takenAt: "2026-09-09T21:00:00.000Z",
+  };
 }
 
 describe("Claude config seeding", () => {
@@ -290,6 +331,379 @@ describe("Claude config seeding", () => {
 });
 
 describe("identity assertion and add", () => {
+  // Reproduced red on 2026-09-10 before the fix: `--help` answered
+  // "FATAL: unknown command --help", and `add --help` answered
+  // "FATAL: --help needs a value" — which is worse, because it reads as though
+  // --help were a real flag whose argument you forgot, so the obvious next move
+  // is to invent one. These are the exact strings Greg types.
+  test.each([["--help"], ["-h"], ["help"], ["add", "--help"]])(
+    "prints usage for %s instead of a FATAL",
+    async (...argv) => {
+      const output: string[] = [];
+      const code = await main(argv, {
+        out: (line) => output.push(line),
+        err: (line) => output.push(`ERR:${line}`),
+      });
+      expect(code).toBe(0);
+      const text = output.join("\n");
+      expect(text).not.toMatch(/FATAL/);
+      // Every question the wizard asks must be discoverable as a flag: a flag
+      // nobody can find is a code path nobody can automate, and the web flow
+      // depends on driving this same command non-interactively.
+      for (const flag of ["--name", "--email", "--role", "--config-dir", "--yes"]) {
+        expect(text).toContain(flag);
+      }
+    },
+  );
+
+
+  test("a second --yes run asks nothing, writes nothing, and reports every no-op", async () => {
+    const root = tempRoot();
+    wizardSeedFixture(root);
+    const configDir = path.join(root, ".claude-pool1");
+    const registryPath = path.join(root, ".claude-accounts", "registry.json");
+    const output: string[] = [];
+    let promptCalls = 0;
+    let loginCalls = 0;
+    const common = {
+      homeDir: root,
+      registryPath,
+      stdinIsTTY: true,
+      prompt: async () => {
+        promptCalls += 1;
+        return "must not be asked";
+      },
+      login: () => {
+        loginCalls += 1;
+        return { ok: true as const };
+      },
+      authStatus: () => ({ kind: "value" as const, loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+      profile: async () => matchingProfile(configDir),
+      usage: async () => ({ kind: "unknown", why: "not needed" }),
+      out: (line: string) => output.push(line),
+      err: (line: string) => output.push(line),
+      now: () => new Date("2026-09-09T21:00:00Z"),
+    };
+
+    expect(await main(["add", "--yes", "--email", "pool@example.com"], common)).toBe(0);
+    const fixed = new Date("2020-01-01T00:00:00Z");
+    const watched = [
+      registryPath,
+      path.join(configDir, "settings.json"),
+      path.join(configDir, ".claude.json"),
+      configDir,
+      path.dirname(registryPath),
+    ];
+    for (const file of watched) utimesSync(file, fixed, fixed);
+    const registryBefore = readFileSync(registryPath);
+    const mtimesBefore = watched.map((file) => statSync(file).mtimeMs);
+    const treeBefore = snapshotTree(root);
+    output.length = 0;
+
+    expect(await main(["add", "--name", "pool1", "--yes"], common)).toBe(0);
+
+    expect(promptCalls).toBe(0);
+    expect(loginCalls).toBe(0);
+    expect(readFileSync(registryPath).equals(registryBefore)).toBe(true);
+    expect(watched.map((file) => statSync(file).mtimeMs)).toEqual(mtimesBefore);
+    expect(snapshotTree(root)).toEqual(treeBefore);
+    expect(output.join("\n")).toMatch(/found: config directory.*\.claude-pool1/i);
+    expect(output.join("\n")).toMatch(/found: settings.*forceLoginMethod=claudeai/i);
+    expect(output.join("\n")).toMatch(/skipped: login.*profile already matches pool@example\.com/i);
+    expect(output.join("\n")).toMatch(/found: seed nothing to change/i);
+    expect(output.join("\n")).toMatch(/found: registry entry pool1 .*registry\.json.*already matches; nothing to change/i);
+    expect(output.join("\n")).toMatch(/pool1 family=claude role=pool/i);
+  });
+
+  test("wizard refuses a sessions symlink that does not point at the shared registry", async () => {
+    const root = tempRoot();
+    wizardSeedFixture(root);
+    const configDir = path.join(root, ".claude-pool1");
+    const wrongSessions = path.join(root, "wrong-sessions");
+    mkdirSync(configDir);
+    mkdirSync(wrongSessions);
+    symlinkSync(wrongSessions, path.join(configDir, "sessions"));
+    const registryPath = path.join(root, ".claude-accounts", "registry.json");
+    const output: string[] = [];
+
+    const code = await main(["add", "--yes", "--email", "pool@example.com"], {
+      homeDir: root,
+      registryPath,
+      authStatus: () => ({ kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+      profile: async () => matchingProfile(configDir),
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    });
+
+    expect(code).not.toBe(0);
+    expect(existsSync(registryPath)).toBe(false);
+    expect(output.join("\n")).toMatch(new RegExp(`refused:.*sessions.*${wrongSessions}.*${path.join(root, ".claude", "sessions")}`, "i"));
+  });
+
+  test("login is skipped when the live profile matches even if auth status has no email", async () => {
+    const root = tempRoot();
+    const configDir = path.join(root, "pool");
+    mkdirSync(configDir);
+    writeFileSync(path.join(configDir, ".credentials.json"), "{}\n");
+    writeFileSync(path.join(configDir, "settings.json"), '{"theme":"dark"}\n');
+    const output: string[] = [];
+    const code = await main(
+      ["add", "--name", "pool", "--config-dir", configDir, "--email", "pool@example.com", "--role", "pool"],
+      {
+        homeDir: root,
+        registryPath: path.join(root, ".claude-accounts", "registry.json"),
+        authStatus: () => ({ kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+        profile: async () => matchingProfile(configDir),
+        usage: async () => ({ kind: "unknown", why: "not needed" }),
+        out: (line) => output.push(line),
+        err: (line) => output.push(line),
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(output.join("\n")).toMatch(/skipped: login.*profile already matches pool@example\.com/i);
+    expect(JSON.parse(readFileSync(path.join(configDir, "settings.json"), "utf8"))).toEqual({
+      theme: "dark",
+      forceLoginMethod: "claudeai",
+    });
+  });
+
+  test("login is refused when the live profile belongs to a different email", async () => {
+    const root = tempRoot();
+    const configDir = path.join(root, "pool");
+    mkdirSync(configDir);
+    writeFileSync(path.join(configDir, ".credentials.json"), "{}\n");
+    const output: string[] = [];
+    const code = await main(
+      ["add", "--name", "pool", "--config-dir", configDir, "--email", "right@example.com", "--role", "pool"],
+      {
+        homeDir: root,
+        registryPath: path.join(root, ".claude-accounts", "registry.json"),
+        authStatus: () => ({ kind: "value", loggedIn: true, email: "right@example.com", authMethod: "claude.ai", apiProvider: "firstParty" }),
+        profile: async () => matchingProfile(configDir, "wrong@example.com"),
+        out: (line) => output.push(line),
+        err: (line) => output.push(line),
+      },
+    );
+
+    expect(code).not.toBe(0);
+    expect(output.join("\n")).toMatch(/refused: login.*wrong@example\.com.*right@example\.com/i);
+    expect(existsSync(path.join(root, ".claude-accounts", "registry.json"))).toBe(false);
+  });
+
+  test("login is refused rather than replacing a credential whose identity is unavailable", async () => {
+    const root = tempRoot();
+    const configDir = path.join(root, "pool");
+    mkdirSync(configDir);
+    writeFileSync(path.join(configDir, ".credentials.json"), "{}\n");
+    const output: string[] = [];
+    const code = await main(
+      ["add", "--name", "pool", "--config-dir", configDir, "--email", "pool@example.com", "--role", "pool"],
+      {
+        homeDir: root,
+        registryPath: path.join(root, ".claude-accounts", "registry.json"),
+        authStatus: () => ({ kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+        profile: async () => ({ kind: "unknown", why: "profile request failed with HTTP 401", status: 401 }),
+        out: (line) => output.push(line),
+        err: (line) => output.push(line),
+      },
+    );
+
+    expect(code).not.toBe(0);
+    expect(output.join("\n")).toMatch(/refused: login.*credential.*identity.*401/i);
+    expect(output.join("\n")).toMatch(/CLAUDE_CONFIG_DIR=.*claude auth logout.*rerun/i);
+    expect(existsSync(path.join(root, ".claude-accounts", "registry.json"))).toBe(false);
+  });
+
+  test("login is offered when logged out and the config directory has no credential", async () => {
+    const root = tempRoot();
+    const configDir = path.join(root, "pool");
+    const bin = path.join(root, "bin");
+    const record = path.join(root, "fake-claude-argv");
+    mkdirSync(bin);
+    writeFileSync(
+      path.join(bin, "claude"),
+      "#!/bin/sh\nprintf '%s\\n' \"$CLAUDE_CONFIG_DIR\" > \"$FAKE_CLAUDE_RECORD\"\nprintf '%s\\n' \"$@\" >> \"$FAKE_CLAUDE_RECORD\"\n",
+    );
+    chmodSync(path.join(bin, "claude"), 0o755);
+    const oldPath = process.env.PATH;
+    const oldRecord = process.env.FAKE_CLAUDE_RECORD;
+    process.env.PATH = `${bin}:${oldPath ?? ""}`;
+    process.env.FAKE_CLAUDE_RECORD = record;
+    const output: string[] = [];
+    let profileCalls = 0;
+    let authCalls = 0;
+    try {
+      const code = await main(
+        ["add", "--name", "pool", "--config-dir", configDir, "--email", "pool@example.com", "--role", "pool"],
+        {
+          homeDir: root,
+          registryPath: path.join(root, ".claude-accounts", "registry.json"),
+          stdinIsTTY: true,
+          authStatus: () => authCalls++ === 0
+            ? { kind: "value", loggedIn: false, email: null, authMethod: "none", apiProvider: null }
+            : { kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" },
+          profile: async () => profileCalls++ === 0
+            ? { kind: "unknown", why: "credential file does not exist" }
+            : matchingProfile(configDir),
+          usage: async () => ({ kind: "unknown", why: "not needed" }),
+          out: (line) => output.push(line),
+          err: (line) => output.push(line),
+        },
+      );
+      expect(code).toBe(0);
+    } finally {
+      if (oldPath === undefined) delete process.env.PATH;
+      else process.env.PATH = oldPath;
+      if (oldRecord === undefined) delete process.env.FAKE_CLAUDE_RECORD;
+      else process.env.FAKE_CLAUDE_RECORD = oldRecord;
+    }
+
+    expect(readFileSync(record, "utf8").split("\n")).toEqual([
+      configDir,
+      "auth",
+      "login",
+      "--claudeai",
+      "--email",
+      "pool@example.com",
+      "",
+    ]);
+    expect(output.join("\n")).toMatch(/found: logged out.*no credential/i);
+    expect(output.join("\n")).toMatch(/changed: login.*pool@example\.com/i);
+  });
+
+  test("interactive answers are asked in order and blank answers accept defaults", async () => {
+    const root = tempRoot();
+    wizardSeedFixture(root);
+    const configDir = path.join(root, ".claude-named-by-answer");
+    const questions: Array<[string, string]> = [];
+    const answers = ["named-by-answer", "answer@example.com", "", ""];
+    const code = await main(["add"], {
+      homeDir: root,
+      registryPath: path.join(root, ".claude-accounts", "registry.json"),
+      prompt: async (question, defaultValue) => {
+        questions.push([question, defaultValue]);
+        return answers.shift() ?? "";
+      },
+      authStatus: () => ({ kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+      profile: async () => matchingProfile(configDir, "answer@example.com"),
+      usage: async () => ({ kind: "unknown", why: "not needed" }),
+      out: () => undefined,
+      err: () => undefined,
+    });
+
+    expect(code).toBe(0);
+    expect(questions.map(([question]) => question)).toEqual(["Account name", "Email", "Role", "Config directory"]);
+    expect(questions[0]?.[1]).toBe("pool1");
+    expect(questions[1]?.[1]).toBe("");
+    expect(questions[2]?.[1]).toBe("pool");
+    expect(questions[3]?.[1]).toBe(configDir);
+    const saved = JSON.parse(readFileSync(path.join(root, ".claude-accounts", "registry.json"), "utf8"));
+    expect(saved.accounts[0]).toMatchObject({
+      name: "named-by-answer",
+      displayEmail: "answer@example.com",
+      role: "pool",
+      stateDir: configDir,
+    });
+    expect(JSON.parse(readFileSync(path.join(configDir, "settings.json"), "utf8"))).toMatchObject({
+      forceLoginMethod: "claudeai",
+    });
+    expect(statSync(configDir).mode & 0o777).toBe(0o700);
+    expect(statSync(path.join(configDir, "settings.json")).mode & 0o777).toBe(0o600);
+  });
+
+  test("--yes accepts defaults without prompting, while supplied flags override them", async () => {
+    const root = tempRoot();
+    wizardSeedFixture(root);
+    const configDir = path.join(root, "explicit-config");
+    mkdirSync(configDir);
+    let promptCalls = 0;
+    const code = await main(["add", "--yes", "--email", "flag@example.com", "--config-dir", configDir], {
+      homeDir: root,
+      registryPath: path.join(root, ".claude-accounts", "registry.json"),
+      prompt: async () => {
+        promptCalls += 1;
+        return "wrong";
+      },
+      authStatus: () => ({ kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" }),
+      profile: async () => matchingProfile(configDir, "flag@example.com"),
+      usage: async () => ({ kind: "unknown", why: "not needed" }),
+      out: () => undefined,
+      err: () => undefined,
+    });
+
+    expect(code).toBe(0);
+    expect(promptCalls).toBe(0);
+    const saved = JSON.parse(readFileSync(path.join(root, ".claude-accounts", "registry.json"), "utf8"));
+    expect(saved.accounts[0]).toMatchObject({ name: "pool1", role: "pool", displayEmail: "flag@example.com", stateDir: configDir });
+  });
+
+  test("does not prompt when stdin is not a TTY", async () => {
+    const root = tempRoot();
+    let promptCalls = 0;
+    const output: string[] = [];
+    const code = await main(["add"], {
+      homeDir: root,
+      registryPath: path.join(root, ".claude-accounts", "registry.json"),
+      stdinIsTTY: false,
+      prompt: async () => {
+        promptCalls += 1;
+        return "unexpected";
+      },
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    });
+
+    expect(code).not.toBe(0);
+    expect(promptCalls).toBe(0);
+    expect(output.join("\n")).toMatch(/--email.*no default|supply --email/i);
+  });
+
+  test("a shell metacharacter in an email remains one literal login argument", async () => {
+    const root = tempRoot();
+    const configDir = path.join(root, "pool");
+    const bin = path.join(root, "bin");
+    const record = path.join(root, "fake-claude-argv");
+    const injected = path.join(root, "injected");
+    const email = `pool@example.com;touch ${injected}`;
+    mkdirSync(bin);
+    writeFileSync(path.join(bin, "claude"), "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_CLAUDE_RECORD\"\n");
+    chmodSync(path.join(bin, "claude"), 0o755);
+    const oldPath = process.env.PATH;
+    const oldRecord = process.env.FAKE_CLAUDE_RECORD;
+    process.env.PATH = `${bin}:${oldPath ?? ""}`;
+    process.env.FAKE_CLAUDE_RECORD = record;
+    let profileCalls = 0;
+    let authCalls = 0;
+    try {
+      expect(await main(
+        ["add", "--name", "pool", "--config-dir", configDir, "--email", email, "--role", "pool"],
+        {
+          homeDir: root,
+          registryPath: path.join(root, ".claude-accounts", "registry.json"),
+          stdinIsTTY: true,
+          authStatus: () => authCalls++ === 0
+            ? { kind: "value", loggedIn: false, email: null, authMethod: "none", apiProvider: null }
+            : { kind: "value", loggedIn: true, email: null, authMethod: "claude.ai", apiProvider: "firstParty" },
+          profile: async () => profileCalls++ === 0
+            ? { kind: "unknown", why: "credential file does not exist" }
+            : matchingProfile(configDir, email),
+          usage: async () => ({ kind: "unknown", why: "not needed" }),
+          out: () => undefined,
+          err: () => undefined,
+        },
+      )).toBe(0);
+    } finally {
+      if (oldPath === undefined) delete process.env.PATH;
+      else process.env.PATH = oldPath;
+      if (oldRecord === undefined) delete process.env.FAKE_CLAUDE_RECORD;
+      else process.env.FAKE_CLAUDE_RECORD = oldRecord;
+    }
+
+    expect(existsSync(injected)).toBe(false);
+    expect(readFileSync(record, "utf8").split("\n")).toEqual(["auth", "login", "--claudeai", "--email", email, ""]);
+  });
+
   test("runs auth status with CLAUDE_CONFIG_DIR set", () => {
     const root = tempRoot();
     const bin = path.join(root, "bin");
@@ -317,30 +731,33 @@ describe("identity assertion and add", () => {
     expect(invoked).toEqual({ command: "claude", args: ["auth", "status", "--json"], configDir: "/chosen/config" });
   });
 
-  test("add refuses a different signed-in email and writes nothing", async () => {
+  test("add trusts the matching live profile rather than a stale auth-status email", async () => {
     const root = tempRoot();
+    const configDir = path.join(root, "pool1");
+    mkdirSync(configDir);
     const registryPath = path.join(root, ".claude-accounts", "registry.json");
     let profileCalls = 0;
     const output: string[] = [];
     const code = await main(
-      ["add", "--name", "pool1", "--config-dir", path.join(root, "pool1"), "--email", "right@example.com", "--role", "pool"],
+      ["add", "--name", "pool1", "--config-dir", configDir, "--email", "right@example.com", "--role", "pool"],
       {
         homeDir: root,
         registryPath,
         authStatus: () => ({ kind: "value", loggedIn: true, email: "wrong@example.com", authMethod: "claude.ai", apiProvider: "firstParty" }),
         profile: async () => {
           profileCalls += 1;
-          throw new Error("profile must not be read");
+          return matchingProfile(configDir, "right@example.com");
         },
+        usage: async () => ({ kind: "unknown", why: "not needed" }),
         out: (line) => output.push(line),
         err: (line) => output.push(line),
       },
     );
 
-    expect(code).not.toBe(0);
-    expect(profileCalls).toBe(0);
-    expect(existsSync(registryPath)).toBe(false);
-    expect(output.join("\n")).toContain("wrong@example.com");
+    expect(code).toBe(0);
+    expect(profileCalls).toBeGreaterThan(0);
+    expect(existsSync(registryPath)).toBe(true);
+    expect(output.join("\n")).toMatch(/skipped: login.*profile already matches right@example\.com/i);
   });
 
   test("add writes private modes and updates in place without replacing addedAt", async () => {
