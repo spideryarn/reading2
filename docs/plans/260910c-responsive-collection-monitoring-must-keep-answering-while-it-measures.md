@@ -212,23 +212,44 @@ New module `tools/fleet/child.ts`, importing nothing but node builtins.
 
 ## Stage 2 — Health off the request thread
 
-- [ ] **Split the assembly from the gathering.** `assembleHealth(reads)` takes the seven command
+**Status (2026-09-10): built by Codex, gates green, independent review pending.** The boxes below
+were ticked by the implementing run; each is a claim about code that exists, and the independent
+stage review is what turns them into facts. **The implementing run's own review was not
+independent**: its nested reviewer failed to start and it dispatched a same-model subagent instead
+— [260910c-stage2-code-review-sol.md](260910c-stage2-code-review-sol.md) is that record and says so.
+It found and fixed four real things, which the independent review treats as unreviewed code.
+**No step of `refreshOnce` moved**: the only code change in `refresh.ts` is `await` on
+`refreshHealth`; its header's steps 3 and 4 were reworded to *publish, then retain*, which is what
+the code has done since GPT Sol's finding 11 while the header still said the opposite.
+
+**One question for the review, not yet decided:** `publish` now waits on the health turn, so a
+`vmstat` that wedges delays that turn's publish by its 10-second deadline plus the owner's 1-second
+grace, and is `refused` instantly on every later turn. That holds the *loop*, not the event loop —
+`/api/state` keeps answering from the previous state — but it is a delay a person can see.
+
+- [x] **Split the assembly from the gathering.** `assembleHealth(reads)` takes the seven command
       outcomes and returns the `HealthReport`. One place decides what a reading means.
-- [ ] **`collectHealthAsync(owner, options)`** gathers through `runOwned` under `limit(3)`, with
+- [x] **`collectHealthAsync(owner, options)`** gathers through `runOwned` under `limit(3)`, with
       `vmstat 1 2` on its own longer bound. **The synchronous `collectHealth` stays, over the same
       `assembleHealth`** — `routes-new.ts` and `scripts/readiness-loop.ts` are other people's files
       and keep working untouched. A test asserts the two gatherers produce an **identical report**
       from identical command output, so they cannot drift.
-- [ ] **Health failure stays separate from fleet failure** (`refreshOnce` already does this), a
+- [x] **Health failure stays separate from fleet failure** (`refreshOnce` already does this), a
       `refused` or `timed-out` probe becomes that field's `unknown` **with the pid and the duration
       in the `why`**, and **swap's since-boot first sample stays excluded** — a test pins that.
-- [ ] `RefreshDeps.refreshHealth` becomes `() => Promise<HealthTurn>`; `server.ts` awaits it.
-- [ ] **Recorded, not fixed:** `routes-new.ts:741` still calls the synchronous quick health
+- [x] `RefreshDeps.refreshHealth` becomes `() => Promise<HealthTurn>`; `server.ts` awaits it.
+- [x] **Recorded, not fixed:** `routes-new.ts:741` still calls the synchronous quick health
       (~135 ms measured) on the request process when a new session is created. It is a route file and
       not ours; it is a rare, deliberate, user-initiated request rather than a per-minute poll; and
       the async collector is now there for its owner to adopt.
 
 ## Stage 3 — The tmux probes, the pane pass, and the process table
+
+**Built in two halves, one after the other**, because Stage 1's implementation alone hit a 45-minute
+Codex wall and this stage touches four files plus `tools/overseer/`. **3a** is the tmux probes and
+the pane pass, and moves the bench's fixture onto the real owned path; **3b** is `readExecutions` and
+the `work-probe.ts` extraction. Both edit `collect.ts`, so they cannot run concurrently — two
+processes writing one file is a merge conflict nobody asked for.
 
 - [ ] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
       and `readPanes` becomes async over `limit(4)`. `tests/fleet-launch-mode.test.ts` drives

@@ -22,13 +22,12 @@
  *     which had it backwards: a collection fails when the box is in trouble, so
  *     the reading that would explain the failure was the one the failure
  *     prevented (GPT Astra's A17).
- *  3. **Retain**, before publishing, so the file and the stream cannot disagree
- *     about a turn. Sub-millisecond (measured), synchronous, and wrapped: a
- *     retention layer that takes the dashboard down is worse than no retention
- *     layer. See health-history.ts.
- *  4. **Publish.** The page and the stream get the fresh snapshot BEFORE
- *     anything is delivered. Delivery blocks this process — see drain.ts — and
- *     nothing a person is looking at should wait behind a keystroke.
+ *  3. **Publish.** The page and the stream get the fresh snapshot before a
+ *     filesystem write or delivery can delay them.
+ *  4. **Retain**, after publishing and before draining. The append is wrapped,
+ *     because a retention layer that takes the dashboard down is worse than no
+ *     retention layer, and delivery can block this process for a minute. See
+ *     health-history.ts and the detailed ordering note below.
  *  5. **Drain, last, and only after a collection that worked**, in its own
  *     try/catch. A drain that throws must not set `lastError`, must not make a
  *     good collection report as failed, and must not stop the loop: those are
@@ -74,16 +73,16 @@ export type RefreshDeps = {
    *
    * It used to return `void`, and that was enough while nothing was written
    * down. It is not enough now: `server.ts` catches a throw from
-   * `collectHealth` and leaves its `health` variable holding the PREVIOUS
+   * `collectHealthAsync` and leaves its `health` variable holding the PREVIOUS
    * report, so a retention layer that read that variable would append a reading
    * nobody took, wearing a fresh timestamp — a lie with a clock on it, which is
    * the thing `fleetState` already refuses to write for `collectedAt`.
    *
    * Guarded by its own implementation; never throws here.
    */
-  refreshHealth(): HealthTurn;
+  refreshHealth(): Promise<HealthTurn>;
   /**
-   * Write the turn down, before it is published.
+   * Write the turn down after it is published and before delivery starts.
    *
    * A required field rather than an optional one, so a caller cannot forget it
    * and still compile — **the bug this whole file was re-shaped around was a
@@ -131,7 +130,7 @@ export async function refreshOnce(deps: RefreshDeps): Promise<RefreshOutcome> {
     deps.logError(`collection failed: ${error}`);
   }
 
-  const turn = deps.refreshHealth();
+  const turn = await deps.refreshHealth();
 
   // BEFORE THE DRAIN, ALWAYS. A subscriber sees the failure as well as the
   // success — silence is what a healthy quiet box looks like, and the Overseer
