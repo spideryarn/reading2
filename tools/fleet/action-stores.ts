@@ -99,7 +99,13 @@ function isKeystrokeOp(op: ReceiptOp): boolean {
     case "queued-action":
     case "steer-message":
     case "steer-answer":
+    case "broadcast-recipient":
       return true;
+    // A plan's steps are not keystrokes, and a broadcast parent types nothing itself.
+    case "enacted-session":
+    case "enacted-box":
+    case "broadcast":
+      return false;
     default: {
       const never: never = op;
       return never;
@@ -131,7 +137,7 @@ function computeUnknownWithoutHold(
   const bySession = new Map<string, string[]>();
   for (const receiptId of receiptIds) {
     const state = receipts.get(receiptId);
-    if (state === null || !isKeystrokeOp(state.accepted.op)) continue;
+    if (state === null || state.accepted.target === null || !isKeystrokeOp(state.accepted.op)) continue;
     const sessionId = state.accepted.target.sessionId;
     if (book.holding(sessionId) !== null) continue;
     const ids = bySession.get(sessionId) ?? [];
