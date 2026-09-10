@@ -72,7 +72,7 @@ import { hasArtefacts } from "../src/store/artifacts-pg.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { lockedGlossaryArticleQuery, pgGlossaryStore } from "../src/store/pg-glossary.js";
 import { recordStepRun } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { Glossary, JobStep } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
