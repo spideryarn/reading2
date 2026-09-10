@@ -321,6 +321,35 @@ those are different, previously weighed decisions.
 
 ## D — let Knip inspect source without requiring build output
 
+**Status 2026-09-10: done** (see commit history for `tests/knip-without-build-output.test.ts`).
+The shell read in `vite.api.config.ts` moved from module scope into a `config` hook on a
+build-only plugin; Knip reads the exported object and never runs hooks (checked in the installed
+6.32.2 plugin, which also calls function-style configs with `command: "build"` — so a `command`
+check would not have worked). The Knip-side route was ruled out first: Knip derives the config
+input from `build:api`'s `--config vite.api.config.ts` argument regardless of the plugin's `config`
+glob, so the only Knip-side escapes were ignoring that script or disabling the Vite plugin — the
+blanket ignore this stage rejects. The test runs the real Knip over a copy of the tracked tree with a
+missing and a stale `dist/` (a tree of symlinked directories was tried first and gives Knip no
+source at all, so it would have passed vacuously), and resolves the API config through Vite's
+build-mode `resolveConfig` to show both refusals still fire and a matching shell and digest still
+reach `define`. Red before the fix, and red again under two mutations (module-level read restored;
+plugin set to `apply: "serve"`). `build:api` refused a missing and a stale shell by hand, and
+`npm run build` succeeded with the shell and digest compiled into `api-dist/vercel.js`.
+**Correction to the claim below:** the full Knip finding set was identical before and after (359
+each), so the load error made runs look broken but did not in fact drop anything from this graph.
+Triage of the remaining findings, no deletions made: 11 of the 12 unused files are
+`src/web/preview-*.tsx` throwaway pages served from `preview/*.html` (which Knip does not read) and
+whose own headers say to delete them when their check is done — an owner's call; the twelfth,
+`vitest.witness.config.ts`, is used via `--config` from the store-migration witness script, so it
+is a false positive. The 191 unused exports and 136 unused types were not triaged here.
+GPT Sol reviewed the scoped diff and traced the production path (Vercel and deploy preflight both
+run `npm run build`; Vite 8.2.2 applies `apply: "build"` to SSR builds; `mergeConfig` merges the
+two `define` objects) and found no production defect. It tightened the test itself: the tree gets
+its own `node_modules/` of per-entry links, so Vite's temporary config bundle cannot land in the
+checkout's shared `.vite-temp`; there is an assertion of no unresolved `@/` imports; and
+`resolveConfig` is called in production mode. The full suite was green apart from three fleet
+tests that need a fleet client build this worktree did not have.
+
 **Reproduced:** `npm run knip` reports a config-load error because `vite.api.config.ts` evaluates
 `readClientShell` at module load, then continues to print findings and exits nonzero. The failed
 discovery can leave its Vite/API graph incomplete; those findings are not safe deletion evidence.
@@ -331,20 +360,20 @@ traces the introducing commit and explains why the existing shell tests do not c
 
 ### Stage: decouple config discovery from build execution
 
-- [ ] Read `knip.jsonc`, `vite.api.config.ts`, `scripts/client-shell.ts` § `readClientShell`, and
+- [x] Read `knip.jsonc`, `vite.api.config.ts`, `scripts/client-shell.ts` § `readClientShell`, and
   `scripts/build-stamp.ts`. Reproduce in a disposable worktree with a missing shell and then a
   deliberately stale stamp; do not remove the primary checkout's build artifacts.
-- [ ] Inspect the installed Knip Vite plugin and schema. First try the smallest supported
+- [x] Inspect the installed Knip Vite plugin and schema. First try the smallest supported
   configuration that statically includes the API entry without evaluating its build-only config.
   If that loses alias/import coverage, move build-only shell evaluation to Vite's build invocation
   while keeping config analysis inert. Verify the plugin's actual evaluation behaviour before
   selecting this route. Do not add `if (KNIP) return fakeShell` or weaken stamp comparison.
-- [ ] Prove Knip has no config-load error in either missing/stale-shell case and reports a deliberately unused
+- [x] Prove Knip has no config-load error in either missing/stale-shell case and reports a deliberately unused
   fixture module/export; a success with no project files is a failure. Preserve CSS/font dependencies,
   root scratch-file discovery, aliases and `api/index.js`/`src/vercel.ts` reachability.
-- [ ] Prove `npm run build:api` still rejects missing/stale shell and `npm run build` succeeds in
+- [x] Prove `npm run build:api` still rejects missing/stale shell and `npm run build` succeeds in
   client-then-API order. A completed Knip run with advisory findings need not have exit code zero.
-- [ ] Re-run Knip and triage actual product findings. Do not convert that list into automatic
+- [x] Re-run Knip and triage actual product findings. Do not convert that list into automatic
   deletions. Update [static analysis](../project/static-analysis.md); complete common checks.
 
 ## E — show glossary answers as they arrive

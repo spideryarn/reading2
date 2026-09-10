@@ -77,6 +77,24 @@ The `api/` and `src/vercel.ts` entries are there because the deploy is reachable
 `vercel.json`, which no tool here reads. Delete those entries and four live files start reporting as
 dead.
 
+### Knip does not need a build
+
+Knip *imports* every Vite config it finds, `vite.api.config.ts` included, and reads the exported
+object. Until 2026-09-10 that config read `dist/index.html` at module load — the guard that stops a
+stale client shell being compiled into the function — so in a fresh worktree, or after any pull,
+Knip opened with `ERROR: Error loading vite.api.config.ts` and exited 1 before anyone had read a
+finding. The read now happens in a plugin's `config` hook, which Vite runs while resolving a build;
+Knip never calls plugin hooks. Keep build-only work there rather than at module scope, and do not
+give it a fallback for Knip's sake: the build must still refuse a missing or stale shell.
+[`tests/knip-without-build-output.test.ts`](../../tests/knip-without-build-output.test.ts) holds
+both halves — the real Knip over a copy of the tree with a missing or stale `dist/`, and Vite's own
+build-mode `resolveConfig` refusing both and compiling a matching shell — and the
+[postmortem](../postmortems/260908d-build-only-config-work-runs-during-static-analysis.md) has the
+history. In this repo the load error happened not to change a single finding (359 either way on
+2026-09-10), because that config contributes nothing to the graph that `vite.config.ts` does not;
+the error still made every run look broken, and the next config to fail that way may not be so
+harmless.
+
 ### Cycles gate; nothing else does
 
 There are **zero** import cycles, confirmed independently by four tools, which is exactly why this
