@@ -775,6 +775,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
           kind: "not-found",
           reason: "no-such-session",
           why: "no session with that handle in the current snapshot",
+          /* A current server's answer, not an old unstamped wire shape. The
+             absence of a row means it resolved no conversation claim. */
+          claudeSessionId: null,
         }),
       );
       return;
@@ -798,6 +801,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
           JSON.stringify({
             kind: "unreadable",
             path: null,
+            /* The read threw, but which claim it attempted is still known and
+               must not be accepted under a different browser snapshot. */
+            claudeSessionId: row.claudeSessionId,
             why: `reading the transcript threw: ${err instanceof Error ? err.message : String(err)}`,
           }),
         );
