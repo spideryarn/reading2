@@ -541,6 +541,48 @@ red-first by the same subagent. Under the engineering-manager rule (a check afte
 comes back still open is settled through Fable or Greg, not waved through) and the Overseer's
 "no further Sol round", **Fable confirms the settle**, recorded as not cross-family.
 
+**Fable's settle check, 2026-09-10: F22 closed** (`2ce27ca5`). It checked all four paths:
+
+- **A transient open failure:** the request is left in place and logged, never junked.
+- **The race between `lstat` and `open`:** only the symlink that was swapped in is moved.
+- **A claim that then fails to open:** the request stays in `processing/`.
+- **The scan bound:** an unopenable request delays the drain, and is never lost.
+
+It also confirmed that the regression test was really red first, running as uid 1000, so `chmod 000`
+genuinely took effect.
+
+**One adjacent residual, closed as well.** The claimed-first sort's comment promised that an inbox
+copy could never overwrite a crash-left copy of the same name in `processing/`. F22b had defeated
+that: an unreadable `processing/` copy dropped out of the scan's list, so a same-uuid inbox file
+would be renamed over it. The tooling never makes two files with one uuid (`dismiss` mints a fresh
+one every time), but the comment claimed a guard the code no longer had. The fix is to `lstat` the
+destination before the rename and leave the inbox copy for a later pass. Red first.
+
+**Stage 2 is then done:** the stage, three review passes (round 1 salvaged, round 2 read-only, the
+narrow check), an independent Opus check, and Fable's settle.
+
+**The second merge from `dev`, 2026-09-10 ~16:12: a real conflict, shown as a proposal first.**
+Stage 3's start-of-stage `git merge origin/dev` conflicted in four hunks of `daemon.ts`. On the
+other side were `work-reports`' reports drain (`313b6bf5`) and `schedule-preview`'s daemon-written
+`schedule.json` (`6b5ce4a9`…`f597c7d0`). The resolution was sent to the Overseer before any edit,
+and approved:
+
+- **Imports:** both kept, with `dev`'s superset for `schedule-plan` and `scheduler`.
+- **The block before the ticker:** both kept, unchanged. Ours was renamed to `recoveryEvidence`, so
+  that no use of `evidence` in `dev`'s code can read it.
+- **The ticker:** `recoveryTick()`, then `dev`'s one-reading, one-headline checkpoint exactly.
+- **The `finally`:** ours (`stopTimers()`, Sol's F23), **and `stopTimers` now clears `dev`'s
+  `reportsTicker`.** That is the one real catch. Taking ours as it stood would have left the reports
+  timer running after a stop; taking `dev`'s would have dropped F23's exception-path guarantee. On
+  the Overseer's condition this is a behaviour change to `work-reports`' code, so it gets a
+  red-first test on both exit paths, and `work-reports` is told.
+
+My bare `checkpointUpdate()` in the recovery view follows `dev`'s own pattern in `take()`: with no
+evidence, `schedulerStandingNow()` reads the documents itself, and does not fail closed. The 19
+test files that import the daemon, reports, schedule-preview or recovery code all pass. The one red,
+`fleet-reports-route`, was the known missing built client, and it passes 13 of 13 after
+`npm run build:fleet`.
+
 What landed, beyond the brief: `tools/overseer/recovery-inbox.ts` (new), one leaf that both the CLI
 and the daemon use, so the request format lives in one place. Decisions the implementer made:
 

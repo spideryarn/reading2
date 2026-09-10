@@ -39,6 +39,7 @@ import type { JsonValue } from "../tools/overseer/observation.js";
 import { drainRecoveryInbox, RECOVERY_INBOX_DIR } from "../tools/overseer/recovery-inbox.js";
 import type { RecoveryView } from "../tools/overseer/recovery-view.js";
 import type { RecoveryCandidateEvent, RecoveryDispositionEvent, RecoveryRecord } from "../tools/overseer/recovery.js";
+import type { ReportDrainOutcome } from "../tools/overseer/reports.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { CHECKPOINT_FILE, EVENTS_FILE, openStore, readCheckpoint, type RegisterEntry } from "../tools/overseer/store.js";
 import { editableFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -988,6 +989,81 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
     expect(settled).toBe("threw: ri2f the source broke");
     expect(existsSync(join(root, "overseer.lock"))).toBe(false);
   });
+
+  // F23's class, for the timer dev brought in after it: every interval the
+  // daemon starts must be cleared by `stopTimers`, on both ways out. A timer
+  // left running calls the reports drain against a closed store forever.
+  const QUIET_REPORTS: ReportDrainOutcome = {
+    recorded: 0,
+    duplicates: 0,
+    refused: 0,
+    pending: 0,
+    deferred: 0,
+    skippedEntries: 0,
+    quarantined: 0,
+    scanned: 0,
+    scanCapped: false,
+    replayed: 0,
+    debrisRemoved: 0,
+    probes: 0,
+    bytesRead: 0,
+    stoppedBy: null,
+    notes: [],
+  };
+
+  async function reportDrainsAfterStop(stop: "abort" | "throw"): Promise<{ outcome: string; atStop: number; later: number }> {
+    const root = tempRoot();
+    const controller = new AbortController();
+    let calls = 0;
+    const daemon = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: controller.signal,
+      now: fakeClock("2026-09-08T02:48:40.000Z").now,
+      tickMs: 20,
+      log: () => {},
+      source: () =>
+        (async function* (): AsyncGenerator<SourceMessage> {
+          // Several drain intervals while the daemon runs.
+          await sleep(120);
+          yield* [];
+          if (stop === "throw") throw new Error("ri2f the source broke");
+          controller.abort();
+        })(),
+      bootId: () => BOOT_ONE,
+      recovery: evidenceWorld(),
+      reports: {
+        intervalMs: 10,
+        drain: () => {
+          calls += 1;
+          return QUIET_REPORTS;
+        },
+      },
+    });
+    const outcome = await daemon.then(
+      (result) => result.kind,
+      (cause: unknown) => `threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    const atStop = calls;
+    // Ten intervals after it returned.
+    await sleep(100);
+    return { outcome, atStop, later: calls };
+  }
+
+  test("the reports timer stops with the daemon: a normal stop by the abort signal (F23's class)", async () => {
+    const { outcome, atStop, later } = await reportDrainsAfterStop("abort");
+    expect(outcome).toBe("stopped");
+    // The drain was wired and running before the stop.
+    expect(atStop).toBeGreaterThan(0);
+    expect(later).toBe(atStop);
+  });
+
+  test("the reports timer stops with the daemon: an exceptional stop by a throwing source (F23's class)", async () => {
+    const { outcome, atStop, later } = await reportDrainsAfterStop("throw");
+    expect(outcome).toBe("threw: ri2f the source broke");
+    expect(atStop).toBeGreaterThan(0);
+    expect(later).toBe(atStop);
+  });
 });
 
 describe("already-live", () => {
@@ -1303,6 +1379,64 @@ describe("dismissal through the inbox", () => {
       opened.store.close();
       expect(second.applied).toBe(1);
       expect(dispositions(eventsIn(root)).map((d) => d.id)).toEqual([target]);
+    },
+  );
+
+  test.skipIf(process.getuid?.() === 0)(
+    "an inbox copy is never renamed over an unreadable crash-left copy of the same request in processing/ (F22)",
+    async () => {
+      const { root, ids } = await rebootedStore();
+      const target = ids[0] as string;
+      await recoveryCli(["dismiss", target, "--why", "the inbox copy"], { root, out: () => {} });
+      const [file] = pending(root);
+      if (file === undefined) throw new Error("the CLI wrote no request");
+      const inboxCopy = join(root, RECOVERY_INBOX_DIR, file);
+      // The same request id, crash-left in processing/ with its own sentence.
+      const processing = join(root, RECOVERY_INBOX_DIR, "processing");
+      mkdirSync(processing);
+      const claimedCopy = join(processing, file);
+      const request = JSON.parse(readFileSync(inboxCopy, "utf8")) as Record<string, unknown>;
+      const claimedBytes = `${JSON.stringify({ ...request, why: "the crash-left copy" }, null, 2)}\n`;
+      writeFileSync(claimedCopy, claimedBytes);
+
+      const opened = openStore({ root });
+      if (!opened.ok) throw new Error("the store did not open");
+      const drain = (log: (line: string) => void) =>
+        drainRecoveryInbox({
+          root,
+          index: () => opened.store.recovery,
+          append: (events) => opened.store.append(events).ok,
+          now: () => new Date(LATEST),
+          log,
+        });
+
+      chmodSync(claimedCopy, 0o000);
+      const lines: string[] = [];
+      try {
+        await drain((line) => lines.push(line));
+      } finally {
+        if (existsSync(claimedCopy)) chmodSync(claimedCopy, 0o600);
+      }
+      expect(existsSync(claimedCopy)).toBe(true);
+      expect(readFileSync(claimedCopy, "utf8")).toBe(claimedBytes);
+      expect(existsSync(inboxCopy)).toBe(true);
+      expect(dispositions(eventsIn(root))).toEqual([]);
+      expect(refusals(root)).toEqual([]);
+      expect(lines.some((line) => line.includes("already in processing/"))).toBe(true);
+
+      // Readable again: the crash-left copy is applied, and the inbox copy is
+      // refused as already applied, with what it said kept in refused/.
+      for (let pass = 0; pass < 2; pass += 1) await drain(() => {});
+      opened.store.close();
+      const found = dispositions(eventsIn(root));
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ id: target, evidence: { why: "the crash-left copy" } });
+      expect(existsSync(claimedCopy)).toBe(false);
+      expect(existsSync(inboxCopy)).toBe(false);
+      const refused = refusals(root);
+      expect(refused).toHaveLength(1);
+      expect(refused[0]?.why).toContain("already applied");
+      expect(refused[0]?.request).toMatchObject({ why: "the inbox copy" });
     },
   );
 

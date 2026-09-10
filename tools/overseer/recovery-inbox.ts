@@ -248,9 +248,10 @@ async function pendingRequests(
   // O4: a scan that stops at its bound says so. The junk it examined has moved,
   // so the next pass starts further in; this line is how a flood shows up.
   if (stopped) log(`recovery inbox scan stopped at its limit of ${scanLimit} entries; the rest waits for a later pass`);
-  // A crash-left claim wins over a duplicate still in the public inbox. POSIX
-  // rename replaces its destination, so letting the inbox copy go first could
-  // overwrite the very request the processing directory exists to preserve.
+  // A crash-left claim is handled before a duplicate still in the public inbox,
+  // so a readable one is settled first. The ordering alone is not the guard: an
+  // UNREADABLE claim is not in `found` at all, so the claim step itself refuses
+  // to rename over anything already in processing/ (see the drain).
   found.sort((a, b) => Number(b.claimed) - Number(a.claimed) || a.mtimeMs - b.mtimeMs || (a.file < b.file ? -1 : 1));
   return found.slice(0, DRAIN_LIMIT);
 }
@@ -343,9 +344,28 @@ export async function drainRecoveryInbox(input: {
     const { requestId } = pending;
     let file = pending.file;
     if (!pending.claimed) {
+      const claimed = join(processing, `${requestId}.json`);
+      // NEVER RENAME OVER A CLAIM. POSIX rename replaces its destination, and
+      // processing/ exists to preserve what is in it. A copy of that name there
+      // (crash-left, perhaps unreadable this pass, so not in `found`) keeps the
+      // inbox copy waiting where it is, for a later pass: neither refused nor
+      // deleted. Once the claim is settled, the inbox copy is claimed normally.
+      // A peer creating the claim between this check and the rename is not
+      // guarded; the daemon is the only thing that claims.
+      const occupied = await lstat(claimed).then(
+        () => ({ kind: "occupied" as const }),
+        (cause: unknown) => (isAbsence(cause) ? { kind: "free" as const } : { kind: "cannot-tell" as const, cause }),
+      );
+      if (occupied.kind !== "free") {
+        input.log(
+          occupied.kind === "occupied"
+            ? `recovery request ${requestId}: a file of that name is already in processing/; the inbox copy is left for a later pass`
+            : `recovery request ${requestId}: processing/ could not be checked (${String(occupied.cause)}); the inbox copy is left for a later pass`,
+        );
+        continue;
+      }
       try {
         await mkdir(processing, { recursive: true, mode: 0o700 });
-        const claimed = join(processing, `${requestId}.json`);
         await rename(file, claimed);
         file = claimed;
         await input.afterClaim?.(file);
