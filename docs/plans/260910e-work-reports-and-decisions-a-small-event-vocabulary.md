@@ -20,164 +20,193 @@ report.*
   fold that alone decides what counts as reviewed, init marker so a lost file never reads as empty,
   its own lock), `scripts/overseer-decisions.ts` (`template`, `add --file --by`), the projection
   `tools/fleet/decisions-view.ts`, the route `routes-decisions.ts`, and the **Decisions** tab.
-- **The daemon's store** — `tools/overseer/store.ts`, one writer enforced by an `O_EXCL` lock. Its
-  event log is **disposable**: one bad line in a replay means a cold start, and losing it costs history
-  only.
+- **The daemon's store** — `tools/overseer/store.ts`, one writer enforced by an `O_EXCL` lock on
+  `overseer.lock`. Its event log is **disposable**: one bad line in a replay means a cold start, and
+  losing it costs history only.
 - **`jsonl.ts`** (repair and append) and **`lock.ts`** (exclusion), which decisions already share.
-- **The register's verified execution** per session (`RegisterEntry.verifiedExecution`), and
-  `executionRefFor` in `decisions-view.ts`, which turns a name into `verified | not-found | unavailable`.
+- **The register's verified execution** per session (`RegisterEntry.verifiedExecution`, a token and a
+  `since` that is a floor, not a start time) and `executionRefFor` in `decisions-view.ts`.
+- **`tools/fleet/execution-identity.ts`** — `readBootIdentity`, `readProcessStart`, `parseProcStat`:
+  enough for a process to name the Claude execution it is running under.
 
 ## The design
 
 ### Reports go in their own log, written only by the daemon
 
-`~/.overseer/reports.jsonl` (same root and override as the store). **Not `events.jsonl`**, for two
-reasons: the store's replay rule (one bad line ⇒ cold start) and its disposability are right for a
-derivation of the live fleet and wrong for original input an agent cannot re-send; and a new event kind
-there would make every older daemon build start cold on reading it.
+`~/.overseer/reports.jsonl` (same root and override as the store). **Not `events.jsonl`**: the store's
+replay rule (one bad line ⇒ cold start) and its disposability are right for a derivation of the live
+fleet and wrong for original input an agent cannot re-send, and a new event kind there would make every
+older daemon start cold.
 
-**Clients submit; the daemon writes.** The roadmap asks that the daemon stay the single writer and that
-clients submit to the owner. The daemon has no socket and should not grow one for this, so submission is
-a file drop — the pattern `reconcile-jobs` already uses (a file the daemon consumes):
+**Clients submit; the daemon writes.** The daemon has no socket and should not grow one for this, so
+submission is a file drop — the pattern `reconcile-jobs` already uses. Sol agreed this is the simplest
+durable owner-submission design, including when the daemon is down for hours.
 
 ```
-agent / Overseer / Greg                         daemon (single writer)
-───────────────────────                         ──────────────────────
-overseer report <kind> …                        every 30 s: drainReports(register)
-  validate strictly                               for each inbox file (oldest first, ≤ 50):
-  mint eventId (uuid)                               parse strictly — unknown kind ⇒ refused/
-  write report-inbox/.tmp-<id>                      duplicate id, same bytes ⇒ drop the file
-  rename → report-inbox/<id>.json   ─────────▶      duplicate id, other bytes ⇒ refused/
-  print id + "submitted, not yet recorded"          verify each artefact (found / not-found / unchecked)
-                                                    resolve execution from the live register
-overseer reports                                    [decision] append decided event to decisions.jsonl
-  recorded rows (reports.jsonl)                                 (commandId = report:<id>, idempotent)
-  + "submitted, not yet recorded" (inbox)           append report to reports.jsonl, fsync  (reports.lock)
-  + refused submissions and why                     unlink the inbox file
+submitter (agent / Overseer / Greg)            daemon (single writer — it holds overseer.lock)
+───────────────────────────────────            ────────────────────────────────────────────────
+overseer report <kind> …                       every 30 s, synchronously, one pass at a time:
+  validate strictly (same parser the daemon       list report-inbox/: only regular files named <uuid>.json,
+  uses)                                            opened O_NOFOLLOW, fstat regular, ≤ 16 KiB, name = eventId
+  observe its own execution token                  (anything else: counted and left, never read)
+  mint eventId (uuid)                            [1] prepare once: parse, check artefacts, compare token with
+  write report-inbox/.tmp-<id> (wx, fsync)           the register, stamp receivedAt, and for a decision mint
+  rename → report-inbox/<id>.json  ───────▶          decisionId + decidedAt ⇒ write processing/<id>.json atomically
+  print id + "submitted, not yet recorded"       [2] decision only: append the prepared decided event
+                                                     to decisions.jsonl (exact bytes; command id report:<id>)
+overseer reports                                 [3] append the prepared report to reports.jsonl, fsync
+  recorded rows · in-flight inbox items ·        [4] unlink processing/<id>.json, then the inbox file
+  refused submissions and why                    a processing/ file found at the start of a pass is replayed
+                                                 from [2] with its frozen bytes — nothing is re-derived
 ```
 
-Every crash point replays safely: the decisions append is idempotent on its command id, the report
-append is skipped when its event id is already in the log with the same payload, and the inbox file is
-removed last. A refused submission moves to `report-inbox/refused/` beside a `.why` file, kept to the
-newest 200, and `overseer reports` lists them — a refusal must never look like a report still in
-flight, nor like nothing having been sent.
-
-The drain holds `reports.lock` (via `lock.ts`) while it appends, so a botched second daemon cannot
-interleave, and the CLI has no code path that opens `reports.jsonl` for writing.
+- **Replay is exact.** Enrichment (`receivedAt`, execution comparison, artefact checks, decision id,
+  `decidedAt`) happens once, in [1], and is frozen in `processing/<id>.json`. `appendEvents` is
+  idempotent on a command id only when the payload is byte-identical, so every retry must append the
+  same bytes, and does. A report already in `reports.jsonl` with identical bytes is skipped.
+- **Refused vs pending.** Invalid input (shape, unknown kind, oversized, name ≠ id, a conflicting
+  duplicate) is refused: one atomically written `refused/<id>.json` holding the reason and the original
+  text, then the inbox file is removed; refused records are kept to the newest 200. **Transient failure**
+  (decisions lock held, a checker that could not run) leaves the item pending for the next pass.
+- **Bounds per pass**: 50 files, 1 MiB read, 200 artefact probes, 5 s wall clock; the rest waits. The
+  pass is synchronous, so two cannot overlap and shutdown cannot interrupt one mid-step.
+- **Exclusion** comes from the daemon's own `overseer.lock` — a second daemon never starts — and the
+  drain is only ever called by a daemon holding it. No `reports.lock`.
+- **The limit, stated**: nothing on this filesystem defends against a hostile process running as the
+  same Unix user; it could write `reports.jsonl` directly. This is the same governance-not-OS-boundary
+  line the decision record draws for `by`.
 
 ### The record
+
+Two shapes, because the submitter must not be trusted for what the daemon stamps:
 
 ```ts
 type ReportKind = "progress" | "blocked" | "decision" | "completed";
 type ReportActor = { kind: "session"; name: string } | { kind: "overseer" } | { kind: "greg" };
 
+// tools/fleet/artefact-ref.ts — a leaf, so the browser can build the same links
 type ArtefactRef =
-  | { kind: "commit"; sha: string }          // 7–40 hex
-  | { kind: "path"; path: string }           // repo-relative, no "..", no leading "/", ≤ 300 chars
-  | { kind: "decision"; id: string }         // dec-xxxxxxxx
-  | { kind: "queue-item"; id: string };      // qi-xxxxxxxx
-type ArtefactCheck = { state: "found" } | { state: "not-found" } | { state: "unchecked"; why: string };
+  | { kind: "commit"; sha: string } | { kind: "path"; path: string }
+  | { kind: "decision"; id: string } | { kind: "queue-item"; id: string };
+type ArtefactCheck =
+  | { state: "on-dev" }          // commit is an ancestor of origin/dev; path exists in origin/dev's tree
+  | { state: "found-locally" }   // commit object / file (realpath inside the checkout) here, not on dev
+  | { state: "found" }           // a decision or queue item that exists in its record
+  | { state: "not-found" }
+  | { state: "unchecked"; why: string };
 
-type ReportEvent = {
-  schema: 1; eventId: string /* uuid, minted by the submitter */;
-  submittedAt: string; receivedAt: string /* the daemon's clock */;
-  kind: ReportKind; actor: ReportActor;
-  execution: ExecutionRef | null;            // resolved by the daemon at receipt; null unless a session
+type ReportSubmission = {
+  schema: 1; eventId: string; submittedAt: string; kind: ReportKind; actor: ReportActor;
+  observedExecution: string | null;   // the token the submitter read for its own Claude process
   job: { plan: string | null; queueItem: string | null; occurrence: { jobId: string; scheduledAt: string } | null };
-  summary: string;                           // ≤ 1000 chars, no control characters, never interpreted
-  artefacts: { ref: ArtefactRef; check: ArtefactCheck }[];   // ≤ 20
-  corrects: string | null;                   // an earlier eventId this report corrects
+  summary: string; artefacts: ArtefactRef[]; corrects: string | null;
 } & (
   | { kind: "progress" }
   | { kind: "blocked"; on: "greg" | "peer" | "review" | "environment" | "other"; needs: string }
   | { kind: "completed"; ending: "finished" | "done-enough" | "important-work-left";
       revisions: { reviewed: string[]; tested: string[]; merged: string[] } }
-  | { kind: "decision"; decisionId: string }  // a pointer; the content lives in decisions.jsonl
+  | { kind: "decision"; draft: DecisionDraft }      // the schema-2 decision fields, minus author
 );
+
+type ReportEvent = Omit<ReportSubmission, "artefacts" | "draft"> & {
+  receivedAt: string;
+  execution: "same-verified-run" | "different-verified-run" | { unverifiable: string } | null; // null unless a session
+  artefacts: { ref: ArtefactRef; check: ArtefactCheck }[];
+} & ({ kind: "decision"; decisionId: string } | …the other three unchanged);
 ```
 
+**Every text field is bounded and clean**: summary ≤ 1000 characters, `needs` ≤ 500, every id, path,
+sha, plan and job field to a fixed pattern and length, lists ≤ 20; no control characters, no bidi
+overrides, anywhere, in submissions or in decision drafts. The CLI and the drain share one parser.
+
 **Every report is a claim, and the types say so.** The projection calls rows `claims`, the page says
-*"claimed by work-reports"*, and nothing downstream turns a report into a state: there is no
-READY/LANDED/GATED machine, no permission, no queue transition. A `completed` report's revision lists
-are what the agent *said*; an empty list renders **"not stated"**, never "not reviewed".
+*"claimed by work-reports"*, and nothing downstream turns a report into a state: no READY/LANDED/GATED
+machine, no permission, no queue transition. A `completed` report's revision lists are what the agent
+*said*; an empty list renders **"not stated"**, never "not reviewed".
 
-**`actor` is a self-declaration**, exactly as `by` is in the decision record. What makes a session's
-report checkable is `execution`: the daemon resolves the name against its live register at receipt.
-A report is **stale** when its `submittedAt` is earlier than the register's verified `since` for that
-name — it was written by an earlier run of a reused name — and is kept and labelled, never dropped.
+**Execution is compared by token, not by clock** (Sol's WR-P4). The submitter walks its own process
+ancestry to the `claude` process and reads `boot:pid:startTicks`; the daemon compares that with the
+register's verified token for the named session: equal ⇒ `same-verified-run`, different ⇒
+`different-verified-run` (a reused name, or a register still holding an older run — labelled, kept),
+no token or no verified entry ⇒ `unverifiable` with the reason. Nothing is ever called current because
+a token is absent. `actor` itself stays a self-declaration, as `by` is in the decision record.
 
-**Artefacts are checked, not trusted, and not refused.** A reference to a commit or file that does not
-exist is itself informative — it is a discrepancy Greg should see — so the report is kept with that
-reference marked `not-found at receipt`. The *shape* is refused (a path with `..`, a control
-character, a sha that is not hex). Links are built by us from those validated fields — a GitHub commit
-or `blob/dev/<path>` URL, a `#decision-<id>` anchor — never from the summary text, which is rendered
-as text.
+**Artefacts are checked, not trusted, and not refused.** A commit or file that does not exist is itself
+a discrepancy Greg should see, so the report is kept with that reference `not-found`. The *shape* is
+refused. Commits are checked as commits (`git cat-file -e <sha>^{commit}`, `git merge-base
+--is-ancestor <sha> origin/dev`), paths against `origin/dev`'s tree and then realpath containment in
+the checkout; all through `execFile` with an argv, never a shell. **Links are built only for `on-dev`
+artefacts** (GitHub commit, `blob/dev/<percent-encoded segments>`) and for found decisions
+(`#decision-<id>`), by one function in `artefact-ref.ts`, from validated fields — never from free text.
 
-**Corrections are new events.** `--corrects <eventId>` names what a later report corrects; the fold
-never edits the earlier row, it marks it *corrected by <id>, by <actor>, at <time>*. Without an
-explicit `corrects`, a later claim from the same session that disagrees (a `progress` after a
-`completed`) makes the earlier one show *a later claim from this session disagrees*. Either way both
-rows stay, attributed.
+**Corrections are explicit** (Sol's WR-P9). `corrects` must name an earlier event, not itself; the
+fold never edits the earlier row, it marks it *corrected by <id>, by <actor>, at <time>*. Without
+`corrects`, a later claim is just a later claim: the page shows the latest per session and says a
+later claim exists, and infers no disagreement from event kinds.
 
 ### Decisions: extend the one record, and how the two logs reconcile
-
-The roadmap wants decisions in a searchable, bounded log with consequence, reversibility,
-product/technical, alternatives, recommendation, author, consulted reviewer, evidence and whether Greg
-was asked — ranked by consequence and reversibility, with confidence at most an annotation. The brief
-says to extend the existing record rather than add a second one.
 
 **Schema 2 of `decided`** adds, required on every new event:
 
 | field | values | notes |
 |---|---|---|
-| `author` | `{kind:"overseer"}` \| `{kind:"greg"}` \| `{kind:"session", name, execution}` | who **decided**; `by` stays who **recorded the line** |
+| `author` | `{kind:"overseer"}` \| `{kind:"greg"}` \| `{kind:"session", name, execution}` | who **decided** |
 | `consequence` | `high` \| `medium` \| `low` | ranks first |
 | `reversibility` | `easy` \| `costly` \| `one-way` | ranks second |
 | `domain` | `product` \| `technical` | |
 | `recommendation` | text or null | what the author recommends if Greg looks again |
-| `evidence` | `{ref, check}[]` (the report artefact type) | |
-| `gregAsked` | `no` \| `asked-and-answered` \| `asked-awaiting` | |
+| `evidence` | `{ref, check}[]` | the artefact type above |
+| `gregAsked` | `no` \| `asked-answered` \| `asked-awaiting` | **the author's claim**, rendered as such |
 | `confidence` | `high` \| `medium` \| `low` \| null | annotation only; never sorts |
 
-Alternatives and the consulted reviewer already exist (`options`, `advisers`).
+`by` stays **who recorded the line**, and gains a third value, `daemon`, for a line the drain copied
+from a session's submission — it would be false to say the reasoning Overseer wrote it (Sol's WR-P1).
 
-- **Schema 1 lines stay readable and are never migrated.** They fold with `author: overseer` (the V1
-  invariant made explicit) and the new fields as *not recorded*. For ranking, *not recorded* counts as
-  `high` and `one-way` — unknown must not sort below known-small.
-- **An older reader cannot misread a new line**: schema-2 lines fail its `schema === 1` check and
-  appear as an unreadable-line problem, which is loud, rather than as an Overseer decision, which would
-  be the gate-1 failure.
-- **Who writes `decisions.jsonl`**: the `overseer-decisions` CLI for the Overseer and Greg, as today;
-  and the daemon's drain for a session's `decision` report. Both go through `appendEvents` under
-  `decisions.lock`. This file was never single-writer, and it stays that way.
-- **The reconciliation in one line**: a session's decision is *one* `decided` event in
-  `decisions.jsonl` (the content, reviewed and reversed there, by Greg only) *and* one `decision`
-  report in `reports.jsonl` pointing at it (so that session's timeline of claims is complete). The
-  command id `report:<eventId>` joins them, and is what makes the two appends replay-safe.
-- Only Greg's `reviewed`/`reversed` count, unchanged. A session's decision is pending review exactly
-  as an Overseer one is.
+- **Schema 1 lines are never migrated** and fold with `author: legacy-unrecorded` — not `overseer`,
+  because the record's own header says V1 assumptions were made under Greg's standing decision — and
+  every new field `not-recorded`.
+- **Only a session's decision comes through reports.** The drain refuses a decision submission whose
+  actor is `greg` or `overseer`; they keep using `overseer-decisions add`. So the daemon only ever writes
+  `by: daemon, author: session`.
+- **Nothing an author says changes review.** Only `reviewed`/`reversed` with `by: greg` count,
+  unchanged. `gregAsked: asked-answered` is displayed as *"the author says Greg answered"*, never beside
+  or in the style of the review state.
+- **Both boundaries are bumped** (WR-P2): the event schema, so an old event reader shows an
+  unreadable-line problem, and the `/api/decisions` payload schema, so an old browser refuses the
+  payload instead of showing a session's decision as "recorded by overseer". Tests pin frozen copies
+  of both old parsers.
+- **Who writes `decisions.jsonl`**: the `overseer-decisions` CLI (Overseer, Greg) and the daemon's drain
+  (sessions), both through `appendEvents` under `decisions.lock`, both honouring
+  `OVERSEER_DECISIONS_DIR`. It was never single-writer and stays that way.
+- **The reconciliation in one line**: a session's decision is one `decided` event in
+  `decisions.jsonl` — the content, reviewed or reversed there by Greg only — and one `decision` report
+  in `reports.jsonl` pointing at it, so that session's claims are complete in one place. Command id
+  `report:<eventId>` joins them and makes step [2] replay-safe.
 
-**Ranking**: pending decisions sort by consequence, then reversibility, then newest `decidedAt`. The
-server orders; the panel still does not sort.
+**Ranking** (WR-P8): pending decisions sort by consequence `high` → `not-recorded` → `medium` → `low`,
+then reversibility `one-way` → `not-recorded` → `costly` → `easy`, then newest `decidedAt`. Unknown is
+shown as unknown, never as high. The server orders; the panel still does not sort.
 
 **Searchable**: `overseer-decisions list --search <text> [--domain] [--consequence] [--author]`, and a
-client-side filter box on the tab over the rows the route already bounds.
+client-side filter box over the rows the route already bounds.
 
 ### Unreported sessions show as unreported
 
 The reports projection joins the register: every session the checkpoint knows gets its latest claim, or
 **unreported**. Unreported is not idle, stuck or failed; it means nothing was said.
 
-### The reporting convention reaches agents through proposals, not edits
+### The reporting convention: machinery complete, convention not activated
 
-What I build: the CLI, and `docs/project/work-reports.md` saying when and how to report. What I do
-**not** edit, and propose through the Overseer instead:
+Sol's WR-P7, accepted: roadmap checkbox 4 is only half met by this plan. I build the CLI, the unreported
+rows and `docs/project/work-reports.md`. The convention reaching agents needs three things that are not
+mine, proposed through the Overseer:
 
-1. **A paragraph for the Overseer's dispatch briefs** (its runbook is not mine) — controlled jobs first,
-   as the roadmap says.
-2. **The standing jobs' prompts.** Changing a `what` changes its pinned hash, and re-pinning is Greg's
-   by design (`standing-jobs.ts` § AUTHORISED_HASHES). So: proposed wording and the new hash.
-3. **Any AGENTS.md rule** is Greg's before/after edit; only proposed wording.
+1. **A paragraph for the Overseer's dispatch briefs** (its runbook is not mine).
+2. **The standing jobs' prompts** — changing a `what` changes its pinned hash, and re-pinning is Greg's
+   by design (`standing-jobs.ts` § AUTHORISED_HASHES). Proposed wording and the resulting hash.
+3. **Any AGENTS.md rule** — Greg's before/after edit. Not needed for the first delivery.
+
+The debrief will say *reporting machinery complete; convention not activated* until those land.
 
 ## Simpler options passed over
 
@@ -185,66 +214,78 @@ What I build: the CLI, and `docs/project/work-reports.md` saying when and how to
   puts untrusted text on the path whose one bad line cold-starts the register.
 - **The CLI appends `reports.jsonl` directly under a lock**, as `overseer-decisions` does. Simpler by a
   drain, and exactly what the roadmap asks us not to do: the daemon owning the file is what lets it
-  stamp `receivedAt` and resolve `execution` from the register it holds, rather than trusting the
-  submitter for both.
-- **A second decision log for agents' decisions.** Refused by the brief, and rightly: two logs are two
-  answers to "what was decided".
+  stamp `receivedAt` and compare execution against the register it holds.
+- **Deriving enrichment on every retry** instead of freezing it in `processing/`. One file fewer, and
+  it turns a crash between the two appends into a command-id conflict (Sol's WR-P3).
+- **A second decision log for agents' decisions.** Two logs are two answers to "what was decided".
 - **Refusing a report whose artefact is missing.** Loses the claim, which is the thing worth seeing.
-- **A new dashboard tab.** Six places in three files and another agent in `App.tsx`; the claims section
-  goes inside the Decisions tab instead.
+- **Stale by timestamp** (`submittedAt < since`). `since` is a floor, not a start, so it calls a real
+  report stale and misses a reused name (WR-P4).
+- **A new dashboard tab.** Six places in three files; the claims go in a section of the Decisions tab.
 
 ## Stages
 
 Implementation is by Opus subagents (the brief: Codex is the tighter budget). GPT Sol reviews the plan
 once and each stage once, `--effort high --timeout-minutes 30`; a second round is announced to the
-Overseer first.
+Overseer first. Stages 1 and 2 run in parallel — their file sets are disjoint, and the one module both
+need, `tools/fleet/artefact-ref.ts`, I write first, by hand (it is types, a parser and a link builder).
 
-### Stage 1 — the reports log, the inbox, the drain and the CLI
+### Stage 1 — the reports log, the inbox, the drain, the CLI
 
-- [ ] `tools/overseer/reports.ts`: types, strict parser for submissions and for events, `submitReport`
-  (temp + rename), `drainReports` (injected clock, register, artefact checker, decision appender),
-  `readReports` with the three arms and an init marker, `foldReports` (duplicates, conflicts,
-  corrections, disagreement, stale execution) returning problems rather than throwing.
-- [ ] `tools/overseer/report-artefacts.ts`: the real checker — `git cat-file -e` in the daemon's
-  checkout with a timeout, `existsSync` under the repo root, decision ids from `readDecisions`, queue
-  ids from the queue reader; any failure to look is `unchecked`, never `not-found`.
-- [ ] `scripts/overseer.ts`: `report <kind>` and `reports [--session] [--kind] [--search] [--json]`.
-  Session name defaults to the tmux session (`tmux display-message -p '#S'`) when `$TMUX` is set, else
-  `--session` or `--as overseer|greg` is required.
-- [ ] `tools/overseer/daemon.ts`: one optional `reports?: { intervalMs?, drain(register) }`, on its own
-  interval, errors contained into a note. Composed in `scripts/overseer.ts run`.
-- [ ] Tests red first: duplicate submission (same bytes ⇒ one row; other bytes ⇒ refused), stale
-  execution, untrusted artefact text (`..`, control characters, `javascript:`), unknown event kind,
-  nonexistent artefact (kept, `not-found`), contradictory later report (kept, attributed correction),
-  crash between append and unlink (no second row), a refused submission visible in `reports`.
+- [ ] `tools/fleet/artefact-ref.ts` + its test (orchestrator, by hand, before the stage).
+- [ ] `tools/overseer/reports.ts`: submission and event parsers, `submitReport`, `drainReports` (the
+  four steps, `processing/`, refusals, bounds), `readReports` (three arms, `reports.created` marker),
+  `foldReports`. A `decision` submission is refused in this stage with "decision reports are wired in
+  stage 3"; the prepare/replay protocol is built generally so stage 3 only adds step [2].
+- [ ] `tools/overseer/report-artefacts.ts`: the real checker (git via `execFile` argv, timeouts).
+- [ ] `tools/overseer/report-identity.ts`: the submitter's own execution token from `/proc`.
+- [ ] `scripts/overseer.ts`: `report <kind>` and `reports`; `run` composes the drain into the daemon.
+- [ ] `tools/overseer/daemon.ts`: one optional `reports` option on its own interval; errors contained.
+- [ ] Tests red first: duplicates (same bytes ⇒ one row; other bytes ⇒ refused), execution tokens (same /
+  different / unverifiable), untrusted text in every field (control characters, bidi, `..`, oversize),
+  unknown kind (CLI and hand-dropped), nonexistent artefact kept `not-found`, explicit correction kept
+  and attributed, a later claim not called a contradiction, crash at every step boundary with the
+  register and artefacts changed between attempts, daemon-down backlog beyond one pass, non-regular
+  inbox entries, name ≠ id, a transient checker failure left pending, lost-log marker.
 
 ### Stage 2 — decisions schema 2
 
-- [ ] `decisions.ts`: schema 2 `decided` with the fields above; schema 1 still parsed and folded.
-- [ ] `overseer-decisions.ts`: `template` prints schema 2; `add` requires the new fields; `list
-  --search/--domain/--consequence/--author`.
-- [ ] `decisions-view.ts`: ranking; the author and the new fields on the projection.
-- [ ] `wire.ts` `DecisionWireRecord` gains the fields; `decisions-client.ts` parses them;
-  `DecisionsPanel.tsx` shows author, consequence, reversibility, domain, evidence links, Greg-asked.
-- [ ] Tests: v1 lines still fold; v2 round-trip; ranking with unknowns ranked high; an old-schema
-  reader refuses a v2 line loudly.
+- [ ] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
+- [ ] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.
+- [ ] `decisions-view.ts`: the ranking above.
+- [ ] `/api/decisions` payload schema 2; `wire.ts` decision types, `routes-decisions.ts`,
+  `decisions-client.ts`, `DecisionsPanel.tsx` (author, the new fields, evidence links via
+  `artefact-ref.ts`, Greg-asked as the author's claim), a client-side search box.
+- [ ] Tests: v1 folds; v2 round-trips; each required field refused when missing; no author changes
+  review; frozen old event parser and frozen old client parser both refuse the new shapes; ranking with
+  `not-recorded`; CLI search and filters; panel links built only from validated fields.
 
-### Stage 3 — decision reports, the dashboard's claims, and the convention
+### Stage 3 — decision reports, the dashboard's claims, the convention
 
-- [ ] The drain routes a `decision` report into `decisions.jsonl` (command id `report:<eventId>`,
-  `author: session`), then the pointer into `reports.jsonl`. Replay tests at each crash point.
-- [ ] `tools/fleet/reports-view.ts` (pure projection, joined with the register ⇒ unreported),
-  `routes-reports.ts` (`GET /api/reports`, read-only, byte-bounded like decisions), one line in
-  `server.ts`, a block appended to `wire.ts`, a client, and a **Claims** section in the Decisions tab
-  with a search box.
-- [ ] `docs/project/work-reports.md` (signposted from `dev-and-deployment-overview.md`), and the three
+- [ ] Step [2] of the drain: a session's decision into `decisions.jsonl`, replay tests at each boundary,
+  `OVERSEER_DECISIONS_DIR` honoured, a decisions-lock contention left pending.
+- [ ] `tools/fleet/reports-view.ts` (pure, joined with the register ⇒ unreported), `routes-reports.ts`
+  (`GET /api/reports`, read-only, byte-bounded like decisions), one line in `server.ts`, a block
+  appended to `wire.ts`, a client, and a **Claims** section in the Decisions tab with a search box.
+- [ ] `docs/project/work-reports.md`, signposted from `dev-and-deployment-overview.md`; the three
   proposals sent to the Overseer.
+
+## Plan review outcome (GPT Sol, 2026-09-10)
+
+`260910e-work-reports-plan-review-sol.md`: *revise, no P0*, nine findings, all accepted and folded into
+the design above — WR-P1 (daemon recorder, legacy author, session-only bridge, Greg-asked as claim),
+WR-P2 (API schema bump, frozen old parsers), WR-P3 (submission vs prepared event, frozen `processing/`
+replay, `OVERSEER_DECISIONS_DIR`), WR-P4 (token comparison), WR-P5 (inbox bounds, atomic refusals,
+`overseer.lock` as the exclusion, the same-user limit), WR-P6 (bounds on every field, on-dev vs local,
+encoded links), WR-P7 (convention not activated), WR-P8 (`not-recorded` bucket), WR-P9 (explicit
+corrections only, the longer test list). No second plan round: every finding was a missing protocol
+detail rather than a wrong direction, and Sol called the ownership design sound.
 
 ## Needs Greg (to be confirmed in the debrief)
 
-- The schema-2 decision fields are a stored shape; the enums above are my defaults.
-- Wording for the standing-job prompts (re-pin) and any AGENTS.md rule.
+- The schema-2 decision fields and their enums are a stored shape; the values above are my defaults.
+- Wording for the standing-job prompts (re-pin), and whether an AGENTS.md rule is wanted at all.
 
 ## Status
 
-Plan written 2026-09-10; not yet reviewed.
+Plan reviewed by Sol 2026-09-10 and revised. Stages 1 and 2 next, in parallel.
