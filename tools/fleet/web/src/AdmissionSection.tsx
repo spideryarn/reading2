@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { DATE_LIMIT_MS, type AdmissionApi, type AdmissionView } from "./admission-client";
+import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import { Card, Pill, SectionHeading } from "./ui";
-import type { Tone } from "./view";
 
-function forecastTime(ms: number): string | null {
-  if (!Number.isFinite(ms) || Math.abs(ms) > DATE_LIMIT_MS) return null;
-  return new Date(ms).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
+function forecastTime(ms: number | null, skew: ClockSkew): string | null {
+  if (ms === null || !Number.isFinite(ms) || Math.abs(ms) > DATE_LIMIT_MS) return null;
+  const corrected = shiftMsToBrowserClock(ms, skew);
+  if (!Number.isFinite(corrected) || Math.abs(corrected) > DATE_LIMIT_MS) return null;
+  return new Date(corrected).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
 }
 
 function Outcome({ view }: { view: Exclude<AdmissionView, { kind: "no-answer" }> }): ReactNode {
@@ -23,9 +25,8 @@ function Outcome({ view }: { view: Exclude<AdmissionView, { kind: "no-answer" }>
     return (
       <div className="tw:space-y-2 tw:text-[13px] tw:text-ink-soft">
         <p>
-          {outcome.kind === "would-admit"
-            ? `The gate would admit a test run with the machine default of ${outcome.workers} workers.`
-            : `The gate would admit a test run and would ask the config for ${outcome.workers} workers instead of the machine default of ${outcome.nominalWorkers}.`}
+          For the machine-default request of {outcome.nominalWorkers} workers, the gate would admit the test run. The
+          config would ask Vitest for {outcome.workers} workers{outcome.kind === "would-reduce" ? " instead" : ""}.
         </p>
         <p>
           Gate figures: capacity {outcome.capacity} workers; available memory {outcome.availableBytes.toLocaleString()} bytes;
@@ -56,64 +57,96 @@ function Outcome({ view }: { view: Exclude<AdmissionView, { kind: "no-answer" }>
 
 function policy(view: Exclude<AdmissionView, { kind: "no-answer" }>): ReactNode {
   if (view.label !== "forecast") return null;
+  if (view.policy.explanation === null) {
+    return (
+      <p className="tw:mt-2 tw:text-[12px] tw:text-unknown-ink">
+        Policy explanation unavailable — {view.policy.whyWithheld}.
+      </p>
+    );
+  }
   return (
     <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">
-      {view.policy.explanation ?? view.policy.whyWithheld}
+      {view.policy.explanation}
     </p>
   );
 }
 
-function answerTone(view: AdmissionView): Tone {
-  if (view.kind === "no-answer") return "unknown";
-  if (view.label === "not-modelled") return "idle";
-  if (view.outcome.kind === "would-admit") return "work";
-  if (view.outcome.kind === "would-reduce") return "needs";
-  if (view.outcome.kind === "would-refuse") return "alarm";
-  return "unknown";
+function SignalLabel({ label }: { label: "forecast" | "not-modelled" }): ReactNode {
+  if (label === "not-modelled") {
+    return <span data-admission-label><Pill tone="unknown">{label}</Pill></span>;
+  }
+  return (
+    <span
+      data-admission-label
+      className="tw:inline-flex tw:shrink-0 tw:items-center tw:rounded-full tw:border tw:border-rule-strong tw:bg-panel-raised tw:px-2 tw:py-0.5 tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-soft tw:uppercase tw:whitespace-nowrap"
+    >
+      {label}
+    </span>
+  );
 }
 
-function AdmissionBody({ view }: { view: AdmissionView | null }): ReactNode {
+function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: ClockSkew }): ReactNode {
   if (view === null) {
     return <p className="tw:text-[13px] tw:text-ink-faint">Asking the gate for a forecast…</p>;
   }
   if (view.kind === "no-answer") {
     return (
       <div>
-        <p className="tw:text-[13px] tw:text-ink-soft">This browser never got an answer it could read: {view.why}.</p>
+        <p className="tw:text-[13px] tw:text-ink-soft">
+          {view.source === "browser"
+            ? `This browser never got an answer it could read: ${view.why}.`
+            : `The server did not produce an admission forecast this page could use: ${view.why}.`}
+        </p>
         <div className="tw:mt-3"><Pill tone="unknown">forecast</Pill></div>
       </div>
     );
   }
 
-  /* **An unreadable instant loses the instant, never the answer.**
-     `parseAdmission` already refuses an out-of-range `computedAtMs` into
-     `no-answer`, so this branch is unreachable through the parser — which is
-     precisely why it was wrong and why it now has its own test. It used to say
-     "this browser never got an answer it could read" over a perfectly good
-     would-refuse: two errors at once, since the browser HAD an answer and the
-     answer was being discarded for a bad clock. The outcome is the thing the
-     reader came for; the time is a caption. */
-  const at = forecastTime(view.computedAtMs);
+  /* **An unreadable instant loses the instant, never the answer.** The outcome
+     is the thing the reader came for; the time is a caption. The parser keeps
+     this distinction too, so the real fetch path reaches this arm rather than
+     turning a server answer into a browser-owned `no-answer`. */
+  const at = forecastTime(view.computedAtMs, skew);
   return (
     <div>
       <p className="tw:mb-2 tw:text-[12px] tw:text-ink-faint">
         {at === null
-          ? "The forecast time could not be read, so this answer is undated — the server sent an instant outside the range this page can display."
+          ? "The forecast time could not be displayed on this page's clock, so this answer is undated."
           : `The forecast was computed at ${at}.`}
       </p>
       <Outcome view={view} />
       {policy(view)}
-      <div className="tw:mt-3"><Pill tone={answerTone(view)}>{view.label}</Pill></div>
+      {/* The label says what sort of knowledge this is, not whether the box is
+          healthy. A forecast is neutral rather than live green/amber/red; a
+          missing model is genuinely unknown rather than the page's idle grey. */}
+      <div className="tw:mt-3"><SignalLabel label={view.label} /></div>
     </div>
   );
 }
 
-export function AdmissionSection({ api }: { api: AdmissionApi }): ReactNode {
+/* One request per API while it is pending. Besides ordinary quick remounts,
+   this covers React StrictMode's setup-cleanup-setup rehearsal: both mounts
+   observe the same harmless GET, while each keeps its own state-write guard. */
+const pendingForecasts = new WeakMap<AdmissionApi, Promise<AdmissionView>>();
+
+function forecastOnce(api: AdmissionApi): Promise<AdmissionView> {
+  const pending = pendingForecasts.get(api);
+  if (pending !== undefined) return pending;
+  const request = api.forecast();
+  pendingForecasts.set(api, request);
+  const clear = (): void => {
+    if (pendingForecasts.get(api) === request) pendingForecasts.delete(api);
+  };
+  void request.then(clear, clear);
+  return request;
+}
+
+export function AdmissionSection({ api, skew }: { api: AdmissionApi; skew: ClockSkew }): ReactNode {
   const [view, setView] = useState<AdmissionView | null>(null);
 
   useEffect(() => {
     let alive = true;
-    void api.forecast().then((answer) => {
+    void forecastOnce(api).then((answer) => {
       if (alive) setView(answer);
     });
     return () => {
@@ -126,7 +159,7 @@ export function AdmissionSection({ api }: { api: AdmissionApi }): ReactNode {
       <SectionHeading>If a test run started right now, what would the gate say?</SectionHeading>
       <Card className="tw:border-l-4 tw:p-4">
         <p className="tw:mb-3 tw:text-[13px] tw:font-medium">Gate forecast — this panel admitted or refused nothing.</p>
-        <AdmissionBody view={view} />
+        <AdmissionBody view={view} skew={skew} />
       </Card>
     </section>
   );

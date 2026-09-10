@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
+import { AdmissionSection } from "../tools/fleet/web/src/AdmissionSection";
 import type { ActionsApi } from "../tools/fleet/web/src/actions-client";
-import type { AdmissionApi, AdmissionView } from "../tools/fleet/web/src/admission-client";
+import {
+  makeAdmissionApi,
+  parseAdmission,
+  type AdmissionApi,
+  type AdmissionView,
+} from "../tools/fleet/web/src/admission-client";
 import type { HistoryApi } from "../tools/fleet/web/src/health-history-client";
 import { CLOCK_SKEW_UNMEASURED, type FleetState } from "../tools/fleet/web/src/types";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
@@ -31,7 +37,7 @@ afterEach(() => {
   window.location.hash = "";
 });
 
-function state(): FleetState {
+function state(over: Partial<FleetState> = {}): FleetState {
   return {
     collectedAt: new Date().toISOString(),
     tookMs: 12,
@@ -48,6 +54,7 @@ function state(): FleetState {
     answeringEnabled: { kind: "not-reported" },
     attemptedAt: { kind: "not-reported", why: "the fixture did not say" },
     tmuxServerPid: 132280,
+    ...over,
   };
 }
 
@@ -83,7 +90,7 @@ function forecast(
   };
 }
 
-async function mountFull(api: AdmissionApi): Promise<void> {
+async function mountFull(api: AdmissionApi, nextState: FleetState = state()): Promise<void> {
   const feed = manualTransport();
   act(() => {
     root.render(
@@ -96,7 +103,7 @@ async function mountFull(api: AdmissionApi): Promise<void> {
       />,
     );
   });
-  act(() => feed.push(state()));
+  act(() => feed.push(nextState));
   await act(async () => {});
 }
 
@@ -120,6 +127,34 @@ describe("the Box health admission section", () => {
     expect(asks).toBe(1);
   });
 
+  it("still issues exactly one forecast request when the box has no health reading", async () => {
+    let asks = 0;
+    await mountFull(
+      {
+        forecast: async () => {
+          asks += 1;
+          return forecast({ kind: "not-applicable", why: "no reserve file" });
+        },
+      },
+      state({ health: null }),
+    );
+    expect(asks).toBe(1);
+    expect(container.querySelector('[data-section="admission"]')).not.toBeNull();
+  });
+
+  it("turns StrictMode's effect rehearsal into one forecast request", async () => {
+    let asks = 0;
+    const api: AdmissionApi = {
+      forecast: async () => {
+        asks += 1;
+        return forecast({ kind: "not-applicable", why: "no reserve file" });
+      },
+    };
+    act(() => root.render(<StrictMode><AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} /></StrictMode>));
+    await act(async () => {});
+    expect(asks).toBe(1);
+  });
+
   it.each([
     [
       "would-admit",
@@ -132,7 +167,7 @@ describe("the Box health admission section", () => {
         reserveBytes: 4_294_967_296,
         caveat: CAVEAT,
       }),
-      "would admit a test run with the machine default of 4 workers",
+      "For the machine-default request of 4 workers, the gate would admit the test run. The config would ask Vitest for 4 workers.",
     ],
     [
       "would-reduce",
@@ -145,7 +180,7 @@ describe("the Box health admission section", () => {
         reserveBytes: 4_294_967_296,
         caveat: CAVEAT,
       }),
-      "would ask the config for 2 workers instead of the machine default of 4",
+      "For the machine-default request of 4 workers, the gate would admit the test run. The config would ask Vitest for 2 workers instead.",
     ],
     [
       "would-refuse",
@@ -208,17 +243,100 @@ describe("the Box health admission section", () => {
     expect(text).not.toContain("would refuse");
   });
 
+  it.each([
+    [
+      forecast({
+        kind: "would-admit",
+        nominalWorkers: 4,
+        workers: 4,
+        capacity: 9,
+        availableBytes: 17_179_869_184,
+        reserveBytes: 4_294_967_296,
+        caveat: CAVEAT,
+      }),
+      "tw:bg-panel-raised",
+    ],
+    [
+      forecast({ kind: "would-refuse", forecastCallMessage: "REFUSING TO START: not enough memory" }),
+      "tw:bg-panel-raised",
+    ],
+    [
+      {
+        kind: "answer",
+        label: "not-modelled",
+        computedAtMs: COMPUTED_AT,
+        requestKind: "review",
+        outcome: { kind: "not-modelled", why: "no measured cost model exists" },
+      } as const,
+      "tw:bg-unknown",
+    ],
+  ] as const)("does not reuse a live-health tone for a forecast or an idle tone for an unknown", async (reply, expected) => {
+    await mountFull({ forecast: async () => reply });
+    const label = container.querySelector('[data-section="admission"] [data-admission-label]');
+    const styledLabel = label?.querySelector('[data-slot="pill"]') ?? label;
+    expect(styledLabel?.className).toContain(expected);
+    expect(styledLabel?.className).not.toContain("tw:bg-alarm");
+    expect(styledLabel?.className).not.toContain("tw:bg-work");
+    expect(styledLabel?.className).not.toContain("tw:bg-needs");
+    expect(styledLabel?.className).not.toContain("tw:bg-quiet-wash");
+  });
+
+  it("prints the forecast instant on the corrected clock used by the rest of Box health", async () => {
+    const skew = { kind: "known", ms: -5 * 60_000 } as const;
+    await mountFull(
+      { forecast: async () => forecast({ kind: "not-applicable", why: "no reserve file" }) },
+      state({ clockSkew: skew }),
+    );
+    const expected = new Date(COMPUTED_AT - skew.ms).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const uncorrected = new Date(COMPUTED_AT).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
+    expect(text).toContain(expected);
+    expect(text).not.toContain(uncorrected);
+  });
+
+  it("marks a withheld policy explanation as unavailable instead of styling it like policy prose", async () => {
+    await mountFull({
+      forecast: async () => ({
+        ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+        policy: {
+          gateVersion: 99,
+          explanation: null,
+          whyWithheld: "this dashboard has no explanation for admission policy v99; policy wording is withheld",
+        },
+      }),
+    });
+    const section = container.querySelector('[data-section="admission"]');
+    expect(section?.textContent).toContain("Policy explanation unavailable");
+    expect(section?.querySelector(".tw\\:text-unknown-ink")?.textContent).toContain("policy v99");
+  });
+
   it("keeps a missing browser answer in the browser's own voice", async () => {
-    await mountFull({ forecast: async () => ({ kind: "no-answer", why: "the connection ended" }) });
+    await mountFull({ forecast: async () => ({ kind: "no-answer", source: "browser", why: "the connection ended" }) });
     const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
     expect(text).toContain("This browser never got an answer it could read");
     expect(text.toLowerCase()).not.toContain("server");
   });
 
+  it("speaks a readable HTTP failure in the server's voice, not the browser's", async () => {
+    const api = makeAdmissionApi(async () =>
+      new Response(JSON.stringify({ error: "internal-error", why: "building the answer threw" }), { status: 500 }),
+    );
+    await mountFull(api);
+    const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
+    expect(text).toContain("The server did not produce an admission forecast");
+    expect(text).not.toContain("This browser never got an answer");
+  });
+
   it.each([
     forecast({ kind: "not-applicable", why: "no reserve file" }),
     forecast({ kind: "unknown", why: "worker file was unreadable" }),
-    { kind: "no-answer", why: "the connection ended" } as const,
+    { kind: "no-answer", source: "browser", why: "the connection ended" } as const,
   ])("draws no zero or empty bar when an admission number is absent", async (reply) => {
     await mountFull({ forecast: async () => reply });
     const section = container.querySelector('[data-section="admission"]');
@@ -244,8 +362,7 @@ describe("the defensive admission client", () => {
     ).toMatchObject({ kind: "no-answer" });
   });
 
-  it("refuses an out-of-range instant before a renderer can throw", async () => {
-    const { parseAdmission } = await import("../tools/fleet/web/src/admission-client");
+  it("keeps a valid outcome when only its forecast instant is out of range", () => {
     const parsed = parseAdmission({
       schema: 1,
       label: "forecast",
@@ -254,21 +371,46 @@ describe("the defensive admission client", () => {
       policy: { gateVersion: 1, explanation: "known", whyWithheld: null },
       outcome: { kind: "unknown", why: "reader failed" },
     });
-    expect(parsed).toMatchObject({ kind: "no-answer" });
+    expect(parsed).toMatchObject({
+      kind: "answer",
+      computedAtMs: null,
+      outcome: { kind: "unknown", why: "reader failed" },
+    });
+  });
+
+  it("keeps that outcome through the real fetch-parser-render path", async () => {
+    const api = makeAdmissionApi(async () =>
+      new Response(JSON.stringify({
+        schema: 1,
+        label: "forecast",
+        computedAtMs: 1e300,
+        request: { kind: "test" },
+        policy: { gateVersion: 1, explanation: "known", whyWithheld: null },
+        outcome: {
+          kind: "would-refuse",
+          forecastCallMessage: "REFUSING TO START: not enough memory",
+          messageContext: "dashboard-forecast-call",
+        },
+      }), { status: 200 }),
+    );
+    await mountFull(api);
+    const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
+    expect(text).toContain("REFUSING TO START: not enough memory");
+    expect(text).toContain("this answer is undated");
+    expect(text).not.toContain("This browser never got an answer");
   });
 
   /**
    * **The section's own range check must not throw away the server's answer,
    * and must not blame this browser for the server's clock.**
    *
-   * `parseAdmission` above already refuses an out-of-range instant into
-   * `no-answer`, so a view that reaches the section always has a displayable
-   * time — which is exactly why the section's second check needs a test of its
-   * own: it is unreachable through the parser, and an unreachable branch is one
-   * nothing has ever watched. It said *"This browser never got an answer it
-   * could read"* over a perfectly good `would-refuse`, which is two errors at
-   * once: the browser did get an answer, and the answer was thrown away for a
-   * bad timestamp rather than drawn without one.
+   * This direct view still checks the renderer's own boundary independently of
+   * the parser test above. Before the parser was corrected, this branch was
+   * unreachable through the real fetch path and nothing had ever watched it.
+   * The old pair of paths could say *"This browser never got an answer it could
+   * read"* over a perfectly good `would-refuse`: the browser did get an answer,
+   * and the answer was thrown away for a bad timestamp rather than drawn
+   * without one.
    *
    * The view is constructed directly rather than parsed, because that is the
    * only way in — and it is the way a future caller building a view by hand

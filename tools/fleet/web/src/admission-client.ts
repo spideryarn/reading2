@@ -1,22 +1,24 @@
 /**
  * The admission forecast — `GET /api/admission`.
  *
- * ## THE EXTRA ARM BELONGS TO THE BROWSER
+ * ## THE EXTRA ARMS SAY WHO FAILED
  *
  * The server has answers about the box: the gate would admit, reduce or
  * refuse; the machine has no policy; the server could not ask the gate; or the
  * requested kind has no model. This client adds `no-answer` for a different
- * fact: this browser never received an answer it could read. Keeping that arm
- * in the browser's voice prevents a phone's network failure from becoming a
- * statement about the box.
+ * fact: there is no admission answer the page can use. A source discriminant
+ * keeps a phone's network failure in the browser's voice and a readable HTTP
+ * failure in the server's; neither may borrow the other's failure.
  *
  * ## UNKNOWN INPUT IS AN ABSENCE, NEVER A NUMBER
  *
  * Every field used by the section is read by name. An unknown schema, outcome,
- * label, number or timestamp refuses the whole answer into `no-answer`; no
- * missing numeric field is defaulted to zero. In particular, timestamps are
- * range-checked for `Date` as well as checked for finiteness: `1e300` is finite
- * but `new Date(1e300).toISOString()` throws and would blank the whole panel.
+ * label or outcome number refuses the whole answer into `no-answer`; no
+ * missing numeric field is defaulted to zero. The forecast instant is the one
+ * exception: it is a caption on an otherwise complete answer, so an unreadable
+ * one becomes `null` and the outcome stays. Timestamps are range-checked for
+ * `Date` as well as checked for finiteness: `1e300` is finite but
+ * `new Date(1e300).toISOString()` throws and would blank the whole panel.
  *
  * ## THE SEAM IS LATE-BOUND
  *
@@ -30,11 +32,9 @@ export const ADMISSION_URL = "api/admission";
 
 export type AdmissionRequestKind = "test" | "review" | "browser";
 
-export type AdmissionPolicyView = {
-  gateVersion: number;
-  explanation: string | null;
-  whyWithheld: string | null;
-};
+export type AdmissionPolicyView =
+  | { gateVersion: number; explanation: string; whyWithheld: null }
+  | { gateVersion: number; explanation: null; whyWithheld: string };
 
 type WorkerForecastView = {
   nominalWorkers: number;
@@ -56,7 +56,8 @@ export type AdmissionView =
   | {
       kind: "answer";
       label: "forecast";
-      computedAtMs: number;
+      /** Null keeps a valid forecast while making its missing time explicit. */
+      computedAtMs: number | null;
       requestKind: "test";
       policy: AdmissionPolicyView;
       outcome: AdmissionForecastOutcomeView;
@@ -64,12 +65,12 @@ export type AdmissionView =
   | {
       kind: "answer";
       label: "not-modelled";
-      computedAtMs: number;
+      /** Null keeps a valid answer while making its missing time explicit. */
+      computedAtMs: number | null;
       requestKind: "review" | "browser";
       outcome: { kind: "not-modelled"; why: string };
     }
-  /** This browser never got an answer it could read. Its voice, not the server's. */
-  | { kind: "no-answer"; why: string };
+  | { kind: "no-answer"; source: "browser" | "server"; why: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -103,8 +104,8 @@ function dateInstant(value: unknown): number | null {
     : null;
 }
 
-function noAnswer(why: string): AdmissionView {
-  return { kind: "no-answer", why };
+function noAnswer(why: string, source: "browser" | "server" = "browser"): AdmissionView {
+  return { kind: "no-answer", source, why };
 }
 
 function parseRequestKind(raw: unknown): AdmissionRequestKind | null {
@@ -188,8 +189,8 @@ export function parseAdmission(raw: unknown): AdmissionView {
   }
   const computedAtMs = dateInstant(raw["computedAtMs"]);
   const requestKind = parseRequestKind(raw["request"]);
-  if (computedAtMs === null || requestKind === null || !isRecord(raw["outcome"])) {
-    return noAnswer("the admission response was missing a readable request, outcome or forecast time");
+  if (requestKind === null || !isRecord(raw["outcome"])) {
+    return noAnswer("the admission response was missing a readable request or outcome");
   }
 
   if (raw["label"] === "not-modelled") {
@@ -244,10 +245,10 @@ export function makeAdmissionApi(fetchImpl: typeof fetch = fetch): AdmissionApi 
       try {
         body = await response.json();
       } catch (cause) {
-        return noAnswer(`the response was not readable JSON (${response.status}): ${describe(cause)}`);
+        return noAnswer(`the response was not readable JSON (${response.status}): ${describe(cause)}`, "server");
       }
       if (!response.ok) {
-        return noAnswer(`the request answered with HTTP ${response.status}, not an admission forecast`);
+        return noAnswer(`the request answered with HTTP ${response.status}, not an admission forecast`, "server");
       }
       return parseAdmission(body);
     },
