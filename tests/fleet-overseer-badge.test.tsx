@@ -225,6 +225,10 @@ describe("the row badge", () => {
         collected={true}
         unreadableRows={0}
         answeringEnabled={{ kind: "enabled" }}
+        /* Passed straight through to the detail pane, which is not open here —
+           same reason as the five APIs cast below. */
+        answeringRefusal={null}
+        onAnsweringRefused={() => {}}
         tmuxServerPid={1}
         order="status"
         onOrder={() => {}}

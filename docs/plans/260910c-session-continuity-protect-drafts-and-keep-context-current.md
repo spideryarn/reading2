@@ -189,7 +189,39 @@ reviewer fixes inside the stage and reports wider).
 ### Stage 1 — Detail state follows the execution, not the handle
 
 Roadmap checkbox 1. Files: `continuity.ts` (new), `SessionsPanel.tsx`, `SessionDetail.tsx`,
-`App.tsx`, `RecentMessages.tsx`, `tests/fleet-web.test.tsx`.
+`App.tsx`, `RecentMessages.tsx`, `tests/fleet-web.test.tsx`, and two lines in
+`tests/fleet-overseer-badge.test.tsx` (it mounts `SessionsPanel` directly and needed the new props).
+
+**Status: built, awaiting Sol's stage review.** Implemented by an Opus subagent, reviewed by me
+before commit; ten new tests, each seen red first. What the code taught the plan:
+
+- **The `identityOf` wording above was self-contradictory**, and the implementer caught it before I
+  did. Revision 3 said "the verified conversation id, or a stable kind/cause marker": that breaks
+  the existing sibling test (a claim change under one handle with an `unknown` reading gives two
+  equal identities), and `verified → unknown → verified` becomes three identities, putting a
+  transcript read on the refresh loop. **Built instead: the epoch key plus `row.claudeSessionId`**
+  — *which run* and *what the server actually fetches* (`server.ts:772` resolves `/api/messages`
+  from the row's claim). `useRecentMessages` calls `useExecutionEpoch` itself, so it does not rely
+  on its caller remounting it.
+- **My own review of the first build found two bugs.** (A) An intermediate version keyed the
+  `conflicting` arm on the *observed* conversation while the held turns were the *claimed* one's;
+  if the claim then caught up under the same process, nothing re-read and the previous
+  conversation's turns rendered with no heading and no caveat. (B) The dialog key used the raw
+  token, which is null on every unverifiable collection, so buttons the server had just refused came
+  back in exactly the weather this design exists for. Both now use the epoch; both have a test that
+  was seen red.
+- **One test was testing an impossible state**: a `conflicting` reading carrying the *same* token
+  as an earlier verified one. One process cannot change the `--session-id` on its own argv. It now
+  carries a new token.
+- **Two tests passed on the old code** until rewritten: the flicker test (nothing remounted before,
+  so nothing could be lost) and the two-unverifiable-sessions test (at one pane the list replaces
+  the detail, so moving A → B passes through "nothing selected" and remounts whatever the key is —
+  it now runs at a pinned 1280 px so selection moves directly).
+- **Checked and not a bug**: the App latch captures its payload before an `await`. Both the
+  payload's `answeringEnabled` and the tap-time `answering-disabled` read
+  `process.env["FLEET_ANSWER_ENABLED"]`, so they only disagree across a restart.
+- **Left alone, and noted for the debrief**: `QuestionsPanel` holds its own `answering-disabled`
+  state, a second latch for one server-wide fact.
 
 - [ ] `continuity.ts`: **`useExecutionEpoch(row: FleetRow | null)`**, called unconditionally, which
       keeps the last verified token **per `row.id`**. Its returned key always contains both the
@@ -274,6 +306,26 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
       drop", the rule is now: a different verified conversation leaves the text **on screen**,
       persists nothing, and lets the disabled Send do the protecting. Dropping a person's words on
       the evidence of a process id was a bug wearing caution's clothes.
+
+      **How that meets Stage 1's remount**, which Fable's table did not have to reckon with: a
+      `conflicting` reading always arrives with a new process, so the detail pane has just been
+      remounted and its box is empty. "Keep on screen" therefore means **restore the draft stored
+      under the *claimed* conversation into the box** — the reading names it — with Send and Queue
+      disabled and further edits not persisted. A genuinely different *verified* conversation
+      (the claim itself changed) restores nothing: the old draft stays in storage under its own key
+      and comes back only if that conversation does.
+- [ ] **The composer under each reading** — Fable's table, composer rows. Assigned here because no
+      stage owned it in revision 3: *cannot tell* keeps Send and Queue live with one line beside
+      Send; *can tell* (`conflicting`, `not-claimed`, non-addressable harness) disables them with
+      `identityWriteGate`'s sentence. Typing is enabled in every arm. The gate supplies the sentence
+      and **not** the enable condition — its own header says a cached verdict is not authority, and
+      its refusals for the *cannot tell* arms are exactly what Fable ruled must not disable the
+      controls.
+- [ ] **One quiet limitation, stated rather than discovered.** A session whose Claude was started
+      without `--session-id`, in a pane that has `CLAUDE_SESSION_ID` set, reads
+      `conversation.kind === "unverifiable"` for as long as it runs, so its drafts never persist.
+      Harmless, because `verifyTarget` refuses a send to that pane anyway (`noUsableClaude`) — but
+      it is the kind of quiet gap that should be in the plan rather than found later as a bug.
 - [ ] Tests: suspend/resume restores the draft; a different token restores nothing and leaves the
       old draft unread in storage; storage that throws on the accessor, on `getItem`, and on
       `setItem`; Clear removes the key; over-cap text is not stored.
