@@ -125,11 +125,23 @@ Measured on the box, 21–23 rows:
 | response | 40 kB, **8 kB gzipped** |
 
 **The cost that decides the cadence is the disk, not the wire.** 8 kB is nothing; 10 MB of transcript
-reads every sixty seconds is not. So the tab is fetched when it opens and when the reader asks, never
-on a timer, and **never from the collection loop** — [overseer-direction.md](overseer-direction.md)
-and the responsive-collection stage of
+reads every sixty seconds is not. So there is no timer, and **never a read from the collection
+loop** — [overseer-direction.md](overseer-direction.md) and the responsive-collection stage of
 [260908f](../plans/260908f-overseer-and-fleet-improvement-roadmap.md) both say the collector may not
 be held by a slow reader.
+
+The tab reads when it opens, when the reader asks, and when the session list it already has shows
+evidence that the list may be out of date: a session appearing or going, a status or a dialog
+changing, a different conversation claimed, a run replaced, or a different tmux server. "Replaced"
+means a different *verified* token; a row that merely fails to verify is the box's weather, and
+counts for nothing. Never sooner than `FEED_REREAD_FLOOR_MS` after the last read started, and never
+from a hidden tab. The digest is `feedEvidence` in `feed-client.ts`; the rules are `feedReader` in
+`FeedPanel.tsx` ([260910c](../plans/260910c-session-continuity-protect-drafts-and-keep-context-current.md),
+Stage 3).
+
+**What it cannot notice is the commonest case:** a session writing turns without changing status
+produces no evidence at all. That is why the panel prints how long ago it last read, and why that
+clock, not the re-read, is what keeps the list honest.
 
 An earlier draft of the plan quoted 266 kB on the wire. That was the size of all 579 **candidate**
 turns, not the 50 the route serialises — a number measured on a step's input, read as a number about
