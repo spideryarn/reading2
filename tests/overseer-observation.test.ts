@@ -908,6 +908,64 @@ describe("the producer stamp", () => {
 });
 
 /**
+ * What the collecting dashboard's build declares it can do — plan 260910f,
+ * Sol's G3. The resume pass defers until a snapshot declares
+ * `argv-resume-uuid`, so an old dashboard cannot be asked to verify a resume it
+ * would read as `claimed-only` for ever.
+ *
+ * LIKE THE STAMP, IT CANNOT FAIL THE PARSE. Absent is a dashboard built before
+ * the field, and reads as none; malformed reads as none too, because a
+ * capability is something to be sure of before depending on, never something
+ * to guess from a shape.
+ */
+describe("the producer's declared capabilities", () => {
+  function parsedWith(capabilities: JsonValue | undefined) {
+    const payload = editableFixture("status-change-before");
+    if (capabilities !== undefined) payload["capabilities"] = capabilities;
+    const parsed = parseObservation(payload);
+    if (!parsed.ok) throw new Error(`the snapshot did not parse: ${parsed.reason}`);
+    return parsed.value;
+  }
+
+  test("a declared list is carried, including a name this reader does not know", () => {
+    expect(parsedWith(["argv-resume-uuid", "something-newer"]).capabilities).toEqual(["argv-resume-uuid", "something-newer"]);
+    expect(parsedWith([]).capabilities).toEqual([]);
+  });
+
+  test("absent is none, and every captured fixture is an old producer", () => {
+    expect(parsedWith(undefined).capabilities).toEqual([]);
+    for (const name of EVERY_FIXTURE) {
+      const parsed = parseObservation(rawFixture(name));
+      expect(parsed.ok && parsed.value.capabilities, name).toEqual([]);
+    }
+  });
+
+  const MALFORMED: { what: string; value: JsonValue }[] = [
+    { what: "a bare string", value: "argv-resume-uuid" },
+    { what: "null", value: null },
+    { what: "an object", value: { "argv-resume-uuid": true } },
+    { what: "a number", value: 1 },
+    { what: "a list with a non-string in it", value: ["argv-resume-uuid", 42] },
+    { what: "a list with a nested list in it", value: [["argv-resume-uuid"]] },
+  ];
+  for (const { what, value } of MALFORMED) {
+    test(`malformed is none, and the snapshot still stands: ${what}`, () => {
+      expect(parsedWith(value).capabilities).toEqual([]);
+    });
+  }
+
+  test("an old reader sees the same snapshot with or without the field", () => {
+    // What a daemon built before the field reads is everything but `capabilities`;
+    // that must not move when a new dashboard starts sending it.
+    const { capabilities: declared, ...withField } = parsedWith(["argv-resume-uuid"]);
+    const { capabilities: none, ...withoutField } = parsedWith(undefined);
+    expect(withField).toEqual(withoutField);
+    expect(declared).toEqual(["argv-resume-uuid"]);
+    expect(none).toEqual([]);
+  });
+});
+
+/**
  * `admissible()`'s rules, in the order the plan puts them — and the order is
  * the point: several of these payloads break two rules at once, and the test
  * is which sentence they get.

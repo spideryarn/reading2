@@ -217,6 +217,66 @@ describe("a fresh claude under an unchanged pane", () => {
  * The two things a pid alone cannot survive.
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * A resumed claude: plan 260910f, Stage 3a.
+ * ------------------------------------------------------------------ */
+
+describe("a resumed claude, whose command line carries no --session-id", () => {
+  /**
+   * A REAL capture: the `ps -o pid=,ppid=,etimes=,args=` line of a resumed
+   * interactive claude, 2026-09-10, in the shape `gjd-remote
+   * --resume-conversation` emits. tmux ran the claude directly, so the pane's
+   * own process IS the claude (depth 0). tests/fixtures/claude-argv/.
+   */
+  const capture = JSON.parse(
+    readFileSync(join(import.meta.dirname, "fixtures", "claude-argv", "resumed-claude.json"), "utf8"),
+  ) as { conversationId: string; ps: { line: string } };
+  const CAPTURED_PID = 1224600;
+  const ANOTHER = "5a3e7c19-2b4d-4e6f-9a8b-c1d2e3f4a5b6";
+
+  function readingFor(text: string, panePid: number, claimed: string): ExecutionReading {
+    const table = tableOf(text);
+    return readExecutionIdentity({
+      panePid,
+      claimedConversationId: claimed,
+      table,
+      after: table,
+      boot: BOOT,
+      uptime: UPTIME,
+      readStart: agreeingStarts(table),
+    });
+  }
+
+  it("is a verified conversation with the resumed id, exactly as --session-id is", () => {
+    expect(readingFor(capture.ps.line, CAPTURED_PID, capture.conversationId)).toMatchObject({
+      kind: "verified",
+      harness: "claude-code",
+      token: { boot: BOOT_UUID, pid: CAPTURED_PID },
+      conversation: { kind: "verified", id: capture.conversationId },
+    });
+  });
+
+  it("under the gjd-remote job shell too, which is where a resume will really run", () => {
+    const JOB_SHELL = 1224590;
+    const tree = [
+      `${JOB_SHELL} 1224580 20 bash /home/greg/gjd-remote/jobs/resume-cap.sh`,
+      capture.ps.line.replace(`${CAPTURED_PID} 1224599`, `${CAPTURED_PID} ${JOB_SHELL}`),
+    ].join("\n");
+    expect(readingFor(tree, JOB_SHELL, capture.conversationId)).toMatchObject({
+      kind: "verified",
+      harness: "claude-code",
+      conversation: { kind: "verified", id: capture.conversationId },
+    });
+  });
+
+  it("a pane that claims one conversation and resumed another is conflicting, never verified", () => {
+    expect(readingFor(capture.ps.line, CAPTURED_PID, ANOTHER)).toMatchObject({
+      kind: "verified",
+      conversation: { kind: "conflicting", claimed: ANOTHER, observed: capture.conversationId },
+    });
+  });
+});
+
 describe("pid reuse and reboot", () => {
   const verified = (boot: string, pid: number, startTicks: number): ExecutionReading => ({
     kind: "verified",

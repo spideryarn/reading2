@@ -108,6 +108,47 @@
  * would have bought a distinction that no caller makes. The cost is that `subcommand.name` carries a
  * flag spelling in this one case, which the arm's own doc says.
  *
+ * ══ `--resume <uuid>`: THE ONE OPTIONAL-VALUE SHAPE, AND WHY IT IS DECIDABLE ══
+ *
+ * `-r, --resume [value]` takes an OPTIONAL value, and this header used to say that no such flag could
+ * be read: `--resume foo` might be "resume foo" or "resume, then the prompt foo". A resumed session is
+ * what forced the question. `claude` refuses `--resume` together with `--session-id` (unless
+ * `--fork-session`, which mints an id nothing could match), so a resumed process names its
+ * conversation ONLY after `--resume`, and a reader that refused it left every resumed session
+ * `claimed-only` for ever. Plan 260910f's spike answered it for the CLI, against `claude` 2.1.267 on
+ * 2026-09-10:
+ *
+ *     claude -p --resume <uuid> "Reply…"
+ *       -> resumed <uuid>, appended to <uuid>.jsonl, and took "Reply…" as the prompt
+ *
+ * — so the token right after `--resume` is its value, and the next word is not. What stays
+ * undecidable is what the CLI DOES with a value that is not an id: its help calls the value "a session
+ * ID, or … optional search term" for the interactive picker, so `--resume foo` opens a picker on no
+ * conversation anybody can name. A lowercase uuid is an id; nothing else is. So the rule is exactly
+ * one shape, in `readResume`:
+ *
+ *  - `--resume` followed by a lowercase uuid AS THE NEXT ELEMENT names that conversation. It is
+ *    reported in `sessionIds`, because it states the same fact `--session-id` does — which
+ *    conversation this process writes — and every caller's duplicate policy then applies unchanged:
+ *    `--resume A --session-id B` is two conversations. A real resumed process, captured 2026-09-10
+ *    in the shape `gjd-remote --resume-conversation` emits (tests/fixtures/claude-argv/):
+ *    `claude --resume <uuid> --permission-mode auto --model haiku -- <prompt>`.
+ *  - A bare `--resume` — at the end of the line, or before a dash-led token, `--` included — is the
+ *    picker, and `unreadable`. A non-uuid value, uppercase included, is `unreadable`. `--resume=<uuid>`
+ *    and `-r` are `unreadable`, because nothing here produces them (the table's entry criterion).
+ *
+ * **ON A `ps`-FLATTENED LINE IT IS READ WITH ONE MORE CONDITION.** The flattened arm already believes
+ * that a flag's value is one element — `--session-id` rests on exactly that — and it accepts the
+ * residual (a value with a space in it, which no producer here emits) for every one-value flag. But
+ * `--resume` adds a hazard the others lack: a malformed `--session-id` makes the CLI refuse to start
+ * (measured, above), while a malformed `--resume` value is a live picker. So `--resume "<uuid> carry
+ * on"`, a search term, prints exactly like `--resume <uuid>` followed by a prompt. On a flattened line
+ * the id is therefore read only when what follows it is nothing or a dash-led token; a bare word there
+ * is `unreadable`. This reading is not optional: `tools/overseer/harness.ts` reads every claude off
+ * `ps`, and the execution identity that verifies a resumed conversation comes from it. The shape
+ * `gjd-remote` produces puts `--permission-mode` after the id, so it reads on both arms. The one
+ * caller that presses Enter, `steer.ts`'s `isClaudeForSession`, takes faithful argv only.
+ *
  * ══ MEASURED AGAINST `claude` 2.1.263, 2026-09-08 ══
  *
  * Live box: 5 `claude` processes, all `claude --session-id <uuid> [--permission-mode auto]
@@ -183,8 +224,9 @@ export type ClaudeReading =
    *  session, and nothing may be typed at it. `name` is the subcommand word, or the spelling of the
    *  terminal flag for the flags that print and exit; see the header. */
   | { kind: "subcommand"; name: string }
-  /** A session: interactive, or headless under `--print`. `sessionIds` is EVERY `--session-id`
-   *  found before the boundary, in order, so a caller can apply its own duplicate policy. */
+  /** A session: interactive, or headless under `--print`. `sessionIds` is EVERY conversation id
+   *  named before the boundary, in order — each `--session-id` value, and a `--resume <uuid>` (see
+   *  the header) — so a caller can apply its own duplicate policy. */
   | { kind: "session"; headless: boolean; sessionIds: readonly string[] }
   /** We could not read it: an unknown flag, a flag missing its value, a variadic flag whose values
    *  have no terminator, or a dash-led token that a `ps` flattening left indistinguishable from
@@ -231,11 +273,12 @@ type Arity = "none" | "one" | "variadic";
  * See `TERMINAL_FLAGS`.
  *
  * DELIBERATELY ABSENT, so they land in `unreadable` rather than being guessed: every flag whose
- * value is OPTIONAL — `--cloud [description]`, `-r, --resume [value]`, `-w, --worktree [name]`,
+ * value is OPTIONAL — `--cloud [description]`, `-r` (the short `--resume`), `-w, --worktree [name]`,
  * `-d, --debug [filter]`, `--from-pr [value]`, `--remote-control [name]`, `--teleport [session]`,
- * `--prompt-suggestions [value]`. An optional value cannot be read from argv alone: `--resume foo`
- * is either "resume foo" or "resume, then the prompt foo", and nothing in the command line says
- * which. None of them is produced here. If one ever is, it needs a rule of its own, not a row.
+ * `--prompt-suggestions [value]`. An optional value cannot be read from a row: whether the next word
+ * is the value, and what the CLI does with it, is a fact about each flag that nothing here has
+ * measured. None of these is produced here. **`--resume` is the one that is**, and it got what this
+ * paragraph always said it would need — a rule of its own, not a row: `readResume`, and the header.
  */
 const FLAGS: ReadonlyMap<string, Arity> = new Map<string, Arity>([
   // gjd-remote new-claude
@@ -482,6 +525,66 @@ type FlagStep =
   | { step: "flag"; next: number; headless: boolean; sessionId: string | undefined };
 
 /**
+ * A conversation id as `claude` mints them: a lowercase uuid, and nothing looser. Uppercase is
+ * refused rather than folded: nothing here has measured whether the CLI would resume the same
+ * conversation from it, and refusing costs a grey row, never a message in the wrong pane.
+ */
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * `--resume <uuid>`: the one optional-value flag with a rule of its own. The header says why a uuid
+ * right after it is decidable and every other shape of `--resume` is not.
+ *
+ * **FIDELITY REACHES IN HERE, and only here among the flags.** On faithful argv the element after
+ * the id is its own element, so it can be anything. On a `ps`-flattened line a bare word after the id
+ * may be the rest of a picker search term that happened to start with one, so there it refuses.
+ */
+function readResume(args: {
+  token: string;
+  inline: string | undefined;
+  rest: readonly string[];
+  at: number;
+  fidelity: ClaudeCommandLine["fidelity"];
+}): FlagStep {
+  const { token, inline, rest, at, fidelity } = args;
+  if (inline !== undefined) {
+    return {
+      step: "refuse",
+      why: `\`${token}\` is not a shape this repo produces: only \`--resume <uuid>\`, as two elements, is read`,
+    };
+  }
+  const value = rest[at + 1];
+  if (value === undefined || value.startsWith("-")) {
+    return {
+      step: "refuse",
+      why:
+        `a bare \`--resume\` (followed by ${value === undefined ? "the end of the command line" : `\`${value}\``})` +
+        ` opens the interactive picker, so it names no conversation`,
+    };
+  }
+  if (!CONVERSATION_ID.test(value)) {
+    return {
+      step: "refuse",
+      why:
+        `\`--resume\` is followed by \`${value}\`, which is not a conversation id; the CLI takes anything` +
+        ` else as a picker search term, so which conversation it opens cannot be read`,
+    };
+  }
+  if (fidelity === "ps-flattened") {
+    const after = rest[at + 2];
+    if (after !== undefined && !after.startsWith("-")) {
+      return {
+        step: "refuse",
+        why:
+          `\`--resume ${value}\` is followed by the bare word \`${after}\` on a command line read from \`ps\`,` +
+          ` so whether the id was the whole value or the first word of a picker search term cannot be read`,
+      };
+    }
+  }
+  return { step: "flag", next: at + 2, headless: false, sessionId: value };
+}
+
+/**
  * Read one dash-led token and whatever belongs to it.
  *
  * **THE FLATTENED-AMBIGUITY RULE IS NOT HERE**, and moving it out was ARGV-P1-01's fix. It used to
@@ -489,19 +592,25 @@ type FlagStep =
  * it — and a bare `--` never did, because the scan broke on the separator before calling this. So
  * the one token that most needed the rule was the one exempt from it. It now lives in the scan, over
  * every dash-led token, which is also one condition instead of two.
+ *
+ * `fidelity` is passed through for `--resume` alone — see `readResume`.
  */
 function readFlagToken(args: {
   token: string;
   rest: readonly string[];
   at: number;
   hasSeparator: boolean;
+  fidelity: ClaudeCommandLine["fidelity"];
 }): FlagStep {
-  const { token, rest, at, hasSeparator } = args;
+  const { token, rest, at, hasSeparator, fidelity } = args;
 
   // `--name=value` and `--name value` are both real spellings and the CLI takes either.
   const eq = token.indexOf("=");
   const name = eq === -1 ? token : token.slice(0, eq);
   const inline = eq === -1 ? undefined : token.slice(eq + 1);
+
+  // Before the table, because `--resume` is deliberately not in it: its rule is not an arity.
+  if (name === "--resume") return readResume({ token, inline, rest, at, fidelity });
 
   const arity = FLAGS.get(name);
   if (arity === undefined) {
@@ -590,7 +699,7 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
       continue;
     }
 
-    const step = readFlagToken({ token, rest, at: i, hasSeparator });
+    const step = readFlagToken({ token, rest, at: i, hasSeparator, fidelity: line.fidelity });
     if (step.step === "refuse") return { kind: "unreadable", why: step.why };
     if (step.step === "command") return { kind: "subcommand", name: step.name };
     i = step.next;

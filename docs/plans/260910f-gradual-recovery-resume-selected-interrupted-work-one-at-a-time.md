@@ -603,6 +603,150 @@ Red first:
 - a browser check at 1280 px and 400 px by an Opus subagent, on its own fixture server and never on
   8787.
 
+**Stages 1 and 2, 2026-09-10 ~21:00: committed together as `cfc963eb`, and on `dev` in `f72a4a7e`.**
+
+The merge from `dev` (`bef22460`) brought in `accountUsage`. `1704334e` wires the daemon's own
+reading into the pass, and swaps the local type copies for `dev`'s. On the merged tree:
+
+- typecheck exit 0;
+- 15 files / 437 tests passing;
+- `build:fleet` exit 0.
+
+**Sol's stage review, read-only and findings-only, 2026-09-10 21:13: *refuse*, on nine established
+P1s** ([the review](260910f-gradual-recovery-stage1-2-review-sol.md),
+[the prompt](260910f-gradual-recovery-stage1-2-review-sol-prompt.md)). All nine go to one Opus
+fixer, red first. The fixer is to disagree with any it can refute in the code.
+
+- **G11:** the account was resolved before an await, then reused inside the synchronous stretch.
+  The fix: recheckable ledger and registry evidence, re-validated synchronously.
+- **G12:** a transcript line from before the launch could satisfy verification. **The fix differs
+  from Sol's**, so that it needs no protocol change: the matching line must *begin after the byte
+  offset* recorded in `attempts/<id>.json` before invocation.
+- **G13:** a `planned` or `waiting-admission` occurrence never moved again. The fix: a
+  synchronous `drive(candidateId)` on the port, asked of `launch-protocol`.
+- **G14:** an immediate `failed-before-launch` was refused, contradicting G1. The fix: released
+  continues into attempt 2; held defers, visibly.
+- **G15:** a malformed or oversized ledger row could pin the wrong account. The fix: the real
+  record validator, and a truncated first fragment dropped.
+- **G16:** a failed terminal move was projected as success. The fix: `headMoved` only when every
+  file moved, otherwise an explicit error.
+- **G17:** manual instructions for an unknown account omitted the config-directory warning. The
+  fix: a reason code, with the plain command only for the proven default login.
+- **G18:** a queued request for an absent candidate vanished at `store.ts`'s filter. This was my
+  suspicion 1, confirmed. The fix: the route refuses an absent candidate, and orphans are
+  projected, never dropped.
+- **G19:** a terminal occurrence still holding its reservation blocked the queue for ever. The fix:
+  it is `needs-greg`, with the dispose command, and a named pace blocker.
+
+**The fix pass, 2026-09-10 ~21:00 (an Opus subagent).** All nine findings were checked against the
+code, and none was refuted. Each was fixed red first, and each has a mutation that turns its test
+red. Decisions it recorded:
+
+- **G12:** no timestamp check at all. Only the byte offset proves a line came after the launch.
+- **G14:** retries after a released failure are not capped. The plan names no cap.
+- **G15:** a bounded read cannot attribute an oversized line whose id sits before the 4 MiB window.
+  That case is `unknown`, and is not called the default login.
+- **G17:** the reason codes are `default-login`, `ledger-unreadable`, `ledger-ambiguous`,
+  `account-unusable`, `transcript-elsewhere`, `no-transcript` and `not-resolved`.
+- **G18:** the route blocks only when the index is readable. A missing orphans list reads as none,
+  so a new dashboard works with an old daemon.
+- **G19:** `needs-greg` outranks `resumed`: a slot still held after a verified resume needs Greg.
+
+**Landed with Stage 3a** in `325a9acc`, because they share `wire.ts`, `recovery-resume.ts` and the
+resume tests. `18806dd7` clears a lint error on a Stage 1 line (`position += 1` inside an
+expression). Both are on `dev`, the last pushed at `18806dd7`. The manager's run on the merged tree:
+
+- typecheck exit 0;
+- 22 files / 794 tests, including `no-raw-nul-bytes`;
+- `access-review`'s new `fleet-composed-access`, 76 of 76.
+
+One biome warning remains, pre-existing and hidden past the diagnostics limit. Lint is advice here,
+not a gate.
+
+**Sol's narrow check of the nine fixes, 2026-09-10 ~21:06, read-only**
+([the answer](260910f-gradual-recovery-stage1-2-fixcheck-sol.md),
+[the prompt](260910f-gradual-recovery-stage1-2-fixcheck-sol-prompt.md)): **G11–G19 are all closed.**
+Sol ran one file itself, 66 of 66.
+
+**It found one new defect that a fix introduced: G20, a P1, established.** The G12 reader read a
+first 64 KiB window, dropping its cut-off last line, and read the last 64 KiB only when that tail
+started past the first window. So when the file had grown by between one and two windows, the rest
+went unread. A session line just past one long unrelated line was never seen, which would block
+verification, and the queue, for ever.
+
+- **Fixed by the manager, red first.** Growth that fits in two windows is now read as one
+  contiguous piece. The bound stays at most two windows plus one byte.
+- **Evidence:** the new test was red (`sessionLineSeen` false), then green. The file passes 67 of
+  67, and typecheck exits 0.
+- **Discovery closed** with the narrow check, so **Fable settles G20** (not cross-family), per the
+  engineering-manager rule and the Overseer's terms.
+
+**Fable's settle, 2026-09-10 ~21:20 (not cross-family): "G20: closed."** Fable traced the diff,
+ran the file (67 of 67), and drove the real `transcriptAfter` at the boundaries, with files on disk
+and a count of the bytes requested:
+
+- **the contiguous branch** handles a file with and without a trailing newline, and a torn final
+  line;
+- **the non-contiguous branch** starts its tail strictly after the first window, so no line is
+  read twice;
+- **the bound** is exactly 131,073 bytes at both `2V+1` and `2V+2`.
+
+**One overstatement corrected** in the code's comment. Not every transcript line carries a
+`sessionId`: about 1–1.5% are `file-history-snapshot` lines without one, and 18–31 lines per
+transcript are tool results over 64 KiB.
+
+**The residual, documented rather than closed:** beyond two windows, a pass whose last 64 KiB is
+one oversized tool result, or holds only snapshot lines, sees no session line. The next pass
+re-reads, and a live session soon writes one. So it is transient.
+
+**Stages 1 and 2 are then done:** built, reviewed by Sol (refused on G11–G19), fixed, and
+narrow-checked. G20 was fixed and settled.
+
+## Where this stops: Greg's reprioritisation, 2026-09-10 ~21:10
+
+**Greg, via the Overseer:** Overseer and dashboard work drops to the bottom of the priorities, and
+Spideryarn product work comes up. So this plan lands Stages 1–2, and stops. **Stage 3 is not
+started.**
+
+- **Stage 3a is already on `dev`, and has not been reviewed.** It is the argv reader's
+  `--resume <uuid>` arm and the producer capability, and it landed in `325a9acc` with the G11–G19
+  fixes, because they share `wire.ts`, `recovery-resume.ts` and the resume tests. It has had **no
+  Sol review**, although the Overseer's condition (c) asked for one, because `claude-argv.ts` feeds
+  steer's wrong-conversation guard. Its own red-first tests and its four mutations are its only
+  evidence. **A decision for the Overseer or Greg:** a narrow Sol check of Stage 3a, which is the
+  argv arm alone, or a revert. Until one of them happens, it is live code in the fleet's argv
+  reader.
+- **Stage 3b is briefed, not built.** The brief is [the 3b task](260910f-gradual-recovery-stage3b-task.md):
+  - the `tmux-resume` launcher arm;
+  - gjd-remote's `--resume-conversation`, with the on-box duplicate check;
+  - the adapter from the port to the protocol's `launchOccurrence`, `resumeOccurrence`, `inspect`
+    and `inFlight`;
+  - the daemon's composition of all that;
+  - the `--resume` drill.
+
+  It needs `launch-protocol`'s Stages 1, 1b and 2 on `dev`. Until 3b exists, **the resume port is
+  `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
+  launches. The page says so ("Resume is not available from this dashboard yet"), and gives manual
+  instructions.
+- **Still a question for Greg:** the capability-marker default. Stage 3a puts
+  `"argv-resume-uuid"` on the observation, never in held state, as an assumption pending Greg.
+
+**A raw NUL and a raw SOH byte shipped in `cfc963eb`.** They sat in a string literal on line 251
+of `tests/overseer-recovery-resume.test.ts`: the parser test's control-character input, typed as
+an escape that landed as bytes. That turned `tests/no-raw-nul-bytes` red on `dev` for every
+session, and made git treat the file as binary. `access-review` reported it through the Overseer.
+
+- **The fix**, `b9479b79`, in `7e0c300c` on `dev`, 2026-09-10 ~21:00: the same two characters,
+  written as Unicode escape sequences **by a script, not by typing**.
+- **How it was pushed:** on its own, from a side worktree based on `origin/dev`, because the
+  fixer was mid-edit in the same file here.
+- **The same accident nearly happened twice more.** The first draft of that fix's commit message,
+  which named the two escapes, came out holding the raw bytes too. It was caught by a `cat -v`
+  check before committing, and rewritten to describe them in words.
+- **One cost of the side worktree:** switching this session into it moved the running fixer's
+  isolation with it. The fixer's G11 edits were refused mid-change, and it was resumed once the
+  session came back.
+
 **Stage 1 status, 2026-09-10 ~20:05: built by an Opus subagent. Uncommitted in the worktree, and
 not yet reviewed** (paused by the Overseer for the `mindstone` five-hour window).
 
@@ -684,6 +828,52 @@ with Stage 1, because the route imports Stage 1's request leaf) **and not yet re
     Any mismatch marks the section unreadable, and the records stay visible.
 
 ### Stage 3: the launch, for real (after `launch-protocol` Stages 1–2 are on `dev`)
+
+**Split, 2026-09-10.** **3a** needs nothing from the protocol: the argv reader and the G3 capability.
+It is built. **3b** is the launch itself: the `tmux-resume` arm, gjd-remote, the port adapter, the
+daemon composition and the drill. It waits for `launch-protocol` on `dev`, and is briefed in
+[the 3b task](260910f-gradual-recovery-stage3b-task.md).
+
+**Stage 3a status: built by an Opus subagent, uncommitted, not yet reviewed.**
+
+- **The argv reader.** `claude-argv.ts` reads a uuid token immediately after `--resume` as the
+  conversation, and puts it into `sessionIds` beside `--session-id`'s. So steer's and the harness's
+  duplicate rules apply unchanged: `--resume A --session-id B` is two conversations.
+  - **Still unreadable:** a bare `--resume` (the picker), a non-uuid or uppercase value,
+    `--resume=<uuid>`, `-r`, and `--fork-session`.
+  - **On a ps-flattened line** the uuid counts only when nothing, or a dash-led token, follows it.
+    This case is read rather than left unreadable, because the harness reads every `claude` through
+    the flattened form. Left unreadable, every resumed pane would be unverifiable. The steer guard
+    itself reads faithful argv only.
+  - **Red first**, against a real capture taken with one paid Haiku call on a private socket:
+    `["claude","--resume","723dd2cd-…","--permission-mode","auto","--model","haiku","--","Reply
+    with exactly: OK4"]`, saved in `tests/fixtures/claude-argv/resumed-claude.json`.
+  - **The Overseer's conditions** (a) and (b) are met, in `tests/fleet-steer.test.ts`: another
+    uuid is still refused as a competing Claude; the bare picker stays unreadable; a uuid
+    positional after another flag is not read. Conditions (c) and (d) are the review prompt's and
+    the commit message's.
+- **The capability (G3).** The `/api/state` payload carries a top-level `capabilities` beside
+  `producer`, holding `"argv-resume-uuid"`. `observation.ts` parses it as an optional list: absent
+  or malformed reads as none, and it never fails a snapshot. `producerCanVerifyResume` reads it
+  from the latest accepted observation, and the pass defers without it.
+  - **Assumption pending Greg** (the Overseer's ruling): it lives on the observation and is never
+    held by the daemon. A restored baseline cannot drive a launch, because the pass needs an
+    inventory accepted in the current daemon's life.
+- **Outside the brief, each unavoidable:**
+  - one line of `daemon.ts`'s `observe()`;
+  - one `"capabilities"` entry in `tools/fleet/web/src/types.ts`'s `Omit<>`.
+- **Evidence:**
+  - 21 new tests went red, then 324 of 324 passed in the five fast suites; three daemon G3 tests
+    went red, then green;
+  - four mutations, each turning its tests red.
+
+  Its final gate run was red only in two test files the G11–G19 fixer was editing at the same time.
+  They were green on its 21:17 run.
+
+**Stage 3a still needs a Sol review.** It is a security matcher: the Overseer's condition (c).
+Rather than spending a separate Codex stage review, it goes to the **Stage 3 review**, which covers
+3a and 3b together. If 3b stays blocked for long, 3a gets a narrow Sol check of its own before it
+is pushed.
 
 Files:
 
