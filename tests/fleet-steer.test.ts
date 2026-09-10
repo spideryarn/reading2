@@ -1477,6 +1477,60 @@ describe("reading the box", () => {
     });
   });
 
+  /**
+   * **`--resume <uuid>` — THE NEW ARM, ATTACKED FROM THE THREE DIRECTIONS THE
+   * OVERSEER NAMED** (plan 260910f, Stage 3a). A resumed session's argv has no
+   * `--session-id`, so the reader learned exactly one shape: a lowercase uuid
+   * immediately after `--resume`, on faithful argv. This function is the guard
+   * that stops a Send landing in the wrong conversation, so the new arm has to
+   * grant only its own conversation, and a resume of anyone else's has to be
+   * a COMPETING CLAUDE — not merely unreadable, because `unreadable` beside our
+   * own pid is a different refusal with a different sentence.
+   *
+   * The first assertion is a real capture: tests/fixtures/claude-argv/.
+   */
+  it("reads a resumed claude by the id right after --resume, and by nothing else", () => {
+    const capture = JSON.parse(
+      readFileSync(path.resolve(import.meta.dirname, "fixtures/claude-argv/resumed-claude.json"), "utf8"),
+    ) as { conversationId: string; argv: string[] };
+    expect(isClaudeForSession(faithful(...capture.argv), capture.conversationId)).toEqual({ match: "yes" });
+    expect(armOf(faithful(...capture.argv), UUID)).toBe("other-claude");
+
+    // (1) A resume of ANOTHER conversation is a competing Claude, and ours is ours.
+    expect(armOf(faithful("claude", "--resume", OTHER_UUID, "--permission-mode", "auto", "--", "go on"), UUID)).toBe(
+      "other-claude",
+    );
+    expect(
+      isClaudeForSession(faithful("claude", "--resume", UUID, "--permission-mode", "auto", "--", "go on"), UUID),
+    ).toEqual({ match: "yes" });
+    // ...and a resume beside a --session-id is two conversations, in either order.
+    expect(armOf(faithful("claude", "--resume", OTHER_UUID, "--session-id", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--session-id", UUID, "--resume", OTHER_UUID), UUID)).toBe("other-claude");
+
+    // (2) The picker stays unreadable, and so does anything that is not exactly a uuid.
+    for (const argv of [
+      ["claude", "--resume"],
+      ["claude", "--resume", "--permission-mode", "auto"],
+      ["claude", "--resume", "--", UUID],
+    ]) {
+      expect(armOf(faithful(...argv), UUID), argv.join(" ")).toBe("unreadable");
+    }
+    for (const value of ["foo", UUID.toUpperCase(), `${UUID}9`, UUID.slice(0, 8)]) {
+      expect(armOf(faithful("claude", "--resume", value), UUID), value).toBe("unreadable");
+    }
+    expect(armOf(faithful("claude", `--resume=${UUID}`), UUID)).toBe("unreadable");
+    expect(armOf(faithful("claude", "-r", UUID), UUID)).toBe("unreadable");
+    expect(armOf(faithful("claude", "--resume", UUID, "--fork-session"), UUID)).toBe("unreadable");
+
+    // (3) A uuid-shaped positional after any other flag, or after `--`, is not the conversation.
+    expect(armOf(faithful("claude", "--permission-mode", "auto", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--model", "haiku", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--name", "fleet", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--", "--resume", UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--print", UUID), UUID)).toBe("no");
+  });
+
   it("walks ancestry, bounded, and survives a cycle in a table read line by line", () => {
     const parents = new Map([
       [200, 100],

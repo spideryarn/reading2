@@ -392,8 +392,13 @@ function ManualInstructions({
           {command}
         </code>
       </pre>
-      {account === null ? (
-        <p className="tw:mt-1">
+      {/* G17: THE WARNING UNLESS THE ACCOUNT IS PROVEN. Pinned: the command
+          already names its config directory. The proven default login: the
+          plain command is right as it stands. Anything else — no account data,
+          or an account nobody could establish — and the plain command may run
+          under the wrong account, so the page says what must be set. */}
+      {account === null || (account.kind === "unknown" && account.reason !== "default-login") ? (
+        <p data-testid="recovery-resume-account-warning" className="tw:mt-1">
           Run it under the account whose config directory holds this conversation's transcript: set <Mono>CLAUDE_CONFIG_DIR</Mono> to that directory, or
           leave it unset for the default login. This page does not know which account that is.
         </p>
@@ -787,6 +792,36 @@ function RecordCard({ record, untrusted, resume }: { record: RecoveryWireRecord;
 
 /** Above the list: the resume section's own state, never folded into the rows. */
 function ResumeHead({ section }: { section: RecoveryResumeSection }): ReactNode {
+  return (
+    <>
+      {section.kind === "published" && section.projection.orphans.length > 0 ? <ResumeOrphans orphans={section.projection.orphans} /> : null}
+      <ResumePace section={section} />
+    </>
+  );
+}
+
+/**
+ * G18: requests no card can show, because the index no longer holds their
+ * record. Listed apart from the records, which they never touch, so a "queued"
+ * answer never simply vanishes.
+ */
+function ResumeOrphans({ orphans }: { orphans: Extract<RecoveryResumeSection, { kind: "published" }>["projection"]["orphans"] }): ReactNode {
+  return (
+    <div data-testid="recovery-resume-orphans" className="tw:mb-2 tw:min-w-0 tw:px-1 tw:text-[12px] tw:break-words tw:text-ink">
+      <p className="tw:font-semibold">Resume requests for records this index no longer holds</p>
+      <ul className="tw:mt-1">
+        {orphans.map((orphan) => (
+          <li key={orphan.candidateId} className="tw:mt-1">
+            <Mono>{orphan.candidateId}</Mono>: {orphan.why}.
+            <RequestStateLine state={orphan.state} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ResumePace({ section }: { section: RecoveryResumeSection }): ReactNode {
   switch (section.kind) {
     case "absent":
       return (
@@ -809,6 +844,14 @@ function ResumeHead({ section }: { section: RecoveryResumeSection }): ReactNode 
             Waiting for <span className="tw:font-semibold">{pace.name}</span> to be verified running before the next resume starts (since{" "}
             <When at={pace.since} />
             ).
+          </p>
+        );
+      }
+      if (pace.kind === "stuck") {
+        return (
+          <p data-testid="recovery-pace" data-pace="stuck" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:break-words tw:text-ink">
+            No resume can start until <span className="tw:font-semibold">{pace.name}</span>'s launch is ended by hand ({pace.state}: {pace.why}). Only a dispose
+            ends it: <code className="tw:font-mono tw:text-[12px] tw:break-all tw:text-ink">{pace.disposeCommand}</code>
           </p>
         );
       }

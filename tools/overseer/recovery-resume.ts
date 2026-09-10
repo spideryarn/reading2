@@ -26,13 +26,15 @@
  * **Nothing resumes on its own.** A request file is the only thing that starts
  * this, and a request file is only ever written by a person's tap or command.
  */
-import { closeSync, constants, fstatSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type {
+  ProducerCapability,
   RecoveryResumeAccount,
+  RecoveryResumeAccountUnknown,
   RecoveryResumeGateWire,
   RecoveryResumeLaunchState,
   RecoveryResumeLaunchWire,
@@ -53,6 +55,7 @@ import {
   readResumeAttempts,
   readSettledResumes,
   writeResumeAttempt,
+  type MoveResult,
   type PendingResume,
   type ResumeAttempt,
   type ResumeRequest,
@@ -131,6 +134,16 @@ export type ResumeLaunchPort =
       inFlight(): readonly ResumeOccurrence[];
       /** Synchronous, like the protocol's `launchOccurrence`. */
       launch(request: ResumeLaunchRequest): ResumeLaunchOutcome;
+      /**
+       * G13: continue a STORED occurrence, synchronously — the protocol's
+       * `resumeOccurrence` (Stage 3b maps it). No replan: the stored plan's
+       * material and launcher are the ones used. It drives only a `planned` or
+       * `waiting-admission` occurrence; anything else answers `not-launchable`
+       * and nothing is invoked; an unknown occurrence or a lost history answers
+       * `refused`. The pass calls it only for `planned` or `waiting-admission`,
+       * after the gates and revalidation, in the synchronous stretch.
+       */
+      drive(candidateId: RecoveryCandidateId): ResumeLaunchOutcome;
     };
 
 export const UNWIRED_LAUNCH_PORT: ResumeLaunchPort = {
@@ -144,8 +157,26 @@ export const UNWIRED_LAUNCH_PORT: ResumeLaunchPort = {
  * this port's: see `quotaGateFor`.
  */
 export type ResumeAccountPort = {
-  resolve(input: { conversationId: string; transcriptPath: string; transcriptRoot: string }): Promise<RecoveryResumeAccount>;
+  resolve(input: { conversationId: string; transcriptPath: string; transcriptRoot: string }): Promise<ResolvedAccount>;
 };
+
+/** Whether what a resolution rested on is still as it was (G11). */
+export type AccountRecheck = { kind: "same" } | { kind: "changed"; why: string };
+
+/**
+ * G11: AN ACCOUNT, AND WHAT IT RESTED ON. The resolution is async (the
+ * registry read, a `realpath`), so it happens before the synchronous stretch;
+ * `recheck` is a BOUNDED SYNCHRONOUS test (a few `stat`s and one `realpath`)
+ * that the stretch runs, so a ledger append or a registry change during the
+ * awaits defers the launch and the next pass resolves again — the launch never
+ * runs on an account the ledger has since moved.
+ */
+export type ResolvedAccount = { account: RecoveryResumeAccount; recheck(): AccountRecheck };
+
+/** A resolution that rests on nothing that can move: no head, or no transcript to find an account from. */
+function unresolvedAccount(account: RecoveryResumeAccount): ResolvedAccount {
+  return { account, recheck: () => ({ kind: "same" }) };
+}
 
 /**
  * THE PINNED ACCOUNT'S QUOTA, from the daemon's own per-account usage reading
@@ -195,13 +226,56 @@ export function defaultProjectsRoots(options: { registryPath?: string; home?: st
 }
 
 /**
+ * One row of `reservations.ndjson`: the ledger's own `LaunchRecord`.
+ *
+ * A FAITHFUL LOCAL COPY of `readLaunches`' validator in
+ * scripts/claude-accounts.ts (~1099–1141, `LaunchRecord`), which is not
+ * exported and is not importable here without pulling the scripts tree and
+ * `smol-toml` into tools/. Keep the two in step. One deliberate strictness
+ * beyond it (Sol's G15): `createdAt`, and `activeUntil` when present, must be
+ * readable instants — a row whose time cannot be read is not trusted to name
+ * the account a launch runs under.
+ */
+function ledgerRowOf(u: unknown): { sessionUuid: string; accountName: string } | { why: string } {
+  if (!isObject(u)) return { why: "it is not a JSON object" };
+  if (u["schema"] !== 1) return { why: "its schema is not 1" };
+  if (typeof u["accountName"] !== "string") return { why: "it has no accountName" };
+  if (!(typeof u["providerAccountId"] === "string" || u["providerAccountId"] === null)) return { why: "its providerAccountId is neither text nor null" };
+  if (typeof u["sessionUuid"] !== "string") return { why: "it has no sessionUuid" };
+  if (typeof u["launchName"] !== "string") return { why: "it has no launchName" };
+  if (typeof u["createdAt"] !== "string" || !Number.isFinite(Date.parse(u["createdAt"]))) return { why: "its createdAt is not a readable time" };
+  if (!(u["activeUntil"] === undefined || (typeof u["activeUntil"] === "string" && Number.isFinite(Date.parse(u["activeUntil"]))))) {
+    return { why: "its activeUntil is not a readable time" };
+  }
+  if (!(u["outcome"] === "reserved" || u["outcome"] === "started" || u["outcome"] === "completed" || u["outcome"] === "failed")) {
+    return { why: `its outcome ${JSON.stringify(u["outcome"])} is not one the ledger writes` };
+  }
+  return { sessionUuid: u["sessionUuid"], accountName: u["accountName"] };
+}
+
+/** Uuid-shaped text in a line the validator refused: the conversations that line may have been about. */
+const UUID_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * What the ledger's NEWEST line about a conversation says (G15): a whole launch
+ * record naming its account, or a line that mentions the conversation and is
+ * not one — in which case the account is unknown, never the one an OLDER row
+ * named, because the newer line may have been the one that moved it.
+ */
+type LedgerNewest = { kind: "row"; accountName: string } | { kind: "doubtful"; why: string };
+
+/**
  * The account ledger's rows for session ids, read BACKWARDS by a bound: the
  * last `RESERVATIONS_TAIL_BYTES` of `reservations.ndjson`, synchronously, with
  * `O_NOFOLLOW`. Cached on the file's `(size, mtimeMs)`, so an unchanged ledger
  * costs one `stat`.
+ *
+ * `noBoundary`: the window began mid-file and holds no newline, so all of it is
+ * the end of ONE line longer than the window, which cannot be read whole —
+ * nothing in it is a row, and nothing can be said about any conversation.
  */
 type LedgerReading =
-  | { kind: "read"; lastAccount: Map<string, string>; truncated: boolean }
+  | { kind: "read"; newest: Map<string, LedgerNewest>; truncated: boolean; noBoundary: boolean }
   | { kind: "absent" }
   | { kind: "unreadable"; why: string };
 
@@ -225,21 +299,41 @@ function readLedgerTail(path: string): LedgerReading {
       read += n;
     }
     let text = bytes.subarray(0, read).toString("utf8");
-    // A read that began mid-file began mid-line: that first fragment is not a row.
-    if (start > 0) text = text.slice(text.indexOf("\n") + 1);
-    const lastAccount = new Map<string, string>();
+    const newest = new Map<string, LedgerNewest>();
+    const doubt = (line: string, why: string): void => {
+      for (const id of line.match(UUID_TEXT) ?? []) newest.set(id.toLowerCase(), { kind: "doubtful", why });
+    };
+    const mib = RESERVATIONS_TAIL_BYTES / (1024 * 1024);
+    if (start > 0) {
+      // A read that began mid-file began mid-line: that first fragment is not
+      // a row. With NO newline at all, the whole window is that fragment.
+      const boundary = text.indexOf("\n");
+      if (boundary === -1) return { kind: "read", newest, truncated: true, noBoundary: true };
+      // The fragment is the OLDEST text in the window, so any later line about
+      // the same conversation still decides; if none does, the conversation's
+      // newest line is one we could not read whole.
+      doubt(text.slice(0, boundary), `the newest account-ledger line naming this conversation is longer than the ${mib} MiB the port reads, so it cannot be read whole`);
+      text = text.slice(boundary + 1);
+    }
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
+      let parsed: unknown;
       try {
-        const row = JSON.parse(line) as unknown;
-        if (isObject(row) && row["schema"] === 1 && typeof row["sessionUuid"] === "string" && typeof row["accountName"] === "string") {
-          lastAccount.set(row["sessionUuid"], row["accountName"]);
-        }
+        parsed = JSON.parse(line) as unknown;
       } catch {
-        /* A torn or foreign line names no account. */
+        doubt(line, "the newest account-ledger line naming this conversation is not a valid launch record (it is not JSON)");
+        continue;
       }
+      const row = ledgerRowOf(parsed);
+      if ("why" in row) {
+        const why = `the newest account-ledger line naming this conversation is not a valid launch record (${row.why})`;
+        doubt(line, why);
+        if (isObject(parsed) && typeof parsed["sessionUuid"] === "string") newest.set(parsed["sessionUuid"].toLowerCase(), { kind: "doubtful", why });
+        continue;
+      }
+      newest.set(row.sessionUuid.toLowerCase(), { kind: "row", accountName: row.accountName });
     }
-    return { kind: "read", lastAccount, truncated: start > 0 };
+    return { kind: "read", newest, truncated: start > 0, noBoundary: false };
   } catch (cause) {
     return { kind: "unreadable", why: errText(cause) };
   } finally {
@@ -282,37 +376,85 @@ export function productionAccountPort(options: { accountsDir?: string; registryP
     ledger = { size: info.size, mtimeMs: info.mtimeMs, reading };
     return reading;
   };
+  /**
+   * G11: A FILE'S IDENTITY, as a synchronous `stat` sees it — device, inode,
+   * size, mtime and ctime, or that it could not be stat'd. Taken BEFORE the
+   * ledger and the registry are read, so a write during the read is caught too.
+   */
+  const identity = (path: string): string => {
+    try {
+      const s = statSync(path);
+      return `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;
+    } catch (cause) {
+      return `unstattable:${(cause as NodeJS.ErrnoException).code ?? errText(cause)}`;
+    }
+  };
+  type Judged = { account: RecoveryResumeAccount; projects: { link: string; real: string } | null };
+  const unknown = (reason: RecoveryResumeAccountUnknown, why: string, projects: Judged["projects"] = null): Judged => ({ account: { kind: "unknown", reason, why }, projects });
+  const judge = async (conversationId: string, transcriptRoot: string): Promise<Judged> => {
+    const read = ledgerNow();
+    if (read.kind === "unreadable") return unknown("ledger-unreadable", `the account ledger could not be read (${read.why})`);
+    if (read.kind === "read" && read.noBoundary) {
+      return unknown(
+        "ledger-ambiguous",
+        `the last ${RESERVATIONS_TAIL_BYTES / (1024 * 1024)} MiB of the account ledger is one line longer than that window (unfinished, or not the ledger's), so no row in it can be read`,
+      );
+    }
+    const newest = read.kind === "read" ? read.newest.get(conversationId.toLowerCase()) : undefined;
+    if (newest?.kind === "doubtful") return unknown("ledger-ambiguous", newest.why);
+    const name = newest?.accountName;
+    if (name === undefined) {
+      // THE ONE PROVEN DEFAULT LOGIN (G17): a ledger read WHOLE, or absent,
+      // with no row for the conversation. A ledger longer than the window
+      // proves nothing about a row that may be older than it.
+      return read.kind === "read" && read.truncated
+        ? unknown(
+            "ledger-ambiguous",
+            `no account row for this conversation in the last ${RESERVATIONS_TAIL_BYTES / (1024 * 1024)} MiB of the account ledger, which is longer than that: its row may be older, or in a line cut off at the window's start, or it started on the default login, so the account it ran under is not established`,
+          )
+        : unknown("default-login", "started on the default login, which gjd-remote cannot relaunch by name");
+    }
+    const registry = await readAccountRegistry(registryPath);
+    const resolved = resolveAccount(registry, name);
+    if (resolved.kind !== "value") return unknown("account-unusable", `the account ${name} is not usable: ${resolved.why}`);
+    if (resolved.account.family !== "claude") return unknown("account-unusable", `the account ${name} is not a Claude account`);
+    const link = join(resolved.account.stateDir, "projects");
+    let accountRoot: string;
+    try {
+      accountRoot = await realpath(link);
+    } catch (cause) {
+      return unknown("account-unusable", `the account ${name}'s projects directory could not be resolved: ${errText(cause)}`);
+    }
+    if (accountRoot !== transcriptRoot) {
+      return unknown(
+        "transcript-elsewhere",
+        `the transcript is under ${transcriptRoot}, not under the account ${name}'s own projects directory (${accountRoot}), so a resume under that account would not find it`,
+        { link, real: accountRoot },
+      );
+    }
+    return { account: { kind: "pinned", name, configDir: resolved.account.stateDir }, projects: { link, real: accountRoot } };
+  };
   return {
     async resolve({ conversationId, transcriptRoot }) {
-      const read = ledgerNow();
-      if (read.kind === "unreadable") return { kind: "unknown", why: `the account ledger could not be read (${read.why})` };
-      const name = read.kind === "read" ? read.lastAccount.get(conversationId) : undefined;
-      if (name === undefined) {
-        return {
-          kind: "unknown",
-          why:
-            read.kind === "read" && read.truncated
-              ? `no account row for this conversation in the last ${RESERVATIONS_TAIL_BYTES / (1024 * 1024)} MiB of the account ledger: it started on the default login, which gjd-remote cannot relaunch by name, or its row is older than that`
-              : "started on the default login, which gjd-remote cannot relaunch by name",
-        };
-      }
-      const registry = await readAccountRegistry(registryPath);
-      const resolved = resolveAccount(registry, name);
-      if (resolved.kind !== "value") return { kind: "unknown", why: `the account ${name} is not usable: ${resolved.why}` };
-      if (resolved.account.family !== "claude") return { kind: "unknown", why: `the account ${name} is not a Claude account` };
-      let accountRoot: string;
-      try {
-        accountRoot = await realpath(join(resolved.account.stateDir, "projects"));
-      } catch (cause) {
-        return { kind: "unknown", why: `the account ${name}'s projects directory could not be resolved: ${errText(cause)}` };
-      }
-      if (accountRoot !== transcriptRoot) {
-        return {
-          kind: "unknown",
-          why: `the transcript is under ${transcriptRoot}, not under the account ${name}'s own projects directory (${accountRoot}), so a resume under that account would not find it`,
-        };
-      }
-      return { kind: "pinned", name, configDir: resolved.account.stateDir };
+      const before = { ledger: identity(ledgerPath), registry: identity(registryPath) };
+      const { account, projects } = await judge(conversationId, transcriptRoot);
+      return {
+        account,
+        recheck: (): AccountRecheck => {
+          if (identity(ledgerPath) !== before.ledger) return { kind: "changed", why: "the account ledger changed" };
+          if (identity(registryPath) !== before.registry) return { kind: "changed", why: "the account registry changed" };
+          if (projects !== null) {
+            let real: string;
+            try {
+              real = realpathSync(projects.link);
+            } catch (cause) {
+              return { kind: "changed", why: `the account's projects directory no longer resolves (${errText(cause)})` };
+            }
+            if (real !== projects.real) return { kind: "changed", why: "the account's projects directory now resolves elsewhere" };
+          }
+          return { kind: "same" };
+        },
+      };
     },
   };
 }
@@ -501,15 +643,23 @@ function dirOfRecord(record: RecoveryRecord): string | null {
 
 // ═══ Verification (G2) ════════════════════════════════════════════════════════
 
-/** The transcript as the async phase read it: its size and mtime, and a bounded tail. */
-export type TranscriptReading = { size: number; mtimeMs: number; tail: string; tailFromStart: boolean };
+/**
+ * The transcript as the async phase read it, AGAINST ONE ATTEMPT'S BYTE OFFSET
+ * (G12): its size and mtime, the offset it was read after, and the complete
+ * JSON lines that BEGIN AFTER that offset — never a line that was already in
+ * the file, or had already begun, when the attempt was written.
+ */
+export type TranscriptReading = { size: number; mtimeMs: number; afterOffset: number; newLines: readonly Record<string, unknown>[] };
 
 /**
  * "VERIFIED" IS ALL FOUR (Sol's G2): the inventory's `resumed` disposition for
  * the candidate; the launch protocol's `observed-running`; the transcript's
- * size and mtime past what revalidation recorded at launch; and a bounded tail
- * holding a line with that `sessionId` dated after the launch. `resumed`
- * alone proves a process and a conversation, never which transcript is written.
+ * size and mtime past what revalidation recorded at launch; and a line with
+ * that `sessionId` that BEGINS AFTER the byte offset `attempts/<id>.json`
+ * recorded BEFORE the launch was invoked (G12). No clock is compared: a line's
+ * timestamp is the transcript writer's clock, and a line written before the
+ * launch can carry any date. `resumed` alone proves a process and a
+ * conversation, never which transcript is written.
  */
 export function verificationOf(
   occurrence: ResumeOccurrence,
@@ -526,17 +676,12 @@ export function verificationOf(
     atLaunch !== undefined &&
     transcript.size > atLaunch.transcriptSizeAtLaunch &&
     transcript.mtimeMs > atLaunch.transcriptMtimeAtLaunch;
-  let sessionLineSeen = false;
-  if (transcript !== null && atLaunch !== undefined) {
-    const launchedMs = Date.parse(atLaunch.launchedAt);
-    for (const line of jsonLines(Buffer.from(transcript.tail, "utf8"), transcript.tailFromStart, true)) {
-      const at = typeof line["timestamp"] === "string" ? Date.parse(line["timestamp"]) : Number.NaN;
-      if (line["sessionId"] === atLaunch.conversationId && Number.isFinite(at) && at > launchedMs) {
-        sessionLineSeen = true;
-        break;
-      }
-    }
-  }
+  // A reading taken against another attempt's offset is not this attempt's evidence.
+  const sessionLineSeen =
+    transcript !== null &&
+    atLaunch !== undefined &&
+    transcript.afterOffset === atLaunch.transcriptSizeAtLaunch &&
+    transcript.newLines.some((line) => line["sessionId"] === atLaunch.conversationId);
   return { inventoryResumed, observedRunning, transcriptGrew, sessionLineSeen };
 }
 
@@ -553,12 +698,53 @@ function waitingForOf(v: RecoveryResumeVerification): string {
   return missing.length === 0 ? "nothing" : missing.join("; ");
 }
 
-async function readTranscriptTail(path: string, read: ReadRange): Promise<TranscriptReading | null> {
+/** The complete JSON objects among `pieces` (a window split on newlines, already trimmed of partial ends). */
+function objectsOf(pieces: readonly string[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const piece of pieces) {
+    if (piece.trim() === "") continue;
+    try {
+      const value = JSON.parse(piece) as unknown;
+      if (isObject(value)) out.push(value);
+    } catch {
+      /* A torn or foreign line is no evidence. */
+    }
+  }
+  return out;
+}
+
+/**
+ * THE LINES THAT BEGIN AFTER `offset` (G12) — the byte offset
+ * `attempts/<id>.json` recorded before the launch was invoked. Bounded: at most
+ * `VERIFY_TAIL_BYTES` from the offset, plus, when the file has grown past that,
+ * the last `VERIFY_TAIL_BYTES` (every line in it begins after the offset too).
+ *
+ * A line counts only if it begins at a line boundary at or after the offset:
+ * the read starts one byte early, so a line that begins exactly at the offset
+ * is kept, and the rest of a line that had already begun (a file that ended
+ * mid-line when the attempt was written) is dropped.
+ */
+export async function transcriptAfter(path: string, offset: number, read: ReadRange = readRange): Promise<TranscriptReading | null> {
   try {
     const info = await stat(path);
-    const start = Math.max(0, info.size - VERIFY_TAIL_BYTES);
-    const tail = await read(path, start, info.size - start);
-    return { size: info.size, mtimeMs: info.mtimeMs, tail: tail.toString("utf8"), tailFromStart: start === 0 };
+    const reading = (newLines: Record<string, unknown>[]): TranscriptReading => ({ size: info.size, mtimeMs: info.mtimeMs, afterOffset: offset, newLines });
+    if (info.size <= offset) return reading([]);
+    const from = offset === 0 ? 0 : offset - 1;
+    const end = Math.min(info.size, from + VERIFY_TAIL_BYTES + 1);
+    const first = (await read(path, from, end - from)).toString("utf8").split("\n");
+    // Up to and including the first newline began before the offset.
+    if (offset > 0) first.shift();
+    // A window that stops short of the end may stop mid-line.
+    if (end < info.size) first.pop();
+    const lines = objectsOf(first);
+    const tailStart = info.size - VERIFY_TAIL_BYTES;
+    if (tailStart > end) {
+      const tail = (await read(path, tailStart, info.size - tailStart)).toString("utf8").split("\n");
+      // The tail begins mid-line; everything after its first newline begins after the offset.
+      tail.shift();
+      lines.push(...objectsOf(tail));
+    }
+    return reading(lines);
   } catch {
     return null;
   }
@@ -580,29 +766,110 @@ export function disposeCommandFor(occurrenceId: string): string {
  * G1: what an existing occurrence means for a request, as an exhaustive
  * `switch`. `continue` goes on through pace, the gate and revalidation.
  */
-export type OccurrenceStep = { kind: "continue"; attempt: number } | { kind: "defer"; why: string } | { kind: "settled"; occurrence: ResumeOccurrence };
+export type OccurrenceStep =
+  | { kind: "continue"; attempt: number }
+  /**
+   * G13: a stored occurrence the protocol will continue (`planned`,
+   * `waiting-admission`). It goes through pace, the gates and revalidation like
+   * a new attempt, and is then DRIVEN, never replanned.
+   */
+  | { kind: "drive"; occurrence: ResumeOccurrence }
+  | { kind: "defer"; why: string }
+  | { kind: "settled"; occurrence: ResumeOccurrence };
 
-export function occurrenceStep(occurrence: ResumeOccurrence | null): OccurrenceStep {
-  if (occurrence === null) return { kind: "continue", attempt: 1 };
-  // DISPOSED IS SETTLED WHATEVER THE STATE: Greg ended it, and nothing is launched again under it.
-  if (occurrence.disposed) return { kind: "settled", occurrence };
+/**
+ * A failed attempt whose slot the protocol could not release (G1, G14): the
+ * request stays pending and waits, and says how Greg ends it if the protocol
+ * never manages to.
+ */
+function heldSlotWhy(occurrenceId: string): string {
+  return `the last attempt failed before it started and its slot has not been released yet; the launch protocol may still release it, or end it with: ${disposeCommandFor(occurrenceId)}`;
+}
+
+/**
+ * G19: AN OCCURRENCE'S STANDING, decided over ALL THREE things the protocol
+ * reports — its state, whether its reservation is still held, and whether
+ * Greg disposed it — so that no combination falls through a switch that is
+ * exhaustive over the state alone. Every reader (the occurrence table, pace,
+ * the page state) switches on this, never on `state`.
+ *
+ *  - disposed, whatever else: Greg ended it;
+ *  - **stuck**: `outcome-unknown`, or a TERMINAL state (`completed`,
+ *    `failed-before-launch`) whose reservation is still held. Nothing the
+ *    daemon does moves it, and a held slot blocks every other resume at the
+ *    protocol's admission, so it needs Greg's `dispose`;
+ *  - not launched yet (`planned`, `waiting-admission`, `reserved`);
+ *  - launched (`launching`, `observed-running`);
+ *  - ended (`completed`, released);
+ *  - failed with its slot released: free to try the next attempt.
+ */
+export type OccurrenceStanding =
+  | { kind: "disposed" }
+  | { kind: "stuck"; state: "outcome-unknown" | "completed" | "failed-before-launch"; why: string; disposeCommand: string }
+  | { kind: "not-launched-yet"; state: "planned" | "waiting-admission" | "reserved" }
+  | { kind: "launched"; state: "launching" | "observed-running" }
+  | { kind: "ended" }
+  | { kind: "failed-released" };
+
+export function standingOf(occurrence: ResumeOccurrence): OccurrenceStanding {
+  if (occurrence.disposed) return { kind: "disposed" };
+  const stuck = (state: "outcome-unknown" | "completed" | "failed-before-launch", why: string): OccurrenceStanding => ({
+    kind: "stuck",
+    state,
+    why,
+    disposeCommand: disposeCommandFor(occurrence.occurrenceId),
+  });
   switch (occurrence.state) {
-    case "failed-before-launch":
-      return occurrence.reservationHeld
-        ? { kind: "defer", why: "the last attempt's slot has not been released yet" }
-        : { kind: "continue", attempt: (occurrence.attempt ?? 0) + 1 };
     case "planned":
     case "waiting-admission":
     case "reserved":
-      return { kind: "defer", why: `the launch protocol holds this resume as ${occurrence.state}; it has not launched yet` };
+      return { kind: "not-launched-yet", state: occurrence.state };
     case "launching":
     case "observed-running":
+      return { kind: "launched", state: occurrence.state };
     case "outcome-unknown":
+      return stuck("outcome-unknown", "the launch protocol cannot tell whether this resume started");
     case "completed":
-      return { kind: "settled", occurrence };
+      return occurrence.reservationHeld
+        ? stuck("completed", "it has ended, but its launch slot has not been released, so no other resume can be admitted")
+        : { kind: "ended" };
+    case "failed-before-launch":
+      return occurrence.reservationHeld ? stuck("failed-before-launch", "the launch failed before it started, and its slot has not been released") : { kind: "failed-released" };
     default: {
       const never: never = occurrence.state;
-      throw new Error(`no request step for launch state ${String(never)}`);
+      throw new Error(`no standing for launch state ${String(never)}`);
+    }
+  }
+}
+
+export function occurrenceStep(occurrence: ResumeOccurrence | null): OccurrenceStep {
+  if (occurrence === null) return { kind: "continue", attempt: 1 };
+  const standing = standingOf(occurrence);
+  switch (standing.kind) {
+    // DISPOSED IS SETTLED WHATEVER THE STATE: Greg ended it, and nothing is launched again under it.
+    case "disposed":
+      return { kind: "settled", occurrence };
+    case "stuck":
+      // G14: a failed attempt still holding its slot keeps the request pending,
+      // waiting for the release; any other stuck occurrence is the protocol's,
+      // and the page shows it as needing Greg.
+      return standing.state === "failed-before-launch" ? { kind: "defer", why: heldSlotWhy(occurrence.occurrenceId) } : { kind: "settled", occurrence };
+    case "failed-released":
+      return { kind: "continue", attempt: (occurrence.attempt ?? 0) + 1 };
+    case "not-launched-yet":
+      // G13: the protocol's reconciler never moves planned or waiting-admission
+      // on its own, so a permanent defer would wait for ever: drive it. Reserved
+      // IS the reconciler's (released as failed-before-launch after a restart),
+      // and the next pass follows G14's released or held path.
+      return standing.state === "reserved"
+        ? { kind: "defer", why: "the launch protocol holds this resume as reserved; its own reconciliation settles it, and the next pass follows that" }
+        : { kind: "drive", occurrence };
+    case "launched":
+    case "ended":
+      return { kind: "settled", occurrence };
+    default: {
+      const never: never = standing;
+      throw new Error(`no request step for standing ${JSON.stringify(never)}`);
     }
   }
 }
@@ -616,10 +883,17 @@ export function occurrenceStep(occurrence: ResumeOccurrence | null): OccurrenceS
 export type Pace =
   | { kind: "free" }
   | { kind: "blocked"; blocker: ResumeOccurrence; why: string }
+  /**
+   * G19: a blocker only Greg's `dispose` moves (`standingOf`'s `stuck`). It
+   * blocks whether or not it was ever verified: a held slot blocks the
+   * protocol's admission either way. `reason` is the standing's own sentence.
+   */
+  | { kind: "stuck"; blocker: ResumeOccurrence; why: string; reason: string; disposeCommand: string }
   | { kind: "spacing"; untilMs: number };
 
 export function paceOf(input: {
-  candidateId: RecoveryCandidateId;
+  /** The request being decided, whose own occurrence is not its own blocker; null for the page's reading. */
+  candidateId: RecoveryCandidateId | null;
   inFlight: readonly ResumeOccurrence[];
   verified: (occurrence: ResumeOccurrence) => boolean;
   lastVerifiedAtMs: number | null;
@@ -627,17 +901,31 @@ export function paceOf(input: {
   nameOf: (candidateId: RecoveryCandidateId) => string;
 }): Pace {
   for (const occurrence of input.inFlight) {
-    if (occurrence.candidateId === input.candidateId || occurrence.disposed) continue;
-    if (input.verified(occurrence)) continue;
+    if (occurrence.candidateId === input.candidateId) continue;
+    const standing = standingOf(occurrence);
     const name = input.nameOf(occurrence.candidateId);
-    const stuck = occurrence.state === "outcome-unknown" || (occurrence.reservationHeld && occurrence.state === "failed-before-launch");
-    return {
-      kind: "blocked",
-      blocker: occurrence,
-      why: stuck
-        ? `waiting for ${name}: its launch needs Greg (${occurrence.state}); end it with: ${disposeCommandFor(occurrence.occurrenceId)}`
-        : `waiting for ${name} to be verified running (its launch is ${occurrence.state})`,
-    };
+    switch (standing.kind) {
+      case "disposed":
+      case "ended":
+      case "failed-released":
+        continue;
+      case "stuck":
+        return {
+          kind: "stuck",
+          blocker: occurrence,
+          reason: standing.why,
+          disposeCommand: standing.disposeCommand,
+          why: `waiting for ${name}: its launch needs Greg (${occurrence.state}: ${standing.why}); end it with: ${standing.disposeCommand}`,
+        };
+      case "not-launched-yet":
+      case "launched":
+        if (input.verified(occurrence)) continue;
+        return { kind: "blocked", blocker: occurrence, why: `waiting for ${name} to be verified running (its launch is ${occurrence.state})` };
+      default: {
+        const never: never = standing;
+        throw new Error(`no pace for standing ${JSON.stringify(never)}`);
+      }
+    }
   }
   if (input.lastVerifiedAtMs !== null && input.nowMs < input.lastVerifiedAtMs + RESUME_SPACING_MS) {
     return { kind: "spacing", untilMs: input.lastVerifiedAtMs + RESUME_SPACING_MS };
@@ -655,6 +943,8 @@ export type RevalidationFacts = {
   dir: { kind: "directory" } | { kind: "missing"; why: string };
   transcript: { kind: "file"; size: number; mtimeMs: number } | { kind: "missing"; why: string };
   account: RecoveryResumeAccount;
+  /** G11: whether what the account resolution rested on is unchanged, checked in the synchronous stretch. */
+  accountRecheck: AccountRecheck;
   producerCanVerify: boolean;
 };
 
@@ -663,13 +953,22 @@ export type Revalidation =
   | { kind: "refuse"; why: string }
   | { kind: "defer"; why: string };
 
+/** What the collecting dashboard must declare before a resume may launch (G3). wire.ts § `ProducerCapability`. */
+const VERIFY_RESUME_CAPABILITY: ProducerCapability = "argv-resume-uuid";
+
 /**
- * G3's hook: whether the dashboard collecting this box can verify a resumed
- * session (it declares `argv-resume-uuid`). **A no-op in Stage 1**, always
- * true; Stage 3 adds the capability and makes this read it.
+ * G3's gate: whether the dashboard collecting this box can verify a resumed
+ * session — it declares `argv-resume-uuid` on the latest ACCEPTED snapshot.
+ *
+ * A dashboard that does not (an older build, or a malformed list, which the
+ * parser turns into none) would read `claude --resume <uuid>` as unreadable, so
+ * the session would stay `claimed-only`, `resumed` would never be derived, and
+ * the pace rule would wait for ever behind a session that is really running.
+ * So revalidation DEFERS, never refuses: restarting the dashboard is the fix,
+ * and the request should still be there when it is done.
  */
-export function producerCanVerifyResume(_snapshot: ResumeObservation): boolean {
-  return true;
+export function producerCanVerifyResume(observation: ResumeObservation): boolean {
+  return observation.capabilities.includes(VERIFY_RESUME_CAPABILITY);
 }
 
 /**
@@ -712,6 +1011,12 @@ export function revalidate(facts: RevalidationFacts): Revalidation {
     const why = facts.transcript.kind === "missing" ? facts.transcript.why : facts.located?.kind === "found" ? "" : (facts.located?.why ?? "");
     return { kind: "refuse", why: `the transcript is gone since the preview${why === "" ? "" : `: ${why}`}` };
   }
+  // G11: AN ACCOUNT RESOLVED BEFORE AN AWAIT IS ONLY USED IF NOTHING IT RESTED
+  // ON HAS MOVED. Defer, never refuse (the manual-only verdict could be stale
+  // too): the next pass resolves again.
+  if (facts.accountRecheck.kind === "changed") {
+    return { kind: "defer", why: `the account this conversation runs under may have changed since it was resolved (${facts.accountRecheck.why}); it is resolved again on the next pass` };
+  }
   if (facts.account.kind !== "pinned") return { kind: "refuse", why: `manual only: ${facts.account.why}` };
   if (!facts.producerCanVerify) {
     return { kind: "defer", why: "the dashboard collecting this box cannot yet verify a resumed session; it needs a restart" };
@@ -744,6 +1049,8 @@ export type ResumeDecision =
   | { kind: "defer"; why: string; until: string | null; gate: LaunchGate | null }
   | { kind: "refuse"; why: string }
   | { kind: "launch"; attempt: number; revalidation: Extract<Revalidation, { kind: "ok" }>; gate: LaunchGate }
+  /** G13: continue the stored occurrence through the port's `drive`, after the same pace, gates and revalidation. */
+  | { kind: "drive"; occurrence: ResumeOccurrence; revalidation: Extract<Revalidation, { kind: "ok" }>; gate: LaunchGate }
   | { kind: "settled"; occurrence: ResumeOccurrence };
 
 function iso(ms: number): string {
@@ -770,6 +1077,7 @@ export function decideResume(input: DecideInput): ResumeDecision {
     case "defer":
       return defer(step.why);
     case "continue":
+    case "drive":
       break;
     default: {
       const never: never = step;
@@ -778,6 +1086,7 @@ export function decideResume(input: DecideInput): ResumeDecision {
   }
   switch (input.pace.kind) {
     case "blocked":
+    case "stuck":
       return defer(input.pace.why);
     case "spacing":
       return defer("spacing the launches: the last resumed session is given two minutes to start before the next", iso(input.pace.untilMs));
@@ -792,7 +1101,9 @@ export function decideResume(input: DecideInput): ResumeDecision {
   if (gate.kind === "held") return defer(gate.why, gate.until, gate);
   if (input.revalidation.kind === "refuse") return input.revalidation;
   if (input.revalidation.kind === "defer") return defer(input.revalidation.why, null, gate);
-  return { kind: "launch", attempt: step.attempt, revalidation: input.revalidation, gate };
+  return step.kind === "drive"
+    ? { kind: "drive", occurrence: step.occurrence, revalidation: input.revalidation, gate }
+    : { kind: "launch", attempt: step.attempt, revalidation: input.revalidation, gate };
 }
 
 // ═══ The pass ═════════════════════════════════════════════════════════════════
@@ -802,6 +1113,12 @@ export type ResumeObservation = {
   inventory: InventoryTrust;
   /** The latest accepted snapshot's opaque `health`, or null. */
   health: unknown;
+  /**
+   * The latest accepted snapshot's declared producer capabilities, `[]` before
+   * one is accepted (tools/overseer/observation.ts). Read from the observation,
+   * never held by the daemon: the Overseer's ruling on G3, 2026-09-10.
+   */
+  capabilities: readonly string[];
   /** A COPY of the index's records, so a snapshot taken before an await stays the snapshot it was. */
   index: RecoveryIndex;
 };
@@ -904,7 +1221,8 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
   // ── 2. The async phase ─────────────────────────────────────────────────────
   const locate = transcriptLocator(deps.evidence);
   let headLocated: LocatedTranscript | null = null;
-  let headAccount: RecoveryResumeAccount = { kind: "unknown", why: "not resolved: nothing is at the head of the queue" };
+  // G11: the account AND what it rested on; the synchronous stretch rechecks the latter.
+  let headAccount: ResolvedAccount = unresolvedAccount({ kind: "unknown", reason: "not-resolved", why: "not resolved: nothing is at the head of the queue" });
   if (head !== null) {
     const record = before.index.records.get(head.candidateId);
     const conversation = record === undefined ? null : verifiedConversationOf(record.oversize ? null : record.lastSeen);
@@ -913,7 +1231,7 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
       headAccount =
         headLocated.kind === "found"
           ? await deps.accounts.resolve({ conversationId: conversation, transcriptPath: headLocated.path, transcriptRoot: headLocated.root })
-          : { kind: "unknown", why: "the transcript was not found, so its account cannot be established" };
+          : unresolvedAccount({ kind: "unknown", reason: "no-transcript", why: "the transcript was not found, so its account cannot be established" });
     }
   }
   // The in-flight occurrences' transcripts, for verification (G2).
@@ -923,7 +1241,7 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
   for (const occurrence of inFlightBefore) {
     const attempt = attemptsBefore.get(occurrence.candidateId);
     if (attempt !== undefined && !readings.has(occurrence.candidateId)) {
-      readings.set(occurrence.candidateId, await readTranscriptTail(attempt.transcriptPath, readBytes));
+      readings.set(occurrence.candidateId, await transcriptAfter(attempt.transcriptPath, attempt.transcriptSizeAtLaunch, readBytes));
     }
   }
   const previews = await buildPreviews(deps, before);
@@ -941,11 +1259,25 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
   if (head !== null) {
     const { decision } = decisionFor(deps, head, observed, headLocated, headAccount, readings, attempts, nowMs);
     headDecision = decision;
-    headGate = decision.kind === "defer" || decision.kind === "launch" ? decision.gate : null;
+    headGate = decision.kind === "defer" || decision.kind === "launch" || decision.kind === "drive" ? decision.gate : null;
     const at = iso(nowMs);
+    // G16: THE HEAD HAS MOVED ONLY WHEN EVERY FILE OF ITS GROUP MOVED. A file
+    // that could not be moved is still pending on disk, so it stays pending on
+    // the page, with the error, and the next pass settles it again (the
+    // occurrence, not the file, is what stops a second launch).
+    let moveError: string | null = null;
+    const moved = (results: readonly MoveResult[], where: "done/" | "refused/"): void => {
+      const failed = results.flatMap((r) => (r.ok ? [] : [r.why]));
+      if (failed.length === 0) {
+        headMoved = true;
+        return;
+      }
+      moveError = `${failed.length} of ${results.length} of its request files could not be moved out of pending/ into ${where} (${failed[0]}); it is still pending, and the next pass tries again`;
+      deps.log(`recovery resume: ${head.candidateId}: ${moveError}`);
+    };
     const settleAll = (occurrenceId: string, outcome: string): void => {
       const attempt = attempts.get(head.candidateId);
-      for (const file of head.files) {
+      const results = head.files.map((file) =>
         moveToDone(deps.root, file.path, file.name, {
           settledAt: at,
           occurrenceId,
@@ -954,13 +1286,15 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
           transcriptSizeAtLaunch: attempt?.transcriptSizeAtLaunch ?? null,
           transcriptMtimeAtLaunch: attempt?.transcriptMtimeAtLaunch ?? null,
           request: file.request,
-        });
-      }
-      headMoved = true;
+        }),
+      );
+      moved(results, "done/");
     };
     const refuseAll = (why: string): void => {
-      for (const file of head.files) moveToRefused(deps.root, file.path, file.name, { refusedAt: at, why, request: file.request });
-      headMoved = true;
+      moved(
+        head.files.map((file) => moveToRefused(deps.root, file.path, file.name, { refusedAt: at, why, request: file.request })),
+        "refused/",
+      );
     };
     let outcome: ResumeLaunchOutcome | null = null;
     let why = "";
@@ -976,8 +1310,11 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
         why = `settled against ${decision.occurrence.occurrenceId} (${decision.occurrence.state})`;
         settleAll(decision.occurrence.occurrenceId, "settled");
         break;
-      case "launch": {
-        if (port.kind !== "wired") throw new Error("a launch was decided with no wired port");
+      // G13: A DRIVE IS A LAUNCH OF A STORED OCCURRENCE. Same attempt file first
+      // (its byte offset is G12's boundary), same outcome table after.
+      case "launch":
+      case "drive": {
+        if (port.kind !== "wired") throw new Error(`a ${decision.kind} was decided with no wired port`);
         const r = decision.revalidation;
         // WHAT REVALIDATION MEASURED, ON DISK BEFORE THE LAUNCH, so a crash
         // between the launch and the move still leaves growth judgeable (G2).
@@ -1006,7 +1343,10 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
           verifiedAt: null,
         });
         try {
-          outcome = port.launch({ candidateId: head.candidateId, conversationId: r.conversationId, dir: r.dir, account: r.account, nudge: nudgeFor(r.record) });
+          outcome =
+            decision.kind === "drive"
+              ? port.drive(head.candidateId)
+              : port.launch({ candidateId: head.candidateId, conversationId: r.conversationId, dir: r.dir, account: r.account, nudge: nudgeFor(r.record) });
         } catch (cause) {
           // A THROW IS NOT AN ANSWER: whether it launched is for `inspect` to
           // say on the next pass. The requests stay pending.
@@ -1020,6 +1360,15 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
             settleAll(outcome.occurrenceId, outcome.kind);
             break;
           case "failed-before-launch":
+            // G1, G14: NOT A REFUSAL. The request stays pending. Released: the
+            // next pass tries the next attempt through the gates and
+            // revalidation again. Held: it waits for the release, and the
+            // occurrence table says so with the dispose command.
+            why =
+              outcome.reservation.kind === "released"
+                ? `the launch failed before it started (${outcome.why}); its slot was released, so the next pass tries again through the gates and revalidation`
+                : `the launch failed before it started (${outcome.why}), and its slot was not released (${outcome.reservation.why}): ${heldSlotWhy(outcome.occurrenceId)}`;
+            break;
           case "refused":
           case "conflict":
             why = `the launch protocol answered ${outcome.kind}: ${outcome.why}`;
@@ -1041,7 +1390,7 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
         throw new Error(`no request step for decision ${JSON.stringify(never)}`);
       }
     }
-    result = { candidateId: head.candidateId, decision: decision.kind, outcome: outcome?.kind ?? null, why };
+    result = { candidateId: head.candidateId, decision: decision.kind, outcome: outcome?.kind ?? null, why: moveError === null ? why : `${why}; but ${moveError}` };
   }
   // Verification, recorded ONCE per attempt, the first time all four hold.
   const inFlight = port.kind === "wired" ? port.inFlight() : [];
@@ -1061,6 +1410,7 @@ export async function runResumePass(deps: ResumePassDeps): Promise<ResumePassRes
     head,
     headMoved,
     headDecision,
+    headWhy: result?.why ?? null,
     headGate,
     overflow: listing.overflow,
     observed,
@@ -1078,12 +1428,13 @@ function decisionFor(
   head: Group,
   observation: ResumeObservation,
   located: LocatedTranscript | null,
-  account: RecoveryResumeAccount,
+  resolved: ResolvedAccount,
   readings: ReadonlyMap<string, TranscriptReading | null>,
   attempts: ReadonlyMap<string, ResumeAttempt>,
   nowMs: number,
 ): { decision: ResumeDecision } {
   const port = deps.port;
+  const account = resolved.account;
   const record = observation.index.records.get(head.candidateId);
   const request = (head.files[0] as PendingResume).request;
   const dir = record === undefined ? null : dirOfRecord(record);
@@ -1095,6 +1446,8 @@ function decisionFor(
     dir: dir === null ? { kind: "missing", why: "no directory recorded" } : statDir(dir),
     transcript: statTranscript(located),
     account,
+    // G11: IN THE SYNCHRONOUS STRETCH, bounded: a few `stat`s and one `realpath`.
+    accountRecheck: resolved.recheck(),
     producerCanVerify: producerCanVerifyResume(observation),
   });
   const inFlight = port.kind === "wired" ? port.inFlight() : [];
@@ -1148,9 +1501,9 @@ async function buildPreviews(deps: ResumePassDeps, observation: ResumeObservatio
     let account: RecoveryResumeAccount;
     try {
       const transcriptRoot = await realpath(dirname(dirname(transcriptPath)));
-      account = await deps.accounts.resolve({ conversationId, transcriptPath, transcriptRoot });
+      account = (await deps.accounts.resolve({ conversationId, transcriptPath, transcriptRoot })).account;
     } catch (cause) {
-      account = { kind: "unknown", why: `the transcript's projects directory could not be resolved: ${errText(cause)}` };
+      account = { kind: "unknown", reason: "no-transcript", why: `the transcript's projects directory could not be resolved: ${errText(cause)}` };
     }
     const quotes = await transcriptQuotes(transcriptPath, { cache: deps.previewCache, ...(deps.readRange === undefined ? {} : { readRange: deps.readRange }) });
     out.push({
@@ -1203,38 +1556,24 @@ export function settledStateOf(input: {
 }): RecoveryResumeRequestState {
   const { occurrence, requestedAt } = input;
   const launch = launchWire(occurrence);
-  if (occurrence.disposed) return { kind: "disposed", requestedAt, launch };
-  if (input.verifiedAt !== null) return { kind: "resumed", requestedAt, launch, verifiedAt: input.verifiedAt };
-  switch (occurrence.state) {
-    case "planned":
-    case "waiting-admission":
-    case "reserved":
-    case "launching":
-    case "observed-running":
+  const standing = standingOf(occurrence);
+  // STUCK BEFORE RESUMED (G19): a held slot blocks every other resume even
+  // after this one was verified, and only Greg's dispose releases it.
+  if (standing.kind === "stuck") return { kind: "needs-greg", requestedAt, launch, why: standing.why, disposeCommand: standing.disposeCommand };
+  if (standing.kind !== "disposed" && input.verifiedAt !== null) return { kind: "resumed", requestedAt, launch, verifiedAt: input.verifiedAt };
+  switch (standing.kind) {
+    case "disposed":
+      return { kind: "disposed", requestedAt, launch };
+    case "not-launched-yet":
+    case "launched":
       return { kind: "launched", requestedAt, launch, verification: input.verification, waitingFor: waitingForOf(input.verification) };
-    case "outcome-unknown":
-      return {
-        kind: "needs-greg",
-        requestedAt,
-        launch,
-        why: "the launch protocol cannot tell whether this resume started",
-        disposeCommand: disposeCommandFor(occurrence.occurrenceId),
-      };
-    case "completed":
+    case "ended":
       return { kind: "ended-unverified", requestedAt, launch, how: howItEnded(occurrence) };
-    case "failed-before-launch":
-      return occurrence.reservationHeld
-        ? {
-            kind: "needs-greg",
-            requestedAt,
-            launch,
-            why: "the launch failed before it started, and its slot has not been released",
-            disposeCommand: disposeCommandFor(occurrence.occurrenceId),
-          }
-        : { kind: "refused", requestedAt, refusedAt: input.settledAt, why: "the launch failed before it started; Resume may be tapped again" };
+    case "failed-released":
+      return { kind: "refused", requestedAt, refusedAt: input.settledAt, why: "the launch failed before it started; Resume may be tapped again" };
     default: {
-      const never: never = occurrence.state;
-      throw new Error(`no page state for launch state ${String(never)}`);
+      const never: never = standing;
+      throw new Error(`no page state for standing ${JSON.stringify(never)}`);
     }
   }
 }
@@ -1246,6 +1585,8 @@ function projectionOf(input: {
   head: Group | null;
   headMoved: boolean;
   headDecision: ResumeDecision | null;
+  /** What the pass concluded for a head that stays pending (a launch answered `waiting`, a failed attempt, a failed move). */
+  headWhy: string | null;
   headGate: LaunchGate | null;
   overflow: number;
   observed: ResumeObservation;
@@ -1276,7 +1617,9 @@ function projectionOf(input: {
           decision !== null && decision.kind === "defer"
             ? decision.why
             : isHead
-              ? "being handled"
+              ? input.headWhy !== null && input.headWhy !== ""
+                ? input.headWhy
+                : "being handled"
               : input.headMoved && i === 0
                 ? "next: it is looked at on the next pass"
                 : `waiting behind ${nameOf((pendingGroups[0] as Group).candidateId)}`,
@@ -1326,24 +1669,53 @@ function projectionOf(input: {
       }),
     });
   }
-  // Pace, as the page reads it.
+  // Pace, as the page reads it: THE SAME `paceOf` the decision uses, with no request excluded.
   let pace: RecoveryResumeProjection["pace"] = { kind: "free" };
   if (port.kind === "wired") {
-    for (const occurrence of port.inFlight()) {
-      if (occurrence.disposed) continue;
-      const attempt = input.attempts.get(occurrence.candidateId);
-      if (attempt?.verifiedAt !== null && attempt?.verifiedAt !== undefined) continue;
-      const v = verificationOf(occurrence, input.observed.index.records.get(occurrence.candidateId), input.readings.get(occurrence.candidateId) ?? null, attempt);
-      if (isVerified(v)) continue;
-      pace = { kind: "waiting-for-verification", candidateId: occurrence.candidateId, name: nameOf(occurrence.candidateId), since: attempt?.launchedAt ?? iso(input.nowMs) };
-      break;
+    let last: number | null = null;
+    for (const attempt of input.attempts.values()) {
+      if (attempt.verifiedAt !== null) last = Math.max(last ?? 0, Date.parse(attempt.verifiedAt));
     }
-    if (pace.kind === "free") {
-      let last: number | null = null;
-      for (const attempt of input.attempts.values()) {
-        if (attempt.verifiedAt !== null) last = Math.max(last ?? 0, Date.parse(attempt.verifiedAt));
+    const reading = paceOf({
+      candidateId: null,
+      inFlight: port.inFlight(),
+      verified: (occurrence) => {
+        const attempt = input.attempts.get(occurrence.candidateId);
+        if (attempt?.verifiedAt !== null && attempt?.verifiedAt !== undefined) return true;
+        return isVerified(verificationOf(occurrence, input.observed.index.records.get(occurrence.candidateId), input.readings.get(occurrence.candidateId) ?? null, attempt));
+      },
+      lastVerifiedAtMs: last,
+      nowMs: input.nowMs,
+      nameOf,
+    });
+    switch (reading.kind) {
+      case "free":
+        break;
+      case "stuck":
+        pace = {
+          kind: "stuck",
+          candidateId: reading.blocker.candidateId,
+          name: nameOf(reading.blocker.candidateId),
+          state: reading.blocker.state,
+          why: reading.reason,
+          disposeCommand: reading.disposeCommand,
+        };
+        break;
+      case "blocked":
+        pace = {
+          kind: "waiting-for-verification",
+          candidateId: reading.blocker.candidateId,
+          name: nameOf(reading.blocker.candidateId),
+          since: input.attempts.get(reading.blocker.candidateId)?.launchedAt ?? iso(input.nowMs),
+        };
+        break;
+      case "spacing":
+        pace = { kind: "spacing", until: iso(reading.untilMs) };
+        break;
+      default: {
+        const never: never = reading;
+        throw new Error(`no page pace for ${JSON.stringify(never)}`);
       }
-      if (last !== null && input.nowMs < last + RESUME_SPACING_MS) pace = { kind: "spacing", until: iso(last + RESUME_SPACING_MS) };
     }
   }
   const gate: RecoveryResumeGateWire | null = input.headGate === null ? null : input.headGate;
@@ -1355,6 +1727,8 @@ function projectionOf(input: {
     pace,
     requests,
     previews: input.previews,
+    // The pass does not know which records the file will hold; the store's write point fills this (G18).
+    orphans: [],
     pendingOverflow: input.overflow,
   };
 }

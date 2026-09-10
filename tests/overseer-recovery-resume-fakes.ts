@@ -13,7 +13,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import type { RecoveryResumeAccount } from "../tools/fleet/wire.js";
 import type { AccountUsageSection, StoredAccountUsage } from "../tools/overseer/launch-gate.js";
 import type { RecoveryCandidateId } from "../tools/overseer/recovery.js";
-import type { ResumeAccountPort, ResumeLaunchOutcome, ResumeLaunchRequest, ResumeOccurrence } from "../tools/overseer/recovery-resume.js";
+import type { AccountRecheck, ResumeAccountPort, ResumeLaunchOutcome, ResumeLaunchRequest, ResumeOccurrence } from "../tools/overseer/recovery-resume.js";
 
 const IN_FLIGHT = new Set(["planned", "waiting-admission", "reserved", "launching", "observed-running", "outcome-unknown"]);
 
@@ -25,8 +25,16 @@ export type FakePort = {
   inspect(candidateId: RecoveryCandidateId): ResumeOccurrence | null;
   inFlight(): readonly ResumeOccurrence[];
   launch(request: ResumeLaunchRequest): ResumeLaunchOutcome;
+  /**
+   * The protocol's `resumeOccurrence` semantics (G13): an unknown occurrence
+   * is `refused`; only `planned` or `waiting-admission` is driven, anything
+   * else is `not-launchable` and nothing is invoked.
+   */
+  drive(candidateId: RecoveryCandidateId): ResumeLaunchOutcome;
   /** Every `launch` call, in order. */
   calls: ResumeLaunchRequest[];
+  /** Every `drive` call, in order — including the ones the protocol answered not-launchable. */
+  drives: string[];
   /** The launcher invoked (an `invoked` answer). Also written, one line each, to `markerPath`. */
   invocations: number;
   occurrences: Map<string, ResumeOccurrence>;
@@ -41,6 +49,7 @@ export function fakePort(markerPath: string): FakePort {
   const port: FakePort = {
     kind: "wired",
     calls: [],
+    drives: [],
     invocations: 0,
     occurrences: new Map(),
     script: [],
@@ -79,6 +88,19 @@ export function fakePort(markerPath: string): FakePort {
       appendFileSync(markerPath, `${JSON.stringify({ candidateId: request.candidateId, attempt, conversationId: request.conversationId, dir: request.dir })}\n`);
       return { kind: "invoked", occurrenceId, correlationId: `ri-correlation-${attempt}`, launcher: "started", detail: "the fake launcher" };
     },
+    drive(candidateId) {
+      port.drives.push(candidateId);
+      const existing = port.occurrences.get(candidateId);
+      if (existing === undefined) return { kind: "refused", why: `no occurrence for ${candidateId} is in the journal` };
+      if (existing.state !== "planned" && existing.state !== "waiting-admission") {
+        return { kind: "not-launchable", occurrenceId: existing.occurrenceId, state: existing.state, why: `${existing.occurrenceId} is ${existing.state}; only a planned or waiting occurrence is resumed` };
+      }
+      const attempt = (existing.attempt ?? 0) + 1;
+      port.occurrences.set(candidateId, { ...existing, state: "launching", attempt, reservationHeld: true });
+      port.invocations += 1;
+      appendFileSync(markerPath, `${JSON.stringify({ candidateId, attempt, driven: true })}\n`);
+      return { kind: "invoked", occurrenceId: existing.occurrenceId, correlationId: `ri-correlation-${attempt}`, launcher: "started", detail: "the fake launcher, driving a stored occurrence" };
+    },
   };
   return port;
 }
@@ -92,15 +114,25 @@ export function markerLines(path: string): { candidateId: string; attempt: numbe
     .map((line) => JSON.parse(line) as { candidateId: string; attempt: number });
 }
 
-export type FakeAccounts = ResumeAccountPort & { resolveCalls: number };
+export type FakeAccounts = ResumeAccountPort & { resolveCalls: number; rechecks: number };
 
-/** An account port that pins every conversation to one pool account (or answers `account`). */
-export function fakeAccounts(options: { account?: RecoveryResumeAccount } = {}): FakeAccounts {
+/**
+ * An account port that pins every conversation to one pool account (or answers
+ * `account`). Its evidence is unchanged unless `recheck` says otherwise (G11).
+ */
+export function fakeAccounts(options: { account?: RecoveryResumeAccount; recheck?: () => AccountRecheck } = {}): FakeAccounts {
   const accounts: FakeAccounts = {
     resolveCalls: 0,
+    rechecks: 0,
     async resolve() {
       accounts.resolveCalls += 1;
-      return options.account ?? { kind: "pinned", name: "ri-pool", configDir: "/nonexistent/ri-pool-config" };
+      return {
+        account: options.account ?? { kind: "pinned", name: "ri-pool", configDir: "/nonexistent/ri-pool-config" },
+        recheck: () => {
+          accounts.rechecks += 1;
+          return options.recheck?.() ?? { kind: "same" };
+        },
+      };
     },
   };
   return accounts;

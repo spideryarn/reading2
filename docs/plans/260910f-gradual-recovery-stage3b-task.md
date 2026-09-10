@@ -66,6 +66,11 @@ Read these first:
    - `inspect` answering `null` and then being refused means **held by a history reset**. That is a
      `refused` request which names the reset, and it is never free to launch. Test it.
    - `failed-before-launch`'s `reservation: released | held` maps to the G1 table.
+   - The port's `drive(candidateId)`, added by the G13 fix, maps to the composed protocol's
+     `resumeOccurrence(occurrenceIdOf(recoveryOrigin(candidateId)))`. Confirmed by
+     `launch-protocol`, 2026-09-10. It drives a stored `planned` or `waiting-admission` record
+     with no re-plan. From any other state it answers `not-launchable`, and for an unknown id or a
+     lost history it answers `refused`. `reserved` is never driven: reconciliation settles it.
 5. **The daemon** composes the launch protocol with the `tmux-resume` launcher, and hands the port
    to the resume pass, replacing `unwired`. Make small targeted edits, and merge first. If
    `launch-protocol` already composes the protocol in the daemon for the scheduler, **reuse that one

@@ -3067,9 +3067,21 @@ function resumeForFile(
   const nameOf = (id: string): string | null => fold.records.get(id as RecoveryCandidateId)?.name ?? null;
   let position = 0;
   const requested = new Set<string>();
+  // G18: A REQUEST THIS FILE CANNOT SHOW AGAINST A RECORD IS AN ORPHAN, NEVER
+  // DROPPED. The page lists it apart from the records, so a stale tab's
+  // "queued" does not simply vanish.
+  const orphans: RecoveryResumeProjection["orphans"] = [...resume.orphans];
   const requests = resume.requests.flatMap((request) => {
     const name = nameOf(request.candidateId);
-    if (name === null || requested.has(request.candidateId)) return [];
+    if (name === null) {
+      orphans.push({
+        candidateId: request.candidateId,
+        state: request.state,
+        why: "the recovery index no longer holds this record (resolved over 30 days ago, past its capacity, or never held by this index), so the request cannot be shown against it; the Overseer refuses it when it reaches the head of the queue",
+      });
+      return [];
+    }
+    if (requested.has(request.candidateId)) return [];
     requested.add(request.candidateId);
     const state = request.state.kind === "pending" ? { ...request.state, position: (position += 1) } : request.state;
     return [{ ...request, name, state }];
@@ -3083,10 +3095,17 @@ function resumeForFile(
     previewed.add(preview.candidateId);
     return true;
   });
-  const paceName = resume.pace.kind === "waiting-for-verification" ? nameOf(resume.pace.candidateId) : null;
-  const pace: RecoveryResumeProjection["pace"] =
-    resume.pace.kind !== "waiting-for-verification" ? resume.pace : paceName === null ? { kind: "free" } : { ...resume.pace, name: paceName };
-  return { ...resume, requests, previews, pace };
+  let pace: RecoveryResumeProjection["pace"] = resume.pace;
+  if (resume.pace.kind === "waiting-for-verification") {
+    const paceName = nameOf(resume.pace.candidateId);
+    pace = paceName === null ? { kind: "free" } : { ...resume.pace, name: paceName };
+  } else if (resume.pace.kind === "stuck") {
+    // A STUCK BLOCKER IS NEVER DROPPED (G19): its dispose command is the only
+    // way the queue moves again. A record that has left the file lends it no
+    // name, so it is named by its candidate id.
+    pace = { ...resume.pace, name: nameOf(resume.pace.candidateId) ?? resume.pace.candidateId };
+  }
+  return { ...resume, requests, previews, pace, orphans };
 }
 
 /**
