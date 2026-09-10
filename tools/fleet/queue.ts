@@ -500,7 +500,7 @@ function currentRunItemSuffix(itemId: string, runId: string): number | null {
   const match = new RegExp(`^${escapeRegExp(runId)}-q([0-9]+)$`).exec(itemId);
   if (match?.[1] === undefined) return null;
   const suffix = Number(match[1]);
-  return Number.isSafeInteger(suffix) && suffix >= 0 ? suffix : null;
+  return Number.isSafeInteger(suffix) && suffix >= 0 && suffix < Number.MAX_SAFE_INTEGER ? suffix : null;
 }
 
 /**
@@ -879,6 +879,7 @@ export class SteeringQueue {
     // foreign one by name rather than reporting it as absent.
     let itemId: string;
     do {
+      if (this.seq >= Number.MAX_SAFE_INTEGER) this.seq = 0;
       this.seq += 1;
       itemId = `${this.serverInstanceId}${ID_SEPARATOR}q${this.seq}`;
     } while (this.reservedItemIds.has(itemId));

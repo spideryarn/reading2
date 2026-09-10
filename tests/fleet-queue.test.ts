@@ -771,6 +771,23 @@ describe("releasing", () => {
  * ---------------------------------------------------------------- */
 
 describe("noteGeneration", () => {
+  it("does not let the largest safe retained suffix mint an unsafe id and stall the next enqueue", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const receipts = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: "deadbeef" });
+    seedMessageReceipt(receipts, `${INSTANCE}-q9007199254740991`, 132_280, "retained words");
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts,
+    });
+
+    expect(q.enqueueMessage(TARGET, "new words", "greg")).toMatchObject({
+      ok: true,
+      item: { id: `${INSTANCE}-q1` },
+    });
+  });
+
   it("restores original ids, skips every reserved id, and keeps matching generations", () => {
     const clock = { t: 1_700_000_000_000 };
     const receipts = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: "deadbeef" });

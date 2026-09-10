@@ -276,6 +276,50 @@ describe("the fleet action stores composition", () => {
     expect(existsSync(join(dir, "holds.jsonl"))).toBe(true);
   });
 
+  it("keeps healthy durable receipts when only the hold ledger cannot open", () => {
+    const dir = tempRoot();
+    const seeded = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_000_000,
+      serverInstanceId: "ad0e1f2a",
+      log: () => {},
+    });
+    const accepted = seeded.receipts.accept({
+      requestId: null,
+      fingerprint: null,
+      op: "queued-message",
+      origin: "enqueue",
+      actor: { kind: "client-claimed", id: "greg" },
+      speaker: "greg",
+      target: {
+        sessionId: "$97908",
+        paneId: null,
+        claudeSessionId: "35f36cc5-1504-4340-8977-d0cf7982debb",
+        tmuxGeneration: 980_000,
+      },
+      what: "message (6 characters)",
+      queue: { itemId: "ad0e1f2a-q1", enqueuedAt: 1_700_000_000_000 },
+      material: { kind: "message", text: "pinned", speaker: "greg" },
+    });
+    expect(accepted).toMatchObject({ ok: true, durable: true });
+    resetFleetActionStoresForTests();
+
+    // A directory where the JSONL file belongs makes only the hold ledger
+    // unreadable. The independent receipt file and its material remain valid.
+    mkdirSync(join(dir, "holds.jsonl"));
+    const restarted = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_001_000,
+      serverInstanceId: "be1f2a3b",
+      log: () => {},
+    });
+
+    expect(restarted.ledger).toBeNull();
+    expect(restarted.receipts.durable()).toBe(true);
+    expect(restarted.receipts.restorable()).toHaveLength(1);
+    expect(restarted.receipts.restorable()[0]?.queue.itemId).toBe("ad0e1f2a-q1");
+  });
+
   it("reset is idempotent and gives the composition-owned lock back", () => {
     const dir = tempRoot();
     openFleetActionStores({ dir, log: () => {} });

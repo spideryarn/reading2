@@ -278,10 +278,42 @@ export function openFleetActionStores(options: OpenFleetActionStoresOptions = {}
     onTrouble: (why) => report(`hold ledger: ${why}`),
   });
   if (hold.kind === "refused") {
-    if (ownedStoreLock !== null) releaseLock(ownedStoreLock, lockPath);
-    ownedStoreLock = null;
-    ownedStoreLockPath = null;
-    return memoryActionStores(now, runId, [`hold ledger: ${hold.why}. Holds will not survive a restart.`]);
+    /* The two stores share one writer claim, not one fate. A broken hold file
+       must not hide a healthy receipt file: acknowledged queued work can still
+       be restored safely, with the hold barrier explicitly memory-only. */
+    const receipt = openReceiptJournal(resolved.dir, {
+      lock: claim,
+      now,
+      serverInstanceId: runId,
+      onTrouble: (why) => report(`receipt journal: ${why}`),
+    });
+    if (receipt.kind === "refused") {
+      if (ownedStoreLock !== null) releaseLock(ownedStoreLock, lockPath);
+      ownedStoreLock = null;
+      ownedStoreLockPath = null;
+      return memoryActionStores(now, runId, [
+        `hold ledger: ${hold.why}. Holds will not survive a restart.`,
+        `receipt journal: ${receipt.why}. Action receipts will not survive a restart.`,
+      ]);
+    }
+
+    sharedReceipts = receipt.journal;
+    const { book, rehydrated } = installSharedQuarantineLedger(null, { now, serverInstanceId: runId });
+    const log: string[] = [];
+    const error = [`hold ledger: ${hold.why}. Holds will not survive a restart.`];
+    accountForReceiptJournal(receipt.journal.status(), { log, error });
+    const recovery = receipt.journal.recovery();
+    const startup: FleetActionStores = {
+      book,
+      ledger: null,
+      receipts: receipt.journal,
+      rehydrated,
+      recovery,
+      unknownWithoutHold: installUnknownWithoutHold(receipt.journal, recovery, book),
+      lines: { log, error },
+    };
+    openedStores = startup;
+    return startup;
   }
 
   const receipt = openReceiptJournal(resolved.dir, {

@@ -793,7 +793,7 @@ describe("retention, capacity, ids and write failures", () => {
   it("does not let an unsafe retained suffix stall receipt id minting", () => {
     const dir = directory("unsafe-suffix");
     const old = {
-      schema: 1, kind: "accepted", at: NOW, receiptId: "receipt-run-r9007199254740992", requestId: null,
+      schema: 1, kind: "accepted", at: NOW, receiptId: "receipt-run-r9007199254740991", requestId: null,
       fingerprint: null, op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg", target: TARGET,
       what: "message", serverInstanceId: "receipt-run", queue: { itemId: "receipt-run-q-unsafe", enqueuedAt: NOW },
     };
@@ -888,6 +888,35 @@ describe("retention, capacity, ids and write failures", () => {
     expect(journal.restorable()).toHaveLength(1);
   });
 
+  it("makes a later withdrawal durable after a returned settlement failed open", () => {
+    const dir = directory("withdraw-after-returned-failure");
+    let writes = 0;
+    const journal = openDisk(dir, {
+      writeLine: (fd, line) => {
+        writes += 1;
+        if (writes === 3) throw new Error("disk full for returned only");
+        writeSync(fd, line);
+      },
+    });
+    const result = journal.accept(accepted({
+      queue: { itemId: "receipt-run-q-withdraw-after-return", enqueuedAt: NOW },
+      material: { kind: "message", text: "cancel after a proven-unsent return", speaker: "greg" },
+    }));
+    if (!result.ok) throw new Error("setup acceptance failed");
+    expect(journal.attempted(result.receiptId)).toEqual({ landed: true });
+    expect(journal.returned(result.receiptId, "nothing-sent")).toBe(true);
+    journal.noteGeneration(9_801);
+    expect(journal.durable()).toBe(false);
+    expect(journal.withdrawn([result.receiptId], "cancelled", ACTOR)).toBe(true);
+    expect(journal.durable()).toBe(true);
+    journal.close();
+    releaseLast(dir);
+
+    const reopened = openDisk(dir);
+    expect(reopened.get(result.receiptId)?.last).toMatchObject({ kind: "withdrawn", reason: "cancelled" });
+    expect(reopened.restorable()).toEqual([]);
+  });
+
   it("never writes a volatile receipt into a later mixed withdrawal or compaction", () => {
     const dir = directory("mixed-volatile-withdrawal");
     let failWrites = true;
@@ -902,6 +931,10 @@ describe("retention, capacity, ids and write failures", () => {
     failWrites = false;
     const durable = journal.accept(accepted({ queue: { itemId: "mixed-q-durable", enqueuedAt: NOW } }));
     if (!durable.ok) return;
+
+    // A later successful append must not make the journal claim every live
+    // receipt is durable: the first accepted line still exists only in memory.
+    expect(journal.durable()).toBe(false);
 
     expect(journal.withdrawn([volatile.receiptId, durable.receiptId], "cleared", ACTOR)).toBe(true);
     expect(journal.compact()).toBe(true);

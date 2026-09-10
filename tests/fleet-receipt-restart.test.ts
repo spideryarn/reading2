@@ -285,7 +285,7 @@ function row(
   };
 }
 
-function snapshot(rows: FleetRow[], generation = GENERATION): FleetSnapshot {
+function snapshot(rows: FleetRow[], generation: number | null = GENERATION): FleetSnapshot {
   return {
     rows,
     collectedAt: "2026-09-10T10:01:00.000Z",
@@ -731,9 +731,60 @@ describe("write-ahead cancellation and delivery", () => {
     const third = boot(dir, "e363e363", conversationId);
     expect(third.queue.totalSize()).toBe(0);
   });
+
+  it("refuses an entire clear when an old-page list mixes one restored id with one stale foreign id", async () => {
+    const dir = root();
+    const conversationId = randomUUID();
+    const first = boot(dir, "c151c151", conversationId);
+    first.queue.noteGeneration(GENERATION);
+    const accepted = await enqueue(first, conversationId, "keep this restored item when the old list is mixed");
+    const item = accepted.json.item as { id: string };
+    first.crash();
+
+    const second = boot(dir, "d262d262", conversationId);
+    const cleared = await request(second.routes, "/api/actions/clear", "POST", {
+      sessionId: SESSION_A,
+      itemIds: [item.id, "c151c151-q999"],
+    });
+
+    expect(cleared.status).toBe(409);
+    expect(cleared.json.code).toBe("other-instance");
+    expect(second.queue.snapshot(SESSION_A).items.map((queued) => queued.id)).toEqual([item.id]);
+    expect(receiptForItem(second.receipts, item.id)?.last.kind).toBe("accepted");
+  });
 });
 
 describe("restoration guards and pinned payloads", () => {
+  it("waits through a null-generation drain pass before judging a restored item against the first real generation", async () => {
+    const dir = root();
+    const conversationId = randomUUID();
+    const keys: Key[] = [];
+    const first = boot(dir, "e091e091", conversationId);
+    first.queue.noteGeneration(GENERATION);
+    const accepted = await enqueue(first, conversationId, "wait for a real tmux generation");
+    const item = accepted.json.item as { id: string };
+    first.crash();
+
+    const second = boot(dir, "f190f190", conversationId, {
+      transport: (target, text) => {
+        keys.push({ kind: "text", text }, { kind: "enter" });
+        return {
+          ok: true,
+          verified: { paneId: target.paneId, sessionId: target.sessionId, panePid: PANE_PID, claudePid: PANE_PID + 1 },
+          sent: [["send-keys", "-t", target.paneId, "-l", "--", text], ["send-keys", "-t", target.paneId, "Enter"]],
+        };
+      },
+    });
+    const unknown = second.routes.drain(snapshot([row(SESSION_A, PANE_A, conversationId)], null));
+    expect(unknown.outcomes).toMatchObject([{ kind: "held", reason: "no-generation" }]);
+    expect(second.queue.snapshot(SESSION_A).items.map((queued) => queued.id)).toEqual([item.id]);
+    expect(keys).toEqual([]);
+
+    const proven = second.routes.drain(snapshot([row(SESSION_A, PANE_A, conversationId)]));
+    expect(proven.outcomes).toMatchObject([{ kind: "delivered", itemId: item.id }]);
+    expect(keys.map((key) => key.kind)).toEqual(["text", "enter"]);
+  });
+
   it("concludes a restored item when the tmux generation changed", async () => {
     const dir = root();
     const conversationId = randomUUID();

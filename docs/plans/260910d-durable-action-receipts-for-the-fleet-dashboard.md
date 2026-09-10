@@ -346,8 +346,15 @@ Two Codex runs, committed separately.
   (2) the composition lives in `quarantine.ts` with `action-stores.ts` re-exporting it, to avoid a
   cycle with the legacy `openSharedQuarantine()` — which Stage 1b can delete once `server.ts` and
   the guard move, and the composition can then move where the plan put it.
-- [x] **1b** *(built 2026-09-10 10:56 by GPT Sol from [the 1b brief](260910d-durable-action-receipts-stage1b-task.md);
-  gates re-run here; Sol stage review — which is also 1a's second round — next.)* The queue takes the journal as a required option and writes its own receipts at every
+- [x] **1b** *(built 2026-09-10 10:56 by GPT Sol from [the 1b brief](260910d-durable-action-receipts-stage1b-task.md).
+  [Stage review](260910d-durable-action-receipts-stage1b-review-sol.md), which was also 1a's second
+  round: it hit its 30-minute budget cap in its final hygiene check, after a green gate, so its answer
+  is **reconstructed from its activity log** and says so. Four fixes kept — F32 (P1: a broken hold
+  file no longer takes a healthy receipt journal down with it), F33 (P1: an unlanded `returned` is
+  caught up on disk before the next attempt or withdrawal), F34, F35 — and one out-of-stage finding,
+  F36, carried to Stage 3. A mutation run of 22 mutations over 1a and 1b killed 17; of the five
+  survivors one is equivalent and four were real holes, each now killed by
+  `tests/fleet-receipt-guards.test.ts`.)* The queue takes the journal as a required option and writes its own receipts at every
   item transition — enqueue, cancel and clear write-ahead; `beginDelivery` (the drain's `attempted`,
   fail-closed); settle, `release` (`returned`), `quarantineLeased`, the drain's throw, abandon — so no
   enqueue path, HTTP or broadcast, can skip it. Restore under original ids; the generation guard;
@@ -382,6 +389,9 @@ twice; a different body is refused before any effect.
   comes back unknown **with the steps known to have completed**.
 - [ ] `/api/broadcast`: one parent receipt carrying the `requestId`, and a child receipt per
   recipient (a direct send, or the queued item's own receipt).
+- [ ] **Stage 1b review F36**: `enqueueSharedMessage` drops the queue's `durable` bit, so the
+  broadcast answers *queued* for a recipient whose queued receipt is not durable. Carry it through
+  to the recipient's outcome and the response.
 - [ ] Crash tests including a duplicate HTTP request after a restart for a kill and a worktree
   removal, on fake `ActionIo`.
 

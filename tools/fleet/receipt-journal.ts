@@ -403,6 +403,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const durableAccepted = new Set<string>();
   /** Receipts deliberately kept only for this run after an unkeyed write failure. */
   const volatileReceipts = new Set<string>();
+  /** Durable attempts whose fail-open `returned` exists only in this fold. */
+  const unlandedReturns = new Set<string>();
   /** Non-terminal evidence which recovery must never offer back to the queue. */
   const recoverySuppressed = new Set<string>();
   const materialMemory = new Map<string, ReceiptMaterial>();
@@ -524,6 +526,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     if (!apply(record)) return { accepted: false, landed };
     if (landed && !forceMemory) domainFailure = null;
     if (record.kind === "accepted" && landed) durableAccepted.add(record.receiptId);
+    if (record.kind === "returned" && durableAccepted.has(record.receiptId)) {
+      if (landed) unlandedReturns.delete(record.receiptId);
+      else unlandedReturns.add(record.receiptId);
+    }
     if (record.kind === "outcome") deleteMaterialFor(record.receiptId);
     if (record.kind === "withdrawn") for (const id of record.receiptIds) deleteMaterialFor(id);
     if (!recovering) maybeCompact();
@@ -618,6 +624,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
     }
     if (core !== null && !core.replace(physicalReplacement)) return memoryFallback();
+    if (core !== null) unlandedReturns.clear();
     rebuild(kept, replacement);
     for (const id of [...volatileReceipts]) if (!kept.has(id)) volatileReceipts.delete(id);
     if (core !== null) {
@@ -791,7 +798,11 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       if (api.nonTerminal().length >= (options.nonTerminalCap ?? NON_TERMINAL_CAP)) return { ok: false, why: "the receipt journal already has 1,000 non-terminal receipts" };
       if ((input.requestId === null) !== (input.fingerprint === null)) return { ok: false, why: "requestId and fingerprint must either both be present or both be null" };
       let receiptId: string;
-      do { receiptSequence += 1; receiptId = `${options.serverInstanceId}-r${receiptSequence}`; } while (reservedReceipts.has(receiptId));
+      do {
+        if (receiptSequence >= Number.MAX_SAFE_INTEGER) receiptSequence = 0;
+        receiptSequence += 1;
+        receiptId = `${options.serverInstanceId}-r${receiptSequence}`;
+      } while (reservedReceipts.has(receiptId));
       reservedReceipts.add(receiptId);
       let materialVolatile = false;
       if (input.material !== undefined && !api.putMaterial(receiptId, input.material)) {
@@ -833,6 +844,13 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
     },
     attempted(receiptId) {
+      /* A failed `returned` is safe by itself: disk still says attempted, so a
+         restart will not retry it. Before another attempt, however, the disk
+         fold must catch up. Otherwise the new attempted line is illegal on
+         restart, and a later successful cancel cannot remain withdrawn. */
+      if (unlandedReturns.has(receiptId)) {
+        if (!api.compact() || unlandedReturns.has(receiptId)) return { landed: false };
+      }
       const result = append(
         { schema: 1, kind: "attempted", at: options.now(), receiptId },
         { failOpen: !durableAccepted.has(receiptId) },
@@ -853,6 +871,12 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       const durableIds = receiptIds.filter((id) => !volatileReceipts.has(id));
       const volatileIds = receiptIds.filter((id) => volatileReceipts.has(id));
       if (durableIds.length > 0) {
+        /* Same repair as `attempted`: withdrawal is write-ahead, so it may not
+           claim success on top of an on-disk attempted line when memory alone
+           contains the proven-unsent return. */
+        if (durableIds.some((id) => unlandedReturns.has(id))) {
+          if (!api.compact() || durableIds.some((id) => unlandedReturns.has(id))) return false;
+        }
         const durable = append({ schema: 1, kind: "withdrawn", at, receiptIds: durableIds, reason, actor: by });
         if (!durable.accepted) return false;
       }
@@ -895,7 +919,12 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     },
     unknownKeystrokeReceipts: () => [...states.values()].filter(isUnknown).map(view),
     durable: () => physicalWritable() && core!.status().failure === null
-      && domainFailure === null && recoveryFailure === null,
+      && domainFailure === null && recoveryFailure === null
+      && unlandedReturns.size === 0
+      && ![...volatileReceipts].some((id) => {
+        const state = states.get(id);
+        return state !== undefined && isNonTerminal(state);
+      }),
     acceptedDurably: (receiptId) => durableAccepted.has(receiptId),
     reservedQueueItemIds: () => [...reservedQueue],
     compact,
@@ -978,6 +1007,6 @@ function currentRunReceiptSuffix(receiptId: string, serverInstanceId: string): n
   const match = new RegExp(`^${escapeRegExp(serverInstanceId)}-r([0-9]+)$`).exec(receiptId);
   if (match?.[1] === undefined) return null;
   const suffix = Number(match[1]);
-  return Number.isSafeInteger(suffix) && suffix >= 0 ? suffix : null;
+  return Number.isSafeInteger(suffix) && suffix >= 0 && suffix < Number.MAX_SAFE_INTEGER ? suffix : null;
 }
 function errorText(err: unknown): string { return err instanceof Error ? err.message : String(err); }
