@@ -33,6 +33,13 @@ journal, projected into the planner. Its material is pinned. Its run spec is aut
    - `observedOf(record, artefacts)` returns the Stage A `ObservedLaunch`, with `tmuxSession` = the
      current attempt's correlation id (M6) and `answer` carrying sha256 from `exit.json`.
    - The launch journal's history standing, for the planner (F2).
+2b. **Fable's P2 and P3 on F1 (in the plan's dispositions) are binding here.**
+   - **P2:** the `resume` verdict is decided **before `due()`**. Only the pin, dry-run, spacing and
+     usage gates apply to it, not the clock.
+   - **P3:** one comparator (`reservedAt`, then index order) is used by `lastRunOf`,
+     `newestAttemptOf` and the resume candidate. `launchOccurrencesOf` preserves fold order.
+   - A superseded sibling is `abandon`ed before the new revision is planned, and a refused `abandon`
+     plans nothing.
 3. **`tools/overseer/schedule-plan.ts`**
    - `PlanInput.history` per kind (F2).
    - The `resume` verdict (F1).

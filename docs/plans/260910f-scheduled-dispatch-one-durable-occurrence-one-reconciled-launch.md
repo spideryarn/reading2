@@ -324,6 +324,48 @@ F1 is also my own finding M1, made independently while the review was running.
     3. capacity clears, and B is invoked once;
     4. a rollback to A at the same due instant plans nothing, and later ticks invoke nothing more
        until the next due instant.
+- **F1: Fable's arbitration, 2026-09-10. "Closed with named changes"; all accepted except one
+  recommendation.**
+  - **P1: a superseded record must be terminal to the protocol, not only to my selector.**
+    - A `failed-before-launch` with no attempts is `retryable()` today (launch-protocol.ts:416-423),
+      so an abandoned record could be launched again.
+    - Asked of `launch-protocol`:
+      - `retryable()` excludes `proof === "superseded"`;
+      - an explicit `superseded` arm in `nextRecord`;
+      - a test that after `abandon`, both `launchOccurrence(sameRequest)` and `resumeOccurrence(id)`
+        answer `not-launchable`.
+    - The rollback guarantee then lives in the journal.
+    - (The earlier bullet's "terminal, so `plan()` answers `not-launchable`" was wrong about the
+      mechanism: `plan()` returns the record, and `drive()` is what refuses.)
+  - **P2: resume comes before the clock.**
+    - A `resume` verdict is decided **before `due()`**. Its `dueAt` was fixed when it was planned,
+      and asking `due()` again would read the superseded sibling's `endedAt` and delay the
+      replacement by an interval.
+    - The pin, dry-run, spacing and usage gates still apply to a resume. The clock does not.
+  - **P3: one comparator for every "newest".**
+    - It is `reservedAt` (for a launch occurrence, its `plannedAt`), then **index order**. Index
+      order is the fold's insertion order, which is the order of the `planned` lines, because a
+      `Map.set` on an existing key keeps its position.
+    - `lastRunOf`, `newestAttemptOf` and the resume candidate all use it.
+    - `launchOccurrencesOf` and the index merge preserve fold order. The merge puts `events.jsonl`
+      occurrences (rules) first, and those never share a job with launch occurrences.
+  - **P4: named.**
+    - A crash between `abandon` and the new `plan()`, or a refused `plan()`, leaves the job settled
+      at the abandonment. The next due instant is one interval later, and one interval is lost.
+    - A refused `abandon` plans nothing.
+    - A crash after `plan()` and before `drive()` is resumed on the next tick, which is fine.
+  - **P5: the rollback cost, stated correctly.**
+    - It is one interval **from the rollback's own abandonment** (the replacement's `endedAt`).
+    - Counting a superseded `failed-before-launch` as settled is load-bearing. If `lastRunOf`
+      skipped it, a first-run rollback would recompute `arming.at + initialDelayMs`, which is A's
+      own id, for ever.
+  - **Not taken: "hash the built material and drop `resumeOccurrence`".**
+    - Fable's alternative is one protocol addition instead of two. But it puts the framing code
+      inside every job's pin, so a mechanical change to the wrapper would need Greg to
+      re-authorise every job.
+    - `resumeOccurrence` only exposes `drive()`, which already takes an id, and it is already
+      agreed.
+    - Fable's point that `abandon` cannot be dropped stands either way.
 - **F2 (P1): history authority is per ledger. Accepted.**
   - `PlanInput.history` becomes a history per kind: rules read `events.jsonl`'s `OccurrenceHistory`,
     and session jobs read the launch journal's `JournalStatus`.
