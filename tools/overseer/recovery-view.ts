@@ -20,11 +20,11 @@
  * directory is a missing directory: it never resolves a record, and
  * `worktree:check` is not called.
  */
-import { stat as fsStat } from "node:fs/promises";
+import { opendir, stat as fsStat } from "node:fs/promises";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 
-import { findTranscript, type NotFoundReason } from "../fleet/transcript.js";
+import { isClaudeSessionId, slugifyDir, type NotFoundReason } from "../fleet/transcript.js";
 import { statusKey } from "./diff.js";
 import type { ObservedRow } from "./observation.js";
 import {
@@ -66,8 +66,8 @@ export type LiveRowFacts = {
 /** The classification, first match wins — the plan's § 4 list, in its order. */
 export type RecoveryClass =
   | { kind: "unknown"; why: string }
-  /** `sameRun` false is a resumption, and the daemon appends `resumed` for it; true is a run that was never gone. */
-  | { kind: "already-live"; why: string; sameRun: boolean; row: LiveRowFacts }
+  /** `sameRun` false is a resumption, true is a run that was never gone, and null means the candidate recorded no token to compare. */
+  | { kind: "already-live"; why: string; sameRun: boolean | null; row: LiveRowFacts }
   | { kind: "present-but-unmatched"; why: string; row: LiveRowFacts }
   | { kind: "ended-before-reboot"; why: string; statusKey: string; observedAt: string }
   | { kind: "interrupted"; why: string };
@@ -95,6 +95,7 @@ export type TranscriptEvidence =
   /** Found under the CLAIM, which outlives its conversation: shown, never trusted, never a resume. */
   | { kind: "found-under-claim"; claimedConversationId: string; path: string; mtime: string | null; why: string }
   | { kind: "not-found"; under: "verified" | "claim"; conversationId: string; reason: NotFoundReason; why: string }
+  | { kind: "cannot-tell"; under: "verified" | "claim"; conversationId: string; why: string }
   | { kind: "no-conversation"; why: string };
 
 export type ResumeEvidence =
@@ -144,8 +145,10 @@ export type RecoveryView = {
 };
 
 export const RECOVERY_PAGE_SIZE = 100;
+/** A hostile or accidental projects tree cannot turn one view pass into an unbounded directory walk. */
+export const RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT = 100;
 
-export type StatLike = { isDirectory(): boolean; mtimeMs: number };
+export type StatLike = { isDirectory(): boolean; isFile(): boolean; mtimeMs: number };
 
 /** Injected so tests need no fake home: the projects directory, the stat, and the host name. */
 export type EvidenceDeps = {
@@ -203,17 +206,28 @@ export function classifyRecord(record: RecoveryRecord, inventory: InventoryTrust
 
   const conversation = verifiedConversationOf(record.lastSeen);
   if (conversation !== null) {
+    const matching: { row: ObservedRow; token: string }[] = [];
     for (const row of inventory.rows) {
       const live = liveExecutionOf(row);
       if (live === null || live.conversationId !== conversation) continue;
-      const sameRun = live.token === record.lastSeen?.executionToken;
+      matching.push({ row, token: live.token });
+    }
+    if (matching.length > 0) {
+      const previousToken = record.lastSeen?.executionToken ?? null;
+      const same = previousToken === null ? undefined : matching.find((item) => item.token === previousToken);
+      const chosen = same ?? matching[0];
+      if (chosen === undefined) throw new Error("a non-empty live match set had no first row");
+      const sameRun = previousToken === null ? null : same !== undefined;
       return {
         kind: "already-live",
         sameRun,
-        row: factsOf(row),
-        why: sameRun
-          ? "the same conversation is live under the same run: it was never gone"
-          : "the same conversation is live under a different run: it was resumed",
+        row: factsOf(chosen.row),
+        why:
+          sameRun === null
+            ? "the same conversation is live, but the candidate recorded no execution token, so its run cannot be compared"
+            : sameRun
+              ? "the same conversation is live under the same run: it was never gone"
+              : "the same conversation is live under a different run: it was resumed",
       };
     }
   }
@@ -310,17 +324,99 @@ async function mtimeOf(path: string, deps: EvidenceDeps): Promise<string | null>
   }
 }
 
-async function transcriptEvidence(record: FullRecord, entry: RegisterEntry, dir: string | null, deps: EvidenceDeps): Promise<TranscriptEvidence> {
+type LocatedTranscript =
+  | { kind: "found"; path: string; via: "slug-guess" | "scan" }
+  | { kind: "not-found"; reason: NotFoundReason; why: string }
+  | { kind: "cannot-tell"; why: string };
+
+/** One bounded project-directory listing, shared by every record in a view pass. */
+function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: string | null) => Promise<LocatedTranscript> {
+  let projects:
+    | Promise<{ kind: "listed"; names: string[]; complete: boolean } | { kind: "unavailable"; why: string }>
+    | null = null;
+  const listProjects = (): Promise<{ kind: "listed"; names: string[]; complete: boolean } | { kind: "unavailable"; why: string }> => {
+    projects ??= (async () => {
+      const names: string[] = [];
+      try {
+        const directory = await opendir(deps.projectsDir);
+        let complete = true;
+        for await (const item of directory) {
+          if (names.length >= RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT) {
+            complete = false;
+            break;
+          }
+          names.push(item.name);
+        }
+        return { kind: "listed" as const, names, complete };
+      } catch (cause) {
+        return { kind: "unavailable" as const, why: `could not list ${deps.projectsDir}: ${errText(cause)}` };
+      }
+    })();
+    return projects;
+  };
+  const fileInfo = async (path: string): Promise<{ mtimeMs: number } | null> => {
+    try {
+      const info = await deps.stat(path);
+      return info.isFile() ? { mtimeMs: info.mtimeMs } : null;
+    } catch {
+      return null;
+    }
+  };
+  return async (conversationId, dir) => {
+    if (!isClaudeSessionId(conversationId)) {
+      return {
+        kind: "not-found",
+        reason: "malformed-claude-session-id",
+        why: "the session's conversation id is not a uuid, so there is no transcript path to look at",
+      };
+    }
+    const filename = `${conversationId}.jsonl`;
+    if (dir !== null && dir !== "") {
+      const guess = join(deps.projectsDir, slugifyDir(dir), filename);
+      if ((await fileInfo(guess)) !== null) return { kind: "found", path: guess, via: "slug-guess" };
+    }
+    const listed = await listProjects();
+    if (listed.kind === "unavailable") return { kind: "not-found", reason: "no-projects-directory", why: listed.why };
+    let best: { path: string; mtimeMs: number } | null = null;
+    for (const name of listed.names) {
+      const path = join(deps.projectsDir, name, filename);
+      const info = await fileInfo(path);
+      if (info !== null && (best === null || info.mtimeMs > best.mtimeMs)) best = { path, mtimeMs: info.mtimeMs };
+    }
+    if (!listed.complete) {
+      return {
+        kind: "cannot-tell",
+        why: `the transcript search stopped after ${RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT} project directories, so it cannot say whether this conversation has a newer or omitted transcript`,
+      };
+    }
+    if (best !== null) return { kind: "found", path: best.path, via: "scan" };
+    return {
+      kind: "not-found",
+      reason: "no-transcript-file",
+      why: `no transcript for this conversation in ${deps.projectsDir} (looked in all ${listed.names.length} project directories)`,
+    };
+  };
+}
+
+async function transcriptEvidence(
+  record: FullRecord,
+  entry: RegisterEntry,
+  dir: string | null,
+  deps: EvidenceDeps,
+  locate: (conversationId: string, dir: string | null) => Promise<LocatedTranscript>,
+): Promise<TranscriptEvidence> {
   const verified = verifiedConversationOf(record.lastSeen);
   if (verified !== null) {
-    const found = await findTranscript(deps.projectsDir, verified, dir);
+    const found = await locate(verified, dir);
     if (found.kind === "not-found") return { kind: "not-found", under: "verified", conversationId: verified, reason: found.reason, why: found.why };
+    if (found.kind === "cannot-tell") return { kind: "cannot-tell", under: "verified", conversationId: verified, why: found.why };
     return { kind: "found", conversationId: verified, path: found.path, via: found.via, mtime: await mtimeOf(found.path, deps) };
   }
   const claim = entry.claimedConversationId;
   if (claim === null) return { kind: "no-conversation", why: "the session carried neither a verified conversation nor a claim" };
-  const found = await findTranscript(deps.projectsDir, claim, dir);
+  const found = await locate(claim, dir);
   if (found.kind === "not-found") return { kind: "not-found", under: "claim", conversationId: claim, reason: found.reason, why: found.why };
+  if (found.kind === "cannot-tell") return { kind: "cannot-tell", under: "claim", conversationId: claim, why: found.why };
   return {
     kind: "found-under-claim",
     claimedConversationId: claim,
@@ -366,16 +462,23 @@ function resumeEvidence(record: FullRecord, entry: RegisterEntry, dir: string | 
   if (transcript.kind === "not-found" && transcript.under === "verified") {
     return { kind: "not-supported", why: `the transcript of its verified conversation was not found: ${transcript.why}` };
   }
+  if (transcript.kind === "cannot-tell" && transcript.under === "verified") {
+    return { kind: "not-supported", why: `the transcript of its verified conversation could not be checked safely: ${transcript.why}` };
+  }
   return { kind: "not-supported", why: "there is no verified conversation to resume (a claim alone does not count)" };
 }
 
 /** The facts for one record. Async: a stat of the directory, and a transcript lookup with one stat of what it found. */
-export async function recoveryEvidence(record: RecoveryRecord, deps: EvidenceDeps): Promise<RecoveryEvidence> {
+export async function recoveryEvidence(
+  record: RecoveryRecord,
+  deps: EvidenceDeps,
+  locate = transcriptLookup(deps),
+): Promise<RecoveryEvidence> {
   if (record.oversize) return { kind: "unavailable", why: "the record was too large for the index; the full candidate is in events.jsonl" };
   const entry = record.entry;
   if (entry === null) return { kind: "unavailable", why: "no register entry survives for this session" };
   const dir = dirOf(entry.meta);
-  const transcript = await transcriptEvidence(record, entry, dir, deps);
+  const transcript = await transcriptEvidence(record, entry, dir, deps, locate);
   const floor = entry.lastSeenAlive;
   const lastActivity =
     transcript.kind === "found" && transcript.mtime !== null && Date.parse(transcript.mtime) > Date.parse(floor)
@@ -422,6 +525,7 @@ export async function buildRecoveryView(
   const records = [...index.records.values()].sort(recoveryOrder);
   const first = records.slice(0, RECOVERY_PAGE_SIZE);
   const page: RecoveryViewItem[] = [];
+  const locate = transcriptLookup(deps);
   for (const record of first) {
     const unresolved = record.resolution.disposition === "unresolved";
     page.push({
@@ -431,7 +535,7 @@ export async function buildRecoveryView(
       at: record.at,
       resolution: record.resolution,
       classification: unresolved ? classifyRecord(record, inventory) : null,
-      evidence: unresolved ? await recoveryEvidence(record, deps) : null,
+      evidence: unresolved ? await recoveryEvidence(record, deps, locate) : null,
     });
   }
   return {

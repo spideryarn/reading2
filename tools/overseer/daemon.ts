@@ -838,11 +838,23 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // state as it is then. Awaited on the way out, like the other passes.
   let viewRunning: Promise<void> | null = null;
   let viewWanted = false;
+  // A pass snapshots both the inventory and recovery records before its first
+  // filesystem await. If either changes while it is running, publishing that
+  // completed pass would put older evidence back on disk until the queued pass
+  // caught up. The revision makes an obsolete pass disposable.
+  let viewRevision = 0;
   let lastViewAtMs = Number.NEGATIVE_INFINITY;
   const startView = (): void => {
     viewWanted = false;
-    viewRunning = buildRecoveryView(store.recovery, inventory, { ...evidence, now })
+    const revision = viewRevision;
+    const recovery = store.recovery;
+    const viewInventory: InventoryTrust =
+      recovery.replay.kind === "not-run"
+        ? { kind: "untrusted", why: `the recovery index is incomplete: ${recovery.replay.why}` }
+        : inventory;
+    viewRunning = buildRecoveryView(recovery, viewInventory, { ...evidence, now })
       .then((view) => {
+        if (revision !== viewRevision) return;
         lastViewAtMs = now().getTime();
         if (halted() !== null) return;
         // Written when it changed — `setRecoveryView` decides — through the same
@@ -858,7 +870,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         if (viewWanted && halted() === null) startView();
       });
   };
-  const requestView = (): void => {
+  const requestView = (invalidateRunning = true): void => {
+    if (invalidateRunning) viewRevision += 1;
     viewWanted = true;
     if (viewRunning === null) startView();
   };
@@ -880,17 +893,41 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     requestView();
     return true;
   };
-  const recoveryTick = (): void => {
-    const drained = drainRecoveryInbox({ root, index: () => store.recovery, append: (events) => guard(store.append(events)), now, log });
+  let recoveryRunning: Promise<void> | null = null;
+  const runRecoveryTick = async (): Promise<void> => {
+    // A refused all-or-nothing replay leaves the fold deliberately stale. It
+    // cannot authorize a dismissal, suppress a replayed request id, or prove a
+    // derived disposition until a later start reads the missing tail. Leave
+    // requests exactly where they are and publish only an unknown view.
+    if (store.recovery.replay.kind === "not-run") {
+      if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+      return;
+    }
+    const drained = await drainRecoveryInbox({ root, index: () => store.recovery, append: (events) => guard(store.append(events)), now, log });
     if (drained.halted || halted() !== null) return;
     if (drained.applied > 0) requestView();
     if (!appendDerived()) return;
-    if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView();
+    // A clock refresh asks for another pass but does not make the facts in the
+    // one already running obsolete. Invalidating every minute could starve a
+    // slow evidence pass indefinitely.
+    if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+  };
+  const recoveryTick = (): void => {
+    if (recoveryRunning !== null) return;
+    recoveryRunning = runRecoveryTick()
+      .catch((cause: unknown) => {
+        log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        recoveryRunning = null;
+      });
   };
   // AT START, before the source: a request left while the daemon was down is
   // applied now, and the first view is drawn — against no inventory, so every
   // record is `unknown` until a collection is accepted, which says so.
-  recoveryTick();
+  await runRecoveryTick().catch((cause: unknown) => {
+    log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+  });
 
   const ticker = setInterval(() => {
     if (halted() !== null) return;
@@ -1175,7 +1212,10 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     }
     // THE VIEW PASS, in a loop: one that finishes with a request pending starts
     // the next, and that one writes through the store too.
-    while (viewRunning !== null) await viewRunning;
+    while (viewRunning !== null || recoveryRunning !== null) {
+      if (recoveryRunning !== null) await recoveryRunning;
+      if (viewRunning !== null) await viewRunning;
+    }
     await settleRuleRuns();
   }
 

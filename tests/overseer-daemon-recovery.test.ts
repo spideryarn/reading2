@@ -11,7 +11,19 @@
  * after a reboot looks like before tmux is back. The run ids, boot ids and the
  * second tmux generation are minted for this file.
  */
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -20,7 +32,7 @@ import { main as recoveryCli } from "../scripts/overseer-recovery.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { BASELINE_FILE, runOverseer, type DaemonOptions } from "../tools/overseer/daemon.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
-import { RECOVERY_INBOX_DIR } from "../tools/overseer/recovery-inbox.js";
+import { drainRecoveryInbox, RECOVERY_INBOX_DIR } from "../tools/overseer/recovery-inbox.js";
 import type { RecoveryView } from "../tools/overseer/recovery-view.js";
 import type { RecoveryCandidateEvent, RecoveryDispositionEvent, RecoveryRecord } from "../tools/overseer/recovery.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
@@ -64,6 +76,18 @@ function fakeClock(startIso: string): { now: () => Date } {
   return { now: () => new Date(ms) };
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function nextTurn(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 function payload(json: JsonValue, via: "sse" | "poll" = "sse"): SourceMessage {
   return { kind: "payload", via, atMs: 0, json };
 }
@@ -87,7 +111,7 @@ function evidenceWorld(dirs: readonly string[] = []): NonNullable<DaemonOptions[
     projectsDir: tempRoot(),
     hostname: () => "ri-daemon-host",
     stat: async (path: string) => {
-      if (dirs.includes(path)) return { isDirectory: () => true, mtimeMs: Date.parse("2026-09-08T02:00:00.000Z") };
+      if (dirs.includes(path)) return { isDirectory: () => true, isFile: () => false, mtimeMs: Date.parse("2026-09-08T02:00:00.000Z") };
       const error = new Error(`ENOENT: no such file or directory, stat '${path}'`) as NodeJS.ErrnoException;
       error.code = "ENOENT";
       throw error;
@@ -675,6 +699,77 @@ describe("the inventory-trust rule: a refused, failed or held collection after t
     expect(view.inventory.kind).toBe("untrusted");
     expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("unknown"));
   });
+
+  test("a failed collection cannot be overwritten by an older trusted view pass that finishes afterwards", async () => {
+    const root = tempRoot();
+    const before = editableFixture("session-new-before");
+    const [first] = rowsOf(before);
+    if (first === undefined) throw new Error("the fixture has a row");
+    await run(root, async function* () {
+      yield payload(
+        stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { rows: [first] }),
+      );
+      yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+    });
+    expect(index(root)).toHaveLength(1);
+
+    const startupStat = deferred();
+    const trustedStat = deferred();
+    const releaseTrusted = deferred();
+    const finalStat = deferred();
+    const releaseFinal = deferred();
+    let statCalls = 0;
+    const observed: { whileFinalPassBlocked: RecoveryView | null } = { whileFinalPassBlocked: null };
+    const projectsDir = tempRoot();
+    const source = async function* (): AsyncGenerator<SourceMessage> {
+      await startupStat.promise;
+      // Let the startup pass publish its deliberately untrusted view before
+      // the accepted collection asks for the next one.
+      await nextTurn();
+      await nextTurn();
+      yield payload(rebootedEmptyG2(RUN_B, 2, LATER_STILL));
+      await trustedStat.promise;
+      yield { kind: "poll-failed", atMs: 0, why: "collector failed while evidence was being checked" };
+      releaseTrusted.resolve();
+      await finalStat.promise;
+      // The final, untrusted pass is blocked. Whatever is on disk now is what
+      // the completed older pass tried to publish after trust was withdrawn.
+      observed.whileFinalPassBlocked = viewIn(root);
+      releaseFinal.resolve();
+    };
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: fakeClock("2026-09-08T02:48:40.000Z").now,
+      tickMs: 60_000,
+      log: () => {},
+      source: () => source(),
+      bootId: () => BOOT_ONE,
+      recovery: {
+        projectsDir,
+        hostname: () => "ri-daemon-host",
+        stat: async () => {
+          statCalls += 1;
+          if (statCalls === 2) startupStat.resolve();
+          if (statCalls === 3) {
+            trustedStat.resolve();
+            await releaseTrusted.promise;
+          }
+          if (statCalls === 5) {
+            finalStat.resolve();
+            await releaseFinal.promise;
+          }
+          const error = new Error("ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          throw error;
+        },
+      },
+    });
+    expect(outcome.kind).toBe("stopped");
+    expect(observed.whileFinalPassBlocked?.inventory.kind).toBe("untrusted");
+    expect(observed.whileFinalPassBlocked?.page[0]?.classification?.kind).toBe("unknown");
+  });
 });
 
 describe("already-live", () => {
@@ -750,6 +845,21 @@ describe("dismissal through the inbox", () => {
     expect(refusals(root)).toEqual([]);
   });
 
+  test("a request with a malformed audit timestamp is refused rather than normalized into a valid dismissal", async () => {
+    const { root, ids } = await rebootedStore();
+    await recoveryCli(["dismiss", ids[0] as string, "--why", "bad timestamp fixture"], { root, out: () => {} });
+    const [file] = pending(root);
+    if (file === undefined) throw new Error("the CLI wrote no request");
+    const path = join(root, RECOVERY_INBOX_DIR, file);
+    const request = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    request["requestedAt"] = "2026-09-10";
+    writeFileSync(path, `${JSON.stringify(request)}\n`);
+
+    await run(root, async function* () {});
+    expect(dispositions(eventsIn(root))).toEqual([]);
+    expect(refusals(root)[0]?.why).toContain("requestedAt");
+  });
+
   test("a duplicate request, a request for a resolved id and one for an unknown id are each refused with a reason, and none applied", async () => {
     const { root, ids } = await rebootedStore();
     const target = ids[0] as string;
@@ -772,6 +882,97 @@ describe("dismissal through the inbox", () => {
     expect(whys.some((why) => why.includes("already resolved"))).toBe(true);
     expect(whys.some((why) => why.includes("not in the recovery index"))).toBe(true);
     expect(pending(root)).toEqual([]);
+  });
+
+  test("an unread recovery tail leaves a crash-replayed dismissal pending instead of applying it twice", async () => {
+    const { root, ids } = await rebootedStore();
+    const target = ids[0] as string;
+    await recoveryCli(["dismiss", target, "--why", "checked before the crash"], { root, out: () => {} });
+    const [file] = pending(root);
+    if (file === undefined) throw new Error("the CLI wrote no request");
+    const request = JSON.parse(readFileSync(join(root, RECOVERY_INBOX_DIR, file), "utf8")) as { requestId: string; why: string };
+
+    // The daemon fsynced the disposition, then died before recovery.json caught
+    // up or the request file was removed. A later bad complete line makes the
+    // recovery-tail replay all-or-nothing refusal keep the stale unresolved
+    // fold, which must not be treated as authority for a second append.
+    const opened = openStore({ root });
+    if (!opened.ok) throw new Error("the store did not open");
+    opened.store.append([
+      {
+        kind: "recovery-disposition",
+        at: LATEST,
+        id: target as RecoveryDispositionEvent["id"],
+        disposition: "dismissed",
+        evidence: { requestId: request.requestId, why: request.why },
+      },
+    ]);
+    opened.store.close();
+    appendFileSync(join(root, EVENTS_FILE), "{not an event}\n");
+
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: fakeClock("2026-09-08T02:48:40.000Z").now,
+      tickMs: 5,
+      log: () => {},
+      source: () => (async function* () {})(),
+      bootId: () => BOOT_ONE,
+      recovery: evidenceWorld(),
+    });
+    expect(outcome.kind).toBe("stopped");
+    const validEvents = readFileSync(join(root, EVENTS_FILE), "utf8").split("\n").flatMap((line) => {
+      try {
+        return line === "" ? [] : [JSON.parse(line) as OverseerEvent];
+      } catch {
+        return [];
+      }
+    });
+    expect(dispositions(validEvents)).toHaveLength(1);
+    expect(pending(root)).toEqual([file]);
+  });
+
+  test("the bounded async drain leaves unexamined work pending, and a path swapped to a symlink after claim is never followed", async () => {
+    const { root, ids } = await rebootedStore();
+    const target = ids[0] as string;
+    await recoveryCli(["dismiss", target, "--why", "bounded scan"], { root, out: () => {} });
+    const opened = openStore({ root });
+    if (!opened.ok) throw new Error("the store did not open");
+    const append = (events: OverseerEvent[]): boolean => opened.store.append(events).ok;
+
+    const skipped = await drainRecoveryInbox({
+      root,
+      index: () => opened.store.recovery,
+      append,
+      now: () => new Date(LATEST),
+      log: () => {},
+      scanLimit: 0,
+    });
+    expect(skipped).toEqual({ applied: 0, refused: 0, halted: false });
+    expect(pending(root)).toHaveLength(1);
+
+    const [file] = pending(root);
+    if (file === undefined) throw new Error("the request disappeared");
+    const original = join(root, RECOVERY_INBOX_DIR, file);
+    const replacement = join(root, "valid-request-target.json");
+    writeFileSync(replacement, readFileSync(original));
+    const lines: string[] = [];
+    const swapped = await drainRecoveryInbox({
+      root,
+      index: () => opened.store.recovery,
+      append,
+      now: () => new Date(LATEST),
+      log: (line) => lines.push(line),
+      afterClaim: (claimed) => {
+        unlinkSync(claimed);
+        symlinkSync(replacement, claimed);
+      },
+    });
+    expect(swapped.applied).toBe(0);
+    expect(dispositions(eventsIn(root))).toEqual([]);
+    expect(lines.some((line) => line.includes("could not be read"))).toBe(true);
+    opened.store.close();
   });
 
   test("list prints every record the index retains", async () => {

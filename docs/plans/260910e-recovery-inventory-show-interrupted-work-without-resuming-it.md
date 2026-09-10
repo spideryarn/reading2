@@ -438,6 +438,37 @@ Tests, red first (the spec's list, plus the spec's failed-collection rule):
   typecheck exit 0. On the manager's own run: typecheck exit 0, and the three recovery suites 89 of 89.
 - [ ] Sol review; commit.
 
+**Sol's round 1 timed out, and left fixes but no verdict.** The writable review (`--effort high`,
+30 minutes) was killed at 1,800 s (`EXIT=1`) before it wrote an answer. No Codex process survived
+it. It had already made coherent, red-first fixes in the tree. Its six new tests name what it
+found, numbered here because the run never did:
+
+- **F15:** an older, trusted view pass finishing after a failed collection could overwrite the
+  failed collection's `unknown` view. Fixed: each pass carries a revision, and a stale pass is
+  discarded.
+- **F16:** a request with a malformed `requestedAt` was normalised into a valid dismissal. Fixed:
+  it is refused.
+- **F17:** while a recovery replay is `not-run`, the fold is stale, so a crash-replayed dismissal
+  could be applied twice. Fixed: the drain and the derived dispositions do nothing while the replay
+  is `not-run`, requests stay pending, and the view is untrusted.
+- **F18:** the drain's scan was unbounded, and a path swapped for a symlink after the request was
+  claimed could be followed. Fixed: a scan limit that counts junk names; `O_NOFOLLOW`; a bounded
+  read; a claim into `processing/`, so a crash cannot strand or overwrite a request; and the drain is
+  async, off the tick.
+- **F19:** `already-live` depended on row order, and could invent a resumption without the previous
+  token. Fixed.
+- **F20:** the transcript search was unbounded over `~/.claude/projects`. Fixed: a directory limit,
+  with a `cannot-tell` arm that makes `resume` not-supported.
+
+With them in: typecheck exit 0, and the three recovery suites 95 of 95 (the manager's run). **These
+fixes are committed as unreviewed code.** A **second round, read-only and findings-only**
+(`--sandbox review`, 30 minutes), reviews the whole stage including them. Beside it, an
+**independent read-only Opus agent** checks the salvaged hunks against the plan's contract. An Opus
+subagent then fixes whatever either finds. All of this is on the Overseer's terms, given before the
+round: 30 minutes, not 45 ("length has never been what saved one"), plus the Opus salvage check,
+which caught a latent P1 in another session's salvage the same day. If Sol times out again, the
+fallback is Fable, recorded as not cross-family.
+
 What landed, beyond the brief: `tools/overseer/recovery-inbox.ts` (new), one leaf that both the CLI
 and the daemon use, so the request format lives in one place. Decisions the implementer made:
 

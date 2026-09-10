@@ -25,6 +25,7 @@ import {
   classifyRecord,
   recoveryEvidence,
   RECOVERY_PAGE_SIZE,
+  RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT,
   type EvidenceDeps,
   type InventoryTrust,
 } from "../tools/overseer/recovery-view.js";
@@ -181,6 +182,21 @@ describe("classification, first match wins", () => {
     expect(result).toMatchObject({ kind: "already-live", sameRun: false });
   });
 
+  test("already-live prefers the previous token regardless of row order, and does not invent a resumption without that token", () => {
+    const oldRun = liveRow("$8", "old-run", CONV_A, TOKEN_ONE);
+    const newRun = liveRow("$9", "new-run", CONV_A, TOKEN_TWO);
+    for (const rows of [
+      [newRun, oldRun],
+      [oldRun, newRun],
+    ]) {
+      expect(classifyRecord(record(), trusted(rows))).toMatchObject({ kind: "already-live", sameRun: true, row: { tmuxId: "$8" } });
+    }
+    expect(classifyRecord(record({ lastSeen: lastSeen({ executionToken: null }) }), trusted([newRun]))).toMatchObject({
+      kind: "already-live",
+      sameRun: null,
+    });
+  });
+
   test("a conflicting reading's observed conversation is the verified one; its claim is not", () => {
     const conflicting = record({ lastSeen: lastSeen({ conversation: { kind: "conflicting", claimed: CLAIM_C, observed: CONV_A } }) });
     expect(classifyRecord(conflicting, trusted([liveRow("$7", "x", CONV_A, TOKEN_ONE)])).kind).toBe("already-live");
@@ -236,7 +252,7 @@ function deps(projectsDir: string, dirs: readonly string[] = []): EvidenceDeps {
     projectsDir,
     hostname: () => HOST,
     stat: async (path: string) => {
-      if (dirs.includes(path)) return { isDirectory: () => true, mtimeMs: Date.parse("2026-09-10T07:00:00.000Z") };
+      if (dirs.includes(path)) return { isDirectory: () => true, isFile: () => false, mtimeMs: Date.parse("2026-09-10T07:00:00.000Z") };
       if (path.startsWith(projectsDir)) return realStat(path);
       const error = new Error(`ENOENT: no such file or directory, stat '${path}'`) as NodeJS.ErrnoException;
       error.code = "ENOENT";
@@ -300,6 +316,17 @@ describe("evidence", () => {
     if (evidence.kind !== "checked") throw new Error("expected evidence");
     expect(evidence.transcript).toMatchObject({ kind: "found", path, via: "scan" });
     expect(evidence.resume.kind).toBe("supported");
+  });
+
+  test("a transcript scan stops at its project-directory bound and says it cannot tell", async () => {
+    const projects = tempRoot();
+    for (let i = 0; i <= RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT; i += 1) {
+      mkdirSync(join(projects, `project-${i.toString().padStart(3, "0")}`));
+    }
+    const evidence = await recoveryEvidence(record(), deps(projects, [DIR]));
+    if (evidence.kind !== "checked") throw new Error("expected evidence");
+    expect(evidence.transcript.kind).toBe("cannot-tell");
+    expect(evidence.resume.kind).toBe("not-supported");
   });
 
   test("only a claim survives: a transcript under it is shown as unverified, and resume stays not-supported", async () => {

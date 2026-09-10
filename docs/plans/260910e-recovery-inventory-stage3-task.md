@@ -5,8 +5,19 @@ You are implementing Stage 3 of
 `/home/greg/code/spideryarn2/.claude/worktrees/recovery-inventory`. Read the plan in full first,
 including Findings; §6 is this stage. Stages 1 and 2 are committed. **The format you read is
 whatever `tools/overseer/store.ts` and `recovery-view.ts` actually write to
-`~/.overseer/recovery.json`**. Read that code before designing the parser: the plan describes
-intent, and the code is the contract. Where the plan and this brief disagree, the plan wins; tell me.
+`~/.overseer/recovery.json`**: `recoveryFileText` in `store.ts` writes it, and the view's types are in
+`recovery-view.ts`. Read that code before designing the parser: the plan describes intent, and the
+code is the contract. Where the plan and this brief disagree, the plan wins; tell me.
+
+Three facts from Stage 2 that the page must draw honestly, each its own state and never an empty
+list:
+
+- **`view` is `null` until the daemon's first pass after a start.** Show "not yet checked by this
+  daemon", with the records it has, their classification unknown.
+- **Before any collection is accepted, every record is `unknown`**, carrying the inventory-trust
+  sentence. Show that sentence once, as a banner, not on every row.
+- **`resume: manual` carries the host and the directory as two separate facts.** Render them as
+  "on <host>, in <dir>". Do not assemble a `cd` or `ssh` command string.
 
 ## Files — yours
 

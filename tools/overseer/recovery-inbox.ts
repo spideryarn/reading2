@@ -23,7 +23,8 @@
  * never applied twice, and the file does not come round a third time.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { constants, mkdirSync } from "node:fs";
+import { mkdir, open, opendir, rename, rmdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { OverseerEvent } from "./diff.js";
@@ -39,6 +40,9 @@ const REQUEST_MAX_BYTES = 16 * 1024;
 export const DISMISS_WHY_MAX_CHARS = 1000;
 /** Requests handled per drain, so a flooded inbox costs a bounded tick. */
 const DRAIN_LIMIT = 50;
+/** Directory entries examined per pass, including junk names: the scan itself is bounded too. */
+export const RECOVERY_INBOX_SCAN_LIMIT = 200;
+const PROCESSING_DIR = "processing";
 
 const REQUEST_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/;
 const CANDIDATE_ID = /^r[cl]-[0-9a-f]{20}$/;
@@ -106,31 +110,67 @@ function parseRequest(text: string, fileRequestId: string): { ok: true; value: D
   if (r["requestId"] !== fileRequestId) return { ok: false, why: "the request id does not match the file's name" };
   const problem = requestProblem(r["id"], r["why"]);
   if (problem !== null) return { ok: false, why: problem };
-  const requestedAt = typeof r["requestedAt"] === "string" ? r["requestedAt"] : "";
+  const requestedAt = r["requestedAt"];
+  const requestedAtMs = typeof requestedAt === "string" ? Date.parse(requestedAt) : Number.NaN;
+  if (
+    typeof requestedAt !== "string" ||
+    !Number.isFinite(requestedAtMs) ||
+    new Date(requestedAtMs).toISOString() !== requestedAt
+  ) {
+    return { ok: false, why: "requestedAt is not an ISO timestamp" };
+  }
   return {
     ok: true,
     value: { schema: 1, kind: "dismiss", requestId: fileRequestId, id: r["id"] as RecoveryCandidateId, why: (r["why"] as string).trim(), requestedAt },
   };
 }
 
-/** The request files, oldest first. Symlinks, directories, `.tmp-` siblings and anything not named `<uuid>.json` are skipped. */
-function pendingRequests(inbox: string): { file: string; requestId: string }[] {
-  const found: { file: string; requestId: string; mtimeMs: number }[] = [];
-  for (const name of readdirSync(inbox)) {
-    const match = REQUEST_FILE.exec(name);
-    if (match === null || name.includes(".tmp-")) continue;
-    const path = join(inbox, name);
-    let info: ReturnType<typeof lstatSync>;
+type PendingRequest = { file: string; requestId: string; mtimeMs: number; claimed: boolean };
+
+/**
+ * The oldest requests among a bounded scan. `processing/` comes first so a
+ * crash after a request was claimed cannot strand it. The entry bound counts
+ * junk too: hostile names may delay work, but cannot monopolise a daemon tick.
+ */
+async function pendingRequests(inbox: string, scanLimit: number): Promise<PendingRequest[]> {
+  const found: PendingRequest[] = [];
+  let examined = 0;
+  for (const [directory, claimed] of [
+    [join(inbox, PROCESSING_DIR), true],
+    [inbox, false],
+  ] as const) {
+    let handle: Awaited<ReturnType<typeof opendir>> | null = null;
     try {
-      info = lstatSync(path);
+      handle = await opendir(directory);
     } catch {
       continue;
     }
-    if (!info.isFile()) continue;
-    found.push({ file: path, requestId: match[1] as string, mtimeMs: info.mtimeMs });
+    for await (const item of handle) {
+      if (examined >= scanLimit) break;
+      examined += 1;
+      const match = REQUEST_FILE.exec(item.name);
+      if (match === null || item.name.includes(".tmp-")) continue;
+      const file = join(directory, item.name);
+      let info: Awaited<ReturnType<typeof open>> | null = null;
+      try {
+        info = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        const stat = await info.stat();
+        if (!stat.isFile()) continue;
+        found.push({ file, requestId: match[1] as string, mtimeMs: stat.mtimeMs, claimed });
+      } catch {
+        // A symlink, a disappearing entry, or something that cannot be opened
+        // is not a request and costs only one bounded slot.
+      } finally {
+        if (info !== null) await info.close().catch(() => {});
+      }
+    }
+    if (examined >= scanLimit) break;
   }
-  found.sort((a, b) => a.mtimeMs - b.mtimeMs || (a.file < b.file ? -1 : 1));
-  return found.slice(0, DRAIN_LIMIT).map(({ file, requestId }) => ({ file, requestId }));
+  // A crash-left claim wins over a duplicate still in the public inbox. POSIX
+  // rename replaces its destination, so letting the inbox copy go first could
+  // overwrite the very request the processing directory exists to preserve.
+  found.sort((a, b) => Number(b.claimed) - Number(a.claimed) || a.mtimeMs - b.mtimeMs || (a.file < b.file ? -1 : 1));
+  return found.slice(0, DRAIN_LIMIT);
 }
 
 export type DrainResult = { applied: number; refused: number; halted: boolean };
@@ -144,34 +184,55 @@ export type DrainResult = { applied: number; refused: number; halted: boolean };
  * the request said — a request that vanished with only a console line behind
  * it would be an operator's decision nobody can show was refused.
  */
-export function drainRecoveryInbox(input: {
+export async function drainRecoveryInbox(input: {
   root: string;
   index: () => RecoveryIndex;
   append: (events: OverseerEvent[]) => boolean;
   now: () => Date;
   log: (line: string) => void;
-}): DrainResult {
+  /** Test seams for the two filesystem boundaries; production uses neither. */
+  scanLimit?: number;
+  afterClaim?: (path: string) => void | Promise<void>;
+}): Promise<DrainResult> {
   const inbox = join(input.root, RECOVERY_INBOX_DIR);
   const result: DrainResult = { applied: 0, refused: 0, halted: false };
-  if (!existsSync(inbox)) return result;
-  let requests: { file: string; requestId: string }[];
+  // A refused all-or-nothing recovery replay leaves records and request ids
+  // deliberately stale. It can authorize nothing; leave every file pending
+  // until a later daemon start can read the missing journal tail.
+  if (input.index().replay.kind === "not-run") return result;
+  let requests: PendingRequest[];
   try {
-    requests = pendingRequests(inbox);
+    requests = await pendingRequests(inbox, input.scanLimit ?? RECOVERY_INBOX_SCAN_LIMIT);
   } catch (cause) {
     input.log(`recovery inbox could not be listed: ${String(cause)}`);
     return result;
   }
 
-  const refuse = (file: string, requestId: string, why: string, request: unknown): void => {
+  const refuse = async (file: string, requestId: string, why: string, request: unknown): Promise<void> => {
     const refusedDir = join(inbox, REFUSED_DIR);
     try {
-      mkdirSync(refusedDir, { recursive: true, mode: 0o700 });
-      writeAtomically(
-        join(refusedDir, `${requestId}.json`),
-        refusedDir,
-        `${JSON.stringify({ refusedAt: input.now().toISOString(), why, request }, null, 2)}\n`,
-      );
-      unlinkSync(file);
+      await mkdir(refusedDir, { recursive: true, mode: 0o700 });
+      const target = join(refusedDir, `${requestId}.json`);
+      const temp = `${target}.tmp-${process.pid}-${randomUUID()}`;
+      const output = await open(temp, "wx", 0o600);
+      try {
+        await output.writeFile(`${JSON.stringify({ refusedAt: input.now().toISOString(), why, request }, null, 2)}\n`, "utf8");
+        await output.sync();
+      } finally {
+        await output.close();
+      }
+      await rename(temp, target);
+      try {
+        const directory = await open(refusedDir, "r");
+        try {
+          await directory.sync();
+        } finally {
+          await directory.close();
+        }
+      } catch {
+        /* Not every platform lets a directory be opened and synced. */
+      }
+      await unlink(file);
       result.refused += 1;
       input.log(`recovery request ${requestId} REFUSED: ${why}`);
     } catch (cause) {
@@ -179,21 +240,52 @@ export function drainRecoveryInbox(input: {
     }
   };
 
-  for (const { file, requestId } of requests) {
-    let text: string;
-    try {
-      if (lstatSync(file).size > REQUEST_MAX_BYTES) {
-        refuse(file, requestId, `the request is over ${REQUEST_MAX_BYTES} bytes`, null);
+  const processing = join(inbox, PROCESSING_DIR);
+  for (const pending of requests) {
+    const { requestId } = pending;
+    let file = pending.file;
+    if (!pending.claimed) {
+      try {
+        await mkdir(processing, { recursive: true, mode: 0o700 });
+        const claimed = join(processing, `${requestId}.json`);
+        await rename(file, claimed);
+        file = claimed;
+        await input.afterClaim?.(file);
+      } catch (cause) {
+        input.log(`recovery request ${requestId} could not be claimed: ${String(cause)}`);
         continue;
       }
-      text = readFileSync(file, "utf8");
+    }
+    let text: string;
+    let requestFile: Awaited<ReturnType<typeof open>> | null = null;
+    try {
+      requestFile = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      const info = await requestFile.stat();
+      if (!info.isFile()) {
+        await refuse(file, requestId, "the request is not a regular file", null);
+        continue;
+      }
+      const bytes = Buffer.alloc(REQUEST_MAX_BYTES + 1);
+      let read = 0;
+      while (read < bytes.length) {
+        const part = await requestFile.read(bytes, read, bytes.length - read, read);
+        if (part.bytesRead === 0) break;
+        read += part.bytesRead;
+      }
+      if (read > REQUEST_MAX_BYTES) {
+        await refuse(file, requestId, `the request is over ${REQUEST_MAX_BYTES} bytes`, null);
+        continue;
+      }
+      text = bytes.subarray(0, read).toString("utf8");
     } catch (cause) {
       input.log(`recovery request ${requestId} could not be read: ${String(cause)}`);
       continue;
+    } finally {
+      if (requestFile !== null) await requestFile.close().catch(() => {});
     }
     const parsed = parseRequest(text, requestId);
     if (!parsed.ok) {
-      refuse(file, requestId, parsed.why, text.slice(0, 2000));
+      await refuse(file, requestId, parsed.why, text.slice(0, 2000));
       continue;
     }
     const request = parsed.value;
@@ -201,12 +293,12 @@ export function drainRecoveryInbox(input: {
     // may have just resolved the record this one names.
     const index = input.index();
     if (index.appliedRequests.has(requestId)) {
-      refuse(file, requestId, "this request was already applied — a replay after a crash between the append and the delete, or a copy", request);
+      await refuse(file, requestId, "this request was already applied — a replay after a crash between the append and the delete, or a copy", request);
       continue;
     }
     const record = index.records.get(request.id);
     if (record === undefined) {
-      refuse(
+      await refuse(
         file,
         requestId,
         `${request.id} is not in the recovery index: it never existed, it was resolved over 30 days ago, or it is past the index's capacity and survives only in events.jsonl`,
@@ -215,7 +307,7 @@ export function drainRecoveryInbox(input: {
       continue;
     }
     if (record.resolution.disposition !== "unresolved") {
-      refuse(file, requestId, `${request.id} is already resolved as ${record.resolution.disposition} (at ${record.resolution.at})`, request);
+      await refuse(file, requestId, `${request.id} is already resolved as ${record.resolution.disposition} (at ${record.resolution.at})`, request);
       continue;
     }
     const appended = input.append([
@@ -234,12 +326,13 @@ export function drainRecoveryInbox(input: {
     result.applied += 1;
     input.log(`recovery request ${requestId}: dismissed ${request.id}`);
     try {
-      unlinkSync(file);
+      await unlink(file);
     } catch (cause) {
       // The disposition is on disk. The file comes round again and is refused
       // as already applied, which is the crash case above.
       input.log(`recovery request ${requestId} was applied and could not be deleted: ${String(cause)}`);
     }
   }
+  await rmdir(processing).catch(() => {});
   return result;
 }
