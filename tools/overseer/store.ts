@@ -188,6 +188,7 @@ import {
   type RecoveryResolution,
 } from "./recovery.js";
 import type { RecoveryView } from "./recovery-view.js";
+import type { RecoveryResumeProjection } from "../fleet/wire.js";
 
 /**
  * Re-exported because this file was where they lived until 2026-09-08, and a
@@ -971,6 +972,12 @@ export type OverseerStore = {
    * nothing on a request path does.
    */
   setRecoveryView(view: RecoveryView): boolean;
+  /**
+   * The resume pass's projection, held for the next `recovery.json` write as
+   * an optional `resume` field beside `view` (plan 260910f, Sol's G9). Returns
+   * whether the file now needs writing, by the same rule as the view.
+   */
+  setRecoveryResume(projection: RecoveryResumeProjection): boolean;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -2967,7 +2974,7 @@ export type RecoveryFileReading =
   | { kind: "absent" }
   | { kind: "unusable"; why: string }
   /** `view` is exactly what the file holds, unvalidated: a consumer that draws it parses it itself. */
-  | { kind: "file"; writtenAt: string | null; index: RecoveryIndex; view: unknown };
+  | { kind: "file"; writtenAt: string | null; index: RecoveryIndex; view: unknown; resume: unknown };
 
 /**
  * `recovery.json` for a reader outside the daemon — the CLI's `list`. **Read-only
@@ -2984,6 +2991,8 @@ export function readRecoveryIndexFile(root: string): RecoveryFileReading {
     writtenAt: typeof writtenAt === "string" ? writtenAt : null,
     index: recoveryIndexOf(read.fold),
     view: read.raw["view"] ?? null,
+    // Unvalidated, like `view`: the optional resume projection (plan 260910f, G9).
+    resume: read.raw["resume"] ?? null,
   };
 }
 
@@ -3135,6 +3144,47 @@ function parseRecoveryRecord(u: unknown): ParseResult<RecoveryRecord> {
 }
 
 /**
+ * THE RESUME PROJECTION HOLDS ONLY WHAT THIS FILE HOLDS — the page's rule
+ * below (Sol's F24), for the fleet's stricter reader (recovery-feed.ts §
+ * `resumeContradiction`, plan 260910f): every candidate is a record of this
+ * file, under that record's name, once; pending positions count from 1 again
+ * after any drop; a preview stays only when the page's evidence, where it has
+ * any for that record, supports the same conversation; and a pace blocker this
+ * file does not hold is not named. The projection was built on an earlier
+ * clock than this write, so a record can leave in between, exactly as a page
+ * item can. Display only: the daemon's decisions never read this back.
+ */
+function resumeForFile(
+  resume: RecoveryResumeProjection,
+  fold: RecoveryFold,
+  page: readonly RecoveryView["page"][number][] | null,
+): RecoveryResumeProjection {
+  const nameOf = (id: string): string | null => fold.records.get(id as RecoveryCandidateId)?.name ?? null;
+  let position = 0;
+  const requested = new Set<string>();
+  const requests = resume.requests.flatMap((request) => {
+    const name = nameOf(request.candidateId);
+    if (name === null || requested.has(request.candidateId)) return [];
+    requested.add(request.candidateId);
+    const state = request.state.kind === "pending" ? { ...request.state, position: (position += 1) } : request.state;
+    return [{ ...request, name, state }];
+  });
+  const items = new Map((page ?? []).map((item) => [item.id as string, item]));
+  const previewed = new Set<string>();
+  const previews = resume.previews.filter((preview) => {
+    if (nameOf(preview.candidateId) === null || previewed.has(preview.candidateId)) return false;
+    const evidence = items.get(preview.candidateId)?.evidence;
+    if (evidence?.kind === "checked" && evidence.resume.kind === "supported" && evidence.resume.conversationId !== preview.conversationId) return false;
+    previewed.add(preview.candidateId);
+    return true;
+  });
+  const paceName = resume.pace.kind === "waiting-for-verification" ? nameOf(resume.pace.candidateId) : null;
+  const pace: RecoveryResumeProjection["pace"] =
+    resume.pace.kind !== "waiting-for-verification" ? resume.pace : paceName === null ? { kind: "free" } : { ...resume.pace, name: paceName };
+  return { ...resume, requests, previews, pace };
+}
+
+/**
  * **The view rides beside the fold and is not part of it.** It is derived (by
  * the daemon's view pass, recovery-view.ts), it is not restored on open, and a
  * reader that ignores it loses the classification and nothing else — so it
@@ -3147,6 +3197,7 @@ function recoveryFileText(
   cursor: { events: number; bytes: number },
   writtenAt: string,
   view: RecoveryView | null,
+  resume: RecoveryResumeProjection | null = null,
 ): string {
   // THE PAGE HOLDS ONLY RECORDS THIS FILE HOLDS (Sol's F24). The view was built
   // on an earlier clock than the retention prune in `checkpoint()`, so a record
@@ -3166,6 +3217,10 @@ function recoveryFileText(
       pending: [...fold.pending].map(([key, pending]) => ({ key, ...pending })),
       appliedRequests: [...fold.appliedRequests],
       view: published,
+      // OPTIONAL, BESIDE `view`, and for the same reason it needs no schema
+      // bump (Sol's G9): `parseRecoveryFile` never reads it, so an old reader
+      // ignores it and a malformed one cannot break the restore.
+      ...(resume === null ? {} : { resume: resumeForFile(resume, fold, page) }),
     },
     null,
     2,
@@ -3655,6 +3710,9 @@ class Store implements OverseerStore {
   /** The daemon's latest view, and its text without the clock. See `setRecoveryView`. */
   private recoveryView: RecoveryView | null = null;
   private recoveryViewStable: string | null = null;
+  /** The resume pass's latest projection, and its text without the clock. See `setRecoveryResume`. */
+  private recoveryResume: RecoveryResumeProjection | null = null;
+  private recoveryResumeStable: string | null = null;
   private closed = false;
 
   constructor(input: {
@@ -3722,6 +3780,26 @@ class Store implements OverseerStore {
     }
     this.recoveryView = view;
     this.recoveryViewStable = stable;
+    this.recoveryDirty = true;
+    return true;
+  }
+
+  /**
+   * Hold the resume pass's projection for the next `recovery.json` write, by
+   * `setRecoveryView`'s rule: written when anything but the clock changed, or
+   * when the held one is `RECOVERY_VIEW_REFRESH_MS` old. Derived like the view,
+   * never restored on open: a projection from a previous life described
+   * launches that process asked about.
+   */
+  setRecoveryResume(projection: RecoveryResumeProjection): boolean {
+    this.assertOpen();
+    const stable = JSON.stringify({ ...projection, writtenAt: null });
+    const held = this.recoveryResume;
+    if (held !== null && stable === this.recoveryResumeStable && Date.parse(projection.writtenAt) - Date.parse(held.writtenAt) < RECOVERY_VIEW_REFRESH_MS) {
+      return false;
+    }
+    this.recoveryResume = projection;
+    this.recoveryResumeStable = stable;
     this.recoveryDirty = true;
     return true;
   }
@@ -3885,7 +3963,7 @@ class Store implements OverseerStore {
         this.recoveryFold.replay.kind === "not-run"
           ? this.recoveryWrittenAt
           : { events: this.events, bytes: this.bytes };
-      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, recoveryCursor, at, this.recoveryView));
+      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, recoveryCursor, at, this.recoveryView, this.recoveryResume));
       this.recoveryDirty = false;
       this.recoveryWrittenAt = recoveryCursor;
     }

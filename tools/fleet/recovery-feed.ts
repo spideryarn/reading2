@@ -45,6 +45,19 @@
  * resolution, carrying a classification and evidence exactly when it is
  * unresolved. One exception, and only in one direction: see `parseView`.
  *
+ * ## The optional `resume` field, which never touches the records
+ *
+ * Plan 260910f (Sol's G9) puts the resume projection in this file as an
+ * optional top-level `resume` field beside `view`. It has a strict validator of
+ * its own and four arms of its own (`RecoveryResumeSection`): absent, published,
+ * unreadable (naming what was wrong) and unsupported-schema. **Whatever it
+ * holds, it cannot change `records`, `view` or any other part of the feed** — it
+ * is parsed after them, from them, and only into `resume`. A malformed field
+ * means the page offers no Resume, and nothing else. A request, preview or pace
+ * naming a candidate the file does not hold, or with another record's name, is
+ * `unreadable`, in F29's spirit: one record's resume state must never be drawn
+ * under another's name.
+ *
  * ## Asynchronous, on purpose
  *
  * The route calls this on a request, in the one Node process that serves the
@@ -76,6 +89,16 @@ import type {
   RecoveryWireTranscript,
   RecoveryWireView,
   RecoveryWireWorktree,
+  RecoveryResumeAccount,
+  RecoveryResumeGateWire,
+  RecoveryResumeLaunchState,
+  RecoveryResumeLaunchWire,
+  RecoveryResumePreview,
+  RecoveryResumeProjection,
+  RecoveryResumeQuote,
+  RecoveryResumeRequestState,
+  RecoveryResumeSection,
+  RecoveryResumeVerification,
 } from "./wire.js";
 
 export const RECOVERY_FILE = "recovery.json";
@@ -555,6 +578,270 @@ function parseView(u: unknown, records: ReadonlyMap<string, RecordFacts>): Parse
 }
 
 /* ------------------------------------------------------------------ *
+ * The optional `resume` field (plan 260910f, Sol's G9).
+ * ------------------------------------------------------------------ */
+
+/** The one `resume` schema this reader understands. */
+export const KNOWN_RESUME_SCHEMA = 1;
+
+const LAUNCH_STATES: Record<RecoveryResumeLaunchState, true> = {
+  planned: true,
+  "waiting-admission": true,
+  reserved: true,
+  launching: true,
+  "observed-running": true,
+  completed: true,
+  "failed-before-launch": true,
+  "outcome-unknown": true,
+};
+
+function instantOrNull(u: unknown): u is string | null {
+  return u === null || instant(u);
+}
+
+function parseLaunch(u: unknown): Parsed<RecoveryResumeLaunchWire> {
+  if (!isRecord(u)) return bad("launch is not an object");
+  const { occurrenceId, state, attempt, reservationHeld, disposed, endedAt, completion } = u;
+  if (!nonBlank(occurrenceId)) return bad("launch.occurrenceId is not an occurrence id");
+  if (typeof state !== "string" || !Object.hasOwn(LAUNCH_STATES, state)) return bad(`launch.state ${JSON.stringify(state)} is not one the launch protocol has`);
+  if (!(attempt === null || whole(attempt))) return bad("launch.attempt is not a count or null");
+  if (typeof reservationHeld !== "boolean" || typeof disposed !== "boolean") return bad("launch.reservationHeld or launch.disposed is not a boolean");
+  if (!instantOrNull(endedAt)) return bad("launch.endedAt is not a timestamp or null");
+  let done: RecoveryResumeLaunchWire["completion"];
+  if (completion === null) done = null;
+  else if (isRecord(completion) && completion["kind"] === "exit" && (completion["code"] === null || Number.isSafeInteger(completion["code"]))) {
+    done = { kind: "exit", code: completion["code"] as number | null };
+  } else if (isRecord(completion) && completion["kind"] === "rebooted") done = { kind: "rebooted" };
+  else return bad("launch.completion is neither an exit, a reboot nor null");
+  return ok({ occurrenceId, state: state as RecoveryResumeLaunchState, attempt, reservationHeld, disposed, endedAt, completion: done });
+}
+
+function parseVerification(u: unknown): Parsed<RecoveryResumeVerification> {
+  if (!isRecord(u)) return bad("verification is not an object");
+  const { inventoryResumed, observedRunning, transcriptGrew, sessionLineSeen } = u;
+  if (typeof inventoryResumed !== "boolean" || typeof observedRunning !== "boolean" || typeof transcriptGrew !== "boolean" || typeof sessionLineSeen !== "boolean") {
+    return bad("verification lacks one of its four parts");
+  }
+  return ok({ inventoryResumed, observedRunning, transcriptGrew, sessionLineSeen });
+}
+
+/** One request's state, exhaustively (Sol's G1). Each arm is rebuilt from its own fields only. */
+function parseRequestState(u: unknown): Parsed<RecoveryResumeRequestState> {
+  if (!isRecord(u)) return bad("state is not an object");
+  const requestedAt = u["requestedAt"];
+  const kind = u["kind"];
+  if (kind !== "resumed" && !instant(requestedAt)) return bad(`a ${JSON.stringify(kind)} state has no requestedAt timestamp`);
+  const at = requestedAt as string;
+  switch (kind) {
+    case "pending": {
+      const { position, actor, why, until } = u;
+      if (!whole(position) || position < 1) return bad("a pending state's position is not a count from 1");
+      if (actor !== "dashboard" && actor !== "cli") return bad(`a pending state's actor ${JSON.stringify(actor)} is neither dashboard nor cli`);
+      if (!nonBlank(why)) return bad("a pending state says no why");
+      if (!instantOrNull(until)) return bad("a pending state's until is not a timestamp or null");
+      return ok({ kind, position, requestedAt: at, actor, why, until });
+    }
+    case "refused":
+      return instant(u["refusedAt"]) && nonBlank(u["why"])
+        ? ok({ kind, requestedAt: at, refusedAt: u["refusedAt"], why: u["why"] })
+        : bad("a refused state lacks its time or its reason");
+    case "launched": {
+      const launch = parseLaunch(u["launch"]);
+      if (!launch.ok) return launch;
+      const verification = parseVerification(u["verification"]);
+      if (!verification.ok) return verification;
+      if (!nonBlank(u["waitingFor"])) return bad("a launched state says nothing about what it waits for");
+      return ok({ kind, requestedAt: at, launch: launch.value, verification: verification.value, waitingFor: u["waitingFor"] });
+    }
+    case "ended-unverified": {
+      const launch = parseLaunch(u["launch"]);
+      if (!launch.ok) return launch;
+      return nonBlank(u["how"]) ? ok({ kind, requestedAt: at, launch: launch.value, how: u["how"] }) : bad("an ended-unverified state says not how it ended");
+    }
+    case "needs-greg": {
+      const launch = parseLaunch(u["launch"]);
+      if (!launch.ok) return launch;
+      return nonBlank(u["why"]) && nonBlank(u["disposeCommand"])
+        ? ok({ kind, requestedAt: at, launch: launch.value, why: u["why"], disposeCommand: u["disposeCommand"] })
+        : bad("a needs-greg state lacks its why or its dispose command");
+    }
+    case "disposed": {
+      const launch = parseLaunch(u["launch"]);
+      return launch.ok ? ok({ kind, requestedAt: at, launch: launch.value }) : launch;
+    }
+    case "resumed": {
+      if (!instantOrNull(requestedAt)) return bad("a resumed state's requestedAt is not a timestamp or null");
+      if (!instant(u["verifiedAt"])) return bad("a resumed state has no verifiedAt timestamp");
+      let launch: RecoveryResumeLaunchWire | null = null;
+      if (u["launch"] !== null) {
+        const parsed = parseLaunch(u["launch"]);
+        if (!parsed.ok) return parsed;
+        launch = parsed.value;
+      }
+      return ok({ kind, requestedAt, launch, verifiedAt: u["verifiedAt"] });
+    }
+    default:
+      return bad(`state ${JSON.stringify(kind)} is not one this reader knows`);
+  }
+}
+
+function parseQuote(u: unknown, where: string): Parsed<RecoveryResumeQuote> {
+  if (!isRecord(u)) return bad(`${where} is not an object`);
+  if (u["kind"] === "quoted" && typeof u["text"] === "string" && typeof u["truncated"] === "boolean") return ok({ kind: "quoted", text: u["text"], truncated: u["truncated"] });
+  if (u["kind"] === "unavailable" && nonBlank(u["why"])) return ok({ kind: "unavailable", why: u["why"] });
+  return bad(`${where} is neither a quotation with its text nor unavailable with why`);
+}
+
+function parseAccount(u: unknown): Parsed<RecoveryResumeAccount> {
+  if (!isRecord(u)) return bad("account is not an object");
+  if (u["kind"] === "pinned" && nonBlank(u["name"]) && nonBlank(u["configDir"])) return ok({ kind: "pinned", name: u["name"], configDir: u["configDir"] });
+  if (u["kind"] === "unknown" && nonBlank(u["why"])) return ok({ kind: "unknown", why: u["why"] });
+  return bad(`account ${JSON.stringify(u["kind"])} is neither pinned with its name and config directory nor unknown with why`);
+}
+
+function parsePreview(u: unknown): Parsed<RecoveryResumePreview> {
+  if (!isRecord(u)) return bad("not an object");
+  const { candidateId, conversationId, dir, title, uncertainty, nudge } = u;
+  if (!nonBlank(candidateId)) return bad("candidateId is not a candidate id");
+  if (!nonBlank(conversationId) || !nonBlank(dir)) return bad("it lacks its conversation or its directory");
+  if (!textOrNull(title)) return bad("title is not text or null");
+  const brief = parseQuote(u["brief"], "brief");
+  if (!brief.ok) return brief;
+  const lastWords = parseQuote(u["lastWords"], "lastWords");
+  if (!lastWords.ok) return lastWords;
+  if (!Array.isArray(uncertainty) || !uncertainty.every(nonBlank)) return bad("uncertainty is not a list of sentences");
+  if (!nonBlank(nudge)) return bad("the nudge is blank");
+  const account = parseAccount(u["account"]);
+  if (!account.ok) return account;
+  return ok({ candidateId, conversationId, dir, title, brief: brief.value, lastWords: lastWords.value, uncertainty: [...uncertainty], nudge, account: account.value });
+}
+
+function parseGate(u: unknown): Parsed<RecoveryResumeGateWire | null> {
+  if (u === null) return ok(null);
+  if (isRecord(u) && u["kind"] === "clear" && Array.isArray(u["notes"]) && u["notes"].every((n) => typeof n === "string")) return ok({ kind: "clear", notes: [...u["notes"]] });
+  if (isRecord(u) && u["kind"] === "held" && nonBlank(u["why"]) && instantOrNull(u["until"])) return ok({ kind: "held", why: u["why"], until: u["until"] });
+  return bad("gate is neither null, clear with its notes, nor held with why");
+}
+
+function parsePace(u: unknown): Parsed<RecoveryResumeProjection["pace"]> {
+  if (!isRecord(u)) return bad("pace is not an object");
+  switch (u["kind"]) {
+    case "free":
+      return ok({ kind: "free" });
+    case "waiting-for-verification":
+      return nonBlank(u["candidateId"]) && typeof u["name"] === "string" && instant(u["since"])
+        ? ok({ kind: "waiting-for-verification", candidateId: u["candidateId"], name: u["name"], since: u["since"] })
+        : bad("pace waiting-for-verification lacks its candidate, name or since");
+    case "spacing":
+      return instant(u["until"]) ? ok({ kind: "spacing", until: u["until"] }) : bad("pace spacing has no until");
+    default:
+      return bad(`pace ${JSON.stringify(u["kind"])} is not one this reader knows`);
+  }
+}
+
+/** The projection's own shape, before anything is compared with the records. */
+function parseProjection(u: Record<string, unknown>): Parsed<RecoveryResumeProjection> {
+  if (!instant(u["writtenAt"])) return bad("writtenAt is not a timestamp");
+  const l = u["launcher"];
+  let launcher: RecoveryResumeProjection["launcher"];
+  if (isRecord(l) && l["kind"] === "wired") launcher = { kind: "wired" };
+  else if (isRecord(l) && l["kind"] === "unwired" && nonBlank(l["why"])) launcher = { kind: "unwired", why: l["why"] };
+  else return bad("launcher is neither wired nor unwired with why");
+  const gate = parseGate(u["gate"]);
+  if (!gate.ok) return gate;
+  const pace = parsePace(u["pace"]);
+  if (!pace.ok) return pace;
+  const rawRequests = u["requests"];
+  if (!Array.isArray(rawRequests)) return bad("requests is not a list");
+  const requests: RecoveryResumeProjection["requests"] = [];
+  for (const [index, raw] of rawRequests.entries()) {
+    if (!isRecord(raw) || !nonBlank(raw["candidateId"]) || typeof raw["name"] !== "string") return bad(`requests[${index}] lacks its candidate or its name`);
+    const state = parseRequestState(raw["state"]);
+    if (!state.ok) return bad(`requests[${index}]: ${state.why}`);
+    requests.push({ candidateId: raw["candidateId"], name: raw["name"], state: state.value });
+  }
+  const rawPreviews = u["previews"];
+  if (!Array.isArray(rawPreviews)) return bad("previews is not a list");
+  const previews: RecoveryResumePreview[] = [];
+  for (const [index, raw] of rawPreviews.entries()) {
+    const preview = parsePreview(raw);
+    if (!preview.ok) return bad(`previews[${index}]: ${preview.why}`);
+    previews.push(preview.value);
+  }
+  if (!whole(u["pendingOverflow"])) return bad("pendingOverflow is not a count");
+  return ok({ schema: 1, writtenAt: u["writtenAt"], launcher, gate: gate.value, pace: pace.value, requests, previews, pendingOverflow: u["pendingOverflow"] });
+}
+
+/**
+ * The projection checked against the file's records and view (the F29
+ * spirit): every candidate it names is one the file holds, under that record's
+ * name, once; pending positions are distinct; and a preview's conversation is
+ * the one its record's evidence supports, when the view says which.
+ */
+function resumeContradiction(p: RecoveryResumeProjection, records: ReadonlyMap<string, RecordFacts>, view: ParsedView | { kind: "unreadable" }): string | null {
+  const named = (where: string, id: string, name: string | null): string | null => {
+    const record = records.get(id);
+    if (record === undefined) return `${where} names ${id}, which the index does not hold`;
+    if (name !== null && name !== record.name) return `${where} names ${id} but carries a different name from that record's`;
+    return null;
+  };
+  const requested = new Set<string>();
+  const positions = new Set<number>();
+  for (const [index, r] of p.requests.entries()) {
+    const why = named(`requests[${index}]`, r.candidateId, r.name);
+    if (why !== null) return why;
+    if (requested.has(r.candidateId)) return `requests lists ${r.candidateId} twice`;
+    requested.add(r.candidateId);
+    if (r.state.kind === "pending") {
+      if (positions.has(r.state.position)) return `requests[${index}]: two pending requests share position ${r.state.position}`;
+      positions.add(r.state.position);
+    }
+  }
+  const previewed = new Set<string>();
+  for (const [index, preview] of p.previews.entries()) {
+    const why = named(`previews[${index}]`, preview.candidateId, null);
+    if (why !== null) return why;
+    if (previewed.has(preview.candidateId)) return `previews lists ${preview.candidateId} twice`;
+    previewed.add(preview.candidateId);
+    const item = view.kind === "checked" ? view.items.get(preview.candidateId) : undefined;
+    if (item?.evidence.kind === "checked" && item.evidence.resume.kind === "supported" && item.evidence.resume.conversationId !== preview.conversationId) {
+      return `previews[${index}] for ${preview.candidateId} names conversation ${preview.conversationId}, but that record's evidence supports ${item.evidence.resume.conversationId}`;
+    }
+  }
+  if (p.pace.kind === "waiting-for-verification") return named("pace", p.pace.candidateId, p.pace.name);
+  return null;
+}
+
+/** `recovery.json`'s optional `resume` field. Never throws, and cannot touch anything but itself. */
+function parseResumeSection(u: unknown, records: ReadonlyMap<string, RecordFacts>, view: ParsedView | { kind: "unreadable" }): RecoveryResumeSection {
+  if (u === undefined || u === null) {
+    return {
+      kind: "absent",
+      why: "the recovery index carries no resume data: the daemon that wrote it predates resume, or resume is not composed into it yet",
+    };
+  }
+  const unreadable = (why: string): RecoveryResumeSection => ({
+    kind: "unreadable",
+    why: `the index's resume field: ${why}. The records are shown as they are; only Resume is unavailable`,
+  });
+  if (!isRecord(u)) return unreadable("it is not an object");
+  if (u["schema"] !== KNOWN_RESUME_SCHEMA) {
+    const saw = JSON.stringify(u["schema"]) ?? "nothing";
+    return {
+      kind: "unsupported-schema",
+      saw,
+      known: KNOWN_RESUME_SCHEMA,
+      why: `the index's resume field says schema ${saw}, and this dashboard reads only schema ${KNOWN_RESUME_SCHEMA} of it. The records are shown; Resume is not offered.`,
+    };
+  }
+  const parsed = parseProjection(u);
+  if (!parsed.ok) return unreadable(parsed.why);
+  const contradiction = resumeContradiction(parsed.value, records, view);
+  if (contradiction !== null) return unreadable(contradiction);
+  return { kind: "published", projection: parsed.value };
+}
+
+/* ------------------------------------------------------------------ *
  * The projection.
  * ------------------------------------------------------------------ */
 
@@ -676,6 +963,8 @@ function projectPublished(path: string, json: Record<string, unknown>, composedA
     unresolved: facts.filter((f) => f.resolution.disposition === "unresolved").length,
     olderCount: facts.length - records.length,
     records,
+    // Last, and from what is already settled: nothing in it can reach the fields above.
+    resume: parseResumeSection(json["resume"], byId, view),
   };
 }
 

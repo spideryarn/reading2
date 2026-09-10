@@ -24,8 +24,11 @@ import { parse as babelParse } from "@babel/parser";
 import type { FunctionDeclaration, Node, Statement } from "@babel/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { Readable } from "node:stream";
+
 import { DRILL_CONVERSATIONS, DRILL_SESSIONS, buildRecoveryDrill, refuseUnsafeTarget } from "../scripts/overseer-recovery-drill.js";
 import { RECOVERY_PATH, makeRecoveryRoute } from "../tools/fleet/routes-recovery.js";
+import { RECOVERY_RESUME_PATH, makeRecoveryResumeRoute } from "../tools/fleet/routes-recovery-resume.js";
 import { parseRecoveryFeed } from "../tools/fleet/web/src/recovery-client";
 import type { RecoveryFeed, RecoveryWireRecord } from "../tools/fleet/wire.js";
 
@@ -132,6 +135,47 @@ describe("the drill, served by the composition server.ts calls", () => {
     // The browser's whole-payload contract (Sol's F30) holds on the answer the
     // real daemon's file produces: the client refuses nothing the server serves.
     expect(parseRecoveryFeed(JSON.parse(JSON.stringify(feed)))).toEqual(feed);
+  }, 60_000);
+
+  it("a Resume POST through the composition server.ts calls lands one request in the drill's store, found through OVERSEER_STORE_DIR (260910f)", async () => {
+    const target = tempDir();
+    const drill = await buildRecoveryDrill(target, { hostname: () => "drill-host" });
+    vi.stubEnv("OVERSEER_STORE_DIR", drill.store);
+    const { feed } = await getThroughTheProductionComposition();
+    if (feed.kind !== "published" || feed.view.kind !== "checked") throw new Error("expected a published, checked feed");
+    const shell = feed.records.find((r) => r.name === DRILL_SESSIONS.shell);
+    if (shell === undefined) throw new Error("the drill's shell record is missing");
+
+    let status = 0;
+    let raw = "";
+    let done!: () => void;
+    const ended = new Promise<void>((resolve) => (done = resolve));
+    const res = {
+      writeHead(code: number) {
+        status = code;
+        return res;
+      },
+      end(chunk?: string) {
+        raw = chunk ?? "";
+        done();
+        return res;
+      },
+    };
+    const body = JSON.stringify({ candidateId: shell.id, seen: { checkedAt: feed.view.checkedAt, conversationId: DRILL_CONVERSATIONS.deleted, dir: drill.dirs.shell } });
+    const host = "127.0.0.1:8799";
+    const req = Object.assign(Readable.from([Buffer.from(body)]), {
+      method: "POST",
+      url: RECOVERY_RESUME_PATH,
+      headers: { host, origin: `http://${host}`, "content-type": "application/json" },
+    });
+    // No arguments, exactly as server.ts builds it.
+    expect(makeRecoveryResumeRoute().handle(req as unknown as IncomingMessage, res as unknown as ServerResponse)).toBe(true);
+    await ended;
+    expect(status).toBe(202);
+    expect(JSON.parse(raw)).toEqual({ ok: true, outcome: "queued", candidateId: shell.id });
+    const pending = readdirSync(join(drill.store, "recovery-resume", "pending")).filter((name) => name.endsWith(".json"));
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.startsWith(`${shell.id}--`)).toBe(true);
   }, 60_000);
 
   it("refuses the live store, anything inside it, and a directory that is not empty", () => {
@@ -340,11 +384,11 @@ function isIdentifier(n: Node | null | undefined, name: string): boolean {
   return n?.type === "Identifier" && n.name === name;
 }
 
-function isDispatch(s: Statement): boolean {
+function isDispatch(s: Statement, route = "recoveryApiRoute"): boolean {
   if (s.type !== "IfStatement" || s.alternate !== null && s.alternate !== undefined) return false;
   const test = s.test;
   if (test.type !== "CallExpression" || test.callee.type !== "MemberExpression") return false;
-  if (!isIdentifier(test.callee.object, "recoveryApiRoute") || !isIdentifier(test.callee.property, "handle")) return false;
+  if (!isIdentifier(test.callee.object, route) || !isIdentifier(test.callee.property, "handle")) return false;
   if (test.arguments.length !== 2 || !isIdentifier(test.arguments[0] as Node, "req") || !isIdentifier(test.arguments[1] as Node, "res")) return false;
   const then = s.consequent;
   return then.type === "ReturnStatement" || (then.type === "BlockStatement" && then.body.length === 1 && then.body[0]?.type === "ReturnStatement");
@@ -403,7 +447,8 @@ function dispatchProblems(source: string): string[] {
   if (!served) problems.push("createServer is never called with handler");
 
   const body = handler.body.body;
-  const at = body.findIndex(isDispatch);
+  // A lambda, not `findIndex(isDispatch)`: findIndex's second argument is the index.
+  const at = body.findIndex((s) => isDispatch(s));
   if (at === -1) return [...problems, "handler has no top-level `if (recoveryApiRoute.handle(req, res)) return;`"];
   for (const s of body.slice(0, at)) {
     const line = s.loc?.start.line ?? "?";
@@ -442,6 +487,89 @@ describe("server.ts (F35: parsed, not searched)", () => {
     for (const [name, mutant] of mutants) {
       expect(mutant, name).not.toBe(source);
       expect(dispatchProblems(mutant), name).not.toEqual([]);
+    }
+  });
+});
+
+/**
+ * **The Resume POST's dispatch (plan 260910f, Stage 2), pinned the same way.**
+ *
+ * One more requirement than `/api/recovery`'s: it must come **before**
+ * `recoveryApiRoute`'s dispatch. That route claims every URL starting with
+ * `/api/recovery` and 404s the ones it does not know, so a resume branch placed
+ * after it is never reached — and every unit test of the route would still pass.
+ */
+function resumeDispatchProblems(source: string): string[] {
+  const problems: string[] = [];
+  const ast = babelParse(source, { sourceType: "module", plugins: ["typescript"] });
+  const top = ast.program.body;
+  const builds = top.filter(
+    (s) =>
+      s.type === "VariableDeclaration" &&
+      s.declarations.some(
+        (d) =>
+          isIdentifier(d.id, "recoveryResumeApiRoute") &&
+          d.init?.type === "CallExpression" &&
+          isIdentifier(d.init.callee, "makeRecoveryResumeRoute") &&
+          d.init.arguments.length === 0,
+      ),
+  );
+  if (builds.length !== 1) problems.push(`expected one module-level \`const recoveryResumeApiRoute = makeRecoveryResumeRoute()\`, found ${builds.length}`);
+  let mentions = 0;
+  let builtAnywhere = 0;
+  walk(ast.program, (n) => {
+    if (isIdentifier(n, "recoveryResumeApiRoute")) mentions += 1;
+    if (n.type === "CallExpression" && isIdentifier(n.callee, "makeRecoveryResumeRoute")) builtAnywhere += 1;
+  });
+  if (mentions !== 2) problems.push(`recoveryResumeApiRoute is named ${mentions} times; expected exactly two, its build and its dispatch`);
+  if (builtAnywhere !== 1) problems.push(`makeRecoveryResumeRoute is called ${builtAnywhere} times; expected once`);
+
+  const handler = top.find((s): s is FunctionDeclaration => s.type === "FunctionDeclaration" && isIdentifier(s.id, "handler"));
+  if (handler === undefined) return [...problems, "no module-level `function handler`"];
+  const body = handler.body.body;
+  const at = body.findIndex((s) => isDispatch(s, "recoveryResumeApiRoute"));
+  if (at === -1) return [...problems, "handler has no top-level `if (recoveryResumeApiRoute.handle(req, res)) return;`"];
+  const inventory = body.findIndex((s) => isDispatch(s));
+  if (inventory !== -1 && inventory < at) problems.push("the resume dispatch comes after recoveryApiRoute's, which 404s everything under /api/recovery first");
+  for (const s of body.slice(0, at)) {
+    const line = s.loc?.start.line ?? "?";
+    if (s.type === "ReturnStatement" || s.type === "ThrowStatement") problems.push(`an unconditional ${s.type} at line ${line} comes before the resume dispatch`);
+    if (s.type === "IfStatement") {
+      for (const lit of urlLiterals(s.test)) {
+        const claims = lit.kind === "prefix" ? RECOVERY_RESUME_PATH.startsWith(lit.value) : lit.value === RECOVERY_RESUME_PATH;
+        if (claims) problems.push(`an earlier branch on ${JSON.stringify(lit.value)} at line ${line} takes ${RECOVERY_RESUME_PATH} first`);
+      }
+    }
+  }
+  return problems;
+}
+
+describe("server.ts: the Resume POST's dispatch (260910f)", () => {
+  const source = readFileSync(join(REPO, "tools", "fleet", "server.ts"), "utf8");
+  const line = "  if (recoveryResumeApiRoute.handle(req, res)) return;";
+  const inventoryLine = "  if (recoveryApiRoute.handle(req, res)) return;";
+
+  it("imports the route module", () => {
+    expect(source).toContain('import { makeRecoveryResumeRoute } from "./routes-recovery-resume.js";');
+  });
+
+  it("builds the route once and dispatches to it as a direct statement of the handler, before /api/recovery's", () => {
+    expect(resumeDispatchProblems(source)).toEqual([]);
+  });
+
+  it("refuses the mutations that would leave it unreached", () => {
+    expect(source).toContain(line);
+    const withoutResume = source.replace(`${line}\n`, "");
+    const mutants: [string, string][] = [
+      ["a dead branch", source.replace(line, `  if (false) {\n  ${line}\n  }`)],
+      ["moved after the inventory route, which 404s it", withoutResume.replace(inventoryLine, `${inventoryLine}\n${line}`)],
+      ["after an unconditional return", source.replace(line, `  return;\n${line}`)],
+      ["a dispatch that no longer returns", source.replace(line, "  recoveryResumeApiRoute.handle(req, res);")],
+      ["taken first by an earlier prefix branch", source.replace("  if (retention.route.handle(req, res)) return;", '  if (url.startsWith("/api/recovery/")) {\n    res.end();\n    return;\n  }\n  if (retention.route.handle(req, res)) return;')],
+    ];
+    for (const [name, mutant] of mutants) {
+      expect(mutant, name).not.toBe(source);
+      expect(resumeDispatchProblems(mutant), name).not.toEqual([]);
     }
   });
 });

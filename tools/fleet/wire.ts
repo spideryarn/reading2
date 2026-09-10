@@ -4868,6 +4868,12 @@ export type RecoveryFeed =
       olderCount: number;
       /** The first page: unresolved first, grouped with interrupted first, newest disappearance first. */
       records: RecoveryWireRecord[];
+      /**
+       * The optional `resume` projection the daemon writes beside `view` (plan
+       * 260910f, Sol's G9). Its absence or its being unreadable never hides
+       * `records`: it only means the page offers no Resume here.
+       */
+      resume: RecoveryResumeSection;
     }
   | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
   | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
@@ -4999,11 +5005,11 @@ export type ScheduledOccurrence = {
 /* ---------------- Gradual recovery: resume requests, GET/POST /api/recovery/resume (260910f) ---------------- */
 
 /**
- * `~/.overseer/recovery-resume.json`, written by the daemon's resume pass and
- * read by `routes-recovery-resume.ts`. A SEPARATE file from `recovery.json` on
- * purpose (plan 260910f §3): the inventory's schema and its strict parser are
- * a contract that shipped first, and a version skew between the daemon and the
- * dashboard must read as "no resume data", never as "index unreadable".
+ * The resume projection: an OPTIONAL `resume` field the daemon writes beside
+ * `view` in `~/.overseer/recovery.json`, and `recovery-feed.ts` parses into
+ * `RecoveryResumeSection` (plan 260910f, Sol's G9). Both parsers ignore unknown
+ * top-level fields, so an old dashboard ignores it; a new one reads its absence
+ * as "resume not available here" and never lets it hide the records.
  */
 export type RecoveryResumeGateWire = { kind: "clear"; notes: string[] } | { kind: "held"; why: string; until: string | null };
 
@@ -5018,28 +5024,58 @@ export type RecoveryResumeLaunchState =
   | "failed-before-launch"
   | "outcome-unknown";
 
+/**
+ * The launch protocol's `OccurrenceSummary` for a recovery occurrence
+ * (`LaunchProtocol.inspect`), as the page sees it. Reported, never interpreted.
+ */
 export type RecoveryResumeLaunchWire = {
   occurrenceId: string;
   state: RecoveryResumeLaunchState;
   /** Null before an attempt exists. */
   attempt: number | null;
-  /** When the launch journal last moved it. */
-  at: string;
+  reservationHeld: boolean;
+  disposed: boolean;
+  endedAt: string | null;
+  completion: { kind: "exit"; code: number | null } | { kind: "rebooted" } | null;
 };
 
 /**
- * One request's state. `resumed` is the inventory's own disposition (a live
- * VERIFIED execution holds the conversation under a new run) — the only arm that
- * says the session is back, and the one the pace rule waits for.
+ * "Verified" is all four (plan 260910f, Sol's G2) — the inventory's `resumed`
+ * alone proves a process and a conversation, never the transcript.
  */
+export type RecoveryResumeVerification = {
+  /** The inventory's own `resumed` disposition: a live VERIFIED execution holds the conversation under a new run. */
+  inventoryResumed: boolean;
+  /** The launch protocol saw the child running, by its correlation evidence. */
+  observedRunning: boolean;
+  /** The transcript's size and mtime moved past what revalidation recorded. */
+  transcriptGrew: boolean;
+  /** A bounded tail holds a line with this conversation's sessionId dated after the launch. */
+  sessionLineSeen: boolean;
+};
+
+/** One request's state. Exhaustive over what the pass can conclude (Sol's G1). */
 export type RecoveryResumeRequestState =
-  /** In `pending/`. Only position 1 is evaluated; `why` says what it waits for (a gate, the pace rule, or the one ahead). */
+  /** In `pending/`. Only the head is evaluated; `why` says what it waits for (a gate, the pace rule, a held slot, or the one ahead). */
   | { kind: "pending"; position: number; requestedAt: string; actor: "dashboard" | "cli"; why: string; until: string | null }
-  /** Moved to `refused/` with the reason. Tapping again is allowed. */
+  /** Refused at revalidation or by the protocol, with the reason. Tapping again is allowed. */
   | { kind: "refused"; requestedAt: string; refusedAt: string; why: string }
-  /** Handed to the launch protocol; not yet verified. `waitingFor` says what verification is still missing. */
-  | { kind: "launched"; requestedAt: string; launch: RecoveryResumeLaunchWire; waitingFor: string }
-  | { kind: "resumed"; requestedAt: string | null; launch: RecoveryResumeLaunchWire | null; at: string };
+  /** Handed to the launch protocol; not yet verified. `waitingFor` names the missing parts of the verification in words. */
+  | { kind: "launched"; requestedAt: string; launch: RecoveryResumeLaunchWire; verification: RecoveryResumeVerification; waitingFor: string }
+  /** The child ended (an exit, or a reboot) before it was verified running. Tapping again is not offered for this occurrence. */
+  | { kind: "ended-unverified"; requestedAt: string; launch: RecoveryResumeLaunchWire; how: string }
+  /** `outcome-unknown`, or a held reservation nobody can release: only Greg's `dispose` moves it. `disposeCommand` is display text. */
+  | { kind: "needs-greg"; requestedAt: string; launch: RecoveryResumeLaunchWire; why: string; disposeCommand: string }
+  /** Greg disposed the launch. */
+  | { kind: "disposed"; requestedAt: string; launch: RecoveryResumeLaunchWire }
+  | { kind: "resumed"; requestedAt: string | null; launch: RecoveryResumeLaunchWire | null; verifiedAt: string };
+
+/**
+ * The account a resume must run under: the one whose config directory holds
+ * the transcript (Sol's G4 — `--resume` only finds its own config dir's
+ * conversations). Never `auto`.
+ */
+export type RecoveryResumeAccount = { kind: "pinned"; name: string; configDir: string } | { kind: "unknown"; why: string };
 
 /**
  * The previous objective and the uncertainty, for a record whose resume is
@@ -5059,6 +5095,8 @@ export type RecoveryResumePreview = {
   uncertainty: string[];
   /** The exact text that will be typed first. */
   nudge: string;
+  /** The account the resume would run under. `unknown` means no Resume button: manual instructions only. */
+  account: RecoveryResumeAccount;
 };
 
 export type RecoveryResumeProjection = {
@@ -5078,11 +5116,13 @@ export type RecoveryResumeProjection = {
   pendingOverflow: number;
 };
 
-export type RecoveryResumeFeed =
-  | { schema: 1; kind: "published"; composedAt: string; path: string; projection: RecoveryResumeProjection }
-  | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
-  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
-  | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string };
+/** `recovery.json`'s optional `resume` field, as the fleet parsed it. No arm lets a failure here hide the records. */
+export type RecoveryResumeSection =
+  | { kind: "published"; projection: RecoveryResumeProjection }
+  /** The daemon wrote no `resume` field: an older daemon, or resume not composed. The page offers no Resume. */
+  | { kind: "absent"; why: string }
+  | { kind: "unreadable"; why: string }
+  | { kind: "unsupported-schema"; saw: string; known: number; why: string };
 
 /** What `POST /api/recovery/resume` takes: the id, and what the person was looking at when they tapped. */
 export type RecoveryResumePostBody = { candidateId: string; seen: { checkedAt: string; conversationId: string; dir: string } };

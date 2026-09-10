@@ -60,6 +60,7 @@ import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
 import { makeRecoveryRoute } from "./routes-recovery.js";
+import { makeRecoveryResumeRoute } from "./routes-recovery-resume.js";
 import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
@@ -355,6 +356,7 @@ const queueRoute = ideaQueueRoute();
 /** Read fresh on request: this is the review record, not refresh-loop state. */
 const decisionsApiRoute = makeDecisionsRoute();
 const recoveryApiRoute = makeRecoveryRoute();
+const recoveryResumeApiRoute = makeRecoveryResumeRoute();
 
 /**
  * The Deploys tab's record and its probe.
@@ -942,6 +944,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  // Resume (plan 260910f): a same-origin POST that writes one request file and
+  // never launches. Before /api/recovery's line, which 404s anything under it.
+  if (recoveryResumeApiRoute.handle(req, res)) return;
   if (recoveryApiRoute.handle(req, res)) return;
   if (reportsApiRoute.handle(req, res)) return;
 
