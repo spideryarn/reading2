@@ -257,3 +257,21 @@ allowed slack), the empty-argv ancestor rule, or importing the pure constants le
 bundle. Final evidence: seven focused files, **778 tests green**; all four typecheck projects green;
 `build:fleet` green. A whole `npm test` attempt could not start its database lanes because this
 sandbox cannot connect to the local Postgres port; it did not report a test failure.
+
+**The narrow check of F62's fix.** F62 was an established P1 whose fix was written by the round-2
+reviewer that found it, so no one else had checked it. Per the engineering-manager rule for a fix
+not in the round-two snapshot, it got one read-only Sol check (`--sandbox review`), scoped to
+`isVitestRunner` alone, on `646684ec`. **No findings.** Claim 1 (subset: every positive still needs
+a token the pre-stage rule matched, so Kill only ever refuses more): holds, reasoned. Claim 2 (every
+listed option's arity matches Node v26.8.1's own `node --help`; an unknown bare option refuses):
+holds, established. Claim 3 (both captured shapes still match): holds, established. Review closed.
+
+## Status
+
+**Landed on `dev` at `d3804ebf`** (2026-09-10), after two code-review rounds and the narrow check;
+the ledger runs F42–F67. Gates on the merged tree: eight focused files, 842 tests, typecheck and
+`build:fleet` green. **A dashboard restart is needed** before any of it is live. The daemon does not
+need one. **Kill behaviour changed:** the `test-suites` policy now refuses more processes than
+before, and never kills one it previously refused. Final measurement on the box, 10:13 UTC: 875
+processes; 1 vitest, 3 Codex batch and 4 browser roots; 0 uncertain, 0 changed-under-read,
+0 unreadable; 428 ms median pass, 12.6 ms worst event-loop stall.
