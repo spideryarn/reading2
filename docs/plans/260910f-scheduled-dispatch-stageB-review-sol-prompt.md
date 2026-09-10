@@ -11,8 +11,29 @@ write it under `/tmp` and name that path in your closing message.
 
 ## The candidate (committed)
 
-- Stage B commit(s): **{{STAGE_B_COMMITS}}**. Diff: `{{DIFF_COMMAND}}`.
-- Changed paths: {{CHANGED_PATHS}}. Start there; this does not limit scope.
+- **Stage B is three commits:**
+  - **2dac033f** (B1: the scheduler through the protocol);
+  - **ae3e18cd** (B2: the classifier on the final exit.json, and `observedOf`);
+  - **46f5da98** (B3: collapsed onto the protocol's real 2b types, plus the `superseded` result
+    kind).
+
+  Read them with `git show 2dac033f ae3e18cd 46f5da98`. The two merges between them (11ee6139 and
+  a866b2e4) bring in launch-protocol's work and dev's, which are not under review. So a
+  `git diff` across the whole range would show you other people's code in `wire.ts`, `daemon.ts`,
+  `schedule-preview.ts` and `status-cli.ts`. **Take this stage's changes from the three commits**,
+  and use the tree at 46f5da98 for everything around them.
+- **Changed paths:**
+  - `tools/overseer/`: `jobs.ts`, `schedule-plan.ts`, `scheduler.ts`, `launch-occurrences.ts` (new),
+    `dispatch.ts`, `standing-jobs.ts`, `schedule-preview.ts`, `daemon.ts` (B1's minimal lines only),
+    `occurrence-result.ts`, `observed-launch.ts` (new), `occurrences-projection.ts`;
+  - `scripts/`: `overseer.ts`, `overseer-activate.ts`;
+  - `tools/fleet/`: `wire.ts` (the SchedulePreview types and the Scheduled occurrences block),
+    `schedule-parse.ts`, `occurrences-parse.ts`, `web/src/SchedulePreview.tsx`,
+    `web/src/ScheduledOccurrences.tsx`;
+  - `tests/`: `overseer-scheduled-dispatch.test.ts` (new), `overseer-observed-launch.test.ts` (new),
+    and the ported suites named in the commit messages.
+
+  Start there; this does not limit scope.
 - **What this branch builds on, and is NOT under review.** The launch protocol (`tools/overseer/launch-*.ts`,
   `launchers.ts`) was merged in locally from `worktree-launch-protocol` at e3bcace3 (its Stages 1, 1b, 2 and 2b; merged here at a866b2e4, together with the dev commits that branch had merged).
   It has its own reviews. Read it as the contract Stage B consumes. Report a defect you find in it,
@@ -25,7 +46,13 @@ write it under `/tmp` and name that path in your closing message.
   - **M12** (an abandoned occurrence releases its due instant; a lost account forces an abandon).
 
   The builder's brief: `docs/plans/260910f-scheduled-dispatch-stageB-task.md`, including 2b and 2c.
-- Evidence: {{GATE_RESULTS}}.
+- Evidence, rerun by the author at 46f5da98 and not taken from the builders' reports:
+  - `npm run typecheck`: exit 0.
+  - The 25 focused test files: exit 0, 880 tests. The list is the `npx vitest run` line in
+    `docs/plans/260910f-scheduled-dispatch-stageB-task.md`'s gates, plus the protocol's own suites
+    and `doc-links`.
+  - The builders watched 21 scheduled-dispatch tests go red. They checked the account and
+    `replaced` rows with three planner mutants, and saw 5 M13 tests go red.
 
 ## What to attack
 
