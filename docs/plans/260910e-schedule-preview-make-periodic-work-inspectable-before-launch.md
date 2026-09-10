@@ -309,9 +309,20 @@ checked for completeness by the compiler but not for agreement; the payload type
 
 - [x] `overseer.md` § The standing jobs: the preview, the fixture, dry-run, per-tick evidence for
   session jobs, the no-recurrence sentence. Factual, not a change to a rule.
-- [ ] Full suite through `tmux-job`, typecheck, lint of touched files; debrief. The roadmap row is
+- [x] Full suite through `tmux-job`, typecheck, lint of touched files; debrief. The roadmap row is
   the Overseer's to update on close-out. The daemon needs a restart to write the file, and the
   dashboard one to serve the route — both the Overseer's.
+
+**The full suite found what the focused lists could not.** On the merged tree (`f597c7d0`) it was
+1011 files passed and 4 red: the two environment tests every fresh worktree reds
+(`cold-start-lazy-imports`, `pdf-bundle-trace`), a timing test in `fetch.test.ts` that passes alone
+(121/121), and **`fleet-attention.test.ts`'s seam test, which was this branch's**: the new route
+reached sixteen Overseer modules through `storeRoot` from `store.ts` and a file-name constant from
+`schedule-preview.ts`. The fix keeps the dashboard at the nine modules it was argued for — the
+fleet's own `storeRoot`, and the constant in the `schedule-parse.ts` leaf — rather than adding an
+allowlist entry. The lesson for the next fleet-side stage: **any new `tools/fleet/` import of
+`tools/overseer/` belongs in the focused list with `tests/fleet-attention.test.ts`**, because that
+test walks the whole closure and nothing else does.
 
 ## Not doing
 

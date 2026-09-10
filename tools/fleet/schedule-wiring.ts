@@ -10,8 +10,14 @@
  * the throw is caught here and the route answers `unreadable` with the reason on
  * every request — the same trade `server.ts` makes around the usage-history
  * store.
+ *
+ * **The fleet's own `storeRoot` (`attention.ts`), never the Overseer's.**
+ * Importing `tools/overseer/store.ts` here pulled sixteen Overseer modules into
+ * the dashboard's reach, which is exactly what `tests/fleet-attention.test.ts`
+ * § *imports only the Overseer modules that were argued for* exists to refuse:
+ * the file is the contract between the two tools, not the Overseer's reader.
  */
-import { storeRoot } from "../overseer/store.js";
+import { storeRoot } from "./attention.js";
 import { readScheduleFile, scheduleRoute, type ScheduleFileRead, type ScheduleRouteDeps } from "./routes-schedule.js";
 
 export type Schedule = {

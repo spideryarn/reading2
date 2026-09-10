@@ -48,6 +48,19 @@ import type {
 /** The schema this build writes and reads. The writer stamps it; a file with any other number is `unsupported-schema`. */
 export const SCHEDULE_PREVIEW_SCHEMA = 1;
 
+/**
+ * The file's name, inside the Overseer store directory — beside `armed.json`,
+ * for the reason `tools/overseer/arming.ts` gives: it is a fact about one
+ * store's scheduler.
+ *
+ * **Here, in the browser-safe leaf, rather than in the Overseer module that
+ * writes it**, because the dashboard's route needs the name and nothing else:
+ * importing it from `tools/overseer/schedule-preview.ts` pulled the planner,
+ * the scheduler and the store into the dashboard's reach
+ * (`tests/fleet-attention.test.ts`). The writer re-exports it from here.
+ */
+export const SCHEDULE_PREVIEW_FILE = "schedule.json";
+
 /** More rows than any job list this box will carry, and few enough that a damaged file cannot make a reader build a huge table. */
 const MAX_JOBS = 500;
 /** A sentence, a prompt or a path. Long enough for every one the daemon writes; short enough to bound a hostile or damaged file. */

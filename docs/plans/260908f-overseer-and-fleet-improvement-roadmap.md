@@ -1524,6 +1524,24 @@ its own volatile launch-record map.
 **Acceptance:** the dashboard/CLI can say exactly what would run next and why, without launching
 anything. A changed job document is visible. No cron hidden inside a Claude session.
 
+**Status (2026-09-10, Overseer): landed on dev at c8490211, session `schedule-preview`, plan
+[260910e](260910e-schedule-preview-make-periodic-work-inspectable-before-launch.md); the stage is
+complete and launches nothing (`OVERSEER_JOBS_ENABLED` stays Greg's).** One pure list-wide planner
+shared by the tick and the preview; duplicate job ids refused before planning (the old loop
+dispatched the first); session-job documents re-digested every tick with the ARMED headline from the
+same reading (before, a doc edited after daemon start ran under the old pin until a restart); a
+hashed live/dry-run switch per job; both scheduled prompts forbid the session creating its own
+recurrence; per-document pins so a refusal names which doc moved; a dry-run fixture job. The daemon
+writes `~/.overseer/schedule.json` every checkpoint, armed or not; `overseer status` prints it and
+says whether the running daemon holds the list this checkout builds; `GET /api/overseer/schedule`
+reads one bounded regular file; the section sits under the Overseer status card, browser-checked at
+1280 and 390 px. Learned: a dry-run job needs its own eligibility arm or the preflight can never arm
+a box carrying it; a disarmed preview must count a proposed launch or it hides the spacing arming
+would apply; any new `tools/fleet` import of `tools/overseer` belongs in the focused list with
+`fleet-attention.test.ts`, the only test that walks the whole import closure. Needs Greg: the
+get-ready-to-deploy doc still tells its runner to recur via a session loop or cron (a rule doc);
+and whether the inert `schedule-fixture` job goes live for Scheduled dispatch's first run.
+
 ### Stage: Scheduled dispatch — one durable occurrence, one reconciled launch
 
 - [ ] Instantiate the Launch protocol for each due job: occurrence identity is distinct from job
