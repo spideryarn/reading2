@@ -1060,7 +1060,7 @@ export const WHY_IS_NOT_OPTIONAL =
   "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
   "  it is written into the store and read by whoever asks why a job ran twice.";
 
-async function runParsed(parsed: Parsed): Promise<number> {
+export async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
 
   switch (parsed.command) {
@@ -1082,12 +1082,19 @@ async function runParsed(parsed: Parsed): Promise<number> {
       if (tail.total === 0) console.log(`no events in ${join(root, EVENTS_FILE)}`);
       for (const event of tail.events) console.log(describeEvent(event));
       if (tail.unreadable > 0) console.log(`(${tail.unreadable} unreadable lines)`);
+      if (tail.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(tail.tornTail)})`);
       return 0;
     }
     case "notes": {
       const read = readNotes(root, parsed.limit);
+      if (read.kind === "unreadable") {
+        console.error(`✗ ${read.cause}`);
+        return 1;
+      }
       if (read.notes.length === 0) console.log("the Overseer has written nothing about itself yet");
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
+      if (read.unreadable > 0) console.log(`(${read.unreadable} unreadable lines)`);
+      if (read.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(read.tornTail)})`);
       return 0;
     }
     case "attention":

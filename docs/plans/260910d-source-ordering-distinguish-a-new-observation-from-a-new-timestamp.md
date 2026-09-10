@@ -285,9 +285,21 @@ their tests.
   left as it is: they are CLI readers, and the page load never reaches them. Nothing here adds a
   full-history parse to a page load: the dashboard reads only the checkpoint (Sol, finding 6).
 
-- [ ] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail.
-- [ ] The live-log check (read-only), recorded below with its count.
-- [ ] Focused suites, typecheck, full suite via `tmux-job`; Sol review; commit; push.
+- [x] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail. **Implemented by Codex
+  (gpt-5.6-sol), run ahead of Stage 2** because Stage 2's `daemon.ts` edits wait on another
+  session's push to that file, and Stage 3 touches none of it. `parseEventLines` is now exported and
+  takes complete lines, so `readEventTail` uses the store's parser instead of its own kind-and-`at`
+  check; `splitJsonl` in `jsonl.ts` is the one splitter.
+- [x] The live-log check (read-only): **1,918 events, 0 unreadable on the new parser**, the same
+  frozen bytes as the baseline.
+- [ ] Focused suites and typecheck green on the manager's own runs (4 files / 156 tests, plus the
+  other suites that reach these readers); full suite via `tmux-job`; Sol review; commit; push.
+
+Status, 2026-09-10: implemented and committed; Sol stage review next. Two things for it: the
+frozen log proves only that no event *written so far* trips the new claim-agreement check, not
+that the differ can never write one, so every constructor in `diff.ts` needs tracing; and
+`readFully` now throws on a zero-byte read inside `truncateToLastLine`, which runs at
+`openStore`, where the old code carried on silently.
 
 ## What this deliberately does not do
 

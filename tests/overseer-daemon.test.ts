@@ -108,7 +108,13 @@ async function run(
     ...(options.schedulerDetail === undefined ? {} : { schedulerDetail: options.schedulerDetail }),
   });
   expect(outcome.kind).toBe(options.outcome ?? "stopped");
-  return { notes: readNotes(root).notes, events: eventsIn(root) };
+  return { notes: notesIn(root), events: eventsIn(root) };
+}
+
+function notesIn(root: string): DaemonNote[] {
+  const read = readNotes(root);
+  if (read.kind === "unreadable") throw new Error(read.cause);
+  return read.notes;
 }
 
 function eventsIn(root: string): OverseerEvent[] {
@@ -725,7 +731,7 @@ describe("refusing to be the second daemon", () => {
     // AND THE REFUSED ONE WROTE NOTHING. A second daemon that logged its own
     // start into the same file would be the first line of a history nobody
     // could trust.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.filter((n) => n.kind === "daemon-started").length).toBe(1);
   });
 });
@@ -748,7 +754,7 @@ describe("stopping", () => {
         })(),
     });
     expect(outcome.kind).toBe("stopped");
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.at(-1)?.kind).toBe("daemon-stopped");
     expect(existsSync(join(root, "overseer.lock"))).toBe(false);
     expect(existsSync(join(root, NOTES_FILE))).toBe(true);
@@ -777,7 +783,7 @@ describe("stopping", () => {
     // stopping note, and a lock file naming a pid that is probably still alive
     // because the process that died was a test worker. The two want different
     // things done about them, so they must not look alike.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const last = notes.at(-1);
     if (last?.kind !== "daemon-stopped") throw new Error("expected a stopping note");
     expect(last.why).toContain("the daemon threw");
@@ -857,7 +863,7 @@ describe("the scheduler on the daemon's clock", () => {
     expect(lines.some((line) => line.includes("STUCK"))).toBe(true);
 
     // REPORTED DURABLY, not only on a console somebody was not keeping.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const unaccounted = notes.filter((note) => note.kind === "job-unaccounted");
     expect(unaccounted.length).toBeGreaterThanOrEqual(1);
     expect(unaccounted[0]?.kind === "job-unaccounted" && unaccounted[0].reason).toBe("lease-expired");

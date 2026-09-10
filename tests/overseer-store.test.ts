@@ -20,6 +20,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readSync,
   readdirSync,
   rmSync,
   statSync,
@@ -39,6 +40,7 @@ import {
   type RegisterRowField,
 } from "../tools/overseer/diff.js";
 import type { ObservedRow } from "../tools/overseer/observation.js";
+import { truncateToLastLine } from "../tools/overseer/jsonl.js";
 import {
   CHECKPOINT_FILE,
   ENTRY_FIELD_OWNERS,
@@ -277,6 +279,24 @@ describe("a cold start", () => {
 });
 
 describe("the torn-write sequence", () => {
+  test("repair reads every byte when the filesystem returns three bytes at a time", () => {
+    const root = tempRoot();
+    const path = join(root, EVENTS_FILE);
+    const complete = `${JSON.stringify(seenEvent(observedRow(), "2026-09-08T10:00:00.000Z"))}\n`;
+    const torn = '{"kind":"session-seen"';
+    writeFileSync(path, complete + torn);
+    let calls = 0;
+
+    const repair = truncateToLastLine(path, (fd, buffer, offset, length, position) => {
+      calls += 1;
+      return readSync(fd, buffer, offset, Math.min(length, 3), position);
+    });
+
+    expect(calls).toBeGreaterThan(1);
+    expect(repair).toEqual({ torn: true, droppedBytes: Buffer.byteLength(torn), droppedText: torn });
+    expect(readFileSync(path, "utf8")).toBe(complete);
+  });
+
   test("tear, restart, append, append, read", () => {
     const root = tempRoot();
     const events = join(root, EVENTS_FILE);
@@ -411,9 +431,67 @@ describe("the torn-write sequence", () => {
 
     const read = store.readEvents();
     expect(read.events).toHaveLength(2);
+    expect(read.tornTail).toBeNull();
     // The REASON travels with the line: a log line that says only "1 unreadable"
     // sends whoever reads it back to the file to guess.
     expect(read.unreadable).toEqual([{ line: 2, text: "{not json}", reason: expect.stringContaining("JSON") }]);
+  });
+
+  test("an unterminated final event is reported as a torn tail and left behind the cursor", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.append([seenEvent(observedRow(), "2026-09-08T10:00:00.000Z")]);
+    const path = join(root, EVENTS_FILE);
+    const completeBytes = readFileSync(path).byteLength;
+    const torn = '{"kind":"tmux-session-gone","at":"2026-09-08T10:01';
+    appendFileSync(path, torn);
+
+    const read = store.readEvents();
+
+    expect(read.events).toHaveLength(1);
+    expect(read.unreadable).toEqual([]);
+    expect(read.tornTail).toBe(torn);
+    expect(read.nextByte).toBe(completeBytes);
+  });
+});
+
+describe("event identity consistency", () => {
+  test("contradictory keys, rows, claims and replacement keys are unreadable", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    const row = observedRow();
+    const next = observedRow({ claimedConversationId: "0e5ee0a1-0002-4000-8000-0000000000a2" });
+    const path = join(root, EVENTS_FILE);
+    const keyMismatch = { ...seenEvent(row, "2026-09-08T10:00:00.000Z"), key: "$9999 none" };
+    const rowMismatch = { ...seenEvent(row, "2026-09-08T10:01:00.000Z"), row: { ...row, id: "$9998" } };
+    const claimMismatch = {
+      ...seenEvent(row, "2026-09-08T10:02:00.000Z"),
+      row: { ...row, claimedConversationId: next.claimedConversationId },
+    };
+    const previousKeyMismatch = { ...replacedEvent(row, next, "2026-09-08T10:03:00.000Z"), previousKey: "$9997 none" };
+    writeFileSync(
+      path,
+      [keyMismatch, rowMismatch, claimMismatch, previousKeyMismatch].map((event) => JSON.stringify(event)).join("\n") + "\n",
+    );
+
+    const read = store.readEvents();
+
+    expect(read.events).toEqual([]);
+    expect(read.unreadable).toHaveLength(4);
+    expect(read.unreadable.map((line) => line.reason).join("\n")).toMatch(/key|identity/i);
+  });
+
+  test("a null pane id beside a real pane pid remains legal", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    const row = observedRow({ paneId: null, panePid: 5353 });
+    const event = paneReplacedEvent(observedRow(), row, "2026-09-08T10:01:00.000Z");
+    writeFileSync(join(root, EVENTS_FILE), `${JSON.stringify(event)}\n`);
+
+    const read = store.readEvents();
+
+    expect(read.unreadable).toEqual([]);
+    expect(read.events).toHaveLength(1);
   });
 });
 
