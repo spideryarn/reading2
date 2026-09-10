@@ -1,5 +1,13 @@
 # Make the Overseer and fleet dashboard useful, dependable, and cheaper to run
 
+**On hold from 2026-09-10 21:10 UTC.** Greg: *"I think we're going to deprioritise further
+Overseer/web dashboard stuff to the very bottom priority, and now push up the priority of all the
+Spideryarn product stuff."* The four stages then in flight (Launch protocol, Bounded judgement,
+Scheduled dispatch, Gradual recovery) land the stage each had in hand and stop; nothing further from
+this roadmap is dispatched until Greg says otherwise. Each stage's status paragraph says where it
+stopped and what the next stage would have done. The product work is
+[260908f-prioritised-spideryarn-codebase-improvements.md](260908f-prioritised-spideryarn-codebase-improvements.md).
+
 Status as of 2026-09-09 01:00 UTC: **implementation in progress, run by the Overseer** — landed on `dev`: Baseline (2aed1a48, census table below), Overseer status (5cf9a7ee), Failure containment (857ca301), **Usage visibility (af1ec002: `usage-feed.ts`, `zones.ts` UTC/London/Athens, `UsagePanel.tsx`, session closed; the new-job deferral half of its checkbox 3 deliberately not built — the signal is `unknown` on this box most of the time; live on 8787 after the next dashboard restart)**; **Execution identity (8ed9ae59: `execution-identity.ts`, `FleetRow.execution`, `session-execution-changed`, `RegisterEntry.verifiedExecution`; no schema bump; live only after the dashboard and daemon restart; session closed)**; next for dispatch when usage allows: Work evidence (its probe machinery now has a production caller), Responsive collection (the identity pass costs 236 ms over 26 sessions); Delivery uncertainty is with the `claude-agents-dashboard` session (its Stages 1–3: 0b2fee1e, 082d91aa, 854fac4b); dispatched 2026-09-08 22:50 UTC: Execution identity (session `260908f-roadmap-exec-identity`) and Usage visibility (`260908f-roadmap-usage`, which also carries Greg's London/Athens clock). Attention inbox and Attention completeness are **already met** per the census (attention-pass.ts, model-driven detector, AttentionPanel) and will not be dispatched; Work evidence waits for Execution identity because both use the same probe machinery. The log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status
 **landed** (5cf9a7ee, session closed); **Baseline landed** (session `260908f-roadmap-baseline`);
 Failure containment is with `260908f-roadmap-failure-containment`; the log is
@@ -1675,6 +1683,22 @@ queued as qi-59skznz8; live since the 16:49Z restarts.
 
 **Acceptance:** two taps cannot launch two copies of the same selected recovery; resources limit the
 pace; unchanged unknowns remain visible. Recovery restores valuable work, not the previous load spike.
+
+**Status (2026-09-10, Overseer): done enough to stop, on dev at b089714b; session
+`gradual-recovery`, plan
+[260910f-gradual-recovery-resume-selected-interrupted-work-one-at-a-time.md](260910f-gradual-recovery-resume-selected-interrupted-work-one-at-a-time.md).**
+Stages 1–2 landed (cfc963eb, then Sol's G11–G20 fixes through bd57a96b): request files and a
+one-per-tick daemon queue; an exhaustive occurrence table; one launch in flight until four facts
+verify it; shared `launch-gate.ts` (health and account quota, also used by Scheduled dispatch); the
+account pinned from the reservations ledger; a `resume` projection in `recovery.json`, a
+`POST /api/recovery/resume` route and the panel's Resume… control with its inline confirmation.
+Stage 3a (the `--resume <uuid>` argv arm and the producer `capabilities` marker) is on dev with a
+narrow Sol check ordered by the Overseer. **Stage 3b is not built** and stops here at Greg's
+reprioritisation of 2026-09-10 21:10Z: the port is `unwired`, so a tap queues a request, the page
+shows it pending with manual instructions, and nothing launches; its brief is
+`260910f-gradual-recovery-stage3b-task.md` and it needs Launch protocol's Stages 1, 1b and 2 on dev.
+Pending Greg: the capability marker is an observation, never held; no automatic resume; unknown
+usage holds; default-login sessions are manual-only. Worktree `recovery-resume` standing.
 
 ### Stage: Work reports and decisions — a small event vocabulary
 
