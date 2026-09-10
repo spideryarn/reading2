@@ -10869,6 +10869,101 @@ describe("the detail pane's state follows the execution, not the handle", () => 
   });
 
   /**
+   * **A FAILED `list-panes` IS WEATHER, NOT A NEW WORLD.** `collect.ts` answers
+   * `tmuxServerPid: null` whenever `list-panes` fails — a timeout on a loaded
+   * box, while the session rows can still arrive — so a mount key that carried
+   * the raw pid read `123 → null → 123` and remounted twice, wiping exactly
+   * what the execution epoch exists to keep. The follow-up to Sol's F11.
+   */
+  it("keeps the draft and the cards when the tmux world goes unreadable for one snapshot and returns the same", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() => feed.push(state({ tmuxServerPid: null, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+  });
+
+  /** The claim half of the same weather: one collection that could not read the row's tmux environment. */
+  it("keeps the draft and the cards when the claim goes unreadable for one snapshot and returns the same", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    const claimless = [
+      steerable({ id: "$a", title: "a session", status: { kind: "working" }, claudeSessionId: null, execution: CANNOT_TELL }),
+    ];
+    act(() => feed.push(state({ rows: claimless })));
+    await act(async () => {});
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+  });
+
+  /**
+   * **AN UNKNOWN IN THE MIDDLE DOES NOT LAUNDER A CHANGE.** Known 132280, then
+   * nothing, then known 132281: two known values that differ, and so a
+   * different world — however many unreadable snapshots lie between them. A
+   * version that let the null overwrite what it held would treat 132281 as a
+   * first sighting and keep one server's draft under another's handle.
+   */
+  it("still clears detail state when the world changes to a different known one across an unreadable snapshot", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() => feed.push(state({ tmuxServerPid: null, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+    act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  it("still clears detail state when the claim changes to a different known one across an unreadable snapshot", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    const claiming = (claim: string | null): FleetState["rows"] => [
+      steerable({ id: "$a", title: "a session", status: { kind: "working" }, claudeSessionId: claim, execution: CANNOT_TELL }),
+    ];
+    act(() => feed.push(state({ rows: claiming(null) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+    act(() => feed.push(state({ rows: claiming("conv-B") })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  /**
    * The epoch alone would be equal for two sessions that have each been
    * replaced the same number of times — which, on a page whose default state is
    * *nobody could verify anything*, means equal for every session at zero. So
@@ -10970,6 +11065,91 @@ describe("recent messages, when the execution reading contradicts the row's clai
     harness: "claude-code",
     conversation: { kind: "conflicting", claimed: "conv-A", observed: "conv-B" },
   };
+
+  /**
+   * **AN ANSWER SAYS WHICH CONVERSATION IT IS OF, AND THE PAGE CHECKS.**
+   * `/api/messages` resolves the claim off the server's CURRENT row, so if the
+   * server's snapshot moved from claim C to D between this page's snapshot and
+   * the request, D's turns come back — and were drawn as C's, because nothing in
+   * the answer said otherwise. The reader now stamps every answer with the
+   * conversation it read (transcript.ts), and a stamp that disagrees with the
+   * claim the page asked under is refused aloud: not drawn as this row's turns,
+   * and not dropped into silence either. GPT Sol's F10.
+   */
+  function answeringFor(stamp: Record<string, unknown>): MessagesApi {
+    return {
+      recent: async () =>
+        parseRecentMessages(
+          messagesWire({ ...stamp, turns: [turnWire({ text: "a turn the server read", uuid: "u-stamped" })] }),
+        ),
+    };
+  }
+
+  it("refuses to draw an answer stamped with a different conversation as this row's transcript", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({ claudeSessionId: "conv-D" }) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("a turn the server read");
+    expect(text).toContain("had already moved to a different conversation");
+    expect(text).toContain("conv-D");
+    /* Not a dead end: the next read, once the page's snapshot has caught up, is
+       one tap away. */
+    expect(buttonSaying("Read again")?.disabled).toBe(false);
+  });
+
+  it("refuses a failure stamped with a different conversation too, rather than drawing it as this row's", async () => {
+    const feed = manualTransport();
+    const api: MessagesApi = {
+      recent: async () =>
+        parseRecentMessages({
+          kind: "not-found",
+          reason: "no-claude-session-id",
+          why: "this session has no conversation id",
+          claudeSessionId: null,
+        }),
+    };
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("had already moved to a different conversation");
+    expect(text).not.toContain("There is no transcript to read for this session.");
+  });
+
+  it("draws an answer stamped with the conversation it asked for", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({ claudeSessionId: "conv-A" }) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn the server read");
+    expect(text).not.toContain("had already moved to a different conversation");
+  });
+
+  /**
+   * **AN OLD SERVER'S ANSWER IS ACCEPTED EXACTLY AS BEFORE.** The page and the
+   * server ship together, and refusing every unstamped answer would blank this
+   * panel for the minutes of a partial deploy.
+   */
+  it("draws an unstamped answer, which is what a server from before the stamp sends", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({}) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn the server read");
+    expect(text).not.toContain("had already moved to a different conversation");
+  });
 
   it("re-reads when the observed conversation changes under one handle, and not on an unchanged snapshot", async () => {
     const feed = manualTransport();

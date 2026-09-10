@@ -53,7 +53,7 @@ import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain, type Tip } from "./Tooltip";
-import { useExecutionEpoch } from "./continuity";
+import { useDetailTargetKey } from "./continuity";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
 import type { MessagesApi } from "./messages-client";
@@ -580,20 +580,14 @@ export function SessionsPanel({
     selectedId === null || wrongWorld ? null : (sorted.find((r) => r.id === selectedId) ?? null);
 
   /**
-   * **WHAT THE DETAIL PANE IS MOUNTED UNDER.** See the `key` below, and
-   * continuity.ts for the whole argument. Called unconditionally, `null`
-   * included, because it is a hook.
+   * **WHAT THE DETAIL PANE IS MOUNTED UNDER** — the run, the tmux server and the
+   * conversation claim, each of which moves the key only between two readings
+   * that were both taken and disagree. See the `key` below, and continuity.ts §
+   * `useDetailTargetKey`, which owns what counts as a change of target so that
+   * this file does not keep a second version of the rule. Called
+   * unconditionally, `null` included, because it is a hook.
    */
-  const executionKey = useExecutionEpoch(selected);
-  /**
-   * The execution epoch is necessary but not sufficient to name the target the
-   * detail pane is drawing. A handle lives inside one tmux server, and every
-   * transcript and write request is resolved against the row's claimed Claude
-   * conversation. Either can change while execution is unverifiable, when the
-   * epoch deliberately holds. Keeping them in the mount key prevents state
-   * created against one resolvable target from riding into another.
-   */
-  const detailKey = JSON.stringify([tmuxServerPid, selected?.claudeSessionId ?? null, executionKey]);
+  const detailKey = useDetailTargetKey(selected, tmuxServerPid);
 
   /**
    * **BRING THE DETAIL ONTO THE SCREEN WHEN A SELECTION ARRIVES.**
@@ -723,8 +717,10 @@ export function SessionsPanel({
            so `key={selected.id}` went on carrying one agent's half-typed
            message onto the terminal of the one that replaced it.
 
-           **WHAT DOES NOT RESET IT, and this is the half worth stating:** an
-           execution reading that goes unverifiable and comes back. On a loaded
+           **WHAT DOES NOT RESET IT, and this is the half worth stating:** a
+           reading that could not be taken and comes back the same — an
+           unverifiable execution, a failed `list-panes` (`tmuxServerPid: null`),
+           a claim one collection could not read. On a loaded
            box that is the normal weather rather than an event — the probe's own
            tolerance was widened to 15 s in September for exactly this — and a
            key built from the token itself would read `T → "" → T`, remount

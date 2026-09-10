@@ -165,3 +165,79 @@ export function useExecutionEpoch(row: ExecutionRow | null): string {
      another row's name. */
   return JSON.stringify([row.id, epoch]);
 }
+
+/**
+ * The last KNOWN value of one fact about one session, and how many times it has
+ * changed to a different known value. The same shape as `Baseline`, for a fact
+ * that has no verified/unverifiable arms — only "read" and "could not be read".
+ */
+type KnownBaseline = { value: string; epoch: number };
+
+/**
+ * **THE EPOCH'S RULE, FOR A FACT THAT IS EITHER KNOWN OR NOT.**
+ *
+ * `null` here means *this snapshot could not read it*, never *it changed to
+ * nothing*: `collect.ts` answers `tmuxServerPid: null` whenever `list-panes`
+ * fails — a timeout on a loaded box, while the rows can still arrive — and a
+ * collection that cannot read a row's tmux environment leaves its claim null
+ * the same way. So, exactly as `useExecutionEpoch` treats an unverifiable
+ * reading:
+ *
+ *  - a **first** known value establishes the baseline without counting a change;
+ *  - the **same** known value holds the epoch;
+ *  - a **different** known value increments it — however many unreadable
+ *    snapshots came between the two, since an unknown in the middle cannot
+ *    launder a change;
+ *  - **null preserves but never updates** the baseline.
+ *
+ * Per session id, and as render-phase state, for the reasons given at
+ * `useExecutionEpoch`.
+ */
+function useKnownEpoch(id: string | null, value: string | null): number {
+  const [baselines, setBaselines] = useState<ReadonlyMap<string, KnownBaseline>>(() => new Map());
+  if (id === null) return 0;
+  const held = baselines.get(id) ?? null;
+  if (value === null) return held?.epoch ?? 0;
+  if (held !== null && held.value === value) return held.epoch;
+
+  const settled: KnownBaseline = { value, epoch: held === null ? 0 : held.epoch + 1 };
+  setBaselines((prev) => {
+    const already = prev.get(id);
+    if (already !== undefined && already.value === settled.value && already.epoch === settled.epoch) return prev;
+    const copy = new Map(prev);
+    copy.set(id, settled);
+    return copy;
+  });
+  return settled.epoch;
+}
+
+/** The minimum of a row the detail key reads: `ExecutionRow`, plus the claim. */
+export type TargetRow = ExecutionRow & { claudeSessionId: string | null };
+
+/**
+ * **THE MOUNT KEY FOR THE DETAIL PANE: WHICH TARGET ITS STATE WAS CREATED
+ * AGAINST.**
+ *
+ * Three facts name that target, and a change in any of them must discard the
+ * draft and the outcome cards: the **run** (`useExecutionEpoch`), the **tmux
+ * server** the handle lives in — `$1643` names a session only inside one — and
+ * the **conversation claim**, which is what every transcript read and write is
+ * resolved against. GPT Sol's F11 put the last two into the key raw, and on
+ * this box that made the key flicker: `123 → null → 123` is two remounts and an
+ * eaten draft for a reason that is not a change of anything.
+ *
+ * So all three follow one rule — *a change is two readings that were both
+ * taken and disagree* — and it lives here rather than as a second hand-written
+ * version at the call site. Call it unconditionally, once, `null` included.
+ */
+export function useDetailTargetKey(row: TargetRow | null, tmuxServerPid: number | null): string {
+  const executionKey = useExecutionEpoch(row);
+  const id = row?.id ?? null;
+  const world = useKnownEpoch(id, tmuxServerPid === null ? null : String(tmuxServerPid));
+  /* `""` is not a conversation: the transcript reader treats it as no id at all. */
+  const claim = useKnownEpoch(id, row === null || row.claudeSessionId === "" ? null : row.claudeSessionId);
+  if (row === null) return NOTHING_SELECTED;
+  /* `executionKey` already carries `row.id`, which is what separates two
+     sessions whose three epochs are equal. */
+  return JSON.stringify([executionKey, world, claim]);
+}

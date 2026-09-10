@@ -554,6 +554,8 @@ export function App({
               view={questions}
               rows={rows}
               answeringEnabled={answeringEnabled}
+              answeringRefusal={answeringRefusal?.why ?? null}
+              onAnsweringRefused={onAnsweringRefused}
               queueApi={queueApi}
               refreshNonce={refreshNonce}
               onOpenQueue={() => go("ideas")}

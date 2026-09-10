@@ -312,8 +312,16 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, `MessageOvers
   - Copy, one shown near Clear when it applies: *"This browser will not let the page keep a copy, so
     a reload would lose this message."* / *"Too long to keep a copy of, so a reload would lose this
     message."*
-- **2b — after Sol's Stage 1 round closes and 2a lands**: the session composer's wiring, the
-  composer under each reading (Fable's table), and the `conflicting` restore.
+- **2b — after Sol's Stage 1 round 2 lands**: the session composer's wiring, the composer under
+  each reading (Fable's table), and the `conflicting` restore. 2a is in (`08fa8e19`).
+
+  **Why round 2 stays write-capable rather than report-only so 2b could overlap it.** Round 2 can
+  write to `SessionDetail.tsx` and `tests/fleet-web.test.tsx`, which are 2b's files, so the only way
+  to run them together would be to take the reviewer's write access away. It would buy nothing: when
+  the Stage 1 follow-up finishes, the Stage 3 round-2 check, Stage 4a and Stage 1 round 2 are three
+  things running tests, which is `overseer.md`'s ceiling, so 2b could not start alongside them
+  anyway. Giving up the house default — a reviewer that fixes what it finds — for no gain in
+  throughput is a bad trade; 2b goes after.
 
 **Stage 4 was held rather than started alongside 2a.** With two reviewers and 2a running, three
 things in this worktree were running tests, and `docs/project/overseer.md` caps test-running work at
@@ -588,6 +596,51 @@ typecheck passed. Mutation checks on each fix were Sol's, and are in its answer.
 | F14 | `question A → refusal → no question → identical A` resurrected the old refusal | P1 established | **Fixed by Sol, accepted** — F7's rule that a transition through no dialog is a change, now made final rather than merely hidden. |
 | F15 | A replacement hidden entirely inside unverifiable readings cannot be detected, so the absolute guarantee is false | P1 established contract gap | **Guarantee narrowed**, the first of the two options Sol offered; see § What this guarantees. The second (withhold everything before a first verified reading) is the rule Fable's arbitration already declined. Not an overrule. |
 | F16 | `QuestionsPanel` owns a second `answering-disabled` latch for the same server-wide fact | P1 established, wider than the detail pane | **Accepted; follow-up.** `App` owns the one latch; `QuestionsPanel` takes it and its handler as props, and keeps only its dialog-scoped refusal local. |
+
+**The Stage 1 follow-up — built**, an Opus subagent, from the three open rows above; every change
+seen red first, and every test that passed on the old code proved able to fail by a deliberate
+mutation, restored afterwards.
+
+- **F11's flicker** — `useDetailTargetKey(row, tmuxServerPid)` in `continuity.ts` replaces the
+  hand-built key in `SessionsPanel`. It holds the last *known* tmux pid and the last known claim per
+  session, with `useExecutionEpoch`'s render-phase pattern: a null reading keeps what was held, a
+  first known value is not a change, and only a different known value moves the key. An empty-string
+  claim counts as unknown, as the transcript reader already treats it.
+- **F10** — `readRecentMessages` returns `RecentMessagesOf`, the unchanged `RecentMessages` plus
+  the conversation id it was asked to read, stamped by one wrapper so no arm added later can forget
+  it. No other caller changed: `server.ts` serialises the payload whole, and `routes-recent-feed.ts`
+  maps fields explicitly. The browser reads the stamp as stamped or unstamped, and a mismatch on
+  *any* arm — found, not-found or unreadable — becomes a new `moved` arm, drawn as a refusal naming
+  both ids with Read again live. A stamp present but neither a string nor null is `no-answer`
+  rather than silently unstamped.
+- **F16** — `QuestionsPanel` takes App's latch and handler. It also draws the latched refusal and
+  the server's reason on the Questions tab, since otherwise a refusal made on the other tab would
+  leave its buttons missing with no explanation.
+
+### Stage 4a — built
+
+An Opus subagent: `useActions.ts`, four lines of `actions-client.ts`, and a new
+`tests/fleet-actions-freshness.test.tsx`, eleven cases each seen red on the old hook. The one that
+cannot fail against correct old code — *never requests `/api/state`* — was proved by inserting a
+`fetch("api/state")` into the reader and watching it go red; the test also asserts its own spy fired
+and that a confirmed action posts the page's stale row identifiers rather than re-reading them.
+Judgment calls, accepted: an 8 s read deadline (`ACTIONS_READ_DEADLINE_MS`), under the 10 s poll so
+a lost read costs one poll rather than two; a poll tick during a read is skipped rather than queued;
+a person's refresh still reads from a hidden tab, and only the page's own poll skips one; `error`
+stays a string because the renderers in `ActionButtons.tsx` take one.
+
+**What 4b draws, from 4a's own note:** `lastGoodAt`, `error` and `pollMs` on the `actions` object
+`SessionDetail` already receives; the age is `now − lastGoodAt` on App's one clock; a suggested
+stale threshold of `2 × pollMs + ACTIONS_READ_DEADLINE_MS`, checked against the tests that pass
+`actionsPollMs={0}`; and `SessionQueue` currently draws its error *instead of* its status line,
+which 4b must check still leaves the items drawn underneath.
+
+**One reader, not two.** 4a reports that its `actionsReader` and Stage 3's `feedReader` now
+repeat the same core almost line for line — one read in flight, one pending, a deadline racing the
+API promise, the generation check, abort on stop — and differ only in what triggers a read. Two
+copies of one mechanism is the drift this repo's "prefer simple" rule names, so it is extracted into
+one shared reader both hooks use, **after Sol's Stage 3 round-2 check is out of `FeedPanel.tsx`**,
+in 4b's slot.
 
 Stage 3 code review, round 1, GPT Sol, 2026-09-10, on `8465380d`
 (`260910c-stage3-code-review-sol.md`), concurrently with the Stage 1 review in disjoint files; its

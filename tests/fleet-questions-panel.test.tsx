@@ -252,6 +252,8 @@ function drawPanel(
     onOpenQueue?: () => void;
     onSelect?: (id: string) => void;
     now?: number;
+    answeringRefusal?: string | null;
+    onAnsweringRefused?: (why: string) => void;
   } = {},
 ): void {
   act(() => root.render(
@@ -264,6 +266,8 @@ function drawPanel(
       onOpenQueue={over.onOpenQueue ?? (() => {})}
       onSelect={over.onSelect ?? (() => {})}
       now={over.now ?? NOW}
+      answeringRefusal={over.answeringRefusal ?? null}
+      onAnsweringRefused={over.onAnsweringRefused ?? (() => {})}
       {...(over.steer === undefined ? {} : { steer: over.steer })}
     />,
   ));
@@ -896,5 +900,104 @@ describe("freshness belongs to App's ticking clock", () => {
     expect(host.textContent).not.toContain("Nothing needs you.");
     expect(host.textContent).toContain("This list may be incomplete");
     expect(host.textContent).toContain("fleet snapshot is stale");
+  });
+});
+
+/**
+ * **ONE PAGE-LEVEL `answering-disabled` LATCH, NOT TWO.** A 503 saying
+ * answering is switched off is a claim about the whole server, and `App` owns
+ * the latch for it (Stage 1, Sol's F7 and F13). This panel used to keep a second
+ * one of its own, so a refusal in the Session detail left this tab offering
+ * buttons off the stale enabled payload, and the other way round. GPT Sol's F16.
+ */
+describe("one answering-disabled latch for the whole page", () => {
+  const REFUSED =
+    "answering a dialog is disabled on this server, so tapping an option would send nothing — answer it in the terminal";
+
+  function refusing(): SteerApi {
+    const outcome: SteerOutcome = {
+      ok: false,
+      code: "answering-disabled",
+      why: REFUSED,
+      status: 503,
+      from: "server",
+      delivery: { kind: "none" },
+    };
+    return {
+      message: async () => { throw new Error("these tests never send prose"); },
+      answer: async () => outcome,
+    };
+  }
+
+  /** By `aria-label`: a dock button's text carries its needs-you badge glued to the label. */
+  function dock(label: string): HTMLButtonElement {
+    const button = [...host.querySelectorAll("button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith(label),
+    );
+    if (!button) throw new Error(`no dock button labelled ${JSON.stringify(label)}`);
+    return button;
+  }
+
+  it("withholds the Questions tab's buttons after a refusal in the Session detail", async () => {
+    window.location.hash = "#sessions?sel=%241";
+    const feed = manualTransport();
+    mountApp(feed.transport, refusing());
+    act(() => feed.push(read()));
+    await act(async () => {});
+    expect(optionButtons().length).toBeGreaterThan(0);
+
+    await act(async () => optionButtons()[0]?.click());
+    expect(optionButtons()).toHaveLength(0);
+
+    act(() => dock("Questions").click());
+    await act(async () => {});
+    expect(host.textContent).toContain("Which colour should the new state use?");
+    expect(optionButtons()).toHaveLength(0);
+    /* Withheld with the reason, not silently: the server's own sentence. */
+    expect(host.textContent).toContain(REFUSED);
+  });
+
+  it("withholds the Session detail's buttons after a refusal in the Questions tab", async () => {
+    window.location.hash = "#sessions?sel=%241";
+    const feed = manualTransport();
+    mountApp(feed.transport, refusing());
+    act(() => feed.push(read()));
+    await act(async () => {});
+    act(() => dock("Questions").click());
+    await act(async () => {});
+    expect(optionButtons().length).toBeGreaterThan(0);
+
+    await act(async () => optionButtons()[0]?.click());
+    expect(optionButtons()).toHaveLength(0);
+
+    /* The selection rides along in the params, so coming back lands on the
+       same session's detail rather than on the list. */
+    act(() => dock("Sessions").click());
+    await act(async () => {});
+    expect(host.textContent).toContain("Which colour should the new state use?");
+    expect(optionButtons()).toHaveLength(0);
+  });
+
+  it("gives both their buttons back when a later payload reports answering enabled", async () => {
+    window.location.hash = "#sessions?sel=%241";
+    const feed = manualTransport();
+    mountApp(feed.transport, refusing());
+    act(() => feed.push(read()));
+    await act(async () => {});
+    act(() => dock("Questions").click());
+    await act(async () => {});
+    await act(async () => optionButtons()[0]?.click());
+    expect(optionButtons()).toHaveLength(0);
+
+    /* A payload received after the refusal, saying answering is on: the server
+       changing its mind, said in the payload. */
+    act(() => feed.push(read()));
+    await act(async () => {});
+    expect(optionButtons().length).toBeGreaterThan(0);
+
+    act(() => dock("Sessions").click());
+    await act(async () => {});
+    expect(host.textContent).toContain("Which colour should the new state use?");
+    expect(optionButtons().length).toBeGreaterThan(0);
   });
 });

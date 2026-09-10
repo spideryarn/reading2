@@ -79,6 +79,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
+  ofTheClaimAsked,
   transcriptAge,
   type MessageTurn,
   type MessagesApi,
@@ -666,7 +667,13 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
       setBusy(true);
       void api.recent(asked).then((answer) => {
         if (newest.current !== token) return;
-        setHeld({ identity: askedFor, view: answer });
+        /* **COMPARED WITH THE CLAIM THIS REQUEST WAS ASKED UNDER**, which is
+           `asked`'s rather than the current row's: the server resolved the
+           conversation off its own row at request time, and the question is
+           whether that is the one this page meant. A mismatch becomes the
+           `moved` arm — a refusal on screen, never these turns under this
+           row's name and never nothing. GPT Sol's F10. */
+        setHeld({ identity: askedFor, view: ofTheClaimAsked(answer, asked.claudeSessionId) });
         setBusy(false);
       });
     },
@@ -821,6 +828,17 @@ export function Conversation({
             )
           }
           said="said by the dashboard server"
+        />
+      ) : view.kind === "moved" ? (
+        <Refusal
+          head="By the time the box read this session's transcript, it had already moved to a different conversation."
+          why={`this page asked about ${view.asked ?? "no conversation"}, and the dashboard server read ${view.read ?? "no conversation"} — its own view of this session changed in between, so what it read is not shown here as this session's transcript`}
+          detail={
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              Read again once this page has caught up with the box.
+            </p>
+          }
+          said="said by this browser, from the conversation the server says it read"
         />
       ) : (
         <Refusal
