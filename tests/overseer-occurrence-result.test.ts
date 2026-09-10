@@ -7,11 +7,15 @@
  * exit record did not say (null) is never read as a good answer; and nothing
  * but a `completed` exit record that said all five things is `succeeded`.
  *
+ * The exit records are the protocol's final `exit.json` shape (`ExitFacts`,
+ * `launch-protocol.ts`): four endings, a verdict or null, and ten causes.
+ *
  * No id in this file is a uuid (`tests/fixture-ids.test.ts`).
  */
 import { describe, expect, test } from "vitest";
 
 import type { ScheduledResultKind } from "../tools/fleet/wire.js";
+import type { FailureCause } from "../tools/overseer/launch-protocol.js";
 import {
   classifyOccurrence,
   RESULT_FAILED,
@@ -22,6 +26,9 @@ import {
 } from "../tools/overseer/occurrence-result.js";
 
 const UPDATED = "2026-09-10T09:30:00.000Z";
+/** Earlier than `UPDATED`: a release after the ending moves `updatedAt`, never the ending. */
+const ENDED = "2026-09-10T09:20:00.000Z";
+const SHA = "0123456789abcdef".repeat(4);
 
 function launch(state: ObservedState, over: Partial<ObservedLaunch> = {}): ObservedLaunch {
   return {
@@ -36,28 +43,33 @@ function launch(state: ObservedState, over: Partial<ObservedLaunch> = {}): Obser
     run: { timeoutMinutes: 5, access: "read-only" },
     tmuxSession: null,
     transcriptPath: null,
-    answer: { kind: "present", attempt: 1, bytes: 6, sha256: "0123456789abcdef".repeat(4), usable: true },
+    answer: { kind: "present", attempt: 1, bytes: 6, sha256: SHA, usable: true },
     disposition: null,
     state,
     ...over,
   };
 }
 
-/** The evidence of a good run; each test spoils one thing. */
+/** The evidence of a good run, as a wrapper writes it; each test spoils one thing. */
 function exit(over: Partial<ObservedExitRecord> = {}): ObservedExitRecord {
   return {
     kind: "exit-record",
     ending: { kind: "exited", code: 0 },
-    timedOut: false,
-    answerUsable: true,
     verdict: { kind: "ok" },
     usageLimit: false,
     permissionDenials: 0,
+    answer: { path: "/scratch/launches/o/x/a1/answer.md", bytes: 6, sha256: SHA, usable: true },
+    transcript: null,
     ...over,
   };
 }
 
-const completed = (evidence: ObservedCompletion): ObservedState => ({ kind: "completed", attempt: 1, evidence });
+const failed = (cause: FailureCause, why: string = `the wrapper says ${cause}`) => ({ kind: "failed" as const, cause, why });
+
+/** What a job shell writes: how the child ended, and no judgement. */
+const shell = (code: number): ObservedExitRecord => exit({ ending: { kind: "exited", code }, verdict: null, usageLimit: null, permissionDenials: null, answer: null });
+
+const completed = (evidence: ObservedCompletion): ObservedState => ({ kind: "completed", attempt: 1, evidence, endedAt: ENDED });
 const classify = (state: ObservedState, over: Partial<ObservedLaunch> = {}) => classifyOccurrence(launch(state, over));
 const kindOf = (evidence: ObservedCompletion): ScheduledResultKind => classify(completed(evidence)).kind;
 
@@ -79,51 +91,107 @@ describe("the not-yet-ended rows", () => {
     expect(classify({ kind: "waiting-admission", why: "the one claude-session slot is held" }).why).toContain("the one claude-session slot is held");
   });
 
-  test("outcome-unknown is unknown, carries the protocol's why, and is dated", () => {
+  test("outcome-unknown is unknown, carries the protocol's why, and is dated by the record", () => {
     const result = classify({ kind: "outcome-unknown", attempt: 1, why: "the supervisor vanished on the same boot" });
     expect(result).toMatchObject({ kind: "unknown", at: UPDATED });
     expect(result.why).toContain("the supervisor vanished on the same boot");
   });
 });
 
-describe("each ending row, from its own evidence", () => {
+describe("an ending is dated by endedAt, never by updatedAt", () => {
+  test("failed-before-launch", () => {
+    expect(classify({ kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot", endedAt: ENDED }).at).toBe(ENDED);
+  });
+
+  test("completed", () => {
+    expect(classify(completed(exit())).at).toBe(ENDED);
+  });
+
+  test("a reboot", () => {
+    expect(classify(completed({ kind: "rebooted" })).at).toBe(ENDED);
+  });
+});
+
+describe("launch-failed: nothing ran", () => {
   test("failed-before-launch is launch-failed, naming its proof", () => {
-    const result = classify({ kind: "failed-before-launch", attempt: null, proof: "material-mismatch", why: "material.txt no longer matched its pin" });
-    expect(result).toMatchObject({ kind: "launch-failed", at: UPDATED });
+    const result = classify({ kind: "failed-before-launch", attempt: null, proof: "material-mismatch", why: "material.txt no longer matched its pin", endedAt: ENDED });
+    expect(result.kind).toBe("launch-failed");
     expect(result.why).toContain("material-mismatch");
     expect(result.why).toContain("material.txt no longer matched its pin");
   });
 
-  test("a supervisor that failed is launch-failed", () => {
-    const result = classify(completed(exit({ ending: { kind: "supervisor-failed", why: "spawn ENOENT" } })));
+  test("a superseded record is launch-failed, naming the proof", () => {
+    const result = classify({ kind: "failed-before-launch", attempt: null, proof: "superseded", why: "superseded by fedcba", endedAt: ENDED });
     expect(result.kind).toBe("launch-failed");
-    expect(result.why).toContain("spawn ENOENT");
+    expect(result.why).toContain("superseded");
   });
 
-  test("a wrapper verdict of spawn is launch-failed", () => {
-    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause: "spawn", why: "claude not on PATH" } }))).toBe("launch-failed");
+  test.each(["wrapper", "prompt-unverified", "spawn"] as const)("a not-run ending with cause %s is launch-failed, saying which", (cause) => {
+    const result = classify(completed(exit({ ending: { kind: "not-run" }, verdict: failed(cause), usageLimit: null, permissionDenials: null, answer: null })));
+    expect(result.kind).toBe("launch-failed");
+    expect(result.why).toContain(cause);
+    expect(result.why).toContain(`the wrapper says ${cause}`);
   });
 
-  test("timedOut is timed-out", () => {
-    expect(kindOf(exit({ ending: { kind: "signalled", signal: "SIGTERM" }, timedOut: true }))).toBe("timed-out");
+  test("an unverified prompt is launch-failed even over a child ending — the prompt check comes before any child", () => {
+    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, verdict: failed("prompt-unverified") }))).toBe("launch-failed");
   });
 
-  test("a wrapper verdict of timeout is timed-out even when timedOut was not set", () => {
-    expect(kindOf(exit({ ending: { kind: "exited", code: 124 }, verdict: { kind: "failed", cause: "timeout", why: "ran past 5 minutes" } }))).toBe("timed-out");
+  test("a wrapper failure over a child that DID run is not launch-failed: the child's ending decides", () => {
+    const result = classify(completed(exit({ ending: { kind: "exited", code: 3 }, verdict: failed("wrapper", "the wrapper exited 0 over a child that did not exit 0") })));
+    expect(result.kind).toBe("failed");
+    expect(result.why).toContain("the wrapper exited 0 over a child that did not exit 0");
   });
+});
 
-  test("a usage limit is quota-refused", () => {
-    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, usageLimit: true, verdict: { kind: "failed", cause: "cli-error", why: "limit" } }))).toBe("quota-refused");
+describe("timed-out", () => {
+  test.each<[string, ObservedExitRecord["ending"]]>([
+    ["signalled", { kind: "signalled", signal: "SIGTERM" }],
+    ["exited", { kind: "exited", code: 124 }],
+    ["unobserved", { kind: "unobserved" }],
+  ])("a verdict of timeout is timed-out over a %s ending", (_name, ending) => {
+    const result = classify(completed(exit({ ending, verdict: failed("timeout", "ran past 5 minutes") })));
+    expect(result.kind).toBe("timed-out");
+    expect(result.why).toContain("ran past 5 minutes");
   });
+});
 
-  test("a signal that is not a timeout is interrupted, naming the signal", () => {
-    const result = classify(completed(exit({ ending: { kind: "signalled", signal: "SIGHUP" }, verdict: null, usageLimit: null, permissionDenials: null })));
+describe("interrupted", () => {
+  test("a hangup — tmux kill-session — over a signalled child is interrupted, naming the hangup", () => {
+    const result = classify(completed(exit({ ending: { kind: "signalled", signal: "SIGHUP" }, verdict: failed("hangup", "the wrapper was hung up") })));
     expect(result.kind).toBe("interrupted");
-    expect(result.why).toContain("SIGHUP");
+    expect(result.why).toContain("hangup");
+    expect(result.why).toContain("the wrapper was hung up");
+  });
+
+  test("a hangup over a child that exited after it was forwarded is still interrupted", () => {
+    expect(kindOf(exit({ ending: { kind: "exited", code: 129 }, verdict: failed("hangup", "the wrapper was hung up") }))).toBe("interrupted");
+  });
+
+  test.each(["nonzero", "cli-error", "wrapper"] as const)("a signalled child with cause %s is interrupted, naming the signal", (cause) => {
+    const result = classify(completed(exit({ ending: { kind: "signalled", signal: "SIGINT" }, verdict: failed(cause) })));
+    expect(result.kind).toBe("interrupted");
+    expect(result.why).toContain("SIGINT");
+  });
+
+  test("a signalled child with no verdict is interrupted", () => {
+    expect(kindOf(exit({ ending: { kind: "signalled", signal: "SIGKILL" }, verdict: null, usageLimit: null, permissionDenials: null }))).toBe("interrupted");
+  });
+
+  test("an unobserved ending is interrupted, saying the wrapper could not see how its child ended", () => {
+    const result = classify(completed(exit({ ending: { kind: "unobserved" }, verdict: failed("wrapper", "forced settle") })));
+    expect(result.kind).toBe("interrupted");
+    expect(result.why).toMatch(/could not observe/);
   });
 
   test("a reboot is interrupted", () => {
     expect(kindOf({ kind: "rebooted" })).toBe("interrupted");
+  });
+});
+
+describe("the remaining ending rows", () => {
+  test("a usage limit is quota-refused", () => {
+    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, usageLimit: true, verdict: failed("cli-error", "limit") }))).toBe("quota-refused");
   });
 
   test("a permission denial is permission-denied, naming the count", () => {
@@ -133,32 +201,42 @@ describe("each ending row, from its own evidence", () => {
   });
 
   test("an exit of 0 with an unusable answer is missing-answer", () => {
-    expect(kindOf(exit({ answerUsable: false }))).toBe("missing-answer");
+    expect(kindOf(exit({ answer: { path: "/scratch/answer.md", bytes: 2, sha256: SHA, usable: false } }))).toBe("missing-answer");
+  });
+
+  test("an exit of 0 with no answer at all is missing-answer", () => {
+    expect(kindOf(exit({ answer: null }))).toBe("missing-answer");
   });
 
   test.each(["no-result", "empty-answer"] as const)("a wrapper verdict of %s is missing-answer, whatever the exit code", (cause) => {
-    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause, why: cause } }))).toBe("missing-answer");
+    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, verdict: failed(cause) }))).toBe("missing-answer");
   });
 
-  test("a non-zero exit is failed, naming the code", () => {
-    const result = classify(completed(exit({ ending: { kind: "exited", code: 2 }, verdict: null })));
+  test("a non-zero exit from a job shell is failed, naming the code", () => {
+    const result = classify(completed(shell(2)));
     expect(result.kind).toBe("failed");
     expect(result.why).toContain("2");
   });
 
   test.each(["cli-error", "overflow", "nonzero"] as const)("a wrapper verdict of %s is failed, with the wrapper's why", (cause) => {
-    const result = classify(completed(exit({ ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause, why: `the wrapper says ${cause}` } })));
+    const result = classify(completed(exit({ ending: { kind: "exited", code: 1 }, verdict: failed(cause) })));
     expect(result.kind).toBe("failed");
     expect(result.why).toContain(`the wrapper says ${cause}`);
   });
 
-  test("the good run is succeeded, dated by the record", () => {
-    expect(classify(completed(exit()))).toMatchObject({ kind: "succeeded", at: UPDATED });
+  test("an exit record the attempt's exit.json could not confirm is failed, with the reason", () => {
+    const result = classify(completed({ kind: "exit-unconfirmed", why: "exit.json is not JSON" }));
+    expect(result.kind).toBe("failed");
+    expect(result.why).toContain("exit.json is not JSON");
+  });
+
+  test("the good run is succeeded", () => {
+    expect(classify(completed(exit())).kind).toBe("succeeded");
   });
 
   test.each([
     { kind: "absent" } as const,
-    { kind: "present", attempt: 1, bytes: 1, sha256: "0123456789abcdef".repeat(4), usable: false } as const,
+    { kind: "present", attempt: 1, bytes: 1, sha256: SHA, usable: false } as const,
     { kind: "present", attempt: 1, bytes: 0, sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", usable: true } as const,
   ])("an otherwise good exit with projected answer $kind/$usable is not succeeded", (answer) => {
     expect(classify(completed(exit()), { answer }).kind).toBe("missing-answer");
@@ -173,16 +251,20 @@ describe("each ending row, from its own evidence", () => {
 
 describe("precedence is the table's order", () => {
   test.each<[string, ObservedExitRecord, ScheduledResultKind]>([
-    ["timed out AND a usage limit", exit({ ending: { kind: "signalled", signal: "SIGTERM" }, timedOut: true, usageLimit: true }), "timed-out"],
-    ["supervisor-failed AND timed out", exit({ ending: { kind: "supervisor-failed", why: "wrapper crashed" }, timedOut: true }), "launch-failed"],
-    ["a spawn verdict AND timed out", exit({ ending: { kind: "exited", code: 1 }, timedOut: true, verdict: { kind: "failed", cause: "spawn", why: "x" } }), "launch-failed"],
-    ["a usage limit AND a signal", exit({ ending: { kind: "signalled", signal: "SIGINT" }, usageLimit: true }), "quota-refused"],
+    ["a not-run ending AND an answer file left lying there", exit({ ending: { kind: "not-run" }, verdict: failed("spawn"), usageLimit: null, permissionDenials: null }), "launch-failed"],
+    ["an unverified prompt AND a usage limit", exit({ ending: { kind: "exited", code: 1 }, verdict: failed("prompt-unverified"), usageLimit: true }), "launch-failed"],
+    ["a timeout AND a usage limit", exit({ ending: { kind: "signalled", signal: "SIGTERM" }, verdict: failed("timeout"), usageLimit: true }), "timed-out"],
+    ["a timeout AND permission denials", exit({ ending: { kind: "unobserved" }, verdict: failed("timeout"), permissionDenials: 2 }), "timed-out"],
+    ["a usage limit AND a signal", exit({ ending: { kind: "signalled", signal: "SIGINT" }, verdict: failed("nonzero"), usageLimit: true }), "quota-refused"],
+    ["a usage limit AND a hangup", exit({ ending: { kind: "signalled", signal: "SIGHUP" }, verdict: failed("hangup"), usageLimit: true }), "quota-refused"],
     ["a usage limit AND permission denials", exit({ usageLimit: true, permissionDenials: 2 }), "quota-refused"],
-    ["a signal AND permission denials", exit({ ending: { kind: "signalled", signal: "SIGINT" }, permissionDenials: 2 }), "interrupted"],
+    ["a signal AND permission denials", exit({ ending: { kind: "signalled", signal: "SIGINT" }, verdict: failed("nonzero"), permissionDenials: 2 }), "interrupted"],
+    ["a hangup on an exited child AND permission denials", exit({ ending: { kind: "exited", code: 129 }, verdict: failed("hangup"), permissionDenials: 2 }), "interrupted"],
+    ["an unobserved ending AND permission denials", exit({ ending: { kind: "unobserved" }, verdict: failed("wrapper"), permissionDenials: 2 }), "interrupted"],
     ["a permission denial with a usable answer and an ok verdict", exit({ permissionDenials: 1 }), "permission-denied"],
-    ["a permission denial AND no usable answer", exit({ permissionDenials: 1, answerUsable: false }), "permission-denied"],
-    ["a no-result verdict AND a non-zero exit", exit({ ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause: "no-result", why: "x" } }), "missing-answer"],
-    ["an unusable answer AND a cli-error verdict on exit 0", exit({ answerUsable: false, verdict: { kind: "failed", cause: "cli-error", why: "x" } }), "missing-answer"],
+    ["a permission denial AND no usable answer", exit({ permissionDenials: 1, answer: null }), "permission-denied"],
+    ["a no-result verdict AND a non-zero exit", exit({ ending: { kind: "exited", code: 1 }, verdict: failed("no-result") }), "missing-answer"],
+    ["an unusable answer AND a cli-error verdict on exit 0", exit({ answer: null, verdict: failed("cli-error") }), "missing-answer"],
   ])("%s is %s", (_name, evidence, kind) => {
     expect(kindOf(evidence)).toBe(kind);
   });
@@ -206,43 +288,35 @@ describe("a disposition is an ending", () => {
   });
 
   test("a proof that nothing ran outranks one too", () => {
-    expect(classify({ kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot" }, { disposition }).kind).toBe("launch-failed");
+    expect(classify({ kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot", endedAt: ENDED }, { disposition }).kind).toBe("launch-failed");
   });
 });
 
 describe("null means the exit record did not say, and it is never success", () => {
   test("an exit of 0 with no verdict and a usable answer is failed, saying the wrapper gave no verdict", () => {
-    const result = classify(completed(exit({ verdict: null })));
+    const result = classify(completed(exit({ verdict: null, usageLimit: null, permissionDenials: null })));
     expect(result.kind).toBe("failed");
     expect(result.why).toMatch(/verdict/);
   });
 
-  test("an exit of 0 with no verdict and no answer is missing-answer", () => {
-    expect(kindOf(exit({ verdict: null, answerUsable: null }))).toBe("missing-answer");
+  test("a job shell's exit of 0 — nothing said but the code, no answer — is missing-answer", () => {
+    expect(kindOf(shell(0))).toBe("missing-answer");
   });
 
-  test("an exit of 0 with an answer nobody said was usable is missing-answer", () => {
-    expect(kindOf(exit({ answerUsable: null }))).toBe("missing-answer");
-  });
-
-  test("an unsaid usage limit is not a clear one", () => {
+  test("an unsaid usage limit (run-codex) is not a clear one", () => {
     const result = classify(completed(exit({ usageLimit: null })));
     expect(result.kind).toBe("failed");
     expect(result.why).toMatch(/usage limit/);
   });
 
-  test("an unsaid denial count is not zero", () => {
+  test("an unsaid denial count (run-codex) is not zero", () => {
     const result = classify(completed(exit({ permissionDenials: null })));
     expect(result.kind).toBe("failed");
     expect(result.why).toMatch(/permission denial/);
   });
 
   test("an unsaid usage limit is not a refusal either", () => {
-    expect(kindOf(exit({ ending: { kind: "exited", code: 1 }, usageLimit: null, verdict: null }))).toBe("failed");
-  });
-
-  test("a tmux launch's exit of 0 — nothing said but the code — is not succeeded", () => {
-    expect(kindOf(exit({ verdict: null, answerUsable: null, usageLimit: null, permissionDenials: null }))).not.toBe("succeeded");
+    expect(kindOf(shell(1))).toBe("failed");
   });
 });
 
@@ -254,8 +328,8 @@ describe("only a completed exit record can be succeeded", () => {
     { kind: "reserved" },
     { kind: "launching", attempt: 1 },
     { kind: "observed-running", attempt: 1 },
-    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } },
-    { kind: "failed-before-launch", attempt: 1, proof: "launcher-refused", why: "tmux server not running" },
+    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" }, endedAt: ENDED },
+    { kind: "failed-before-launch", attempt: 1, proof: "launcher-refused", why: "tmux server not running", endedAt: ENDED },
     { kind: "outcome-unknown", attempt: 1, why: "cannot tell" },
   ];
 
@@ -264,7 +338,7 @@ describe("only a completed exit record can be succeeded", () => {
   });
 
   test.each(everyState)("%j is not succeeded, even with a live tmux session and a usable answer beside it", (state) => {
-    const result = classify(state, { tmuxSession: "sched-fixture", answer: { kind: "present", attempt: 1, bytes: 40, sha256: "0123456789abcdef".repeat(4), usable: true } });
+    const result = classify(state, { tmuxSession: "sched-fixture", answer: { kind: "present", attempt: 1, bytes: 40, sha256: SHA, usable: true } });
     expect(result.kind).not.toBe("succeeded");
   });
 

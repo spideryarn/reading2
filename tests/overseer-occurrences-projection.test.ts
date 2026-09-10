@@ -135,7 +135,7 @@ describe("the bound and the order", () => {
 describe("each occurrence", () => {
   test("restates the observed fields and takes its result from classifyOccurrence", () => {
     const input = observed(4, {
-      state: { kind: "completed", attempt: 2, evidence: { kind: "rebooted" } },
+      state: { kind: "completed", attempt: 2, evidence: { kind: "rebooted" }, endedAt: "2026-09-04T09:05:00.000Z" },
       attempts: 2,
       transcriptPath: "/scratch/launches/o/x/a2/transcript.ndjson",
       answer: { kind: "present", attempt: 2, bytes: 120, sha256: "0123456789abcdef".repeat(4), usable: true },
@@ -172,8 +172,8 @@ describe("the cancel command", () => {
     { kind: "planned" },
     { kind: "waiting-admission", why: "held" },
     { kind: "reserved" },
-    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } },
-    { kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot" },
+    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" }, endedAt: day(1) },
+    { kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot", endedAt: day(1) },
   ])("is absent when %j, even with a session name", (state) => {
     expect(only(observed(1, { state, tmuxSession: "sched-fixture" })).commands.cancel).toBeNull();
   });
@@ -209,7 +209,7 @@ describe("the dispose command", () => {
   test.each<ObservedState>([
     { kind: "launching", attempt: 1 },
     { kind: "observed-running", attempt: 1 },
-    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } },
+    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" }, endedAt: day(1) },
     { kind: "reserved" },
   ])("is absent when %j", (state) => {
     expect(only(observed(7, { state })).commands.dispose).toBeNull();
