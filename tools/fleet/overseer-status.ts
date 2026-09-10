@@ -69,7 +69,11 @@ import {
   projectAttention,
 } from "./attention.js";
 import { projectUsage } from "./usage-feed.js";
-import { projectStoredWork } from "./work-groups.js";
+import {
+  boundStoredWorkText,
+  projectStoredWork,
+  type ResolvedWork,
+} from "./work-groups.js";
 import type {
   AttentionFeed,
   OverseerHeartbeat,
@@ -138,16 +142,20 @@ const MAX_SOURCE_STALE_MS = 60 * 60_000;
  * It takes parsed JSON rather than a path: there is nothing in it that touches
  * the disk, so there is nothing in it that can throw an `EIO`.
  */
-export function projectOverseerStatus(json: unknown): OverseerStatusFeed {
-  return projectCheckpoint(json).overseer;
+export function projectOverseerStatus(json: unknown, checkedAt: string): OverseerStatusFeed {
+  return projectCheckpoint(json, checkedAt).overseer;
 }
 
 type ProjectedCheckpoint = { overseer: OverseerStatusFeed; work: WorkFeed };
 
 /** The two projections that must share one resolved work reading. */
-function projectCheckpoint(json: unknown): ProjectedCheckpoint {
+function projectCheckpoint(json: unknown, checkedAt: string): ProjectedCheckpoint {
+  if (iso(checkedAt) === null) {
+    const why = "the injected work `checkedAt` is not a canonical timestamp";
+    return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
+  }
   try {
-    return project(json);
+    return project(json, checkedAt);
   } catch (cause) {
     /* **THE NET, AND IT IS NOT DECORATION.** This function's signature says
        `unknown`, and the guarantee above says it never throws — but `describe()`
@@ -168,7 +176,7 @@ function unreadableProjection(overseer: OverseerStatusFeed, why: string): Projec
   return { overseer, work: { kind: "checkpoint-unreadable", why } };
 }
 
-function project(json: unknown): ProjectedCheckpoint {
+function project(json: unknown, checkedAt: string): ProjectedCheckpoint {
   if (!isRecord(json)) {
     const why = "the checkpoint is not a JSON object";
     return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
@@ -229,7 +237,7 @@ function project(json: unknown): ProjectedCheckpoint {
      register and the history feed. This is a correctness property: a later
      change must not let history draw a scan whose inventory the register
      rejected by resolving the two with independently chosen inputs. */
-  const work = resolveWork(json["work"], lastGoodSnapshotAt, writtenAt);
+  const work = resolveWork(json["work"], lastGoodSnapshotAt, writtenAt, checkedAt);
 
   return {
     overseer: {
@@ -244,7 +252,7 @@ function project(json: unknown): ProjectedCheckpoint {
         register: projectRegister(json["register"], writtenAt, work),
       },
     },
-    work: { kind: "published", work: projectStoredWork(work), coordinatorWrittenAt: writtenAt },
+    work: { kind: "published", work: projectStoredWork(work, checkedAt), coordinatorWrittenAt: writtenAt },
   };
 }
 
@@ -277,7 +285,10 @@ export type CheckpointFeeds = {
   work: WorkFeed;
 };
 
-export function readCheckpointFeeds(root?: string): CheckpointFeeds {
+export function readCheckpointFeeds(
+  root?: string,
+  checkedAt: string = new Date().toISOString(),
+): CheckpointFeeds {
   const load = loadCheckpoint(root);
   switch (load.kind) {
     case "absent":
@@ -295,7 +306,7 @@ export function readCheckpointFeeds(root?: string): CheckpointFeeds {
         work: { kind: "checkpoint-unreadable", why: load.why },
       };
     case "json": {
-      const projected = projectCheckpoint(load.json);
+      const projected = projectCheckpoint(load.json, checkedAt);
       return {
         attention: projectAttention(load.json),
         overseer: projected.overseer,
@@ -457,10 +468,6 @@ function projectScheduler(u: unknown): OverseerScheduler {
   }
 }
 
-type ResolvedWork =
-  | { kind: "scanned"; scannedAt: string; panes: ReadonlyMap<string, PaneWork> }
-  | { kind: "unavailable"; why: string };
-
 /** `ps etimes` gives whole seconds, so its derived start and duration may differ by one second. */
 const PROCESS_START_TOLERANCE_MS = 1_000;
 
@@ -468,14 +475,33 @@ const PROCESS_START_TOLERANCE_MS = 1_000;
  * The work reading that belongs to this exact inventory, or one sentence saying
  * why no join may be drawn. A bad enrichment never takes the register down.
  */
-function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: string): ResolvedWork {
+function resolveWork(
+  u: unknown,
+  lastGoodSnapshotAt: string | null,
+  writtenAt: string,
+  checkedAt: string,
+): ResolvedWork {
+  const work = resolveWorkUnbounded(u, lastGoodSnapshotAt, writtenAt, checkedAt);
+  return work.kind === "unavailable"
+    ? { ...work, why: boundStoredWorkText(work.why) }
+    : work;
+}
+
+function resolveWorkUnbounded(
+  u: unknown,
+  lastGoodSnapshotAt: string | null,
+  writtenAt: string,
+  checkedAt: string,
+): ResolvedWork {
   const malformed = (): ResolvedWork => ({
     kind: "unavailable",
+    source: { kind: "checkpoint-unavailable", checkedAt },
     why: "the checkpoint's work scan could not be read",
   });
   if (u === undefined) {
     return {
       kind: "unavailable",
+      source: { kind: "not-yet-run", asOf: writtenAt },
       why: "this checkpoint was written before the Overseer recorded work scans",
     };
   }
@@ -485,7 +511,9 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
     case "not-yet-run": {
       const why = nonBlank(u["why"]);
       const at = iso(u["at"]);
-      return why === null || at === null ? malformed() : { kind: "unavailable", why };
+      return why === null || at === null || at !== writtenAt
+        ? malformed()
+        : { kind: "unavailable", source: { kind: "not-yet-run", asOf: at }, why };
     }
     case "probe-failed": {
       const why = nonBlank(u["why"]);
@@ -495,19 +523,25 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
       if (lastGoodSnapshotAt === null) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
         };
       }
       if (sourceCollectedAt !== lastGoodSnapshotAt) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
         };
       }
       if (Date.parse(attemptedAt) < Date.parse(sourceCollectedAt) || Date.parse(attemptedAt) > Date.parse(writtenAt)) {
         return malformed();
       }
-      return { kind: "unavailable", why };
+      return {
+        kind: "unavailable",
+        source: { kind: "probe-failed", attemptedAt, sourceCollectedAt },
+        why,
+      };
     }
     case "scan": {
       const scannedAt = iso(u["scannedAt"]);
@@ -517,24 +551,28 @@ function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: s
       if (lastGoodSnapshotAt === null) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the work scan belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
         };
       }
       if (sourceCollectedAt !== lastGoodSnapshotAt) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the work scan belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
         };
       }
       if (Date.parse(scannedAt) < Date.parse(sourceCollectedAt)) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the work scan says it read the process table at ${scannedAt}, before the ${sourceCollectedAt} inventory it claims to describe was collected`,
         };
       }
       if (Date.parse(scannedAt) > Date.parse(writtenAt)) {
         return {
           kind: "unavailable",
+          source: { kind: "checkpoint-unavailable", checkedAt },
           why: `the work scan says it read the process table at ${scannedAt}, after the ${writtenAt} checkpoint that reports it`,
         };
       }

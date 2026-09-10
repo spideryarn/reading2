@@ -306,8 +306,12 @@ composition root is where the wiring argument already lives.
   > persistence only, never what the page shows as now.**
 
   That threads `state.ts`, `wire.ts`, `web/src/types.ts` and `App.tsx` — files outside the brief's
-  named set, though not on its "not yours" list. The additions are a field and its parse. Recorded
-  here and named in the debrief.
+  named set, though not on its "not yours" list. **The Overseer authorised it explicitly on
+  2026-09-10**, on the conditions that the additions stay small and additive, that each file is
+  re-read immediately before it is edited, and that `origin/dev` is merged before every push —
+  because the `admission-visibility` session is editing `wire.ts` and `HealthPanel.tsx` at the same
+  time. It also confirmed the stage ordering above, and asked for Stage 4 to be attempted rather than
+  stopped short of, the weekly budget being at 3%.
 
 ### Attribution uncertainty, in the page's own words
 
@@ -328,6 +332,15 @@ otherwise assume:
 
 Each stage ends with `npm test`-scoped suites plus `npm run typecheck`, and a GPT Sol review
 (`--sandbox workspace-write`, fixing inside the stage) before its commit.
+
+**The stages are ordered so that the irrecoverable half lands first, and that is deliberate.**
+Stages 1–3 are the *record*; Stage 4 is the *drawing*. The asymmetry between them is total: a night
+that was not written down cannot be drawn tomorrow, but a night that was written down can be drawn
+next week. The queue sized this stage at "about half an agent-day" and it is visibly larger than
+that, so if it has to stop somewhere, **the honest stopping point is the end of Stage 3** — at which
+the box has started remembering what was running, `/api/health/history` serves it, and nothing on
+the page has changed yet. Stopping at the end of Stage 2 is worth much less: the projection exists
+and nothing calls it, which is a feature that has not shipped rather than a feature that is quiet.
 
 ### Stage 1 — one policy module for the cutoffs (mine, small)
 
@@ -474,14 +487,20 @@ sandbox, not a result about the tree.
 
 ## Things found while planning that the brief did not know
 
-- **`ListAgents` cannot see the Overseer from a pool account.** This session runs on the `mindstone`
-  Claude config directory; the Overseer runs on Greg's. `ListAgents` lists three peers and the
-  Overseer is not among them, so `SendMessage({to: "Overseer"})` fails with *no agent named
-  'Overseer' is reachable* — the agent bus appears not to cross config directories. The documented
-  fallback, `POST /api/steer/message` at the dashboard, is **refused by the auto-mode classifier**
-  from this session. So a pool-account session currently has no working channel back to the
-  Overseer, which affects every session it dispatches this way, not just this one. Recorded here and
-  raised in the debrief.
+- **A pool-account session was mute for the first hour, and then was not.** This session runs on the
+  `mindstone` Claude config directory and the Overseer runs on Greg's. For the first hour
+  `ListAgents` showed three peers and the Overseer was not among them, so
+  `SendMessage({to: "Overseer"})` failed with *no agent named 'Overseer' is reachable*. The
+  documented fallback did not work either: `POST /api/steer/message` is **refused by the auto-mode
+  classifier** from this session. So there was no channel back at all.
+
+  It fixed itself at about 02:50: `ListAgents` went from three peers to thirteen, including the
+  Overseer. The cause is `caf42a29` on `dev` — *"Share sessions/ too, so a pool session is listed and
+  can message its peers"* — and **the interesting part is that it reached an already-running session**
+  rather than needing a restart. Two things worth keeping: any pool session dispatched before that
+  commit stays mute unless it re-checks `ListAgents`, and the steer route is not a usable fallback
+  from a session under the auto-mode classifier, so "SendMessage fails" is a hard stop rather than a
+  degraded path.
 - **Both "undrawn" claims needed narrowing after checking them.** `disk` *is* drawn — as a tile, by
   `readHealthStats` — it is only the 24-hour *chart* that has no disk line, which is what the roadmap
   asks for. And `attribution` is not invisible either: `HealthPanel`'s generic disclosure renders

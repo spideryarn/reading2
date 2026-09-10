@@ -3724,14 +3724,18 @@ export type StoredWorkGroup = {
   recogniser: string;
   /** Job processes with that recogniser under that pane, at the scanned instant. */
   jobs: number;
-  /** The oldest of those jobs' starts, or null when the kernel could not say. */
-  oldestStartedAt: string | null;
-  /** How long the longest had run AS AT `scannedAt`, not as at now. Null when unknown. */
-  longestRanForMs: number | null;
+  timing:
+    | { kind: "known"; oldestStartedAt: string; longestRanForMs: number }
+    /** Some jobs' timing was unavailable. These aggregates cover `knownJobs` of `jobs`. */
+    | { kind: "partial"; knownJobs: number; oldestStartedAt: string; longestRanForMs: number }
+    | { kind: "unknown" };
 };
 
 export type StoredWork =
-  | { kind: "unavailable"; why: string }
+  | { kind: "not-yet-run"; asOf: string; why: string }
+  | { kind: "probe-failed"; attemptedAt: string; sourceCollectedAt: string; why: string }
+  /** We could not read the checkpoint, or could not accept its scan. OUR clock, not the daemon's. */
+  | { kind: "checkpoint-unavailable"; checkedAt: string; why: string }
   | {
       kind: "scan";
       /** When the kernel was read. NOT the sample's own clock. */
