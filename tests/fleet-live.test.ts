@@ -141,6 +141,20 @@ describe("subscribe / broadcast lifecycle", () => {
     expect(good.writes).toHaveLength(2);
   });
 
+  it("an initial write that throws removes the listeners attached before it", () => {
+    const before = subscriberCount();
+    const req = fakeReq();
+    const bad = fakeRes({ throwOnWrite: true });
+
+    expect(() => subscribe(req, bad.res, JSON.stringify({ rows: [], collectedAt: "initial" }))).not.toThrow();
+
+    expect(subscriberCount()).toBe(before);
+    expect(bad.destroyed()).toBe(true);
+    expect(req.listenerCount("close")).toBe(0);
+    expect(req.listenerCount("error")).toBe(0);
+    expect(bad.res.listenerCount("error")).toBe(0);
+  });
+
   it("does not double-count or double-remove a subscriber closed twice", () => {
     const before = subscriberCount();
     const req = fakeReq();
@@ -332,5 +346,306 @@ describe("backpressure — a full buffer pauses a subscriber, it does not condem
     const again = fakeRes();
     subscribe(fakeReq(), again.res, JSON.stringify({ rows: [], collectedAt: "h1" }));
     expect(again.writes[0]).toContain('"collectedAt":"h1"');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Backpressure, measured against a real `Writable` that DELAYS its callbacks.
+ *
+ * The block above proves the memory bound with a `Writable` that never calls
+ * `done` at all — a corpse. This one is the other half, and it is the half the
+ * roadmap asked for (260908f § Bounded transport, checkbox 1): a socket that
+ * stalls **and then comes back**, which is what a phone in a lift actually
+ * does. `highWaterMark` and `writableLength` are Node's own accounting here;
+ * nothing in this block decides for itself what backpressure is.
+ * ------------------------------------------------------------------ */
+
+/** A snapshot payload comfortably over the 64-byte high-water mark below. */
+function snapshotJson(n: number): string {
+  return JSON.stringify({ rows: [], collectedAt: `n${n}`, filler: "x".repeat(120) });
+}
+
+/**
+ * A real `Writable` whose `write` callback is held until `release()` is called.
+ *
+ * Not a double: `write()` returns `false` because Node's own buffer passed its
+ * high-water mark, and `drain` fires because Node decided the buffer had
+ * emptied. The only thing this arranges is *when the underlying sink says it
+ * has taken the bytes* — which is exactly what a slow socket varies.
+ */
+function stallingRes(highWaterMark: number): {
+  res: ServerResponse;
+  sink: Writable;
+  /**
+   * What `live.ts` handed to `res.write` — the WRITE COUNT the roadmap asks
+   * for. Distinct from `chunks` below, and the difference matters: Node queues
+   * a second write internally without calling `_write` again, so counting the
+   * sink's callbacks would credit `live.ts` with restraint that was Node's.
+   */
+  offered: string[];
+  /** What Node actually passed down to the sink. */
+  chunks: string[];
+  /** Let every held write complete. What the radio coming back looks like. */
+  release: () => void;
+} {
+  const chunks: string[] = [];
+  const offered: string[] = [];
+  const held: (() => void)[] = [];
+  const sink = new Writable({
+    highWaterMark,
+    write(chunk: Buffer | string, _enc, done) {
+      chunks.push(String(chunk));
+      held.push(() => done());
+    },
+  });
+  const passThrough = sink.write.bind(sink);
+  const res = Object.assign(sink, {
+    writeHead: () => res,
+    flushHeaders: () => {},
+    write: (data: string): boolean => {
+      offered.push(data);
+      return passThrough(data);
+    },
+  }) as unknown as ServerResponse;
+  return {
+    res,
+    sink,
+    offered,
+    chunks,
+    release: () => {
+      for (const done of held.splice(0)) done();
+    },
+  };
+}
+
+describe("backpressure, measured against a real Writable that delays its callbacks", () => {
+  it("holds one frame across two hundred snapshots and interleaved pings, and no more", () => {
+    vi.useFakeTimers();
+    try {
+      // 64 bytes: every frame below is larger, so the FIRST write returns
+      // `false` from Node's own accounting, exactly as a 59 KB snapshot does
+      // against a `ServerResponse`'s 16 KB.
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+
+      // A ping between every pair of snapshots: the heartbeat goes on beating
+      // while a subscriber is stalled, and it must not be a second way to fill
+      // the buffer. 200 beats of 1ms is far short of DRAIN_DEADLINE_MS.
+      const stop = startHeartbeat(1);
+      try {
+        for (let i = 0; i < 200; i += 1) {
+          broadcast(snapshotJson(i));
+          vi.advanceTimersByTime(1);
+        }
+      } finally {
+        stop();
+      }
+
+      // Node took ONE chunk from us and is still holding it. Four hundred
+      // frames were offered; 399 were never written.
+      expect(phone.offered).toHaveLength(1); // ONE write() call for 400 frames
+      expect(phone.chunks).toHaveLength(1);
+      const oneFrame = Buffer.byteLength(phone.chunks[0] ?? "");
+      expect(phone.sink.writableLength).toBeLessThanOrEqual(oneFrame);
+      expect(subscriberCount()).toBeGreaterThan(0);
+      expect(phone.sink.destroyed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("THE RED ONE: a socket that comes back gets the NEWEST snapshot, not the next one", () => {
+    vi.useFakeTimers();
+    try {
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+
+      broadcast(snapshotJson(1)); // taken, and it fills the buffer
+      broadcast(snapshotJson(2));
+      broadcast(snapshotJson(3)); // the newest thing that is true
+      expect(phone.offered).toHaveLength(1);
+
+      // The radio comes back. `drain` fires from Node's own accounting.
+      phone.release();
+      vi.advanceTimersByTime(1);
+
+      /* **THE POINT OF THE WHOLE STAGE.** Before this change the subscriber
+         received nothing here: `drain` cleared the block and sent nothing, so
+         n2 and n3 were gone and it sat on n1 until the next publish — up to
+         60 seconds later, since server.ts publishes once per refresh.
+
+         Note what is NOT claimed: n1 was not lost. A `false` from `write`
+         means Node buffered that frame, not that it withheld it. Only the
+         snapshots broadcast WHILE BLOCKED were dropped, which is why this
+         test broadcasts three and not one. */
+      expect(phone.offered).toHaveLength(2);
+      expect(phone.offered[1]).toContain("event: snapshot");
+      // The NEWEST, not a replay of the one that was skipped first.
+      expect(phone.offered[1]).toContain('"collectedAt":"n3"');
+      expect(phone.offered[1]).not.toContain('"collectedAt":"n2"');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("and the flush itself blocks again: a second generation, with its own deadline", () => {
+    /* **ONE CYCLE IS NOT ENOUGH TO PROVE THIS, and the test above stops one
+       transition short** — GPT Sol's review of the plan, 2026-09-10. At this
+       high-water mark the retained snapshot's own write returns `false` too, so
+       an implementation that delivered the newest frame and then forgot to
+       re-arm — leaving the subscriber unblocked, or retaining the frame it had
+       just written, or holding the *old* deadline — would pass everything
+       above. Four steps, and each one is a different way to get it wrong. */
+    vi.useFakeTimers();
+    try {
+      const before = subscriberCount();
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+
+      broadcast(snapshotJson(1)); // buffered; blocked; deadline A runs to t=30s
+      vi.advanceTimersByTime(10_000);
+      broadcast(snapshotJson(2));
+      broadcast(snapshotJson(3));
+
+      // 1. The socket empties, and the newest retained snapshot goes out.
+      phone.release();
+      expect(phone.offered).toHaveLength(2);
+      expect(phone.offered[1]).toContain('"collectedAt":"n3"');
+
+      // 2. That flush blocked again. More broadcasts must accumulate nothing —
+      //    not a queue, and not a second frame in Node's buffer.
+      broadcast(snapshotJson(4));
+      broadcast(snapshotJson(5));
+      expect(phone.offered).toHaveLength(2);
+      expect(phone.sink.writableLength).toBeLessThanOrEqual(Buffer.byteLength(phone.offered[1] ?? ""));
+
+      // 3. Past the ORIGINAL deadline, which fired at t=30s and would have
+      //    destroyed this subscriber if the drain had not cleared it.
+      vi.advanceTimersByTime(21_000); // t=31s
+      expect(subscriberCount()).toBe(before + 1);
+
+      // 4. And the second generation behaves exactly like the first: the
+      //    newest, once, and not the one before it.
+      phone.release();
+      expect(phone.offered).toHaveLength(3);
+      expect(phone.offered[2]).toContain('"collectedAt":"n5"');
+      expect(phone.offered[2]).not.toContain('"collectedAt":"n4"');
+
+      // The replacement deadline is a real one too: it owns the new blocked
+      // period, and it ends the same way.
+      vi.advanceTimersByTime(DRAIN_DEADLINE_MS + 1);
+      expect(subscriberCount()).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a withheld ping is dropped rather than delivered late", () => {
+    vi.useFakeTimers();
+    try {
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+
+      broadcast(snapshotJson(1)); // fills the buffer
+      const stop = startHeartbeat(1);
+      try {
+        vi.advanceTimersByTime(3); // three pings, all withheld
+      } finally {
+        stop();
+      }
+
+      phone.release();
+      vi.advanceTimersByTime(1);
+
+      /* A ping is a claim about *now*. Delivering one that was true four
+         seconds ago tells the client something it already knew — the frame it
+         is being handed alongside proves the socket is alive — so a stalled
+         ping is dropped, and only the snapshot is worth keeping. */
+      const late = phone.offered.slice(1).join("");
+      expect(late).not.toContain("event: ping");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("nothing is retained when a subscriber stalls with no snapshot behind it", () => {
+    vi.useFakeTimers();
+    try {
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+      const stop = startHeartbeat(1);
+      try {
+        // Pings are small — around 33 bytes, comfortably under the 64-byte
+        // mark — so it takes two of them to fill this buffer, which is worth
+        // knowing rather than assuming: the count below is Node's, not ours.
+        vi.advanceTimersByTime(4);
+      } finally {
+        stop();
+      }
+      const stalledAfter = phone.offered.length;
+      // Small frames can accumulate below Node's byte threshold; the bound is
+      // the high-water mark plus the crossing write, not literally one frame.
+      // At 33 bytes each against 64 bytes, exactly two writes are offered; a
+      // third would mean live.ts kept writing after Node returned false.
+      expect(stalledAfter).toBe(2);
+
+      phone.release();
+      vi.advanceTimersByTime(1);
+
+      // A drain with nothing worth sending sends nothing. Not an empty frame,
+      // not a repeat.
+      expect(phone.offered).toHaveLength(stalledAfter);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a stalled subscriber that never returns is dropped, and its retained frame goes with it", () => {
+    vi.useFakeTimers();
+    try {
+      const before = subscriberCount();
+      const phone = stallingRes(64);
+      subscribe(fakeReq(), phone.res, null);
+      broadcast(snapshotJson(1));
+      broadcast(snapshotJson(2)); // retained, and about to be discarded
+
+      vi.advanceTimersByTime(DRAIN_DEADLINE_MS + 1);
+      expect(subscriberCount()).toBe(before);
+
+      // And a late drain after the drop writes nothing: the retained frame
+      // must not resurrect a subscriber the deadline gave up on.
+      phone.release();
+      vi.advanceTimersByTime(1);
+      expect(phone.offered).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a stalled subscriber's teardown leaves the healthy one untouched, and leaves no listeners", () => {
+    vi.useFakeTimers();
+    try {
+      const phone = stallingRes(64);
+      const good = fakeRes();
+      const phoneReq = fakeReq();
+      subscribe(phoneReq, phone.res, null);
+      subscribe(fakeReq(), good.res, null);
+
+      broadcast(snapshotJson(1));
+      broadcast(snapshotJson(2));
+      phoneReq.emit("close"); // the phone's tab goes away mid-stall
+      broadcast(snapshotJson(3));
+
+      expect(good.writes).toHaveLength(3);
+      expect(good.writes[2]).toContain('"collectedAt":"n3"');
+      // And the departed subscriber owns nothing: no listeners left on either
+      // half of its connection, so nothing of it survives to be called.
+      expect(phoneReq.listenerCount("close")).toBe(0);
+      expect(phoneReq.listenerCount("error")).toBe(0);
+      expect(phone.sink.listenerCount("error")).toBe(0);
+      expect(phone.sink.listenerCount("drain")).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
