@@ -1,7 +1,7 @@
 # Gradual recovery: resume selected interrupted work, one at a time
 
 The roadmap stage is
-[260908f § Stage: Gradual recovery](260908f-overseer-and-fleet-improvement-roadmap.md#stage-gradual-recovery--resume-selected-valuable-work):
+[260908f § Stage: Gradual recovery](260908f-overseer-and-fleet-improvement-roadmap.md#stage-gradual-recovery-resume-selected-valuable-work):
 its four checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
 Queue item `qi-pphwbz23`, session `gradual-recovery`, worktree `.claude/worktrees/recovery-resume`,
 dispatched by the Overseer on 2026-09-10. It consumes two things built today:
@@ -463,6 +463,18 @@ you actually pick.
 A smaller question sits beside it. **Should an unknown usage reading hold resumes?** This plan
 says yes, failing closed (§2.5). The cost is that resumes wait whenever the usage pass has not run,
 for example for five minutes after a daemon restart.
+
+A third comes from G4. **Should a session that started on the default login be resumable onto a
+pool account?** It would work, because the transcript directory is shared, but it changes whose
+quota the session spends.
+
+**The Overseer's defaults pending Greg, 2026-09-10, and built to:**
+- (1) nothing resumes without a tap;
+- (2) an unknown usage reading holds resumes, failing closed;
+- (3) default-login sessions are manual-only in v1.
+
+gjd-remote's explicit `--account` skipping the quota check is queued separately as
+`qi-pbmemdfh`, for the launcher.
 
 ## Stages
 
