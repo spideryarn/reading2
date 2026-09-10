@@ -350,6 +350,18 @@ hand run, the daemon's runner and the evaluation alike. Routing counts only ques
 scored items; `unplaced` is counted apart from N; W splits into *wrong holder* and *asked on a turn
 that asked nothing*.
 
+- [ ] **Blocked in this session — needs someone whose environment holds the key.** The gateway key
+      is not in this session's environment, and the worktree isolation guard refuses exporting it
+      from `.env.local` (it will not set a credential from command output). That refusal is right,
+      and it is not worked around here. The command, for anyone whose shell already has
+      `OPENROUTER_API_KEY` exported:
+      `npx tsx scripts/attention-eval.ts --prompt-version 1 --out docs/plans/260910f-bounded-judgement-proposals-for-the-attention-inbox-eval-v1.json`
+      and the same with `--prompt-version 2 … -eval-v2.json`. Each run reserves against a day
+      budget of its own in a fresh temp directory, about twenty calls, a few cents. **What exists
+      without it**: the `--fake` run, which proves the plumbing and not the model (it answers from
+      the labels, perturbed: 8 of 9 questions, 2 false alarms, against the mechanical inbox's 3 of 9
+      and 1), and the mechanical baseline itself, which is real — every question for Sol, Fable or
+      Greg in the set is invisible without a model.
 - [ ] Run both prompt versions for real over the labelled set (cents). Report **detection** for each
       (does the widened prompt damage it? — D1's trigger) and, for the widened one, routing
       accuracy. Sol's F6 wording: *N proposed; R correct against the labels; W wrong; K of the R

@@ -439,14 +439,21 @@ holds.
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
 file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
-shape. Six files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+shape. These files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`) — **and not only these**:
+the work-reports store (`reports.jsonl` and its inbox directories,
+[260910e](../plans/260910e-work-reports-and-decisions-a-small-event-vocabulary.md)) lives in the same
+directory and is described in `tools/overseer/reports.ts`, so `ls` the directory before trusting
+this table as a census:
 
 | file | what it is | who may read it |
 |---|---|---|
 | `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, the session register, the attention inbox and the last usage reading | anyone, any time |
 | `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
 | `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
-| `attention.json` | the attention pass's memory (schema 1; keys `epoch`, `waits`, `verdicts`): when each session was first seen asking each question, and the cached model verdict per `tailFingerprint` | the daemon only |
+| `attention.json` | the attention pass's memory (schema 2; keys `epoch`, `waits`, `verdicts`): when each session was first seen asking each question, and the cached model verdict per `tailFingerprint`, each recording the prompt version it was made under — a verdict from another version is stale and re-read first ([260910f](../plans/260910f-bounded-judgement-proposals-for-the-attention-inbox.md) D3) | the daemon only |
+| `model-budget.json` | the day's model-spend ledger (schema 1): spent calls, tokens and cost, open worst-case reservations, the cooldown after a 402/429, and a `closed` reason for a day whose record was lost ([260910f](../plans/260910f-bounded-judgement-proposals-for-the-attention-inbox.md) D4) | anyone; written by the daemon **and** by a hand run of `overseer attention`, under `model-budget.lock` |
+| `model-budget.created` | a marker that a day was ever counted here, so a missing or unreadable ledger is a LOST day that refuses paid calls until the next UTC midnight, not a fresh one | anyone |
+| `model-budget.lock` | the budget's `O_CREAT\|O_EXCL` claim, held for milliseconds around each reserve and settle — never across a model call | whoever holds it |
 | `last-snapshot.json` | the differ's baseline — the last snapshot seen, so a restart emits changes rather than re-announcing the fleet | the daemon only |
 | `overseer.lock` | the single-writer claim | the daemon only |
 
@@ -466,6 +473,14 @@ than part of the seam, so nothing outside the daemon reads it, and it is listed 
 coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
 reader can be wrong about the *present* — it may read a checkpoint written a tick ago — and can never
 be wrong about the past.
+
+**One deliberate exception: `model-budget.json` has two writers.** A hand run of `overseer attention`
+makes paid calls just as the daemon does, and GPT Sol's F1 on plan
+[260910f](../plans/260910f-bounded-judgement-proposals-for-the-attention-inbox.md) named that as the
+budget's bypass: a command that spent outside the ledger made the day's ceiling a suggestion. So both
+reserve and settle against the one file, taking turns under `model-budget.lock` (the same
+kernel-backed claim `lock.ts` gives the store), and each process may settle only a reservation it
+minted itself. The single-writer rule still holds for every other file here.
 
 **Two write guarantees, because "lock-free" is worth nothing without them** — asked for by the
 dashboard agent on 2026-09-08, and the right question: a reader that can observe a half-written file
