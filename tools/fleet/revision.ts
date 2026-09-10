@@ -169,12 +169,18 @@ export function readStartRevision(dir: string, deps: { run?: RunGit; now?: () =>
  * caller's `import.meta.url`, `up` the relative path from it to the checkout
  * root ("../.." from `tools/overseer/daemon.ts`).
  *
- * **Why this and not `readStartRevision(fileURLToPath(new URL(up, import.meta.url)))`
- * at the call site.** That expression throws when the module was not loaded from
- * a file — jsdom gives it an `http:` URL — and it sat on the first line of
- * `runOverseer`, so a stamp, which is a diagnostic, stopped a daemon starting
- * (tests/fleet-work-evidence-e2e.test.tsx, red on dev from 1c6e1e4e). A module
- * with no file has no checkout to read: that is `unknown`, with the reason.
+ * **Why this and not `readStartRevision(fileURLToPath(new URL("../..", import.meta.url)))`
+ * at the call site.** In a module a jsdom test loads, Vite and vitest's
+ * `vitest:normalize-url` plugin rewrite that LITERAL browser idiom —
+ * `new URL("<string>", import.meta.url)` — into `http://localhost:3000/@fs/…`,
+ * though `import.meta.url` itself stays `file:`. `fileURLToPath` then threw on
+ * the first line of `runOverseer`, so a stamp, a diagnostic, stopped a daemon
+ * starting (tests/fleet-work-evidence-e2e.test.tsx, red on dev from 1c6e1e4e to
+ * 3d6e851b; docs/postmortems/260910d). Taking `up` as a parameter keeps the
+ * expression out of the rewrite's reach, so under jsdom this returns `known`.
+ * The catch stays for what it says: a module genuinely loaded from something
+ * other than a file has no checkout to read, and that is `unknown` with the
+ * reason, never a throw.
  */
 export function readModuleStartRevision(
   moduleUrl: string,
