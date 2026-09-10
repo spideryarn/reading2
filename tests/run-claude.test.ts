@@ -14,9 +14,10 @@
  * See docs/reusable/claude-cli-as-subagent.md.
  */
 
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
-  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +28,9 @@ import {
 } from "../scripts/run-claude.js";
 import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
+import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
+import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
 const resultEvent = (fields: Record<string, unknown> = {}): string =>
@@ -718,5 +721,307 @@ describe("the CLI, end to end", () => {
     }
     // And the calling session's plumbing, which is not a secret but is not the child's either.
     expect(everything).not.toContain("CLAUDE_CODE_SESSION_ID=");
+  }, 60_000);
+});
+
+/**
+ * `--launch-dir` — plan 260910f Stage 2, the headless half of D6.
+ *
+ * The stand-in records, for EVERY call the wrapper makes (the auth probe as well as the run),
+ * whether `start.json` was already on disk, which launch id it was handed, and its parent pid — so
+ * "written before spawning anything" and "the child sees the id" are measured at the child, not
+ * read off the wrapper. `exit.json` is read back through Stage 1's reader.
+ */
+function tmuxAvailable(): boolean {
+  try {
+    execFileSync("tmux", ["-V"], { stdio: "ignore" });
+    return process.platform === "linux";
+  } catch {
+    return false;
+  }
+}
+
+describe("--launch-dir", () => {
+  function launchedClaude(f: LaunchFixture, body: string): { dir: string; calls: string } {
+    const dir = mkdtempSync(join(tmpdir(), "fake-claude-launch-"));
+    const start = shellQuote(join(f.dir, START_FILE));
+    writeFileSync(
+      join(dir, "claude"),
+      `#!/usr/bin/env bash\nhere="$(cd "$(dirname "$0")" && pwd)"\n`
+        + `if [ -f ${start} ]; then s=start-present; else s=start-absent; fi\n`
+        + `printf '%s %s %s %s\\n' "$1" "$s" "\${SPIDERYARN_LAUNCH_ID-unset}" "$PPID" >> "$here/calls"\n`
+        + `if [ "$1" = "auth" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai"}'; exit 0; fi\n`
+        + `printf '%s\\0' "$@" > "$here/argv"\n${body}\n`,
+    );
+    chmodSync(join(dir, "claude"), 0o755);
+    return { dir, calls: join(dir, "calls") };
+  }
+
+  function run(f: LaunchFixture | null, body: string, extraArgs: string[] = []) {
+    const fixture = f ?? makeLaunchDir();
+    const bin = launchedClaude(fixture, body);
+    const out = mkdtempSync(join(tmpdir(), "run-claude-launch-"));
+    const answerPath = join(out, "answer.md");
+    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    delete env.SPIDERYARN_LAUNCH_ID;
+    const launchArgs = f === null ? [] : ["--launch-dir", fixture.dir];
+    const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", answerPath, ...launchArgs, ...extraArgs], { encoding: "utf8", env });
+    const calls = existsSync(bin.calls)
+      ? readFileSync(bin.calls, "utf8").trim().split("\n").map((line) => line.split(" "))
+      : [];
+    const argv = existsSync(join(bin.dir, "argv")) ? readFileSync(join(bin.dir, "argv"), "utf8").split("\0").slice(0, -1) : [];
+    return { ...r, answerPath, calls, argv, f: fixture, read: () => readArtefacts(fixture.dir, fixture.correlationId) };
+  }
+
+  const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+
+  it("writes start.json before spawning anything, hands every child the id, and exit.json on success", () => {
+    const r = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent()}'`);
+    expect(r.status).toBe(0);
+    expect(r.calls.map((c) => c[0])).toEqual(["auth", "--print"]);
+    for (const call of r.calls) {
+      expect(call[1]).toBe("start-present");
+      expect(call[2]).toBe(r.f.correlationId);
+    }
+    const read = r.read();
+    // The supervisor the reconciler will ask about is the wrapper: the stand-in's parent.
+    expect(read.start.kind === "present" && read.start.record.pid).toBe(Number(r.calls[1]![3]));
+    expect(read.exit).toMatchObject({
+      kind: "present",
+      record: {
+        ending: { kind: "exited", code: 0 },
+        verdict: { kind: "ok" },
+        usageLimit: false,
+        permissionDenials: 0,
+        answer: { path: r.answerPath, bytes: readFileSync(r.answerPath).byteLength, sha256: sha(r.answerPath), usable: true },
+        // --output was given and --activity-log was not, so the transcript takes the launch default.
+        transcript: join(r.f.dir, "transcript.ndjson"),
+      },
+    });
+    // And the console is what it always was: nothing about the launch is printed.
+    expect(r.stdout).toContain("THE-ANSWER");
+    expect(r.stdout).not.toMatch(/start\.json|exit\.json|intent\.json|SPIDERYARN_LAUNCH|--launch-dir/);
+  }, 60_000);
+
+  it("writes exit.json on a non-zero exit with a verdict", () => {
+    const r = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent()}'\nexit 3`);
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 3 }, verdict: { kind: "failed", cause: "nonzero" } } });
+  }, 60_000);
+
+  it("writes exit.json when the stream stops before a verdict", () => {
+    const r = run(makeLaunchDir(), "exit 3");
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({
+      kind: "present",
+      record: { ending: { kind: "exited", code: 3 }, verdict: { kind: "failed", cause: "no-result" }, permissionDenials: null, answer: { usable: false } },
+    });
+  }, 60_000);
+
+  it("writes exit.json on a timeout", () => {
+    const r = run(makeLaunchDir(), "sleep 30", ["--timeout-minutes", "0.05"]);
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { verdict: { kind: "failed", cause: "timeout", why: expect.stringMatching(/killed after/) } } });
+  }, 60_000);
+
+  it("writes exit.json on an empty answer", () => {
+    const r = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent({ result: "   " })}'`);
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 0 }, verdict: { kind: "failed", cause: "empty-answer" }, answer: { usable: false } } });
+  }, 60_000);
+
+  it("writes exit.json when the child is killed by a signal", () => {
+    const r = run(makeLaunchDir(), "kill -KILL $$");
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "signalled", signal: "SIGKILL" }, verdict: { kind: "failed", cause: "no-result" } } });
+  }, 60_000);
+
+  it("keeps the file's own verdict and the wrapper's apart: a CLI error with an answer in the file", () => {
+    const r = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent({ is_error: true, result: "APPROVE" })}'`);
+    expect(r.status).toBe(1);
+    const exit = r.read().exit;
+    expect(exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 0 }, verdict: { kind: "failed", cause: "cli-error" }, answer: { usable: true } } });
+    expect(exit.kind === "present" && exit.record.answer?.bytes).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("says when the CLI hit a usage limit, and how many tool calls it was denied", () => {
+    const limited = run(makeLaunchDir(), "echo 'You have hit your usage limit, resets at 3pm' >&2\nexit 1");
+    expect(limited.read().exit).toMatchObject({ kind: "present", record: { usageLimit: true, verdict: { kind: "failed" } } });
+    const denied = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent({
+      permission_denials: [{ tool_name: "Bash", tool_input: {} }, { tool_name: "Edit", tool_input: {} }],
+    })}'`);
+    expect(denied.read().exit).toMatchObject({ kind: "present", record: { usageLimit: false, permissionDenials: 2, verdict: { kind: "ok" } } });
+  }, 60_000);
+
+  it("defaults the answer and the transcript into the launch directory, and an explicit flag still wins", () => {
+    const f = makeLaunchDir();
+    const bin = launchedClaude(f, `printf '%s\\n' '${resultEvent()}'`);
+    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", f.dir], { encoding: "utf8", env });
+    expect(r.status).toBe(0);
+    expect(readFileSync(join(f.dir, "answer.md"), "utf8")).toBe("THE-ANSWER");
+    expect(readFileSync(join(f.dir, "transcript.ndjson"), "utf8")).toContain('"type":"result"');
+    expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+      kind: "present",
+      record: { answer: { path: join(f.dir, "answer.md") }, transcript: join(f.dir, "transcript.ndjson") },
+    });
+
+    const g = makeLaunchDir();
+    const log = join(mkdtempSync(join(tmpdir(), "run-claude-launch-log-")), "mine.log");
+    const bin2 = launchedClaude(g, `printf '%s\\n' '${resultEvent()}'`);
+    const env2 = accountNeutralEnv({ PATH: `${bin2.dir}:${process.env.PATH}` });
+    expect(spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", g.dir, "--activity-log", log], { encoding: "utf8", env: env2 }).status).toBe(0);
+    expect(readArtefacts(g.dir, g.correlationId).exit).toMatchObject({ kind: "present", record: { answer: { path: join(g.dir, "answer.md") }, transcript: log } });
+  }, 90_000);
+
+  it("refuses a prompt that is not the one the launch pinned, and runs nothing", () => {
+    const r = run(makeLaunchDir({ material: "the pinned prompt" }), `printf '%s\\n' '${resultEvent()}'`);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/pinned|material/);
+    expect(r.calls).toEqual([]);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "prompt-unverified" } } });
+  }, 60_000);
+
+  it("re-hashes the prompt file against intent.json: a tampered prompt.md is refused and the CLI never runs; an untouched one runs", () => {
+    const runFile = (f: LaunchFixture, promptFile: string) => {
+      const bin = launchedClaude(f, `printf '%s\\n' '${resultEvent()}'`);
+      const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+      const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt-file", promptFile, "--launch-dir", f.dir], { encoding: "utf8", env });
+      return { ...r, ran: existsSync(bin.calls) };
+    };
+    const good = makeLaunchDir({ material: "exactly the pinned bytes ✓\n" });
+    writeFileSync(join(good.dir, "prompt.md"), "exactly the pinned bytes ✓\n");
+    const untouched = runFile(good, join(good.dir, "prompt.md"));
+    expect(untouched.status).toBe(0);
+    expect(untouched.ran).toBe(true);
+
+    const bad = makeLaunchDir({ material: "exactly the pinned bytes ✓\n" });
+    writeFileSync(join(bad.dir, "prompt.md"), "exactly the pinned bytes ✓ — and then some\n");
+    const tampered = runFile(bad, join(bad.dir, "prompt.md"));
+    expect(tampered.status).toBe(1);
+    expect(tampered.ran).toBe(false);
+    expect(readArtefacts(bad.dir, bad.correlationId).exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "prompt-unverified" } } });
+
+    const gone = makeLaunchDir();
+    const unreadable = runFile(gone, join(gone.dir, "prompt.md"));
+    expect(unreadable.status).toBe(1);
+    expect(unreadable.ran).toBe(false);
+    expect(readArtefacts(gone.dir, gone.correlationId).exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "prompt-unverified" } } });
+  }, 120_000);
+
+  it("writes exit.json when claude cannot be spawned at all", () => {
+    const f = makeLaunchDir();
+    const empty = mkdtempSync(join(tmpdir(), "run-claude-no-claude-"));
+    // node and tsx by absolute path, so PATH can be one that holds no claude anywhere.
+    const env = accountNeutralEnv({ PATH: `${empty}:/usr/bin:/bin` });
+    const r = spawnSync(process.execPath, [join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"), "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", f.dir], { encoding: "utf8", env });
+    expect(r.status).toBe(1);
+    const read = readArtefacts(f.dir, f.correlationId);
+    expect(read.start.kind).toBe("present");
+    expect(read.exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "spawn" }, usageLimit: null } });
+  }, 60_000);
+
+  it("a failure of the wrapper's own, after start.json, ends supervisor-failed — and nothing was spawned", () => {
+    const f = makeLaunchDir();
+    const bin = launchedClaude(f, "exit 0");
+    const both = join(mkdtempSync(join(tmpdir(), "run-claude-launch-same-")), "same");
+    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", both, "--activity-log", both, "--launch-dir", f.dir], { encoding: "utf8", env });
+    expect(r.status).toBe(1);
+    expect(existsSync(bin.calls)).toBe(false);
+    const read = readArtefacts(f.dir, f.correlationId);
+    expect(read.start.kind).toBe("present");
+    expect(read.exit).toMatchObject({
+      kind: "present",
+      record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "wrapper", why: expect.stringMatching(/same file/) }, usageLimit: null, permissionDenials: null, answer: null },
+    });
+  }, 60_000);
+
+  it("refuses a missing, a 0755 or an intent-less directory before spawning anything, and writes nothing", () => {
+    const missing = makeLaunchDir();
+    rmSync(missing.dir, { recursive: true });
+    const open = makeLaunchDir();
+    chmodSync(open.dir, 0o755);
+    const blank = makeLaunchDir();
+    rmSync(join(blank.dir, "intent.json"));
+    for (const [f, why] of [[missing, /does not exist/], [open, /0700/], [blank, /intent/]] as const) {
+      const r = run(f, `printf '%s\\n' '${resultEvent()}'`);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(why);
+      expect(r.calls).toEqual([]);
+      expect(existsSync(join(f.dir, START_FILE))).toBe(false);
+      expect(existsSync(join(f.dir, EXIT_FILE))).toBe(false);
+    }
+  }, 120_000);
+
+  it("will not dry-run under a launch directory", () => {
+    expect(() => parseArgs(["--prompt", "x", "--launch-dir", "/x", "--dry-run"], {})).toThrow(/--launch-dir/);
+  });
+
+  it.runIf(tmuxAvailable())("closing the wrapper's tmux pane does not orphan its child: the hangup is forwarded, waited for, and recorded", async () => {
+    /* The child runs detached, in its own process group and session, so a closed pane (tmux
+       kill-session, a closed terminal) SIGHUPs only the wrapper. Before the fix the wrapper died of
+       it at once and left `claude` running with no exit.json — the orphan this test was written to
+       show. A real tmux on a socket nothing else can reach; never the default server. */
+    const base = mkdtempSync(join(tmpdir(), "run-claude-hup-"));
+    const sock = join(base, "s");
+    const f = makeLaunchDir();
+    const bin = mkdtempSync(join(tmpdir(), "fake-claude-hup-"));
+    const pidFile = join(bin, "child.pid");
+    writeFileSync(
+      join(bin, "claude"),
+      `#!/usr/bin/env bash\nif [ "$1" = "auth" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai"}'; exit 0; fi\n`
+        + `printf '%s' "$$" > ${shellQuote(pidFile)}\nexec sleep 120\n`,
+    );
+    chmodSync(join(bin, "claude"), 0o755);
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const until = async (done: () => boolean, ms: number): Promise<boolean> => {
+      const deadline = Date.now() + ms;
+      while (!done()) {
+        if (Date.now() > deadline) return false;
+        await new Promise((settle) => setTimeout(settle, 100));
+      }
+      return true;
+    };
+    const command = `cd ${shellQuote(process.cwd())} && exec ${shellQuote(process.execPath)} ${shellQuote(join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"))} scripts/run-claude.ts --prompt p --launch-dir ${shellQuote(f.dir)}`;
+    let child = 0;
+    try {
+      execFileSync("tmux", ["-S", sock, "-f", "/dev/null", "new-session", "-d", "-s", "wrapper", command], { env: accountNeutralEnv({ PATH: `${bin}:${process.env.PATH}` }) });
+      expect(await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8") !== "", 60_000)).toBe(true);
+      child = Number(readFileSync(pidFile, "utf8"));
+      expect(alive(child)).toBe(true);
+      execFileSync("tmux", ["-S", sock, "kill-session", "-t", "=wrapper"]);
+      // Within the kill grace (5s) and some slack: the child is gone, not orphaned.
+      expect(await until(() => !alive(child), 20_000)).toBe(true);
+      expect(await until(() => existsSync(join(f.dir, EXIT_FILE)), 10_000)).toBe(true);
+      expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+        kind: "present",
+        record: { ending: { kind: "signalled", signal: expect.stringMatching(/^SIG(HUP|KILL)$/) }, verdict: { kind: "failed", cause: "hangup" } },
+      });
+    } finally {
+      if (child > 0 && alive(child)) process.kill(child, "SIGKILL");
+      try {
+        execFileSync("tmux", ["-S", sock, "kill-server"], { stdio: "ignore" });
+      } catch {
+        /* already gone */
+      }
+      rmSync(base, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("without --launch-dir, the argv is the same, and no child sees a launch id", () => {
+    const plain = run(null, `printf '%s\\n' '${resultEvent()}'`);
+    expect(plain.status).toBe(0);
+    expect(plain.calls.map((c) => c[2])).toEqual(["unset", "unset"]);
+    const launched = run(makeLaunchDir(), `printf '%s\\n' '${resultEvent()}'`);
+    expect(launched.argv).toEqual(plain.argv);
+    expect(plain.argv.at(-1)).toBe("p");
   }, 60_000);
 });

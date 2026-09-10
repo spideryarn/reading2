@@ -16,6 +16,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync, closeSync, copyFileSync, existsSync, ftruncateSync, mkdirSync, mkdtempSync, openSync,
   readFileSync, rmSync, writeFileSync, writeSync,
@@ -28,6 +29,8 @@ import {
   authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
   parseArgs, readAnswerForConsole, reviewProfileDefined, runCodex, shouldFallBack, untrustedCheckoutHint,
 } from "../scripts/run-codex.js";
+import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
+import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
 
 /**
  * Build the noise line once, outside the loop. Doing it per line — `$(printf 'x%.0s' {1..200})` —
@@ -1072,5 +1075,148 @@ describe("the CLI, end to end", () => {
     const r = attemptsCodex(`printf 'THE-ANSWER\\n' > "$out"`, ["--auth", "key-first"]);
     expect(r.attempts).toEqual(["key"]);
     expect(r.status).toBe(0);
+  }, 60_000);
+});
+
+/**
+ * `--launch-dir` — plan 260910f Stage 2, F6: the WHOLE invocation is instrumented, not one
+ * credential attempt. A read-only fallback runs codex twice under one start.json and ends in one
+ * exit.json; a write-capable run still never falls back. The stand-in records, per attempt, whether
+ * start.json was already there and which launch id it was handed.
+ */
+describe("--launch-dir", () => {
+  function launchedCodex(f: LaunchFixture, body: string): { dir: string; calls: string } {
+    const start = shellQuote(join(f.dir, START_FILE));
+    const bin = fakeCodex(
+      `if [ -f ${start} ]; then s=start-present; else s=start-absent; fi\n`
+      + `printf '%s %s %s\\n' "$s" "\${SPIDERYARN_LAUNCH_ID-unset}" "$PPID" >> "$here/calls"\n${body}`,
+    );
+    return { dir: dirname(bin), calls: join(dirname(bin), "calls") };
+  }
+
+  function run(f: LaunchFixture | null, body: string, extraArgs: string[] = [], extraEnv: Record<string, string> = {}) {
+    const fixture = f ?? makeLaunchDir();
+    const bin = launchedCodex(fixture, body);
+    const answerPath = join(mkdtempSync(join(tmpdir(), "run-codex-launch-")), "answer.md");
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin.dir}:${process.env.PATH}`, ...extraEnv };
+    delete env.SPIDERYARN_LAUNCH_ID;
+    const launchArgs = f === null ? [] : ["--launch-dir", fixture.dir];
+    const r = spawnSync(
+      "npx",
+      ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--output", answerPath, "--sandbox", "read-only", ...launchArgs, ...extraArgs],
+      { encoding: "utf8", env },
+    );
+    const calls = existsSync(bin.calls) ? readFileSync(bin.calls, "utf8").trim().split("\n").map((line) => line.split(" ")) : [];
+    return { ...r, answerPath, calls, f: fixture, read: () => readArtefacts(fixture.dir, fixture.correlationId) };
+  }
+
+  const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+  const outOfCredits = 'echo "ERROR: Your workspace is out of credits." >&2; exit 1';
+
+  it("a read-only fallback is two attempts under one start.json, and ends in one exit.json about the last", () => {
+    const r = run(
+      makeLaunchDir(),
+      `if [ -z "$CODEX_API_KEY" ]; then ${outOfCredits}; fi\nprintf 'THE-ANSWER\\n' > "$out"`,
+      [],
+      { CODEX_API_KEY: "sk-TEST" },
+    );
+    expect(r.status).toBe(0);
+    expect(r.calls).toHaveLength(2);
+    for (const call of r.calls) {
+      expect(call[0]).toBe("start-present");
+      expect(call[1]).toBe(r.f.correlationId);
+    }
+    const read = r.read();
+    expect(read.start.kind === "present" && read.start.record.pid).toBe(Number(r.calls[0]![2]));
+    expect(read.exit).toMatchObject({
+      kind: "present",
+      record: {
+        ending: { kind: "exited", code: 0 },
+        verdict: { kind: "ok" },
+        // Codex has no result event and no usage-limit reading of its own: said as null, not guessed.
+        usageLimit: null,
+        permissionDenials: null,
+        answer: { path: r.answerPath, sha256: sha(r.answerPath), usable: true },
+        transcript: join(r.f.dir, "transcript.ndjson"),
+      },
+    });
+    expect(r.stdout).toContain("THE-ANSWER");
+  }, 60_000);
+
+  it("a write-capable run still does not fall back, and exit.json says how it ended", () => {
+    const r = run(makeLaunchDir(), outOfCredits, ["--sandbox", "workspace-write"], { CODEX_API_KEY: "sk-TEST" });
+    expect(r.status).toBe(1);
+    expect(r.calls).toHaveLength(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause: "nonzero" }, answer: null } });
+  }, 60_000);
+
+  it("writes exit.json on a timeout", () => {
+    const r = run(makeLaunchDir(), "sleep 30", ["--timeout-minutes", "0.05"]);
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { verdict: { kind: "failed", cause: "timeout" } } });
+  }, 60_000);
+
+  it("writes exit.json on an empty answer", () => {
+    const r = run(makeLaunchDir(), `printf '\\n' > "$out"`);
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 0 }, verdict: { kind: "failed", cause: "empty-answer" }, answer: { bytes: 1, usable: false } } });
+  }, 60_000);
+
+  it("writes exit.json when the capture overflows and the child is killed", () => {
+    const r = run(makeLaunchDir(), "head -c 70000000 /dev/zero\nsleep 5");
+    expect(r.status).toBe(1);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "signalled", signal: "SIGKILL" }, verdict: { kind: "failed", cause: "overflow" } } });
+  }, 90_000);
+
+  it("defaults the answer and the transcript into the launch directory", () => {
+    const f = makeLaunchDir();
+    const bin = launchedCodex(f, `printf 'A\\n' > "$out"`);
+    const r = spawnSync("npx", ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--launch-dir", f.dir], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin.dir}:${process.env.PATH}` },
+    });
+    expect(r.status).toBe(0);
+    expect(readFileSync(join(f.dir, "answer.md"), "utf8")).toBe("A\n");
+    expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({ kind: "present", record: { answer: { path: join(f.dir, "answer.md"), usable: true }, verdict: { kind: "ok" } } });
+  }, 60_000);
+
+  it("refuses a prompt that is not the one the launch pinned, and runs nothing", () => {
+    const r = run(makeLaunchDir({ material: "the pinned prompt" }), `printf 'A\\n' > "$out"`);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/pinned|material/);
+    expect(r.calls).toEqual([]);
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "prompt-unverified" } } });
+  }, 60_000);
+
+  it("writes exit.json when codex cannot be spawned at all", () => {
+    const f = makeLaunchDir();
+    const empty = mkdtempSync(join(tmpdir(), "run-codex-no-codex-"));
+    // node and tsx by absolute path, so PATH can be one that holds no codex anywhere.
+    const r = spawnSync(
+      process.execPath,
+      [join(REPO, "node_modules", "tsx", "dist", "cli.mjs"), "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
+      { cwd: REPO, encoding: "utf8", env: { ...process.env, PATH: `${empty}:/usr/bin:/bin` } },
+    );
+    expect(r.status).toBe(1);
+    const read = readArtefacts(f.dir, f.correlationId);
+    expect(read.start.kind).toBe("present");
+    expect(read.exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "spawn", why: expect.stringMatching(/codex|ENOENT/) } } });
+  }, 60_000);
+
+  it("refuses a 0755 directory before spawning anything, and writes nothing", () => {
+    const f = makeLaunchDir();
+    chmodSync(f.dir, 0o755);
+    const r = run(f, `printf 'A\\n' > "$out"`);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/0700/);
+    expect(r.calls).toEqual([]);
+    expect(existsSync(join(f.dir, START_FILE))).toBe(false);
+    expect(existsSync(join(f.dir, EXIT_FILE))).toBe(false);
+  }, 60_000);
+
+  it("without --launch-dir, no child sees a launch id", () => {
+    const r = run(null, `printf 'A\\n' > "$out"`);
+    expect(r.status).toBe(0);
+    expect(r.calls.map((c) => c[1])).toEqual(["unset"]);
   }, 60_000);
 });

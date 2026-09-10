@@ -214,6 +214,14 @@ import {
   selectScript,
   selfSessionUuid,
 } from "./gjd-remote-resume-all.js";
+import {
+  type LaunchFlags,
+  launchBoxCheck,
+  launchExitLines,
+  launchStartLines,
+  launchTmuxFlags,
+  parseLaunchFlags,
+} from "./gjd-remote-launch.js";
 
 /**
  * THE TOOL ROOT: this checkout, found from the script's own location.
@@ -2619,6 +2627,9 @@ async function cmdNewClaude(
     wait?: { seconds: number; label: string } | undefined;
     /** Registry handle or `auto`; absent means `auto`. */
     account?: string | undefined;
+    /** `--launch-id` / `--launch-dir`, already validated in main: the launch protocol's
+     *  correlation id and attempt directory (plan 260910f). Absent, nothing below changes. */
+    launch?: LaunchFlags | undefined;
   },
 ): Promise<void> {
   assertAccountRequest(opts.account);
@@ -2700,7 +2711,9 @@ async function cmdNewClaude(
   const jobPath = `${REMOTE_WORK}/jobs/${name}-${sessionId}.sh`;
   // The note is removed before the run, never after: one left by an earlier
   // session of the same name would otherwise be read back as this one's excuse.
-  ssh(`mkdir -p ${REMOTE_WORK}/prompts ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
+  // Under --launch-id, the same round trip refuses a launch directory that is
+  // not there or whose intent.json is not this launch's — before any session.
+  ssh(`mkdir -p ${REMOTE_WORK}/prompts ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}${launchBoxCheck(opts.launch, shq)}`);
 
   // Size already checked at the top, before any of this touched the network.
   if (opts.prompt) writeRemote(opts.prompt, promptPath);
@@ -2718,6 +2731,10 @@ async function cmdNewClaude(
     `#!/usr/bin/env bash`,
     `export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:$PATH"`,
     `export LANG=C.UTF-8`,
+    ...launchStartLines(opts.launch, failTo(name, "FATAL: could not write the launch's start.json — refusing to start Claude without it"), shq),
+    // ↑ Under --launch-id, the job's FIRST command: start.json, durably, or
+    // failTo and no Claude (plan 260910f F3). Before the directory guard, so a
+    // guard that fails still leaves evidence the session was created.
     // No fallback. This line used to end `|| { echo FATAL; exec bash -l; }`,
     // which gave you a healthy-looking tmux session sitting in /home/greg with
     // the FATAL line one keystroke from scrolling away — and Claude never
@@ -2781,6 +2798,9 @@ async function cmdNewClaude(
       .filter(Boolean)
       .join(" ")),
     `_gjd_claude_status=$?`,
+    ...launchExitLines(opts.launch, shq),
+    // ↑ Under --launch-id: exit.json from the status just saved, before anything
+    // else can run and long before `exec bash -l`.
     `if [ "$_gjd_claude_status" -eq 0 ]; then ${accountOutcomeCommand(sessionId, "completed")}; ` +
       `else ${accountOutcomeCommand(sessionId, "failed")}; fi`,
     `unset _gjd_claude_status`,
@@ -2804,7 +2824,7 @@ async function cmdNewClaude(
     admit,
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
       `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ` +
-      `${accountTmuxPrefix(account)}${metaFlags(target, dir, "claude")} ` +
+      `${accountTmuxPrefix(account)}${launchTmuxFlags(opts.launch, shq)}${metaFlags(target, dir, "claude")} ` +
       shq(`bash ${jobPath}`),
     name,
   );
@@ -5763,10 +5783,16 @@ async function main(): Promise<void> {
           repo: { type: "string" },
           wait: { type: "string" },
           account: { type: "string" },
+          "launch-id": { type: "string" },
+          "launch-dir": { type: "string" },
           "no-attach": { type: "boolean", default: false },
           ssh: { type: "boolean", default: false },
         },
       });
+      // The launch protocol's flags (plan 260910f), refused here for the same
+      // reason as a bad duration below: before anything touches the network.
+      const launchFlags = parseLaunchFlags(values["launch-id"], values["launch-dir"]);
+      if (!launchFlags.ok) die(launchFlags.why);
       // Parsed here, before anything touches the network: a duration typed
       // wrong should cost a sentence, not a session on the box that has to be
       // killed.
@@ -5784,6 +5810,7 @@ async function main(): Promise<void> {
         attach: !values["no-attach"],
         transport: values.ssh ? "ssh" : undefined,
         account: values.account,
+        launch: launchFlags.launch,
       });
     }
 
