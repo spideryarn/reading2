@@ -186,8 +186,16 @@ only `publication`; a poll and a broadcast of the same state carry the same stam
 process have two instances; the old `parseObservation` accepts a stamped payload (additivity, proved
 rather than asserted).
 
-- [ ] Stamp on the wire, ledger, composition, server wiring, client `Omit`.
-- [ ] Focused tests, typecheck, `build:fleet`; Sol review; commit.
+- [x] Stamp on the wire, ledger, composition, server wiring, client `Omit`. **Implemented by Codex
+  (gpt-5.6-sol).** The ledger's API is `record("success" | "failure")`; the initial-frame decision
+  is `initialFramePayload()` in `state.ts`, pure so a test drives the function production calls.
+- [ ] Focused tests, typecheck, `build:fleet` (all green on the manager's own run: typecheck exit 0,
+  13 files / 792 tests); Sol review; commit.
+
+Status, 2026-09-10: implemented and committed; Sol stage review running. Four points raised for it
+by the manager: the production throw on a stamp/snapshot disagreement, the test's dynamic-import
+casts, `ProducerStamp` displacing `FleetState`'s doc comment, and `/api/live` composing a payload
+it may discard.
 
 ### Stage 2 — the consumer orders by run and collection
 

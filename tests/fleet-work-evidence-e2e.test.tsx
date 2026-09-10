@@ -87,6 +87,7 @@ test("recognised child work reaches the browser through the real daemon, project
       refreshMs: 60_000,
       answeringEnabled: true,
       attemptedAt: null,
+      producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
       readCheckpoint: () => readCheckpointFeeds(storeRoot),
     }),
   );

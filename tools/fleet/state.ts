@@ -24,7 +24,7 @@ import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
 import type { CheckpointFeeds } from "./overseer-status.js";
 import { composeQuestions } from "./questions.js";
-import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed, WorkFeed } from "./wire.js";
+import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, ProducerStamp, UsageFeed, WorkFeed } from "./wire.js";
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -96,11 +96,19 @@ export function fleetState(
    * five-minute health-history cadence. Required so a forgotten composition
    * edge is a type error rather than a quietly empty panel. */
   currentWork: WorkFeed,
+  /** Which server run composed this payload, and which kept outcome and
+   * successful inventory it carries. Required so ordering cannot vanish at a
+   * composition edge. */
+  producer: ProducerStamp,
   now: number = Date.now(),
 ): FleetState {
+  if ((producer.inventory === null) !== (snapshot === null)) {
+    throw new Error("producer inventory nullness disagrees with the snapshot");
+  }
   const rows = snapshot?.rows ?? [];
   return {
     schema: 1,
+    producer,
     attemptedAt,
     attention,
     overseer,
@@ -154,6 +162,9 @@ export type PayloadDeps = {
   refreshMs: number;
   answeringEnabled: boolean;
   attemptedAt: string | null;
+  /** The publication ledger's current stamp. Required so a caller cannot
+   * compose an orderless payload without the compiler saying so. */
+  producer: ProducerStamp;
   /**
    * **THE COORDINATOR'S CHECKPOINT — THE INBOX AND ITS OWN STATUS, OUT OF ONE
    * READ.** Must not throw; `readCheckpointFeeds` in overseer-status.ts is the
@@ -207,9 +218,15 @@ export function statePayload(deps: PayloadDeps): string {
       checkpoint.overseer,
       checkpoint.usage,
       checkpoint.work,
+      deps.producer,
       Date.now(),
     ),
   );
+}
+
+/** The initial SSE frame after a kept turn; before that, there is no outcome to publish. */
+export function initialFramePayload(producer: ProducerStamp, payload: string): string | null {
+  return producer.publication > 0 ? payload : null;
 }
 
 /* ------------------------------------------------------------------ *

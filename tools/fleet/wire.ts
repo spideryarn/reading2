@@ -1094,6 +1094,16 @@ export type AttentionFeed =
  * every use site now writes both out. `unknown` is still the right answer for
  * `Health` on the client; it is just no longer the answer nobody chose.
  */
+export type ProducerStamp = {
+  /** Which run of the dashboard composed this payload: `serverInstanceId()`, INSTANCE_TOKEN-shaped. */
+  instance: string;
+  /** How many refresh turns this run has kept (success or failure). 0 before the first. */
+  publication: number;
+  /** How many successful collections this run has kept: the ordinal of the one `rows` came from.
+   *  null exactly when `collectedAt` is null — never collected. */
+  inventory: number | null;
+};
+
 export type FleetState<Row, Health> = {
   /**
    * The payload's shape, so a stored snapshot can be read back by code that has
@@ -1103,6 +1113,7 @@ export type FleetState<Row, Health> = {
    * know, and a version that changes on every addition is one nobody checks.
    */
   schema: 1;
+  producer: ProducerStamp;
   /**
    * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
    * claim about the box when `collectedAt` is non-null, and a freshly restarted
