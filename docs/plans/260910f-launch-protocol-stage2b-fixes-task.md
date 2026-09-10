@@ -32,6 +32,18 @@ this brief will list its findings below.
   those three keys and no `append`/`writeMaterial`/`writeIntent`. Allowed file:
   `tools/overseer/launch-protocol.ts` and `tests/overseer-launch-protocol.test.ts`.
 
+- **`RunSpec` gains a pinned `account`** (agreed with `scheduled-dispatch`, sent to the fixer
+  mid-stage): `run-claude`'s `--account` takes a named handle only — no `auto` — and without it a
+  `tmux-headless` session would run on the daemon's own account, since it inherits the creating
+  client's environment. Dispatch policy is pool accounts only (`dispatch.ts`). So the scheduler picks
+  a named pool account at plan time (it holds the per-account usage), `run.account` is pinned in
+  `planned`/`intent.json` and in F5's conflict check, the adapters pass `--account <handle>`, and the
+  session environment carries no `CLAUDE_CONFIG_DIR` or other account-routing variable of the
+  daemon's. `run-claude` stays the authoritative check (unknown handle, wrong family, orchestrator,
+  default `.claude` → a failed verdict in `exit.json`).
+- **The `tmuxHeadlessLauncher` header comment** still says `--prompt-file <material.txt>`; the code
+  passes the attempt-private `prompt.md`. Correct the comment.
+
 ### The re-run's findings (`260910f-launch-protocol-stage2-review-sol-b.md`, full record `…-sol-b-findings.md`)
 
 **Do F22 first — before running any test that spawns a wrapper.**
