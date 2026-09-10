@@ -315,7 +315,16 @@ returned. Every finding accepted; where it lands:
 
 ## Status
 
-2026-09-10, ~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's
+2026-09-10, ~20:20 UTC. **All of it is on `dev` (`84b8c2a4`).** The full suite on the merged tree
+found one regression of this branch's own: `tests/fleet-work-evidence-e2e.test.tsx` had been red on
+`dev` since Stage 1 (`1c6e1e4e`). `runOverseer`'s first line derived its checkout with
+`fileURLToPath(new URL("../..", import.meta.url))`, which throws under jsdom, so a diagnostic stopped
+a daemon starting — invisible to every daemon test, because all of them run under node. Fixed in
+`3d6e851b`: `readModuleStartRevision` owns the derivation and makes a module with no file `unknown`,
+for the daemon and the dashboard both. Red first; the postmortem waits on the pause. Otherwise the
+suite's only reds were the two environment ones (`cold-start-lazy-imports`, `pdf-bundle-trace`).
+
+~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's
 fixes (`bfc0c3bf`), the plan review's F3/F1 (`52267541`), Stage 4c (`41508b7d`), and Stage 3 with the
 Stage 2 review's six P1 fixes (`b5bdea14` — one commit because they share files). `dev` merged in
 (19 commits, no conflicts), typecheck 0, full suite running on the merged tree. Paused by the
