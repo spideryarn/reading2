@@ -34,7 +34,7 @@ export const MAX_VOIDS_PER_WINDOW = 3;
 
 export type TickDecision =
   | { kind: "run"; sha: string }
-  | { kind: "skip"; why: string };
+  | { kind: "skip"; why: string; cause?: "memory-admission" };
 
 export type AdmissionReadings = Parameters<typeof decideAdmission>[0];
 
@@ -270,6 +270,7 @@ export function decideTick(input: TickInput): TickDecision {
   if (admission.kind === "refuse") {
     return {
       kind: "skip",
+      cause: "memory-admission",
       why: `Memory admission refused this check: ${withPeriod(oneLine(admission.message))}`,
     };
   }

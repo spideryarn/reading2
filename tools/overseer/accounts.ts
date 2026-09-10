@@ -26,7 +26,7 @@ export type AccountEntry = {
   role: AccountRole;
   stateDir: string;
   providerAccountId: string;
-  providerTenantId: string;
+  providerTenantId: string | null;
   displayEmail?: string;
   addedAt: string;
   familyData: Record<string, unknown>;
@@ -111,7 +111,6 @@ function parseRegistryEntry(value: unknown, index: number): AccountEntry | { why
     "role",
     "stateDir",
     "providerAccountId",
-    "providerTenantId",
     "addedAt",
   ] as const;
   for (const field of required) {
@@ -128,6 +127,16 @@ function parseRegistryEntry(value: unknown, index: number): AccountEntry | { why
   const family = entry.family;
   if (family !== "claude" && family !== "codex") {
     return { why: `accounts[${index}].family must be "claude" or "codex"` };
+  }
+  if (!Object.hasOwn(entry, "providerTenantId")) {
+    return { why: `accounts[${index}].providerTenantId is required` };
+  }
+  const providerTenantId = entry.providerTenantId;
+  if (family === "claude" && nonBlankString(providerTenantId) === null) {
+    return { why: `accounts[${index}].providerTenantId is required and must be a non-empty string for claude` };
+  }
+  if (family === "codex" && providerTenantId !== null && nonBlankString(providerTenantId) === null) {
+    return { why: `accounts[${index}].providerTenantId must be null or a non-empty string for codex` };
   }
   const role = entry.role;
   if (role !== "orchestrator" && role !== "pool") {
@@ -148,7 +157,7 @@ function parseRegistryEntry(value: unknown, index: number): AccountEntry | { why
     role,
     stateDir,
     providerAccountId: entry.providerAccountId as string,
-    providerTenantId: entry.providerTenantId as string,
+    providerTenantId: providerTenantId as string | null,
     ...(entry.displayEmail === undefined ? {} : { displayEmail: entry.displayEmail as string }),
     addedAt: entry.addedAt as string,
     familyData,
