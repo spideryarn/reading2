@@ -257,8 +257,24 @@ say, all accepted:
 read around the command line in `report-identity.ts`, hard-link refusal, bounded reads of the
 processing and refused records, stopping a pass on any transient failure so the next pass's repair
 runs before another append, and bounds that hold for the first item — which the orchestrator read,
-tested (170 passed) and committed as unreviewed code. A second run, 45 minutes, reviews Stage 1
-including those fixes; the Overseer was told first.
+tested (170 passed) and committed as unreviewed code; its findings were then recovered from its
+activity log into [the first run's answer](260910e-work-reports-stage1-review-sol.md).
+
+**Second run** ([answer](260910e-work-reports-stage1-review-r2-sol.md)), narrowed at the Overseer's
+direction to 30 minutes, the first run's fixes and what it had not reached, findings written before
+fixing. Three P1s, fixed by the reviewer: stopping a pass on *any* transient failure let one stuck item
+starve every later submission — now only a failed append stops a pass (`AppendMayHaveTornTail`); the
+wall deadline abandoned a report between probes and restarted it every pass — now it finishes, with
+unprobed references `unchecked`; a local path was called `found-locally` when the dev check could not
+answer — now `unchecked`. Orchestrator's run after: 172 passed, exit 0. **Verdict: not approved until
+the inbox enumeration is bounded** — `readdirSync` over a flooded inbox would stall the daemon's whole
+loop. That bound goes into Stage 3b, the next change to `reports.ts`, and Stage 3's review checks it;
+the other three were the whole of what a second round was asked to settle, so there is no third round.
+
+Two lessons, for the debrief. A review asked to do too much dies at its wall, and a killed run leaves no
+answer — the second one wrote findings first and was fine. And `run-codex` overwrites `--output` with the
+run's final message, so a reviewer that writes its findings *into* the answer file loses them; the
+recovered text came from the activity log.
 
 Left for Stage 3: `appendDecision` is in the signature but unreached (decisions are refused before step
 [2]), so "decisions lock held ⇒ pending" is Stage 3's test. The drain re-reads all of `reports.jsonl`

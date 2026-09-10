@@ -80,7 +80,32 @@ the seven above and their new tests. Anything else: stop and say so.
 ## Stage 3b — a session's decision into `decisions.jsonl`
 
 (Dispatched after the second Stage 1 review lands. Files: `tools/overseer/reports.ts`,
-`scripts/overseer.ts`, and the reports tests.)
+`scripts/overseer.ts`, `docs/project/work-reports.md` (its `report decision` section only), and the
+reports tests.)
+
+### First: bound the inbox enumeration (the Stage 1 review's condition for landing)
+
+Read `docs/plans/260910e-work-reports-stage1-review-r2-sol.md` § Directory listing bound. Today every
+pass does `readdirSync` + a `stat` per entry + a sort over the whole inbox, synchronously, inside the
+daemon — so a runaway writer with 100 000 files stalls the whole Overseer, heartbeat included. Slicing
+after `readdirSync` does not bound it. Build the smallest real bound:
+
+- iterate the inbox lazily with `opendirSync` / `readSync`, and stop after a fixed number of directory
+  entries per pass (a new `DrainLimits.scanEntries`, default 1 000), closing the handle in `finally`;
+- among the entries read, order the valid candidates oldest-first as today, and say in the outcome when
+  the scan cap was hit ("order is approximate beyond the first N entries");
+- so a hostile prefix of permanently invalid entries cannot starve valid submissions, **move** entries
+  that can never become a report — a name that is not `<uuid>.json` or `.tmp-<uuid>`, a directory, a
+  symlink, a file with more than one hard link — into a sibling `report-quarantine/` (a `rename`, which
+  moves a symlink itself and never its target), keeping at most the newest 200 there and deleting the
+  rest, and count them. Leave the choice of whether an oversize or name≠id file is quarantined or
+  refused as it is today (they are already refused, which removes them).
+- Tests, red first: a flood of 5 000 invalid entries ahead of one valid submission ⇒ within a bounded
+  number of passes the valid one is recorded and the pass never reads more than `scanEntries` entries;
+  quarantine keeps the newest 200; a symlink in the inbox is moved and its target untouched; the cap
+  message appears when hit.
+
+### Then: decision reports
 
 - A `decision` submission's `draft` is validated with the schema-2 decision parser. Stage 2 exported no
   `DecisionDraft` type; build one in `reports.ts` from `ASSESSMENT_FIELDS` plus the schema-1 content

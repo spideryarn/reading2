@@ -554,7 +554,7 @@ describe("bounds per pass", () => {
     expect(total).toBe(6);
   });
 
-  test("the wall-clock limit is checked between artefact probes within one report", () => {
+  test("the wall-clock limit finishes a legal report without starting more artefact probes", () => {
     const root = tempRoot();
     const s = submission({
       artefacts: [
@@ -564,16 +564,45 @@ describe("bounds per pass", () => {
       ],
     });
     submitReport(root, s);
-    const probes = checker(() => ({ state: "not-found" }));
-    const readings = [0, 0, 0, 2];
-    const clock = vi.spyOn(Date, "now").mockImplementation(() => readings.shift() ?? 2);
+    let elapsedMs = 0;
+    const probes = checker(() => {
+      elapsedMs = 2;
+      return { state: "not-found" };
+    });
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => elapsedMs);
     try {
       const outcome = drainReports(options(root, { checkArtefact: probes.check, limits: { wallMs: 1 } }));
       expect(outcome.stoppedBy).toBe("time");
-      expect(outcome.recorded).toBe(0);
+      expect(outcome.recorded).toBe(1);
       expect(outcome.probes).toBe(1);
       expect(probes.calls).toHaveLength(1);
-      expect(readInbox(root).inFlight.map((item) => item.eventId)).toEqual([s.eventId]);
+      expect(rows(root).rows[0]?.event.artefacts.map((item) => item.check)).toEqual([
+        { state: "not-found" },
+        { state: "unchecked", why: expect.stringMatching(/wall-clock limit/) },
+        { state: "unchecked", why: expect.stringMatching(/wall-clock limit/) },
+      ]);
+      expect(readInbox(root).inFlight).toEqual([]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("pass setup consuming the wall budget cannot defer the first legal item forever", () => {
+    const root = tempRoot();
+    const s = submission({ artefacts: [{ kind: "commit", sha: "abc1234" }] });
+    submitReport(root, s);
+    const probes = checker(() => ({ state: "not-found" }));
+    const readings = [0, 2, 2];
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => readings.shift() ?? 2);
+    try {
+      const outcome = drainReports(options(root, { checkArtefact: probes.check, limits: { wallMs: 1 } }));
+      expect(outcome.recorded).toBe(1);
+      expect(outcome.probes).toBe(0);
+      expect(probes.calls).toEqual([]);
+      expect(rows(root).rows[0]?.event.artefacts[0]?.check).toEqual({
+        state: "unchecked",
+        why: expect.stringMatching(/wall-clock limit/),
+      });
     } finally {
       clock.mockRestore();
     }
@@ -668,11 +697,13 @@ describe("inbox hygiene", () => {
     const elsewhere = join(root, "prepared-elsewhere.json");
     renameSync(prepared, elsewhere);
     symlinkSync(elsewhere, prepared);
+    const later = submission({ summary: "later report" });
+    submitReport(root, later);
 
     const outcome = drainReports(options(root));
     expect(outcome.pending).toBe(1);
-    expect(outcome.recorded).toBe(0);
-    expect(readReports(root).kind).toBe("never-written");
+    expect(outcome.recorded).toBe(1);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([later.eventId]);
     expect(existsSync(prepared)).toBe(true);
     expect(existsSync(join(root, INBOX_DIR, `${s.eventId}.json`))).toBe(true);
   });
@@ -698,6 +729,30 @@ describe("a transient failure leaves the item pending", () => {
     expect(readInbox(root).inFlight.map((i) => i.eventId)).toEqual([s.eventId]);
 
     expect(drainReports(options(root)).recorded).toBe(1);
+  });
+
+  test("a checker that always throws for one item does not starve later submissions", () => {
+    const root = tempRoot();
+    const stuck = submission({ artefacts: [{ kind: "commit", sha: "abc1234" }] });
+    const later = submission({ summary: "later report" });
+    const stuckPath = submitReport(root, stuck);
+    const laterPath = submitReport(root, later);
+    const base = Date.parse("2026-09-10T09:00:00.000Z") / 1000;
+    utimesSync(stuckPath, base, base);
+    utimesSync(laterPath, base + 1, base + 1);
+
+    const outcome = drainReports(
+      options(root, {
+        checkArtefact: () => {
+          throw new Error("git always explodes for this reference");
+        },
+      }),
+    );
+
+    expect(outcome.pending).toBe(1);
+    expect(outcome.recorded).toBe(1);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([later.eventId]);
+    expect(readInbox(root).inFlight.map((item) => item.eventId)).toEqual([stuck.eventId]);
   });
 
   test("a failed append stops the pass before another line can be welded to its torn tail", () => {
@@ -861,6 +916,11 @@ describe("makeArtefactChecker", () => {
     expect(check({ kind: "path", path: "no/such/file-here.ts" })).toEqual({ state: "not-found" });
     const gone = makeArtefactChecker({ repoDir: join(empty(), "missing"), decisionsRoot: empty(), queueRoot: empty() });
     expect(gone({ kind: "commit", sha: "0000000" }).state).toBe("unchecked");
+
+    const notRepo = empty();
+    writeFileSync(join(notRepo, "local.ts"), "local but git cannot say whether it is on dev");
+    const noGitAnswer = makeArtefactChecker({ repoDir: notRepo, decisionsRoot: empty(), queueRoot: empty() });
+    expect(noGitAnswer({ kind: "path", path: "local.ts" }).state).toBe("unchecked");
   });
 
   test("a commit on origin/dev and a path in its tree are on-dev", () => {

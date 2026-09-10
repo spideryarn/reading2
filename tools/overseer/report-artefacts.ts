@@ -94,7 +94,9 @@ function checkPath(git: GitRun, repoDir: string, relative: string): ArtefactChec
   try {
     const base = realpathSync(repoDir);
     const real = realpathSync(path.join(repoDir, relative));
-    if ((real === base || real.startsWith(`${base}${path.sep}`)) && statSync(real).isFile()) return { state: "found-locally" };
+    if ((real === base || real.startsWith(`${base}${path.sep}`)) && statSync(real).isFile()) {
+      return devUnknown === null ? { state: "found-locally" } : { state: "unchecked", why: devUnknown };
+    }
   } catch {
     /* Not in the working tree either. */
   }

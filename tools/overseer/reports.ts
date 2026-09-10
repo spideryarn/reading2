@@ -612,6 +612,14 @@ export const DEFAULT_DRAIN_LIMITS: DrainLimits = { files: 50, bytes: 1024 * 1024
 export type DrainBoundary = "processing-written" | "reports-appended" | "processing-unlinked";
 export class SimulatedCrash extends Error {}
 
+/** Only this failure requires the pass to stop so its next open can repair a torn tail. */
+class AppendMayHaveTornTail extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "AppendMayHaveTornTail";
+  }
+}
+
 export type DrainOptions = {
   root: string;
   /** The daemon's live register, for the execution comparison. */
@@ -815,7 +823,11 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     const existing = recorded.get(prepared.eventId);
     if (existing === undefined) {
       writeInitMarker(root);
-      appendReportLine(logFile, prepared.reportLine);
+      try {
+        appendReportLine(logFile, prepared.reportLine);
+      } catch (cause) {
+        throw new AppendMayHaveTornTail(cause);
+      }
       recorded.set(prepared.eventId, prepared.reportLine);
     } else if (existing !== prepared.reportLine) {
       refuseItem(prepared.eventId, `event id ${prepared.eventId} is already recorded with different content`, original, [processingFile, inboxFile]);
@@ -851,9 +863,11 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       inFlight.add(eventId);
       outcome.pending += 1;
       outcome.notes.push(`pending ${eventId}: its prepared report could not be replayed: ${cause instanceof Error ? cause.message : String(cause)}`);
-      // A failed append may have left a torn tail. The next pass repairs it;
-      // appending another line in this pass could weld good bytes onto the tear.
-      return outcome;
+      if (cause instanceof AppendMayHaveTornTail) {
+        // Only a failed append may have left a torn tail. The next pass repairs
+        // it before another append; every other stuck item must not starve later work.
+        return outcome;
+      }
     }
   }
 
@@ -895,7 +909,7 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
   candidates.sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
 
   let files = 0;
-  candidateLoop: for (let index = 0; index < candidates.length; index += 1) {
+  for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index];
     if (candidate === undefined) continue;
     const { eventId } = candidate;
@@ -912,7 +926,10 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       stopAt("files");
       break;
     }
-    if (Date.now() - startedMs >= limits.wallMs) {
+    // Always admit one bounded file: otherwise time spent opening the log or
+    // listing the inbox can defer the oldest legal submission on every pass.
+    // Its artefact loop below starts no probes once the deadline has elapsed.
+    if (files > 0 && Date.now() - startedMs >= limits.wallMs) {
       stopAt("time");
       break;
     }
@@ -987,10 +1004,17 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       }
 
       const artefacts: CheckedArtefact[] = [];
-      for (const ref of submission.artefacts) {
+      let wallLimitReached = false;
+      for (let artefactIndex = 0; artefactIndex < submission.artefacts.length; artefactIndex += 1) {
+        const ref = submission.artefacts[artefactIndex];
+        if (ref === undefined) continue;
         if (Date.now() - startedMs >= limits.wallMs) {
-          stopAt("time");
-          break candidateLoop;
+          wallLimitReached = true;
+          const why = "the report drain reached its wall-clock limit before this reference could be checked";
+          for (const unchecked of submission.artefacts.slice(artefactIndex)) {
+            artefacts.push({ ref: unchecked, check: { state: "unchecked", why } });
+          }
+          break;
         }
         outcome.probes += 1;
         artefacts.push({ ref, check: options.checkArtefact(ref) });
@@ -1009,13 +1033,19 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
 
       /* ---- [2] is Stage 3's; [3] and [4]. ---- */
       if (commit(prepared, inboxFile, read.text) === "recorded") outcome.recorded += 1;
+      if (wallLimitReached) {
+        outcome.stoppedBy = "time";
+        outcome.deferred = candidates.length - index - 1;
+        break;
+      }
     } catch (cause) {
       if (cause instanceof SimulatedCrash) throw cause;
       outcome.pending += 1;
       outcome.notes.push(`pending ${eventId}: ${cause instanceof Error ? cause.message : String(cause)}`);
-      // Stop on every transient failure: if it came from the append, only the
-      // next pass's opening repair makes another append safe.
-      return outcome;
+      if (cause instanceof AppendMayHaveTornTail) {
+        // The next pass's opening repair must run before another append.
+        return outcome;
+      }
     }
   }
   return outcome;
