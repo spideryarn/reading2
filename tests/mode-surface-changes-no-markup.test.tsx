@@ -1794,15 +1794,21 @@ const DIAGRAM_VISITOR: BandShape = {
  * **The band `ModeSurface`'s attribute passthrough exists for.**
  *
  * `data-outline-rung` is written on the `<aside>` itself, so this is the one
- * shape whose `attrs` is three names rather than two — and the reason
+ * shape whose `attrs` is more than two names — and the reason
  * `BandShape.attrs` is per-shape. Its *value* is a measurement and is
  * deliberately not pinned; `signature` and `attrs` both record names.
+ *
+ * **Two deliberate changes on 2026-09-10**, when this list became Structure
+ * mode's narrow face (docs/plans/260910g-structure-mode-subsumes-outline.md):
+ * the label is the mode's name, `Structure`, and `data-outline-clamp` joined
+ * the rung as the second half of what the fit chose — whether titles had to
+ * be cut to one line to fit (OutlinePanel.tsx § `fit`).
  */
 const OUTLINE: BandShape = {
   className: "mode-band outln",
-  label: "Outline",
+  label: "Structure",
   head: false,
-  attrs: ["aria-label", "class", "data-outline-rung"],
+  attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
   children: [
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",
     "div.outln-measure[aria-hidden]",

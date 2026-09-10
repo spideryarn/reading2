@@ -737,8 +737,20 @@ started.**
     - **The fix: both flags together are unreadable**, in either order, whether the ids are equal
       or not. Tested through both the reader and steer.
 
-  Both are being fixed red first by an Opus subagent, then pushed. That is the Overseer's terms: fix
-  a P1 and push.
+  **Both fixed red first, and landed in `3047602e`.** An Opus subagent did the fix:
+
+  - **Red first:** 7 tests went red before the fix. Among them was steer answering `yes` for
+    `--resume A --session-id A`. After the fix, 218 of 218 passed.
+  - **Mutations:** allowing a flattened `--resume` again, and allowing `--resume A --session-id A`,
+    each turned tests red.
+  - **The manager's gates:** typecheck exit 0, and 12 files / 562 tests passing.
+
+  **A consequence the fixer caught.** `argv-resume-uuid` promises that a resumed session reads
+  **verified**, and after G21 that is false of this build. So `PRODUCER_CAPABILITIES` in
+  `tools/fleet/state.ts` is now **empty**, pinned red first by `tests/fleet-producer-stamp.test.ts`.
+  Declaring the capability anyway would let a resume launch that the pace rule then waits behind for
+  ever: the failure G3 exists to prevent. **Stage 3b re-declares it** once it reads
+  `/proc/<pid>/cmdline` faithfully. Nothing is affected today, because the port is unwired.
 - **Stage 3b is briefed, not built.** The brief is [the 3b task](260910f-gradual-recovery-stage3b-task.md):
   - the `tmux-resume` launcher arm;
   - gjd-remote's `--resume-conversation`, with the on-box duplicate check;

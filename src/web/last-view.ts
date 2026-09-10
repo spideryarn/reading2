@@ -97,7 +97,7 @@ export const NEVER_REMEMBERED = [
   /* **`text=0` is the one state a restore could put the reader in and not get
      them out of**, so it moved down here on 2026-09-05, the day the `Text` pill
      that wrote it went with the rest of the controls bar. `settleAddress`
-     rewrites an incoming `?mode=hierarchy&text=0` to `?mode=outline` for exactly
+     rewrites an incoming `?mode=hierarchy&text=0` to `?mode=structure` for exactly
      that reason (src/web/router.ts § `liftStrandedText`) — and a restore runs
      *after* that rewrite, from a React effect, so a stored one would walk
      straight past it and hand the reader the address the rewrite exists to

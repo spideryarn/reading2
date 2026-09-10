@@ -174,18 +174,22 @@ describe("the stamp on the fleet payload", () => {
     expect(unstampedOrdering).toEqual({ kind: "unstamped" });
   });
 
-  test("declares what this build can do beside the stamp, and the Overseer's parser reads it", () => {
+  test("declares no capability this build cannot back, beside the stamp, and the Overseer's parser reads the list", () => {
     // Plan 260910f, Sol's G3: the resume pass defers until the collecting
-    // dashboard says it reads `--resume <uuid>`. Through the production
-    // composition, not a hand-built payload.
+    // dashboard declares `argv-resume-uuid` — that a resumed session reads as
+    // VERIFIED. After Sol's G21 it does not: a `--resume` on a ps-flattened
+    // line is unreadable, so a resumed pane reads `claimed-only`. Declaring it
+    // anyway would let a resume launch that the pace rule then waits behind
+    // for ever. Stage 3b re-declares it once it reads /proc/<pid>/cmdline
+    // faithfully. Through the production composition, not a hand-built payload.
     const publications = new PublicationLedger("1a2b3c4d");
     publications.record("success");
     const body = JSON.parse(payload(publications.stamp())) as Record<string, JsonValue>;
-    expect(body["capabilities"]).toEqual(["argv-resume-uuid"]);
+    expect(body["capabilities"]).toEqual([]);
     const parsed = parseObservation(body);
-    expect(parsed.ok && parsed.value.capabilities).toEqual(["argv-resume-uuid"]);
-    // and a never-collected payload declares it too: it is a fact about the build
+    expect(parsed.ok && parsed.value.capabilities).toEqual([]);
+    // and a never-collected payload says the same: it is a fact about the build
     const empty = JSON.parse(payload(new PublicationLedger("5e6f7890").stamp(), { snapshot: null })) as Record<string, JsonValue>;
-    expect(empty["capabilities"]).toEqual(["argv-resume-uuid"]);
+    expect(empty["capabilities"]).toEqual([]);
   });
 });

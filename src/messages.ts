@@ -3982,7 +3982,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   hierarchy:
     "The nested table of contents and the zoom levels — the headings, and the model's one-line " +
     "gist for each section where there are gists.",
-  outline: "The whole piece as one nested list, from those same headings and gists.",
   summary: "The one-line gist written for each section, down the page, where there is one.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
@@ -4015,18 +4014,19 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
-  /* **The same three words as `hierarchy` and `outline` do the work here** —
-     "where there are gists" — for the reason those two carry it: a provisional
-     tree has none, and this row is read about articles that have not finished
-     ingesting (src/public/dto.ts § `provisional`).
+  /* **The same three words as `hierarchy` do the work here** — "where there
+     are gists" — for the reason that row carries them: a provisional tree has
+     none, and this row is read about articles that have not finished ingesting
+     (src/public/dto.ts § `provisional`).
 
-     It says "again" on purpose. This mode adds no content to what an owner is
-     about to publish; it is a third arrangement of the two things the rows
-     above already named, and a row implying otherwise would over-state what
-     sharing hands over. */
+     "Those same" on purpose. This mode adds no content to what an owner is
+     about to publish; it is another arrangement of the two things the
+     Hierarchy row already named, and a row implying otherwise would over-state
+     what sharing hands over. Since 2026-09-10 it is also the nested list
+     Outline used to be, which is why it names both arrangements. */
   structure:
-    "Those same headings and gists again, arranged as two linked columns — the parts, and the " +
-    "sections of the one you are reading, where there are gists.",
+    "Those same headings and gists, arranged as two linked columns or, on a narrow screen, one " +
+    "nested list — where there are gists.",
 };
 
 /* ---------------------------------------------------------------- timeline --

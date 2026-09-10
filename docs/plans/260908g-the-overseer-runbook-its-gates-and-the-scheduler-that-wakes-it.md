@@ -1102,6 +1102,28 @@ it catches roughly half. Cheap and *partly* useful. Whether half of a tail case 
 refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
 is that it does not obviously.
 
+> **The full day says 89%, not half, and both my earlier figures were too pessimistic about somebody
+> else's fix.** The completed series — **2866 samples, 23:48 on the 8th to 23:40 on the 9th** — reads
+> 1454 samples where both joins agree positive against 185 oracle-only. I gave that owner *"0 of 1"*
+> from one reading and *"roughly half"* from 73 minutes, and a full day says neither. **A short window
+> was not a small version of the long one**, which is the third time this instrument taught its own
+> operator that lesson.
+>
+> The rest argues against the stage more strongly than before, not less: **0 of 2866 samples had
+> nobody reachable**, and the mean reachable fraction over a full day is **0.74**. The tail is real —
+> the worst sample is 0.07 — and it is a tail. All of it is moot for the broadcast, which is refused
+> upstream regardless; it decides only what the cheap fix would be worth *if* the recipients gap were
+> closed.
+>
+> **And the incidental result is worth more than the thing it was measuring.** The box reached **17
+> concurrent agents** during the day, mean 8.86 — close to the 18 reconstructed from `events.jsonl`.
+> It is **not** the independent second source I said did not exist, because the sampler reads
+> `last-snapshot.json` which the same daemon writes from the same collection; but it reaches the
+> figure through a different artefact and a different code path, which is worth more than nothing and
+> less than corroboration. **The 20–35 this whole design assumes is now measured twice, at 17–18.**
+> `joins_disagree` was non-zero in 456 of 2866 samples: the `readShellState` collapse is a sixth of
+> all samples, measured over a day rather than argued about.
+
 **The confound I reported was not one, and how I got it wrong is the day's own error again.** I said
 `joins_disagree` was 1 early and 0 later, and wondered whether a fix had landed in the window. The
 owner checked: no fix landed, `readShellState` is unchanged, and that item was never built. Then the

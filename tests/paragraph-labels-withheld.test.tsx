@@ -107,7 +107,7 @@ function articleAt(loaded: Loaded, navLabelStatus: NavLabelStatus): Article {
  * preference. The table's own outline mode — text column off, leaf column as the
  * view — is where a first draft of this file drew the withheld column, and it is
  * **unreachable**: nothing sets `showText` false any more and `?text=0` is
- * rewritten to `?mode=outline`, which is the band rather than this table
+ * rewritten to `?mode=structure` (`?mode=outline` until 2026-09-10), which is the band rather than this table
  * (docs/project/browser-testing.md, confirmed in a browser 2026-09-06). A test
  * written against it would have been about a layout no reader can be in.
  */
@@ -296,12 +296,12 @@ describe("a reader who has not opened the column", () => {
   });
 });
 
-describe("outline mode's paragraph rung", () => {
+describe("Structure's list face paragraph rung", () => {
   /** Rung 5's rows — level 3 is a paragraph (src/web/outline.ts § `OutlineRow.level`). */
   async function paragraphRows(status: NavLabelStatus): Promise<string[]> {
     const loaded = await readArticleFromDir(DIR);
     const geometry = buildGeometry(loaded.tree, loaded.blocks);
-    /* Full depth, which is what App.tsx passes for outline mode — the default
+    /* Full depth, which is what StructureBand passes to the list face — the default
        of 2 stops above the paragraphs and there would be no rung 5 to withhold. */
     const root5 = buildSummaryTree(loaded.tree, loaded.blocks, geometry.leafDepth);
     const projection = outlineProjection({

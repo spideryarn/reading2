@@ -465,7 +465,12 @@ as it has one, which is exactly the window a claim needs to survive.
 
 **When an agent finishes**, read its debrief before anything else, update the umbrella plan's status
 for that stage, decide whether it keeps going or stops, and only then close the session and remove
-its worktree — the check in gate 3 first.
+its worktree — the check in gate 3 first. **Removing it is yours, not Greg's.** Greg, 2026-09-10:
+*"you don't need my input to remove worktrees. If things are finished successfully and everything
+that needs to be pushed has been pushed, then you are authorised to remove them without asking me."*
+So a worktree whose work is finished and pushed, and whose `npm run worktree:check` says safe, goes
+without a question; one whose check names anything you cannot account for, or whose branch is the
+only copy of something, stays and is logged.
 
 ## Things that will catch you
 

@@ -255,10 +255,10 @@ function publicTree(tree: Tree): Tree {
          footnotes lane had to come here and choose.
          It has to cross. Every consumer that tells the apparatus from the
          argument reads it off the *node*: the fisheye collapses forty endnotes
-         into one "Notes" row, the spine dims it, outline and summary mode
-         refuse to descend into it or number it, and the diagram leaves it out
-         of the argument's picture. A public reader without it gets all of that
-         back as it was — footnotes numbered as a part of the piece, one blank
+         into one "Notes" row, the spine dims it, Structure's list face and
+         Summary mode refuse to descend into it or number it, and the diagram
+         leaves it out of the argument's picture. A public reader without it
+         gets all of that back as it was — footnotes numbered as a part of the piece, one blank
          row per endnote, and "No summary for this section" on each. Measured
          through the real DTO: 1 part and 1 section for the owner, 2 and 2 for
          a visitor.
@@ -684,4 +684,3 @@ export function publicArticle(row: {
     searches: publicSearches(row.searches),
   };
 }
-

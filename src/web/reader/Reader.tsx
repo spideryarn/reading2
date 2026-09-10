@@ -59,14 +59,11 @@ import {
   hitMarks as buildHitMarks,
   type Found,
 } from "../search-hits.js";
-import { OutlinePanel } from "../OutlinePanel.js";
-import { useColumnContext } from "../useColumnContext.js";
 import { Toggle } from "@/components/ui/toggle";
 import {
   buildArcColumn,
   buildGeometry,
   buildOutline,
-  buildSummaryTree,
   columnHint,
   columnLabel,
 } from "../tree.js";
@@ -90,7 +87,7 @@ import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { bandCoversProse, barHasContent, fitView, offerableGists, proseVisible } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
-import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "../nav-labels.js";
+import { paragraphLabelNotice, paragraphPill } from "../nav-labels.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { useSwipeNav } from "../swipe.js";
@@ -125,13 +122,11 @@ import { proseFound, selectPassages } from "./passages.js";
 const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
 
 /**
- * **No gist-column depths**, wanted in two places for the same reason and by two
- * different questions.
- *
- *  - The outline band asks `useColumnContext` to measure none of them, because a
- *    mode has no gist columns and the band wants only `focusRow`.
- *  - Plain mode hands it to `fitView` as `chosen`, which is the whole of how
- *    that mode empties the table — see `plainCols` below.
+ * **No gist-column depths.** Plain mode hands it to `fitView` as `chosen`, which
+ * is the whole of how that mode empties the table — see `plainCols` below. (The
+ * Outline band used it too, to ask `useColumnContext` for no rects; that band
+ * is Structure's list face since 2026-09-10 and `StructureBand` keeps its own
+ * copy.)
  *
  * Module-level so its identity is stable. A fresh `[]` each render would be a
  * new dependency each render, which restarts the hook's effect — and that
@@ -153,12 +148,14 @@ const EMPTY_DEPTHS: number[] = [];
  *
  * ## A known follow-up, measured rather than guessed
  *
- * `noExcessiveCognitiveComplexity` scores this function **46** against a
- * threshold of 25. It was **38** before the capability seam, **49** after it and
- * **54** by the time the dispatch was extracted, and over the threshold at every
- * one of those, so this is not a line that was crossed here — but the gates are
- * worth a number and the number keeps going up. `band()` below took eight off
- * it and is scored **46** in its own right, which is the honest arithmetic: a
+ * `noExcessiveCognitiveComplexity` scores this function **50** against a
+ * threshold of 25 (measured 2026-09-10). It was **38** before the capability
+ * seam, **49** after it and **54** by the time the dispatch was extracted, and
+ * over the threshold at every one of those, so this is not a line that was
+ * crossed here — but the gates are worth a number and the number keeps going
+ * up. `band()` below took eight off it when it was extracted, has crept back
+ * since, and is scored **50** in its own right — 46 until Debate's boundary
+ * added its owner/visitor branches — which is the honest arithmetic: a
  * switch over every mode is not simpler than one `&&` per mode to a counter of
  * branches. What it is instead is *checked*, and that was the point.
  *
@@ -414,8 +411,9 @@ export function Reader({
    * The arc — one sentence per part on where the argument stands there — keyed
    * by the row each part starts on.
    *
-   * **Outline mode is the only thing that reads this now**, as its rung 4
-   * (`OutlinePanel` § `row.arc`). It used to draw Hierarchy's L0 column as
+   * **Structure's list face is the only thing that reads this now**, as its
+   * rung 4 (`OutlinePanel` § `row.arc`) — Outline mode's, until Outline became
+   * that face on 2026-09-10. It used to draw Hierarchy's L0 column as
    * well; that column went on 2026-09-05 with the rest of the declutter
    * (layout.ts § `offerableGists`) and the artefact did not — `src/arc.ts`, the
    * `arc` job step and `arc.json` are all untouched.
@@ -430,23 +428,6 @@ export function Reader({
   const arcCells = useMemo(
     () => buildArcColumn(geometry, liveArc),
     [geometry, liveArc],
-  );
-
-  /**
-   * Outline mode's tree — the whole thing, down to the leaves.
-   *
-   * `buildSummaryTree` with `summaries: null`, because this mode reads nothing
-   * that stage 6 writes: a title, a gist and a navLabel are all on `tree.json`
-   * already, so the mode is free, instant, and works on any article that has
-   * been through the ToC stage. Full depth rather than the default 2, since the
-   * paragraph rung renders leaves' navLabels. See docs/plans/260828aw-outline-mode.md.
-   */
-  const outlineRoot = useMemo(
-    () =>
-      mode === "outline"
-        ? buildSummaryTree(article.tree, article.blocks, geometry.leafDepth)
-        : null,
-    [mode, article.tree, article.blocks, geometry.leafDepth],
   );
 
   // A string, not the array: a fresh array every render would restart the scroll
@@ -492,23 +473,6 @@ export function Reader({
     return () => setFeedbackArticleContext(null);
   }, [slug, article, mode, fit.columns.length, at]);
 
-  /**
-   * Where the reader is, for the outline band — the same sampler the gist
-   * columns' panels use, so the two can never disagree about which section is
-   * under the focus line.
-   *
-   * `depths: []` because there are no gist columns in a mode and the band wants
-   * none of the rects; `enabled` only in this mode, so nothing is measured and
-   * no scroll listener runs while every other mode is on. It is
-   * **section-granular** — `focusRow` is a section's first row, never the exact
-   * block — which is why no paragraph in the panel is ever marked current.
-   */
-  const outlineLive = useColumnContext({
-    sections,
-    depths: EMPTY_DEPTHS,
-    enabled: mode === "outline",
-    layoutKey,
-  });
 
   /**
    * Comments: selecting prose asks a question of the model, and the answer
@@ -1361,9 +1325,10 @@ export function Reader({
    * What stands where the `Paragraphs` pill would be when there is nothing for
    * it to open, or `null` in the ordinary case — nav-labels.ts owns the rule.
    *
-   * Read once here and used twice: the bar below, and `OutlinePanel`, whose
-   * rung 5 draws the same labels and must make the same decision. `TableView`
-   * asks for itself, off the same `article`.
+   * Read here for the bar below. Structure's band draws the same labels (its
+   * list face's rung 5, its columns' paragraph rows) and makes the same decision
+   * off the same `article` with `paragraphLabelsReady` (StructureMode.tsx), and
+   * `TableView` asks for itself.
    */
   const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
 
@@ -1512,46 +1477,19 @@ export function Reader({
             onSelected={setTerm}
           />
         ) : null;
-      /* No owner/visitor pair, and that is the point rather than an omission:
-         the outline is drawn from the tree in the payload every reader already
-         holds, reaches no artefact, and costs nothing — so a visitor gets the
+      /* **One structural band with two faces, and it owns its own hooks.**
+         `StructureBand` builds the tree and runs the focus sampler itself, and
+         is only mounted here — so nothing of this mode's is measured or built
+         while the reader is in any other one. It chooses between Structure's
+         two columns and Outline's nested list by the band's own width
+         (StructureMode.tsx § `structureFace`); Outline was a mode of its
+         own until 2026-09-10, with its tree and sampler up in this component.
+
+         No owner/visitor pair, and that is the point rather than an omission:
+         both faces are drawn from the tree in the payload every reader already
+         holds, reach no artefact, and cost nothing — so a visitor gets the
          whole of it, exactly as they get the table of contents. `visitorGap`
          has to be told that explicitly, because it fails closed. */
-      case "outline":
-        return (
-          <OutlinePanel
-            root={outlineRoot}
-            supplementOf={geometry.supplementOf}
-            arcByRow={arcCells}
-            focusRow={outlineLive.focusRow}
-            /* `modeW` is 0 exactly when the band covers the prose instead of
-               sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
-               iPad portrait and below until the crossover fell to 700. That is
-               the condition paragraph rows are not permissible under, and reading
-               it from the layout rather than from a width guessed here is why
-               that move cost this line nothing but its example. */
-            proseBeside={fit.modeW > 0}
-            /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
-               makes the same decision. Withheld rather than announced: nobody
-               asked for rung 5 — the panel climbs the ladder as far as the band
-               has room — so a sentence in place of it would be an answer to a
-               question the reader never put. The rungs below still draw, which is
-               what "withhold the layer" means here.
-               Sent as a boolean rather than the status, because that is exactly
-               what this panel needs and `allowParagraphs` beside it is already
-               one. src/web/nav-labels.ts. */
-            paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}
-            onJump={jumpTo}
-          />
-        );
-      /* **The third structural view, and it owns its own hooks.** Outline's
-         tree and focus sampler are computed up in this component, gated on
-         `mode === "outline"`, because that is where they were when App.tsx was
-         split. Structure's are inside `StructureBand`, which is only mounted
-         here — so nothing of this mode's is measured or built while the reader
-         is in any other one. Same reason there is no owner/visitor pair: the
-         tree is in the payload every reader already holds, so there is nothing
-         to fetch and nothing for a visitor to be short of. */
       case "structure":
         return (
           <StructureBand
@@ -1559,10 +1497,15 @@ export function Reader({
             leafDepth={geometry.leafDepth}
             sections={sections}
             layoutKey={layoutKey}
+            supplementOf={geometry.supplementOf}
+            arcByRow={arcCells}
             /* `modeW` is 0 exactly when the band covers the prose instead of
-               sitting beside it (layout.ts) — the same input `OutlinePanel`
-               takes, read from the layout rather than from a width guessed
-               here. */
+               sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
+               iPad portrait and below until the crossover fell to 700. That is
+               the condition paragraph rows are not permissible under, in either
+               face, and reading it from the layout rather than from a width
+               guessed here is why that move cost this line nothing but its
+               example. */
             proseBeside={fit.modeW > 0}
             onJump={jumpTo}
           />
@@ -1690,9 +1633,28 @@ export function Reader({
          GPT Sol review (F23) refused. Until then `POLICY.debate` is
          `owners-only`, so a visitor meets the boundary sentence rather than an
          empty band.
-         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
+         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
+
+         **The second mode that may break on its own**, in Ideas' shape: one
+         boundary at the composition point, around the whole of `DebateBand` —
+         `useDebate`'s read, job poll and `useAutoRun` as well as the panel —
+         so a throw in any of it costs the reader Debate and not the article,
+         and a press that met the throw is retired rather than left for a later
+         Back to spend on two web searches. The key carries the access class for
+         the day Stage 4 adds the visitor child beside the owner's.
+         docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B. */
       case "debate":
-        return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
+        return (
+          <FeatureBoundary
+            name="Debate"
+            slug={slug}
+            target={owner ? "debate" : null}
+            resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
+            onPlain={() => void setMode("plain")}
+          >
+            {owner && <DebateBand slug={slug} onJump={jumpTo} />}
+          </FeatureBoundary>
+        );
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a

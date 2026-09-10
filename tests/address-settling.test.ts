@@ -57,12 +57,13 @@ import { describe, expect, it } from "vitest";
 
 import type { ServerResponse } from "node:http";
 
-import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
+import { DEFAULT_MODE } from "../src/modes.js";
 import { servePublicReadPage } from "../src/public/page.js";
 import { viewFor, type ArticleView } from "../src/read-address.js";
 import type { PublicHead } from "../src/store/public-reader.js";
 import { readSlug } from "../src/vercel.js";
 import { pageTitle } from "../src/web/page-title.js";
+import { modeParam } from "../src/web/params.js";
 import { parseRoute, settleAddress } from "../src/web/router.js";
 
 const SLUG = "a-shared-piece";
@@ -147,9 +148,12 @@ function clientSettles(
   const route = parseRoute(path);
   if (route.kind !== "read" || route.slug !== SLUG) return null;
   const mode = new URLSearchParams(query).get("mode");
-  const chosen = (MODES as readonly string[]).includes(mode ?? "")
-    ? (mode as Mode)
-    : DEFAULT_MODE;
+  /* The real client parser, not a second model of it. `MODES.includes` was
+     equivalent until retired names existed; from 2026-09-10 it called
+     `?mode=outline` Plain while the app and server call it Structure, leaving
+     this cross-product unable to state the new compatibility rule. Codex code
+     review, 2026-09-10. */
+  const chosen = modeParam.parse(mode ?? "") ?? DEFAULT_MODE;
   /* Split by view because `TitleSpec` is: the reading view must carry a mode and
      the other two must not. That is not this test being fussy — it is the type
      that makes App.tsx dropping `mode` a compile error rather than something a
@@ -183,6 +187,9 @@ const QUERIES: { search: string; view: ArticleView }[] = [
   { search: "", view: "article" },
   { search: "?mode=glossary", view: "article" },
   { search: "?mode=hierarchy", view: "article" },
+  /* The retired name is part of the address corpus: unlike arbitrary junk it
+     has a non-default meaning on both sides. */
+  { search: "?mode=outline", view: "article" },
   { search: "?mode=toc", view: "article" },
   { search: "?mode=nonsense", view: "article" },
   { search: "?at=spya-k3m9qt", view: "article" },
@@ -221,10 +228,11 @@ const QUERIES: { search: string; view: ArticleView }[] = [
   /* **The eleventh rewrite, 2026-09-05: `?text=0` is a state with no exit.**
      The `Text` pill was the only way back to the prose and it went with the
      rest of the controls bar, so `?mode=hierarchy&text=0` lands a reader in a
-     view they cannot leave. It is rewritten to `?mode=outline` at boot — which
-     means the **server** has to predict it too, exactly as it predicts the
-     metadata redirect, or the tab says Hierarchy for a second and then says
-     Outline. `readMode` in src/read-address.ts is where the two agree. */
+     view they cannot leave. It is rewritten to `?mode=structure` at boot
+     (`?mode=outline` until Outline became Structure's narrow face, 2026-09-10)
+     — which means the **server** has to predict it too, exactly as it predicts
+     the metadata redirect, or the tab says Hierarchy for a second and then says
+     Structure. `readMode` in src/read-address.ts is where the two agree. */
   { search: "?mode=hierarchy&text=0", view: "article" },
   { search: "?text=0&mode=hierarchy", view: "article" },
   { search: "?%6dode=hierarchy&text=0", view: "article" },
@@ -425,11 +433,15 @@ describe("the server's title and the client's, over every address either can see
    * The pill that wrote it went with the rest of the controls bar on
    * 2026-09-05, and `?mode=hierarchy&text=0` renders a table with the article
    * hidden and nothing on screen that puts it back. So the fifth boot-time
-   * rewrite: the mode becomes `outline`, and the `text` pair is dropped
+   * rewrite: the mode becomes `structure`, and the `text` pair is dropped
    * whatever the mode was.
    *
-   * **Outline, and not Plain, is the least surprising landing** — arbitrated by
-   * Fable. Neither restores the no-prose state (`proseVisible` is
+   * It became `outline` on 2026-09-05 and `structure` on 2026-09-10, when
+   * Outline's list became Structure's narrow face — the argument below is
+   * Outline's and carried over with the list.
+   *
+   * **Structure, because it preserves Outline's list, is the least surprising
+   * landing** — arbitrated by Fable. Neither restores the no-prose state (`proseVisible` is
    * `modeBand || showText`, so a mode band always shows the article), so that
    * cannot be the tie-break. What decides it is that the reader who saved the
    * link was looking at a bar that said **OUTLINE**: the old `reading`/`outline`
@@ -446,19 +458,19 @@ describe("the server's title and the client's, over every address either can see
   describe("the ?text=0 rewrite", () => {
     const settle = (search: string) => settleAddress(`/read/${SLUG}`, search, "");
 
-    it("sends a stranded Hierarchy address to Outline", () => {
-      expect(settle("?mode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=outline`);
+    it("sends a stranded Hierarchy address to Structure", () => {
+      expect(settle("?mode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=structure`);
       // Order is not part of the rule: the mode is rewritten where it stands.
-      expect(settle("?text=0&mode=hierarchy")).toBe(`/read/${SLUG}?mode=outline`);
+      expect(settle("?text=0&mode=hierarchy")).toBe(`/read/${SLUG}?mode=structure`);
     });
 
     it("reads an encoded key and an encoded value as the same request", () => {
       /* The scar `hasKey` carries, in this rewrite's own spelling: a decoding
          decision paired with a literal removal leaves a pair in the query that
          one side acts on and the other has never seen. */
-      expect(settle("?%6dode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=outline`);
-      expect(settle("?mode=hierarchy&te%78t=0")).toBe(`/read/${SLUG}?mode=outline`);
-      expect(settle("?mode=hierarchy&text=%30")).toBe(`/read/${SLUG}?mode=outline`);
+      expect(settle("?%6dode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=structure`);
+      expect(settle("?mode=hierarchy&te%78t=0")).toBe(`/read/${SLUG}?mode=structure`);
+      expect(settle("?mode=hierarchy&text=%30")).toBe(`/read/${SLUG}?mode=structure`);
     });
 
     it("drops the pair in every other mode, and changes nothing else", () => {
@@ -474,15 +486,15 @@ describe("the server's title and the client's, over every address either can see
          it would re-encode those commas — the thing params.ts spells them out
          to avoid. */
       const settled = settle("?cols=0,1&mode=hierarchy&text=0&at=spya-k3m9qt") ?? "";
-      expect(settled).toBe(`/read/${SLUG}?cols=0,1&mode=outline&at=spya-k3m9qt`);
+      expect(settled).toBe(`/read/${SLUG}?cols=0,1&mode=structure&at=spya-k3m9qt`);
     });
 
     it("rewrites the first mode pair only, which is the one anything reads", () => {
       /* `URLSearchParams.get` returns the first match and so does nuqs, so a
          second `mode` is already ignored — rewriting it too would say the
-         reader had asked for Outline twice. */
+         reader had asked for Structure twice. */
       expect(settle("?mode=hierarchy&mode=glossary&text=0")).toBe(
-        `/read/${SLUG}?mode=outline&mode=glossary`,
+        `/read/${SLUG}?mode=structure&mode=glossary`,
       );
       // And a second one behind a *non*-hierarchy first is left entirely alone.
       expect(settle("?mode=glossary&mode=hierarchy&text=0")).toBe(
@@ -518,7 +530,7 @@ describe("the server's title and the client's, over every address either can see
     it("lets the first `text` decide, and still takes the later one out", () => {
       expect(settle("?mode=hierarchy&text=1&text=0")).toBe(`/read/${SLUG}?mode=hierarchy&text=1`);
       // And the other way round: the first says 0, so it strands and rewrites.
-      expect(settle("?mode=hierarchy&text=0&text=1")).toBe(`/read/${SLUG}?mode=outline&text=1`);
+      expect(settle("?mode=hierarchy&text=0&text=1")).toBe(`/read/${SLUG}?mode=structure&text=1`);
     });
 
     /**

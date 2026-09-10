@@ -392,9 +392,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * granularity-zoom.md).
  *
  * **The arc artefact is not what left.** `src/arc.ts`, the `arc` job step and
- * `arc.json` all still run, and Outline mode still renders the arc sentence for
- * the part you are in. What went is the *column* in Hierarchy that used to draw
- * it — docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5.
+ * `arc.json` all still run, and Structure's list face still renders the arc
+ * sentence for the part you are in. What went is the *column* in Hierarchy that
+ * used to draw it — docs/plans/260905d-declutter-the-reading-view-top-bars.md §
+ * Decisions 5.
  *
  * Exported because two things have to agree about it: this file, which decides
  * which columns are on screen, and the pill row in App.tsx, which offers them.

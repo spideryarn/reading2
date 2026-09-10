@@ -137,7 +137,8 @@ Two consequences worth stating, because they are easy to get wrong:
   layer** rather than drawing what happens to exist —
   [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule. The `Paragraphs` pill and
   the leaf column say so in one sentence, because there the reader asked for the layer by name;
-  outline mode's rung 5 simply does not climb that far, because nobody asked.
+  Structure's nested-list face (Outline mode until 2026-09-10) simply does not climb to its paragraph
+  rung, because nobody asked.
 
   **`pending` is the ordinary state of a newly added article, since 2026-09-06**, and that is worth
   knowing before you read the withheld state as a fault. The label pass left the blocking `hierarchy`
@@ -318,7 +319,7 @@ the `reading`/`outline` chip, the `↑↓` readout and the tree-version chip all
 rail is simply on now, and the prose is simply there; `?spine=0` still works and nothing on screen
 writes it. **`?text=0` no longer survives arrival**: it was the one state the reader could not get
 out of once the pill that wrote it had gone, so `?mode=hierarchy&text=0` is rewritten to
-`?mode=outline` before anything is drawn and the pair is dropped whatever the mode
+`?mode=structure` (`?mode=outline` until 2026-09-10) before anything is drawn and the pair is dropped whatever the mode
 ([url-state.md](url-state.md)).
 
 **And so did `Arg`**, on the same day and by the same instruction:
@@ -402,9 +403,9 @@ deliberately, to navigate, is the one context where navigation chrome is the poi
 
 `?text=0` used to open straight into this, so a whole-article ToC was a shareable link rather than a
 button you had to find. **It does not any more** — the `Text` pill went on 2026-09-05 and left the
-address with no way out, so it is rewritten to `?mode=outline` on arrival
-([url-state.md](url-state.md)). Outline mode is where a whole-article overview lives now, and it has
-its own shareable address. `#<blockid>` still opens at a paragraph.
+address with no way out, so it is rewritten to `?mode=structure` on arrival (`?mode=outline` until
+2026-09-10) ([url-state.md](url-state.md)). Structure mode is where a whole-article overview lives
+now — its nested-list face was Outline mode until then — and it has its own shareable address. `#<blockid>` still opens at a paragraph.
 
 ### Both at once: the paragraph outline beside the prose
 
@@ -562,8 +563,9 @@ whether that shouldn't be the default. **On 2026-09-05 the column went entirely*
 ### The arc
 
 **Where it is today, first.** The arc is generated exactly as this section describes, and it is
-rendered as **Outline mode's rung 4** — the sentence for the part you are in
-([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)). It is no longer a column in Hierarchy: Greg,
+rendered as **rung 4 of Structure's nested-list face** — the sentence for the part you are in
+([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)), which was Outline mode until 2026-09-10
+([260910g](../plans/260910g-structure-mode-subsumes-outline.md)). It is no longer a column in Hierarchy: Greg,
 2026-09-05, *"let's get rid of the 'Arg' button and functionality altogether"*, and
 [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Decisions 5 took the column and
 left the artefact, because Outline was already reading it and
@@ -614,7 +616,7 @@ the argument said directly. Relational is still required; it just has to be carr
 
 **Its cells are the parts' cells.** The arc is built from the L1 column's own geometry
 ([`tree.ts` § the arc](../../src/web/tree.ts)), so the two share boundaries by construction rather
-than by two walks of the tree happening to agree — which is what lets Outline mode hang the sentence
+than by two walks of the tree happening to agree — which is what lets Structure's list face (Outline mode until 2026-09-10) hang the sentence
 off the part row it belongs to. It used to be its own rung on the ← / → ladder, borrowing the parts'
 row starts inside `navPlan`; with the column gone, ← stops at Parts
 ([keyboard.md](keyboard.md#choosing-the-level-without-a-mouse)).

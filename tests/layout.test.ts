@@ -124,7 +124,7 @@ describe("the default hierarchy view (no ?cols=)", () => {
    * punish a reader for having saved something.
    *
    * The arc artefact itself survives all of this: `src/arc.ts` still runs and
-   * Outline mode still renders its sentence — see layout.ts § `offerableGists`
+   * Structure's list face still renders its sentence — see layout.ts § `offerableGists`
    * and docs/plans/260905d-declutter-the-reading-view-top-bars.md.
    */
   it("drops the 0 from an old ?cols=0,1,2 rather than breaking the link", () => {

@@ -5,6 +5,10 @@ Status as of 2026-09-08: **researched umbrella plan; implementation not started*
 results are recorded at the end. This is a plan-only commission: completing this document does
 not authorise implementing every product decision below.
 
+**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
+prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
+Each stage's own status line is the authority.
+
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
 > combination of ease and value), with enough research and detail that another less-capable agent
 > could follow it correctly.
@@ -271,14 +275,29 @@ under `src/web/modes/`. Read
 
 ### Stage: contain Debate, using the existing mechanism
 
-- [ ] Trace `DebateBand` in `modes/debate/DebateMode.tsx` and identify all render-time work. Wrap the
+**Built 2026-09-10** (worktree `contain-debate`, queue item qi-2wew3act). `Reader.tsx` § `case
+"debate"` wraps the whole of `DebateBand` — `useDebate`'s read, job poll and `useAutoRun`, and the
+panel — in `FeatureBoundary name="Debate"`, `target` `"debate"` for an owner. Eleven Debate cases
+at the end of the test file: ten were red against the unchanged `Reader` (every one the root
+`[render]` fallback taking the page), all green after. Mutation checks: `target={null}` turns the
+three money cases red, and the Back leg alone catches the spent press; **a constant reset key stays
+green**, because `ArticlePage` renders `OwnedArticle key={slug}` and drops to `loading` between
+articles, so a slug change destroys the boundary structurally — the test says so rather than
+claiming it proves the key. No browser pass: the wrapper adds no DOM, and the fallback cannot be
+reached in a real browser without injecting a throw. GPT Sol review: no production defect; it
+strengthened the owner → visitor case (the mode stays `debate` and the visitor's owners-only band is
+drawn, so a sign-out that fell back to Plain would now fail) and corrected `Reader`'s complexity
+figures, which I reworded so the history stays true. Full suite: five red files, all environment
+(two want `npm run build`, three fleet suites want `tools/fleet/web/dist`), nothing else.
+
+- [x] Trace `DebateBand` in `modes/debate/DebateMode.tsx` and identify all render-time work. Wrap the
   controller and panel together, not only the visible panel; leave shared article geometry outside.
-- [ ] Extend `tests/a-broken-mode-leaves-the-article-readable.test.tsx` with a Debate controller throw
+- [x] Extend `tests/a-broken-mode-leaves-the-article-readable.test.tsx` with a Debate controller throw
   under real StrictMode. Assert the throwing seam ran, prose/spine/dock remain, the fallback names
   Debate, and one scrubbed report is emitted without article/error-message text.
-- [ ] Exercise activation retirement: a throw before `useAutoRun`'s effect must not leave a token
+- [x] Exercise activation retirement: a throw before `useAutoRun`'s effect must not leave a token
   that later Back navigation spends. Successful activation is the positive one-POST control.
-- [ ] Test retry/reset identity, owner-to-visitor transition, different slug, and switch to Plain.
+- [x] Test retry/reset identity, owner-to-visitor transition, different slug, and switch to Plain.
   Complete common checks and commit this independently useful improvement.
 
 ### Stage: extend containment with an honest inventory
@@ -321,6 +340,35 @@ those are different, previously weighed decisions.
 
 ## D — let Knip inspect source without requiring build output
 
+**Status 2026-09-10: done** (see commit history for `tests/knip-without-build-output.test.ts`).
+The shell read in `vite.api.config.ts` moved from module scope into a `config` hook on a
+build-only plugin; Knip reads the exported object and never runs hooks (checked in the installed
+6.32.2 plugin, which also calls function-style configs with `command: "build"` — so a `command`
+check would not have worked). The Knip-side route was ruled out first: Knip derives the config
+input from `build:api`'s `--config vite.api.config.ts` argument regardless of the plugin's `config`
+glob, so the only Knip-side escapes were ignoring that script or disabling the Vite plugin — the
+blanket ignore this stage rejects. The test runs the real Knip over a copy of the tracked tree with a
+missing and a stale `dist/` (a tree of symlinked directories was tried first and gives Knip no
+source at all, so it would have passed vacuously), and resolves the API config through Vite's
+build-mode `resolveConfig` to show both refusals still fire and a matching shell and digest still
+reach `define`. Red before the fix, and red again under two mutations (module-level read restored;
+plugin set to `apply: "serve"`). `build:api` refused a missing and a stale shell by hand, and
+`npm run build` succeeded with the shell and digest compiled into `api-dist/vercel.js`.
+**Correction to the claim below:** the full Knip finding set was identical before and after (359
+each), so the load error made runs look broken but did not in fact drop anything from this graph.
+Triage of the remaining findings, no deletions made: 11 of the 12 unused files are
+`src/web/preview-*.tsx` throwaway pages served from `preview/*.html` (which Knip does not read) and
+whose own headers say to delete them when their check is done — an owner's call; the twelfth,
+`vitest.witness.config.ts`, is used via `--config` from the store-migration witness script, so it
+is a false positive. The 191 unused exports and 136 unused types were not triaged here.
+GPT Sol reviewed the scoped diff and traced the production path (Vercel and deploy preflight both
+run `npm run build`; Vite 8.2.2 applies `apply: "build"` to SSR builds; `mergeConfig` merges the
+two `define` objects) and found no production defect. It tightened the test itself: the tree gets
+its own `node_modules/` of per-entry links, so Vite's temporary config bundle cannot land in the
+checkout's shared `.vite-temp`; there is an assertion of no unresolved `@/` imports; and
+`resolveConfig` is called in production mode. The full suite was green apart from three fleet
+tests that need a fleet client build this worktree did not have.
+
 **Reproduced:** `npm run knip` reports a config-load error because `vite.api.config.ts` evaluates
 `readClientShell` at module load, then continues to print findings and exits nonzero. The failed
 discovery can leave its Vite/API graph incomplete; those findings are not safe deletion evidence.
@@ -331,20 +379,20 @@ traces the introducing commit and explains why the existing shell tests do not c
 
 ### Stage: decouple config discovery from build execution
 
-- [ ] Read `knip.jsonc`, `vite.api.config.ts`, `scripts/client-shell.ts` § `readClientShell`, and
+- [x] Read `knip.jsonc`, `vite.api.config.ts`, `scripts/client-shell.ts` § `readClientShell`, and
   `scripts/build-stamp.ts`. Reproduce in a disposable worktree with a missing shell and then a
   deliberately stale stamp; do not remove the primary checkout's build artifacts.
-- [ ] Inspect the installed Knip Vite plugin and schema. First try the smallest supported
+- [x] Inspect the installed Knip Vite plugin and schema. First try the smallest supported
   configuration that statically includes the API entry without evaluating its build-only config.
   If that loses alias/import coverage, move build-only shell evaluation to Vite's build invocation
   while keeping config analysis inert. Verify the plugin's actual evaluation behaviour before
   selecting this route. Do not add `if (KNIP) return fakeShell` or weaken stamp comparison.
-- [ ] Prove Knip has no config-load error in either missing/stale-shell case and reports a deliberately unused
+- [x] Prove Knip has no config-load error in either missing/stale-shell case and reports a deliberately unused
   fixture module/export; a success with no project files is a failure. Preserve CSS/font dependencies,
   root scratch-file discovery, aliases and `api/index.js`/`src/vercel.ts` reachability.
-- [ ] Prove `npm run build:api` still rejects missing/stale shell and `npm run build` succeeds in
+- [x] Prove `npm run build:api` still rejects missing/stale shell and `npm run build` succeeds in
   client-then-API order. A completed Knip run with advisory findings need not have exit code zero.
-- [ ] Re-run Knip and triage actual product findings. Do not convert that list into automatic
+- [x] Re-run Knip and triage actual product findings. Do not convert that list into automatic
   deletions. Update [static analysis](../project/static-analysis.md); complete common checks.
 
 ## E — show glossary answers as they arrive

@@ -8,6 +8,8 @@
  * behavioural statement of the fix: with the Ideas controller made to throw,
  * the reader keeps the article, keeps the bar, and is told which one thing is
  * broken. docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
+ * Debate joined it on 2026-09-10 and has its own two blocks at the end of the
+ * file — docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
  *
  * There is a second, quieter half and it is the one that costs money. `Dock`
  * arms an activation token *before* changing mode, and `useAutoRun` claims it in
@@ -73,6 +75,13 @@ const probe = vi.hoisted(() => {
     bandRenders: 0,
     bandThrows: 0,
     panelThrows: 0,
+    /** The Debate controller throws during its own render. */
+    throwDebate: false,
+    /** `DebatePanel` throws while the real `useDebate` hooks run above it. */
+    throwDebatePanel: false,
+    debateRenders: 0,
+    debateThrows: 0,
+    debatePanelThrows: 0,
     /** Every `captureClientFailure` the boundary made, in order. */
     reports: [] as { name: string; message: string; context: Record<string, unknown> }[],
     version: () => version,
@@ -94,6 +103,11 @@ const probe = vi.hoisted(() => {
       state.bandRenders = 0;
       state.bandThrows = 0;
       state.panelThrows = 0;
+      state.throwDebate = false;
+      state.throwDebatePanel = false;
+      state.debateRenders = 0;
+      state.debateThrows = 0;
+      state.debatePanelThrows = 0;
       state.reports.length = 0;
     },
   };
@@ -200,6 +214,44 @@ vi.mock("../src/web/IdeasPanel.js", async (importOriginal) => {
 });
 
 /**
+ * **Debate's two throw sites**, the same shape as Ideas': the controller throws
+ * before any of its hooks run, and the panel throws with the real `useDebate`
+ * — its read, its job poll and its `useAutoRun` — mounted above it. The second
+ * is what shows the boundary encloses the controller's work and not only the
+ * visible panel. docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
+ */
+vi.mock("../src/web/modes/debate/DebateMode.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/modes/debate/DebateMode.js")>();
+  const { createElement: h } = await import("react");
+  return {
+    ...actual,
+    DebateBand(props: Parameters<typeof actual.DebateBand>[0]) {
+      probe.debateRenders += 1;
+      if (probe.throwDebate) {
+        probe.debateThrows += 1;
+        throw new Error(BOOM);
+      }
+      return h(actual.DebateBand, props);
+    },
+  };
+});
+
+vi.mock("../src/web/DebatePanel.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/DebatePanel.js")>();
+  const { createElement: h } = await import("react");
+  return {
+    ...actual,
+    DebatePanel(props: Parameters<typeof actual.DebatePanel>[0]) {
+      if (probe.throwDebatePanel) {
+        probe.debatePanelThrows += 1;
+        throw new Error(BOOM);
+      }
+      return h(actual.DebatePanel, props);
+    },
+  };
+});
+
+/**
  * Sentry is not started in a test, so the real `captureClientFailure` returns
  * without doing anything — which would make "the report was made" unfalsifiable.
  * The mock records the call; the *sanitising* half is `monitoring-scrub.ts`'s
@@ -267,6 +319,8 @@ if (!(globalThis as { CSS?: unknown }).CSS) {
 const trace: { url: string; method: string; auth: string | null }[] = [];
 
 const SLUG = "a-piece";
+/** A second article of the same owner's, for the case that changes slug under a broken band. */
+const OTHER_SLUG = "another-piece";
 const PARAGRAPH = "The first paragraph of the piece.";
 /** The phrase an idea occurrence quotes, so the prose really gets marks. */
 const OCCURRENCE = "The first paragraph";
@@ -383,6 +437,8 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return owned();
+  if (url === `/api/article/${OTHER_SLUG}`)
+    return json({ ...OWNED, meta: { ...OWNED.meta, slug: OTHER_SLUG } });
   if (url === "/api/reader") return json({ experimentalSince });
   if (method === "POST") return new Response(null, { status: 204 });
   if (notBuilt !== null && url.startsWith(notBuilt)) return new Response(null, { status: 404 });
@@ -537,9 +593,9 @@ function containedInsideIdeas(): void {
 }
 
 /** The report half: made once, tagged, and carrying no message anywhere. */
-function reportedOnce(): void {
+function reportedOnce(feature = "Ideas"): void {
   expect(probe.reports, "one sanitised report").toHaveLength(1);
-  expect(probe.reports[0]?.context).toMatchObject({ boundary: "feature", feature: "Ideas" });
+  expect(probe.reports[0]?.context).toMatchObject({ boundary: "feature", feature });
   const logged = readLogBuffer().filter((e) => e.kind === "client-error");
   expect(logged, "one client-error in the ring buffer").toHaveLength(1);
   expect(JSON.stringify(logged), "the message reached the buffer").not.toContain(BOOM);
@@ -975,5 +1031,267 @@ describe("the boundary will not retire a token newer than the one its render was
     const surviving = activation.pendingActivation(SLUG, "ideas");
     expect(surviving, "the newer press went with the old one").not.toBeNull();
     expect(surviving, "the retirement took the wrong press").not.toBe(failed);
+  });
+});
+
+/* ---------------------------------------------------- the second mode: Debate --
+
+   The first stage of cluster B in
+   docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md: the same
+   boundary, around `DebateBand` where `Reader` composes it. Debate is the one
+   worth doing next because it is the dearest press in the app — two metered
+   web searches — so an unretired token here is the most expensive one to leave
+   lying about.
+
+   Debate is behind the experimental-features switch, so every case turns it on:
+   the bar draws an experimental mode only for a reader who has, or for the mode
+   they are already in. And every case answers the debate GET 404 — *nobody has
+   searched the web about this piece* — which is both the commonest state and
+   the only one in which a press costs anything. */
+
+const { navigate } = await import("../src/web/router.js");
+
+const DEBATE_FALLBACK = '[aria-label="Debate is not working"]';
+/** The article's spine (src/web/Spine.tsx), drawn in every mode, outside every band. */
+const SPINE = ".spine";
+
+/** Debate's counterpart to `containedInsideIdeas`, and it names the mode. */
+function containedInsideDebate(): void {
+  expect(probe.debateThrows + probe.debatePanelThrows, "the throwing mock never ran").toBeGreaterThan(
+    0,
+  );
+  expect(text(), "the Debate fallback").toContain("[mode-render]");
+  expect(host.querySelector(DEBATE_FALLBACK), "the fallback does not name Debate").not.toBeNull();
+  expect(text(), "the root fallback fired").not.toContain("[render]");
+  expect(text(), "the exception text reached the reader").not.toContain(BOOM);
+  expect(text(), "the prose went with it").toContain(PARAGRAPH);
+  expect(host.querySelector(SPINE), "the spine went with it").not.toBeNull();
+  expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
+}
+
+function debateOn(): void {
+  who.set(OWNER_A);
+  experimentalSince = "2026-09-01T09:00:00.000Z";
+  notBuilt = "/api/debate/";
+}
+
+describe("Debate that throws is replaced by a band, not by an empty page", () => {
+  it("contains a throw from the controller's own render", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+
+    containedInsideDebate();
+    expect(probe.debateThrows, "the controller mock never threw").toBeGreaterThan(0);
+    reportedOnce("Debate");
+
+    await press(MODE_LABEL.plain);
+    expect(modeInUrl()).toBe("plain");
+    expect(text()).not.toContain("[mode-render]");
+    expect(text()).toContain(PARAGRAPH);
+  });
+
+  it("contains a throw from DebatePanel while the real controller's hooks run", async () => {
+    debateOn();
+    probe.throwDebatePanel = true;
+    await open("?mode=debate");
+
+    containedInsideDebate();
+    expect(probe.debatePanelThrows, "the panel mock never ran").toBeGreaterThan(0);
+    expect(probe.debateRenders, "the real controller never rendered").toBeGreaterThan(0);
+    reportedOnce("Debate");
+  });
+
+  it("settles back to the same actionable fallback when retry fails again", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+    const first = probe.debateThrows;
+
+    await act(async () => buttonNamed("Try Debate again").click());
+    await settle();
+
+    expect(probe.debateThrows, "retry did not re-render the feature").toBeGreaterThan(first);
+    containedInsideDebate();
+    buttonNamed("Try Debate again");
+    buttonNamed("Back to the article");
+    expect(jobPosts(), "a retry is not a fresh intent to spend").toEqual([]);
+  });
+
+  it("comes back to a working Debate from retry, and buys nothing doing it", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+    containedInsideDebate();
+
+    probe.throwDebate = false;
+    trace.length = 0;
+    await act(async () => buttonNamed("Try Debate again").click());
+    await settle();
+
+    expect(text(), "the fallback outlived a successful retry").not.toContain("[mode-render]");
+    expect(trace.some((r) => r.url === `/api/debate/${SLUG}`), "the fresh Debate never read").toBe(
+      true,
+    );
+    expect(jobPosts(), "retry minted a fresh intent to spend").toEqual([]);
+  });
+
+  it("returns to Plain from the fallback's own button", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+
+    await act(async () => buttonNamed("Back to the article").click());
+    await modeAfterPress("debate");
+    await settle();
+
+    expect(modeInUrl()).toBe("plain");
+    expect(text()).not.toContain("[mode-render]");
+    expect(text()).toContain(PARAGRAPH);
+  });
+
+  /**
+   * **A different article gets a fresh band.** The mock stops throwing before
+   * the move, so a fallback on the far side could only be carried-over state.
+   *
+   * What this proves is the outcome, not the reset key: it stays green with the
+   * slug taken out of the key, checked 2026-09-10, because `ArticlePage` renders
+   * `OwnedArticle key={slug}` and drops to `loading` between articles — so the
+   * boundary is destroyed structurally, as it is for owner A → owner B above.
+   * The slug in the key is the second lock, for a future composition that keeps
+   * `Reader` mounted across articles.
+   */
+  it("does not carry its fallback to a different article", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+    containedInsideDebate();
+
+    probe.throwDebate = false;
+    trace.length = 0;
+    await act(async () => navigate(`/read/${OTHER_SLUG}?mode=debate`));
+    await settle();
+
+    expect(location.pathname).toBe(`/read/${OTHER_SLUG}`);
+    expect(text(), "the fallback followed the reader").not.toContain("[mode-render]");
+    expect(
+      trace.some((r) => r.url === `/api/debate/${OTHER_SLUG}`),
+      "the new article's Debate never mounted",
+    ).toBe(true);
+    expect(jobPosts(), "changing article is not a press").toEqual([]);
+  });
+
+  /**
+   * **Owner → visitor.** Debate has no visitor band yet (`POLICY.debate` is
+   * owners-only), so the far side is not a Debate panel; what matters is that
+   * neither the fallback nor a press survives the change of reader, that the
+   * owner's controller is not mounted for a visitor, and that the article is
+   * still there.
+   */
+  it("leaves nothing behind when the owner signs out underneath it", async () => {
+    debateOn();
+    probe.throwDebate = true;
+    await open("?mode=debate");
+    containedInsideDebate();
+    const rendered = probe.debateRenders;
+
+    probe.throwDebate = false;
+    trace.length = 0;
+    await act(async () => who.set(null));
+    await settle();
+
+    expect(modeInUrl(), "signing out changed the mode instead of changing its access").toBe(
+      "debate",
+    );
+    expect(
+      host.querySelector('.mode-band[aria-label="Not available on a shared link"]'),
+      "the visitor's owners-only band never replaced Debate",
+    ).not.toBeNull();
+    expect(text(), "the fallback survived the change of reader").not.toContain("[mode-render]");
+    expect(text(), "the article went with it").toContain(PARAGRAPH);
+    expect(probe.debateRenders, "a visitor mounted the owner's controller").toBe(rendered);
+    expect(jobPosts(), "signing out is not a press").toEqual([]);
+  });
+});
+
+describe("a Debate press that met a broken band cannot be spent later", () => {
+  /** The positive control for every zero below: a press that works buys one search. */
+  it("gives exactly one job for an ordinary press on a working Debate", async () => {
+    debateOn();
+    await open();
+    trace.length = 0;
+
+    await press(MODE_LABEL.debate);
+
+    expect(modeInUrl()).toBe("debate");
+    expect(text()).not.toContain("[mode-render]");
+    expect(jobPosts(), "one job, under React's double-invoked effects").toHaveLength(1);
+  });
+
+  it("gives no job at all when the press throws and the reader comes back", async () => {
+    debateOn();
+    await open();
+    trace.length = 0;
+
+    probe.throwDebate = true;
+    await press(MODE_LABEL.debate);
+    containedInsideDebate();
+    expect(
+      activation.pendingActivation(SLUG, "debate"),
+      "the press outlived the failed render",
+    ).toBeNull();
+    expect(jobPosts(), "the failed render bought something").toEqual([]);
+
+    probe.throwDebate = false;
+    await press(MODE_LABEL.plain);
+    await act(async () => history.back());
+    await modeAfterPress("plain");
+    await settle();
+
+    expect(modeInUrl(), "Back did not return to Debate").toBe("debate");
+    expect(trace.some((r) => r.url === `/api/debate/${SLUG}`), "the GET settled").toBe(true);
+    expect(jobPosts(), "Back spent the retired press").toEqual([]);
+  });
+
+  it("gives no job when the press made at the fallback throws too", async () => {
+    debateOn();
+    await open();
+    trace.length = 0;
+
+    probe.throwDebate = true;
+    await press(MODE_LABEL.debate);
+    const afterFirst = probe.debateThrows;
+
+    await press(MODE_LABEL.debate);
+    expect(probe.debateThrows, "the fresh press never reset the boundary").toBeGreaterThan(
+      afterFirst,
+    );
+    containedInsideDebate();
+    expect(jobPosts()).toEqual([]);
+
+    probe.throwDebate = false;
+    await press(MODE_LABEL.plain);
+    await act(async () => history.back());
+    await modeAfterPress("plain");
+    await settle();
+
+    expect(modeInUrl()).toBe("debate");
+    expect(jobPosts(), "the second press was spent on Back").toEqual([]);
+  });
+
+  it("gives exactly one job when the press made at the fallback succeeds", async () => {
+    debateOn();
+    await open();
+
+    probe.throwDebate = true;
+    await press(MODE_LABEL.debate);
+    containedInsideDebate();
+    trace.length = 0;
+
+    probe.throwDebate = false;
+    await press(MODE_LABEL.debate);
+
+    expect(text(), "Debate did not come back").not.toContain("[mode-render]");
+    expect(jobPosts(), "one job, attributable to that click").toHaveLength(1);
   });
 });

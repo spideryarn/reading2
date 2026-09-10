@@ -157,6 +157,14 @@ function install() {
   });
   vi.stubGlobal("SpeechRecognition", FakeRecognition);
   vi.stubGlobal("webkitSpeechRecognition", FakeRecognition);
+  /* Chromium's engine to go with Chromium's recogniser: the hook probes only
+     where `navigator.userAgentData.brands` identifies Chromium
+     (docs/plans/260910g), and the timer tests here are about the live-words
+     path that the probe unlocks. */
+  Object.defineProperty(navigator, "userAgentData", {
+    configurable: true,
+    value: { brands: [{ brand: "Chromium", version: "151" }], mobile: false, platform: "macOS" },
+  });
   vi.stubGlobal(
     "MediaStream",
     class {

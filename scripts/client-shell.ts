@@ -23,11 +23,17 @@
  *
  * ## Why it is here and not inside the vite config
  *
- * A config file only runs during a build, so a check that lives in one can only
- * be shown to fail by doing a build — and a guard nobody has watched fire is
- * not yet a guard. As a module it has tests (tests/client-shell.test.ts) that
- * feed it a mismatched stamp, a duplicated sentinel and the repo's own source
- * `index.html`, in milliseconds and without writing anything.
+ * A check that lives in a config file can only be shown to fail by resolving
+ * that config — and a guard nobody has watched fire is not yet a guard. As a
+ * module it has tests (tests/client-shell.test.ts) that feed it a mismatched
+ * stamp, a duplicated sentinel and the repo's own source `index.html`, in
+ * milliseconds and without writing anything.
+ *
+ * **Loading a config is not only something a build does.** Knip imports every
+ * Vite config to discover the graph, so the call in `vite.api.config.ts` sits in
+ * a build-only plugin's `config` hook rather than at module scope, where a
+ * missing or stale `dist/` broke every Knip run —
+ * docs/postmortems/260908d-build-only-config-work-runs-during-static-analysis.md.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";

@@ -127,8 +127,8 @@ export function sharedInventory(available: PublicArtefacts): SharedInventory {
   }
 
   /* **The two artefacts the sweep cannot see**, because neither is a mode: the
-     thread is a page beside the article, and the arc is the extra rung Outline
-     draws when there is one. Both are in `PublicArtefacts`, both cross when they
+     thread is a page beside the article, and the arc is the extra rung Structure's
+     list face (Outline, until 2026-09-10) draws when there is one. Both are in `PublicArtefacts`, both cross when they
      exist, and both were `available` flags with nothing reading them until GPT
      Sol found the arc on 2026-09-02. Asked by hand, and asked the same way, so
      the pair cannot drift apart. */

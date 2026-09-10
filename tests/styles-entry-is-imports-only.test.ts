@@ -166,8 +166,9 @@ const MANIFEST = [
      convenience: the two sheets share no selector — `.mode-band.struct` against
      `.mode-band.outln` — so the cascade cannot decide anything between them,
      and putting them adjacent is what says the pair is meant to be read
-     together and deleted together when the comparison they exist for is over.
-     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+     together. Since 2026-09-10 they are the two faces of one mode, Structure —
+     its list and its columns — so neither goes without the other.
+     docs/plans/260910g-structure-mode-subsumes-outline.md. */
   "structure-mode.css",
   "quotes.css",
   "timeline.css",

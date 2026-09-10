@@ -129,7 +129,7 @@ describe("navPlan", () => {
    * to select, so the coarse end of the ladder is Parts. The other half stands
    * exactly as it did: → still runs all the way out to the prose.
    *
-   * The arc artefact is untouched by this; Outline mode still renders it
+   * The arc artefact is untouched by this; Structure's list face still renders it
    * (docs/project/keyboard.md § Choosing the level without a mouse).
    */
   it("runs from the parts to the prose, and offers no argument rung", () => {

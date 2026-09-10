@@ -1739,8 +1739,12 @@ one-per-tick daemon queue; an exhaustive occurrence table; one launch in flight 
 verify it; shared `launch-gate.ts` (health and account quota, also used by Scheduled dispatch); the
 account pinned from the reservations ledger; a `resume` projection in `recovery.json`, a
 `POST /api/recovery/resume` route and the panel's Resume… control with its inline confirmation.
-Stage 3a (the `--resume <uuid>` argv arm and the producer `capabilities` marker) is on dev with a
-narrow Sol check ordered by the Overseer. **Stage 3b is not built** and stops here at Greg's
+Stage 3a (the `--resume <uuid>` argv arm) is on dev; the narrow Sol check the Overseer ordered
+found two P1s, fixed red first at 3047602e (G21: a picker search flattens to exactly a real resume's
+line, so `--resume` on a ps-flattened line is unreadable; G22: `--resume` beside `--session-id` is
+unreadable, and steer had been answering yes to `--resume A --session-id A`), and the producer
+capability `argv-resume-uuid` is withdrawn, so a resumed pane reads claimed-only until Stage 3b
+re-declares it from a faithful read of `/proc/<pid>/cmdline`. **Stage 3b is not built** and stops here at Greg's
 reprioritisation of 2026-09-10 21:10Z: the port is `unwired`, so a tap queues a request, the page
 shows it pending with manual instructions, and nothing launches; its brief is
 `260910f-gradual-recovery-stage3b-task.md` and it needs Launch protocol's Stages 1, 1b and 2 on dev.

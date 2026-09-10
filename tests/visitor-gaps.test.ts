@@ -260,18 +260,16 @@ describe("what a visitor is told, mode by mode", () => {
        gets is the answers somebody already paid for, which is the same bargain
        `diagram` makes with the Sketch. */
     /* **`structure` joined on 2026-09-07**, on the plainest version of this
-       bargain there is: it is a third arrangement of the tree in the payload
-       every reader already holds, mounts no hook, issues no request, and reads
-       no artefact at all — so unlike `outline` it does not even have a rung to
-       skip when one is missing. Behind the experimental switch is a separate
-       question and does not belong in this list: the switch decides whether the
-       *bar draws the button*, and a shared URL must show two people the same
-       band whatever their switches say
-       (docs/project/experimental-features.md). */
+       bargain there is: its columns are an arrangement of the tree in the
+       payload every reader already holds, mount no hook and issue no request.
+       **And `outline` left the list on 2026-09-10**, by becoming Structure's
+       narrow face rather than a mode — a list that was free on the terms above
+       (it reads the arc from the payload and skips that rung without it) and is
+       still free, under Structure's name.
+       docs/plans/260910g-structure-mode-subsumes-outline.md. */
     const ALWAYS_FREE: Mode[] = [
       "plain",
       "hierarchy",
-      "outline",
       "structure",
       "summary",
       "diagram",
@@ -316,10 +314,10 @@ describe("what a visitor is told, mode by mode", () => {
       if (
         mode === "plain" ||
         mode === "hierarchy" ||
-        mode === "outline" ||
-        /* Same tree, third arrangement, and it reads no artefact at all — so a
-           visitor is short of nothing and there is no gap to report.
-           docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+        /* Same tree, in columns or (Outline's) nested list, and it reaches no
+           artefact that could be missing — so a visitor is short of nothing
+           and there is no gap to report.
+           docs/plans/260910g-structure-mode-subsumes-outline.md. */
         mode === "structure" ||
         mode === "glossary" ||
         mode === "summary" ||

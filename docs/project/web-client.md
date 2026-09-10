@@ -117,7 +117,7 @@ unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zo
 [url-state.md](url-state.md) for `?spine=`). The prose has no off switch at all any more: `?text=0`
 hid it in the hierarchy mode and nowhere else — which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice — and since 2026-09-05
-that address is rewritten to `?mode=outline` on arrival, because the pill that put the prose back
+that address is rewritten on arrival — to `?mode=structure` since 2026-09-10, `?mode=outline` before — because the pill that put the prose back
 went with the controls bar ([url-state.md](url-state.md#the-parameters)).
 
 Chat is the first mode that is not the hierarchy
@@ -147,9 +147,13 @@ of `App.tsx` into `src/web/modes/` first.
 The failed controller is unmounted, so its existing cleanup runs and the prose is left with no stale
 marks. And a mode press that fails has its activation token retired at the point of failure
 ([`activation.ts`](../../src/web/activation.ts) § `retireActivation`), so a later Back cannot spend
-a press that never started anything. Ideas is the first mode wired this way;
+a press that never started anything. Ideas was the first mode wired this way and Debate — the
+dearest press in the app — the second, on 2026-09-10; the other modes still fall through to the
+root boundary.
 [260905h](../plans/260905h-a-mode-failure-should-leave-the-article-readable.md) is the reasoning,
-and [`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx)
+[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § B is the plan for
+the rest, and
+[`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx)
 is what holds it.
 
 ## Tailwind and shadcn components
