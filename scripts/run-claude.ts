@@ -422,19 +422,24 @@ export function parseResultEvent(ndjson: string): ClaudeResult | undefined {
  */
 export function claudeEnv(
   parent: NodeJS.ProcessEnv, auth: Auth, passThrough: string[] = [], stateDir?: string,
+  onOverruled?: (names: string[]) => void,
 ): NodeJS.ProcessEnv {
-  const credentials = auth === 'env' ? ENV_CREDENTIALS : [];
-  const drop = [
+  const asked = [...(auth === 'env' ? ENV_CREDENTIALS : []), ...passThrough];
+  // Restorable: configuration for the caller's context, which an explicit --pass-env (or --auth env,
+  // for the credentials) brings back — so each is left out of `drop` when it is asked for. The
+  // prefix is resolved against what this parent actually has, so the rule needs no list to keep up.
+  const restorable = [
     ...PARENT_SESSION_VARS,
     ...CLAUDE_CONFIG_VARS,
-    // The prefix, resolved against what this parent actually has, so the rule needs no list to
-    // keep up to date. `passThrough` is re-added afterwards and so still wins.
     ...Object.keys(parent).filter((n) => ANTHROPIC_PREFIX.test(n)),
-    ...(stateDir === undefined
-      ? []
-      : Object.keys(parent).filter((n) => n === 'CLAUDECODE' || n.startsWith('CLAUDE_'))),
+  ].filter((n) => !asked.includes(n));
+  // Absolute, and only when routed: the child's account is its state directory and nothing else,
+  // so no credential crosses however it is asked. `drop` beats `passThrough` (plan 260910d).
+  const absolute = stateDir === undefined ? [] : [
+    ...ENV_CREDENTIALS,
+    ...Object.keys(parent).filter((n) => n === 'CLAUDECODE' || n.startsWith('CLAUDE_')),
   ];
-  const env = sanitisedEnv(parent, [...credentials, ...passThrough], drop);
+  const env = sanitisedEnv(parent, asked, [...restorable, ...absolute], onOverruled);
   if (stateDir !== undefined) env.CLAUDE_CONFIG_DIR = stateDir;
   return env;
 }

@@ -27,6 +27,7 @@ import {
 } from "../scripts/run-claude.js";
 import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
+import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
 const resultEvent = (fields: Record<string, unknown> = {}): string =>
@@ -104,6 +105,40 @@ describe("account routing", () => {
       .toMatchObject({ kind: "refused" });
     expect(resolveRunClaudeAccount(registry, undefined, "/configs/missing"))
       .toMatchObject({ kind: "refused" });
+  });
+
+  it("never hands a routed child a credential, however it is asked", () => {
+    /* A routed child's account is its config directory and nothing else. Measured 2026-09-10:
+       `--auth env` or `--pass-env CLAUDE_CODE_OAUTH_TOKEN` handed a child routed to pool-a the
+       parent's token as well — a second account riding in beside the first, because --pass-env was
+       re-added after the drop list. Plan 260910d. */
+    const parent = {
+      PATH: "/bin",
+      CLAUDE_CONFIG_DIR: "/configs/parent",
+      CLAUDE_CODE_OAUTH_TOKEN: "oauth-of-another-account",
+      ANTHROPIC_AUTH_TOKEN: "auth-of-another-account",
+      ANTHROPIC_API_KEY: "key-of-another-account",
+    };
+    const credentials = ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"];
+    const asks: Array<[Parameters<typeof claudeEnv>[1], string[]]> = [
+      ["env", []],
+      ["machine", credentials],
+      ["env", credentials],
+    ];
+    for (const [auth, passEnv] of asks) {
+      const env = claudeEnv(parent, auth, passEnv, "/configs/pool-a", () => {});
+      expect(env.CLAUDE_CONFIG_DIR).toBe("/configs/pool-a");
+      for (const name of credentials) expect(env[name], `${auth} ${passEnv.join(",")}: ${name}`).toBeUndefined();
+    }
+  });
+
+  it("says which names a routed child was refused", () => {
+    const told: string[][] = [];
+    claudeEnv(
+      { CLAUDE_CODE_OAUTH_TOKEN: "t" }, "machine", ["CLAUDE_CODE_OAUTH_TOKEN"], "/configs/pool-a",
+      (names) => told.push(names),
+    );
+    expect(told).toEqual([["CLAUDE_CODE_OAUTH_TOKEN"]]);
   });
 
   it("sets only the selected state directory after sanitising the child environment", () => {
@@ -474,7 +509,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", answerPath, ...extraArgs],
-      { encoding: "utf8", env: { ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}` } },
+      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     return { ...r, answerPath };
   }
@@ -587,7 +622,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", both, "--activity-log", both],
-      { encoding: "utf8", env: { ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}` } },
+      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("--activity-log");
