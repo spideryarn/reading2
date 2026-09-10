@@ -77,7 +77,7 @@ function deps(made: HealthRetention, over: Partial<RefreshDeps> = {}): RefreshDe
   return {
     collect: () => Promise.resolve(snap()),
     keep: () => {},
-    refreshHealth: (): HealthTurn => ({ kind: "reading", report: report() }),
+    refreshHealth: async (): Promise<HealthTurn> => ({ kind: "reading", report: report() }),
     retainHealth: made.retainHealth,
     refreshMs: 60_000,
     now: () => new Date("2026-09-08T12:00:30.000Z"),
@@ -199,7 +199,7 @@ describe("a turn reaches the browser through the composition the server uses", (
   it("writes a collector failure as its own arm, all the way to the browser", () => {
     const made = retention({ nowMs: () => Date.parse("2026-09-08T12:00:31.000Z") });
     const failing = deps(made, {
-      refreshHealth: (): HealthTurn => ({ kind: "collector-failed", why: "collectHealth threw: out of memory" }),
+      refreshHealth: async (): Promise<HealthTurn> => ({ kind: "collector-failed", why: "collectHealth threw: out of memory" }),
     });
     return refreshOnce(failing).then(() => {
       const { body } = get(made, "/api/health/history?hours=24");
@@ -225,7 +225,7 @@ describe("a turn reaches the browser through the composition the server uses", (
 
     await refreshOnce(deps(made, {
       now: () => new Date(now),
-      refreshHealth: () => ({ kind: "collector-failed", why: "collectHealth threw" }),
+      refreshHealth: async () => ({ kind: "collector-failed", why: "collectHealth threw" }),
     }));
 
     const read = made.store?.read({ sinceMs: 0 });
@@ -305,5 +305,14 @@ describe("server.ts", () => {
 
   it("builds the composition exactly once", () => {
     expect(source.match(/makeHealthRetention\(/g) ?? []).toHaveLength(1);
+  });
+
+  it("keeps one health probe owner for the lifetime of the server", () => {
+    expect(source.match(/probeOwner\(\)/g) ?? []).toHaveLength(1);
+    expect(source).toMatch(/const healthProbeOwner = probeOwner\(\);/);
+    expect(source).toMatch(/async function refreshHealth\(\): Promise<HealthTurn>/);
+    expect(source).toMatch(/await collectHealthAsync\(\{/);
+    expect(source).toMatch(/collectHealthAsync\(\{\s*owner: healthProbeOwner,/);
+    expect(source).toMatch(/await refreshOnce\(\{[\s\S]*?\n {4}refreshHealth,/);
   });
 });
