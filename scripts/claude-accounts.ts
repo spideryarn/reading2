@@ -1500,8 +1500,53 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps, canPrompt: bool
   return listOrCheck("list", deps);
 }
 
+/**
+ * What `--help` prints.
+ *
+ * It exists because the first version had none, and the two things a person
+ * actually types — `claude-accounts --help` and `add --help` — answered
+ * `FATAL: unknown command --help` and `FATAL: --help needs a value`. The second
+ * is the worse one: it reads as though `--help` were a real flag whose argument
+ * you forgot, so the obvious next guess is to invent one.
+ *
+ * Every question the wizard asks is listed with its flag, because that is the
+ * contract that lets the tests and the web flow drive the same code path — a
+ * flag nobody can discover is a code path nobody can automate.
+ */
+const HELP = `claude-accounts — the box's Claude account registry
+
+  add [flags]        add or update an account; with no flags it asks
+  list               every registered account, who is signed in, and live usage
+  check [--live-usage]   assert every account; non-zero if any fails
+  resolve --account <name|auto> --launch-name <n> [--session-uuid <u>]
+  verify --account <name> [--cwd <dir>]
+  outcome --session-uuid <u> --value <started|completed|failed>
+
+add flags — each one is a question it would otherwise ask:
+
+  --name <name>          the handle, e.g. pool2
+  --email <address>      the account's email
+  --role <pool|orchestrator>   default: pool
+  --config-dir <path>    default: ~/.claude-<name>
+  --family <claude>      reserved for Codex accounts
+  --seed                 seed a pool dir (implied in wizard mode)
+  --yes                  accept every default; ask nothing
+
+The login step is skipped when the account is already signed in as that email,
+and refused rather than replaced when a credential is present but unreadable —
+re-logging in rotates a credential that live sessions may be using.`;
+
+function wantsHelp(argv: readonly string[]): boolean {
+  return argv.some((arg) => arg === "--help" || arg === "-h" || arg === "help");
+}
+
 export async function main(argv: readonly string[], overrides: Partial<ClaudeAccountsDeps> = {}): Promise<number> {
   const deps = depsWith(overrides);
+  // Before parsing, so `add --help` is help rather than a flag missing a value.
+  if (argv.length === 0 || wantsHelp(argv)) {
+    deps.out(HELP);
+    return 0;
+  }
   const parsed = parseArgs(argv);
   if ("why" in parsed) {
     deps.err(`FATAL: ${parsed.why}`);

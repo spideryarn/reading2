@@ -331,6 +331,32 @@ describe("Claude config seeding", () => {
 });
 
 describe("identity assertion and add", () => {
+  // Reproduced red on 2026-09-10 before the fix: `--help` answered
+  // "FATAL: unknown command --help", and `add --help` answered
+  // "FATAL: --help needs a value" — which is worse, because it reads as though
+  // --help were a real flag whose argument you forgot, so the obvious next move
+  // is to invent one. These are the exact strings Greg types.
+  test.each([["--help"], ["-h"], ["help"], ["add", "--help"]])(
+    "prints usage for %s instead of a FATAL",
+    async (...argv) => {
+      const output: string[] = [];
+      const code = await main(argv, {
+        out: (line) => output.push(line),
+        err: (line) => output.push(`ERR:${line}`),
+      });
+      expect(code).toBe(0);
+      const text = output.join("\n");
+      expect(text).not.toMatch(/FATAL/);
+      // Every question the wizard asks must be discoverable as a flag: a flag
+      // nobody can find is a code path nobody can automate, and the web flow
+      // depends on driving this same command non-interactively.
+      for (const flag of ["--name", "--email", "--role", "--config-dir", "--yes"]) {
+        expect(text).toContain(flag);
+      }
+    },
+  );
+
+
   test("a second --yes run asks nothing, writes nothing, and reports every no-op", async () => {
     const root = tempRoot();
     wizardSeedFixture(root);
