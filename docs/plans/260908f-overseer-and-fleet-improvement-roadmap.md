@@ -1785,6 +1785,25 @@ security rewrite and does not override Greg's explicit deferrals.
 honesty and avoids duplicate side effects. The SSH/manual path remains complete. A green test suite
 without an observed stopped-clock/failed-source control is insufficient evidence.
 
+**Status (2026-09-10, Overseer): done enough to stop, on dev at 33f99bbe; session
+`operational-finish`, plan 260910f, worktree `ops-diagnose` left standing.** Boxes 1 and 3 are
+built and reviewed: `npx tsx scripts/overseer.ts diagnose [--json]`, `GET /api/diagnostics` and a
+Diagnostics section in Box health report each service's recorded start HEAD, checkpoint schema,
+clocks, boot ids and job-list agreement, never inferred from HEAD; crash, bad-build, failed-bind,
+SIGKILL-takeover and restart-without-double-dispatch all proven on scratch instances. Box 2 is
+measured, not changed (the unit's rebuild-on-start stays). Box 4 is a proposal, not a build: the
+destination is **Greg's** (Healthchecks.io recommended over Better Stack and Cronitor). Boxes 5–7
+wait on that choice and on the two restarts the Overseer owes (dashboard, then daemon) for the
+stamps and the route to show; until then unstamped services read `unknown`, which is honest. Sol:
+plan review 9 findings (5 P1), stage reviews 3 P1 + 1 P2 then 6 P1, all taken; the narrow check
+closed eight of ten, and Fable ruled the other two documented limits (store listing stops at 200
+entries; a pid reused within 2 s of the lock still reads RUNNING, needing an identity token, queued).
+One regression of its own, `fleet-work-evidence-e2e` red on dev for 84 minutes, root-caused in
+`docs/postmortems/260910d-a-literal-new-url-…` (vitest's normalize-url plugin rewrites a `new URL("../..",
+import.meta.url)` literal under jsdom; three more such literals are queued). Contracts that outlive
+the branch: an optional `revision` on the daemon-started note, `dist/build-stamp.json`, and the
+`/api/diagnostics` payload.
+
 ## Parallel commitments and optional convenience
 
 Wave 2 already commissions harness visibility and dictation; integrate those active workstreams in
