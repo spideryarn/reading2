@@ -1114,6 +1114,26 @@ controlled fixture cached requests stay below a provisional 250ms p95, with real
 recorded separately. Repeated timeouts do not multiply live owned children. No collection-speed
 improvement is claimed without before/after output.
 
+**Status (2026-09-10, Overseer): landed on dev at e0e82fca, session `responsive-collection`, plan
+[260910c](260910c-responsive-collection-monitoring-must-keep-answering-while-it-measures.md).**
+Measured with its own instrument (`scripts/fleet-collect-bench.ts`) on the 25-session fixture under
+a 30 s capture: `/api/state` p95 went from 30,018 ms to 7.2 ms, and a production collection turn
+holds the request thread for about 40 ms where it held it about 1.6 s a minute. Wall times are
+unchanged; the claim was a free thread, not speed. `tools/fleet/child.ts` is the owned child
+(freed at timeout plus grace, SIGTERM then SIGKILL to a process group proved at spawn, pid reuse
+checked by `/proc` start time before every signal, a per-key refusal ended only by an observed exit
+or kernel proof); health, the tmux probes and captures, and the two `ps` calls of `readExecutions`
+all go through it. The finding that reshaped the plan: `execFileSync`'s timeout signals and then
+waits without bound (1,000 ms asked, 20,019 ms measured), met twice before and fixed only where it
+hit — postmortem `260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md`; the remaining
+synchronous sites are queued (qi-xdvh82cs). Also found: the collector's this-box `selfCheck` has
+been inert in production since the systemd move (qi-j4jyf3ab, postmortem 260910b); a concurrency
+limiter bounds pending calls, not the children that outlive a timed-out call (twice). The title
+cache checkbox was dropped on measurement (dec-wyaanpzm; revisit condition in the plan). Known, not
+fixed: the owner's registry is in memory, so a restart forgets a stuck survivor; `routes-new.ts`
+still takes the synchronous quick health on session creation. The daemon still calls the synchronous
+`probeProcessTable`.
+
 ### Stage: Resource history — show what was happening when load rose
 
 - [ ] Integrate the dashboard-owned Wave 2 health history at `~/.fleet-health/` first. Preserve its
