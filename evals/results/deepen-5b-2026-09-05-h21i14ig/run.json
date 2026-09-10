@@ -1,0 +1,552 @@
+{
+  "meta": {
+    "startedAt": "2026-09-05T14:26:53.050Z",
+    "commit": "450b57afb836f1c6b21e9e8d418a0e31c3b30a7f",
+    "gitDirty": true,
+    "srcPatchSha256": null,
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "node": "v26.8.1",
+    "model": "anthropic/claude-sonnet-5",
+    "effort": {
+      "hierarchy": "low",
+      "pipelineEnvOverride": null,
+      "note": "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts (EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. Every CandidateRecord carries the model and effort it was decided under."
+    },
+    "jobConcurrency": 3,
+    "jobConcurrencyRuntime": 3,
+    "stepBudgetMs": 700000,
+    "effectiveDeadlineMs": 740000
+  },
+  "runTag": "h21i14ig",
+  "args": {
+    "book": "output/2701-h.html",
+    "articles": [
+      "output/noema-mythology-of-conscious-ai.html"
+    ],
+    "repeats": 3,
+    "spend": true,
+    "dryRun": false,
+    "keep": false,
+    "mode": "spend"
+  },
+  "fixtures": [
+    {
+      "role": "book",
+      "file": "output/2701-h.html",
+      "sha256": "9ef7866a853cdf783af6281a5cf66b5d9e2caa7085d022c992801d2d3b25321b",
+      "bytes": 1415665
+    },
+    {
+      "role": "article-1",
+      "file": "output/noema-mythology-of-conscious-ai.html",
+      "sha256": "7d110be8d94a9c2c5a38324d2a4965c1968e480f85b93bb4343e9b39591531e6",
+      "bytes": 78787
+    }
+  ],
+  "notes": [
+    "Stage 1 (fetch) is a fixture read of a file named on the command line, so no network latency is in any elapsed time here, and there is no committed manifest holding those bytes constant — output/ is gitignored. The sha256 of what this run read is in `fixtures`.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`. Every label call carries stepName=hierarchy and job=labels. The SCOPED EXPANSION CALLS also carry job=hierarchy, the same as the whole-document structure call — so on a repeat with the structure checkpoint resumed, the `hierarchy` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that into a check rather than an assumption.",
+    "Money is the ledger's (`costStore.forJob`). Token counts are reported beside it and are never converted into a price here.",
+    "Question 1 pairs candidates on parent-plus-derived-range, never on `where`, which is an ordinal path derived from the answer's own fan-out. Verdict flips, changed fan-out and moved boundaries at equal fan-out are three separate rows and must not be added together.",
+    "A repeat is only a repeat if it bought its wave again. SPIDERYARN_DEEPEN_REASK names the book's slug and nothing else; the structure checkpoint is deliberately still resumed, which is what holds the seed constant.",
+    "Phase D runs three jobs at once, and this box is shared: another agent's dev server holding a claim slot would serialise them. Read the per-step clocks against each other, not only against the budget."
+  ],
+  "seamProof": {
+    "cold": 1,
+    "repeatWithoutReask": 0,
+    "repeatWithReask": 1,
+    "readsWhileReasking": 0,
+    "namespaces": [
+      "hierarchy-deepen"
+    ]
+  },
+  "estimate": {
+    "rows": [
+      {
+        "what": "book, full ingest, deepening on",
+        "jobs": 1,
+        "usdEach": 8.4,
+        "basis": "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound."
+      },
+      {
+        "what": "book, forced hierarchy, structure + labels resumed",
+        "jobs": 3,
+        "usdEach": 7.4,
+        "basis": "$8.4 less the $1.00 structure call the checkpoint resumes (same table). Labels resume too wherever the deepened tree comes out the same, so this is an upper bound twice over."
+      },
+      {
+        "what": "ordinary article, full ingest",
+        "jobs": 3,
+        "usdEach": 3.4,
+        "basis": "evals/cost/run.ts records ~$3.40 for a `long-html` (186-block) ingest, measured 2026-09-03. The plan says an ordinary article's wave is 'a fraction' of a book's; nothing is measured, so nothing is added. **One of these runs with the flag off** — phase C's first pass, which is the byte-identical baseline — and that costs the same, because on an article where nothing is eligible the wave makes no call either way. That equality is the thing phase C is measuring, so it is an assumption here and a result there."
+      },
+      {
+        "what": "ordinary article, forced hierarchy, everything resumed",
+        "jobs": 1,
+        "usdEach": 0.1,
+        "basis": "the inertness pass: structure and labels both resume and no section is eligible, so the expectation is zero. $0.10 is headroom for a label batch the deepened tree re-cut."
+      }
+    ],
+    "totalUsd": 40.9,
+    "worstCaseUsd": 85.30000000000001,
+    "bound": "$40.90 is the NOMINAL ESTIMATE — one purchase of each row — and $85.30 is the THREE-WINDOW REQUEUE EXPOSURE: what the same run would cost if every re-asking pass were re-claimed at its own 740s deadline and bought its wave in each of the three windows `REQUEUE_BUDGET = 2` permits. This run stops a re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § driveToDone), so it does not buy that exposure. **NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP.** No dollar or token limit refuses a call at $N. An ordinary, non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed; a redraw buys a second answer to the same question; and every per-row figure is the plan's arithmetic rather than a limit anything checks against. Watch the bill.",
+    "caveat": "Every per-row figure is an upper bound on ONE purchase of that row, derived from the plan's own arithmetic rather than measured — it is not a bound on how many purchases the run makes, which is the sentence above. The run's own `run.json` carries what it really cost. If the real bill lands far under this, that is question 4 answering itself; if it lands over, stop and read why before repeating."
+  },
+  "jobs": [
+    {
+      "phase": "A",
+      "label": "book ingest, deepening on (repeat 1)",
+      "repeat": 1,
+      "slug": "evaldeepen-h21i14ig-book-spya-f8ag7m",
+      "jobId": "spya-ffag2e",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract",
+        "blocks",
+        "hierarchy",
+        "assets"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T14:26:53.289Z",
+      "finishedAt": "2026-09-05T14:30:52.414Z",
+      "elapsedMs": 239124,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Building the hierarchy did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "1382 KB (fixture book)",
+          "startedAt": "2026-09-05T14:26:53.360Z",
+          "finishedAt": "2026-09-05T14:26:53.472Z",
+          "ms": 112
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "Moby Dick; or The Whale",
+          "startedAt": "2026-09-05T14:26:53.518Z",
+          "finishedAt": "2026-09-05T14:26:58.017Z",
+          "ms": 4499
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "2569 blocks, 2 new ids (2567 kept)",
+          "startedAt": "2026-09-05T14:26:58.187Z",
+          "finishedAt": "2026-09-05T14:27:08.168Z",
+          "ms": 9981
+        },
+        {
+          "name": "hierarchy",
+          "status": "error",
+          "detail": "7 of 28 sections labelled",
+          "error": "Building the hierarchy did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T14:27:09.640Z",
+          "finishedAt": "2026-09-05T14:30:52.371Z",
+          "ms": 222731
+        },
+        {
+          "name": "assets",
+          "status": "pending",
+          "startedAt": null,
+          "finishedAt": null,
+          "ms": null
+        }
+      ],
+      "hierarchyMs": 222731,
+      "deepenFlag": true,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "hierarchy",
+          "calls": 27,
+          "pending": 4,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 2733061400,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 27,
+          "money": {
+            "credits": 2733061400,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "0cd50267-1571-4d97-9567-e420db91a59e"
+          ],
+          "jobIds": [
+            "spya-ffag2e"
+          ],
+          "tokens": {
+            "input": 1047606,
+            "output": 57717,
+            "cacheRead": 25747,
+            "cacheWrite": 22212,
+            "reasoning": 7202
+          },
+          "outcomes": {
+            "ok": 27
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 222598,
+          "summedDurationMs": 613344
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 18,
+          "money": {
+            "credits": 2367066400,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "0cd50267-1571-4d97-9567-e420db91a59e"
+          ],
+          "jobIds": [
+            "spya-ffag2e"
+          ],
+          "tokens": {
+            "input": 959222,
+            "output": 40463,
+            "cacheRead": 18162,
+            "cacheWrite": 16144,
+            "reasoning": 7172
+          },
+          "outcomes": {
+            "ok": 18
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 166814,
+          "summedDurationMs": 425627
+        },
+        {
+          "step": "labels",
+          "calls": 9,
+          "money": {
+            "credits": 365995000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "0cd50267-1571-4d97-9567-e420db91a59e"
+          ],
+          "jobIds": [
+            "spya-ffag2e"
+          ],
+          "tokens": {
+            "input": 88384,
+            "output": 17254,
+            "cacheRead": 7585,
+            "cacheWrite": 6068,
+            "reasoning": 30
+          },
+          "outcomes": {
+            "ok": 9
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 55641,
+          "summedDurationMs": 187717
+        }
+      ],
+      "recordsFiles": [
+        "evaldeepen-h21i14ig-book-spya-f8ag7m-2026-09-05-14-29-56-917099-1.json"
+      ],
+      "stats": {
+        "targets": 32,
+        "expanded": 0,
+        "added": 0,
+        "withheld": 28,
+        "uncheckpointed": 0,
+        "calls": 13,
+        "resumed": 0,
+        "oversized": 0,
+        "outOfTime": 0,
+        "rateLimited": 0,
+        "gate": {
+          "initialWidth": 8,
+          "finalWidth": 8,
+          "narrowestWidth": 8,
+          "refusals": 0
+        },
+        "verdicts": {
+          "candidates": 224,
+          "rawYes": 4,
+          "rawNo": 174,
+          "unassessed": 46,
+          "effectiveYes": 54,
+          "overrides": {
+            "authored-heading": 3,
+            "depth-cap": 0,
+            "divisibility-floor": 0,
+            "forced-open": 15
+          }
+        },
+        "usage": {
+          "inputTokens": 442108,
+          "outputTokens": 29104,
+          "cacheReadTokens": 14126,
+          "cacheWriteTokens": 14126
+        }
+      },
+      "waveFailed": true,
+      "waveFailureReason": "ExpansionRefused: The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed, and 0 start(s) that marked no split point. One child covers its parent's whole range, so the same question would be asked again one level down and the cascade would run to its depth cap without dividing anything.",
+      "findings": [
+        {
+          "kind": "ledger-short",
+          "fatal": true,
+          "message": "hierarchy: hierarchy made 27 call(s) but 4 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+        },
+        {
+          "kind": "wave-failed",
+          "fatal": true,
+          "message": "book ingest, deepening on (repeat 1): the deepening wave threw (ExpansionRefused: The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed, and 0 start(s) that marked no split point. One child covers its parent's whole range, so the same question would be asked again one level down and the cascade would run to its depth cap without dividing anything.). The article kept the tree wave 1 produced; the records are the governor's decisions and the bill, and this pass expanded nothing. It is excluded from questions 1-3."
+        },
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "book ingest, deepening on (repeat 1): the job stopped at `error` rather than `done`. Whatever it bought before it stopped is on the ledger, but this job did not finish the steps the run was buying it for, so nothing measured over it is a whole measurement and no later phase may be purchased on top of it."
+        }
+      ]
+    }
+  ],
+  "answers": {
+    "q1": null,
+    "q2": {
+      "overall": {
+        "candidates": 0,
+        "asked": 0,
+        "yes": 0,
+        "no": 0,
+        "rate": null
+      },
+      "byWave": [],
+      "bySize": [
+        {
+          "bucket": "under the floor (<10 blocks)",
+          "rate": {
+            "candidates": 0,
+            "asked": 0,
+            "yes": 0,
+            "no": 0,
+            "rate": null
+          }
+        },
+        {
+          "bucket": "10+ blocks, <800 words",
+          "rate": {
+            "candidates": 0,
+            "asked": 0,
+            "yes": 0,
+            "no": 0,
+            "rate": null
+          }
+        },
+        {
+          "bucket": "10+ blocks, 800-2000 words",
+          "rate": {
+            "candidates": 0,
+            "asked": 0,
+            "yes": 0,
+            "no": 0,
+            "rate": null
+          }
+        },
+        {
+          "bucket": "10+ blocks, 2000+ words",
+          "rate": {
+            "candidates": 0,
+            "asked": 0,
+            "yes": 0,
+            "no": 0,
+            "rate": null
+          }
+        }
+      ]
+    },
+    "q3": {
+      "candidates": 0,
+      "expanded": 0,
+      "stopped": 0,
+      "because": {
+        "authored-heading": 0,
+        "forced-open": 0,
+        "unassessed-ceiling": 0,
+        "depth-cap": 0,
+        "divisibility-floor": 0,
+        "verdict": 0,
+        "no-verdict": 0
+      },
+      "assessed": 0,
+      "overruled": 0,
+      "overrides": {
+        "authored-heading": 0,
+        "depth-cap": 0,
+        "divisibility-floor": 0,
+        "forced-open": 0
+      },
+      "decidedByVerdict": 0,
+      "reading": "No node carried a verdict, so nothing could be overruled — this cut says nothing about question 3."
+    },
+    "q4": {
+      "rows": [
+        {
+          "label": "A book ingest, deepening on (repeat 1)",
+          "nanos": 2733061400,
+          "unpriced": 0,
+          "unreadable": 0,
+          "vsIncumbent": 2.7330614
+        }
+      ],
+      "totalNanos": 2733061400,
+      "answerable": true,
+      "findings": [],
+      "source": "Money is read back from `spideryarn.ai_calls` by job id (`costStore.forJob`), which is what the gateway billed — and reconciled against what each step's own collector saw (`AdvanceParts.onStepSpend`), because a row that was never inserted reads back as `unreadable: 0`. The wave's own token counts are reported separately and are NOT converted into a price here — docs/plans/260904d-deepen-fat-sections.md § stage 5b asks for one or the other, said plainly, and this is the ledger."
+    },
+    "q5": {
+      "budgetMs": 700000,
+      "deadlineMs": 740000,
+      "clocks": [],
+      "overBudget": [],
+      "selfAborted": [],
+      "wasted": [],
+      "measured": 0,
+      "expected": 0,
+      "completed": 0,
+      "peakConcurrency": 0,
+      "fullConcurrencyMs": null,
+      "fullConcurrencyFloorMs": 60000,
+      "answerable": false,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "Question 5 needs 0 completed step(s) with a clock and a wave that finished, and this phase has 0 of 0 (no clocks at all). A step that started and failed carries both timestamps, so its clock is a duration and not a measurement; neither is a step that finished on the fallback tree because its wave threw — this is an absence, not a pass."
+        }
+      ],
+      "reading": "Question 5 was NOT measured: 0 of 0 step(s) completed and the peak concurrency was 0. This is an absence, not a pass — read the findings before quoting any number in this block."
+    },
+    "phaseDBookPasses": []
+  },
+  "findings": [
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "3 fatal finding(s) on a job that has already stopped, so the run did not go on to the repeats (phase B), the control (C) or the load (D). What is below covers what was really driven and really bought; the phases named are absent, not zero."
+    },
+    {
+      "kind": "ledger-short",
+      "fatal": true,
+      "message": "A book ingest, deepening on (repeat 1), on the end-of-run ledger read: hierarchy: hierarchy made 27 call(s) but 4 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+    },
+    {
+      "kind": "ledger-short",
+      "fatal": true,
+      "message": "hierarchy: hierarchy made 27 call(s) but 4 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+    },
+    {
+      "kind": "wave-failed",
+      "fatal": true,
+      "message": "book ingest, deepening on (repeat 1): the deepening wave threw (ExpansionRefused: The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed, and 0 start(s) that marked no split point. One child covers its parent's whole range, so the same question would be asked again one level down and the cascade would run to its depth cap without dividing anything.). The article kept the tree wave 1 produced; the records are the governor's decisions and the bill, and this pass expanded nothing. It is excluded from questions 1-3."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "book ingest, deepening on (repeat 1): the job stopped at `error` rather than `done`. Whatever it bought before it stopped is on the ledger, but this job did not finish the steps the run was buying it for, so nothing measured over it is a whole measurement and no later phase may be purchased on top of it."
+    },
+    {
+      "kind": "wave-failed",
+      "fatal": true,
+      "message": "\"A r1\" (evaldeepen-h21i14ig-book-spya-f8ag7m-2026-09-05-14-29-56-917099-1.json) is a pass whose wave threw — ExpansionRefused: The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed, and 0 start(s) that marked no split point. One child covers its parent's whole range, so the same question would be asked again one level down and the cascade would run to its depth cap without dividing anything.. Its records are the governor's decisions up to the throw and nothing after it, so they are a partial measurement and are excluded from questions 1-3. A required book pass that failed makes those answers unquotable rather than smaller."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "Question 1 needs 3 usable pass(es) of the book's wave and this run has 0 (1 more failed). A stability figure over fewer passes than the run set out to make is measuring a different run."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "Question 2 was computed over 0 assessed verdict(s), with 1 failed pass(es) excluded. No node carried a verdict, so there is nothing to take a rate of — this is an absence and must not be read as a measured zero."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "Question 3 was computed over 0 assessed verdict(s), with 1 failed pass(es) excluded. No node carried a verdict, so there is nothing to take a rate of — this is an absence and must not be read as a measured zero."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "Question 5 needs 0 completed step(s) with a clock and a wave that finished, and this phase has 0 of 0 (no clocks at all). A step that started and failed carries both timestamps, so its clock is a duration and not a measurement; neither is a step that finished on the fallback tree because its wave threw — this is an absence, not a pass."
+    }
+  ]
+}

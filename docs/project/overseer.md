@@ -120,6 +120,18 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
 - **Disagreement escalates on P0 and P1 only.** Sol disagreeing with an agent is the ordinary state
   of things and chains here have run to round twelve; treat a P2 disagreement as information, not as
   a reason to wake anyone.
+- **Four things Greg settled on 2026-09-10 so they are never asked again.** A **merge conflict** is
+  the agent's to resolve, with Sol or Fable when unsure, and reaches Greg only if it is a real
+  product trade-off neither side can keep —
+  [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md); you settle the
+  technical ones on his behalf and log them. **What to commit and what to throw away** in a drifted
+  tree is the agent's, with Fable —
+  [git-commit-changes.md](../reusable/git-commit-changes.md). **The changelog is written whether or
+  not anyone can deploy it**, and a missing Vercel credential has a stated fallback —
+  [changelog.md § Running it](changelog.md#running-it). **A Sol review's time wall is 90 minutes**
+  (it was 45; five reviewers died at 30 in one day), and a review still writes its findings to a
+  separate file first, because `run-codex` overwrites `--output` at exit —
+  [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md).
 
 ### 3. Never the irreversible, and never work of your own devising
 
@@ -135,7 +147,10 @@ This one is a list on purpose, because the test is uncomputable at 3am and the l
 - no killing a session with unpushed work;
 - **no keystrokes at a pane with a dialog open.** A message beginning `1` arriving at a numbered
   menu is an approval. Answering a dialog is a different, narrower capability than typing prose, and
-  the two are not interchangeable;
+  the two are not interchangeable. **One dialog is pre-approved**, by Greg on 2026-09-10 after three
+  sessions lost hours to it: Claude Code's *"Allow reads outside the working directories?"*, raised
+  by the Read tool on a file outside the session's worktree — answer it with option 1 (*yes, keep
+  allowing*), and log that you did. Nothing else at a numbered menu is yours;
 - no `git` command that throws work away, anywhere, for the reasons in
   [AGENTS.md](../../AGENTS.md);
 - **and nothing dispatched that Greg did not queue.** Scheduled jobs, plan docs and the feedback

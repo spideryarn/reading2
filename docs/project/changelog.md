@@ -177,7 +177,7 @@ earns its place here because the failure mode is a confident sentence about a ch
 happen.
 
 ```
-npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
+npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
   --prompt-file <review-prompt> --output <review-answer>
 ```
 
@@ -358,6 +358,18 @@ bookkeeping. Everything intermediate goes under `logs/changelog/`, which is giti
    it re-reads the result afterwards.
 7. **Read the new lines yourself before committing them.** They are public claims about the product,
    written by a model, and this is the only step where a person sees them.
+
+**Write the lines even when nobody is about to deploy them.** Greg, 2026-09-10: *"it should write the
+changelog docs, even if you can't actually deploy them."* The file is committed to `dev` like any
+other work and ships with the next deploy; a run that cannot deploy is not a reason to skip the run.
+The one real blocker is step 1: if Vercel cannot be reached from where you are (this box has no
+`VERCEL_TOKEN`, so the MCP tool's OAuth is the way in, and the dashboard's Deploys tab is no help —
+it reads *this file*), the fallback is production's own build stamp: `/build.json` and `/api/health`
+name the sha that is serving now, token-free, and `main`'s first-parent history from the watermark
+to that sha is the set of candidate deploy points. Write **one** version for that range, from the
+watermark to the serving sha, named by the stamp's build time, and say in the line's `generated_by`
+and in the commit that it was enumerated from the build stamp rather than Vercel — a later run with
+Vercel access can split it. Never guess intermediate deploy points from git alone.
 
 **Not a step in [get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md), and not in
 `npm run deploy`.** The obvious objection — that the deploy has not happened yet — is a

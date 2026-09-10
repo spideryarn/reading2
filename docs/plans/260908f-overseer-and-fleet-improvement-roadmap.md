@@ -479,7 +479,7 @@ them.**
 | Launch protocol | partial — Overseer side only | `schedulerTick` (`overseer/scheduler.ts:196`) does append-`reserved`→fsync→spawn→append-`started`, with a durable lease and a `stuck` sweep. Not shared with any dashboard action; no admission step |
 | Schedule preview | shipped in CLI, proposed in browser | `describeStandingJobs` printed by `overseer status` (`scripts/overseer.ts:334-342`); definitions pinned by `authorisedHash` per tick. Nothing in the browser reads `scheduler` |
 | Scheduled dispatch | **built and wired, disarmed** | `gjdRemoteDispatch` (`overseer/dispatch.ts`) really spawns `gjd-remote new-claude … --no-attach -p -`; handed to the daemon only when `OVERSEER_JOBS_ENABLED === "1"` (`dispatch.ts:50`), and `daemon.ts:563` writes `scheduler.kind = "off"` otherwise — which is exactly the live checkpoint's `{kind:"off", why:"OVERSEER_JOBS_ENABLED is not \"1\"…", definitions: get-ready-to-deploy, feedback-sweep}`. **Arming this dispatches real agents; it is not a display flag.** And `infra/hetzner/systemd/overseer.service:37` neither sets the variable nor reads an env file with it in, so exporting it in a shell and starting the unit arms nothing — durable arming is a unit or drop-in, a reload, a restart, and the same change in provisioning |
-| Recovery inventory | proposed | No `RecoveryCandidate` anywhere |
+| Recovery inventory | proposed | No `RecoveryCandidate` anywhere. *(Superseded 2026-09-10: the daemon side has been built, in plan 260910e; see the stage below.)* |
 | Gradual recovery | proposed | Depends on the above |
 | Work reports and decisions | proposed | Event kinds are only `session-*` and `job-occurrence-*` (`scripts/overseer.ts:246-277`). The decision log that landed in `46a70cc5`/`77c7a502` is documentation, not events |
 | Bounded judgement | partial | The detector and its call budget run, but there is no typed *proposal* with a recipient and no routing to Sol or Fable |
@@ -1566,7 +1566,22 @@ missed day does not produce a storm; failed/answerless jobs are visibly failed. 
 
 ### Stage: Recovery inventory — show interrupted work without resuming it
 
-- [ ] Preserve recovery candidates from the pre-restart register and retained disappearance events
+**Status, 2026-09-10 (plan
+[260910e](260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md), worktree
+`recovery-inventory`, queue item `qi-z4q4rkg3`).** The daemon side is built and reviewed: Stage 1,
+the journal and the fold, and Stage 2, the view, the dispositions and the dismissal CLI. Two things
+the plan did not know:
+
+- **The first empty post-reboot snapshot closes sessions as `absent-from-snapshot`**, with a null
+  generation, not as `tmux-server-changed`. So the candidate rule keys on the world relation, and
+  not on the gone reason.
+- **tmux can get the same pid after a reboot.** So the daemon reads the host's boot id itself.
+
+**Stage 3, the page, is done as well**: `GET /api/recovery`, and the *Interrupted work* section below
+the Overseer panel. It was reviewed by Sol, narrow-checked, and settled by Fable. The acceptance is
+shown below. Nothing is live until the daemon and the dashboard are restarted on this code.
+
+- [x] Preserve recovery candidates from the pre-restart register and retained disappearance events
   when tmux generation changes. The current register removes gone sessions, so reading only
   `current.json` after the first empty post-reboot snapshot loses the very work recovery needs.
   Append a `recovery-candidate` event containing the final complete RegisterEntry and generation
@@ -1575,26 +1590,55 @@ missed day does not produce a storm; failed/answerless jobs are visibly failed. 
   appends cannot duplicate it. Fold recovery events into a daemon-owned recovery register/checkpoint
   and expose a read-only projection comparing that evidence with current verified inventory. Distinguish ended-before-reboot, interrupted, present-but-unmatched and unknown.
   Inventory absence during failed collection is not proof of interruption.
-- [ ] Persist explicit candidate disposition: unresolved, resumed (replacement execution), dismissed
+- [x] Persist explicit candidate disposition: unresolved, resumed (replacement execution), dismissed
   by operator, or superseded with evidence. Unresolved candidates never expire silently. Keep a
   bounded first page (for example 100) with older-count/pagination; reconstruct the index once at
   daemon startup, not on page requests. Cap accepted record sizes; if safe capacity is exceeded,
   preserve the journal and report degraded/overflow instead of dropping recovery evidence. Archive
   resolved entries only under a stated retention policy; v1 need not delete journal history.
-- [ ] For logs predating recovery events, perform a one-time offline/startup replay to recover last
+- [x] For logs predating recovery events, perform a one-time offline/startup replay to recover last
   complete entries where evidence suffices. Missing evidence becomes unknown, not a fabricated
   candidate. Test crash before candidate append, between candidate/removal, and before checkpoint.
-- [ ] Show transcript existence, recorded working directory/worktree, last observed activity,
+- [x] Show transcript existence, recorded working directory/worktree, last observed activity,
   latest available evidence and whether the harness supports resume. Paths come from the register,
   checked for existence; never synthesize a resume command from a display title.
-- [ ] Keep shells/manual jobs as manual recovery with an SSH path; do not pretend they have resumable
+- [x] Keep shells/manual jobs as manual recovery with an SSH path; do not pretend they have resumable
   agent state. Provide a bounded checklist/report first, no execute button.
-- [ ] Test a missing directory, transcript absent, valid Claude transcript, already-live matching
+- [x] Test a missing directory, transcript absent, valid Claude transcript, already-live matching
   execution, empty rebooted fleet, and old schema. Include the first accepted empty post-reboot snapshot and prove candidates survive register removal.
   No `worktree:check` or filesystem read may be treated as proof of work completion.
 
 **Acceptance:** after a simulated reboot Greg sees recoverable work and missing evidence, with zero
 sessions automatically started. This stage can land earlier alongside the status projection.
+
+**Shown, 2026-09-10.** `scripts/overseer-recovery-drill.ts` drives the real daemon into a disposable
+store:
+- boot B1, generation G1, with four sessions;
+- an empty snapshot after the reboot, under B2;
+- G2, with one session back under a new run.
+
+The page then shows:
+- *interrupted*: the session whose directory is **missing**, and the shell job (manual, "on <host>,
+  in <dir>");
+- *stopped before the world change*: the Claude that had already exited;
+- *resolved*: the session that came back, marked *resumed*, with both run tokens.
+
+There are no buttons, no links and no command text, and nothing was started. It was checked at
+1280 px and 400 px.
+
+**Status (2026-09-10, Overseer): landed on dev at 3dc65697, session `recovery-inventory`, plan
+[260910e](260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md); the stage is
+complete (the drill above is the acceptance).** The candidate record goes into the same write as, and
+immediately before, its tmux-session-gone, keyed by previous execution plus removing collection; the
+daemon reads the host boot id itself because tmux can reuse a pid after a reboot; records are
+classified against the trusted inventory and are all unknown after any refused, failed or held
+collection; resumed and superseded come only from a verified conversation; dismissal is a CLI through
+`~/.overseer/recovery-inbox/`. Found on the way: a daemon stopping on an exception could loop forever
+settling in-flight views while timers kept requesting them, holding the store lock so systemd could
+not replace it — fixed on both exit paths, now also clearing work-reports' drain timer. Two first
+review rounds timed out mid-fix; read-only findings-only rounds plus a separate fixer converged; one
+same-user file-system race was overruled through Fable with a narrowed, tested guarantee. Follow-ups
+queued as qi-59skznz8; live since the 16:49Z restarts.
 
 ### Stage: Gradual recovery — resume selected valuable work
 

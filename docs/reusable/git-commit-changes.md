@@ -67,6 +67,17 @@ made the index irrelevant, and it throws away whatever a peer had staged.
 Write the paths out literally on both commands. In zsh an unquoted `$FILES` is **not** word-split —
 `FILES="a.ts b.ts"; git add $FILES` passes one giant filename and git rejects it.
 
+## Deciding what to commit and what to throw away is yours
+
+Greg, 2026-09-10: get input from **Fable** (a subagent with `model: "fable"`) when you cannot tell
+whether a batch is finished work, an abandoned experiment, or somebody's scratch — and then decide.
+Do not put the question to Greg. The bar for deleting is higher than for skipping: a batch you skip
+is still there next run, a batch you delete is not, so delete only untracked files that nothing
+references, that no doc or plan says should be committed, and that Fable agrees are not work; say in
+the report what you deleted and why. A batch whose disposal really is a product call (data that a
+doc says is evidence, results a plan cites) is committed rather than deleted, and the doubt is
+recorded in the message.
+
 ## Say what you skipped
 
 Finish by listing the batches you left alone and why — still moving, tests red, couldn't tell what

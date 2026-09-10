@@ -167,6 +167,10 @@ export function describeEvent(event: OverseerEvent): string {
       return `${at}  intends    ${event.occurrenceId} ${event.ruleId} — ${event.what}`;
     case "rule-settled":
       return `${at}  rule       ${event.occurrenceId} ${event.ruleId} — ${describeRuleOutcome(event.outcome)}`;
+    case "recovery-candidate":
+      return `${at}  candidate  ${event.entry.name} (${event.entry.tmuxId}) — ${event.id}, generation ${event.disappearance.generation}${event.disappearance.bootChanged ? ", boot changed" : ""}${event.disappearance.watched ? "" : ", unwatched"}`;
+    case "recovery-disposition":
+      return `${at}  disposed   ${event.id} — ${event.disposition}`;
     default: {
       const never: never = event;
       throw new Error(String(never));

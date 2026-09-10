@@ -64,6 +64,7 @@ import type { ConversationReading } from "../fleet/wire.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { BehaviourHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
+import type { RecoveryEvent } from "./recovery.js";
 import type { RuleFinding, RuleId, RuleOutcome } from "./rules.js";
 
 /**
@@ -732,9 +733,11 @@ export type RuleEvent =
  * the job family, so a family whose runtime parser is missing appends
  * perfectly and is refused on replay, with nothing failing to compile. That is
  * why `isRuleKind` exists beside `isJobKind` rather than a comment asking
- * somebody to remember.
+ * somebody to remember — and `isRecoveryKind` beside both, for the fourth
+ * family: the recovery journal, whose two arms live in recovery.ts and are
+ * written by the daemon, never by `diff()`.
  */
-export type OverseerEvent = SessionEvent | JobEvent | RuleEvent;
+export type OverseerEvent = SessionEvent | JobEvent | RuleEvent | RecoveryEvent;
 
 /**
  * The row fields the register keeps, in the order an event lists them.

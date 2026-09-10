@@ -31,6 +31,16 @@ side, not just the file:
 
 **Make a proposal. Don't make changes yet.**
 
+**Who agrees the proposal.** Greg, 2026-09-10: resolve it yourself, with GPT Sol and/or Fable where
+the conflict is complex or risky, and do not put it to him *"unless there are real, major,
+unresolvable conflicts that involve product tradeoffs"*. So: write the proposal down (in the merge
+commit message, and in the plan if the work has one), have Sol or Fable check it when you are not
+sure, then resolve. An append-append, two independent additions to one function, or a union of
+imports never needs anyone else. Only a conflict where the two sides want different *product*
+behaviour and neither can be kept goes to Greg — and it goes as a question he can answer, per
+[AGENTS.md § Explain plainly and briefly](../../AGENTS.md). In the fleet, the Overseer settles
+technical conflicts on his behalf and logs them.
+
 ## Once the proposal is agreed
 
 Resolve by **editing the file** — deleting the `<<<<<<<` / `=======` / `>>>>>>>` markers as you go —

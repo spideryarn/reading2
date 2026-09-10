@@ -1091,6 +1091,10 @@ export function foldOccurrences(
       // record silently editing this one.
       case "rule-intended":
       case "rule-settled":
+      // AND THE RECOVERY JOURNAL'S. A candidate or a disposition is about a
+      // session that went away, never about a run of a job.
+      case "recovery-candidate":
+      case "recovery-disposition":
         break;
       default: {
         const never: never = event;
