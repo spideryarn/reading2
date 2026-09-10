@@ -63,6 +63,7 @@ import {
 import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
+import { listRevision, readSchedulePreviewFile, schedulePreviewLines } from "../tools/overseer/schedule-preview.js";
 import { describeNote, readNotes } from "../tools/overseer/notes.js";
 import { describeArtefactCheck, parseArtefactSpec, spellArtefactRef, type ArtefactRef } from "../tools/fleet/artefact-ref.js";
 import { decisionsRoot } from "../tools/overseer/decisions.js";
@@ -100,6 +101,7 @@ import {
   EVENTS_FILE,
   RECONCILE_FILE,
   describeRefusal,
+  readCheckpoint,
   storeRoot,
   type SessionRegister,
 } from "../tools/overseer/store.js";
@@ -630,6 +632,16 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
    * daemon anything to run?*
    */
   jobs: DaemonOptions["jobs"] | undefined;
+  /**
+   * **WHAT THE DAEMON PREVIEWS, under every arming** — plan 260910e § D6.
+   *
+   * The full list, standing jobs and rules, whatever the arming: a disarmed
+   * daemon has to be able to show what arming it would do, and a rules-only
+   * one what it is NOT running. The capabilities are the ones `jobs` above
+   * hands over, so the preview cannot claim a spawner the daemon lacks. It
+   * carries no spawner and no rule runner — the daemon cannot dispatch from it.
+   */
+  preview: NonNullable<DaemonOptions["preview"]>;
 } {
   const root = repoRoot();
   const standing = standingJobs(root);
@@ -664,6 +676,17 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
         : `${sessionDetail}; rules: ${ruleDetail}`,
     problems,
     definitions,
+    // THE PREVIEW, UNDER EVERY ARMING — including off, where `jobs` below is
+    // absent and this is the only list the daemon holds. `held` is the same
+    // value the `jobs` fragment is built from, so the two cannot disagree.
+    preview: {
+      definitions,
+      readDocument,
+      capabilities: held,
+      listRevision: listRevision(definitions),
+      arming: armedAt,
+      launchSeparationMs: LAUNCH_SEPARATION_MS,
+    },
     jobs:
       arming === "all"
         ? {
@@ -1582,9 +1605,20 @@ export async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
 
   switch (parsed.command) {
-    case "status":
+    case "status": {
       console.log(statusLines(root, Date.now(), await readOverseerClaim(fleetUrl(process.env))).join("\n"));
+      // THE SCHEDULE BLOCK, after everything else: what the running daemon
+      // would run, read from the file it writes each checkpoint — and the list
+      // THIS checkout builds, so the block can say whether a restart would load
+      // a different one (plan 260910e § D6). Built the way `schedulerWiring`
+      // builds it, so an unchanged checkout reads as the same list.
+      const checkout = repoRoot();
+      const builds = listRevision([...standingJobs(checkout).jobs, ...ruleJobs(checkout).jobs]);
+      const checkpoint = readCheckpoint(root);
+      const runningInstanceId = checkpoint.kind === "checkpoint" ? checkpoint.checkpoint.heartbeat.instanceId : null;
+      console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds, runningInstanceId }, Date.now())].join("\n"));
       return 0;
+    }
     case "tick":
       console.log((await tickLines({ root, baseUrl: fleetUrl(process.env) })).join("\n"));
       // A degraded screen is still the tick doing its job: it tells the caller
@@ -1759,6 +1793,9 @@ export async function runParsed(parsed: Parsed): Promise<number> {
         // genuinely are: absent is what stops `daemon.ts` building a timer.
         ...(wiring.jobs === undefined ? {} : { jobs: wiring.jobs }),
         schedulerDetail: wiring.detail,
+        // ALWAYS, whatever the arming: the list the daemon previews into
+        // `schedule.json`. Nothing it can dispatch from — see `schedulerWiring`.
+        preview: wiring.preview,
       });
       /* The history fd, released when the daemon stops. `runOverseer` has
          already awaited any pass in flight by this point — it does that so a
