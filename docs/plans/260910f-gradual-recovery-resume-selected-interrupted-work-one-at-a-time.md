@@ -724,8 +724,17 @@ started.**
   - the daemon's composition of all that;
   - the `--resume` drill.
 
-  It needs `launch-protocol`'s Stages 1, 1b and 2 on `dev`. Until 3b exists, **the resume port is
-  `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
+  **`launch-protocol`'s Stages 1, 1b, 2 and 2b reached `dev` at `b44d69a2`** (2026-09-10, reported
+  by that session). That covers `resumeOccurrence`, `inspect` and `inFlight`, `usesTmux`, the
+  reservation result on `failed-before-launch`, and `admissionPolicy("recovery-resume")`.
+  **`launch-protocol` also stopped for the reprioritisation.** Its own Stage 3 is not built. See
+  its plan's section "Stage 3, not built — the handover".
+
+  **Nothing in `daemon.ts` composes the protocol yet.** So Stage 3b would compose it itself (the
+  brief's item 5), not reuse a composition. The `tmux-resume` launcher kind and
+  `--resume-conversation` stay this plan's to add, on top.
+
+  Until 3b exists, **the resume port is `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
   launches. The page says so ("Resume is not available from this dashboard yet"), and gives manual
   instructions.
 - **Still a question for Greg:** the capability-marker default. Stage 3a puts
