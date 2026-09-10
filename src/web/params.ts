@@ -306,7 +306,7 @@ import { isMode } from "../modes.js";
 export { isMode };
 /* Imported as well as re-exported: `export … from` creates no local binding, and
    `modeParam` below uses all three. */
-import { DEFAULT_MODE, MODES, type Mode } from "../modes.js";
+import { DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
 export { DEFAULT_MODE, MODES, type Mode };
 
 /* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
@@ -336,8 +336,11 @@ export const modeParam = createParser<Mode>({
      same query string (`readMode` in src/vercel.ts), and this file used to
      answer it independently — so "one place decides what a mode is" was a claim
      rather than a fact, and no test paired the two on an invalid input. GPT Sol,
-     2026-08-30. */
-  parse: (v) => (isMode(v) ? v : null),
+     2026-08-30.
+
+     `modeFromParam` since 2026-09-10, which is `isMode` plus the retired names —
+     `?mode=outline` opens Structure (src/modes.ts § `RETIRED_MODES`). */
+  parse: (v) => modeFromParam(v),
   serialize: (v) => v,
 })
   .withDefault(DEFAULT_MODE)

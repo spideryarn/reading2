@@ -119,8 +119,8 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     case "search":
       return slots.search;
     /* The ones with nothing to mark. `plain` and `hierarchy` have no band at
-       all; `chat`, `glossary`, `summary`, `diagram`, `remember`, `outline` and
-       `debate` have one that publishes no passages — verified rather than
+       all; `chat`, `glossary`, `summary`, `diagram`, `remember`, `structure`
+       and `debate` have one that publishes no passages — verified rather than
        assumed for chat and remember when they moved
        (docs/plans/260906c… § Stage 2), and `glossary`'s selection is a
        different currency (`termSelections`) that never reaches this state. */
@@ -131,11 +131,10 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     case "summary":
     case "diagram":
     case "remember":
-    case "outline":
-    /* Structure marks nothing in the prose, and it is beside Outline here for
-       the same reason: it is navigation over the tree, so every row of it is
-       already a door into a passage rather than a claim about one. A mode that
-       lit its own rows' blocks in the prose would mark the whole article. */
+    /* Structure marks nothing in the prose, in either face: it is navigation
+       over the tree, so every row of it is already a door into a passage rather
+       than a claim about one. A mode that lit its own rows' blocks in the prose
+       would mark the whole article. */
     case "structure":
     case "debate":
       return NOTHING;

@@ -236,7 +236,6 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
 export const MODE_LABEL: Record<Mode, string> = {
   plain: "Plain",
   hierarchy: "Hierarchy",
-  outline: "Outline",
   summary: "Summary",
   glossary: "Glossary",
   ideas: "Ideas",

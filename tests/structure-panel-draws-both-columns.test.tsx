@@ -20,10 +20,11 @@
  *
  * ## What jsdom can and cannot prove here
  *
- * jsdom does no layout: every `scrollHeight` and `clientHeight` is 0, and no
- * container query is ever evaluated. So this file says nothing about **fit** —
- * whether two 193px tracks read, whether the columns stack below 364px, whether
- * anything overflows. Those are browser questions and are stage 3's
+ * jsdom does no layout: every `scrollHeight` and `clientHeight` is 0. So this
+ * file says nothing about **fit** — whether two 193px tracks read, whether
+ * anything overflows. (Which face a band gets — these columns, or the list
+ * on a band too narrow for them — is tests/structure-mode-faces.test.tsx.) Fit
+ * questions are browser questions, and stage 3's
  * (docs/project/browser-testing.md). What is fully testable here is what the
  * panel *renders*: which rows land in which column, and that the mark, the
  * bracket header and the section list are all present together.

@@ -1,6 +1,7 @@
 /**
- * Outline mode's projection: the whole document as one nested list, expanded
- * around where the reader is standing.
+ * Structure mode's list-face projection: the whole document as one nested list,
+ * expanded around where the reader is standing. It keeps Outline's names after
+ * that mode became this face on 2026-09-10.
  *
  * **One function decides what is drawn AND which row is current.** That is the
  * whole design constraint here, and it comes from a bug this repo has already

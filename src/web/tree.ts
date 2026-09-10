@@ -285,8 +285,8 @@ function columnStride(depth: number, leafDepth: number): string {
    One sentence per part on where the argument stands there, from stage 5b
    (src/arc.ts).
 
-   **This was Hierarchy's L0 column until 2026-09-05, and now it is Outline
-   mode's rung 4** (OutlinePanel.tsx) — Greg took the column out of Hierarchy
+   **This was Hierarchy's L0 column until 2026-09-05, and now it is Structure's
+   list face at rung 4** (OutlinePanel.tsx) — Greg took the column out of Hierarchy
    with the rest of the top-bar clutter, and the artefact stayed exactly where
    it was: docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions
    5, and 260903b decision 7, which says Argument mode v1 will be this and
@@ -326,7 +326,8 @@ export interface ArcCell {
  *
  * Built from the L1 column's own cells, so the arc and the parts share
  * boundaries by construction rather than by two walks of the tree agreeing —
- * which is what lets Outline mode hang each sentence off the right part row.
+ * which is what lets Structure's list face hang each sentence off the right
+ * part row.
  *
  * **Every part gets an entry**, even one the arc has no sentence for. That was
  * a hard requirement while this drew a table column, where a missing `<td>`

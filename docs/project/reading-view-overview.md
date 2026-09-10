@@ -70,19 +70,18 @@ mostly unfinished work, but **Referee is behind it for its audience rather than 
 four of its sub-modes are built, and it is for somebody asked to peer-review the piece, which most
 readers never are.
 
-- **[260828aw-outline-mode.md](../plans/260828aw-outline-mode.md)** — the whole document as one
-  nested list, deep where you are reading and shallow everywhere else. The plan is the reference:
-  there is no `outline.md` yet, and it shares the tree with
-  [granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own.
-- **Structure** — the same tree again, as two linked columns: every part on the left, the sections of
-  the one you are in on the right. It is **an instrument rather than an addition**, added as a third
-  structural mode on 2026-09-06 and hidden behind the switch so that Hierarchy, Outline and Structure
-  can be flipped between on one article and compared. There is no `structure.md` yet; the plan is the
-  reference:
-  [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md), and
-  its ancestor [260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md) is the
-  design — whose *conclusion*, merging Hierarchy and Outline into one, is deferred pending exactly
-  that comparison.
+- **Structure** — the article's tree with two faces, chosen by the band's width. Where the band is
+  wide enough (389px border-box) it is two linked columns: every part on the left, the sections of
+  the one you are in on the right. Where it is not, it is a nested list, deep where you are reading
+  and shallow everywhere else. It shares the tree with [granularity-zoom.md](granularity-zoom.md)
+  rather than having a structure of its own, and there is no `structure.md` yet; the plans are the
+  reference. [260910g](../plans/260910g-structure-mode-subsumes-outline.md) is the two faces;
+  [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md) is the
+  two columns, built behind the switch on 2026-09-06 so the three structural modes could be compared;
+  and [260828aw](../plans/260828aw-outline-mode.md) is the nested list, which was **Outline mode**
+  until 2026-09-10. That comparison ended with Outline retired, its list kept as Structure's narrow
+  face, Structure out from behind the switch in Outline's place in the bar, and Hierarchy unchanged.
+  `?mode=outline` still opens Structure.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that

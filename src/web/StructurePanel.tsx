@@ -29,11 +29,16 @@
  * docs/project/granularity-zoom.md state, and a third view of one artefact is
  * not a divergence.
  *
- * **Not a replacement for either of them.** Structure was added as a third mode
- * on 2026-09-06 so that Greg can flip between three views of one tree and find
- * out which is better; Hierarchy and Outline both stay, and it is behind the
- * experimental switch so that an ordinary reader's bar is unchanged while that
- * comparison runs.
+ * **Only one of Structure's two faces.** Structure was added as a third mode on
+ * 2026-09-06 so that Greg could flip between three views of one tree; on
+ * 2026-09-10 it kept these columns where the band has room for them and took
+ * Outline's nested list (`OutlinePanel`) where it does not, and Outline stopped
+ * being a mode. So this panel is only mounted on a band wide enough for two
+ * columns (StructureMode.tsx § `structureFace`), and always draws two tracks —
+ * the stacked layout it used to fall back to is what Greg called "very
+ * confusing".
+ * src/web/modes/structure/StructureMode.tsx;
+ * docs/plans/260910g-structure-mode-subsumes-outline.md.
  *
  * **No `.band-head`.** The documented default since 2026-09-05: the Dock at the
  * foot of the page is already saying which mode this is
@@ -318,6 +323,7 @@ export function StructurePanel({
   focusRow,
   allowParagraphs,
   onJump,
+  surfaceRef,
 }: {
   root: SummaryNode | null;
   /**
@@ -333,6 +339,11 @@ export function StructurePanel({
   focusRow: number;
   allowParagraphs: boolean;
   onJump(id: BlockId): void;
+  /**
+   * Handed the band's `<aside>`, so `StructureBand` can measure the band's width
+   * and choose the face. A stable function (a state setter).
+   */
+  surfaceRef?: (el: HTMLElement | null) => void;
 }) {
   /**
    * **Projected once, unwindowed.** The measuring copies below and the visible
@@ -413,23 +424,15 @@ export function StructurePanel({
       const hB = heights("b");
 
       /**
-       * **Side by side the columns each get the whole height; stacked they have
-       * to share it**, and the first draft handed both of them the full height
-       * in both layouts. Side by side that is right. Stacked it is a
-       * double-count: column A drew all twenty-two parts with no counters at all
-       * and the band overflowed by 208–379px, slicing column B in half at the
-       * bottom edge. Measured in Chrome at 700–900px wide, 2026-09-07.
+       * **Always side by side, so each column gets the whole height.** Until
+       * 2026-09-10 a narrow band stacked the two columns and this measured a
+       * shared height for them; a narrow band now gets the list face instead
+       * (StructureMode.tsx § `structureFace`), so this panel is only
+       * mounted where there is room for two tracks, and the stacked branch —
+       * with its own story of a 208–379px overflow, in this file's history —
+       * went with the layout.
        *
-       * Which layout it is comes from the **computed grid**, not from a width
-       * compared against the 364px constant. There is one threshold and it is
-       * the container query's; asking the element what it actually did keeps
-       * this from becoming a second copy of that rule, free to drift.
-       */
-      const tracks = getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length;
-      const rowGap = Number.parseFloat(getComputedStyle(grid).rowGap) || 0;
-
-      /**
-       * **Side by side, ask each list where it actually starts.**
+       * **Ask each list where it actually starts.**
        *
        * `available − headH` was arithmetic, and arithmetic left things out: the
        * header's own bottom margin, and any sub-pixel rounding on a 181.5px
@@ -443,8 +446,7 @@ export function StructurePanel({
        * A list's top is not circular even though its contents are windowed:
        * column A starts at the top of its column, and column B starts under a
        * header whose height depends on the part's title, not on how many rows
-       * were kept. Stacked is the exception and keeps the arithmetic below,
-       * because there column B's top *does* move with column A's row count.
+       * were kept.
        *
        * `:scope > .struct-side` deliberately excludes the measuring copies,
        * which are a direct child of the grid but are not a `.struct-side`.
@@ -454,18 +456,8 @@ export function StructurePanel({
       const roomBelow = (el: HTMLElement | undefined): number | null =>
         el ? Math.max(0, Math.floor(bottom - el.getBoundingClientRect().top)) : null;
 
-      let availA = roomBelow(visible[0]) ?? available;
-      let availB = roomBelow(visible[1]) ?? Math.max(0, available - headH);
-      if (tracks < 2) {
-        const shared = Math.max(0, available - headH - rowGap);
-        /* Column B takes what it needs up to half, and column A takes the rest —
-           rather than a flat half each, which would window a three-section column
-           B down while column A had rows it could not draw. Column B is the
-           shorter of the two on nearly every article. */
-        const naturalB = hB.reduce((a, b) => a + b, 0);
-        availB = Math.min(naturalB, Math.floor(shared / 2));
-        availA = shared - availB;
-      }
+      const availA = roomBelow(visible[0]) ?? available;
+      const availB = roomBelow(visible[1]) ?? Math.max(0, available - headH);
 
       const next: Capacity = {
         a: capacityFrom(hA, proj.columnA.rows, availA, gapFor("a"), counterHeight("a")),
@@ -490,7 +482,7 @@ export function StructurePanel({
   const nothing = proj.columnA.rows.length === 0;
 
   return (
-    <ModeSurface label="Structure" feature="struct">
+    <ModeSurface label="Structure" feature="struct" {...(surfaceRef ? { ref: surfaceRef } : {})}>
       {nothing ? (
         /* **A sentence, not an error.** A piece with no parts is a real article
            — a short one the hierarchy stage put under a single root — so this

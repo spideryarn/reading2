@@ -1489,8 +1489,8 @@ export interface Article {
   tree: Tree;
   /**
    * One sentence per part on where the argument stands there (src/arc.ts,
-   * stage 5b). Absent until that step has run, and then Outline mode simply
-   * omits its rung 4 — it drew Hierarchy's L0 column too until 2026-09-05.
+   * stage 5b). Absent until that step has run, and then Structure's list face
+   * simply omits its rung 4 — it drew Hierarchy's L0 column too until 2026-09-05.
    */
   arc?: Arc;
   /**

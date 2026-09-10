@@ -243,7 +243,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   hierarchy: {
     description: "The article's own shape, one column per level of detail",
-    how: "The columns are the tree the pipeline wrote before you opened the article, so there is nothing to generate and nothing to wait for. It is the same tree Outline and Summary read — three views of one structure rather than three passes over the piece.",
+    how: "The columns are the tree the pipeline wrote before you opened the article, so there is nothing to generate and nothing to wait for. It is the same tree Structure and Summary read — three views of one structure rather than three passes over the piece.",
     /* `toc` was this mode's name until 2026-08-29 and is still what most people
        call the thing, so it is the alias that will be typed most. It is also
        the pipeline step that builds the tree (src/step-order.ts), which is a
@@ -351,13 +351,6 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["recall"],
     experimental: true,
   },
-  outline: {
-    description:
-      "The whole document in one list, with more detail on the part you are reading and less on the rest",
-    how: "The same already-built tree as Hierarchy and Summary, so there is nothing to generate. What moves is the detail rather than the page: it opens up around the part you are reading and shrinks everywhere else, so the whole document stays on one screen.",
-    aliases: ["tree", "map"],
-    experimental: false,
-  },
   quotes: {
     description: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
     how: "The model only locates a line; the words you read are sliced out of the article itself, so nothing here is the model's typing. What that proves is that the sentence is in the piece, not who wrote it — a quotation the article left unmarked cannot be told from its own prose.",
@@ -396,29 +389,34 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   structure: {
-    description: "The document's shape in two linked columns — every part, and the sections of the one you are in",
+    /* **True of both faces**, since 2026-09-10: the two columns and the nested
+       list each show every part and the sections of the one the reader is in.
+       It said "in two linked columns" until then, which a narrow band's list
+       would have contradicted. */
+    description: "The document's shape — every part, and the sections of the one you are in",
     /* Checked against the code rather than written from the plan, which is the
        failure this field has already had twice (docs/project/new-mode.md § The
        card on the button). "Nothing to generate" is true: the tree arrives in
        the page's own payload and this mode reaches no artefact and makes no
-       request. The second sentence is the reading order, which is the one thing
-       a press does not tell you and the whole of how the two columns relate —
-       and it is what a reader would otherwise have to infer from watching the
-       right-hand column change at a boundary. */
-    how: "The same already-built tree as Hierarchy and Outline, so there is nothing to generate. Read it left to right: the right-hand column is always the inside of the row marked in the left, and it re-fills as you cross into a new part.",
-    /* One nickname, and it is the shape rather than the subject. `tree` and
-       `map` are Outline's, `contents` and `toc` are Hierarchy's, and taking any
-       of them would rank the wrong one of three adjacent structural modes first
-       for somebody who typed the right thing — the exact cost this table says
-       a loose alias has. `columns` is the only word that is about *this* one. */
-    aliases: ["columns"],
-    /* **Behind the switch because it is an instrument, not because it is
-       unfinished** — the second row here that is about what the mode is for
-       rather than about its readiness, Referee being the first. Greg asked for
-       a third structural mode so that he could flip between three views of one
-       tree and find out which is better; hiding it is what keeps an ordinary
-       reader's bar unchanged while that comparison runs.
-       docs/project/experimental-features.md owns that argument. */
-    experimental: true,
+       request. The rest is the one thing a press does not tell you — that what
+       you get depends on the room, and how to read each — and the reading order
+       of the columns is what a reader would otherwise have to infer from
+       watching the right-hand one change at a boundary.
+       StructureMode.tsx § `structureFace` is the switch. */
+    how: "The same already-built tree as Hierarchy and Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
+    /* `columns` is about the wide face. `tree`, `map` and `outline` came from
+       Outline on 2026-09-10 with its list: `outline` so the retired mode's own
+       name still finds the mode that holds it, the other two because they were
+       Outline's nicknames and Outline is now this. None of them is Hierarchy's
+       (`contents`, `toc`), which is the loose alias this table refuses. */
+    aliases: ["columns", "outline", "tree", "map"],
+    /* **Out of the switch since 2026-09-10.** It was behind it as an
+       instrument — a third structural view for Greg to compare against the
+       other two, kept off an ordinary reader's bar while the comparison ran.
+       The comparison answered: Structure took Outline's place, and Outline was
+       on every reader's bar, so keeping this hidden would have taken the list
+       away from everybody without the switch.
+       docs/plans/260910g-structure-mode-subsumes-outline.md. */
+    experimental: false,
   },
 };

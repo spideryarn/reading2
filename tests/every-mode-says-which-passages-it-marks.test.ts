@@ -102,7 +102,6 @@ const SILENT: Mode[] = [
   "summary",
   "diagram",
   "remember",
-  "outline",
   "structure",
   "debate",
 ];

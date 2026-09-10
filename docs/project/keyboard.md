@@ -100,7 +100,8 @@ L0 column to select, so ← stops at Parts. The argument column had been a rung 
 the only thing that made "left all the way" anything but a dead end — and both the column and the
 borrowing went with it
 ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Decisions 5). **The arc
-itself is still generated and still on screen**, as Outline mode's rung 4.
+itself is still generated and still on screen**, as a rung of Structure's nested-list face (Outline
+mode's rung 4 until 2026-09-10, when that list became Structure's narrow face).
 
 The right-hand end is untouched: the prose shares its rung with the leaf column beside it, since both
 mean one paragraph, and making them two rungs would cost a press to cross a distinction that does not
