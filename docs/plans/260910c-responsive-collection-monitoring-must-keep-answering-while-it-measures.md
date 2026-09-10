@@ -323,6 +323,29 @@ processes writing one file is a merge conflict nobody asked for.
 
 ## Stage 4 — The title lookup
 
+**Status (2026-09-10): dropped, on the Overseer's decision, with the measurement as the reason.**
+The boxes below are left unticked on purpose: they describe a design that was worked out and then
+not built.
+
+**Measured**: the title grep inside `buildSessionScript` costs **236–251 ms per collection** — 25
+most recently written transcripts, 85 MB, a warm page cache, which is the realistic case for a
+once-a-minute job — inside an inventory that takes **4.4–5.1 s** and already runs in an awaited
+async child. So it costs about 5% of the inventory's freshness and **nothing** of the server's
+responsiveness. The "10–12 s, the dominant cost of a whole collection" in `gjd-remote-tmux.ts`'s
+comment was `gjd-remote ls` measured through `ssh`, not the dashboard; that comment is corrected in
+the same commit as this paragraph, because it is what would send the next reader down this path.
+
+**Against it:** the correct design is the inode-keyed incremental cache below — a day of careful work
+with several ways to show a title wrongly or stale, a bug nobody would notice — for about a quarter of
+a second of freshness a minute. A cheap version does not exist: a bounded tail is provably wrong,
+because Claude titles a conversation early.
+
+**Revisit when**, in the Overseer's words as a number: the title grep across live transcripts
+**exceeds about two seconds per pass** (roughly eight times today's 85 MB), **or it ever moves onto
+the request thread**. Then build the cache as specified below. The Overseer logged this as its own
+engineering call — no user-visible change, measured rather than guessed — so it is not a question for
+Greg.
+
 Demoted from "the dominant cost" by Stage 0: the inventory takes **5.0 s and is already async**, so
 the title grep costs *freshness* and no responsiveness at all. The 10–12 s in the source comment was
 `gjd-remote ls` measured through `ssh`; this is the same script run locally by `bash`.
