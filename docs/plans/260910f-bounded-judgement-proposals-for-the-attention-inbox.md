@@ -336,7 +336,24 @@ checked by breaking it three ways — each break went red on exactly its test). 
 known environment files (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-decisions-route`,
 `fleet-reports-route`), so green bar the environment; log
 `logs/tmux-jobs/bj-s2-fullsuite-1935-617892.log`. The Sol stage review waited out the Overseer's
-pause for the five-hour window (19:1x–19:53Z) and runs after the next merge of `dev`.
+pause for the five-hour window (19:1x–19:53Z).
+
+**Sol's Stage 2 review** ([findings](260910f-bounded-judgement-proposals-for-the-attention-inbox-stage2-review-sol-findings.md)),
+read-only, of `261b4759..652b5a3d`: **accept, with four P2 follow-ups; no P0 or P1.** It checked and
+found holding: default off means off (version 1's prompt byte-pinned, every card `off`); the strict
+recipient route with no promotion to Greg; producer authority over `by` and `reach`; both live
+compositions use `LIVE_SEAMS` and pass one prompt version to classifier and pass alike; `reach` never
+cached; **nothing is sent** — every proposal reference ends in parsing, publication, the CLI or the
+card; the parsers compatible both ways; and the worst-case reservation (25,291 prompt tokens for
+version 2 at the tail cap, about $0.0063, inside the $0.01 reserved). The four, all being fixed red
+first in one pass:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F15 | the three wire parsers accept an `asks` that is not in the same item's excerpt, and the card labels it *"the sentence this proposal is about"* | fixing — a cross-field check in each parser, one bad item fails the list |
+| F16 | any `by.model` string is accepted, so a stored `"Greg"` renders *"Proposal by Greg via the Overseer"* | fixing — fixed words keep the model identifier out of the speaker's slot |
+| F17 | `asks` has no length bound: one character, or the whole 4,000-character tail, both accepted and drawn in full on a phone | fixing — a documented `MAX_ASKS_CHARS` and a minimum, at the model parse and in all three parsers. **Graded P2 by Sol; reachable from real model output, so treated as the most important of the four** |
+| F18 | a cached proposal forgets which model made it, so a model change re-attributes old judgements with no call | fixing — the model recorded beside the cached verdict, used for `by` and in the proposal id |
 
 ### Stage 3 — the evaluation, and the answer
 
@@ -404,7 +421,13 @@ with F7–F8 (P2). Answer: [plan-review-sol](260910f-bounded-judgement-proposals
 `2eccd2a6`; the narrow check and Fable, above). The Stage 3 evaluation machinery landed early, at
 `4380ff57`. `origin/dev` merged at `261b4759` — one conflict, in `store.ts`'s type import, where both
 sides had added one name; resolved as the union, and checked with `git diff MERGE_HEAD` for any of
-the other side's work going missing (none). **Stage 2 is being implemented.**
+the other side's work going missing (none). Stage 2 committed at `652b5a3d`; `dev` merged again
+at `1984b59a` (clean). Stage 3's docs: the store table in `overseer-direction.md` (`f54a1161`), and
+**gate 4's status block in `overseer.md`, applied at `1eeb59f8` as the Overseer approved it** — a
+status edit, not a rule change, with the ceiling numbers replaced by a pointer here. The real
+evaluation is blocked on the gateway key (above). **Next:** Sol's Stage 2 review, then a merge of
+the 14 commits `dev` gained since (gradual recovery; they touch `wire.ts` and `store.ts` far from this
+work), one full suite on the final commit, and the push.
 
 **The first full-suite run is not evidence either way**, and is recorded so nobody quotes it: it ran
 on `f03d5571` while the F11 fixer and then the merge changed the tree underneath it. Six red: the four
