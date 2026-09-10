@@ -33,7 +33,7 @@
  *     permission-denied  permissionDenials > 0
  *     missing-answer     exit 0 without a usable answer; verdict cause no-result or empty-answer
  *     failed             everything else that is not the row below
- *     succeeded          exit 0 AND verdict ok AND a usable answer AND 0 denials AND no usage limit
+ *     succeeded          exit 0 AND verdict ok AND a usable projected answer AND exactly 0 denials AND no usage limit
  *
  * **A permission denial with a usable answer is still `permission-denied`.** An
  * unattended job that could not do something it tried is the case somebody must
@@ -71,8 +71,9 @@
  *  - `usageLimit` null, or `permissionDenials` null, on an otherwise good run is
  *    `failed` for the same reason, naming the field that was not said.
  *
- * So a row can only be `succeeded` from the `completed` arm, and from an exit
- * record that said all five things. **Nothing maps `launching`, a live tmux
+ * So a row can only be `succeeded` from the `completed` arm, from an exit
+ * record that said all five things, and when the answer projected beside it is
+ * present, usable and non-empty. **Nothing maps `launching`, a live tmux
  * session or a started launcher to `succeeded`**, and the tests loop over all
  * eight states to hold that.
  *
@@ -222,7 +223,7 @@ export function classifyOccurrence(o: ObservedLaunch): ScheduledResult {
         case "rebooted":
           return ended("interrupted", `the box rebooted while attempt ${state.attempt} ran, so it never wrote an exit record`);
         case "exit-record": {
-          const [kind, why] = exitLadder(evidence);
+          const [kind, why] = exitLadder(evidence, o.answer);
           return ended(kind, why);
         }
         default: {
@@ -261,7 +262,7 @@ function notEnded(state: Exclude<ObservedState, { kind: "completed" | "failed-be
 }
 
 /** One exit record, down the ending rows in table order. The first whose evidence is present wins. */
-function exitLadder(e: ObservedExitRecord): [ScheduledResultKind, string] {
+function exitLadder(e: ObservedExitRecord, answer: ScheduledAnswer): [ScheduledResultKind, string] {
   const cause = e.verdict?.kind === "failed" ? e.verdict.cause : null;
   const wrapperWhy = e.verdict?.kind === "failed" ? e.verdict.why : null;
   const ending = describeEnding(e.ending);
@@ -281,8 +282,12 @@ function exitLadder(e: ObservedExitRecord): [ScheduledResultKind, string] {
   }
 
   const code = e.ending.code;
-  if (code === 0 && e.answerUsable !== true) {
-    return ["missing-answer", e.answerUsable === false ? "it exited 0 but its answer was empty or unusable" : "it exited 0 and the exit record says nothing of an answer"];
+  const projectedAnswerUsable = answer.kind === "present" && answer.usable && answer.bytes > 0;
+  if (code === 0 && (e.answerUsable !== true || !projectedAnswerUsable)) {
+    if (e.answerUsable !== true) {
+      return ["missing-answer", e.answerUsable === false ? "it exited 0 but its answer was empty or unusable" : "it exited 0 and the exit record says nothing of an answer"];
+    }
+    return ["missing-answer", "it exited 0 and the exit record calls its answer usable, but the projected answer is absent, unusable or empty"];
   }
   if (cause === "no-result" || cause === "empty-answer") return ["missing-answer", `the wrapper says there was no answer (${cause}, ${ending}): ${wrapperWhy}`];
 
@@ -294,6 +299,7 @@ function exitLadder(e: ObservedExitRecord): [ScheduledResultKind, string] {
   if (e.verdict === null) return ["failed", "it exited 0 with a usable answer, but the exit record gives no wrapper verdict, so success cannot be claimed"];
   if (e.usageLimit === null) return ["failed", "it exited 0 with a usable answer, but the exit record does not say whether a usage limit was hit"];
   if (e.permissionDenials === null) return ["failed", "it exited 0 with a usable answer, but the exit record does not count permission denials"];
+  if (e.permissionDenials !== 0) return ["failed", `it exited 0 with a usable answer, but the exit record's permission denial count (${e.permissionDenials}) is not zero`];
 
   return ["succeeded", "it exited 0, the wrapper's verdict was ok, its answer is usable, and there were no permission denials and no usage limit"];
 }

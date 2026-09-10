@@ -24,7 +24,9 @@
  *   readable occurrence with a present answer. An id it does not list — another
  *   launch origin's — is a 404 whatever is on disk; so is an occurrence whose
  *   row is unreadable, and so is every id while the file is absent or
- *   unreadable.
+ *   unreadable. A genuinely absent file is the same 404; a file that exists but
+ *   cannot be read or is too large is 503, because failing to look is not
+ *   finding nothing.
  * - **The path is `<store>/launches/o/<id>/a<attempt>/answer.md`**, the launch
  *   protocol's fixed layout, built ONLY from the validated id and the
  *   projection's `answer.attempt` (1 to 999). Never from a path in the file —
@@ -204,16 +206,20 @@ type PresentAnswer = Extract<ScheduledAnswer, { kind: "present" }>;
  * shows. Read through the list's own bounded reader and the one parser, so the
  * route serves an answer only for a row the page could have drawn.
  */
-function listedAnswer(storeDir: string, launchOccurrenceId: string): { kind: "listed"; answer: PresentAnswer } | { kind: "absent"; why: string } {
+function listedAnswer(
+  storeDir: string,
+  launchOccurrenceId: string,
+): { kind: "listed"; answer: PresentAnswer } | { kind: "absent"; why: string } | { kind: "unreadable"; why: string } {
   const notShown = (why: string) => ({ kind: "absent", why: `${launchOccurrenceId} is not a scheduled occurrence with an answer that this page shows: ${why}` }) as const;
+  const couldNotLook = (why: string) => ({ kind: "unreadable", why: `the answer authority in ${OCCURRENCES_FILE} could not be read: ${why}` }) as const;
   const read = readOccurrencesFile(storeDir);
   switch (read.kind) {
     case "absent":
       return notShown(`there is no ${OCCURRENCES_FILE} in the Overseer store`);
     case "too-large":
-      return notShown(`${OCCURRENCES_FILE} is ${read.bytes} bytes, more than the ${MAX_OCCURRENCES_FILE_BYTES} this route will read`);
+      return couldNotLook(`${OCCURRENCES_FILE} is ${read.bytes} bytes, more than the ${MAX_OCCURRENCES_FILE_BYTES} this route will read`);
     case "unreadable":
-      return notShown(read.why);
+      return couldNotLook(read.why);
     case "read":
       break;
     default: {
@@ -222,7 +228,9 @@ function listedAnswer(storeDir: string, launchOccurrenceId: string): { kind: "li
     }
   }
   const parsed = parseOccurrencesFile(read.json);
-  if (parsed.kind !== "parsed") return notShown(parsed.why);
+  if (parsed.kind !== "parsed") return couldNotLook(parsed.why);
+  const rawCount = rawOccurrenceIdCount(read.json, launchOccurrenceId);
+  if (rawCount > 1) return notShown(`${OCCURRENCES_FILE} lists it ${rawCount} times, so which answer was judged cannot be told`);
   const rows = parsed.file.jobs
     .flatMap((job) => (job.kind === "job" ? job.job.occurrences : []))
     .filter((row) => (row.kind === "occurrence" ? row.occurrence.launchOccurrenceId : row.launchOccurrenceId) === launchOccurrenceId);
@@ -232,6 +240,25 @@ function listedAnswer(storeDir: string, launchOccurrenceId: string): { kind: "li
   if (row.kind === "unreadable") return notShown(`its row in ${OCCURRENCES_FILE} is unreadable (${row.why})`);
   if (row.occurrence.answer.kind === "absent") return notShown(`${OCCURRENCES_FILE} records no answer for it`);
   return { kind: "listed", answer: row.occurrence.answer };
+}
+
+/** Count ids at the file's structural job/occurrence seam, including rows hidden by an unreadable job field. */
+function rawOccurrenceIdCount(json: unknown, launchOccurrenceId: string): number {
+  if (json === null || typeof json !== "object" || Array.isArray(json)) return 0;
+  const jobs = (json as Record<string, unknown>)["jobs"];
+  if (!Array.isArray(jobs)) return 0;
+  let count = 0;
+  for (const job of jobs) {
+    if (job === null || typeof job !== "object" || Array.isArray(job)) continue;
+    const occurrences = (job as Record<string, unknown>)["occurrences"];
+    if (!Array.isArray(occurrences)) continue;
+    for (const occurrence of occurrences) {
+      if (occurrence !== null && typeof occurrence === "object" && !Array.isArray(occurrence)) {
+        if ((occurrence as Record<string, unknown>)["launchOccurrenceId"] === launchOccurrenceId) count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 type JudgedRead =
@@ -285,7 +312,7 @@ function readJudgedFile(path: string, maxBytes: number, judged: PresentAnswer): 
 export function readAnswerFile(storeDir: string, launchOccurrenceId: string, maxBytes = MAX_ANSWER_BYTES): AnswerRead {
   if (!LAUNCH_OCCURRENCE_ID.test(launchOccurrenceId)) return { kind: "refused", why: "that is not a launch occurrence id (lo- and twenty hex)" };
   const listed = listedAnswer(storeDir, launchOccurrenceId);
-  if (listed.kind === "absent") return listed;
+  if (listed.kind !== "listed") return listed;
   const { attempt } = listed.answer;
   /* The parser already refuses any other; checked again because it builds a path. */
   if (!Number.isSafeInteger(attempt) || attempt < 1 || attempt > MAX_ATTEMPT) {

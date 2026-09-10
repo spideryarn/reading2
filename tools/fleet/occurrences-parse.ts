@@ -122,6 +122,9 @@ const ENDINGS: readonly ScheduledResultKind[] = [
   "succeeded",
 ];
 
+/** The only classifier results whose `at` is null. `unknown` is open but dated by when uncertainty was recorded. */
+const RESULTS_WITHOUT_ENDING: ReadonlySet<ScheduledResultKind> = new Set(["pending", "admission-waiting", "running"]);
+
 /**
  * The results the classifier can give each state
  * (`tools/overseer/occurrence-result.ts` § the ladder). Keyed by the state, so
@@ -227,6 +230,13 @@ function parseOccurrence(value: unknown): ScheduledOccurrence {
   const state = stateWord as ScheduledLaunchState;
   const result = parseResult(object(occurrence["result"], `${where}'s result`), where);
   if (!RESULTS_OF_STATE[state].has(result.kind)) fail(`${where} is ${state} with result ${result.kind}, a combination the classifier never gives`);
+  const attempts = count(occurrence, "attempts", where, MAX_ATTEMPTS);
+  const answer = parseAnswer(object(occurrence["answer"], `${where}'s answer`), where);
+  if (answer.kind === "present" && answer.attempt > attempts) fail(`${where}'s answer is from attempt ${answer.attempt}, but the occurrence records only ${attempts} attempts`);
+  if (answer.kind === "present" && answer.usable && answer.bytes === 0) fail(`${where}'s zero-byte answer cannot be usable`);
+  if (result.kind === "succeeded" && (answer.kind !== "present" || !answer.usable || answer.bytes === 0)) {
+    fail(`${where} succeeded without the present, usable, non-empty answer the classifier requires`);
+  }
   return {
     launchOccurrenceId,
     schedulerOccurrenceId: nonBlank(occurrence, "schedulerOccurrenceId", where),
@@ -234,11 +244,11 @@ function parseOccurrence(value: unknown): ScheduledOccurrence {
     behaviourHash: hex(occurrence, "behaviourHash", where),
     plannedAt: instant(occurrence, "plannedAt", where),
     updatedAt: instant(occurrence, "updatedAt", where),
-    attempts: count(occurrence, "attempts", where, MAX_ATTEMPTS),
+    attempts,
     state,
     run: parseRun(object(occurrence["run"], `${where}'s run spec`), where),
     result,
-    answer: parseAnswer(object(occurrence["answer"], `${where}'s answer`), where),
+    answer,
     transcriptPath: nullableText(occurrence, "transcriptPath", where),
     tmuxSession: nullableText(occurrence, "tmuxSession", where),
     commands: parseCommands(object(occurrence["commands"], `${where}'s commands`), where),
@@ -248,8 +258,12 @@ function parseOccurrence(value: unknown): ScheduledOccurrence {
 function parseResult(value: Obj, where: string): ScheduledResult {
   const kind = text(value, "kind", where);
   if (!Object.hasOwn(RESULT_KINDS, kind)) fail(`${where} has a result this build does not know (${kind})`);
+  const resultKind = kind as ScheduledResultKind;
   const at = value["at"];
-  return { kind: kind as ScheduledResultKind, why: text(value, "why", where), at: at === null ? null : instant(value, "at", `${where}'s result`) };
+  const withoutEnding = RESULTS_WITHOUT_ENDING.has(resultKind);
+  if (withoutEnding && at !== null) fail(`${where}'s ${resultKind} result has an ending instant, but the classifier gives it none`);
+  if (!withoutEnding && at === null) fail(`${where}'s ${resultKind} result has no instant for when its evidence was recorded`);
+  return { kind: resultKind, why: text(value, "why", where), at: at === null ? null : instant(value, "at", `${where}'s result`) };
 }
 
 function parseAnswer(value: Obj, where: string): ScheduledAnswer {

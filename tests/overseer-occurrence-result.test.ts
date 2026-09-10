@@ -36,7 +36,7 @@ function launch(state: ObservedState, over: Partial<ObservedLaunch> = {}): Obser
     run: { timeoutMinutes: 5, access: "read-only" },
     tmuxSession: null,
     transcriptPath: null,
-    answer: { kind: "absent" },
+    answer: { kind: "present", attempt: 1, bytes: 6, sha256: "0123456789abcdef".repeat(4), usable: true },
     disposition: null,
     state,
     ...over,
@@ -154,6 +154,20 @@ describe("each ending row, from its own evidence", () => {
 
   test("the good run is succeeded, dated by the record", () => {
     expect(classify(completed(exit()))).toMatchObject({ kind: "succeeded", at: UPDATED });
+  });
+
+  test.each([
+    { kind: "absent" } as const,
+    { kind: "present", attempt: 1, bytes: 1, sha256: "0123456789abcdef".repeat(4), usable: false } as const,
+    { kind: "present", attempt: 1, bytes: 0, sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", usable: true } as const,
+  ])("an otherwise good exit with projected answer $kind/$usable is not succeeded", (answer) => {
+    expect(classify(completed(exit()), { answer }).kind).toBe("missing-answer");
+  });
+
+  test("a negative permission-denial count is not positively zero and cannot succeed", () => {
+    const result = classify(completed(exit({ permissionDenials: -1 })));
+    expect(result.kind).toBe("failed");
+    expect(result.why).toMatch(/permission denial/);
   });
 });
 

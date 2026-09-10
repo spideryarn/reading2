@@ -108,13 +108,27 @@ describe("the bound and the order", () => {
     expect(projected?.omitted).toBe(0);
   });
 
-  test("a tie on scheduledAt is broken by launch id, the same way every time", () => {
-    const a = observed(2, { scheduledAt: day(5) });
-    const b = observed(1, { scheduledAt: day(5) });
+  test("an exact time tie is newest by fold insertion order", () => {
+    const a = observed(2, { scheduledAt: day(5), plannedAt: day(5) });
+    const b = observed(1, { scheduledAt: day(5), plannedAt: day(5) });
     const forwards = project([job([a, b])]).jobs[0]?.occurrences.map((o) => o.launchOccurrenceId);
     const backwards = project([job([b, a])]).jobs[0]?.occurrences.map((o) => o.launchOccurrenceId);
     expect(forwards).toEqual([loId(1), loId(2)]);
-    expect(backwards).toEqual(forwards);
+    expect(backwards).toEqual([loId(2), loId(1)]);
+  });
+
+  test("revision siblings at one due instant put the later-planned occurrence first", () => {
+    const revisionA = observed(1, { scheduledAt: day(5), plannedAt: "2026-09-05T09:00:01.000Z" });
+    const revisionB = observed(2, { scheduledAt: day(5), plannedAt: "2026-09-05T09:05:00.000Z" });
+    const projected = project([job([revisionA, revisionB])]).jobs[0];
+    expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
+  });
+
+  test("an exact time tie puts the later fold entry first, not the lower launch hash", () => {
+    const earlierInFold = observed(1, { scheduledAt: day(5), plannedAt: day(5) });
+    const laterInFold = observed(2, { scheduledAt: day(5), plannedAt: day(5) });
+    const projected = project([job([earlierInFold, laterInFold])]).jobs[0];
+    expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
   });
 });
 

@@ -165,7 +165,7 @@ function listing(storeDir: string, occurrences: unknown[]): void {
 /** A store whose projection lists `ID` with an answer at `attempt` of exactly `text`, and that text on disk there. */
 function listedStore(attempt: number, text: string): string {
   const storeDir = tempRoot();
-  listing(storeDir, [{ ...OCCURRENCE, answer: present(attempt, text) }]);
+  listing(storeDir, [{ ...OCCURRENCE, attempts: Math.max(OCCURRENCE.attempts, attempt), answer: present(attempt, text) }]);
   writeAnswer(storeDir, ID, `a${attempt}`, text);
   return storeDir;
 }
@@ -292,20 +292,42 @@ describe("the answer route: the durable result link", () => {
     expect(answer.raw).not.toContain("another origin's answer");
   });
 
-  it("answers 404 when occurrences.json is absent or unreadable, whatever is on disk", () => {
+  it("answers 404 when occurrences.json is absent, whatever is on disk", () => {
     const absent = tempRoot();
     writeAnswer(absent, ID, "a2", ANSWER_TEXT);
+    const answer = call(makeOccurrences({ storeDir: absent }).route, answerPath());
+    expect(answer.status).toBe(404);
+    expect(answer.raw).not.toContain(ANSWER_TEXT);
+  });
+
+  it("answers 503 when occurrences.json cannot be read, rather than claiming the answer is absent", () => {
     const junk = tempRoot();
     writeAnswer(junk, ID, "a2", ANSWER_TEXT);
     writeFileSync(join(junk, OCCURRENCES_FILE), "{ not json", "utf8");
     const schema = tempRoot();
     writeAnswer(schema, ID, "a2", ANSWER_TEXT);
     writeFileSync(join(schema, OCCURRENCES_FILE), JSON.stringify({ schema: 9 }), "utf8");
-    for (const storeDir of [absent, junk, schema]) {
+    const oversized = tempRoot();
+    writeAnswer(oversized, ID, "a2", ANSWER_TEXT);
+    writeFileSync(join(oversized, OCCURRENCES_FILE), "x".repeat(MAX_OCCURRENCES_FILE_BYTES + 1), "utf8");
+    for (const storeDir of [junk, schema, oversized]) {
       const answer = call(makeOccurrences({ storeDir }).route, answerPath());
-      expect(answer.status).toBe(404);
+      expect(answer.status).toBe(503);
+      expect(answer.raw).toContain("Could not look");
       expect(answer.raw).not.toContain(ANSWER_TEXT);
     }
+  });
+
+  it("refuses a duplicate id even when one copy is hidden inside an unreadable job", () => {
+    const storeDir = tempRoot();
+    const readable = { ...FILE.jobs[0], occurrences: [OCCURRENCE] };
+    const unreadable = { ...FILE.jobs[0], jobId: "broken-job", next: { kind: "whenever" }, occurrences: [{ ...OCCURRENCE, answer: present(1, "other") }] };
+    writeFileSync(join(storeDir, OCCURRENCES_FILE), JSON.stringify({ ...FILE, jobs: [unreadable, readable] }), "utf8");
+    writeAnswer(storeDir, ID, "a2", ANSWER_TEXT);
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+    expect(answer.status).toBe(404);
+    expect(answer.raw).toContain("2 times");
+    expect(answer.raw).not.toContain(ANSWER_TEXT);
   });
 
   it("answers 404 for an occurrence whose own row is unreadable, and for one with no answer", () => {

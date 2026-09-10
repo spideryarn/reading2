@@ -106,7 +106,7 @@ function Answer({ occurrence }: { occurrence: ScheduledOccurrence }): ReactNode 
       >
         answer
       </a>
-      {answer.usable ? null : <span className="tw:font-medium tw:text-alarm-ink"> (empty)</span>}{" "}
+      {answer.usable ? null : <span className="tw:font-medium tw:text-alarm-ink"> (empty or unusable)</span>}{" "}
       <span className="tw:text-ink-faint">
         — attempt a{answer.attempt}, {plural(answer.bytes, "byte")}
       </span>

@@ -15,10 +15,11 @@
  * ## Bounded, newest first
  *
  * `OCCURRENCES_PER_JOB` per job, newest first by `scheduledAt` — the nominal
- * due instant, which is the occurrence's identity — and ties broken by launch
- * id ascending so two writes of the same journal give the same file. What is
- * left out is COUNTED (`omitted`), because a list that stopped at ten without
- * saying so reads as "only ten ever ran".
+ * due instant, which is the occurrence's identity. Revision siblings share
+ * that instant, so ties use `plannedAt` newest first, then the fold's insertion
+ * order newest first. Two writes of the same journal therefore give the same
+ * file. What is left out is COUNTED (`omitted`), because a list that stopped at
+ * ten without saying so reads as "only ten ever ran".
  *
  * ## A command is printed only where it applies, and only if it is safe to paste
  *
@@ -62,7 +63,7 @@ export type OccurrencesProjectionJob = {
   readonly run: ScheduledRunSpec;
   /** The preview's own answer from the same planner pass, copied — `schedule.json` is its home. */
   readonly next: SchedulePreviewNext;
-  /** Every schedule-origin launch of this job, in any order. */
+  /** Every schedule-origin launch of this job, in the launch fold's insertion order. */
   readonly observed: readonly ObservedLaunch[];
 };
 
@@ -90,7 +91,10 @@ function jobOf(job: OccurrencesProjectionJob): ScheduledOccurrencesJob {
   // the throw and says so, as it does for `schedulePreview`'s.
   const stray = job.observed.find((o) => o.jobId !== job.jobId);
   if (stray !== undefined) throw new Error(`occurrence ${stray.launchOccurrenceId} belongs to job ${stray.jobId}, not ${job.jobId}`);
-  const newestFirst = [...job.observed].sort(newestFirstOrder);
+  const newestFirst = job.observed
+    .map((occurrence, foldIndex) => ({ occurrence, foldIndex }))
+    .sort((a, b) => newestFirstOrder(a.occurrence, b.occurrence) || b.foldIndex - a.foldIndex)
+    .map(({ occurrence }) => occurrence);
   return {
     jobId: job.jobId,
     dispatch: job.dispatch,
@@ -104,15 +108,24 @@ function jobOf(job: OccurrencesProjectionJob): ScheduledOccurrencesJob {
 /**
  * Newest `scheduledAt` first, by instant rather than by string, so two
  * spellings of one instant sort together; an instant that does not parse sorts
- * after every one that does, rather than wherever NaN lands. Ties by launch id.
+ * after every one that does, rather than wherever NaN lands. Revision siblings
+ * tie on `scheduledAt`, so their `plannedAt` decides next. The caller decorates
+ * final ties with reverse fold insertion order, the protocol's last word on
+ * which one is newest.
  */
 function newestFirstOrder(a: ObservedLaunch, b: ObservedLaunch): number {
-  const at = Date.parse(a.scheduledAt);
-  const bt = Date.parse(b.scheduledAt);
+  const scheduled = instantNewestFirst(a.scheduledAt, b.scheduledAt);
+  if (scheduled !== 0) return scheduled;
+  return instantNewestFirst(a.plannedAt, b.plannedAt);
+}
+
+/** One instant newest first; unreadable instants sort after readable ones, then deterministically by text. */
+function instantNewestFirst(a: string, b: string): number {
+  const at = Date.parse(a);
+  const bt = Date.parse(b);
   if (Number.isNaN(at) !== Number.isNaN(bt)) return Number.isNaN(at) ? 1 : -1;
   if (!Number.isNaN(at) && at !== bt) return bt - at;
-  if (a.scheduledAt !== b.scheduledAt) return a.scheduledAt < b.scheduledAt ? 1 : -1;
-  return a.launchOccurrenceId < b.launchOccurrenceId ? -1 : a.launchOccurrenceId > b.launchOccurrenceId ? 1 : 0;
+  return a === b ? 0 : a < b ? 1 : -1;
 }
 
 function occurrenceOf(o: ObservedLaunch): ScheduledOccurrence {

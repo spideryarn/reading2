@@ -172,6 +172,43 @@ describe("what it does not know, it says it does not know — per row", () => {
     }
   });
 
+  test("result instants follow the classifier: open rows have none, unknown and endings have one", () => {
+    const pendingWithEnding = copy();
+    const pending = occurrencesOf(pendingWithEnding)[0] as Record<string, unknown>;
+    pending["state"] = "planned";
+    pending["result"] = { kind: "pending", why: "planned", at: "2026-09-10T11:03:00.000Z" };
+
+    const unknownWithoutReading = copy();
+    const unknown = occurrencesOf(unknownWithoutReading)[0] as Record<string, unknown>;
+    unknown["state"] = "outcome-unknown";
+    unknown["result"] = { kind: "unknown", why: "cannot tell", at: null };
+
+    const successWithoutEnding = copy();
+    (occurrencesOf(successWithoutEnding)[0] as Record<string, unknown>)["result"] = { kind: "succeeded", why: "ok", at: null };
+
+    for (const value of [pendingWithEnding, unknownWithoutReading, successWithoutEnding]) {
+      const job = parsed(value).jobs[0];
+      if (job?.kind !== "job") throw new Error("expected the job row");
+      expect(job.job.occurrences[0]?.kind).toBe("unreadable");
+    }
+  });
+
+  test("succeeded requires the usable non-empty answer of an existing attempt", () => {
+    const answers: unknown[] = [
+      { kind: "absent" },
+      { ...SUCCEEDED.answer, usable: false },
+      { ...SUCCEEDED.answer, bytes: 0 },
+      { ...SUCCEEDED.answer, attempt: 2 },
+    ];
+    for (const answer of answers) {
+      const value = copy();
+      (occurrencesOf(value)[0] as Record<string, unknown>)["answer"] = answer;
+      const job = parsed(value).jobs[0];
+      if (job?.kind !== "job") throw new Error("expected the job row");
+      expect(job.job.occurrences[0]?.kind, JSON.stringify(answer)).toBe("unreadable");
+    }
+  });
+
   test("an unknown access or answer kind is an unreadable occurrence row", () => {
     const access = copy();
     (occurrencesOf(access)[0] as Record<string, unknown>)["run"] = { timeoutMinutes: 5, access: "root" };

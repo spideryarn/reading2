@@ -286,11 +286,11 @@ describe("the last occurrence", () => {
     expect(visible('a[data-slot="answer-link"]', last("section-occ-good"))).toBe("answer");
   });
 
-  it("an answer that is not usable is linked and marked (empty)", async () => {
+  it("an answer that is not usable is linked and marked empty or unusable", async () => {
     await draw(occurrencesView());
     const text = visible('[data-slot="answer"]', last("section-occ-timeout"));
     expect(text).toContain("answer");
-    expect(text).toContain("(empty)");
+    expect(text).toContain("(empty or unusable)");
   });
 
   it("UNKNOWN is the warning tone, has no answer link, and shows the command that disposes of it", async () => {
