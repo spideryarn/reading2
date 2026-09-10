@@ -54,9 +54,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { readStartRevision } from "../fleet/revision.js";
+import { readModuleStartRevision } from "../fleet/revision.js";
 import type {
   AttentionList,
   OverseerWork,
@@ -674,7 +673,7 @@ export const TICK_MS = 30_000;
 export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome> {
   // FIRST, before anything else can take time: the checkout moves under a
   // running daemon, and this is the closest we get to what it loaded.
-  const revision = options.revision ?? readStartRevision(fileURLToPath(new URL("../..", import.meta.url)));
+  const revision = options.revision ?? readModuleStartRevision(import.meta.url, "../..");
   const now = options.now ?? (() => new Date());
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();

@@ -48,7 +48,7 @@ import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
-import { readStartRevision } from "./revision.js";
+import { readModuleStartRevision } from "./revision.js";
 import { readBuildStamp } from "./build-stamp.js";
 import { makeDiagnosticsRoute } from "./routes-diagnostics.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
@@ -150,7 +150,7 @@ let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 const publicationLedger = new PublicationLedger(serverInstanceId());
 /** The revision this process started from — read once, here, never again: tools/fleet/revision.ts says why. */
-const startRevision = readStartRevision(fileURLToPath(new URL("../..", import.meta.url)));
+const startRevision = readModuleStartRevision(import.meta.url, "../..");
 /** The client bundle on disk as this process starts, before any listener opens — so the page can
  *  tell "the bundle this server started with" from "the bundle on disk now" after a rebuild. */
 const bundleAtStart = readBuildStamp(DIST);
