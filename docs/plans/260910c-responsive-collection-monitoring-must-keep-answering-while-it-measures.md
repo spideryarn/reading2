@@ -1,6 +1,15 @@
 # Responsive collection — monitoring must keep answering while it measures
 
-**Status: Stage 0 done and measured; reviewed by GPT Sol and rewritten; Stages 1–4 to build.**
+**Status (2026-09-10): finished.** Stages 0–3 are built, independently reviewed by GPT Sol, and
+measured; Stage 4, the title cache, was dropped on its measurement by the Overseer's decision. The
+acceptance line is met: a 30-second probe now leaves `/api/state` at p95 **7.2 ms** against a
+provisional 250 ms target, where it held it for 30 s; and a real production turn holds the request
+thread for at most about 40 ms, where it held it for about 1.6 s. Full suite on the merged tree: 986
+files passed, and the only two reds are the known environment pair that needs `api-dist/`. Found on
+the way and handed to the Overseer rather than fixed: the other unbounded synchronous child calls on
+the same thread (postmortem 260910a, queued), and `selfCheck` switched off in production by the move
+to systemd (postmortem 260910b, queued as `qi-j4jyf3ab`). Codex (gpt-5.6-sol) implemented every
+build stage; each had an independent review.
 Dispatched by the Overseer as queue item `qi-n6seyeks`, from
 [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fleet-improvement-roadmap.md)
 § "Stage: Responsive collection". That stage's six checkboxes and its acceptance paragraph are the
@@ -559,4 +568,22 @@ requests that sat behind the block are all counted.
 
 ### After Stages 1–3
 
-*(to be filled in, with the fixed request accounting)*
+Every figure below comes from `scripts/fleet-collect-bench.ts` on the corrected instrument, with each
+run's requests accounted for; the tables and their exact commands are in the stage status blocks.
+
+| what | before | after | where |
+|---|---|---|---|
+| **The acceptance case**: `/api/state` p95 while one of 25 captures takes 30 s | 30018 ms | **7.2 ms** | Stage 3, status — 3a |
+| …and requests answered during those 30 s | 85 | **1209** | Stage 3, status — 3a |
+| `collect()` end to end, loop lag max, real box | 409–478 ms | **28.1–31.6 ms** | Stage 3, status — 3b |
+| The health turn, loop lag max, real box | 1159–1185 ms | **30–44 ms** | Stage 2, status |
+
+The provisional target was a 250 ms p95 on the controlled fixture; the owned path is about 35× under
+it. On the real box, **a production turn — collection plus health — no longer holds the request
+thread for more than about 40 ms**, where it used to hold it for about 1.6 s every minute. Wall times
+are essentially unchanged (the inventory script and `vmstat`'s sampling interval still take what they
+take), and that was never the claim.
+
+**Checked in production, read-only**: the Overseer's 09:44 restart put Stages 0–2 live, and one GET of
+`/api/state` at 08:55 UTC showed all six health readings as values, a health turn of 1012 ms — the
+owned gatherer's figure, not the synchronous 1160 ms — a fresh collection and no error.

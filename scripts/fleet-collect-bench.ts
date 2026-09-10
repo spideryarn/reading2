@@ -785,7 +785,7 @@ async function main(): Promise<void> {
   }
 }
 
-const invokedDirectly = process.argv[1] !== undefined && process.argv[1].endsWith("fleet-collect-bench.ts");
+const invokedDirectly = process.argv[1]?.endsWith("fleet-collect-bench.ts") ?? false;
 if (invokedDirectly) {
   await main();
 }
