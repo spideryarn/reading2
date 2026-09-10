@@ -453,7 +453,10 @@ detail rather than a wrong direction, and Sol called the ownership design sound.
 ## Status
 
 **2026-09-10, end of day: reporting machinery complete; convention not activated.** All three stages are
-on `dev` (last at `c68a7e25`): the reports log, inbox, daemon drain and CLI; decisions schema 2; the
+on `dev` (last code at `0c9f7cbf`, merged with schedule-preview's seam fix). **Full suite** on that tree,
+through `scripts/tmux-job.ts`: 1 013 files passed, 2 failed, 1 skipped; 21 745 tests passed. The two
+failures are the environment pair every fresh worktree has, `cold-start-lazy-imports` and
+`pdf-bundle-trace` (no `api-dist/`), and nothing else. What landed: the reports log, inbox, daemon drain and CLI; decisions schema 2; the
 Claims section, `GET /api/reports`, decision reports into `decisions.jsonl`, and the bounds three reviews
 asked for. Implemented by Opus subagents throughout; no Codex implementation.
 
