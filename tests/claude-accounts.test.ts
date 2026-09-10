@@ -142,6 +142,44 @@ describe("Claude config seeding", () => {
     if (second.ok) expect(second.messages.join("\n")).toMatch(/already links/i);
   });
 
+  // Red before the fix on 2026-09-10. `~/.claude/sessions/<pid>.json` is BOTH
+  // the `claude agents --json` listing and the SendMessage/ListAgents peer
+  // registry — measured: a config dir whose sessions/ was symlinked to the
+  // default's listed all ten ambient agents by name, while mindstone's own dir
+  // listed two. Unshared, every pool session classified as
+  // `running-but-unlisted` AND could not message the Overseer at all.
+  //
+  // Sharing is safe here for the reason it is NOT safe for memory: the files
+  // are pid-keyed and pids are unique on a box, so each has exactly one writer.
+  test("shares sessions/, copying existing records so a live session is not lost", () => {
+    const { source, target } = seedFixture(tempRoot());
+    mkdirSync(path.join(source, "sessions"), { recursive: true });
+    writeFileSync(path.join(source, "sessions", "111.json"), '{"pid":111}\n');
+    // A record a live pool session has already written under its own dir. It
+    // must survive: dropping it would make a working session VANISH from `ls`
+    // rather than appear, which is worse than the bug being fixed.
+    mkdirSync(path.join(target, "sessions"), { recursive: true });
+    writeFileSync(path.join(target, "sessions", "222.json"), '{"pid":222}\n');
+
+    const first = seedClaudeConfig(target, {
+      defaultConfigDir: source,
+      now: () => new Date("2026-09-09T21:00:00Z"),
+      isConfigDirInUse: () => false,
+    });
+
+    expect(first.ok).toBe(true);
+    expect(lstatSync(path.join(target, "sessions")).isSymbolicLink()).toBe(true);
+    // Both records are now visible through the one shared directory.
+    expect(readFileSync(path.join(source, "sessions", "222.json"), "utf8")).toBe('{"pid":222}\n');
+    expect(readFileSync(path.join(target, "sessions", "111.json"), "utf8")).toBe('{"pid":111}\n');
+    const retained = readdirSync(target).find((name) => name.startsWith("sessions.retained-"));
+    expect(retained).toBeDefined();
+    expect(readFileSync(path.join(target, retained!, "222.json"), "utf8")).toBe('{"pid":222}\n');
+
+    const second = seedClaudeConfig(target, { defaultConfigDir: source, isConfigDirInUse: () => false });
+    expect(second).toMatchObject({ ok: true, changed: false });
+  });
+
   test("refuses a dangling projects symlink", () => {
     const { source, target } = seedFixture(tempRoot());
     symlinkSync(path.join(target, "missing-projects"), path.join(target, "projects"));

@@ -219,6 +219,7 @@ interface SeedPlan {
   targetDir: string;
   projectsLink: string;
   desiredProjects: string;
+  desiredSessions: string;
   claudePath: string;
   claudeBefore: string | null;
   claudeAfter: Record<string, unknown>;
@@ -439,6 +440,8 @@ function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | {
   if (!existsSync(targetDir)) return { why: `${targetDir} does not exist; log in under that config directory before seeding it` };
 
   const desiredProjects = path.join(defaultConfigDir, "projects");
+  // The shared peer registry and agents listing — see applySessionsShare.
+  const desiredSessions = path.join(defaultConfigDir, "sessions");
   const projectsLink = path.join(targetDir, "projects");
   const projects = inspectProjectsShare(projectsLink, desiredProjects, targetDir, options);
   if (!projects.ok) return { why: projects.why };
@@ -489,6 +492,7 @@ function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | {
     targetDir,
     projectsLink,
     desiredProjects,
+    desiredSessions,
     claudePath,
     claudeBefore: targetClaude.text,
     claudeAfter,
@@ -570,7 +574,64 @@ function unusedBackupPath(dir: string, instant: Date): string {
   return candidate;
 }
 
+/**
+ * Share `sessions/` the way `projects/` is shared, and for a bigger reason than
+ * it looks.
+ *
+ * **`<config dir>/sessions/<pid>.json` is two things at once**: the listing
+ * behind `claude agents --json`, and the peer registry behind `SendMessage` /
+ * `ListAgents` — it carries `name`, `messagingSocketPath` and `sessionId`. The
+ * sockets themselves already live in the shared `/run/user/1000/cc-socks/`;
+ * only this listing is per config directory. Measured 2026-09-10: a config dir
+ * whose `sessions/` was symlinked to the default's listed **all ten** ambient
+ * agents by name, while the pool account's own dir listed two. Unshared, every
+ * pool session showed as `running-but-unlisted` in the register **and could not
+ * message the Overseer at all** — which for a dispatched agent whose job ends
+ * in a debrief is close to fatal.
+ *
+ * **Why sharing is safe here when sharing memory would not be**: these files
+ * are pid-keyed, and pids are unique on a box, so each has exactly one writer.
+ * The record also carries `procStart` and `pidDomain`, so the CLI disambiguates
+ * pid reuse itself. That is the opposite of `MEMORY.md`, where many writers
+ * share one path — the distinction that matters, and one this plan got
+ * backwards at first.
+ *
+ * **Deliberately simpler than the `projects/` migration**, which hashes a
+ * manifest and records resumable state because transcripts and auto-memory are
+ * irreplaceable. A session record is rewritten by its live process within about
+ * a minute — measured, mtimes 40 minutes after start — so losing one costs
+ * nothing. The copy exists only so a *running* session does not blink out of
+ * `ls` between the swap and its next write; the original is retained rather
+ * than deleted for the same reason.
+ */
+function applySessionsShare(plan: SeedPlan): boolean {
+  const link = path.join(plan.targetDir, "sessions");
+  const shared = plan.desiredSessions;
+  let info: ReturnType<typeof lstatSync> | null = null;
+  try {
+    info = lstatSync(link);
+  } catch {
+    info = null;
+  }
+  if (info?.isSymbolicLink()) return false;
+  mkdirSync(shared, { recursive: true, mode: 0o700 });
+  if (info?.isDirectory()) {
+    // Copy first, swap second: a live session's only record is in here.
+    for (const entry of readdirSync(link)) {
+      const destination = path.join(shared, entry);
+      if (!existsSync(destination)) copyFileSync(path.join(link, entry), destination);
+    }
+    const stamp = plan.now().toISOString().replace(/[:.]/g, "-");
+    renameSync(link, path.join(plan.targetDir, `sessions.retained-${stamp}`));
+  }
+  symlinkSync(shared, link);
+  return true;
+}
+
 function applySeed(plan: SeedPlan): Extract<SeedResult, { ok: true }> {
+  const sessionsChanged = applySessionsShare(plan);
+  if (sessionsChanged) plan.messages.push(`shared sessions -> ${plan.desiredSessions} so this account's sessions are listed and reachable`);
+  else plan.messages.push("sessions already shared");
   const projectsChanged = applyProjects(plan.projects, plan.projectsLink, plan.desiredProjects);
   if (plan.claudeChanged && plan.claudeBefore !== null) {
     const backups = path.join(plan.targetDir, "backups");
@@ -584,7 +645,7 @@ function applySeed(plan: SeedPlan): Extract<SeedResult, { ok: true }> {
   if (plan.copyPlugins) cpSync(plan.pluginsSource, path.join(plan.targetDir, "plugins"), { recursive: true, errorOnExist: true });
   return {
     ok: true,
-    changed: plan.claudeChanged || plan.settingsChanged || plan.copyPlugins || projectsChanged,
+    changed: plan.claudeChanged || plan.settingsChanged || plan.copyPlugins || projectsChanged || sessionsChanged,
     messages: plan.messages,
   };
 }
