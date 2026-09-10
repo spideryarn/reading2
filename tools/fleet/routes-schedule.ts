@@ -33,7 +33,7 @@
  * hands this route's real bytes to that client, so the two cannot drift apart
  * unnoticed.
  */
-import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
@@ -92,13 +92,20 @@ export function readScheduleFile(storeDir: string, maxBytes = MAX_SCHEDULE_FILE_
   const path = join(storeDir, SCHEDULE_PREVIEW_FILE);
   let fd: number;
   try {
-    fd = openSync(path, "r");
+    // Do not follow a store entry somewhere else, and do not let a FIFO block
+    // the dashboard before `fstat` can refuse it as non-regular.
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { kind: "absent" };
+    if ((cause as NodeJS.ErrnoException).code === "ELOOP") {
+      return { kind: "unreadable", why: `${SCHEDULE_PREVIEW_FILE} is not a regular file in the Overseer store, so it was not read` };
+    }
     return { kind: "unreadable", why: `${SCHEDULE_PREVIEW_FILE} could not be opened (${message(cause)})` };
   }
   try {
-    const bytes = fstatSync(fd).size;
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return { kind: "unreadable", why: `${SCHEDULE_PREVIEW_FILE} is not a regular file in the Overseer store, so it was not read` };
+    const bytes = stat.size;
     if (bytes > maxBytes) return { kind: "too-large", bytes };
     const text = readFileSync(fd, "utf8");
     try {

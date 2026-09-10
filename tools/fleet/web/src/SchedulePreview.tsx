@@ -306,7 +306,7 @@ function JobRow({ job, boxNow }: { job: SchedulePreviewJob; boxNow: number }): R
         <strong>{VERDICT_LABEL[job.verdict.kind]}</strong> — {job.verdict.sentence}
       </p>
       {job.verdict.kind === "unauthorised" && job.verdict.drift.length > 0 ? (
-        <ul className="tw:mt-1 tw:list-disc tw:pl-5 tw:text-[12px] tw:break-all tw:text-alarm-ink">
+        <ul className="tw:mt-1 tw:list-disc tw:pl-5 tw:text-[12px] tw:break-words tw:text-alarm-ink">
           {job.verdict.drift.map((line) => (
             <li key={line}>{line}</li>
           ))}
@@ -317,12 +317,12 @@ function JobRow({ job, boxNow }: { job: SchedulePreviewJob; boxNow: number }): R
           was pinned is the one thing this card must not hide behind a
           disclosure — the roadmap's "a changed document is named". */}
       {changed.length > 0 ? (
-        <p data-slot="documents-changed" className="tw:mt-1 tw:font-medium tw:break-all tw:text-alarm-ink">
+        <p data-slot="documents-changed" className="tw:mt-1 tw:font-medium tw:break-words tw:text-alarm-ink">
           CHANGED since it was authorised: {changed.map((document) => document.path).join(", ")}
         </p>
       ) : null}
       {unread.length > 0 ? (
-        <p data-slot="documents-unread" className="tw:mt-1 tw:break-all tw:text-unknown-ink">
+        <p data-slot="documents-unread" className="tw:mt-1 tw:break-words tw:text-unknown-ink">
           could not be read, so nobody can say whether it changed: {unread.map((document) => document.path).join(", ")}
         </p>
       ) : null}
@@ -451,11 +451,26 @@ function Facts({ preview, boxNow }: { preview: ParsedSchedulePreview; boxNow: nu
   );
 }
 
-function Preview({ view, now }: { view: Extract<ScheduleView, { kind: "preview" }>; now: number }): ReactNode {
+function Preview({
+  view,
+  now,
+  currentInstanceId,
+}: {
+  view: Extract<ScheduleView, { kind: "preview" }>;
+  now: number;
+  currentInstanceId: string | null;
+}): ReactNode {
   const { preview } = view;
   const boxNow = boxNowOf(view, now);
+  const anotherInstance = currentInstanceId !== null && currentInstanceId !== preview.instanceId;
   return (
     <>
+      {anotherInstance ? (
+        <p data-slot="schedule-instance-mismatch" className="tw:mt-2 tw:font-medium tw:text-[13px] tw:break-words tw:text-alarm-ink">
+          FROM ANOTHER DAEMON INSTANCE — this preview was written by <Mono>{preview.instanceId}</Mono>, while the current checkpoint belongs to{" "}
+          <Mono>{currentInstanceId}</Mono>. It does not describe the current daemon.
+        </p>
+      ) : null}
       <Caveat preview={preview} boxNow={boxNow} />
       <Headline preview={preview} />
       <Facts preview={preview} boxNow={boxNow} />
@@ -480,7 +495,7 @@ function Preview({ view, now }: { view: Extract<ScheduleView, { kind: "preview" 
 }
 
 /** Each kind of nothing, in the voice of whoever failed to answer. */
-function Body({ view, now }: { view: ScheduleView | null; now: number }): ReactNode {
+function Body({ view, now, currentInstanceId }: { view: ScheduleView | null; now: number; currentInstanceId: string | null }): ReactNode {
   const quiet = "tw:mt-2 tw:text-[13px] tw:break-words";
   if (view === null) {
     return (
@@ -491,7 +506,7 @@ function Body({ view, now }: { view: ScheduleView | null; now: number }): ReactN
   }
   switch (view.kind) {
     case "preview":
-      return <Preview view={view} now={now} />;
+      return <Preview view={view} now={now} currentInstanceId={currentInstanceId} />;
     case "absent":
       return (
         <p data-schedule-state="absent" className={cx(quiet, "tw:text-ink-soft")}>
@@ -527,7 +542,7 @@ function Body({ view, now }: { view: ScheduleView | null; now: number }): ReactN
   }
 }
 
-export function SchedulePreview({ api, now }: { api: ScheduleApi; now: number }): ReactNode {
+export function SchedulePreview({ api, now, currentInstanceId }: { api: ScheduleApi; now: number; currentInstanceId: string | null }): ReactNode {
   const [view, setView] = useState<ScheduleView | null>(null);
 
   /* A GENERATION TOKEN, so an older answer that resolves late cannot replace a
@@ -555,7 +570,7 @@ export function SchedulePreview({ api, now }: { api: ScheduleApi; now: number })
     <section data-section="schedule-preview" className="tw:mb-3">
       <Card className="tw:min-w-0 tw:p-4">
         <h2 className="tw:font-medium">What the scheduler would run next</h2>
-        <Body view={view} now={now} />
+        <Body view={view} now={now} currentInstanceId={currentInstanceId} />
       </Card>
     </section>
   );

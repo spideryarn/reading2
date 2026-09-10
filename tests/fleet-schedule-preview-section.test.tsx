@@ -34,7 +34,7 @@ import type { ActionsApi } from "../tools/fleet/web/src/actions-client";
 import { OverseerPanel } from "../tools/fleet/web/src/OverseerPanel";
 import { SchedulePreview as ScheduleSection } from "../tools/fleet/web/src/SchedulePreview";
 import { SCHEDULE_POLL_MS, type ScheduleApi, type ScheduleView } from "../tools/fleet/web/src/schedule-client";
-import { CLOCK_SKEW_UNMEASURED } from "../tools/fleet/web/src/types";
+import { CLOCK_SKEW_UNMEASURED, type OverseerView } from "../tools/fleet/web/src/types";
 import type { ActionsUi } from "../tools/fleet/web/src/useActions";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -169,7 +169,7 @@ function recording(answer: () => Promise<ScheduleView>): { api: ScheduleApi; cal
 
 async function draw(view: ScheduleView, now = RECEIVED_MS): Promise<void> {
   const { api } = recording(async () => view);
-  await act(async () => root.render(<ScheduleSection api={api} now={now} />));
+  await act(async () => root.render(<ScheduleSection api={api} now={now} currentInstanceId={null} />));
 }
 
 /** An element's words as a sighted reader sees them: the tooltips' sr-only copies removed. */
@@ -192,7 +192,7 @@ function row(jobId: string): Element {
 describe("every absence says which nothing it is", () => {
   it("says it is asking before any answer, and draws no rows", async () => {
     const { api } = recording(() => new Promise<ScheduleView>(() => undefined));
-    await act(async () => root.render(<ScheduleSection api={api} now={RECEIVED_MS} />));
+    await act(async () => root.render(<ScheduleSection api={api} now={RECEIVED_MS} currentInstanceId={null} />));
     expect(visible('[data-schedule-state="asking"]')).toContain("Asking");
     expect(container.querySelectorAll("[data-schedule-job]")).toHaveLength(0);
   });
@@ -338,14 +338,14 @@ describe("mounted on the Overseer tab", () => {
     };
   }
 
-  function drawPanel(api: ScheduleApi): void {
+  function drawPanel(api: ScheduleApi, overseer: OverseerView | null = null): void {
     act(() =>
       root.render(
         <OverseerPanel
           actions={actions()}
           rows={[]}
           unreadableRows={null}
-          overseer={null}
+          overseer={overseer}
           usage={null}
           codex={null}
           now={RECEIVED_MS}
@@ -365,6 +365,36 @@ describe("mounted on the Overseer tab", () => {
     expect(calls()).toBe(1);
     expect(container.querySelector('[data-section="schedule-preview"]')).not.toBeNull();
     expect(row("section-dry-job")).not.toBeNull();
+  });
+
+  it("says when the preview belongs to another daemon instance", async () => {
+    const current: OverseerView = {
+      kind: "published",
+      status: {
+        schema: 2,
+        writtenAt: SERVED,
+        lastGoodSnapshotAt: SERVED,
+        sourceStaleAfterMs: 300_000,
+        heartbeat: {
+          kind: "reading",
+          pid: 42,
+          instanceId: "section-current-instance",
+          startedAt: WRITTEN,
+          lastTickAt: SERVED,
+          ticks: 2,
+        },
+        scheduler: { kind: "off", why: "not armed", at: SERVED },
+        register: { kind: "read", total: 0, work: { kind: "unavailable", why: "not relevant to this test" }, sessions: [] },
+      },
+    };
+    const { api } = recording(async () => previewView());
+    drawPanel(api, current);
+    await act(async () => undefined);
+
+    const warning = visible('[data-slot="schedule-instance-mismatch"]');
+    expect(warning).toContain("FROM ANOTHER DAEMON INSTANCE");
+    expect(warning).toContain("section-fixture-instance");
+    expect(warning).toContain("section-current-instance");
   });
 
   it("asks again every minute while it is open", async () => {

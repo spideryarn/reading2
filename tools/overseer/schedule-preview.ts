@@ -55,7 +55,7 @@ import type {
 import { londonFirstLine } from "../fleet/zones.js";
 import { describeAge } from "./format-age.js";
 import type { Arming, AuthorisedJob, JobWork, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
-import { authorisationUnder, planJobs, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
+import { authorisationUnder, documentEvidenceFor, planJobs, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
 import type { HeldCapabilities } from "./scheduler.js";
 import type { StoredScheduler } from "./store.js";
 
@@ -375,7 +375,7 @@ function documentsOf(job: AuthorisedJob, evidence: DocumentEvidence): SchedulePr
   const current = new Map<string, SchedulePreviewDocument["current"]>();
   switch (behaviour.work.kind) {
     case "session": {
-      const readings = evidence.get(behaviour.id);
+      const readings = documentEvidenceFor(evidence, job);
       if (readings === undefined) {
         for (const document of [...job.authorisedDocuments, ...behaviour.documents]) {
           current.set(document.path, { kind: "unreadable", why: "no reading of this job's documents was taken this checkpoint" });
@@ -517,11 +517,13 @@ export function schedulePreviewLines(
 }
 
 function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null }, nowMs: number): string[] {
+  const fromAnotherInstance =
+    checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== null && checkout.runningInstanceId !== preview.instanceId;
   const lines = [
     // A PREVIEW FROM ANOTHER DAEMON INSTANCE SAYS SO ON ITS FIRST LINE, not only
     // its second: the first line is the one a person reads, and its headline
     // (ARMED, say) is that other daemon's word, not the current one's.
-    `${label("schedule")}${checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== preview.instanceId ? "FROM ANOTHER DAEMON INSTANCE, " : ""}` +
+    `${label("schedule")}${fromAnotherInstance ? "FROM ANOTHER DAEMON INSTANCE, " : ""}` +
       `${preview.headline.kind.toUpperCase()} — preview as of ${londonFirst(preview.writtenAt)} ` +
       `(${describeAge(nowMs - Date.parse(preview.writtenAt))} old), written by instance ${preview.instanceId}`,
     `${INDENT}${listLine(preview.list, checkout, preview.instanceId)}`,

@@ -37,7 +37,7 @@ import {
   type OccurrenceKey,
 } from "../tools/overseer/jobs.js";
 import { ruleJobs } from "../tools/overseer/rule-jobs.js";
-import { evidenceAsBuilt, planJobs, type DocumentEvidence } from "../tools/overseer/schedule-plan.js";
+import { evidenceAsBuilt, planJobs, resolveEvidence, type DocumentEvidence } from "../tools/overseer/schedule-plan.js";
 import {
   listRevision,
   MISSED_RUN_POLICY,
@@ -188,9 +188,37 @@ describe("each verdict the planner can give becomes a row that says so", () => {
   });
 
   test("a duplicate id: both definitions refused, with no next run", () => {
-    const preview = previewOf([sessionJob("twin"), sessionJob("twin", { everyMs: hours(6) }), sessionJob("bystander")]);
+    const first = sessionJob("twin");
+    const secondDocument: JobDocument = { path: "docs/fixture/preview-test-second-twin.md", sha256: "b".repeat(64) };
+    const secondBehaviour: JobBehaviour = {
+      ...first.definition.behaviour,
+      documents: [secondDocument],
+    };
+    const second: AuthorisedJob = {
+      definition: { behaviour: secondBehaviour, schedule: { ...first.definition.schedule, everyMs: hours(6) } },
+      authorisedHash: behaviourHash(secondBehaviour),
+      authorisedDocuments: [secondDocument],
+    };
+    const definitions = [first, second, sessionJob("bystander")];
+    const evidence = resolveEvidence(definitions, (path) => ({
+      kind: "read",
+      path,
+      sha256: path === secondDocument.path ? secondDocument.sha256 : DOC.sha256,
+    }));
+    const preview = previewOf(definitions, { evidence });
     expect(preview.jobs.map((row) => `${row.jobId}:${row.verdict.kind}`)).toEqual(["twin:duplicate-id", "twin:duplicate-id", "bystander:dispatch"]);
     expect(preview.jobs[0]?.verdict.next).toEqual({ kind: "none", why: expect.stringContaining("share") });
+    expect(preview.jobs[0]?.documents).toEqual([
+      { path: DOC.path, pinned: { kind: "pinned", sha256: DOC.sha256 }, current: { kind: "read", sha256: DOC.sha256, when: "this-checkpoint" }, changed: "no" },
+    ]);
+    expect(preview.jobs[1]?.documents).toEqual([
+      {
+        path: secondDocument.path,
+        pinned: { kind: "pinned", sha256: secondDocument.sha256 },
+        current: { kind: "read", sha256: secondDocument.sha256, when: "this-checkpoint" },
+        changed: "no",
+      },
+    ]);
   });
 
   test("a document edited since it was pinned: unauthorised, the drift named, and both digests on the row", () => {
@@ -529,6 +557,16 @@ describe("the CLI block", () => {
     expect(text).toContain("a-new-daemon-instance");
     expect(text).toContain("does not say which list the current daemon holds");
     expect(text).not.toContain("the running daemon holds list");
+  });
+
+  test("no readable current checkpoint is not called another daemon instance", () => {
+    const preview = previewOf([sessionJob("a")]);
+    const first = schedulePreviewLines(
+      { kind: "preview", preview: { ...preview, jobs: preview.jobs.map((job) => ({ kind: "job" as const, job })) } },
+      { listRevision: listRevision([sessionJob("a")]), runningInstanceId: null },
+      NOW.getTime(),
+    )[0];
+    expect(first).not.toContain("FROM ANOTHER DAEMON INSTANCE");
   });
 
   test("an unreadable row is printed as unreadable, and the others still print", () => {

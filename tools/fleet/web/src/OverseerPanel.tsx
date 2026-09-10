@@ -656,13 +656,14 @@ export function OverseerPanel({
      nobody can see is the most interesting one on the page. */
   const titles = new Map<string, string>();
   for (const row of rows) if (row.title !== null) titles.set(row.id, row.title);
+  const currentInstanceId = overseer?.kind === "published" && overseer.status.heartbeat.kind === "reading" ? overseer.status.heartbeat.instanceId : null;
 
   return (
     <div>
       {/* FIRST, because it is the answer to "can I trust the rest of this
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
-      <SchedulePreview api={scheduleApi} now={now} />
+      <SchedulePreview api={scheduleApi} now={now} currentInstanceId={currentInstanceId} />
 
       {/* SECOND, and beside the status card rather than on a tab of its own:
           *is anything watching* and *can either subscription afford more work*

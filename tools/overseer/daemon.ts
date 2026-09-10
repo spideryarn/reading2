@@ -915,7 +915,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       // would have had no reading, and `authorisationUnder` fails closed on
       // that — a BLOCKED headline over a tick that dispatches. The shipped
       // wiring makes one a subset of the other; this does not rely on it.
-      // `resolveEvidence` reads each id once.
+      // `resolveEvidence` reads each distinct loaded definition once; duplicate
+      // ids with different documents need separate evidence for their rows.
       evidence =
         previewOptions === undefined
           ? null

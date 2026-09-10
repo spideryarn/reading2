@@ -164,8 +164,9 @@ server, which has two drifts: the fleet process holds *its own* loaded prompts, 
 constants, not the daemon's; and the checkpoint's occurrence ledger lags the scheduler timer.
 
 So: **on every checkpoint tick the daemon writes `~/.overseer/schedule.json`** (atomic temp +
-rename), computed by the shared planner from *its* loaded definitions, the documents as they are
-now, its **in-memory** occurrence index, its arming, and the capabilities it actually holds. It
+rename), computed by the shared planner from *its* loaded definitions, the session jobs' documents
+as they are now (rule jobs' sources as loaded — § D3), its **in-memory** occurrence index, its
+arming, and the capabilities it actually holds. It
 carries `schema`, `writtenAt`, the daemon's `instanceId`, `listRevision`, capabilities, arming,
 history state, the headline, and per job: resource class, dispatch mode, the verdict and its
 sentence, next due (absolute UTC instant, or *"after the run in flight settles"*), last attempt and
@@ -280,18 +281,37 @@ Stage 2's final state rather than a separate second round. What the plan did not
 
 ### Stage 3 — the browser section
 
-- [ ] `routes-schedule.ts` + `schedule-wiring.ts` + mount; `schedule-client.ts`;
+**Done.** `b623a503` (an Opus subagent, from [the task](260910e-schedule-preview-stage3-task.md);
+the Stage 2 check's fixes ride in the same commit because they share `schedule-preview.ts`). Before
+it: the independent read-only Opus check of `b0b8ee80` that the Overseer asked for (*push after
+fixes*: a latent P1 — a disarmed preview hid the spacing arming would apply — and two P2s, all
+fixed red first). After it: Sol's one review covering Stages 2–3
+([findings](260910e-schedule-preview-stage3-review-sol-findings.md)) — four established P1s, all
+fixed red first inside the stage (F4 the page did not say a preview came from another daemon
+instance; F5 the CLI called an unknown instance "another"; F6 duplicate-id rows borrowed the other
+definition's documents; F7 the route followed a symlinked or FIFO `schedule.json`), and F8's prose.
+A browser check at 1280 and 390 px passed every item; its one visual defect (prose broken mid-word
+by `break-all`) is fixed. Focused suites 16 files / 434 tests, typecheck and `build:fleet` exit 0.
+
+Known and left: a throwing document reader leaves the previous `schedule.json` in place and the jobs
+ticker's reader is unguarded (the real reader returns a result and never throws); on a disarmed
+preview the spacing row's sentence is the planner's own and reads *"a Claude session was launched
+0s ago"*, which the caveat qualifies; the page's verdict words are a second copy of the CLI's,
+checked for completeness by the compiler but not for agreement; the payload type lives in
+`routes-schedule.ts` rather than `wire.ts`.
+
+- [x] `routes-schedule.ts` + `schedule-wiring.ts` + mount; `schedule-client.ts`;
   `SchedulePreview.tsx`; the `OverseerPanel` mount.
-- [ ] Tests: the route over a fixture store; the join through `makeSchedule()`; the section drives
-  the seam, draws each absence, and prints times through `zones.ts`.
+- [x] Tests: the route over a fixture store; the join through `makeSchedule()`; the section drives
+  the seam, draws each absence, and prints times London first.
 
 ### Stage 4 — docs and close-out
 
-- [ ] `overseer.md` § The standing jobs: the preview, the fixture, dry-run, per-tick evidence, the
-  no-recurrence sentence. Factual, not a change to a rule.
-- [ ] Full suite through `tmux-job`, typecheck, lint of touched files; the roadmap row; debrief. The
-  daemon needs a restart to write the file, and the dashboard one to serve the route — both the
-  Overseer's.
+- [x] `overseer.md` § The standing jobs: the preview, the fixture, dry-run, per-tick evidence for
+  session jobs, the no-recurrence sentence. Factual, not a change to a rule.
+- [ ] Full suite through `tmux-job`, typecheck, lint of touched files; debrief. The roadmap row is
+  the Overseer's to update on close-out. The daemon needs a restart to write the file, and the
+  dashboard one to serve the route — both the Overseer's.
 
 ## Not doing
 

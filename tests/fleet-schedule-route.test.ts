@@ -20,7 +20,7 @@
  * Every store root is a temp directory; `~/.overseer` is never touched. No id in
  * this file is a uuid (`tests/fixture-ids.test.ts`).
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -224,6 +224,18 @@ describe("the payload over a real store directory, through makeSchedule()", () =
     expect(file(answer)["kind"]).toBe("unreadable");
     expect(String(file(answer)["why"])).toContain(`${bytes} bytes`);
     expect(String(file(answer)["why"])).toContain("not read");
+  });
+
+  it("does not follow schedule.json outside the store", () => {
+    const storeDir = tempRoot();
+    const elsewhere = tempRoot();
+    const outside = join(elsewhere, SCHEDULE_PREVIEW_FILE);
+    writeFileSync(outside, JSON.stringify(daemonPreview()), "utf8");
+    symlinkSync(outside, join(storeDir, SCHEDULE_PREVIEW_FILE));
+
+    const read = readScheduleFile(storeDir);
+    expect(read.kind).toBe("unreadable");
+    expect(read.kind === "unreadable" && read.why).toContain("regular file");
   });
 
   it("names a schema this build does not read as its own answer, with both numbers", () => {

@@ -44,6 +44,7 @@
  */
 import {
   authorisationOf,
+  behaviourHash,
   documentDrift,
   due,
   lastRunOf,
@@ -73,7 +74,7 @@ export type DocumentReading =
 export type ReadDocument = (path: string) => DocumentReading;
 
 /**
- * **THE DOCUMENTS EACH SESSION JOB WOULD FOLLOW, AS THEY ARE NOW**, by job id.
+ * **THE DOCUMENTS EACH SESSION JOB WOULD FOLLOW, AS THEY ARE NOW**, by loaded definition.
  *
  * Session jobs only. A rule job's "documents" are the source of code already
  * loaded into this process, so re-reading them would refuse a rule whose running
@@ -83,22 +84,38 @@ export type ReadDocument = (path: string) => DocumentReading;
 export type DocumentEvidence = ReadonlyMap<string, readonly DocumentReading[]>;
 
 /**
+ * A definition-specific key, with the plain id retained as an explicit-call
+ * override. Duplicate ids are refused before authorisation, but their preview
+ * rows still have to show the documents of the definition each row describes.
+ */
+function evidenceKey(job: AuthorisedJob): string {
+  return `${job.definition.behaviour.id}\0${behaviourHash(job.definition.behaviour)}`;
+}
+
+export function documentEvidenceFor(evidence: DocumentEvidence, job: AuthorisedJob): readonly DocumentReading[] | undefined {
+  return evidence.get(job.definition.behaviour.id) ?? evidence.get(evidenceKey(job));
+}
+
+/**
  * Read every session job's documents, once, for one tick or one checkpoint.
  *
  * **The impure half, kept out of `planJobs` on purpose.** Both the tick and the
  * daemon's headline call this with the same `readDocument`, so the verdict that
  * refuses a job and the headline that describes it are made of the same reading.
  *
- * A duplicate id is read once; the planner refuses both definitions before it
- * would look.
+ * Definitions with a duplicate id but different behaviour are read separately:
+ * the planner refuses both before authorisation, but the preview still shows
+ * the documents belonging to each definition rather than borrowing the first's.
  */
 export function resolveEvidence(definitions: readonly AuthorisedJob[], readDocument: ReadDocument): DocumentEvidence {
   const evidence = new Map<string, readonly DocumentReading[]>();
+  const duplicateIds = duplicateJobIds(definitions);
   for (const job of definitions) {
     const behaviour = job.definition.behaviour;
-    if (behaviour.work.kind !== "session" || evidence.has(behaviour.id)) continue;
+    const key = duplicateIds.has(behaviour.id) ? evidenceKey(job) : behaviour.id;
+    if (behaviour.work.kind !== "session" || evidence.has(key)) continue;
     evidence.set(
-      behaviour.id,
+      key,
       behaviour.documents.map((document) => readDocument(document.path)),
     );
   }
@@ -163,7 +180,7 @@ export function authorisationUnder(job: AuthorisedJob, evidence: DocumentEvidenc
       };
     }
     case "session": {
-      const readings = evidence.get(behaviour.id);
+      const readings = documentEvidenceFor(evidence, job);
       if (readings === undefined) {
         // FAIL CLOSED. A caller that forgot to read is not evidence that
         // nothing moved.

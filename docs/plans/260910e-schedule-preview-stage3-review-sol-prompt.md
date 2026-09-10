@@ -14,11 +14,13 @@ with nothing written — so the findings file is the record, and your closing me
 
 ## The candidate
 
-Committed: commits STAGE2_SHAS and STAGE3_SHA — fill-in below
-            Stage 2's final state: git diff 27310eb3 STAGE2_LAST   (6b5ce4a9 built it; b0b8ee80 kept a timed-out review's
-                                   unreported edits; STAGE2_FIX fixed what an independent check of those found)
-            Stage 3:               git show STAGE3_SHA
-            changed paths:         git diff --stat 27310eb3 STAGE3_SHA
+Committed: commits 6b5ce4a9, b0b8ee80, b623a503, on top of Stage 1 (27310eb3, already reviewed)
+            Everything under review: git diff 27310eb3 b623a503 -- ':!docs/plans'
+            Stage 2 built:           git show 6b5ce4a9
+            a timed-out review's unreported edits, kept: git show b0b8ee80
+            Stage 3, plus the fixes an independent check of b0b8ee80 found (they share schedule-preview.ts):
+                                     git show b623a503   (its message lists which hunks are which)
+            changed paths:           git diff --stat 27310eb3 b623a503
 
 Start with: tools/fleet/routes-schedule.ts, tools/fleet/schedule-wiring.ts, tools/fleet/web/src/schedule-client.ts,
 tools/fleet/web/src/SchedulePreview.tsx, the mount lines in tools/fleet/server.ts and

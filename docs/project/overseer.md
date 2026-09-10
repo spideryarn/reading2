@@ -228,9 +228,11 @@ reason goes into the store for whoever later asks why a job ran twice.
 **And each one is pinned.** The digest of the document it points at is part of the job's fingerprint,
 and the fingerprint is compared against a constant in that file before anything is dispatched — so
 editing one of these documents stops its job until somebody re-pins it in a reviewed commit. That is
-gate 3's last bullet made mechanical rather than remembered. **The documents are re-read on every
-tick**, not once at start: a session is told to follow the file on disk, so a digest taken when the
-daemon started would have let an edit run under the old pin until the next restart
+gate 3's last bullet made mechanical rather than remembered. **A session job's documents are
+re-read on every tick**, not once at start: a session is told to follow the file on disk, so a
+digest taken when the daemon started would have let an edit run under the old pin until the next
+restart. (A rule job's "documents" are the source of code already loaded into the daemon, so those
+are judged as loaded — re-reading them would compare the disk with code the process is not running.)
 ([260910e](../plans/260910e-schedule-preview-make-periodic-work-inspectable-before-launch.md)).
 
 **What would run next is written down, armed or not.** Every checkpoint tick the daemon writes
