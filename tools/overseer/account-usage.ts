@@ -398,9 +398,17 @@ function parseClaudeReading(
   }
   if (reading.kind !== "windows" || !Array.isArray(reading.windows)) return null;
   const windows: UsageWindowCard[] = [];
+  const seen = new Set<string>();
   for (const entry of reading.windows) {
     const parsed = parseWindowCard(entry);
     if (parsed === null) return null;
+    /* ONE WINDOW NAME, ONE READING. Two `five_hour` entries would render as two
+       conflicting numbers under one heading. The provider keys windows by
+       object, so a duplicate can only come from a corrupted or hand-edited
+       checkpoint — which is exactly what this parser is for. GPT Sol's
+       re-review of plan 260910c. */
+    if (seen.has(parsed.window)) return null;
+    seen.add(parsed.window);
     windows.push(parsed);
   }
   return { kind: "windows", windows };
@@ -421,8 +429,25 @@ function parseCodexReading(
   // something false.
   if (reading.kind !== "buckets" || !Array.isArray(reading.buckets)) return null;
   const credits = reading.resetCredits;
-  if (credits !== null && credits !== undefined && (typeof credits !== "number" || !Number.isFinite(credits))) {
+  /* A COUNT, OR NOTHING. Finite was not enough: `-1` and `1.5` are finite, and
+     `CodexResetCreditsCard` would print them as a confident number of resets.
+     The history route's own parser already requires a non-negative whole
+     number (`usage-history-client.ts § parseCodex`); this is the same rule, at
+     the boundary that was missing it. GPT Sol's re-review of plan 260910c. */
+  if (
+    credits !== null &&
+    credits !== undefined &&
+    (typeof credits !== "number" || !Number.isSafeInteger(credits) || credits < 0)
+  ) {
     return null;
+  }
+  /* One `limitId`, one bucket: two `codex` buckets would render as two
+     conflicting general-headroom readings under one heading. */
+  const limitIds = new Set<string>();
+  for (const bucket of reading.buckets) {
+    const limitId = text(record(bucket)?.limitId);
+    if (limitId === null || limitIds.has(limitId)) return null;
+    limitIds.add(limitId);
   }
   return {
     kind: "buckets",

@@ -479,7 +479,18 @@ its signpost in `AGENTS.md`.
 - **One test Sol's extension left red found a real flicker.** The sections were anchored on the bare
   once-a-second `now`, so a section read just after a tick had a `takenAt` in the future and withheld
   its numbers. They now share the card's `Math.max(now, receivedAt)` anchor.
-- **A short read-only re-review was run for the verdict the kill swallowed**, answer in
-  `260910c-code-rereview-sol.md` beside this plan.
+- **A short read-only re-review was run for the verdict the kill swallowed** —
+  [260910c-code-rereview-sol.md](260910c-code-rereview-sol.md), a genuine spawn (its activity log
+  opens with the Codex session header). **No P0, three P1s, no lesser findings.** Two were fixed,
+  red first, in `tests/account-usage-reading-integrity.test.ts`, which drives each case through all
+  three boundaries with a positive control beside it: a reset-credit count that is not a
+  non-negative whole number, and duplicate windows or buckets inside one section.
+- **The third is left as it is, and put to Greg as a product call.** A section older than 20
+  minutes still shows its numbers, with its age in red — the rule the existing card has always
+  followed (*"it never suppresses anything; past this it is printed loudly"*). Sol's case against
+  it is real: usage only rises within a window, so a stale number errs towards looking like more
+  room, which is the dangerous direction for a page used to decide whether to start more work.
+  Changing it here would diverge the sections from the card beside them, so it should change in
+  both places or neither.
 - Gates: `npm test` and `npm run typecheck`, and GPT Sol on the plan before building and on the code
   after.

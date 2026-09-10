@@ -140,6 +140,7 @@ function parseSection(u: unknown): AccountUsageSection | string {
     const raw = reading["windows"];
     if (!Array.isArray(raw)) return `section ${name} carries no window list`;
     const windows: UsageWindowCard[] = [];
+    const seenWindows = new Set<string>();
     for (const entry of raw) {
       const window = parseWindow(entry);
       /* ONE BAD WINDOW FAILS THE SECTION rather than being skipped. A five-hour
@@ -147,6 +148,10 @@ function parseSection(u: unknown): AccountUsageSection | string {
          five-hour limit, which is a claim, and the section would then be wrong
          about its own contents. Same argument `parseHit` makes one file along. */
       if (typeof window === "string") return `section ${name}: ${window}`;
+      /* And one window name, one reading: two `five_hour` entries would render
+         as two conflicting numbers under one heading. GPT Sol's re-review. */
+      if (seenWindows.has(window.window)) return `section ${name} lists window ${window.window} twice`;
+      seenWindows.add(window.window);
       windows.push(window);
     }
     return providerAccountId === null
@@ -167,13 +172,23 @@ function parseSection(u: unknown): AccountUsageSection | string {
     const raw = reading["buckets"];
     if (!Array.isArray(raw)) return `section ${name} carries no bucket list`;
     const rawCredits = reading["resetCredits"];
+    /* A count, or nothing: `-1` and `1.5` are finite and not counts. The same
+       rule the history route's parser applies. GPT Sol's re-review. */
     const resetCredits =
       rawCredits === null || rawCredits === undefined
         ? null
-        : typeof rawCredits === "number" && Number.isFinite(rawCredits)
+        : typeof rawCredits === "number" && Number.isSafeInteger(rawCredits) && rawCredits >= 0
           ? rawCredits
           : undefined;
     if (resetCredits === undefined) return `section ${name} has an unreadable reset-credit count`;
+    /* One `limitId`, one bucket — two would draw as conflicting readings. */
+    const limitIds = new Set<string>();
+    for (const bucket of raw) {
+      const limitId = isRecord(bucket) ? nonBlank(bucket["limitId"]) : null;
+      if (limitId === null) return `section ${name} carries a bucket with no limit id`;
+      if (limitIds.has(limitId)) return `section ${name} lists bucket ${limitId} twice`;
+      limitIds.add(limitId);
+    }
     /* The bucket interiors are carried as the collector produced them and are
        re-checked by the browser's own Codex view parser, which already exists
        for the history route. Re-deriving `CodexUsageBucket` here would be a

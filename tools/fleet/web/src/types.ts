@@ -2545,9 +2545,14 @@ function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
     }
     if (str(reading["kind"]) !== "windows" || !Array.isArray(reading["windows"])) return null;
     const windows: UsageWindowCard[] = [];
+    const seenWindows = new Set<string>();
     for (const entry of reading["windows"]) {
       const window = parseUsageWindowCard(entry);
       if (window === null) return null;
+      /* One window name, one reading — two `five_hour` entries would render as
+         two conflicting numbers under one heading. GPT Sol's re-review. */
+      if (seenWindows.has(window.window)) return null;
+      seenWindows.add(window.window);
       windows.push(window);
     }
     return providerAccountId === null
@@ -2562,13 +2567,22 @@ function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
     }
     if (str(reading["kind"]) !== "buckets" || !Array.isArray(reading["buckets"])) return null;
     const rawCredits = reading["resetCredits"];
+    /* A count, or nothing: `-1` and `1.5` are finite and not counts — the same
+       rule `parseCodex` in usage-history-client.ts applies. GPT Sol's re-review. */
     const resetCredits =
       rawCredits === null || rawCredits === undefined
         ? null
-        : typeof rawCredits === "number" && Number.isFinite(rawCredits)
+        : typeof rawCredits === "number" && Number.isSafeInteger(rawCredits) && rawCredits >= 0
           ? rawCredits
           : undefined;
     if (resetCredits === undefined) return null;
+    /* One `limitId`, one bucket — two would draw as conflicting readings. */
+    const limitIds = new Set<string>();
+    for (const bucket of reading["buckets"]) {
+      const limitId = isRecord(bucket) ? nonBlank(bucket["limitId"]) : null;
+      if (limitId === null || limitIds.has(limitId)) return null;
+      limitIds.add(limitId);
+    }
     /* `takenAt` is this reading's own instant, which is what the bucket parser
        checks each window against — that a reset falls inside the window that
        produced it. Not `Date.now()`: that would turn an old-but-valid reading
