@@ -605,3 +605,24 @@ roadmap stage's status.
   - **B2**: `ObservedExitRecord` reworked to the protocol's final exit.json shape, and the
     `observedOf` adapter in `tools/overseer/observed-launch.ts`.
 - `view()` is declared locally in `scheduler.ts` until the protocol ships it.
+
+**2026-09-10: Stage B built (B1 2dac033f, B2 ae3e18cd, B3 46f5da98).**
+- Merged with launch-protocol's Stage 2b at a866b2e4. Stage B then moved off its stand-in types
+  onto the protocol's real `view()` and `RunSpec.account`.
+- M13: an occurrence abandoned because a newer revision replaced it, or because its pinned account
+  is gone, now reads as a neutral `superseded`, not as `launch-failed`.
+- Gates rerun by the author at 46f5da98: typecheck exit 0; 25 focused files, 880 tests.
+- GPT Sol's stage review is under way:
+  [260910f-scheduled-dispatch-stageB-review-sol-prompt.md](260910f-scheduled-dispatch-stageB-review-sol-prompt.md).
+
+**2026-09-10, ~21:15Z: stopped here, by Greg's reprioritisation.**
+- Greg, through the Overseer: *Overseer and dashboard work drops to the very bottom of the
+  priorities and Spideryarn product work comes up.* So Stage B is finished and landed, and **Stage C
+  is not started.**
+- Its brief, [260910f-scheduled-dispatch-stageC-task.md](260910f-scheduled-dispatch-stageC-task.md),
+  is ready for whoever picks it up.
+- **Stage C waits on the launch protocol's own Stage 3.** That is the protocol composed in
+  `daemon.ts`, the launch inbox and `overseer-launches.ts`, and the launches projection.
+  `launch-protocol` landed its Stages 1, 1b, 2 and 2b and stopped without building it.
+- Until then, the daemon passes a "not wired" launch capability and `AccountChoice`. So the
+  scheduler holds no session capability, and nothing launches, whatever the arming.

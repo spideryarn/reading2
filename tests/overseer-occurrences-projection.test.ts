@@ -95,7 +95,7 @@ describe("the file around the jobs", () => {
 });
 
 describe("the bound and the order", () => {
-  test(`keeps the newest ${OCCURRENCES_PER_JOB} by scheduledAt, and counts the rest as omitted`, () => {
+  test(`keeps the newest ${OCCURRENCES_PER_JOB} by plannedAt, and counts the rest as omitted`, () => {
     const launches = [3, 14, 1, 9, 12, 5, 7, 2, 11, 4, 13, 6, 8, 10].map((n) => observed(n));
     const projected = project([job(launches)]).jobs[0];
     expect(projected?.occurrences.map((o) => o.scheduledAt)).toEqual([14, 13, 12, 11, 10, 9, 8, 7, 6, 5].map(day));
@@ -121,6 +121,13 @@ describe("the bound and the order", () => {
     const revisionA = observed(1, { scheduledAt: day(5), plannedAt: "2026-09-05T09:00:01.000Z" });
     const revisionB = observed(2, { scheduledAt: day(5), plannedAt: "2026-09-05T09:05:00.000Z" });
     const projected = project([job([revisionA, revisionB])]).jobs[0];
+    expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
+  });
+
+  test("planning order outranks nominal due order, matching the scheduler's one newest comparator", () => {
+    const plannedFirst = observed(1, { scheduledAt: day(9), plannedAt: day(10) });
+    const plannedLater = observed(2, { scheduledAt: day(8), plannedAt: day(11) });
+    const projected = project([job([plannedFirst, plannedLater])]).jobs[0];
     expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
   });
 

@@ -49,7 +49,7 @@ import type {
 } from "./wire.js";
 
 /** The schema this build writes and reads. The writer stamps it; a file with any other number is `unsupported-schema`. */
-export const SCHEDULE_PREVIEW_SCHEMA = 1;
+export const SCHEDULE_PREVIEW_SCHEMA = 2;
 
 /**
  * The file's name, inside the Overseer store directory — beside `armed.json`,
@@ -131,7 +131,7 @@ export function parseSchedulePreview(json: unknown): SchedulePreviewParse {
       capabilities: parseCapabilities(object(top["capabilities"], "capabilities")),
       arming: parseArming(object(top["arming"], "arming")),
       history: parseHistory(object(top["history"], "history")),
-      sessionHistory: parseHistory(object(top["sessionHistory"], "sessionHistory")),
+      sessionHistory: parseSessionHistory(object(top["sessionHistory"], "sessionHistory")),
       headline: parseHeadline(object(top["headline"], "headline")),
       missedRunPolicy: parseMissedRunPolicy(object(top["missedRunPolicy"], "missedRunPolicy")),
       caveat: text(top, "caveat", "the schedule preview"),
@@ -430,6 +430,12 @@ function parseHistory(value: Obj): ParsedSchedulePreview["history"] {
   if (kind === "intact") return { kind };
   if (kind === "lost") return { kind, why: text(value, "why", "history") };
   return fail(`the ledger's history is of a kind this build does not know (${kind})`);
+}
+
+function parseSessionHistory(value: Obj): ParsedSchedulePreview["sessionHistory"] {
+  const kind = text(value, "kind", "sessionHistory");
+  if (kind === "unavailable") return { kind, why: text(value, "why", "sessionHistory") };
+  return parseHistory(value);
 }
 
 function parseHeadline(value: Obj): ParsedSchedulePreview["headline"] {

@@ -61,7 +61,7 @@ const SECOND: SchedulePreviewJob = {
 };
 
 const PREVIEW: SchedulePreview = {
-  schema: 1,
+  schema: 2,
   writtenAt: "2026-09-10T12:00:00.000Z",
   instanceId: "parse-fixture-instance",
   list: { kind: "given", listRevision: "abcdef012345" },
@@ -96,7 +96,7 @@ describe("a file the daemon wrote reads back as exactly what it wrote", () => {
       { kind: "job", job: JOB },
       { kind: "job", job: SECOND },
     ]);
-    expect(SCHEDULE_PREVIEW_SCHEMA).toBe(1);
+    expect(SCHEDULE_PREVIEW_SCHEMA).toBe(2);
   });
 });
 
@@ -165,8 +165,18 @@ describe("what it does not know, it says it does not know — per row", () => {
 
   test("a schema this build does not read is its own answer, not an unreadable file", () => {
     const value = copy();
-    value["schema"] = 2;
-    expect(parseSchedulePreview(value)).toEqual({ kind: "unsupported-schema", schema: 2 });
+    value["schema"] = 3;
+    expect(parseSchedulePreview(value)).toEqual({ kind: "unsupported-schema", schema: 3 });
+  });
+
+  test("the former schema-1 shape is an older build, not a damaged current preview", () => {
+    const value = copy();
+    value["schema"] = 1;
+    delete value["sessionHistory"];
+    const first = jobsOf(value)[0] as Record<string, unknown>;
+    first["sessionTimeout"] = "not built";
+    first["sessionNoOverlap"] = "not enforced";
+    expect(parseSchedulePreview(value)).toEqual({ kind: "unsupported-schema", schema: 1 });
   });
 
   test("anything that is not a preview at all is unreadable, with a reason, and nothing throws", () => {
@@ -299,6 +309,15 @@ describe("a session job's launch, its run spec, and the Stage B verdicts (plan 2
     const unknown = copy();
     unknown["sessionHistory"] = { kind: "mostly" };
     expect(parseSchedulePreview(unknown).kind).toBe("unreadable");
+  });
+
+  test("an unavailable launch journal is distinct from history loss", () => {
+    const value = copy();
+    value["sessionHistory"] = { kind: "unavailable", why: "this daemon holds no launch protocol" };
+    const parsed = parseSchedulePreview(value);
+    expect(parsed.kind).toBe("preview");
+    if (parsed.kind !== "preview") return;
+    expect(parsed.preview.sessionHistory).toEqual({ kind: "unavailable", why: "this daemon holds no launch protocol" });
   });
 });
 

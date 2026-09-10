@@ -4291,7 +4291,7 @@ export type ReceiptSummary = {
  * tick cannot disagree about the gate order.
  */
 export type SchedulePreview = {
-  schema: 1;
+  schema: 2;
   /** When the daemon computed this. Every verdict below is as of this instant — see `caveat`. */
   writtenAt: string;
   /** The daemon instance that wrote it, so a reader can tell a restarted daemon's file from the one before. */
@@ -4306,9 +4306,10 @@ export type SchedulePreview = {
   /**
    * The launch journal — every session job's history since plan 260910f
    * (scheduled dispatch). `lost` holds every session job, and their rows say so;
-   * it says nothing about the rules (F2).
+   * `unavailable` means this process deliberately holds no launch protocol, not
+   * that a journal reader found damage. It says nothing about the rules (F2).
    */
-  sessionHistory: SchedulePreviewHistory;
+  sessionHistory: SchedulePreviewSessionHistory;
   /** The checkpoint's own scheduler headline, recomputed from the same fresh evidence on the same tick. */
   headline: SchedulePreviewHeadline;
   missedRunPolicy: { kind: "one-run"; sentence: string };
@@ -4332,6 +4333,9 @@ export type SchedulePreviewArming = { kind: "armed"; at: string } | { kind: "non
 
 /** Whether one ledger is whole. `lost` holds every job whose history lives in it, and the rows say so. */
 export type SchedulePreviewHistory = { kind: "intact" } | { kind: "lost"; why: string };
+
+/** The launch journal may also be unavailable because this process holds no launch protocol. */
+export type SchedulePreviewSessionHistory = SchedulePreviewHistory | { kind: "unavailable"; why: string };
 
 /** `store.ts`'s `StoredScheduler`, restated here because this file imports nothing. */
 export type SchedulePreviewHeadline = { kind: "armed" | "blocked" | "off" | "unknown"; why: string; at: string };

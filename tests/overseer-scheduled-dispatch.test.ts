@@ -767,11 +767,18 @@ describe("a waiting occurrence's pinned account, and the replacement's due insta
     expect(launched).toEqual([]);
   });
 
-  test("a record that names no account (before 2b) is gated by the account choice a new plan would be", () => {
+  test("a record that names no account is abandoned, never resumed through an unpinned launcher", () => {
     const job = sessionJob("sweep");
     const held: AccountChoice = { chosen: { kind: "held", why: "the box is critical", until: null }, standing: () => ({ kind: "clear" }) };
-    expect(planOf(job, indexOf(waiting(job, null)), held).plans.map((one) => one.kind)).toEqual(["usage-held"]);
-    expect(planOf(job, indexOf(waiting(job, null)), ACCOUNTS).plans.map((one) => one.kind)).toEqual(["resume"]);
+    const heldResult = planOf(job, indexOf(waiting(job, null)), held);
+    expect(heldResult.superseded).toEqual(["the waiting occurrence pins no pool account, so it cannot be resumed as a scheduled session"]);
+    expect(heldResult.plans.map((one) => one.kind)).toEqual(["usage-held"]);
+    expect(heldResult.launched).toEqual([]);
+
+    const replacement = planOf(job, indexOf(waiting(job, null)), ACCOUNTS);
+    expect(replacement.superseded).toEqual(["the waiting occurrence pins no pool account, so it cannot be resumed as a scheduled session"]);
+    expect(replacement.plans.map((one) => one.kind)).toEqual(["dispatch"]);
+    expect(replacement.launched).toEqual([{ kind: "new-session", dueAt: now().toISOString(), account: "pool-a" }]);
   });
 
   test("a new plan with no account to run on is `usage-held`, and says until when", () => {

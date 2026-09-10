@@ -452,7 +452,11 @@ function Facts({ preview, boxNow }: { preview: ParsedSchedulePreview; boxNow: nu
       </li>
       <li className={preview.sessionHistory.kind === "lost" ? "tw:font-medium tw:text-alarm-ink" : undefined}>
         sessions:{" "}
-        {preview.sessionHistory.kind === "intact" ? "the launch journal is whole" : `the launch journal is LOST, so every session job is held — ${preview.sessionHistory.why}`}
+        {preview.sessionHistory.kind === "intact"
+          ? "the launch journal is whole"
+          : preview.sessionHistory.kind === "lost"
+            ? `the launch journal is LOST, so every session job is held — ${preview.sessionHistory.why}`
+            : `this daemon cannot read a launch journal, so every session job is held — ${preview.sessionHistory.why}`}
       </li>
       {preview.list.kind === "given" ? (
         <li>

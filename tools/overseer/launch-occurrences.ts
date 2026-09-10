@@ -111,11 +111,11 @@ function carriedStanding(disposition: CarriedOccurrence["disposition"], why: str
  * kind was written by something other than this scheduler. What the code does
  * with one:
  *  - it is still projected, never dropped, because its job's clock must see it;
- *  - with no pinned account, nothing can say that account is gone, so it is
- *    never superseded on that ground, only for a moved revision;
- *  - a resume of it waits on the account choice a new plan would make
- *    (`schedule-plan.ts` § `resumeHold`);
- *  - and then the protocol drives its stored request on, tmux launcher and all.
+ *  - it is superseded before launch, because a newly chosen account cannot be
+ *    applied to the stored request and M11 permits no scheduled session without
+ *    a pinned pool account;
+ *  - its replacement is a normal `tmux-headless` request with the chosen
+ *    account, authorised timeout and access.
  */
 export function accountOf(record: LaunchRecord): string | null {
   return record.run === null ? null : record.run.account;

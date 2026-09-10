@@ -351,9 +351,9 @@ describe("schedule-client", () => {
   });
 
   it("re-parses the forwarded file with the one parser, and says so in its own voice when the page's build disagrees", () => {
-    const newer = parseSchedulePayload({ schema: 1, servedAt: served, file: { kind: "preview", preview: { schema: 2 } } }, RECEIVED_MS);
-    expect(newer).toEqual({ kind: "unsupported-schema", source: "page", schema: 2, known: SCHEDULE_PREVIEW_SCHEMA, servedAt: served });
-    const damaged = parseSchedulePayload({ schema: 1, servedAt: served, file: { kind: "preview", preview: { schema: 1 } } }, RECEIVED_MS);
+    const newer = parseSchedulePayload({ schema: 1, servedAt: served, file: { kind: "preview", preview: { schema: 3 } } }, RECEIVED_MS);
+    expect(newer).toEqual({ kind: "unsupported-schema", source: "page", schema: 3, known: SCHEDULE_PREVIEW_SCHEMA, servedAt: served });
+    const damaged = parseSchedulePayload({ schema: 1, servedAt: served, file: { kind: "preview", preview: { schema: 2 } } }, RECEIVED_MS);
     expect(damaged.kind).toBe("unreadable");
     expect(damaged.kind === "unreadable" && damaged.source).toBe("page");
   });

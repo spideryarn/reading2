@@ -215,6 +215,11 @@ describe("each verdict the planner can give becomes a row that says so", () => {
       expect(row.verdict.kind).toBe("history-lost");
       expect(row.verdict.sentence).toContain("launch journal");
       expect(row.verdict.sentence).toContain("a torn line");
+      expect(row.verdict.next).toEqual({
+        kind: "none",
+        why: expect.stringContaining("launch journal history is resolved"),
+      });
+      if (row.verdict.next.kind === "none") expect(row.verdict.next.why).not.toContain("reconcile-jobs");
       expect(row.lastAttempt.kind).toBe("not-known");
     }
     expect(only(preview, "r").verdict.kind).toBe("dispatch");
@@ -222,10 +227,12 @@ describe("each verdict the planner can give becomes a row that says so", () => {
     expect(preview.sessionHistory.kind).toBe("lost");
   });
 
-  test("a process holding no launch journal holds every session row, and says why — an unread history is not an empty one", () => {
+  test("a process holding no launch protocol says history is unavailable, not lost, and holds every session row", () => {
     const preview = previewOf([sessionJob("a"), ruleJob("r")], { journal: undefined });
-    expect(only(preview, "a").verdict.kind).toBe("history-lost");
+    expect(preview.sessionHistory).toEqual({ kind: "unavailable", why: expect.stringContaining("holds no launch protocol") });
+    expect(only(preview, "a").verdict.kind).toBe("held");
     expect(only(preview, "a").verdict.sentence).toContain("holds no launch protocol");
+    expect(only(preview, "a").verdict.sentence).not.toContain("not whole");
     expect(only(preview, "r").verdict.kind).toBe("dispatch");
   });
 
@@ -799,11 +806,11 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     expect(read.preview.list).toEqual({ kind: "given", listRevision: PREVIEW_OPTION.listRevision });
     expect(read.preview.capabilities).toEqual(NONE);
     const rows = read.preview.jobs.map((row) => (row.kind === "job" ? `${row.job.jobId}:${row.job.verdict.kind}` : "unreadable"));
-    // THE DAEMON HANDS THE PREVIEW NO LAUNCH JOURNAL YET (Stage C wires it), so
-    // every session row is held on it and says why; the rule still previews a
-    // dispatch.
-    expect(rows).toEqual(["would-dispatch:history-lost", "dry:history-lost", "would-run:dispatch"]);
-    expect(read.preview.sessionHistory).toEqual({ kind: "lost", why: expect.stringContaining("no launch protocol") });
+    // THE DAEMON HANDS THE PREVIEW NO LAUNCH PROTOCOL YET (Stage C wires it),
+    // so every session row is held and says the history is unavailable rather
+    // than falsely claiming a journal was lost; the rule still previews a dispatch.
+    expect(rows).toEqual(["would-dispatch:held", "dry:held", "would-run:dispatch"]);
+    expect(read.preview.sessionHistory).toEqual({ kind: "unavailable", why: expect.stringContaining("no launch protocol") });
     expect(read.preview.history).toEqual({ kind: "intact" });
     // THE ASSERTION THAT MATTERS: it previewed a dispatch and made none.
     expect(eventsIn(root).filter((event) => event.kind.startsWith("job-occurrence") || event.kind.startsWith("rule-"))).toEqual([]);
@@ -911,9 +918,9 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     // THE LIVE READER'S DIGEST, not the copy's.
     expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.documents[0]?.changed : "unreadable"))).toEqual(["no", "no"]);
     // The live SPACING cannot show until Stage C hands the daemon its launch
-    // journal: until then every session row is held on it. When it does, these
+    // protocol: until then every session row is held. When it does, these
     // read dispatch, spacing-held — which is what this line used to assert.
-    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.verdict.kind : "unreadable"))).toEqual(["history-lost", "history-lost"]);
+    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.verdict.kind : "unreadable"))).toEqual(["held", "held"]);
   });
 
   test("a daemon handed no job list writes a file that says so, rather than no file", async () => {

@@ -124,7 +124,7 @@ const EDITED: SchedulePreviewJob = {
 };
 
 const PREVIEW: SchedulePreview = {
-  schema: 1,
+  schema: 2,
   writtenAt: WRITTEN,
   instanceId: "section-fixture-instance",
   list: { kind: "given", listRevision: "abcdef012345" },
@@ -350,6 +350,17 @@ describe("the preview", () => {
     expect(visible('[data-slot="verdict"]', row("section-usage-job"))).toContain("HELD FOR A POOL ACCOUNT");
     expect(container.textContent).toContain("the launch journal is LOST, so every session job is held — a torn line at 3");
     expect(container.textContent).toContain("launch protocol no");
+  });
+
+  it("shows an unavailable launch journal without raising a lost-history alarm", async () => {
+    await draw(
+      previewView({
+        ...PREVIEW,
+        sessionHistory: { kind: "unavailable", why: "this daemon holds no launch protocol" },
+      }),
+    );
+    expect(container.textContent).toContain("this daemon cannot read a launch journal, so every session job is held");
+    expect(container.textContent).not.toContain("launch journal is LOST");
   });
 
   it("gives a row this build cannot read its own line, naming the job", async () => {

@@ -14,12 +14,13 @@
  *
  * ## Bounded, newest first
  *
- * `OCCURRENCES_PER_JOB` per job, newest first by `scheduledAt` — the nominal
- * due instant, which is the occurrence's identity. Revision siblings share
- * that instant, so ties use `plannedAt` newest first, then the fold's insertion
- * order newest first. Two writes of the same journal therefore give the same
- * file. What is left out is COUNTED (`omitted`), because a list that stopped at
- * ten without saying so reads as "only ten ever ran".
+ * `OCCURRENCES_PER_JOB` per job, newest first by `plannedAt`, then the fold's
+ * insertion order newest first. That is the scheduler's one definition of
+ * newest (`jobs.ts` § `newestOccurrenceOf`): the nominal due instant is
+ * identity, not order, and revision siblings can share it. Two writes of the
+ * same journal therefore give the same file. What is left out is COUNTED
+ * (`omitted`), because a list that stopped at ten without saying so reads as
+ * "only ten ever ran".
  *
  * ## A command is printed only where it applies, and only if it is safe to paste
  *
@@ -109,16 +110,13 @@ function jobOf(job: OccurrencesProjectionJob): ScheduledOccurrencesJob {
 }
 
 /**
- * Newest `scheduledAt` first, by instant rather than by string, so two
- * spellings of one instant sort together; an instant that does not parse sorts
- * after every one that does, rather than wherever NaN lands. Revision siblings
- * tie on `scheduledAt`, so their `plannedAt` decides next. The caller decorates
- * final ties with reverse fold insertion order, the protocol's last word on
- * which one is newest.
+ * Newest `plannedAt` first, by instant rather than by string, so two spellings
+ * of one instant sort together; an instant that does not parse sorts after
+ * every one that does, rather than wherever NaN lands. The caller decorates
+ * ties with reverse fold insertion order, the protocol's last word on which
+ * one is newest.
  */
 function newestFirstOrder(a: ObservedLaunch, b: ObservedLaunch): number {
-  const scheduled = instantNewestFirst(a.scheduledAt, b.scheduledAt);
-  if (scheduled !== 0) return scheduled;
   return instantNewestFirst(a.plannedAt, b.plannedAt);
 }
 

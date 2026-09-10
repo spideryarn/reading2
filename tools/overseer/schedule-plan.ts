@@ -665,10 +665,9 @@ function pinnedAccountOf(occurrence: LaunchOccurrence): string | null {
 function resumeDecision(occurrence: LaunchOccurrence, authorisedHash: BehaviourHash, accounts: AccountChoice): { readonly kind: "resume" } | { readonly kind: "supersede"; readonly why: string } {
   if (occurrence.key.behaviourHash !== authorisedHash) return { kind: "supersede", why: `superseded by ${authorisedHash}` };
   const account = pinnedAccountOf(occurrence);
-  if (account !== null) {
-    const standing = accounts.standing(account);
-    if (standing.kind === "gone") return { kind: "supersede", why: `pinned account ${account} is no longer usable: ${standing.why}` };
-  }
+  if (account === null) return { kind: "supersede", why: "the waiting occurrence pins no pool account, so it cannot be resumed as a scheduled session" };
+  const standing = accounts.standing(account);
+  if (standing.kind === "gone") return { kind: "supersede", why: `pinned account ${account} is no longer usable: ${standing.why}` };
   return { kind: "resume" };
 }
 
@@ -679,16 +678,14 @@ function resumeDecision(occurrence: LaunchOccurrence, authorisedHash: BehaviourH
  * so it runs on the account it was planned with; if that account is held, the
  * resume waits for it. It is not abandoned and no sibling is planned: the same
  * key on a different run spec would be a conflict at the protocol (F5), and a
- * held account is a reason to wait, not a reason to replace. (A `gone` account
- * never reaches here — `resumeDecision` supersedes it.) A record that names no
- * account — a `tmux` launch, which pins no run spec (`launch-occurrences.ts` §
- * `accountOf`) — waits on the account choice a new plan would.
+ * held account is a reason to wait, not a reason to replace. (A `gone` account,
+ * or a record with no pinned account, never reaches here — `resumeDecision`
+ * supersedes it.)
  */
 function resumeHold(occurrence: LaunchOccurrence, accounts: AccountChoice): { readonly why: string; readonly until: string | null; readonly account: string | null } | null {
   const account = pinnedAccountOf(occurrence);
   if (account === null) {
-    const chosen = accounts.chosen;
-    return chosen.kind === "held" ? { why: `its waiting occurrence is resumable, and no pool account may start a session now: ${chosen.why}`, until: chosen.until, account: null } : null;
+    return { why: "its waiting occurrence pins no pool account and cannot be resumed as a scheduled session", until: null, account: null };
   }
   const standing = accounts.standing(account);
   switch (standing.kind) {

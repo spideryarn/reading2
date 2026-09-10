@@ -56,7 +56,7 @@ import type {
 import { londonFirstLine } from "../fleet/zones.js";
 import { describeAge } from "./format-age.js";
 import type { Arming, AuthorisedJob, JobWork, LaunchOccurrence, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
-import { scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
+import { NO_LAUNCH_JOURNAL_WHY, scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
 import { authorisationUnder, documentEvidenceFor, planJobs, type AccountChoice, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
 import type { HeldCapabilities } from "./scheduler.js";
 import type { StoredScheduler } from "./store.js";
@@ -180,7 +180,7 @@ export function schedulePreview(input: SchedulePreviewInput): SchedulePreview {
     capabilities: { session: input.capabilities.session, rules: input.capabilities.rules },
     arming,
     history: historyOf(merged.history.rules),
-    sessionHistory: historyOf(merged.history.sessions),
+    sessionHistory: input.journal === undefined ? { kind: "unavailable", why: NO_LAUNCH_JOURNAL_WHY } : historyOf(merged.history.sessions),
     headline: { kind: input.headline.kind, why: input.headline.why, at: input.headline.at },
     missedRunPolicy: { kind: MISSED_RUN_POLICY, sentence: MISSED_RUN_SENTENCE },
     caveat: SCHEDULE_PREVIEW_CAVEAT,
@@ -288,11 +288,24 @@ const none = (why: string): SchedulePreviewNext => ({ kind: "none", why });
 function verdictOf(plan: JobPlan, job: AuthorisedJob, input: SchedulePreviewInput): SchedulePreviewVerdict {
   switch (plan.kind) {
     case "history-lost":
-      return {
-        kind: plan.kind,
-        sentence: `held — the occurrence ledger is not whole, so nothing is dispatched: ${plan.why}`,
-        next: none("nothing runs until the ledger is reconciled (overseer reconcile-jobs) and the daemon restarted"),
-      };
+      if (job.definition.behaviour.work.kind === "session" && input.journal === undefined) {
+        return {
+          kind: "held",
+          sentence: `held — ${NO_LAUNCH_JOURNAL_WHY}`,
+          next: none("nothing runs until this daemon is started with a launch protocol"),
+        };
+      }
+      return job.definition.behaviour.work.kind === "session"
+        ? {
+            kind: plan.kind,
+            sentence: `held — the launch journal is not whole, so nothing is dispatched: ${plan.why}`,
+            next: none("nothing runs until the launch journal history is resolved and the daemon restarted"),
+          }
+        : {
+            kind: plan.kind,
+            sentence: `held — the rules' occurrence ledger is not whole, so nothing is dispatched: ${plan.why}`,
+            next: none("nothing runs until the rules' ledger is reconciled (overseer reconcile-jobs) and the daemon restarted"),
+          };
     case "duplicate-id":
       return { kind: plan.kind, sentence: plan.why, next: none("not while two definitions share its id") };
     case "unauthorised":
@@ -613,7 +626,7 @@ function previewLines(preview: ParsedSchedulePreview, checkout: { readonly built
     `${INDENT}${listLine(preview.list, checkout, preview.instanceId)}`,
     `${INDENT}arming: ${preview.arming.kind === "armed" ? `armed at ${londonFirst(preview.arming.at)}` : `none — ${preview.arming.why}`}`,
     `${INDENT}history: ${preview.history.kind === "intact" ? "the rules' ledger is whole" : `the rules' ledger is LOST, so every rule is held — ${preview.history.why}`}`,
-    `${INDENT}sessions: ${preview.sessionHistory.kind === "intact" ? "the launch journal is whole" : `the launch journal is LOST, so every session job is held — ${preview.sessionHistory.why}`}`,
+    `${INDENT}sessions: ${sessionHistoryLine(preview.sessionHistory)}`,
     `${INDENT}this daemon holds: launch protocol ${preview.capabilities.session ? "yes" : "no"}, rule runner ${preview.capabilities.rules ? "yes" : "no"}`,
     `${INDENT}missed runs: ${preview.missedRunPolicy.kind} — ${preview.missedRunPolicy.sentence}`,
     `${INDENT}${preview.caveat}`,
@@ -621,6 +634,21 @@ function previewLines(preview: ParsedSchedulePreview, checkout: { readonly built
   if (preview.list.kind === "given" && preview.jobs.length === 0) lines.push(`${INDENT}the list holds no jobs`);
   for (const row of preview.jobs) lines.push("", ...rowLines(row, nowMs));
   return lines;
+}
+
+function sessionHistoryLine(history: ParsedSchedulePreview["sessionHistory"]): string {
+  switch (history.kind) {
+    case "intact":
+      return "the launch journal is whole";
+    case "lost":
+      return `the launch journal is LOST, so every session job is held — ${history.why}`;
+    case "unavailable":
+      return `this daemon cannot read a launch journal, so every session job is held — ${history.why}`;
+    default: {
+      const never: never = history;
+      throw new Error(`no session-history line for ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 function listLine(
