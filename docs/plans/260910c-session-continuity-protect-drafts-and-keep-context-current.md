@@ -688,6 +688,14 @@ F50–F53 only.
   before any change: `fleet-web`, `fleet-feed-panel` and `fleet-execution-identity`, **535 tests,
   exit 0**. The two environment reds in a fresh worktree (`cold-start-lazy-imports`,
   `pdf-bundle-trace`) are expected and are not mine.
+- **A third environment red, found and proved on 2026-09-10.** In a worktree that has never run
+  `npm run build:fleet`, `tests/fleet-decisions-route.test.ts` › *server.ts wiring* fails with
+  `process.exit unexpectedly called with "2"`: `server.ts` refuses to start without
+  `tools/fleet/web/dist/index.html` (its own comment says why — a server with no client once
+  answered 404 to the only person who visited). Proved rather than reasoned: after one
+  `npm run build:fleet` the file passes 15 of 15. `dist/` is gitignored, so the build leaves nothing
+  to commit. Same class as the two above — a build artefact a fresh worktree lacks — and worth
+  adding to the brief the Overseer gives every fleet agent.
 
 ## Decision log
 
