@@ -193,6 +193,9 @@ describe("history-lost, and the attributed way out (F2, F11)", () => {
 
   test.each([
     ["an interior line that is not JSON", ["{not json", reserved(B)], 1],
+    // F14: a blank record is a record that does not parse, not a gap to skip.
+    ["a blank interior line", [reserved(A), ""], 2],
+    ["a blank first line", [""], 1],
     ["an unknown schema", [{ ...reserved(A), v: 2 }], 1],
     ["an unknown kind", [reserved(A), { v: 1, kind: "borrowed", at, key: A }], 2],
     ["an unexpected field", [{ ...reserved(A), extra: true }], 1],

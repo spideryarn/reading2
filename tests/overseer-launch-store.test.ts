@@ -140,6 +140,9 @@ describe("append and replay", () => {
 describe("a journal that cannot be replayed whole is history-lost, with nothing folded past the hole (F11)", () => {
   const cases: readonly [string, readonly (string | object)[], number][] = [
     ["an interior line that is not JSON", [planned("cand-a"), "{garbage"], 2],
+    // F14: a blank record is a record that does not parse, not a gap to skip.
+    ["a blank interior line", [planned("cand-a"), ""], 2],
+    ["a blank first line", [""], 1],
     ["an unknown schema", [{ ...planned("cand-a"), v: 2 }], 1],
     ["an unknown kind", [planned("cand-a"), { v: 1, kind: "teleported", occurrenceId: A, at: T0 }], 2],
     ["a known kind missing a field", [{ ...planned("cand-a"), material: undefined }], 1],
@@ -156,7 +159,7 @@ describe("a journal that cannot be replayed whole is history-lost, with nothing 
       [planned("cand-a"), reserved(A), launching(A), disposed(A, "req-dup"), planned("cand-b"), reserved(B), launching(B), disposed(B, "req-dup")],
       8,
     ],
-    ["a history reset after the first line", [planned("cand-a"), { v: 1, kind: "history-reset", at: T0, actor: "greg", requestId: "r", why: "w", preservedAs: "p", lostAt: { line: 1, why: "x" }, acknowledgement: "x", carried: [], artefactDirs: [] }], 2],
+    ["a history reset after the first line", [planned("cand-a"), { v: 1, kind: "history-reset", at: T0, actor: "greg", requestId: "r", why: "w", preservedAs: "p", lostAt: { line: 1, why: "x" }, acknowledgement: "x", carried: [] }], 2],
   ];
   test.each(cases)("%s", (_name, lines, atLine) => {
     const root = tempRoot();
@@ -212,9 +215,13 @@ describe("resetHistory (F2)", () => {
   test("preserves the old journal byte-for-byte, carries what it can see, and starts whole", () => {
     const root = tempRoot();
     const hidden = idOf("cand-only-the-owner-knows");
+    // F15: behind the hole, released, so only its artefact directory remembers it.
+    const artefactsOnly = idOf("cand-only-the-artefacts-know");
     seed(root, [planned("cand-a"), "{a hole", planned("cand-b")]);
     const before = readFileSync(journalOf(root));
     mkdirSync(join(root, LAUNCHES_DIR, OCCURRENCES_DIR, A), { recursive: true });
+    mkdirSync(join(root, LAUNCHES_DIR, OCCURRENCES_DIR, artefactsOnly, "a1"), { recursive: true });
+    mkdirSync(join(root, LAUNCHES_DIR, OCCURRENCES_DIR, "not-an-occurrence-id"), { recursive: true });
     const store = open(root);
     const at = "2026-09-10T13:00:00.000Z";
     const reset = store.resetHistory({ request, at, ownerReservations: [{ key: reservationKeyOf(hidden), cls: "claude-session", slot: "claude-session#1" }] });
@@ -226,9 +233,9 @@ describe("resetHistory (F2)", () => {
         { occurrenceId: A, lastSeen: "planned", ownerHeld: null },
         { occurrenceId: B, lastSeen: "planned", ownerHeld: null },
         { occurrenceId: hidden, lastSeen: null, ownerHeld: { slot: "claude-session#1" } },
+        { occurrenceId: artefactsOnly, lastSeen: null, ownerHeld: null },
       ].sort((x, y) => x.occurrenceId.localeCompare(y.occurrenceId)),
     );
-    expect(reset.reset.artefactDirs).toEqual([A]);
     expect(reset.reset.lostAt.line).toBe(2);
     const lines = readFileSync(journalOf(root), "utf8").split("\n").filter((line) => line !== "");
     expect(lines).toHaveLength(1);
@@ -240,7 +247,7 @@ describe("resetHistory (F2)", () => {
     close(store);
     const reopened = open(root);
     expect(reopened.status()).toEqual({ kind: "whole" });
-    expect([...reopened.fold().carried.keys()].sort()).toEqual([A, B, hidden].sort());
+    expect([...reopened.fold().carried.keys()].sort()).toEqual([A, B, hidden, artefactsOnly].sort());
   });
 
   test("a retry after dying between the link and the replace finds its own link and finishes", () => {

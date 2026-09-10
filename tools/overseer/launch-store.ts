@@ -46,7 +46,7 @@ import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readd
 import { isAbsolute, join } from "node:path";
 
 import { writeAll, writeAtomically, truncateToLastLine, type JsonlRepair } from "./jsonl.js";
-import { preserveThenReplace } from "./launch-admission.js";
+import { journalRecords, preserveThenReplace } from "./launch-admission.js";
 import { writeIntentFile } from "./launch-artefacts.js";
 import {
   HIDDEN_LAUNCH_ACKNOWLEDGEMENT,
@@ -112,7 +112,7 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
   let fd: number;
   try {
     repair = truncateToLastLine(journalPath);
-    texts = existsSync(journalPath) ? readFileSync(journalPath, "utf8").split("\n").filter((line) => line !== "") : [];
+    texts = existsSync(journalPath) ? journalRecords(readFileSync(journalPath, "utf8")) : [];
     fd = openSync(journalPath, "a", 0o600);
   } catch (cause) {
     releaseLock(lock, lockPath);
@@ -198,21 +198,26 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
     resetHistory({ request, at, ownerReservations }) {
       if (status.kind !== "history-lost") return { ok: false, why: "the launch journal's history is whole; there is nothing to resolve" };
       // EVERYTHING STILL VISIBLE IS CARRIED: every occurrence a parseable line
-      // names, and every reservation the owner holds. Over-carrying costs Greg
-      // a `dispose`; under-carrying costs a second session.
+      // names, every reservation the owner holds, and every occurrence with a
+      // directory under `o/`. The last is not a diagnostic (review F15): an
+      // occurrence whose lines are behind the hole and whose slot is already
+      // released is known ONLY by its directory, and left uncarried it could be
+      // planned again, restart at `a1`, and have its old `exit.json` release the
+      // new slot. Over-carrying costs Greg a `dispose`; under-carrying costs a
+      // second session.
+      let artefactIds: string[];
+      try {
+        artefactIds = readdirSync(occurrencesDir);
+      } catch (cause) {
+        return { ok: false, why: `the artefact directories could not be listed: ${messageOf(cause)}` };
+      }
       const held = new Map<string, string>(ownerReservations.map((one) => [one.key, one.slot]));
       const ids = new Set<LaunchOccurrenceId>(salvage.keys());
-      for (const key of held.keys()) if (isLaunchOccurrenceId(key)) ids.add(key);
+      for (const key of [...held.keys(), ...artefactIds]) if (isLaunchOccurrenceId(key)) ids.add(key);
       const carried: CarriedEntry[] = [...ids].sort().map((occurrenceId) => {
         const slot = held.get(occurrenceId);
         return { occurrenceId, lastSeen: salvage.get(occurrenceId) ?? null, ownerHeld: slot === undefined ? null : { slot } };
       });
-      let artefactDirs: string[];
-      try {
-        artefactDirs = readdirSync(occurrencesDir).filter(isLaunchOccurrenceId).sort();
-      } catch (cause) {
-        return { ok: false, why: `the artefact directories could not be listed: ${messageOf(cause)}` };
-      }
       const reset: HistoryResetEvent = {
         v: 1,
         kind: "history-reset",
@@ -224,7 +229,6 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
         lostAt: { line: status.atLine, why: status.why },
         acknowledgement: HIDDEN_LAUNCH_ACKNOWLEDGEMENT,
         carried,
-        artefactDirs,
       };
       const text = JSON.stringify(reset);
       // THE LINE MUST REPLAY, or the fresh journal is born lost.

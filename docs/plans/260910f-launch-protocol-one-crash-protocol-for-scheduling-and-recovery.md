@@ -417,6 +417,16 @@ went red, each in the group written for that rule, then reverted. Departures, al
   `OVERSEER_STORE_DIR` after a launch strands it. And the reader rejects unknown fields and wants
   `at` in exactly `toISOString()` form — Stage 2's bash writer must emit `date -u +%Y-%m-%dT%H:%M:%S.%3NZ`.
 
+**Learned 2026-09-10, from the seam talk with `scheduled-dispatch`: a daemon child does not survive
+a daemon restart.** `infra/hetzner/systemd/overseer.service` sets no `KillMode`, so systemd's default
+(`control-group`) kills every process in the unit's cgroup on stop or restart. A headless wrapper
+spawned directly by the daemon therefore dies with every Overseer restart and, under F1, strands
+its occurrence as `outcome-unknown`. A session created on the **already running** tmux server lives
+outside the cgroup. Proposed to `scheduled-dispatch`: scheduled jobs use a third adapter, **a tmux
+session that runs `run-claude --launch-dir …`** (the id at creation, the wrapper's exit status and
+answer in `exit.json`, survives restarts), refusing if no tmux server is running rather than forking
+one inside the cgroup. The interactive `gjd-remote new-claude` adapter stays, for recovery.
+
 ### Stage 2: the launchers
 
 Files: `scripts/gjd-remote.ts` (flags, `-e`, job-script lines — session-creation path only),

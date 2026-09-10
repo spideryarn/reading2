@@ -327,8 +327,8 @@ export type HistoryResetEvent = {
   readonly lostAt: { readonly line: number; readonly why: string };
   /** Said in the record rather than implied: the hole may hide a launch nobody can enumerate. */
   readonly acknowledgement: string;
+  /** Every occurrence still visible — in a parseable line, in the owner's inventory, or as a directory under `o/` (F15). */
   readonly carried: readonly CarriedEntry[];
-  readonly artefactDirs: readonly string[];
 };
 
 export type JournalLine = LaunchEvent | HistoryResetEvent;
@@ -843,9 +843,9 @@ function parseCarried(u: unknown): Parsed<CarriedEntry> {
 }
 
 function parseReset(u: Record<string, unknown>, at: string): Parsed<HistoryResetEvent> {
-  const o = object(u, "history-reset", ["v", "kind", "at", "actor", "requestId", "why", "preservedAs", "lostAt", "acknowledgement", "carried", "artefactDirs"]);
+  const o = object(u, "history-reset", ["v", "kind", "at", "actor", "requestId", "why", "preservedAs", "lostAt", "acknowledgement", "carried"]);
   if (!o.ok) return o;
-  const { actor, requestId, why, preservedAs, lostAt, acknowledgement, carried, artefactDirs } = o.value;
+  const { actor, requestId, why, preservedAs, lostAt, acknowledgement, carried } = o.value;
   if (!isText(actor) || !isText(requestId) || !isText(why) || !isText(preservedAs)) return { ok: false, why: "a history reset names its actor, request, reason and preserved file" };
   if (acknowledgement !== HIDDEN_LAUNCH_ACKNOWLEDGEMENT) return { ok: false, why: "a history reset must carry the hidden-launch acknowledgement" };
   const lost = object(lostAt, "lostAt", ["line", "why"]);
@@ -853,7 +853,7 @@ function parseReset(u: Record<string, unknown>, at: string): Parsed<HistoryReset
   const line = lost.value["line"];
   const lostWhy = lost.value["why"];
   if (!isPositiveInteger(line) || !isText(lostWhy)) return { ok: false, why: "lostAt is a line number and a reason" };
-  if (!Array.isArray(carried) || !Array.isArray(artefactDirs)) return { ok: false, why: "carried and artefactDirs are lists" };
+  if (!Array.isArray(carried)) return { ok: false, why: "carried is a list" };
   const entries: CarriedEntry[] = [];
   for (const one of carried) {
     const entry = parseCarried(one);
@@ -861,10 +861,9 @@ function parseReset(u: Record<string, unknown>, at: string): Parsed<HistoryReset
     if (entries.some((e) => e.occurrenceId === entry.value.occurrenceId)) return { ok: false, why: `${entry.value.occurrenceId} is carried twice` };
     entries.push(entry.value);
   }
-  if (!artefactDirs.every(isLaunchOccurrenceId)) return { ok: false, why: "artefactDirs names something that is not an occurrence id" };
   return {
     ok: true,
-    value: { v: 1, kind: "history-reset", at, actor, requestId, why, preservedAs, lostAt: { line, why: lostWhy }, acknowledgement, carried: entries, artefactDirs },
+    value: { v: 1, kind: "history-reset", at, actor, requestId, why, preservedAs, lostAt: { line, why: lostWhy }, acknowledgement, carried: entries },
   };
 }
 

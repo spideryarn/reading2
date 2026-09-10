@@ -977,7 +977,6 @@ describe("F2: history-lost refuses to plan, and Greg's attributed resolution is 
     const carried = new Map(resolved.reset.carried.map((entry) => [entry.occurrenceId, entry]));
     expect(carried.get(idOf(hidden))).toEqual({ occurrenceId: idOf(hidden), lastSeen: null, ownerHeld: { slot: "claude-session#1" } });
     expect(carried.get(idOf(visible))?.lastSeen).toBe("planned");
-    expect(resolved.reset.artefactDirs).toContain(idOf(hidden));
 
     // Neither carried occurrence is ever planned again; a new one waits behind the hidden slot.
     expect(w.protocol.plan(hidden).kind).toBe("refused");
@@ -992,6 +991,38 @@ describe("F2: history-lost refuses to plan, and Greg's attributed resolution is 
     expect(heldOf(w, idOf(hidden))).toBe(0);
     expect(w.protocol.launchOccurrence(fresh).kind).toBe("invoked");
     expect(shared.invocations).toBe(2);
+  });
+
+  test("a hole hiding an occurrence whose slot was already released: its artefact directory alone carries it, and it never launches again (F15)", () => {
+    const shared = newShared("exits-at-once");
+    const gone = request("cand-artefacts-only");
+    const w0 = world(shared);
+    expect(w0.protocol.launchOccurrence(gone).kind).toBe("invoked");
+    reconcileOk(w0);
+    // Completed and released: the owner holds nothing for it any more.
+    expectRow(shared, w0, idOf(gone), { invocations: 1, effects: 1, held: 0, state: "completed" });
+    expect(existsSync(join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(gone), "a1", EXIT_FILE))).toBe(true);
+    w0.kill();
+    // Every line about it disappears behind one unreadable first line.
+    const lines = readFileSync(journalPath(shared), "utf8").split("\n").filter((line) => line !== "");
+    const kept = lines.filter((line) => !line.includes(idOf(gone)));
+    expect(kept).toEqual([]);
+    writeFileSync(journalPath(shared), "{unrecoverable\n");
+
+    const w = world(shared);
+    const resolution = { actor: "greg", requestId: "resolve-artefacts-only", why: "the journal lost its head in a disk fault", acceptHiddenLaunchRisk: true } as const;
+    const resolved = resolveHistory({ journal: w.store, owner: w.owner, now }, resolution);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.reset.carried).toEqual([{ occurrenceId: idOf(gone), lastSeen: null, ownerHeld: null }]);
+    expect(w.store.fold().carried.has(idOf(gone))).toBe(true);
+
+    // Not a fresh occurrence restarting at a1, where the old exit.json could release the new slot.
+    const again = w.protocol.launchOccurrence(gone);
+    expect(again.kind).toBe("refused");
+    expect(shared.invocations).toBe(1);
+    expect(effectsOf(shared)).toBe(1);
+    expect(heldOf(w, idOf(gone))).toBe(0);
   });
 
   test("resolution waits for the owner: an owner that lost its own history is resolved first", () => {

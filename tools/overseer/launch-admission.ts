@@ -46,6 +46,21 @@ import { isAbsolute, join } from "node:path";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import { releaseLock, stillOurs, takeLock, type HeldLock, type LockRefusal } from "./lock.js";
 
+/**
+ * A journal's records, one per line, **blank ones included** (review F14).
+ *
+ * The caller has run `truncateToLastLine`, so the text is empty or ends in a
+ * newline. The one empty element after that final newline is not a record;
+ * every other element — `""` too — goes to replay, whose exact parser refuses
+ * it. Filtering blanks out instead let `<valid>\n\n<valid>\n` open as whole.
+ * Shared by both journals so the rule cannot drift between them.
+ */
+export function journalRecords(text: string): string[] {
+  const records = text.split("\n");
+  if (records.at(-1) === "") records.pop();
+  return records;
+}
+
 /* ------------------------------------------------------------------ *
  * The interface every owner implements.
  * ------------------------------------------------------------------ */
@@ -352,7 +367,7 @@ export function openLocalAdmission(options: LocalAdmissionOptions): { ok: true; 
   let fd: number;
   try {
     repair = truncateToLastLine(journalPath);
-    texts = existsSync(journalPath) ? readFileSync(journalPath, "utf8").split("\n").filter((line) => line !== "") : [];
+    texts = existsSync(journalPath) ? journalRecords(readFileSync(journalPath, "utf8")) : [];
     fd = openSync(journalPath, "a", 0o600);
   } catch (cause) {
     releaseLock(lock, lockPath);
