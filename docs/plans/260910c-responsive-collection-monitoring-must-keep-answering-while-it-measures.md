@@ -143,7 +143,9 @@ round fixed two P1s — both about signalling the wrong thing: **pid reuse** (a 
 its own group would have had `SIGKILL` sent to a stranger's whole group; start time is now captured
 at spawn and a mismatch sends nothing) and **the group proof taken at kill time** (a vanished leader
 left its descendants unreachable; the proof is now captured at spawn). 13 tests → 28, each red
-first.
+first. **Mutation-verified afterwards, by me rather than the reviewer:** disabling the start-time
+comparison in `checkIdentity` turned exactly the two pid-reuse tests red — 2 of 28, nothing else —
+and restoring it returned 28/28. The guard is real, and the tests aim at it and at nothing nearby.
 
 *Accepted after checking:* the review added parent `SIGINT`/`SIGTERM` forwarding — process-global
 listeners that signal owned children and then re-raise. `git grep` at `HEAD` found no signal handler
