@@ -228,6 +228,17 @@ that cannot start reviews its own work and reads identically.
   `.ts.net` label check goes red in `tests/fleet-origin.test.ts`.
 - The composed file: 76 tests, three consecutive green runs.
 
+**The narrow check of the two P1 fixes (GPT Sol, read-only, 20 minutes, on `f3674e36`)** asked
+whether two statements are accurate, not whether the fixes are sound:
+[prompt](260910f-fleet-access-review-composed-server-p1-check-prompt.md),
+[answer](260910f-fleet-access-review-composed-server-p1-check-answer.md),
+[findings](260910f-fleet-access-review-composed-server-p1-check-answer-findings.md). Verdict on both:
+**accurate** — the owner's death closes the listener and its group, the disconnect mutation is red,
+and it cannot signal another group; malformed or multiple `Host` fields get 421 while every listed
+legitimate authority passes. No F17. It too could not bind loopback, so it reasoned from the
+committed blobs and the recorded mutations; the execution evidence is the runs above. No
+disagreement to arbitrate, so the brief's Fable step was not needed, and there is no further round.
+
 ## Status
 
 Plan written 2026-09-10 and revised after Sol's review. **Stages 1 and 2 built by an Opus subagent**
