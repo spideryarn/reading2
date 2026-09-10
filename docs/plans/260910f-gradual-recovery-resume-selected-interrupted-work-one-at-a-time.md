@@ -681,6 +681,24 @@ verification, and the queue, for ever.
 - **Discovery closed** with the narrow check, so **Fable settles G20** (not cross-family), per the
   engineering-manager rule and the Overseer's terms.
 
+**Fable's settle, 2026-09-10 ~21:20 (not cross-family): "G20: closed."** Fable traced the diff,
+ran the file (67 of 67), and drove the real `transcriptAfter` at the boundaries, with files on disk
+and a count of the bytes requested:
+
+- **the contiguous branch** handles a file with and without a trailing newline, and a torn final
+  line;
+- **the non-contiguous branch** starts its tail strictly after the first window, so no line is
+  read twice;
+- **the bound** is exactly 131,073 bytes at both `2V+1` and `2V+2`.
+
+**One overstatement corrected** in the code's comment. Not every transcript line carries a
+`sessionId`: about 1–1.5% are `file-history-snapshot` lines without one, and 18–31 lines per
+transcript are tool results over 64 KiB.
+
+**The residual, documented rather than closed:** beyond two windows, a pass whose last 64 KiB is
+one oversized tool result, or holds only snapshot lines, sees no session line. The next pass
+re-reads, and a live session soon writes one. So it is transient.
+
 **Stages 1 and 2 are then done:** built, reviewed by Sol (refused on G11–G19), fixed, and
 narrow-checked. G20 was fixed and settled.
 
