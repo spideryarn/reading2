@@ -1,7 +1,7 @@
 # Gradual recovery: resume selected interrupted work, one at a time
 
 The roadmap stage is
-[260908f § Stage: Gradual recovery](260908f-overseer-and-fleet-improvement-roadmap.md#stage-gradual-recovery--resume-selected-valuable-work):
+[260908f § Stage: Gradual recovery](260908f-overseer-and-fleet-improvement-roadmap.md#stage-gradual-recovery-resume-selected-valuable-work):
 its four checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
 Queue item `qi-pphwbz23`, session `gradual-recovery`, worktree `.claude/worktrees/recovery-resume`,
 dispatched by the Overseer on 2026-09-10. It consumes two things built today:
