@@ -382,6 +382,41 @@ Red first:
   idempotent; state survives reopen.
 - `cannot-tell` from any port never moves a record.
 
+**Status (2026-09-11): built by an Opus subagent, not yet Sol-reviewed.** Four modules
+(`launch-protocol.ts` 1,671 lines, `launch-store.ts`, `launch-admission.ts`, `launch-artefacts.ts`)
+and four suites, 123 tests; with `fixture-ids` 128 pass, typecheck exit 0, lint clean of errors.
+**Tests were written after the code, not before** — the builder compensated by breaking seven rules
+on purpose (F1, F9, reserve idempotence, fold across a hole, F4, F5, correlation binding): 32 tests
+went red, each in the group written for that rule, then reverted. Departures, all accepted:
+
+- The owner answers `lookup`/`release` with a third arm, `unavailable`, and has `inventory()`. F8's
+  "only `reserved` or `none`" cannot be built fail-closed: an owner whose own journal is lost can
+  say `none` only by lying, and `none` licenses a release. `inventory()` is what F2's reset lists.
+- `intent.json` carries the boot id, so a reboot is provable with no `start.json` at all →
+  `completed (rebooted)`, released.
+- `exit.json` has a `supervisor-failed` ending (the wrapper failed on its own account, e.g. a spawn
+  error); Stage 2 uses it or replaces it.
+- Recovery candidate ids are validated locally (1–256 chars, no control characters): the
+  `RecoveryCandidateId` brand was not in this tree when it was built. Tightened to the real regex
+  in Stage 3, after the merge brings `recovery-inbox.ts`'s `isCandidateId`.
+- The reservation key is the occurrence id.
+- `launchOccurrence` continues from a `reserved` record, relying on `reserve`'s idempotence — which
+  is how a lost reply is recovered *by the next launch call*. **Reconciliation, run first, instead
+  releases a `reserved` as `failed-before-launch`** (D4's row), so after a restart a recovered lost
+  reply is released rather than launched. Conservative, and the scheduler's next due instant is a
+  new occurrence anyway; Gradual recovery must call `launchOccurrence` again, which is a fresh plan.
+- After `disposed` the only legal record is `released`; evidence arriving later is not recorded.
+- An occurrence carried across a history reset can never be planned again.
+- F2 had two wordings (Sol's: dispose every visible reservation before the reset; the
+  dispositions': reservations stay held and listed, each released by its own `dispose`). Built the
+  dispositions'.
+- The launch journal has no replay ceiling or retention (unlike `store.ts`'s 64 MiB): a later need.
+- The no-production-caller test walks `tools/ scripts/ src/ api/ evals/` with an allow-list of the
+  launch files; Stages 2–3 extend it deliberately.
+- Open, for the stage review: `launching` records an absolute artefact path, so moving
+  `OVERSEER_STORE_DIR` after a launch strands it. And the reader rejects unknown fields and wants
+  `at` in exactly `toISOString()` form — Stage 2's bash writer must emit `date -u +%Y-%m-%dT%H:%M:%S.%3NZ`.
+
 ### Stage 2: the launchers
 
 Files: `scripts/gjd-remote.ts` (flags, `-e`, job-script lines — session-creation path only),
