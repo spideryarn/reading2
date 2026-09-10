@@ -1418,6 +1418,33 @@ function ownedCaptureFailure(outcome: Exclude<OwnedOutcome, { kind: "ok" }>): st
   return `capture ${outcome.kind}: ${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms`;
 }
 
+const CAPTURE_TIMEOUT_MS = 2_000;
+const CAPTURE_CHILD_CAP = 4;
+
+function captureCapFailure(owner: ProbeOwner, key: string): string | null {
+  let live: ReturnType<ProbeOwner["live"]>;
+  try {
+    live = owner.live().filter((child) => child.key.startsWith("capture-pane:"));
+  } catch (cause) {
+    return `capture failed: could not inspect the capture child registry: ${cause instanceof Error ? cause.message : String(cause)}`;
+  }
+
+  /* Let the owner re-check this key even at the cap. It can prove that a child
+     whose exit event was missed is gone, while a genuinely live child is
+     refused without adding a sibling. A different key cannot make that proof
+     and must not turn four survivors into five. */
+  if (live.length < CAPTURE_CHILD_CAP || live.some((child) => child.key === key)) return null;
+
+  const now = Date.now();
+  const children = live
+    .map((child) => `pid ${child.pid} alive for ${Math.max(1, now - child.startedAtMs)}ms`)
+    .join(", ");
+  return (
+    `capture refused: probe "${key}" was not started because ${live.length} capture children remain ` +
+    `unaccounted for (${children}); the ${CAPTURE_CHILD_CAP}-child capture cap was kept`
+  );
+}
+
 /**
  * Read a pane without holding Node's request thread while tmux answers.
  *
@@ -1429,13 +1456,19 @@ function ownedCaptureFailure(outcome: Exclude<OwnedOutcome, { kind: "ok" }>): st
  */
 export async function capturePaneAsync(owner: ProbeOwner, paneId: string): Promise<string> {
   if (!isPaneId(paneId)) throw new Error(`not a tmux pane id: ${paneId}`);
+  const key = `capture-pane:${paneId}`;
+  const capFailure = captureCapFailure(owner, key);
+  if (capFailure !== null) throw new Error(capFailure);
   let outcome: OwnedOutcome;
   try {
     outcome = await owner.run({
-      key: `capture-pane:${paneId}`,
+      key,
       cmd: "tmux",
       args: ["capture-pane", "-p", "-t", paneId],
-      timeoutMs: 10_000,
+      // A healthy capture is ~12–14ms on this box. Two seconds is still over
+      // 140× that measured cost, while seven four-wide timeout rounds plus the
+      // owner's one-second grace remain inside collect's 120-second backstop.
+      timeoutMs: CAPTURE_TIMEOUT_MS,
       maxBytes: 4 * 1024 * 1024,
     });
   } catch (cause) {

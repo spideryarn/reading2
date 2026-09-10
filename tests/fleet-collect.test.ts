@@ -40,6 +40,7 @@ import { fleetState } from "../tools/fleet/state.js";
 import type { AttentionFeed, OverseerStatusFeed, UsageFeed } from "../tools/fleet/wire.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
+import { report as reportCollectBench } from "../scripts/fleet-collect-bench.js";
 
 /** No status derived for anyone — the map `toRows` falls back from. */
 const NO_STATUS = new Map<string, FleetStatus>();
@@ -329,6 +330,15 @@ describe("panesBySession", () => {
 });
 
 describe("owned tmux probes", () => {
+  it("wires collect through the asynchronous tmux probes", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
+
+    expect(src).not.toMatch(/^import .*\b(?:execFileSync|spawnSync)\b.*from "node:child_process";/m);
+    expect(src).toContain("const generationBefore = await generationNow(owner)");
+    expect(src).toContain("const listing = await panes(owner)");
+    expect(src).toContain("await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId))");
+  });
+
   it("finishes the other captures when one owner call reports a bounded timeout", async () => {
     const rows = interactiveRows(6);
     const completedBeforeSlow: string[] = [];
@@ -478,6 +488,52 @@ describe("owned tmux probes", () => {
         timeoutMs: 5_000,
       },
     ]));
+  });
+
+  it("keeps a refused pane listing empty and a refused generation unverifiable", async () => {
+    const asked: string[] = [];
+    const owner = ownerReturning((spec) => {
+      asked.push(spec.key);
+      return {
+        kind: "refused",
+        why: `probe "${spec.key}" still has an unaccounted child`,
+        pid: 9_912,
+        liveForMs: 14_000,
+      };
+    });
+
+    const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
+
+    expect(asked.sort()).toEqual(["tmux:generation", "tmux:list-panes"]);
+    expect(listing).toEqual({ panes: new Map(), tmuxServerPid: null });
+    expect(generation).toBeNull();
+    expect(generationDrift(132_280, generation)).toBeNull();
+  });
+});
+
+describe("the collection bench refuses flattering HTTP evidence", () => {
+  it("fails a balanced run with no samples or with failed requests", () => {
+    const previousExitCode = process.exitCode;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      for (const http of [
+        { latencies: [], failures: 0, pending: [], issued: 0 },
+        { latencies: [4, 5], failures: 1, pending: [], issued: 3 },
+        { latencies: [4, 5], failures: 0, pending: [], issued: 3 },
+      ]) {
+        process.exitCode = undefined;
+        reportCollectBench("test", [], http, []);
+        expect(process.exitCode).toBe(3);
+      }
+
+      // The positive control: complete, non-empty evidence must remain usable.
+      process.exitCode = undefined;
+      reportCollectBench("test", [], { latencies: [4, 5, 6], failures: 0, pending: [], issued: 3 }, []);
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      log.mockRestore();
+      process.exitCode = previousExitCode;
+    }
   });
 });
 

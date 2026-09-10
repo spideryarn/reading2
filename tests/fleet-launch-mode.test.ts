@@ -423,15 +423,23 @@ describe("the row carries the mode", () => {
 
   /** A capture that throws leaves both facts unread rather than inventing either. */
   it("leaves the mode unread when the pane cannot be captured", async () => {
+    let captures = 0;
     const rows = toRows(
       [session({ id: "$1" })],
-      new Map<string, FleetStatus>([["$1", { kind: "working" }]]),
+      // `needs-you` is the only status for which a successful capture would
+      // populate `question`, so null below is evidence about both fields.
+      new Map<string, FleetStatus>([["$1", { kind: "needs-you" }]]),
       new Map([["$1", { paneId: "%11", panePid: 1 }]]),
     );
     await readPanes(rows, async () => {
+      captures += 1;
       throw new Error("no such pane");
     });
-    expect(rows[0]?.permissionMode.kind).toBe("cannot-tell");
+    expect(captures).toBe(1);
+    expect(rows[0]?.permissionMode).toEqual({
+      kind: "cannot-tell",
+      why: "this session's pane could not be captured: no such pane",
+    });
     expect(rows[0]?.question).toBeNull();
   });
 

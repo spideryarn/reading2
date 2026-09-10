@@ -410,10 +410,12 @@ function snapshotOf(rows: FleetRow[]): FleetSnapshot {
  * still pending, because the pending ones are the slowest requests in the run
  * by construction and leaving them out is how a bad p95 passes. If the parts do
  * not add up to what the child says it issued, this prints the discrepancy in
- * the loudest terms it has and sets a non-zero exit code: a benchmark that has
- * lost track of its own requests is not evidence of anything.
+ * the loudest terms it has and sets a non-zero exit code. Balanced arithmetic
+ * is necessary but not sufficient: zero requests and requests that failed have
+ * no latency sample, so either would flatter the percentile while still adding
+ * up perfectly. Those runs are not evidence either.
  */
-function report(title: string, rows: readonly Row[], http: PollResult, context: readonly string[]): void {
+export function report(title: string, rows: readonly Row[], http: PollResult, context: readonly string[]): void {
   console.log(`\n## ${title}\n`);
   for (const line of context) console.log(`- ${line}`);
   console.log("");
@@ -432,11 +434,26 @@ function report(title: string, rows: readonly Row[], http: PollResult, context: 
   console.log(
     `Accounting: ${http.issued} issued = ${http.latencies.length} completed + ${http.failures} failed + ${http.pending.length} still pending at the drain deadline.`,
   );
+  const invalid: string[] = [];
   if (accounted !== http.issued) {
+    invalid.push(
+      `${http.issued - accounted} of the ${http.issued} requests it issued are unaccounted for, ` +
+      "and the ones a run like this loses are its slowest — so every percentile above is flattered by an unknown amount",
+    );
+  }
+  if (http.issued === 0) {
+    invalid.push("the poller issued no HTTP requests, so there is no responsiveness measurement");
+  }
+  if (http.failures > 0) {
+    invalid.push(
+      `${http.failures} HTTP request(s) failed and therefore contributed no latency sample — ` +
+      "the percentile above is flattered by excluding them",
+    );
+  }
+  if (invalid.length > 0) {
     console.log(
-      `\n**THIS RUN IS NOT EVIDENCE.** ${http.issued - accounted} of the ${http.issued} requests it issued are unaccounted for, ` +
-        `and the ones a run like this loses are its slowest — so every percentile above is flattered by an unknown amount. ` +
-        `Fix the poller before quoting anything from here.`,
+      `\n**THIS RUN IS NOT EVIDENCE.** ${invalid.join("; ")}. ` +
+      "Fix the poller or server before quoting anything from here.",
     );
     process.exitCode = 3;
   }

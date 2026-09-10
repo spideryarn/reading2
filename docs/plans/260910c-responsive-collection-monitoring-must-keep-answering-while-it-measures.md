@@ -301,10 +301,53 @@ the pane pass, and moves the bench's fixture onto the real owned path; **3b** is
 the `work-probe.ts` extraction. Both edit `collect.ts`, so they cannot run concurrently — two
 processes writing one file is a merge conflict nobody asked for.
 
-- [ ] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
+**Status — 3a (2026-09-10): built by Codex, independently reviewed by GPT Sol, acceptance measured.**
+`generationNow()`, `panes()` and every pane capture now go through the one module-scope owner
+(renamed `fleetProbeOwner`, since it now owns health and tmux probes both).
+
+**The acceptance line, measured** — same instrument, same 25-session fixture, one pane's capture
+taking 30 s, runs minutes apart at load 10–14:
+
+| `/api/state` while one capture takes 30 s | median | **p95** | max | answered in those 30 s |
+|---|---|---|---|---|
+| synchronous — before (`--variant=sync`) | 29222 ms | **30018 ms** | 30096 ms | 85 (85 = 85) |
+| owned, async — after (`--variant=owned`) | 4.2 ms | **7.2 ms** | 57.8 ms | 1209 (1209 = 1209) |
+
+The target was a provisional 250 ms p95. The 30-second child lived its full 30,013 ms and ended
+`ok`; no child was left alive. **This is the pane pass in isolation**: `readExecutions`' two
+synchronous `ps` calls are still on the real collection path until 3b, so the whole-collection
+after on the real box comes then.
+
+**What the review changed.** (1) *The calls-versus-children gap again*, which the Stage 2 review
+found in health: `limit(4)` bounds pending captures, not surviving children, so captures could
+accumulate as pane ids change. A four-child capture cap now matches health's; health children are
+not counted, and a same-key call still reaches the owner's re-check. (2) *The capture deadline is
+2 s, not 10*: a healthy capture measures 12–14 ms here (over 140× headroom), and the worst wedged
+turn — about 98 s all told — now fits inside the 120 s collection deadline, where 10 s captures
+could not. (3) *The bench refuses more flattering evidence*: a run with no requests, or with
+failed ones, balances perfectly and is still not evidence, so both now exit 3.
+
+**What I fixed myself before the review**: the rename broke a Stage 2 source guard that named the
+owner, which 3a's scoped gate list could not see and the every-fleet-file sweep did; and the bench
+could not isolate the owned pass or let its slow child live the full 30 s, so it could not have
+proved the acceptance sentence at all (`--variant`, and the slow child's default deadline).
+
+**A correction, and a finding that predates this plan.** This plan's 3a brief said an unreadable
+pane listing "is an empty map, and the snapshot still arrives". **The second half is false in
+production.** The dashboard runs under tmux, so `selfCheck` looks for its own pane in that empty map,
+returns `absent`, and `collect()` throws *"this is not a listing of this box"* — naming the wrong
+cause for what was a slow or failed `list-panes`, and contradicting `panes()`'s own comment that the
+row is still worth showing. It predates `b2029e4d`, but 3a makes it more reachable: an owned
+timeout now produces that empty map too. **Stage 3b fixes the sentence** — the listing says whether
+it was read, and an unread one fails the collection *truthfully* — and keeps today's safe
+behaviour of not publishing a listing that cannot be verified. **Whether to publish the rows anyway,
+marked unverified, is a safety trade-off put to the Overseer**, not taken here: it would give up the
+check `selfCheck` exists for. A postmortem is being written.
+
+- [x] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
       and `readPanes` becomes async over `limit(4)`. `tests/fleet-launch-mode.test.ts` drives
       `readPanes` at four call sites and must be updated with it.
-- [ ] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
+- [x] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
       unreadable listing is an empty map, an unreadable generation is `null` meaning *unverifiable*,
       and only two numbers that disagree are drift.
 - [ ] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
