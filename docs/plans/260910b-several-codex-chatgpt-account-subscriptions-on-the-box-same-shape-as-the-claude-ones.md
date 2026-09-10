@@ -215,6 +215,51 @@ home; a real run **bills and records that account**; its subagents stay visible 
 **the fleet sees its tmux/process row**; resume uses the same home; and plugins/MCP are either
 present or *honestly absent*.
 
+#### Adding the first real Codex account — what Greg does, and what gets checked
+
+Written after Stage 0, so the steps are the ones the code actually implements rather than a sketch.
+**The wizard deliberately does not log in.** There is no `codex login --email`, so a wizard-driven
+login is a browser flow with no way to say which account is intended — it could sign the pool home
+into the very account we are separating from. So `add` prepares the home and stops.
+
+```
+npx tsx scripts/claude-accounts.ts add --family codex --name pool2
+#   creates /home/greg/.codex-pool2 (0700), seeds its config.toml with the repo's
+#   project-trust entry, then prints the login command and exits 1 without
+#   registering anything.
+
+CODEX_HOME=/home/greg/.codex-pool2 codex login       # Greg, watching. A browser flow.
+
+npx tsx scripts/claude-accounts.ts add --family codex --name pool2
+#   second run finds auth.json, reads the identity locally, and registers it.
+```
+
+Then the seven things that must be true before any launcher work builds on it. The first five the
+code can check; **the last two need a real dispatched run**, and they are the two that caught us on
+the Claude side.
+
+1. `claude-accounts check` passes the new entry: the parsed `auth.json` identity matches the pin, and
+   `codex doctor --json` reports the effective `CODEX_HOME` equal to the registry `stateDir` with
+   `sqlite home` inside it.
+2. The alternate account id **differs from ambient**. Two ChatGPT accounts of Greg's would share
+   `chatgpt_user_id`; only `chatgpt_account_id` separates them, which is why that is the pin.
+3. `overseer usage` reads the new account's own windows through its own `CODEX_HOME`, and a reading
+   it cannot take is rendered `unknown` rather than `0%`.
+4. The negative control still holds *for this home*: with `CODEX_API_KEY` withheld, a deliberately
+   wrong home 401s rather than spending anything.
+5. A real `run-codex --account pool2` run **bills pool2 and records pool2** — checked by watching
+   pool2's usage move, not by reading the launch record, which is the thing under test.
+6. **`codex agents` under pool2 sees the run, and the fleet sees its process row.** Stage 0 could
+   only establish that the app-server control socket lives under `CODEX_HOME`; whether a pool run is
+   visible to anything that has to supervise it is unproven. This is the exact shape of the Claude
+   bug — a pool account that passed every check while being invisible to `ListAgents` — and it was
+   found only by dispatching a real session and noticing.
+7. `codex resume` under pool2 finds the thread, and under ambient does **not**. Stage 0 inferred this
+   from `doctor`'s per-home database paths; nobody has watched it happen.
+
+Items 6 and 7 are the ones to actually perform rather than reason about. Everything above them is
+already enforced by a test.
+
 That list is the Claude lesson written down in advance. The Claude pool account passed every test
 while being invisible to the fleet and unable to message anyone, and it was caught only by running a
 real session and noticing `ListAgents` was empty.
@@ -427,6 +472,100 @@ The first line is the negative control the design rests on, re-confirmed indepen
 three *failed* runs the home contained six SQLite databases, three rollout files, `installation_id`,
 `sessions/`, `skills/` and `shell_snapshots/`. **"The directory has something in it" is not evidence
 of anything** — not of a login, not of a successful run, not of a seed.
+
+### Round 2: Sol's Stage 0 design ruling
+
+GPT Sol, `gpt-5.6-sol`, high effort, `--sandbox review`, 2026-09-10 — a genuine nested run, not the
+[self-review that looks like an independent one](../reusable/codex-cli-as-subagent.md). It was given
+every measurement above and asked three questions. **Accepted in full except where marked.**
+
+#### Q1 — the tenant field: `providerTenantId: string | null`
+
+Sol rejected all three options offered and proposed a fourth, which is better than the one this plan
+was going to take: **keep the field required, make its type nullable** rather than making it
+optional. Every entry still carries the property, `Pick<AccountEntry, …>` keeps working for
+`LiveUsageIdentity`, absence is represented explicitly rather than by a missing key, and none of the
+out-of-stage narrowing a discriminated union would force is needed. It also matches
+`scripts/gjd-remote-account.ts`, which **already** types its resolve-payload tenant `string | null`.
+The cost, stated plainly: the compiler still cannot prove a Claude entry has a tenant — the parser
+owns that invariant, and the discriminated union stays the better eventual type once its callers can
+move together.
+
+The pin, for both launch and `check`: `auth_mode === "chatgpt"`; a non-empty `tokens.account_id`; a
+decodable id_token whose `chatgpt_account_id` **equals** it; that value equal to the registry's
+`providerAccountId`; and, when the tenant is non-null, the default organization id equal to it.
+**Never pin on `email`, `sub`, `chatgpt_user_id` or `user_id`** — they are the person, and two of
+Greg's accounts would share them. They may be displayed or kept in `familyData`.
+
+**Deviation 1 — `forced_chatgpt_workspace_id` is not a v1 requirement.** Sol's sixth verifier rule
+was that the effective `forced_chatgpt_workspace_id` must equal `providerTenantId`, and be absent
+when the tenant is null. Declined for v1, for three reasons that compound: it would put a key into
+every seeded `config.toml` **whose effect we have not measured** — Stage 0 established only that it
+is a real typed key, which is precisely the standard §3 says is not enough; the ambient account does
+not set it, so the rule would fail the account we are separating *from*; and it rests on the premise
+Sol itself flags as unproven, that `is_default` names the billed workspace. What we take instead is
+the fail-closed half without the unverified half: **v1 never writes the key, and `check` refuses
+only if the key is present and disagrees with the tenant.** That catches somebody pinning a
+different workspace without asserting a mechanism nobody has watched work.
+
+**Deviation 2 — a lone workspace is used whether or not it is flagged default.** Sol's rule refuses
+a non-empty `organizations` array with zero or multiple defaults as ambiguous. Kept for *multiple*
+entries, which is genuinely ambiguous and worth a loud refusal. Declined for the single-entry case:
+with one account observed we do not know that a personal workspace is flagged `is_default`, and a
+rule built from that census would refuse to register Greg's second account with no way forward. So:
+**exactly one entry → use it; several entries with exactly one default → use that; anything else →
+refuse as ambiguous, and say in the refusal how to proceed.** This is the
+`a-survey-cannot-see-an-absent-state` hazard applied to the rule rather than to the data.
+
+#### Q2 — the child environment: an account-pinned drop list
+
+Not a wider `isSecretName` (it is shared with the Claude wrapper, and it conflates
+secret-exfiltration protection with process-routing isolation), and not a positive allowlist (which
+would make plugins and ordinary CLI behaviour depend on continuously enumerating their environment).
+On a registered-account launch: run the existing sanitiser, then **drop all 18 routing and state
+variables** from §3, then set back only `CODEX_HOME`.
+
+Sol's classification of the 18, with its own confidence attached — worth keeping, because most of
+them are *"potentially identity-changing, but not individually proven in this executable path"*:
+
+| effect | variables |
+|---|---|
+| direct account/auth selection | `CODEX_HOME`, `OPENAI_FEDERATION_RULE_ID` |
+| API-organization selection (API-key mode only) | `OPENAI_ORGANIZATION` |
+| state association, not billing | `CODEX_SQLITE_HOME`, `CODEX_ROLLOUT_TRACE_ROOT` |
+| documented audit-only | `OPENAI_WORKLOAD_IDENTITY_CONTEXT` |
+| endpoint/provider/auth routing — **not individually proven** | `OPENAI_BASE_URL`, `CODEX_AUTHAPI_BASE_URL`, `CODEX_APP_SERVER_CHATGPT_BASE_URL`, `CODEX_APP_SERVER_LOGIN_CLIENT_ID`, `CODEX_CLOUD_TASKS_BASE_URL`, `CODEX_OSS_BASE_URL`, `CODEX_EXEC_SERVER_URL`, `CODEX_AGENT_IDENTITY_JWKS_BASE_URL`, `CODEX_URL`, `OPENAI_CLUSTER` |
+| install/metadata — inference, not measured | `CODEX_MANAGED_PACKAGE_ROOT`, `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` |
+
+Drop the last two as well: they buy nothing on a pinned launch. **The list is version-scoped** — a
+Codex upgrade can add another routing variable, so the binary inventory is repeated at upgrade time.
+And the environment fix does not replace validating the home's effective `config.toml`: providers,
+profiles, base URLs, login method and workspace restrictions still have to be checked there.
+
+**And a real bug in shared code, found by Sol and then confirmed by running it.**
+`sanitisedEnv(parent, passThrough, drop)` applies `drop` in its main loop but **re-adds every
+`passThrough` name afterwards without consulting `drop`**, so a name in both survives:
+
+```
+sanitisedEnv(parent, [],                     ["CODEX_SQLITE_HOME"]) → { PATH }
+sanitisedEnv(parent, ["CODEX_SQLITE_HOME"],  ["CODEX_SQLITE_HOME"]) → { PATH, CODEX_SQLITE_HOME }
+```
+
+So `--pass-env` defeats a drop list, and Stage 2 cannot rely on `drop` alone: it must either refuse
+`--pass-env` for a protected name or re-apply the drop after pass-through. `--pass-env
+CODEX_API_KEY` is already refused by name, which is why this has not bitten yet. **This is in
+`scripts/subagent-cli.ts`, which no stage of this plan owns** — flagged for the Overseer.
+
+#### Q3 — `--account` plus `--auth key-first` is a hard error
+
+No `api-key` payer in v1. A registered account makes the effective mode `subscription-only`; no
+`--auth`, or an explicit `--auth subscription-only`, is allowed; an explicit `key-first` or
+`subscription-first` is a hard error **before spawning**; the ambient, unpinned path keeps today's
+behaviour. Sol's reason for refusing the payer idea is the one worth quoting: an API-key payer would
+need its own identity, organization attribution, selection rules and launch-record shape, and
+*"adding only the label would recreate the same false-attribution problem under a nicer name."* The
+cost is deliberate — a depleted subscription now fails instead of succeeding on the wrong payer, and
+the way to spend the key is to launch without an account pin.
 
 ## The stages
 
