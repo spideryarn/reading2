@@ -8,7 +8,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { decideAdmission as gateDecideAdmission, type AdmissionDecision, type MemorySnapshot } from "../../vitest-admission.js";
-import type { AdmissionOutcome, AdmissionPayload, AdmissionPolicy, AdmissionRequest } from "./wire.js";
+import type {
+  AdmissionOutcome,
+  AdmissionPayload,
+  AdmissionPolicy,
+  AdmissionRefusalJournal,
+  AdmissionRequest,
+} from "./wire.js";
 
 export const ADMISSION_PATH = "/api/admission";
 
@@ -18,6 +24,7 @@ export type AdmissionRouteDeps = {
   readReserveBytes(): number | undefined;
   resolveParallelWorkers(): number;
   policyVersion: number;
+  readRefusals(): AdmissionRefusalJournal;
   decideAdmission?: ((args: {
     nominalWorkers: number;
     snapshot: MemorySnapshot;
@@ -92,7 +99,13 @@ function payload(
   request: AdmissionRequest,
   explanation: AdmissionExplanation,
 ): AdmissionPayload {
-  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs() };
+  let journal: AdmissionRefusalJournal;
+  try {
+    journal = deps.readRefusals();
+  } catch (cause) {
+    journal = { kind: "unreadable", why: `reading the refusal journal threw: ${message(cause)}` };
+  }
+  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs(), journal };
   if (explanation.label === "forecast") {
     return {
       ...base,

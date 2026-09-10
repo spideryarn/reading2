@@ -119,6 +119,8 @@ const CREDENTIALS = ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"
 const MAY_NAME: Readonly<Record<string, string>> = {
   "src/web/PrivacyPage.tsx":
     "The privacy policy links to the provider's own. It names the host and never calls it.",
+  "tools/overseer/codex-auth.ts":
+    "Reads a Codex home's auth.json from disk to say which ChatGPT account it belongs to. It names api.openai.com only as the id_token's namespaced claim key, `https://api.openai.com/auth` — a JSON object key it looks up, never a URL it requests. Its only imports are node:fs/promises and node:path. Here rather than in ALLOWED so that a fetch growing beside that string is still an offence: a file whose whole job is reading a local credential has no business acquiring a transport.",
 };
 
 /**

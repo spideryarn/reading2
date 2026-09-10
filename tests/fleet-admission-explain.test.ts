@@ -65,6 +65,7 @@ function routeDeps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     readReserveBytes: () => 1,
     resolveParallelWorkers: () => 2,
     policyVersion: ADMISSION_POLICY_VERSION,
+    readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
     ...over,
   };
 }

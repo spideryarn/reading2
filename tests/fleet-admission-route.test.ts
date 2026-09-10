@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ADMISSION_POLICY_VERSION, FIXED_RUN_PEAK_BYTES, PER_WORKER_PEAK_BYTES } from "../vitest-admission.js";
 import { makeAdmission } from "../tools/fleet/admission-wiring.js";
 import { ADMISSION_PATH, admissionRoute, type AdmissionRouteDeps } from "../tools/fleet/routes-admission.js";
+import type { AdmissionRefusalJournal } from "../tools/fleet/wire.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dirs: string[] = [];
@@ -28,6 +29,7 @@ function deps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     readReserveBytes: () => 1,
     resolveParallelWorkers: () => 2,
     policyVersion: ADMISSION_POLICY_VERSION,
+    readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
     ...over,
   };
 }
@@ -65,6 +67,19 @@ describe("GET /api/admission", () => {
     expect(answer.status).toBe(200);
     expect(answer.headers["cache-control"]).toBe("no-store");
     expect(answer.body?.schema).toBe(1);
+  });
+
+  const journalArms: AdmissionRefusalJournal[] = [
+    { kind: "read", entries: [], unparseableLines: 0 },
+    { kind: "directory-absent" },
+    { kind: "unreadable", why: "the journal file was denied" },
+  ];
+
+  it.each(journalArms)("carries the journal's $kind arm independently of the forecast", (journal) => {
+    const answer = get(admissionRoute(deps({ readRefusals: () => journal })), ADMISSION_PATH);
+    expect(answer.status).toBe(200);
+    expect(answer.body?.journal).toEqual(journal);
+    expect(answer.body?.outcome).toMatchObject({ kind: "would-admit" });
   });
 
   it("answers a suffix under the admission prefix with the explicit 404 arm", () => {

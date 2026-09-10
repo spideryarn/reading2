@@ -6,6 +6,7 @@
  * construction production mounts, rather than rebuilding a second set of deps
  * that could stay green after the server's wire was cut.
  */
+import { readRefusals } from "../../admission-journal.js";
 import {
   ADMISSION_POLICY_VERSION,
   decideAdmission,
@@ -25,6 +26,7 @@ export function makeAdmission(options: {
   meminfoPath?: string | undefined;
   reserveFile?: string | undefined;
   workersFile?: string | undefined;
+  journalDir?: string | undefined;
 } = {}): Admission {
   const deps: AdmissionRouteDeps = {
     nowMs: options.nowMs ?? (() => Date.now()),
@@ -32,6 +34,7 @@ export function makeAdmission(options: {
     readReserveBytes: () => readReserveBytes(options.reserveFile),
     resolveParallelWorkers: () => resolveParallelWorkers(options.workersFile),
     policyVersion: ADMISSION_POLICY_VERSION,
+    readRefusals: () => readRefusals({ dir: options.journalDir }),
     decideAdmission,
   };
   return { deps, route: admissionRoute(deps) };
