@@ -3083,7 +3083,8 @@ function resumeForFile(
     }
     if (requested.has(request.candidateId)) return [];
     requested.add(request.candidateId);
-    const state = request.state.kind === "pending" ? { ...request.state, position: (position += 1) } : request.state;
+    if (request.state.kind === "pending") position += 1;
+    const state = request.state.kind === "pending" ? { ...request.state, position } : request.state;
     return [{ ...request, name, state }];
   });
   const items = new Map((page ?? []).map((item) => [item.id as string, item]));

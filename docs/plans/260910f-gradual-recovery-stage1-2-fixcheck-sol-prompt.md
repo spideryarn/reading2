@@ -8,8 +8,8 @@ any file. The sandbox cannot write to the tree, so put everything in your closin
 
 ## The candidate
 
-- The fix commit: **FIX-SHA** on `worktree-recovery-resume`. Its diff is exactly
-  `git show FIX-SHA`, and `git show --name-only FIX-SHA` lists its paths.
+- The fix commit: **325a9acc** on `worktree-recovery-resume`. Its diff is exactly
+  `git show 325a9acc`, and `git show --name-only 325a9acc` lists its paths.
 - The code it fixes: `cfc963eb` and `1704334e` (Stages 1 and 2).
 - The fixer's own account, finding by finding: the "Fix pass" paragraph in the plan's Stage 1–2
   section of `docs/plans/260910f-gradual-recovery-resume-selected-interrupted-work-one-at-a-time.md`.
@@ -38,7 +38,7 @@ npx vitest run <21 files: overseer-account-quota-gate, overseer-launch-gate,
 npm run build:fleet                    exit 0 (the fixer's run)
 ```
 
-**FIX-SHA also carries Stage 3a**, because the two share `wire.ts`, `recovery-resume.ts` and the
+**325a9acc also carries Stage 3a**, because the two share `wire.ts`, `recovery-resume.ts` and the
 resume tests, so neither builds alone. Stage 3a's own files are **out of scope here**:
 
 - `tools/fleet/claude-argv.ts`, `execution-identity.ts`, `state.ts` and `web/src/types.ts`;
