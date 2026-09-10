@@ -335,32 +335,68 @@ it would be one design written twice.
 
 ### Stage 3 — the client keeps what it showed
 
-**Status:** not started.
+**Status: done**, in `0e7d29a5` and then the review round. Implemented by GPT from
+`260909h-box-contracts-stage3-codex-task.md`; the three Stage 1 acceptance tests went green without
+being weakened. Reviewed by GPT Sol with fix authority
+(`260909h-box-contracts-stage3-code-review-sol-r1.md`) — **five more established P1s and a P2**, all
+fixed red-first. The two worth reading:
 
-- [ ] `ActionsApi.box` splits into `boxPreview(actionId, rows)` and `boxConfirm(envelope)`, and the
+- **The material you confirmed was a live alias of the response.** `parseActionMaterial` returned the
+  object `response.json()` produced — deliberately, so the echo would be verbatim rather than rebuilt
+  — and that object stays writable by anything holding it. Preview a five-minute broadcast, set
+  `minutes` to 99 on the parsed answer, press Confirm, and 99 goes. Fixed by taking an **inert JSON
+  snapshot** of a successful box answer before parsing, which disposes of getters, prototypes,
+  aliasing and every non-JSON value in one move, and keeps the JSON-value semantics the server's own
+  comparison uses.
+- **`result` and the receipt could contradict each other and Confirm still appeared** — a `result`
+  naming `%somebody-else` beside a receipt binding `%1` drew a confirmation. The join between the two
+  is parsed all-or-nothing now, so a page that cannot prove both halves describe one thing has
+  nothing to press.
+
+The rest: a confirm landing after a newer preview erased it (the generation is rechecked *after* the
+await, not only before); polling could rewrite the *"1 of 2 rows could not be reached"* sentence after
+it was read, so the counts are captured at preview time; and a recipient the server had excluded was
+drawn nowhere but inside the collapsed diagnostics.
+
+**And the hardcode I raised was a defect, with a distinction I had not drawn.** Two action-id lists in
+the client decided whether a preview body carried recipients and what material to expect. Sol: *the
+server's id-to-policy map is authorization; the client's is transport*, and only the second should
+follow the catalogue. `boxPreview` takes `{ id, effect }` now, so a new broadcast id works without
+anyone remembering a second list — which is the dead-button failure class this whole stage exists to
+close, and the client had quietly rebuilt it.
+
+It also found one of the new negative tests weaker than it claimed: the broadcast fixture had an empty
+`result.recipients` beside a receipt holding one, so it passed on that inconsistency rather than on
+its subject. Corrected, and the inconsistency has its own test.
+
+**Expiry stays the server's**, deliberately: comparing `expiresAt` against an unsynchronised browser
+clock could withdraw Confirm from a receipt that is still perfectly good, where the server can refuse
+it accurately.
+
+- [x] `ActionsApi.box` splits into `boxPreview(actionId, rows)` and `boxConfirm(envelope)`, and the
       ~10 call sites — nearly all of them in `tests/fleet-actions-route.test.ts` — follow. A confirm
       with no envelope to give then does not compile.
-- [ ] `BoxOutcome` keeps `op`, `action` and the parsed envelope. The envelope is *parsed*, not
+- [x] `BoxOutcome` keeps `op`, `action` and the parsed envelope. The envelope is *parsed*, not
       trusted: an answer whose `schema` is unrecognised, whose `dryRun` is absent or false, or whose
       `actionId` is not the action that was pressed, reaches the component as **no envelope**, and no
       Confirm is rendered over it.
-- [ ] `BoxActions` holds **one** state value — `{ generation, action, outcome }` — and discards any
+- [x] `BoxActions` holds **one** state value — `{ generation, action, outcome }` — and discards any
       response from an older generation. Press A, press B, B answers, A answers second, and the old
       two-field shape puts A's envelope under B's name while `boxConfirm` obediently runs A. Freezing
       the rows does nothing about that; one value and a generation counter does.
-- [ ] The confirm submits **only** from that frozen envelope. `rows` is read once, at preview time.
-- [ ] The whole answer has to agree before a Confirm exists: the expected preview `op`, the top-level
+- [x] The confirm submits **only** from that frozen envelope. `rows` is read once, at preview time.
+- [x] The whole answer has to agree before a Confirm exists: the expected preview `op`, the top-level
       `action`, `dryRun === true`, the envelope's `actionId`, a material discriminator matching the
       action's effect, and material that parses **all or nothing**.
-- [ ] `rows` reach `HealthPanel` too — `App → HealthPanel → BoxActionsCard`. The roadmap asks for both
+- [x] `rows` reach `HealthPanel` too — `App → HealthPanel → BoxActionsCard`. The roadmap asks for both
       panels; `OverseerPanel` passes rows and `HealthPanel` never has, so Broadcast on Box Health
       previews with nobody in it and is refused, exactly as the Overseer tab's was until 2026-09-09.
       A Health-tab test equivalent to the Overseer hop test.
-- [ ] The confirmation renders the candidate list / recipient list, the exact action words, and
+- [x] The confirmation renders the candidate list / recipient list, the exact action words, and
       explicit counts — including the excluded ones with their reasons. `RawValue` moves under a
       collapsed *diagnostic detail*, kept because a field this page has never heard of must stay on
       the page.
-- [ ] Component tests in `tests/fleet-box-confirm.test.tsx`: missing `dryRun`, `dryRun: false`,
+- [x] Component tests in `tests/fleet-box-confirm.test.tsx`: missing `dryRun`, `dryRun: false`,
       malformed payload, mismatched action, a contradictory `op`, and **two preview promises resolved
       out of order** — each shows a refusal or unknown state with **no executable confirm control**,
       or confirms the action whose name is on the button and no other.
