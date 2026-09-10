@@ -70,6 +70,7 @@ import {
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
+import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
   parseAttempt,
@@ -454,6 +455,17 @@ export type DaemonOptions = {
     /** The minimum gap between two session launches. `schedules.ts` § `LAUNCH_SEPARATION_MS`, and GPT Sol's S8-5. */
     launchSeparationMs: number;
     /**
+     * **HOW A SESSION JOB'S DOCUMENTS ARE READ — every tick, and every
+     * checkpoint.** `scheduler.ts` § `TickInput.readDocument` says why the tick
+     * reads; the checkpoint reads for Sol's P1-1 on plan 260910e, so the `ARMED`
+     * headline is made of the same evidence that refuses a job and cannot go on
+     * claiming a job the tick has stopped dispatching.
+     *
+     * Required for the reason `arming` is: a default would be this file deciding
+     * that a digest taken days ago is good enough.
+     */
+    readDocument: ReadDocument;
+    /**
      * How long a shutdown waits for rule runs still in flight, before giving up
      * on them **loudly**. Defaults to `RULE_SETTLE_GRACE_MS`.
      *
@@ -512,10 +524,12 @@ export const USAGE_INTERVAL_MS = 300_000;
  * How often the scheduler looks: every tick's worth, 30 seconds.
  *
  * **It is deliberately the cheapest of the three timers**, and it can be,
- * because a tick that finds nothing due does no I/O at all — it reads a map the
- * store already holds and compares two numbers. The interval is therefore the
- * granularity of the schedule rather than a cost, and the shortest job anyone
- * has asked for is five minutes.
+ * because a tick that finds nothing due reads a map the store already holds,
+ * compares two numbers — and, since 2026-09-10, digests each session job's
+ * documents, which is three small files (plan 260910e § D3: a digest taken at
+ * start and reused for days authorised whatever the document said by the time
+ * it was followed). The interval is therefore the granularity of the schedule
+ * rather than a cost, and the shortest job anyone has asked for is five minutes.
  *
  * It is a SEPARATE timer from the heartbeat rather than a line inside it,
  * because a spawn is a syscall and `lastTickAt` is how a reader tells a dead
@@ -730,9 +744,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
   // thing in each case: leave the store's own report alone.
   let usage: StoredUsage | null = null;
-  // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
-  // option rather than off a flag beside it, so "armed" and "there are jobs"
-  // cannot come apart.
+  // RECOMPUTED ON EVERY CHECKPOINT, from the documents as they are now. `armed`
+  // is read off the option rather than off a flag beside it, so "armed" and
+  // "there are jobs" cannot come apart.
   //
   // **AND `armed` IS A CLAIM ABOUT THE LOADED DEFINITIONS, not about a switch**
   // (GPT Sol's S8-7). It used to be `jobs === undefined ? "off" : "armed"`,
@@ -741,18 +755,29 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // document could not be read, still said `ARMED`. Now the switch being on with
   // nothing runnable is `blocked`, which is its own word because it is its own
   // situation — not off, and not working.
-  const schedulerStanding: StoredScheduler = schedulerStandingOf({
-    jobs:
-      options.jobs === undefined
-        ? undefined
-        : { definitions: options.jobs.definitions, held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined } },
-    detail: options.schedulerDetail,
-    at: now().toISOString(),
-  });
+  //
+  // **It was built ONCE, at start, until 2026-09-10** — Sol's P1-1 on plan
+  // 260910e. Once the tick began re-reading documents, a document edited after
+  // start would have the tick refusing its job while every checkpoint went on
+  // saying ARMED. So it is made of the same fresh reading the tick uses, and
+  // `at` is when this checkpoint decided it.
+  const schedulerStandingNow = (): StoredScheduler =>
+    schedulerStandingOf({
+      jobs:
+        options.jobs === undefined
+          ? undefined
+          : {
+              definitions: options.jobs.definitions,
+              held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined },
+              evidence: resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
+            },
+      detail: options.schedulerDetail,
+      at: now().toISOString(),
+    });
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
-    scheduler: schedulerStanding,
+    scheduler: schedulerStandingNow(),
     // THE DEADLINE, NOT THE CADENCE, and written on every tick because
     // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
     // this instead of computing its own: sharing `staleAfterMs` stopped the
@@ -996,6 +1021,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             rules: jobOptions.rules,
             arming: jobOptions.arming,
             launchSeparationMs: jobOptions.launchSeparationMs,
+            // THE DOCUMENTS, READ NOW — not the digests the definitions were
+            // built with at start (plan 260910e, defect 1).
+            readDocument: jobOptions.readDocument,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.

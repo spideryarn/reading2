@@ -58,6 +58,14 @@
  *     phase offset could not do. The job that loses is `spacing-held`, a state
  *     a reader can see, never a silent skip.
  *
+ * **THE ORDER IS NO LONGER WRITTEN OUT IN THIS FILE.** Since 2026-09-10 it is
+ * `schedule-plan.ts`'s `planJobs`, which the preview calls too — plan 260910e
+ * § D2: a preview with its own copy of the gates would be a second copy of the
+ * one thing it must not get wrong. It also gained two steps the list above
+ * does not show: a **duplicate-id preflight** over the whole list between 1 and
+ * 2, and **dry-run** between 3 and 4. What stays here is the sweep before it,
+ * the document reading it is handed, and the side effects after it.
+ *
  * ## Fail closed, and what that actually means here
  *
  * **If the reservation does not land on the disk, nothing is spawned.** Not
@@ -108,11 +116,7 @@
  */
 import type { OverseerEvent } from "./diff.js";
 import {
-  authorisationOf,
   behaviourHash,
-  due,
-  lastRunOf,
-  lastSessionLaunchOf,
   leaseExpired,
   occurrenceId,
   standingOf,
@@ -128,6 +132,7 @@ import {
   type SpawnJob,
 } from "./jobs.js";
 import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
+import { authorisationUnder, evidenceAsBuilt, planJobs, resolveEvidence, type DocumentEvidence, type JobPlan, type ReadDocument } from "./schedule-plan.js";
 import type { AppendResult, StoredScheduler } from "./store.js";
 
 /**
@@ -197,6 +202,20 @@ export type SchedulerReport =
    * job without anybody noticing.
    */
   | { readonly kind: "spacing-held"; readonly jobId: string; readonly remainingMs: number; readonly why: string }
+  /**
+   * **DUE, AND DRY-RUN, SO NOTHING WAS RESERVED OR LAUNCHED.** Plan 260910e
+   * § D5. Nothing is written to the ledger either, so a job in this state
+   * reports it every tick while it is due — the same volume `waiting` has.
+   */
+  | { readonly kind: "dry-run"; readonly jobId: string; readonly why: string }
+  /**
+   * **TWO OR MORE DEFINITIONS SHARE THIS ID, AND EVERY ONE OF THEM IS REFUSED.**
+   * Its own arm rather than a `not-dispatched`, because that one means a write
+   * failed and this one means the job list is wrong — and because the old
+   * `not-dispatched` for this case was written while the FIRST duplicate had
+   * already been dispatched (Sol's P1-5 on plan 260910e).
+   */
+  | { readonly kind: "duplicate-id"; readonly jobId: string; readonly why: string }
   /** THE GATE. The definition in front of us is not the one that was authorised, so no key is minted and nothing is spawned. */
   | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string }
   /** Opening the store could not reconstruct the occurrence ledger, so every job is held: a cold start is not permission. */
@@ -234,6 +253,25 @@ export type TickInput = {
    * passes.
    */
   readonly launchSeparationMs: number;
+  /**
+   * **HOW A SESSION JOB'S DOCUMENTS ARE READ, EVERY TICK.** Plan 260910e § D3.
+   *
+   * The definitions are built once, when the daemon starts, and a session they
+   * launch is told to follow the document **on disk** in the primary checkout,
+   * where every push to `dev` lands. So a digest taken at start and reused for
+   * days authorised whatever the document said by the time it was followed —
+   * unattended authority growing between a doc edit and the next restart, with
+   * the pin still green. Reading every tick closes that; the window left is a
+   * document edited between this read and the session's, which pinning the
+   * material handed to the child closes and which is the Scheduled-dispatch
+   * stage's first bullet.
+   *
+   * **Required**, because the alternative to a reading is the stale digest, and
+   * a default would reintroduce the defect for any caller that forgot. Session
+   * jobs only: a rule's documents are code already loaded into this process,
+   * and its load-time digests are the right evidence (`schedule-plan.ts`).
+   */
+  readonly readDocument: ReadDocument;
   /**
    * **OPTIONAL, AND THAT IS THE DETERMINISTIC-ONLY ARMING PATH.**
    *
@@ -324,15 +362,34 @@ export type RuleRun = {
  */
 export type JobEligibility =
   | { readonly kind: "eligible"; readonly jobId: string }
-  | { readonly kind: "ineligible"; readonly jobId: string; readonly why: string };
+  | { readonly kind: "ineligible"; readonly jobId: string; readonly why: string }
+  /**
+   * **AUTHORISED, RUNNABLE, AND DELIBERATELY NOT LIVE.** Not eligible — it
+   * cannot earn `ARMED`, because it will never start anything — and not a
+   * fault either, which is why it is its own arm rather than an `ineligible`.
+   * Folding the two would make the activation preflight, which stops on any
+   * `ineligible`, refuse to arm a box because its harmless fixture job is doing
+   * exactly what it was pinned to do. Plan 260910e § D5.
+   */
+  | { readonly kind: "dry-run"; readonly jobId: string; readonly why: string };
 
 /** The capabilities a process holds — the same two `TickInput` carries, as booleans, because this asks a yes/no question of them. */
 export type HeldCapabilities = { readonly session: boolean; readonly rules: boolean };
 
-export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabilities): readonly JobEligibility[] {
+/**
+ * `evidence` is the session jobs' documents as they are now. **Absent means the
+ * definitions were built from the checkout a moment ago**, so their own
+ * digests are the fresh reading — `schedulerWiring` and the activation
+ * preflight. A long-running holder of definitions (the daemon) must pass it,
+ * and does: see `schedulerStandingOf`.
+ */
+export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabilities, evidence?: DocumentEvidence): readonly JobEligibility[] {
+  const reading = evidence ?? evidenceAsBuilt(jobs);
   return jobs.map((job) => {
     const jobId = job.definition.behaviour.id;
-    const authorisation = authorisationOf(job);
+    // THE SAME GATE THE TICK APPLIES, over the same kind of evidence — so the
+    // headline and the refusal cannot disagree about a document.
+    const authorisation = authorisationUnder(job, reading);
     if (authorisation.kind === "unauthorised") return { kind: "ineligible", jobId, why: authorisation.why };
     const work = job.definition.behaviour.work;
     if (work.kind === "session" && !held.session) {
@@ -341,6 +398,8 @@ export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabili
     if (work.kind === "rule" && !held.rules) {
       return { kind: "ineligible", jobId, why: "this daemon holds no rule capability, so it cannot run this rule" };
     }
+    const dispatch = job.definition.behaviour.dispatch;
+    if (dispatch.kind === "dry-run") return { kind: "dry-run", jobId, why: `pinned as dry-run, so it will never start anything: ${dispatch.why}` };
     return { kind: "eligible", jobId };
   });
 }
@@ -359,14 +418,26 @@ export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabili
  * on and not one loaded job able to run, which used to print as `ARMED`.
  */
 export function schedulerStandingOf(input: {
-  readonly jobs: { readonly definitions: readonly AuthorisedJob[]; readonly held: HeldCapabilities } | undefined;
+  readonly jobs:
+    | {
+        readonly definitions: readonly AuthorisedJob[];
+        readonly held: HeldCapabilities;
+        /**
+         * The session jobs' documents AS THEY ARE NOW — `eligibilityOf` says what
+         * absent means. The daemon passes a fresh reading on every checkpoint
+         * (Sol's P1-1 on plan 260910e), so `ARMED` cannot outlive the job that
+         * earned it.
+         */
+        readonly evidence?: DocumentEvidence;
+      }
+    | undefined;
   readonly detail: string | undefined;
   readonly at: string;
 }): StoredScheduler {
   if (input.jobs === undefined) {
     return { kind: "off", why: input.detail ?? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched", at: input.at };
   }
-  const eligibility = eligibilityOf(input.jobs.definitions, input.jobs.held);
+  const eligibility = eligibilityOf(input.jobs.definitions, input.jobs.held, input.jobs.evidence);
   const eligible = eligibility.filter((one) => one.kind === "eligible");
   const detail = input.detail ?? `${input.jobs.definitions.length} scheduled job(s)`;
   if (eligible.length > 0) return { kind: "armed", why: `${eligible.length} of ${eligibility.length} job(s) can run: ${detail}`, at: input.at };
@@ -376,70 +447,85 @@ export function schedulerStandingOf(input: {
       "the scheduler is switched on and NOT ONE loaded job can run, so nothing will be dispatched however due it is: " +
       (eligibility.length === 0
         ? "no job definitions were built at all"
-        : eligibility.map((one) => (one.kind === "ineligible" ? `${one.jobId} — ${one.why}` : one.jobId)).join("; ")) +
+        : eligibility.map((one) => (one.kind === "eligible" ? one.jobId : `${one.jobId} — ${one.why}`)).join("; ")) +
       `. ${detail}`,
     at: input.at,
   };
 }
 
-/** One pass of the scheduler: sweep what nobody can account for, then dispatch what is due. */
+/**
+ * One pass of the scheduler: sweep what nobody can account for, read the
+ * documents the session jobs lean on, let the planner decide, and do what it
+ * decided.
+ *
+ * **What is left here is the order of the side effects**, not the gates: the
+ * sweep first (so one tick both reports a stuck run and lets its job move on),
+ * the reading second (so the planner is handed a value), and the reservation →
+ * spawn → record dance inside `launch`, which answers the planner truthfully —
+ * a failed reservation or a refusal moves no spacing clock.
+ */
 export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
   const at = input.now();
   const nowMs = at.getTime();
-  const reports: SchedulerReport[] = [...sweep(input, at.toISOString(), nowMs)];
-  // EVERY JOB IS HELD WHEN THE LEDGER IS INCOMPLETE, and it is checked here
-  // rather than inside `dispatch` so that it cannot be reached round the side by
-  // a later arm. `sweep` above still runs: what it can see is still worth
+  const atIso = at.toISOString();
+  // `sweep` runs whatever the ledger's state: what it can see is still worth
   // writing down, and it starts nothing.
-  const history = input.store.occurrenceHistory;
-  if (history.kind === "lost") {
-    for (const job of input.definitions) {
-      reports.push({ kind: "history-lost", jobId: job.definition.behaviour.id, why: history.why });
-    }
-    return reports;
-  }
-  const seen = new Set<string>();
-  // THE SPACING GATE'S STATE, SEEDED FROM THE DISK AND UPDATED WITHIN THE TICK.
-  //
-  // Seeded from the ledger so it survives a restart and a day's downtime — the
-  // half of S8-5 an in-memory counter would get wrong. Updated in the loop
-  // because a reservation appended two lines above must count against the next
-  // job in the same pass, and reading the store's index back for that would make
-  // this depend on when the index is refreshed.
-  const sessionJobIds = new Set(input.definitions.filter((job) => job.definition.behaviour.work.kind === "session").map((job) => job.definition.behaviour.id));
-  const lastLaunch = lastSessionLaunchOf(input.store.occurrences, sessionJobIds);
-  let lastLaunchMs = lastLaunch.kind === "at" ? Date.parse(lastLaunch.at) : Number.NEGATIVE_INFINITY;
-  for (const job of input.definitions) {
-    const definition = job.definition;
-    // TWO DEFINITIONS WITH ONE ID IS A CONFIGURATION MISTAKE THAT WOULD BE
-    // SILENT. Identical ones mint the same key at the same instant, so the
-    // second dispatch spawns a second process and then overwrites the first's
-    // acknowledgement — one occurrence in the log, two children on the box.
-    // Refusing the duplicate is a line in the log; permitting it is the class of
-    // failure this whole module is arranged against.
-    const jobId = definition.behaviour.id;
-    if (seen.has(jobId)) {
-      reports.push({ kind: "not-dispatched", jobId, why: "two definitions share this id, so neither can be addressed unambiguously" });
-      continue;
-    }
-    seen.add(jobId);
-    // THE AUTHORISATION GATE, AND IT COMES BEFORE `due`. An edited definition
-    // has no history, `due` reads no history as "run it now", and that pair is
-    // what turned an edit into an immediate unauthorised dispatch (C2). Asking
-    // here means the edited job never reaches the arithmetic at all.
-    const authorisation = authorisationOf(job);
-    if (authorisation.kind === "unauthorised") {
-      reports.push({ kind: "unauthorised", jobId, why: authorisation.why });
-      continue;
-    }
-    const outcome = dispatch(input, definition, at.toISOString(), nowMs, lastLaunchMs);
-    // ONLY A LAUNCH MOVES THE GATE. A held, waiting or refused job started
-    // nothing, so counting it would ration the next job against an event that
-    // did not happen.
-    if (outcome.launched) lastLaunchMs = nowMs;
-    reports.push(...outcome.reports);
-  }
+  const reports: SchedulerReport[] = [...sweep(input, atIso, nowMs)];
+  // THE LAUNCH'S OWN REPORTS, KEPT BY THE JOB OBJECT IT WAS HANDED. A launch
+  // produces one to three reports (the dispatch, a refusal, a record that could
+  // not be written), and they have to come out in the job's place in the list,
+  // not in the order `launch` happened to be called.
+  const launched = new Map<AuthorisedJob, readonly SchedulerReport[]>();
+  const plans = planJobs(
+    {
+      definitions: input.definitions,
+      occurrences: input.store.occurrences,
+      history: input.store.occurrenceHistory,
+      arming: input.arming,
+      launchSeparationMs: input.launchSeparationMs,
+      nowMs,
+      // READ NOW, EVERY TICK, AND ONLY FOR SESSION JOBS — `TickInput.readDocument`.
+      evidence: resolveEvidence(input.definitions, input.readDocument),
+    },
+    (job) => {
+      const outcome = launch(input, job.definition, atIso, nowMs);
+      launched.set(job, outcome.reports);
+      return outcome.launched;
+    },
+  );
+  for (const plan of plans) reports.push(...reportsOf(plan, launched));
   return reports;
+}
+
+/** One verdict as the reports the log has always carried. `dispatch` is the only arm whose reports were made elsewhere — by `launch`. */
+function reportsOf(plan: JobPlan, launched: ReadonlyMap<AuthorisedJob, readonly SchedulerReport[]>): readonly SchedulerReport[] {
+  switch (plan.kind) {
+    case "history-lost":
+      return [{ kind: "history-lost", jobId: plan.jobId, why: plan.why }];
+    case "duplicate-id":
+      return [{ kind: "duplicate-id", jobId: plan.jobId, why: plan.why }];
+    case "unauthorised":
+      return [{ kind: "unauthorised", jobId: plan.jobId, why: plan.why }];
+    case "held":
+      return [{ kind: "held", jobId: plan.jobId, why: plan.why }];
+    case "waiting":
+      return [{ kind: "waiting", jobId: plan.jobId, remainingMs: plan.remainingMs }];
+    case "not-yet-eligible":
+      return [{ kind: "not-yet-eligible", jobId: plan.jobId, firstEligibleAt: plan.firstEligibleAt, remainingMs: plan.remainingMs }];
+    case "dry-run":
+      return [{ kind: "dry-run", jobId: plan.jobId, why: plan.why }];
+    case "spacing-held":
+      return [{ kind: "spacing-held", jobId: plan.jobId, remainingMs: plan.remainingMs, why: plan.why }];
+    case "dispatch":
+      // A PLANNED LAUNCH WITH NO RECORD OF IT is a bug in this file, not a
+      // state of the world — but the daemon's timer must not throw over it, so
+      // it is said out loud instead of swallowed.
+      return launched.get(plan.job) ?? [{ kind: "not-dispatched", jobId: plan.jobId, why: "the planner reported a launch that this tick has no record of making" }];
+    default: {
+      const never: never = plan;
+      throw new Error(`no report for plan ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /**
@@ -499,66 +585,32 @@ function leaseWhy(occurrence: Occurrence, nowMs: number): string {
 }
 
 /**
- * One job, one decision.
+ * One job the planner decided to dispatch: reserve, start, record.
+ *
+ * Every gate is behind it — the history, the id, the pin, the clock, dry-run
+ * and spacing are `planJobs`'s — so this is only the ordering that makes a crash
+ * visible. `definition` is the job AS AUTHORISED: for a session job, with the
+ * document digests read this tick, so the key's hash is the pin that was
+ * actually checked.
  *
  * Returns the reports for it — one in every case but the dispatch that fails to
  * acknowledge — **and whether a session was launched**, which is what the
- * spacing gate in `schedulerTick` counts. The flag rather than an inspection of
- * the reports: "did this start a process" is a fact this function knows and a
+ * planner's spacing clock counts. The flag rather than an inspection of the
+ * reports: "did this start a process" is a fact this function knows and a
  * caller matching on report kinds would be re-deriving.
  */
-function dispatch(
+function launch(
   input: TickInput,
   definition: JobDefinition,
   at: string,
   nowMs: number,
-  lastLaunchMs: number,
 ): { readonly launched: boolean; readonly reports: readonly SchedulerReport[] } {
   const jobId = definition.behaviour.id;
   const held = (reports: readonly SchedulerReport[]): { launched: boolean; reports: readonly SchedulerReport[] } => ({ launched: false, reports });
-  const verdict = due(definition.schedule, lastRunOf(input.store.occurrences, jobId, nowMs), nowMs, input.arming);
-  switch (verdict.kind) {
-    case "held":
-      return held([{ kind: "held", jobId, why: verdict.why }]);
-    case "not-due":
-      return held([{ kind: "waiting", jobId, remainingMs: verdict.remainingMs }]);
-    case "not-yet-eligible":
-      return held([{ kind: "not-yet-eligible", jobId, firstEligibleAt: verdict.firstEligibleAt, remainingMs: verdict.remainingMs }]);
-    case "due":
-      break;
-    default: {
-      const never: never = verdict;
-      throw new Error(`no dispatch for ${JSON.stringify(never)}`);
-    }
-  }
 
-  // THE LAUNCH-SPACING GATE, AFTER `due` AND BEFORE THE RESERVATION.
-  //
-  // After `due`, so a job that is not due is reported as not due rather than as
-  // spaced — the two are different facts and only one of them is temporary.
-  // Before the reservation, because a reservation is the launch as far as the
-  // ledger is concerned, and one written here would ration the NEXT job against
-  // a session that never started.
-  //
-  // Sessions only. A rule runs in this process, spends nothing and finishes in
-  // milliseconds; rationing it would be rationing the wrong thing.
-  if (definition.behaviour.work.kind === "session" && input.launchSeparationMs > 0) {
-    const sinceMs = nowMs - lastLaunchMs;
-    if (sinceMs < input.launchSeparationMs) {
-      const remainingMs = input.launchSeparationMs - sinceMs;
-      return held([
-        {
-          kind: "spacing-held",
-          jobId,
-          remainingMs,
-          why:
-            `it is due, and a Claude session was launched ${Math.round(sinceMs / 1000)}s ago — ` +
-            `this box starts at most one every ${Math.round(input.launchSeparationMs / 1000)}s, so this one waits ${Math.round(remainingMs / 1000)}s`,
-        },
-      ]);
-    }
-  }
-
+  // A RESERVATION IS THE LAUNCH as far as the ledger is concerned, which is
+  // why the spacing gate sits before this function rather than inside it: one
+  // written here would ration the NEXT job against a session that never started.
   const key: OccurrenceKey = { jobId, scheduledAt: at, behaviourHash: behaviourHash(definition.behaviour) };
   const id = occurrenceId(key);
   const leaseUntil = new Date(nowMs + definition.schedule.leaseMs).toISOString();
@@ -768,6 +820,10 @@ export function describeReport(report: SchedulerReport): string {
       return `job ${report.jobId}: never run; first eligible at ${report.firstEligibleAt} (${Math.round(report.remainingMs / 1000)}s away)`;
     case "spacing-held":
       return `job ${report.jobId}: WAITING FOR SPACING — ${report.why}`;
+    case "dry-run":
+      return `job ${report.jobId}: DRY RUN — ${report.why}`;
+    case "duplicate-id":
+      return `job ${report.jobId}: DUPLICATE ID — ${report.why}`;
     case "unauthorised":
       return `job ${report.jobId}: NOT AUTHORISED — ${report.why}`;
     case "history-lost":

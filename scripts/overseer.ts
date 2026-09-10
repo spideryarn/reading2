@@ -44,7 +44,7 @@ import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overs
 import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
 import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
 import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
-import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
+import { describeStandingJobs, readJobDocument, standingJobs } from "../tools/overseer/standing-jobs.js";
 /* THE DASHBOARD'S GROUPING AND THE DASHBOARD'S CLOCKS, imported rather than
    restated. `tools/overseer/` already depends on `tools/fleet/` — that is the
    allowed direction of the seam — and two renderings of one measurement is how
@@ -606,6 +606,11 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
   const problems = [...standing.problems, ...rules.problems];
   const definitions = [...standing.jobs, ...rules.jobs];
   const work = (): ProposingRuleWork => ruleWork({ baseUrl: fleetUrl(env), selfPid: process.pid });
+  // HOW THE DAEMON RE-READS A SESSION JOB'S DOCUMENTS, every tick and every
+  // checkpoint (plan 260910e § D3) — the same digest function the definitions
+  // above were built with, against the same checkout. Handed over under both
+  // armings: a rules-only daemon holds no session job, so it never calls it.
+  const readDocument = readJobDocument(root);
   // WHAT THIS PROCESS WOULD HOLD, matching the `jobs` fragment below exactly. A
   // second reading of the same decision would be the drift GPT Sol's S8-7 is
   // about, one level in, so both come from `arming`.
@@ -633,6 +638,7 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
             rules: work(),
             arming: armedAt,
             launchSeparationMs: LAUNCH_SEPARATION_MS,
+            readDocument,
           }
         : arming === "rules-only"
           ? // NO `spawn` KEY AT ALL. Not `spawn: undefined`, not a spawner that
@@ -640,7 +646,7 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
             //
             // The spacing gate is still passed and is still inert here, because
             // it only ever gates session work and this process can start none.
-            { definitions: rules.jobs, rules: work(), arming: armedAt, launchSeparationMs: LAUNCH_SEPARATION_MS }
+            { definitions: rules.jobs, rules: work(), arming: armedAt, launchSeparationMs: LAUNCH_SEPARATION_MS, readDocument }
           : undefined,
   };
 }

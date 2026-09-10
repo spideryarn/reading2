@@ -1,0 +1,1 @@
+This is the Overseer's harmless fixture job: it exists so the scheduler has one job that is safe in every state, and it asks for nothing. Reply with the single line `schedule fixture ran` and stop. Do not read, edit, run or commit anything.

@@ -56,6 +56,7 @@ import {
   type OccurrenceLog,
   type SchedulerReport,
 } from "../tools/overseer/scheduler.js";
+import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import {
   hours,
   LAUNCH_SEPARATION_MS,
@@ -71,6 +72,9 @@ import { activationVerdict, ARMING_ENV_FILE, INSTALLED_UNIT, substitutedUnit, UN
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Every session job this file ticks leans on no document, so a tick that asked for one would be a bug — it says so rather than inventing a digest. */
+const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
+
 const temporary: string[] = [];
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
@@ -85,7 +89,7 @@ function tempDir(): string {
 // ───────────────────────────────────────────────────────────── S8-1, the split
 
 describe("S8-1: a schedule edit moves no fingerprint, and a behaviour edit still does", () => {
-  const BEHAVIOUR: JobBehaviour = { id: "j", what: "do the thing", documents: [], work: { kind: "session" } };
+  const BEHAVIOUR: JobBehaviour = { id: "j", what: "do the thing", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
   const SCHEDULE: ScheduleConfig = { everyMs: hours(6), leaseMs: hours(6), initialDelayMs: minutes(30) };
 
   test("THE ONE THAT MAKES GREG'S CONFIG FILE WORK: every schedule field can move without moving the hash", () => {
@@ -118,7 +122,7 @@ describe("S8-1: a schedule edit moves no fingerprint, and a behaviour edit still
     expect(
       behaviourHash({
         ...BEHAVIOUR,
-        work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 60, policy: "safe-to-kill", disposition: "propose" } },
+        work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 60, policy: "safe-to-kill", disposition: "propose" } }, dispatch: { kind: "live" },
       }),
     ).not.toBe(pinned);
   });
@@ -128,7 +132,9 @@ describe("S8-1: a schedule edit moves no fingerprint, and a behaviour edit still
     // encoder table, and the table is a mapped type over `keyof JobBehaviour` —
     // so putting `everyMs` back would take a type change (moving the field onto
     // `JobBehaviour`) and a red line here, rather than one added encoder entry.
-    expect([...JOB_BEHAVIOUR_HASHED_FIELDS].sort()).toEqual(["documents", "id", "what", "work"]);
+    // `dispatch` joined on 2026-09-10 (plan 260910e § D5): whether a job may
+    // start anything is gate 3's question, so it is hashed. Still no clock knob.
+    expect([...JOB_BEHAVIOUR_HASHED_FIELDS].sort()).toEqual(["dispatch", "documents", "id", "what", "work"]);
   });
 
   test("the SHIPPED jobs are pinned against their behaviour, and rebuilding them with other schedules changes nothing", () => {
@@ -152,15 +158,17 @@ describe("S8-1: the config, and the validation that replaced the re-pin", () => 
     // > 3h — Greg, 2026-09-08
     expect(STANDING_JOB_SCHEDULES["get-ready-to-deploy"].everyMs).toBe(hours(6));
     expect(STANDING_JOB_SCHEDULES["feedback-sweep"].everyMs).toBe(hours(3));
-    expect(Object.keys(STANDING_JOB_SCHEDULES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy"]);
+    // The third key is the dry-run fixture (plan 260910e § D5): daily, and it
+    // can start nothing as pinned.
+    expect(Object.keys(STANDING_JOB_SCHEDULES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy", "schedule-fixture"]);
     // And the standing jobs actually carry them — a config nothing reads is the
     // failure mode of every config file.
     const built = standingJobs(REPO);
-    expect(built.jobs.map((job) => job.definition.schedule.everyMs)).toEqual([hours(6), hours(3)]);
+    expect(built.jobs.map((job) => job.definition.schedule.everyMs)).toEqual([hours(6), hours(3), hours(24)]);
   });
 
   test("the shipped config passes its own validation", () => {
-    expect(validateSchedules(STANDING_JOB_SCHEDULES, ["get-ready-to-deploy", "feedback-sweep"])).toEqual([]);
+    expect(validateSchedules(STANDING_JOB_SCHEDULES, ["get-ready-to-deploy", "feedback-sweep", "schedule-fixture"])).toEqual([]);
     expect(validateLaunchSeparation(LAUNCH_SEPARATION_MS, STANDING_JOB_SCHEDULES)).toEqual([]);
   });
 
@@ -210,8 +218,8 @@ describe("S8-1: the config, and the validation that replaced the re-pin", () => 
 // ────────────────────────────────────────────────────────── S8-4, the lineage
 
 describe("S8-4: a re-pin no longer discards a job's cadence", () => {
-  const OLD: JobBehaviour = { id: "feedback-sweep", what: "the old instruction", documents: [], work: { kind: "session" } };
-  const NEW: JobBehaviour = { id: "feedback-sweep", what: "the new instruction", documents: [], work: { kind: "session" } };
+  const OLD: JobBehaviour = { id: "feedback-sweep", what: "the old instruction", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
+  const NEW: JobBehaviour = { id: "feedback-sweep", what: "the new instruction", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
 
   function ran(behaviour: JobBehaviour, at: string, kind: "finished" | "started"): Occurrence {
     const key: OccurrenceKey = { jobId: behaviour.id, scheduledAt: at, behaviourHash: behaviourHash(behaviour) };
@@ -340,9 +348,10 @@ describe("S8-5: a durable minimum separation between session launches", () => {
   const NOW = new Date("2026-09-09T12:00:00.000Z");
 
   function sessionJob(id: string): AuthorisedJob {
-    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work: { kind: "session" } };
+    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
     return {
       definition: { behaviour, schedule: { everyMs: hours(6), leaseMs: hours(6), initialDelayMs: 0 } },
+      authorisedDocuments: [],
       authorisedHash: behaviourHash(behaviour),
     };
   }
@@ -383,6 +392,7 @@ describe("S8-5: a durable minimum separation between session launches", () => {
       spawn: spawn.spawn,
       arming: ARMED,
       launchSeparationMs: minutes(30),
+      readDocument: NO_DOCUMENTS,
       now: () => NOW,
     });
     expect(spawn.started).toEqual(["get-ready-to-deploy"]);
@@ -431,6 +441,7 @@ describe("S8-5: a durable minimum separation between session launches", () => {
       spawn: spawn.spawn,
       arming: ARMED,
       launchSeparationMs: minutes(30),
+      readDocument: NO_DOCUMENTS,
       now: () => NOW,
     });
     expect(spawn.started).toEqual([]);
@@ -449,10 +460,11 @@ describe("S8-5: a durable minimum separation between session launches", () => {
       id: "wedged-work",
       what: "look",
       documents: [],
-      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 60, policy: "safe-to-kill", disposition: "propose" } },
+      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 60, policy: "safe-to-kill", disposition: "propose" } }, dispatch: { kind: "live" },
     };
     const rule: AuthorisedJob = {
       definition: { behaviour, schedule: { everyMs: minutes(15), leaseMs: minutes(30), initialDelayMs: 0 } },
+      authorisedDocuments: [],
       authorisedHash: behaviourHash(behaviour),
     };
     const spawn = spawner();
@@ -465,6 +477,7 @@ describe("S8-5: a durable minimum separation between session launches", () => {
       // the rule reached `start`, past the spacing gate.
       arming: ARMED,
       launchSeparationMs: minutes(30),
+      readDocument: NO_DOCUMENTS,
       now: () => NOW,
     });
     expect(spawn.started).toEqual(["get-ready-to-deploy"]);
@@ -500,9 +513,10 @@ describe("S8-5: a durable minimum separation between session launches", () => {
 
 describe("S8-7: `ARMED` is a fact about the loaded definitions, not about an env var", () => {
   function job(id: string, work: JobBehaviour["work"], pinned: string | null): AuthorisedJob {
-    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work };
+    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work, dispatch: { kind: "live" } };
     return {
       definition: { behaviour, schedule: { everyMs: hours(6), leaseMs: hours(6), initialDelayMs: 0 } },
+      authorisedDocuments: [],
       authorisedHash: (pinned ?? behaviourHash(behaviour)) as BehaviourHash,
     };
   }
@@ -601,6 +615,20 @@ describe("S8-3: the activation command cannot report success on the old unit", (
 
   test("the happy path is the only one that exits zero", () => {
     expect(activationVerdict(BASE).ok).toBe(true);
+  });
+
+  test("A DRY-RUN JOB IS NEITHER A PROBLEM NOR CALLED ELIGIBLE — it is named as never dispatching", () => {
+    // The fixture (plan 260910e D5) is pinned dry-run on purpose. It must not
+    // stop activation, and "schedule-fixture is eligible" in the success notes
+    // would tell whoever armed the box that a job will run which never will.
+    const verdict = activationVerdict({
+      ...BASE,
+      eligibility: [...BASE.eligibility, { kind: "dry-run" as const, jobId: "schedule-fixture", why: "pinned as dry-run" }],
+      requiredJobIds: [...BASE.requiredJobIds, "schedule-fixture"],
+    });
+    expect(verdict.ok).toBe(true);
+    expect(verdict.notes.join("\n")).not.toContain("schedule-fixture is eligible");
+    expect(verdict.notes.join("\n")).toContain("schedule-fixture is dry-run");
   });
 
   test("THE FINDING ITSELF: the installed unit is not the one this checkout would install", () => {

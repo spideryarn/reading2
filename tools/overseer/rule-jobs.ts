@@ -228,8 +228,14 @@ export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
   // implementation files rather than prose, and a rule's implementation is the
   // thing a person is authorising. Re-pinned after reading the diff: two words
   // in two comments, both of them the new name of a function this file calls.
-  "wedged-work": "17abcb1814de",
-  "launch-mode": "f130e228aa85",
+  //
+  // BOTH RE-PINNED 2026-09-10 (plan 260910e § D5), for one thing only:
+  // `JobBehaviour` gained the hashed `dispatch` field and both rules are
+  // `{ kind: "live" }`, which is what they already were. No spec, threshold,
+  // disposition or source file moved — `RULE_SOURCES` are byte-for-byte what
+  // they were. Was `17abcb1814de` and `f130e228aa85`.
+  "wedged-work": "28d1f83b8a42",
+  "launch-mode": "4de4439f7848",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
@@ -301,7 +307,9 @@ export function ruleJobs(repoRoot: string): RuleJobs {
   // question there is.
   const defined: readonly RuleJobDefinition[] = [
     {
-      behaviour: { id: "wedged-work", what: WEDGED_WORK_WHAT, documents, work: { kind: "rule", rule: WEDGED_WORK_SPEC } },
+      // `dispatch: live` — a rule that only proposes has no dry-run worth the
+      // name, and it is hashed like every other job's (`jobs.ts` § JobDispatch).
+      behaviour: { id: "wedged-work", what: WEDGED_WORK_WHAT, documents, work: { kind: "rule", rule: WEDGED_WORK_SPEC }, dispatch: { kind: "live" } },
       // THE RULES' SCHEDULES ARE NOT IN `schedules.ts`, deliberately. That file
       // is Greg's — the two standing jobs, the ones that cost money, the ones he
       // asked to be able to retune at 3am. A rule ticks in-process and costs
@@ -311,7 +319,7 @@ export function ruleJobs(repoRoot: string): RuleJobs {
       schedule: { everyMs: WEDGED_WORK_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
     {
-      behaviour: { id: "launch-mode", what: LAUNCH_MODE_WHAT, documents, work: { kind: "rule", rule: LAUNCH_MODE_SPEC } },
+      behaviour: { id: "launch-mode", what: LAUNCH_MODE_WHAT, documents, work: { kind: "rule", rule: LAUNCH_MODE_SPEC }, dispatch: { kind: "live" } },
       schedule: { everyMs: LAUNCH_MODE_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
   ];
@@ -319,6 +327,12 @@ export function ruleJobs(repoRoot: string): RuleJobs {
     jobs: defined.map((definition) => ({
       definition,
       authorisedHash: AUTHORISED_RULE_HASHES[definition.behaviour.id as RuleJobId] as BehaviourHash,
+      // THE LOAD-TIME DIGESTS, not literals (plan 260910e § D4). A rule's
+      // documents are the code this process has already loaded, and the tick
+      // never re-reads them, so the digest the definition was built with IS the
+      // one it is judged by — a literal beside the hash would be a second copy
+      // of `RULE_SOURCES`' bytes to keep in step for no diagnosis it could add.
+      authorisedDocuments: documents,
     })),
     problems,
   };
