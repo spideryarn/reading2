@@ -70,6 +70,13 @@ plan's F8, F9 and F14 are why.
 
 ### Decision 1 — the browser rule, which is not exported
 
+**Settled: (a), authorised by the Overseer on 2026-09-10**, on four conditions: behaviour-preserving
+(no new names in the browser set), a test that drives `isBrowserProgram` alone, `origin/dev` merged
+first, and `actions.ts` named in the commit message. The Overseer also confirmed that reusing
+`recogniseHarnessCommand` supersedes the task file's "write one new recogniser for `codex-batch`":
+one tested recogniser for `codex exec` already exists, and a second copy is what the task file's own
+reasoning forbids.
+
 The rule lives inline in `isOrphanedDebugPipeBrowser`. Three ways to reuse it:
 
 - **(a) A small export in `actions.ts`**, outside my file set: extract
@@ -98,7 +105,14 @@ processes. A timer moves that stall off the request path but still blocks the on
 cadence, which is round 2's F13 in a smaller form. The adapter reads with `fs/promises`, so a pass
 yields between files. The pass takes longer in wall time, and a longer window means more
 changed-under-read rows, which the bracket already turns into an honest count rather than a guess.
-To be measured on the box both ways: wall time per pass and the longest event-loop stall.
+**Measured on the box, 2026-09-10 07:58 UTC, load 6**, 20 passes each of `stat` + `cmdline` + `stat`
+per pid, reads only, with no fold: **880 processes** (twice the 425 the earlier measurement saw).
+Synchronous: **49.1 ms median, 82.8 ms worst**, every millisecond of it blocking the event loop.
+Async: **338 ms median, 484 ms worst** wall time per pass, and a longest event-loop stall of **2.4 ms
+median, 6.2 ms worst**, measured with a 1 ms interval running beside it. So async trades about seven
+times the wall time for a stall roughly thirteen times shorter, and on a 30-second cadence the wall
+time costs nothing anybody waits on. The fold is pure arithmetic over the rows and is not in these
+numbers.
 
 ### Decision 3 — the cadence, and where the task starts
 
