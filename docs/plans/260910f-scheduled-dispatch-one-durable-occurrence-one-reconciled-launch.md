@@ -521,3 +521,21 @@ roadmap stage's status.
 - Built by two Opus subagents in parallel: 198 focused tests and typecheck green.
 - F7's evidence-bound answer route is being fixed on top of it.
 - Stages B and C wait for the protocol's Stages 1–2, then 3, on dev.
+
+**2026-09-10: Stage A reviewed and landed on dev.**
+- GPT Sol's stage review, run workspace-write so the reviewer could fix what it found, fixed five
+  P1s and one P3 (S1–S6), each red first (3e50550c). The review:
+  [260910f-scheduled-dispatch-stageA-review-sol.md](260910f-scheduled-dispatch-stageA-review-sol.md);
+  the findings:
+  [260910f-scheduled-dispatch-stageA-review-sol-findings.md](260910f-scheduled-dispatch-stageA-review-sol-findings.md).
+- Merged with dev at ad02c9b3. The one conflict was an append-append in `wire.ts`, next to Gradual
+  recovery's resume block; both blocks were kept whole. Checked with `git diff HEAD` and
+  `git diff MERGE_HEAD`: neither side lost a line.
+- Gates: typecheck exit 0; 14 focused files, 768 tests.
+- Pushed to dev. The page's section shows its "no file" arm until Stage C's daemon writes
+  `occurrences.json`, and needs a dashboard restart to be served.
+- **Known follow-up, for Stage B:** the protocol's Stage 2 (3858a4a9) changed `exit.json`.
+  `ending` is now `exited` / `signalled` / `not-run` / `unobserved`; `supervisor-failed` and
+  `timedOut` are gone; and `verdict.cause` adds `wrapper`, `prompt-unverified` and `hangup`. Stage A's
+  `ObservedExitRecord` and ladder are reworked to that shape in Stage B's `observedOf` adapter
+  commit, before anything feeds them real records.
