@@ -254,15 +254,25 @@ export function openJournalFile<R>(dir: string, options: OpenJournalFileOptions<
       failure = null;
       return true;
     },
-    status: () => ({
-      dir,
-      file: path,
-      lockedOutBy,
-      failure,
-      unreadableLines: rawUnreadableLines.length,
-      repaired,
-      compactions,
-    }),
+    status: () => {
+      // Status is used to decide whether a restart is safe. Refresh the lock
+      // claim here as well as before writes; otherwise a removed/replaced lock
+      // is reported healthy until the next mutation, exactly when the caller
+      // is asking whether a future mutation would survive.
+      if (!closed && held !== null && !stillOurs(held, lockPath)) {
+        held = null;
+        lockedOutBy = `the writer lock at ${lockPath} is no longer this process's — another writer took it`;
+      }
+      return {
+        dir,
+        file: path,
+        lockedOutBy,
+        failure,
+        unreadableLines: rawUnreadableLines.length,
+        repaired,
+        compactions,
+      };
+    },
     close(): void {
       /* IDEMPOTENT: `releaseLock` closes the fd and closing it twice is EBADF.
          A handed-in claim belongs to the composition, not either journal. */

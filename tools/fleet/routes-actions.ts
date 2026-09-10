@@ -92,7 +92,8 @@ import {
 } from "./execution-identity.js";
 import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
-import type { ReceiptJournalStatus, ReceiptState, RecoverySummary } from "./receipt-journal.js";
+import { summarizeReceipt, type ReceiptJournalStatus, type RecoverySummary } from "./receipt-journal.js";
+import { lookupRequest, readRequestKey, type RequestKey, type RequestLookup } from "./request-key.js";
 import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import {
   deliveryGate,
@@ -330,6 +331,12 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
      here because the union is shared with routes-steer.ts, where it is a 409:
      the request was fine, nothing was typed, and pressing again will not help. */
   "session-held": 409,
+  // Request ids, plan 260910d. A malformed key is the client's bug (400); a
+  // conflicting or expired one is well formed and the world is not what the
+  // client thought (409). Neither is ever a retry permission.
+  "bad-request-id": 400,
+  "request-id-conflict": 409,
+  "request-id-expired": 409,
   internal: 500,
   "no-such-action": 400,
   "wrong-scope": 400,
@@ -524,8 +531,32 @@ export function killReport(pids: readonly number[], run: PlanRun): KillReport {
 }
 
 export type ActionResponse =
-  | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
-  | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate; durable: boolean }
+  | {
+      ok: true;
+      op: "catalogue";
+      schema: 1;
+      actions: { session: readonly Action[]; box: readonly Action[] };
+      queues: QueueView[];
+      acting: { enabled: boolean; why: string };
+      now: number;
+      /**
+       * Whether a steering hold would survive a dashboard restart — the book's
+       * own reading of its hold ledger (`QuarantineBook.durable`). Read by
+       * `scripts/fleet-restart-plan.ts`, which lets a restart go ahead over a
+       * hold only when this is `true`. On the envelope rather than on
+       * `QueueView`, because the web client builds a queue view field by field
+       * and a new required field there would stop it compiling.
+       */
+      holdsDurable: boolean;
+    }
+  /** `receiptId` is present only on a keyed request (plan 260910d). */
+  | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate; durable: boolean; receiptId?: string }
+  /**
+   * **A REPLAY: NOTHING HAPPENED ON THIS REQUEST.** The same `requestId` and
+   * body were accepted before; this is that receipt, text-free, and it says
+   * whether it is still pending.
+   */
+  | { ok: true; op: "receipt"; replay: true; receipt: ReceiptSummary }
   | {
       ok: true;
       op: "receipts";
@@ -1487,48 +1518,38 @@ function fromAnotherRun(queue: SteeringQueue, itemIds: readonly string[]): strin
   );
 }
 
-function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
-  let attemptedAt: number | null = null;
-  let outcomeAt: number | null = null;
-  let reconciled = false;
-  let state: ReceiptSummary["state"] = "accepted";
-  let reason: string | null = null;
-  for (const record of receipt.records) {
-    if (record.kind === "attempted") attemptedAt = record.at;
-    if (record.kind === "outcome") {
-      outcomeAt = record.at;
-      state = record.state;
-      reason = record.reason;
+/**
+ * A known request id, answered — plan 260910d § The fingerprint.
+ *
+ * A replay is a 200 carrying the stored receipt and **nothing else happens**:
+ * not the parse, not the limiter, not the queue. The receipt says whether it is
+ * still pending. The two refusals do nothing either, and say so.
+ */
+function answerRequestLookup(
+  res: ServerResponse,
+  found: Exclude<RequestLookup, { kind: "fresh" }>,
+  log: (line: string) => void,
+): void {
+  switch (found.kind) {
+    case "replay": {
+      const receipt = summarizeReceipt(found.receipt);
+      log(`action session: REPLAY receipt=${receipt.receiptId} state=${receipt.state} — nothing was done on this request`);
+      respond(res, 200, { ok: true, op: "receipt", replay: true, receipt });
+      return;
     }
-    if (record.kind === "reconciled") reconciled = true;
-  }
-  if (outcomeAt === null) {
-    if (receipt.last.kind === "attempted") state = "attempted";
-    else if (receipt.last.kind === "returned") {
-      state = "returned";
-      reason = receipt.last.code;
-    } else if (receipt.last.kind === "withdrawn") {
-      state = "withdrawn";
-      reason = receipt.last.reason;
+    case "conflict":
+      log("action session: refused code=request-id-conflict");
+      refuse(res, "request-id-conflict", found.why);
+      return;
+    case "expired":
+      log("action session: refused code=request-id-expired");
+      refuse(res, "request-id-expired", found.why);
+      return;
+    default: {
+      const never: never = found;
+      void never;
     }
   }
-  return {
-    receiptId: receipt.receiptId,
-    op: receipt.accepted.op,
-    origin: receipt.accepted.origin,
-    actor: { ...receipt.accepted.actor },
-    speaker: receipt.accepted.speaker,
-    target: { ...receipt.accepted.target },
-    what: receipt.accepted.what,
-    acceptedAt: receipt.accepted.at,
-    state,
-    reason,
-    attemptedAt,
-    outcomeAt,
-    reconciled,
-    queueItemId: receipt.accepted.queue?.itemId ?? null,
-    materialDeletionPending: receipt.materialDeletionPending,
-  };
 }
 
 /** Test-only fallback for compositions that open the two stores by hand. */
@@ -1613,6 +1634,7 @@ const ENQUEUE_CODE: Record<EnqueueRefusalRule, ActionErrorCode> = {
   "fleet-queue-full": "queue-refused",
   "double-tap": "queue-refused",
   "receipt-capacity": "queue-refused",
+  "receipt-unavailable": "receipt-unavailable",
 };
 
 /** Every reason `plan*` can refuse, as one code. They are all "your input was wrong". */
@@ -1742,6 +1764,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       // the alternative is a person discovering it by tapping and getting a 503.
       acting: { enabled: deps.actEnabled(), why: deps.actEnabled() ? "" : ACTING_DISABLED_WHY },
       now: deps.now(),
+      // The ledger's own reading, never assumed — see the field's type.
+      holdsDurable: deps.queue.quarantineBook().durable(),
     });
   }
 
@@ -1806,6 +1830,24 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
     if (parsed === null) return;
+    // THE KEY IS READ AND LOOKED UP BEFORE THE PARSE, plan 260910d § The
+    // fingerprint (Sol F16). `parseSessionBody` resolves `actionId` against
+    // today's catalogue, so a replay asked after a deploy that retired the
+    // action would otherwise be refused as a bad request — and the person who
+    // lost the first response would never learn it had been queued.
+    const key = readRequestKey("actions-session", parsed);
+    if (key.kind === "bad") {
+      deps.log("action session: refused code=bad-request-id");
+      refuse(res, "bad-request-id", key.why);
+      return;
+    }
+    if (key.kind === "keyed") {
+      const found = lookupRequest(deps.queue.receiptJournal(), key, deps.now());
+      if (found.kind !== "fresh") {
+        answerRequestLookup(res, found, deps.log);
+        return;
+      }
+    }
     const body = parseSessionBody(parsed);
     if (!body.ok) {
       deps.log(`action session: refused code=bad-request why=${body.why}`);
@@ -1836,7 +1878,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     if (r.mode === "enqueue") {
-      await enqueue(r, res);
+      await enqueue(r, res, key.kind === "keyed" ? key : null);
       return;
     }
 
@@ -1863,6 +1905,20 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
 
+    // A KEY THAT NOTHING WOULD HONOUR IS REFUSED, NOT IGNORED. An enacted run
+    // gets its receipt in Stage 3 of plan 260910d; until then nothing records
+    // one, so a retry after a lost response would run the plan again under a
+    // key that promised it would not. Unkeyed runs are unchanged.
+    if (key.kind === "keyed") {
+      deps.log(`action session: refused code=bad-request-id action=${action.id} why=keyed-run-unsupported`);
+      refuse(
+        res,
+        "bad-request-id",
+        "a requestId cannot yet be honoured for running an enacted action — nothing here would record it, so a " +
+          "retry could run it twice. Nothing was run; send it without a requestId.",
+      );
+      return;
+    }
     if (!deps.actEnabled()) {
       deps.log(`action session: refused code=acting-disabled action=${action.id} pane=${target.paneId}`);
       refuse(res, "acting-disabled", ACTING_DISABLED_WHY);
@@ -1904,7 +1960,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run } });
   }
 
-  async function enqueue(r: SessionActionRequest, res: ServerResponse): Promise<void> {
+  async function enqueue(
+    r: SessionActionRequest,
+    res: ServerResponse,
+    request: Extract<RequestKey, { kind: "keyed" }> | null,
+  ): Promise<void> {
     // REFUSE NOW WHAT COULD NEVER DRAIN. `drainGate` asks `steerableStatus`, so
     // the sentence a person reads is steer.ts's own — "it is a shell, which
     // would EXECUTE the message" rather than "queued". Without this, an item
@@ -1927,8 +1987,21 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
     const t = { sessionId: r.target.sessionId, claudeSessionId: r.target.claudeSessionId };
     const result: EnqueueResult =
-      r.what.kind === "action" ? deps.queue.enqueueAction(t, r.what.action.id, r.speaker) : deps.queue.enqueueMessage(t, r.what.text, r.speaker);
+      r.what.kind === "action"
+        ? deps.queue.enqueueAction(t, r.what.action.id, r.speaker, "enqueue", request)
+        : deps.queue.enqueueMessage(t, r.what.text, r.speaker, "enqueue", request);
     if (!result.ok) {
+      // The journal refuses an id it already holds. The lookup in
+      // `sessionRoute` and this accept are synchronous with no `await`
+      // between, so that cannot be a race — but if it ever is, it is a
+      // replay, not a failure.
+      if (request !== null && result.rule === "receipt-unavailable") {
+        const again = lookupRequest(deps.queue.receiptJournal(), request, deps.now());
+        if (again.kind === "replay") {
+          answerRequestLookup(res, again, deps.log);
+          return;
+        }
+      }
       deps.log(`action session: refused code=${ENQUEUE_CODE[result.rule]} rule=${result.rule}`);
       refuse(res, ENQUEUE_CODE[result.rule], result.why);
       return;
@@ -1954,6 +2027,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       position: result.position,
       gate: willGo,
       durable: result.durable,
+      ...(request === null ? {} : { receiptId: result.receiptId }),
     });
   }
 

@@ -40,8 +40,12 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Readable } from "node:stream";
 
+import { sharedReceiptJournal } from "./action-stores.js";
 import { renderMessage, type Speaker } from "./actions.js";
 import { addressableHost } from "./origin.js";
+import { summarizeReceipt, type ReceiptJournal, type ReceiptOutcome } from "./receipt-journal.js";
+import { lookupRequest, readRequestKey, type RequestLookup } from "./request-key.js";
+import type { ReceiptSummary } from "./wire.js";
 import {
   classifyConsequence,
   classifyGate,
@@ -121,14 +125,43 @@ export type RouteErrorCode =
    * person saying what is actually in that input box, on the Queue panel.
    */
   | "session-held"
+  /**
+   * A `requestId` field that is not a request id (plan 260910d). **Never read
+   * as "no key"**: a client that meant to deduplicate and got it wrong must be
+   * told, not given an undeduplicated send.
+   */
+  | "bad-request-id"
+  /** That request id already names a DIFFERENT request. Nothing was done. */
+  | "request-id-conflict"
+  /**
+   * Too old (or too far in the future) to check against the journal. A request
+   * carrying it may already have been acted on and that can no longer be told,
+   * so nothing was done.
+   */
+  | "request-id-expired"
+  /**
+   * A receipt record that had to land before the effect could not be written,
+   * so nothing was done — a keyed `accepted`, or a durable receipt's
+   * `attempted`.
+   */
+  | "receipt-unavailable"
   | "internal";
 
 export type SteerOp = "message" | "answer";
 
 /** What the client gets back. `ok:false` always carries a code and a sentence. */
 export type SteerResponse =
-  | { ok: true; op: SteerOp; verified: Verified; sent: readonly (readonly string[])[] }
+  /** `receiptId` is present only on a keyed request (plan 260910d). */
+  | { ok: true; op: SteerOp; verified: Verified; sent: readonly (readonly string[])[]; receiptId?: string }
+  /**
+   * **A REPLAY: NOTHING HAPPENED ON THIS REQUEST.** The same `requestId` and
+   * body were accepted before, and this is that receipt, text-free. It may be
+   * pending, unknown or proven; the receipt says which.
+   */
+  | { ok: true; op: "receipt"; replay: true; receipt: ReceiptSummary }
   | {
+      /** Present only on a keyed request that got as far as its receipt. */
+      receiptId?: string;
       ok: false;
       code: RefusalCode | RouteErrorCode;
       why: string;
@@ -866,6 +899,16 @@ export type SteerDeps = {
    * a field on this type.
    */
   send: SendCoordinator;
+  /**
+   * Where every direct send is written down — plan 260910d, Stage 2.
+   *
+   * `accepted` and then `attempted` land here BEFORE the coordinator, and the
+   * outcome after it, so a restart can say of any direct send whether it was
+   * never attempted, proven, or unknown. **The same journal the queue writes
+   * to**, so one request id names one action whichever route it was sent to.
+   * No material: a direct send is typed now or not at all, never restored.
+   */
+  receipts: ReceiptJournal;
   now: () => number;
   limiter: RateLimiter;
   log: (line: string) => void;
@@ -884,6 +927,9 @@ export type SteerDeps = {
 export function realSteerDeps(): SteerDeps {
   return {
     send: sharedSendCoordinator(),
+    // The process's one journal, the one the queue writes to — durable once
+    // server.ts has called openFleetActionStores(), memory-only before that.
+    receipts: sharedReceiptJournal(),
     now: () => Date.now(),
     limiter: createRateLimiter(),
     log: (line) => console.log(line),
@@ -967,6 +1013,25 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       deps.log(`steer ${op}: refused code=bad-request why=not-json`);
       respond(res, 400, { ok: false, code: "bad-request", why: `the body is not JSON: ${(e as Error).message}` });
       return;
+    }
+
+    // THE KEY IS READ AND LOOKED UP BEFORE THE PARSE, plan 260910d § The
+    // fingerprint (Sol F16). The parse applies this build's speaker rule and
+    // the limiter applies this minute's allowance; a replay must depend on
+    // neither, or a person whose response was lost is refused the answer to
+    // "did it go?" by a check about sending now.
+    const key = readRequestKey(op === "message" ? "steer-message" : "steer-answer", raw);
+    if (key.kind === "bad") {
+      deps.log(`steer ${op}: refused code=bad-request-id`);
+      respond(res, 400, { ok: false, code: "bad-request-id", why: key.why });
+      return;
+    }
+    if (key.kind === "keyed") {
+      const found = lookupRequest(deps.receipts, key, deps.now());
+      if (found.kind !== "fresh") {
+        answerLookup(found);
+        return;
+      }
     }
 
     const parsed = op === "message" ? parseMessageBody(raw) : parseAnswerBody(raw);
@@ -1109,17 +1174,105 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     // the answer was no, so `notSendable` below is unreachable — and it is
     // written out rather than asserted away because the readable failure for an
     // unreachable case is a refusal, not a bare send.
-    let attempt: SendAttempt;
+    //
+    // RENDERED BEFORE THE RECEIPT, so this refusal — which types nothing —
+    // leaves no receipt behind either.
+    let fire: () => SendAttempt;
     if ("text" in request) {
-      const rendered = renderMessage(request.text, request.speaker);
+      const message = request;
+      const rendered = renderMessage(message.text, message.speaker);
       if (!rendered.ok) {
         refused(notSendable(rendered.why));
         return;
       }
-      attempt = deps.send.message(target, rendered.text, request.declaredStatus, purpose);
+      const text = rendered.text;
+      fire = () => deps.send.message(target, text, message.declaredStatus, purpose);
     } else {
-      attempt = deps.send.answer(target, request.seen, request.optionIndex, request.declaredStatus, purpose);
+      const answer = request;
+      fire = () => deps.send.answer(target, answer.seen, answer.optionIndex, answer.declaredStatus, purpose);
     }
+
+    /*
+     * ACCEPTED, THEN ATTEMPTED, BEFORE THE COORDINATOR — plan 260910d
+     * § Write-ahead. Both refuse the send when they cannot land for a request
+     * that needs them: a KEYED `accepted` (without it the effect runs, the
+     * response is lost, and the retry finds nothing and sends again), and the
+     * `attempted` of any receipt whose `accepted` is durable (without it a
+     * restart would read "accepted, never attempted" as proof nothing was
+     * typed — `interrupted-before-attempt` — over a send that went).
+     *
+     * `what` is the description the hold already carries, never the words.
+     * The actor is what the body CLAIMS (plan § The actor): an answer claims
+     * nobody, so it is `unattributed-http`. There is no material: a direct
+     * send is typed now or not at all, and is never restored.
+     */
+    const keyed = key.kind === "keyed" ? key : null;
+    const accepted = deps.receipts.accept({
+      requestId: keyed?.requestId ?? null,
+      fingerprint: keyed?.fingerprint ?? null,
+      op: op === "message" ? "steer-message" : "steer-answer",
+      origin: "direct-steer",
+      actor: "text" in request ? { kind: "client-claimed", id: request.speaker } : { kind: "unattributed-http", id: null },
+      speaker: "text" in request ? request.speaker : null,
+      target: {
+        sessionId: target.sessionId,
+        paneId: target.paneId,
+        claudeSessionId: target.claudeSessionId,
+        tmuxGeneration: deps.send.book().knownGeneration() ?? deps.receipts.lastGeneration(),
+      },
+      what,
+      queue: null,
+    });
+    if (!accepted.ok) {
+      // The journal refuses an id it already holds. The lookup above and this
+      // accept are synchronous with no `await` between, so that cannot be a
+      // race — but if it ever is one, it is a replay, not a failure.
+      if (keyed !== null) {
+        const again = lookupRequest(deps.receipts, keyed, deps.now());
+        if (again.kind === "replay") {
+          answerLookup(again);
+          return;
+        }
+      }
+      deps.log(`steer ${op}: refused code=receipt-unavailable pane=${target.paneId} why=${oneLine(accepted.why)}`);
+      respond(res, 503, {
+        ok: false,
+        code: "receipt-unavailable",
+        why: `nothing was sent: this send could not be given a receipt first (${accepted.why})`,
+        delivery: "none",
+      });
+      return;
+    }
+    const receiptId = accepted.receiptId;
+    /** Only a keyed request is told its receipt id: that is the request that can ask again. */
+    const tag: { receiptId?: string } = keyed === null ? {} : { receiptId };
+    /** Settles are fail-open: a lost outcome line recovers as `outcome-unknown`, which is true. */
+    const settle = (arm: ReceiptOutcome): void => {
+      if (!deps.receipts.outcome(receiptId, arm)) {
+        deps.log(`steer ${op}: receipt=${receiptId} outcome ${arm.state}/${arm.reason} was not recorded`);
+      }
+    };
+    if (!deps.receipts.attempted(receiptId).landed) {
+      settle({
+        state: "not-sent",
+        reason: "attempt-not-recorded",
+        code: null,
+        why: "the record that this send was being attempted could not be written, so nothing was sent",
+      });
+      deps.log(`steer ${op}: refused code=receipt-unavailable pane=${target.paneId} receipt=${receiptId} why=attempt-not-recorded`);
+      respond(res, 503, {
+        ok: false,
+        code: "receipt-unavailable",
+        why:
+          "nothing was sent: the record that this send was being attempted could not be written, and without it " +
+          "a restart could not tell whether it went",
+        delivery: "none",
+        ...tag,
+      });
+      return;
+    }
+
+    const attempt = fire();
 
     // **NOTHING WAS TYPED**, because the coordinator refused before the
     // transport. This is the arm the page's own copy has been promising since
@@ -1135,7 +1288,13 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       // honestly make: the transport was never reached, so no keystroke left
       // this process for THIS request. What may be sitting in that input box is
       // the earlier send's, and the hold's own sentence says so.
-      respond(res, 409, { ok: false, code: "session-held", why: attempt.why, delivery: "none" });
+      settle({
+        state: "not-sent",
+        reason: "session-held",
+        code: "session-held",
+        why: "the session was held, so the coordinator refused before the transport",
+      });
+      respond(res, 409, { ok: false, code: "session-held", why: attempt.why, delivery: "none", ...tag });
       return;
     }
 
@@ -1146,21 +1305,48 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       const why = `the delivery module threw: ${attempt.error.message}`;
       deps.log(`steer ${op}: FAILED pane=${target.paneId} ${why}`);
       if (attempt.hold !== null) noteHold(attempt.hold);
-      respond(res, 500, { ok: false, code: "internal", why });
+      settle({
+        state: "outcome-unknown",
+        reason: "threw",
+        code: null,
+        why: "the delivery module threw and could not establish whether any keystroke was sent",
+      });
+      respond(res, 500, { ok: false, code: "internal", why, ...tag });
       return;
     }
 
     const result = attempt.result;
     if (!result.ok) {
-      refused(result, attempt.hold);
+      // THE COORDINATOR'S READING, NOT A SECOND OPINION. `unsent` is its
+      // `nothingWasSent` verdict, the one audited place that reads both the
+      // summary and the list of tmux calls that completed. Anything else is
+      // ambiguous, and read the way the coordinator read it for the hold.
+      if (attempt.unsent !== null) {
+        settle({
+          state: "not-sent",
+          reason: "transport-refused-unsent",
+          code: result.reason.code,
+          why: "the transport refused before any keystroke left this process",
+        });
+      } else {
+        const reading = result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted";
+        settle({
+          state: "outcome-unknown",
+          reason: reading,
+          code: result.reason.code,
+          why: `the transport's reading was '${reading}', so what reached the input box cannot be told`,
+        });
+      }
+      refused(result, attempt.hold, tag);
       return;
     }
 
+    settle({ state: "keys-submitted", reason: "transport-ok", code: null, why: "the transport submitted every key" });
     deps.log(
       `steer ${op}: SENT pane=${result.verified.paneId} session=${result.verified.sessionId} ` +
         `panePid=${result.verified.panePid} claudePid=${result.verified.claudePid} calls=${result.sent.length}`,
     );
-    respond(res, 200, { ok: true, op, verified: result.verified, sent: result.sent });
+    respond(res, 200, { ok: true, op, verified: result.verified, sent: result.sent, ...tag });
 
     /**
      * One refusal, logged and answered the same way whoever refused.
@@ -1169,7 +1355,36 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
      * and the transport's own refusals cannot drift apart in what they say or
      * in what status they carry.
      */
-    function refused(result: SteerFailure, hold: QuarantineHoldView | null = null): void {
+    /**
+     * A known request id, answered — plan 260910d § The fingerprint. A replay
+     * is a 200 carrying the stored receipt, text-free, and nothing else
+     * happens: no parse, no limiter, no coordinator. It says whether it is
+     * still pending. The two refusals do nothing either.
+     */
+    function answerLookup(found: Exclude<RequestLookup, { kind: "fresh" }>): void {
+      switch (found.kind) {
+        case "replay": {
+          const receipt = summarizeReceipt(found.receipt);
+          deps.log(`steer ${op}: REPLAY receipt=${receipt.receiptId} state=${receipt.state} — nothing was sent on this request`);
+          respond(res, 200, { ok: true, op: "receipt", replay: true, receipt });
+          return;
+        }
+        case "conflict":
+          deps.log(`steer ${op}: refused code=request-id-conflict`);
+          respond(res, 409, { ok: false, code: "request-id-conflict", why: found.why });
+          return;
+        case "expired":
+          deps.log(`steer ${op}: refused code=request-id-expired`);
+          respond(res, 409, { ok: false, code: "request-id-expired", why: found.why });
+          return;
+        default: {
+          const never: never = found;
+          void never;
+        }
+      }
+    }
+
+    function refused(result: SteerFailure, hold: QuarantineHoldView | null = null, extra: { receiptId?: string } = {}): void {
       // `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and this
       // file's header promises the message is never logged. A refusal that
       // leaked it into the log would be the promise broken at the one moment
@@ -1202,6 +1417,7 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         // "partial" means their text is sitting in that agent's input box, and
         // "try again" is the worst available advice.
         delivery: result.delivery,
+        ...extra,
       });
     }
   }

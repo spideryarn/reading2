@@ -263,10 +263,20 @@ export type EnqueueRefusalRule =
   /** The same thing, pressed again within the double-tap window. */
   | "double-tap"
   /** The journal's non-terminal admission cap was reached. */
-  | "receipt-capacity";
+  | "receipt-capacity"
+  /**
+   * A KEYED enqueue whose `accepted` could not land durably. Refused rather
+   * than queued in memory: a key promises that a retry after a lost response
+   * finds the first one, and a receipt only this process remembers cannot keep
+   * that promise across a restart. Plan 260910d § Write-ahead, the first write.
+   */
+  | "receipt-unavailable";
+
+/** The idempotency key a caller checked before asking — `request-key.ts`. */
+export type EnqueueRequestKey = { requestId: string; fingerprint: string };
 
 export type EnqueueResult =
-  | { ok: true; item: QueuedItem; position: number; durable: boolean }
+  | { ok: true; item: QueuedItem; position: number; durable: boolean; receiptId: string }
   | { ok: false; rule: EnqueueRefusalRule; why: string };
 
 export type NextResult =
@@ -749,6 +759,7 @@ export class SteeringQueue {
     actionId: string,
     speaker: Speaker,
     origin: ReceiptOrigin = "enqueue",
+    request: EnqueueRequestKey | null = null,
   ): EnqueueResult {
     const action = actionById(actionId);
     if (!action) return { ok: false, rule: "no-such-action", why: `there is no action called '${actionId}'` };
@@ -789,7 +800,7 @@ export class SteeringQueue {
         why: `'${action.id}' runs commands on the box rather than typing a sentence, and nothing delivers a queued one — dry-run it to see what it would do, then run it with a confirm`,
       };
     }
-    return this.push(target, { kind: "action", action }, speaker, origin);
+    return this.push(target, { kind: "action", action }, speaker, origin, request);
   }
 
   /**
@@ -814,6 +825,7 @@ export class SteeringQueue {
     text: string,
     speaker: Speaker,
     origin: ReceiptOrigin = "enqueue",
+    request: EnqueueRequestKey | null = null,
   ): EnqueueResult {
     const bad = checkText(text);
     if (bad) return { ok: false, rule: "bad-text", why: bad.why };
@@ -832,7 +844,7 @@ export class SteeringQueue {
         why: `${afterPrefix.why} — the line saying who is speaking is added when it goes out, and counts towards that`,
       };
     }
-    return this.push(target, { kind: "message", text }, speaker, origin);
+    return this.push(target, { kind: "message", text }, speaker, origin, request);
   }
 
   private push(
@@ -840,6 +852,7 @@ export class SteeringQueue {
     payload: QueuedPayload,
     speaker: Speaker,
     origin: ReceiptOrigin,
+    request: EnqueueRequestKey | null,
   ): EnqueueResult {
     if (!SESSION_HANDLE.test(target.sessionId)) {
       return { ok: false, rule: "bad-target", why: `'${target.sessionId}' is not a tmux session handle` };
@@ -895,8 +908,8 @@ export class SteeringQueue {
       invalidated: null,
     };
     const accepted = this.receipts.accept({
-      requestId: null,
-      fingerprint: null,
+      requestId: request?.requestId ?? null,
+      fingerprint: request?.fingerprint ?? null,
       op: payload.kind === "message" ? "queued-message" : "queued-action",
       origin,
       actor: { kind: "client-claimed", id: speaker },
@@ -915,12 +928,23 @@ export class SteeringQueue {
           : { kind: "action", action: payload.action, speaker },
     });
     if (!accepted.ok) {
+      // KEYED WORK IS NOT QUEUED IN MEMORY. The journal refuses a keyed accept
+      // that did not land durably, and so does this: an item only this process
+      // remembers is exactly the one a restart forgets, and its retry would
+      // find no receipt and be queued a second time.
+      if (request !== null) {
+        return {
+          ok: false,
+          rule: "receipt-unavailable",
+          why: `nothing was queued: its receipt could not be written durably first (${accepted.why})`,
+        };
+      }
       return { ok: false, rule: "receipt-capacity", why: accepted.why };
     }
     this.receiptByItem.set(itemId, accepted.receiptId);
     items.push(item);
     this.bySession.set(target.sessionId, items);
-    return { ok: true, item, position: items.length, durable: accepted.durable };
+    return { ok: true, item, position: items.length, durable: accepted.durable, receiptId: accepted.receiptId };
   }
 
   /**

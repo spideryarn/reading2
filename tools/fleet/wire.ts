@@ -3963,8 +3963,14 @@ export type AdmissionCensusState =
  */
 export type ReceiptSummary = {
   receiptId: string;
-  op: "queued-message" | "queued-action";
-  origin: "enqueue" | "broadcast";
+  op: "queued-message" | "queued-action" | "steer-message" | "steer-answer";
+  origin: "enqueue" | "broadcast" | "direct-steer";
+  /**
+   * True while the receipt is still non-terminal — `accepted`, `attempted` or
+   * `returned`. A replay of a pending receipt is not an outcome: the action may
+   * still happen (queued work) or be concluded at the next start.
+   */
+  pending: boolean;
   actor: {
     kind: "client-claimed" | "unattributed-http" | "system";
     id: string | null;

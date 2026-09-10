@@ -30,7 +30,7 @@ import {
   type JournalFile,
   type SharedJournalLock,
 } from "./journal-file.js";
-import type { Speaker } from "./wire.js";
+import type { ReceiptSummary, Speaker } from "./wire.js";
 
 export const RECEIPTS_FILE = "receipts.jsonl";
 export const UNREADABLE_RECEIPTS_FILE = "receipts.unreadable.jsonl";
@@ -53,8 +53,12 @@ export type ReceiptActor = {
   kind: "client-claimed" | "unattributed-http" | "system";
   id: string | null;
 };
-export type ReceiptOp = "queued-message" | "queued-action";
-export type ReceiptOrigin = "enqueue" | "broadcast";
+/**
+ * What was accepted. The two `steer-*` ops are direct keystrokes from
+ * `routes-steer.ts` — typed at once, never queued, never restored.
+ */
+export type ReceiptOp = "queued-message" | "queued-action" | "steer-message" | "steer-answer";
+export type ReceiptOrigin = "enqueue" | "broadcast" | "direct-steer";
 export type ReceiptTarget = {
   sessionId: string;
   paneId: string | null;
@@ -94,7 +98,19 @@ export type NotSentOutcome = {
     | "undeliverable"
     | "lost-at-restart"
     | "tmux-generation-changed"
-    | "tmux-generation-unproven";
+    | "tmux-generation-unproven"
+    /**
+     * A durably accepted direct send whose `attempted` could not be written.
+     * `attempted` is fail-closed for such a receipt, so nothing was typed.
+     */
+    | "attempt-not-recorded"
+    /**
+     * Recovery found a direct send (`queue: null`) at `accepted`, on disk,
+     * with no `attempted`. Because `attempted` is fail-closed for a durable
+     * receipt, that is proof it was never attempted. Never restored: a direct
+     * send is not queued work.
+     */
+    | "interrupted-before-attempt";
   code: string | null;
   why: string;
 };
@@ -173,6 +189,8 @@ export type RecoverySummary = {
   reason: string | null;
   generationUnproven: boolean;
   interrupted: string[];
+  /** Direct sends found at `accepted` with no `attempted`: proven never typed. */
+  interruptedBeforeAttempt: string[];
   lostAtRestart: string[];
   recoveryBlocked: string[];
   orphanEvidence: string[];
@@ -237,12 +255,12 @@ export type OpenReceiptJournalOptions = {
 export type OpenedReceiptJournal = { kind: "open"; journal: ReceiptJournal } | { kind: "refused"; why: string };
 
 const SPEAKERS: readonly Speaker[] = ["greg", "overseer", "dashboard"];
-const OPS: readonly ReceiptOp[] = ["queued-message", "queued-action"];
-const ORIGINS: readonly ReceiptOrigin[] = ["enqueue", "broadcast"];
+const OPS: readonly ReceiptOp[] = ["queued-message", "queued-action", "steer-message", "steer-answer"];
+const ORIGINS: readonly ReceiptOrigin[] = ["enqueue", "broadcast", "direct-steer"];
 const ACTOR_KINDS: readonly ReceiptActor["kind"][] = ["client-claimed", "unattributed-http", "system"];
 const NOT_SENT_REASONS: readonly NotSentOutcome["reason"][] = [
   "transport-refused-unsent", "session-held", "undeliverable", "lost-at-restart",
-  "tmux-generation-changed", "tmux-generation-unproven",
+  "tmux-generation-changed", "tmux-generation-unproven", "attempt-not-recorded", "interrupted-before-attempt",
 ];
 const UNKNOWN_REASONS: readonly UnknownOutcome["reason"][] = [
   "partial", "unknown", "none-contradicted", "threw", "interrupted", "lease-abandoned", "recovery-blocked",
@@ -412,8 +430,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const records: ReceiptRecord[] = [];
   const deleteFile = options.deleteMaterial ?? unlinkSync;
   const recovery: RecoverySummary = {
-    blocked: false, reason: null, generationUnproven: false, interrupted: [], lostAtRestart: [],
-    recoveryBlocked: [], orphanEvidence: [], wouldConclude: [],
+    blocked: false, reason: null, generationUnproven: false, interrupted: [], interruptedBeforeAttempt: [],
+    lostAtRestart: [], recoveryBlocked: [], orphanEvidence: [], wouldConclude: [],
   };
   let generation: number | null = null;
   let illegalTransitions = 0;
@@ -697,13 +715,23 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     recovery.blocked = blanket;
     recovery.reason = blanket ? "unreadable receipt evidence could hide an attempt for any restorable queued receipt" : null;
 
+    /* THE BLANKET BLOCK COVERS DIRECT SENDS TOO. A direct send at `accepted`
+       is "proven not attempted" only because nothing on disk says otherwise;
+       malformed bytes could be its `attempted`, so under them it is concluded
+       unknown rather than proven unsent. */
+    const blanketBlocks = (state: ReceiptState): boolean =>
+      blanket && (state.last.kind === "accepted" || state.last.kind === "returned");
+    /* `attempted` is fail-closed for a durable receipt, so a direct send whose
+       `accepted` is on disk and which never reached `attempted` was not typed. */
+    const provenNotAttempted = (state: ReceiptState): boolean =>
+      state.accepted.queue === null && state.last.kind === "accepted" && durableAccepted.has(state.receiptId);
+
     if (!physicalWritable()) {
       for (const state of states.values()) {
-        const globallyBlocked = blanket && state.accepted.queue !== null
-          && (state.last.kind === "accepted" || state.last.kind === "returned");
-        if (globallyBlocked) recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "recovery-blocked" });
+        if (blanketBlocks(state)) recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "recovery-blocked" });
         else if (blockedIds.has(state.receiptId) && isNonTerminal(state)) recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "recovery-blocked" });
         else if (state.last.kind === "attempted") recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "interrupted" });
+        else if (provenNotAttempted(state)) recovery.wouldConclude.push({ receiptId: state.receiptId, state: "not-sent", reason: "interrupted-before-attempt" });
         else if ((state.last.kind === "accepted" || state.last.kind === "returned") && state.accepted.queue !== null && readMaterial(state.receiptId) === null)
           recovery.wouldConclude.push({ receiptId: state.receiptId, state: "not-sent", reason: "lost-at-restart" });
       }
@@ -715,9 +743,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     let conclusionsLanded = true;
     for (const state of [...states.values()]) {
       if (!isNonTerminal(state)) continue;
-      const globallyBlocked = blanket && state.accepted.queue !== null
-        && (state.last.kind === "accepted" || state.last.kind === "returned");
-      if (globallyBlocked || blockedIds.has(state.receiptId)) {
+      if (blanketBlocks(state) || blockedIds.has(state.receiptId)) {
         if (conclude(state.receiptId, { state: "outcome-unknown", reason: "recovery-blocked", code: null, why: "unreadable receipt evidence could hide an attempt" })) {
           recovery.recoveryBlocked.push(state.receiptId);
         } else {
@@ -730,6 +756,13 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
         } else {
           conclusionsLanded = false;
           recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "interrupted" });
+        }
+      } else if (provenNotAttempted(state)) {
+        if (conclude(state.receiptId, { state: "not-sent", reason: "interrupted-before-attempt", code: null, why: "the dashboard restarted after this direct send was accepted and before it was attempted" })) {
+          recovery.interruptedBeforeAttempt.push(state.receiptId);
+        } else {
+          conclusionsLanded = false;
+          recovery.wouldConclude.push({ receiptId: state.receiptId, state: "not-sent", reason: "interrupted-before-attempt" });
         }
       } else if (state.accepted.queue !== null && readMaterial(state.receiptId) === null) {
         if (conclude(state.receiptId, { state: "not-sent", reason: "lost-at-restart", code: null, why: "the pinned queued material was missing at restart" })) {
@@ -928,7 +961,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     acceptedDurably: (receiptId) => durableAccepted.has(receiptId),
     reservedQueueItemIds: () => [...reservedQueue],
     compact,
-    recovery: () => ({ ...recovery, interrupted: [...recovery.interrupted], lostAtRestart: [...recovery.lostAtRestart], recoveryBlocked: [...recovery.recoveryBlocked], orphanEvidence: [...recovery.orphanEvidence], wouldConclude: [...recovery.wouldConclude] }),
+    recovery: () => ({ ...recovery, interrupted: [...recovery.interrupted], interruptedBeforeAttempt: [...recovery.interruptedBeforeAttempt], lostAtRestart: [...recovery.lostAtRestart], recoveryBlocked: [...recovery.recoveryBlocked], orphanEvidence: [...recovery.orphanEvidence], wouldConclude: [...recovery.wouldConclude] }),
     status: () => {
       const status = core?.status();
       return {
@@ -981,6 +1014,56 @@ function spokenAction(value: unknown): value is SpokenAction {
 }
 
 export function reservedQueueItemIds(journal: ReceiptJournal): string[] { return journal.reservedQueueItemIds(); }
+
+/**
+ * One receipt as the wire shows it: text-free, and saying whether it is still
+ * pending. The read route's list and a request-id replay both answer with it,
+ * so the two cannot describe one receipt differently.
+ */
+export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
+  let attemptedAt: number | null = null;
+  let outcomeAt: number | null = null;
+  let reconciled = false;
+  let state: ReceiptSummary["state"] = "accepted";
+  let reason: string | null = null;
+  for (const record of receipt.records) {
+    if (record.kind === "attempted") attemptedAt = record.at;
+    if (record.kind === "outcome") {
+      outcomeAt = record.at;
+      state = record.state;
+      reason = record.reason;
+    }
+    if (record.kind === "reconciled") reconciled = true;
+  }
+  if (outcomeAt === null) {
+    if (receipt.last.kind === "attempted") state = "attempted";
+    else if (receipt.last.kind === "returned") {
+      state = "returned";
+      reason = receipt.last.code;
+    } else if (receipt.last.kind === "withdrawn") {
+      state = "withdrawn";
+      reason = receipt.last.reason;
+    }
+  }
+  return {
+    receiptId: receipt.receiptId,
+    op: receipt.accepted.op,
+    origin: receipt.accepted.origin,
+    pending: receipt.last.kind === "accepted" || receipt.last.kind === "attempted" || receipt.last.kind === "returned",
+    actor: { ...receipt.accepted.actor },
+    speaker: receipt.accepted.speaker,
+    target: { ...receipt.accepted.target },
+    what: receipt.accepted.what,
+    acceptedAt: receipt.accepted.at,
+    state,
+    reason,
+    attemptedAt,
+    outcomeAt,
+    reconciled,
+    queueItemId: receipt.accepted.queue?.itemId ?? null,
+    materialDeletionPending: receipt.materialDeletionPending,
+  };
+}
 
 /** Atomic material writes are private from the first temporary byte, not only after rename. */
 function writePrivateAtomically(path: string, directory: string, text: string): void {

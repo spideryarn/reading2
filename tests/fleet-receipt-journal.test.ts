@@ -435,6 +435,24 @@ describe("recovery", () => {
     expect(readFileSync(join(dir, RECEIPTS_FILE), "utf8")).not.toContain("not json at all");
   });
 
+  it("proves a direct send at accepted was never attempted, unless malformed bytes could hide its attempt", () => {
+    const direct = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "receipt-old-r7", requestId: null,
+      fingerprint: null, op: "steer-message", origin: "direct-steer", actor: ACTOR, speaker: "greg",
+      target: TARGET, what: "message (5 characters)", serverInstanceId: "receipt-old", queue: null,
+    };
+    const clean = directory("direct-clean");
+    writeFileSync(join(clean, RECEIPTS_FILE), `${JSON.stringify(direct)}\n`);
+    const proven = openDisk(clean);
+    expect(proven.get("receipt-old-r7")?.last).toMatchObject({ state: "not-sent", reason: "interrupted-before-attempt" });
+    expect(proven.recovery().interruptedBeforeAttempt).toEqual(["receipt-old-r7"]);
+
+    const blocked = directory("direct-blanket");
+    writeFileSync(join(blocked, RECEIPTS_FILE), `${JSON.stringify(direct)}\nthese bytes are not json\n`);
+    const unproven = openDisk(blocked);
+    expect(unproven.get("receipt-old-r7")?.last).toMatchObject({ state: "outcome-unknown", reason: "recovery-blocked" });
+  });
+
   it("a locked-out opener reads but writes no bytes and keeps new receipts only in memory", () => {
     const dir = directory("locked-out");
     const writer = openDisk(dir);

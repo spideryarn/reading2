@@ -385,6 +385,30 @@ export class QuarantineBook {
     return this.generation;
   }
 
+  /**
+   * Whether a hold opened now would survive a dashboard restart: the hold
+   * ledger is present, this process holds its writer lock, and its last write
+   * did not fail.
+   *
+   * **READ OFF THE LEDGER'S OWN STATUS, NEVER ASSUMED FROM HAVING BEEN HANDED
+   * ONE.** A ledger that is locked out by another dashboard, or whose last write
+   * failed, is a restart that may lose the hold — and saying otherwise would let
+   * `scripts/fleet-restart-plan.ts`, which reads this as the catalogue's
+   * `holdsDurable`, restart over a session whose hold then silently vanished.
+   */
+  durable(): boolean {
+    if (this.ledger === null) return false;
+    const status = this.ledger.status();
+    if (status.lockedOutBy !== null || status.failure !== null) return false;
+    // A later successful append clears the ledger's last-failure field, but it
+    // cannot retroactively persist a hold whose own write failed. The restart
+    // check is about the holds that exist, not only the next write, so every
+    // open in-memory hold must still have some live ledger barrier for its
+    // session (an attempt or a held record both rebuild a hold).
+    const durableSessions = new Set(this.ledger.live().map((record) => record.sessionId));
+    return this.heldSessions().every((sessionId) => durableSessions.has(sessionId));
+  }
+
   /* ---------------- writing ---------------- */
 
   /**
