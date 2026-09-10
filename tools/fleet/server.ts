@@ -49,7 +49,9 @@ import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
-import { readStartRevision } from "./revision.js";
+import { readModuleStartRevision } from "./revision.js";
+import { readBuildStamp } from "./build-stamp.js";
+import { makeDiagnosticsRoute } from "./routes-diagnostics.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
@@ -58,6 +60,7 @@ import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
 import { makeRecoveryRoute } from "./routes-recovery.js";
+import { makeRecoveryResumeRoute } from "./routes-recovery-resume.js";
 import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
@@ -149,9 +152,21 @@ let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 const publicationLedger = new PublicationLedger(serverInstanceId());
 /** The revision this process started from — read once, here, never again: tools/fleet/revision.ts says why. */
-const startRevision = readStartRevision(fileURLToPath(new URL("../..", import.meta.url)));
-// Read by the diagnostics route, Stage 3 (docs/plans/260910f).
-void startRevision;
+const startRevision = readModuleStartRevision(import.meta.url, "../..");
+/** The client bundle on disk as this process starts, before any listener opens — so the page can
+ *  tell "the bundle this server started with" from "the bundle on disk now" after a rebuild. */
+const bundleAtStart = readBuildStamp(DIST);
+/** Which code each service recorded at start, schema and clocks: routes-diagnostics.ts, plan 260910f. */
+const diagnosticsRoute = makeDiagnosticsRoute({
+  now: () => new Date(),
+  instance: serverInstanceId(),
+  start: startRevision,
+  bundleAtStart,
+  bundleOnDisk: () => readBuildStamp(DIST),
+  collector: () => ({ attemptedAt, collectedAt: snapshot?.collectedAt ?? null, lastError }),
+  healthCollectedAt: () => health?.collectedAt ?? null,
+  env: process.env,
+});
 
 /**
  * The box's own vital signs, refreshed alongside the fleet.
@@ -341,6 +356,7 @@ const queueRoute = ideaQueueRoute();
 /** Read fresh on request: this is the review record, not refresh-loop state. */
 const decisionsApiRoute = makeDecisionsRoute();
 const recoveryApiRoute = makeRecoveryRoute();
+const recoveryResumeApiRoute = makeRecoveryResumeRoute();
 
 /**
  * The Deploys tab's record and its probe.
@@ -786,6 +802,10 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
      usage-history.ts § "No writer lock". */
   if (usageHistoryRouteHandler.handle(req, res)) return;
 
+  // Which revision each service recorded at start, and every store file's schema and age.
+  // Read-only: bounded lstat/tail reads of the Overseer's files, nothing written.
+  if (diagnosticsRoute.handle(req, res)) return;
+
   // The last N messages across EVERY session, for the Recent messages tab.
   // Read-only, and deliberately not on the collection loop: it is a fan-out of
   // byte-bounded tail reads (~250 ms and ~10 MB of page cache for the whole
@@ -924,6 +944,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  // Resume (plan 260910f): a same-origin POST that writes one request file and
+  // never launches. Before /api/recovery's line, which 404s anything under it.
+  if (recoveryResumeApiRoute.handle(req, res)) return;
   if (recoveryApiRoute.handle(req, res)) return;
   if (reportsApiRoute.handle(req, res)) return;
 

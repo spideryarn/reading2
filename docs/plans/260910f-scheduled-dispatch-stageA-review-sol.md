@@ -7,7 +7,7 @@ Stage A review complete. I fixed five P1 findings and one P3, all red-first:
 - Duplicate IDs hidden in unreadable jobs escaped detection.
 - “Empty” overstated what `usable: false` means.
 
-Full evidence and dispositions: [260910f-scheduled-dispatch-stageA-review-sol-findings.md](260910f-scheduled-dispatch-stageA-review-sol-findings.md)
+Full evidence and dispositions: [stageA-review-sol-findings.md](260910f-scheduled-dispatch-stageA-review-sol-findings.md)
 
 Files changed:
 

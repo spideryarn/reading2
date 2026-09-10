@@ -59,6 +59,7 @@
  * fresh read, and each caller keeps its own value.
  */
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { GIT_TIMEOUT_MS, gitEnv } from "./readiness-git.js";
 import type { StartRevision } from "./wire.js";
@@ -161,6 +162,35 @@ export function readStartRevision(dir: string, deps: { run?: RunGit; now?: () =>
   // observation, and nothing here made one.
   if (!status.ok) return { kind: "unknown", why: status.why, readAt };
   return parsePorcelainV2(status.out, dir, readAt);
+}
+
+/**
+ * The start revision of the checkout a module sits in: `moduleUrl` is the
+ * caller's `import.meta.url`, `up` the relative path from it to the checkout
+ * root ("../.." from `tools/overseer/daemon.ts`).
+ *
+ * **Why this and not `readStartRevision(fileURLToPath(new URL(up, import.meta.url)))`
+ * at the call site.** That expression throws when the module was not loaded from
+ * a file — jsdom gives it an `http:` URL — and it sat on the first line of
+ * `runOverseer`, so a stamp, which is a diagnostic, stopped a daemon starting
+ * (tests/fleet-work-evidence-e2e.test.tsx, red on dev from 1c6e1e4e). A module
+ * with no file has no checkout to read: that is `unknown`, with the reason.
+ */
+export function readModuleStartRevision(
+  moduleUrl: string,
+  up: string,
+  deps: { run?: RunGit; now?: () => Date } = {},
+): StartRevision {
+  let dir: string;
+  try {
+    dir = fileURLToPath(new URL(up, moduleUrl));
+  } catch (cause) {
+    const readAt = (deps.now ?? (() => new Date()))().toISOString();
+    const scheme = URL.canParse(moduleUrl) ? new URL(moduleUrl).protocol : "an unparseable URL";
+    const why = cause instanceof Error ? cause.message : String(cause);
+    return { kind: "unknown", why: `this module was loaded from ${scheme}, not a file, so there is no checkout to read (${why})`, readAt };
+  }
+  return readStartRevision(dir, deps);
 }
 
 /**

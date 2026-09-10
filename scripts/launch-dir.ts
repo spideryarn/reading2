@@ -88,7 +88,7 @@ export function exitFactsOf(seen: WrapperObservations, code: number): ExitFacts 
   else if (code !== 0) verdict = { kind: "failed", cause: "wrapper", why: `the wrapper exited ${code} without saying why` };
   else if (ending.kind !== "exited" || ending.code !== 0) verdict = { kind: "failed", cause: "wrapper", why: "the wrapper exited 0 over a child that did not exit 0" };
   else verdict = { kind: "ok" };
-  // A child that never ran is only ever the wrapper's, the prompt check's or the spawn's failure.
+  // A child that never ran is only ever the wrapper's, the prompt check's, the spawn's or a hangup's failure.
   if (ending.kind === "not-run" && verdict.kind === "failed" && !NOT_RUN_CAUSES.includes(verdict.cause)) verdict = { kind: "failed", cause: "wrapper", why: verdict.why };
   const readings = ending.kind === "not-run" ? { usageLimit: null, permissionDenials: null } : seen.readings;
   return { ending, verdict, usageLimit: readings.usageLimit, permissionDenials: readings.permissionDenials, answer: seen.answer, transcript: seen.transcript };
@@ -115,6 +115,11 @@ export type WrapperLaunch = {
    * — a process that dies of a signal never reaches 'exit', so this is the last chance to record it.
    */
   hangup(result: RunResult): void;
+  /**
+   * {@link hangup}'s twin for a hangup BEFORE the CLI ran — during run-claude's auth probe (F20).
+   * The probe's own ending is not the run's, so nothing is noted as the run: `not-run`, `hangup`.
+   */
+  hangupBeforeRun(): void;
 };
 
 const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
@@ -190,6 +195,14 @@ export function beginWrapperLaunch(dir: string, options: { readonly now?: () => 
         why: "the wrapper was hung up (its tmux pane or terminal closed); the hangup was forwarded to the child's group and the child waited for within the kill grace",
       };
       // 128 + SIGHUP's 1: the code a shell would report for the death that follows.
+      const wrote = launch.finish(129);
+      if (!wrote.wrote) process.stderr.write(`WARNING: ${wrote.why}\n`);
+    },
+    hangupBeforeRun() {
+      failure ??= {
+        cause: "hangup",
+        why: "the wrapper was hung up (its tmux pane or terminal closed) during its auth probe, before the CLI ran; the hangup was forwarded to the probe and the probe waited for within the kill grace",
+      };
       const wrote = launch.finish(129);
       if (!wrote.wrote) process.stderr.write(`WARNING: ${wrote.why}\n`);
     },

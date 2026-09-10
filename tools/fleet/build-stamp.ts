@@ -19,9 +19,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { isIsoInstant, parseStartRevision, readStartRevision, type RunGit } from "./revision.js";
-import type { BuildStamp } from "./wire.js";
+import type { BuildStamp, BuildStampReading } from "./wire.js";
 
-export type { BuildStamp } from "./wire.js";
+export type { BuildStamp, BuildStampReading } from "./wire.js";
 
 /** Beside `index.html` in `tools/fleet/web/dist/`. */
 export const BUILD_STAMP_FILE = "build-stamp.json";
@@ -36,7 +36,7 @@ export function buildStamp(dir: string, deps: { run?: RunGit; now?: () => Date }
   return { ...readStartRevision(dir, { ...deps, now }), builtAt: now().toISOString() };
 }
 
-export type ReadBuildStamp = { kind: "stamp"; stamp: BuildStamp } | { kind: "unknown"; why: string };
+export type ReadBuildStamp = BuildStampReading;
 
 /** The stamp in `distDir`, or why there is none. Four reasons, four sentences. */
 export function readBuildStamp(distDir: string): ReadBuildStamp {

@@ -38,36 +38,40 @@
  * injected, so the verdicts can be tested without a repository.
  */
 import { spawnSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { lstatSync, opendirSync, statSync, type Stats } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DESCRIPTIONS_FILE, DESCRIPTIONS_SCHEMA } from "../fleet/describe-store.js";
 import { GIT_TIMEOUT_MS, gitEnv } from "../fleet/readiness-git.js";
 import { SCHEDULE_PREVIEW_FILE, SCHEDULE_PREVIEW_SCHEMA } from "../fleet/schedule-parse.js";
+import { parseDiagnosticsSummary } from "../fleet/diagnostics-parse.js";
 import { probeStoreFiles, type ProbeTarget, type StoreFileProbe } from "../fleet/store-probe.js";
 import { LINE_SCHEMA as USAGE_LINE_SCHEMA } from "../fleet/usage-history-record.js";
-import { LIVE_FILE as USAGE_FILE } from "../fleet/usage-history.js";
+import { PREV_FILE as USAGE_PREV_FILE, LIVE_FILE as USAGE_FILE } from "../fleet/usage-history.js";
 import type { StartRevision } from "../fleet/wire.js";
+import { ARMING_FILE } from "./arming.js";
 import { ATTENTION_MEMORY_FILE, ATTENTION_MEMORY_SCHEMA } from "./attention-memory.js";
-import { CLI_STATE_FILE, CLI_STATE_SCHEMA } from "./cli-state.js";
+import { CLI_STATE_FILE, CLI_STATE_LOCK_FILE, CLI_STATE_SCHEMA } from "./cli-state.js";
 import { BASELINE_FILE, readHostBootId } from "./daemon.js";
-import { DECISIONS_FILE, DECISIONS_SCHEMA, LEGACY_DECISIONS_SCHEMA } from "./decisions.js";
-import { describeAge } from "./format-age.js";
-import { IDEA_QUEUE_SCHEMA, QUEUE_FILE } from "./idea-queue.js";
+import { DECISIONS_FILE, DECISIONS_INIT_FILE, DECISIONS_LOCK_FILE, DECISIONS_SCHEMA, LEGACY_DECISIONS_SCHEMA } from "./decisions.js";
+import { describeSince } from "./format-age.js";
+import { IDEA_QUEUE_SCHEMA, QUEUE_FILE, QUEUE_INIT_FILE, QUEUE_LOCK_FILE } from "./idea-queue.js";
 import { NOTES_FILE, readNotes, type ReadNotes } from "./notes.js";
-import { REPORTS_FILE, REPORTS_SCHEMA } from "./reports.js";
+import { RECOVERY_INBOX_DIR } from "./recovery-inbox.js";
+import { INBOX_DIR, PROCESSING_DIR, QUARANTINE_DIR, REFUSED_DIR, REPORTS_FILE, REPORTS_INIT_FILE, REPORTS_SCHEMA } from "./reports.js";
 import { ruleJobs } from "./rule-jobs.js";
-import { listRevision, readSchedulePreviewFile, schedulePreviewLines, type SchedulePreviewRead } from "./schedule-preview.js";
+import { listRevision, readSchedulePreviewFile, schedulePreviewLines, type BuiltList, type SchedulePreviewRead } from "./schedule-preview.js";
 import { standingJobs } from "./standing-jobs.js";
-import { newerStartThanCheckpoint, standingFromReads, type DaemonStanding } from "./status-cli.js";
+import { newerStartThanCheckpoint, readPidIdentity, standingFromReads, type DaemonStanding, type PidReader } from "./status-cli.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
   LOCK_FILE,
+  RECONCILE_FILE,
   RECOVERY_FILE,
   RECOVERY_SCHEMA,
   STORE_SCHEMA,
-  isProcessAlive,
   readCheckpoint,
   readRecoveryIndexFile,
   type CheckpointRead,
@@ -79,29 +83,72 @@ import {
  * ------------------------------------------------------------------ */
 
 /**
- * Every file the Overseer's store holds, with the schema(s) this build reads
- * where the file's owner exports one. `null` is "this build names no schema for
- * it" — the event log, the notes, the lock and the baseline carry none as a
- * constant — and is rendered as such rather than as a match.
+ * One name this build knows the store to hold: what it is, and how it is read.
+ * `probe` names are opened under the fleet probe's contract — whose allow-list
+ * must carry them — and their declared schema compared; `stat` names are only
+ * `lstat`ed, never opened: the locks, the loss markers, the directories, and
+ * the files the probe's allow-list does not carry. `known: null` is "this build
+ * names no schema for it", rendered as such rather than as a match.
  */
-const STORE_FILES: readonly { target: ProbeTarget; known: readonly number[] | null }[] = [
-  { target: CHECKPOINT_FILE, known: [STORE_SCHEMA] },
-  { target: RECOVERY_FILE, known: [RECOVERY_SCHEMA] },
-  { target: EVENTS_FILE, known: null },
-  { target: NOTES_FILE, known: null },
-  { target: SCHEDULE_PREVIEW_FILE, known: [SCHEDULE_PREVIEW_SCHEMA] },
-  { target: ATTENTION_MEMORY_FILE, known: [ATTENTION_MEMORY_SCHEMA] },
+type CatalogueEntry = {
+  readonly target: ProbeTarget;
+  readonly meaning: string;
+  readonly read: "probe" | "stat";
+  readonly known: readonly number[] | null;
+  /**
+   * A file that declares no schema and that its reader still accepts, as this
+   * schema (Sol's F41). Per file, from the reader's own rule: an undeclared
+   * schema is never a match anywhere else.
+   */
+  readonly legacyUndeclared?: number;
+};
+
+const lockFor = (file: string): string => `the writers' lock around ${file}`;
+const markerFor = (file: string): string => `says ${file} once existed, so its loss is noticed rather than read as empty`;
+
+/**
+ * **The catalogue.** It is not the census: the census is the union of this and
+ * what the directory actually holds (Sol's F42), so a name nobody catalogued
+ * still gets a row. Of every reader of these files, only `cli-state.ts`
+ * accepts a record with no schema (as schema 1); the others refuse one.
+ */
+const CATALOGUE: readonly CatalogueEntry[] = [
+  { target: CHECKPOINT_FILE, meaning: "the daemon's checkpoint", read: "probe", known: [STORE_SCHEMA] },
+  { target: RECOVERY_FILE, meaning: "the recovery index, and the boot it last recorded", read: "probe", known: [RECOVERY_SCHEMA] },
+  { target: EVENTS_FILE, meaning: "the event log", read: "probe", known: null },
+  { target: NOTES_FILE, meaning: "the daemon's notes", read: "probe", known: null },
+  { target: SCHEDULE_PREVIEW_FILE, meaning: "the scheduler's preview", read: "probe", known: [SCHEDULE_PREVIEW_SCHEMA] },
+  { target: ATTENTION_MEMORY_FILE, meaning: "the attention pass's memory", read: "probe", known: [ATTENTION_MEMORY_SCHEMA] },
   // Its envelope field is `lineSchema`, not `schema` (usage-history-record.ts).
-  { target: { name: USAGE_FILE, schemaField: "lineSchema" }, known: [USAGE_LINE_SCHEMA] },
-  { target: REPORTS_FILE, known: [REPORTS_SCHEMA] },
+  { target: { name: USAGE_FILE, schemaField: "lineSchema" }, meaning: "the usage history", read: "probe", known: [USAGE_LINE_SCHEMA] },
+  { target: REPORTS_FILE, meaning: "the work reports", read: "probe", known: [REPORTS_SCHEMA] },
   // Schema 1 lines are still read exactly as written (decisions.ts).
-  { target: DECISIONS_FILE, known: [DECISIONS_SCHEMA, LEGACY_DECISIONS_SCHEMA] },
-  { target: QUEUE_FILE, known: [IDEA_QUEUE_SCHEMA] },
-  { target: CLI_STATE_FILE, known: [CLI_STATE_SCHEMA] },
-  { target: DESCRIPTIONS_FILE, known: [DESCRIPTIONS_SCHEMA] },
-  { target: BASELINE_FILE, known: null },
-  { target: LOCK_FILE, known: null },
+  { target: DECISIONS_FILE, meaning: "the decision log", read: "probe", known: [DECISIONS_SCHEMA, LEGACY_DECISIONS_SCHEMA] },
+  { target: QUEUE_FILE, meaning: "the idea queue", read: "probe", known: [IDEA_QUEUE_SCHEMA] },
+  // `parseCliState` reads `schema ?? CLI_STATE_SCHEMA`: a file with none is the legacy format.
+  { target: CLI_STATE_FILE, meaning: "the CLI's mine and paused lists", read: "probe", known: [CLI_STATE_SCHEMA], legacyUndeclared: CLI_STATE_SCHEMA },
+  { target: DESCRIPTIONS_FILE, meaning: "the session descriptions", read: "probe", known: [DESCRIPTIONS_SCHEMA] },
+  { target: BASELINE_FILE, meaning: "the last collection, the next start's baseline", read: "probe", known: null },
+  { target: LOCK_FILE, meaning: "the daemon's lock", read: "probe", known: null },
+  // Not on the fleet probe's allow-list, so listed and never opened.
+  { target: ARMING_FILE, meaning: "when the scheduler was first armed", read: "stat", known: null },
+  { target: RECONCILE_FILE, meaning: "a one-off reconcile of a lost occurrence ledger, consumed by the next start", read: "stat", known: null },
+  { target: USAGE_PREV_FILE, meaning: "the previous usage history, rotated out", read: "stat", known: null },
+  { target: CLI_STATE_LOCK_FILE, meaning: lockFor(CLI_STATE_FILE), read: "stat", known: null },
+  { target: DECISIONS_LOCK_FILE, meaning: lockFor(DECISIONS_FILE), read: "stat", known: null },
+  { target: QUEUE_LOCK_FILE, meaning: lockFor(QUEUE_FILE), read: "stat", known: null },
+  { target: DECISIONS_INIT_FILE, meaning: markerFor(DECISIONS_FILE), read: "stat", known: null },
+  { target: QUEUE_INIT_FILE, meaning: markerFor(QUEUE_FILE), read: "stat", known: null },
+  { target: REPORTS_INIT_FILE, meaning: markerFor(REPORTS_FILE), read: "stat", known: null },
+  { target: INBOX_DIR, meaning: "work reports waiting to be read", read: "stat", known: null },
+  { target: PROCESSING_DIR, meaning: "work reports being read", read: "stat", known: null },
+  { target: REFUSED_DIR, meaning: "work reports refused", read: "stat", known: null },
+  { target: QUARANTINE_DIR, meaning: "inbox entries moved aside unread", read: "stat", known: null },
+  { target: RECOVERY_INBOX_DIR, meaning: "recovery requests", read: "stat", known: null },
 ];
+
+/** How many directory entries one reading lists before it stops and says so (Sol's F42). */
+export const DIRECTORY_LISTING_CAP = 200;
 
 const nameOf = (target: ProbeTarget): string => (typeof target === "string" ? target : target.name);
 
@@ -126,13 +173,110 @@ export type GitReads = {
 };
 
 /**
- * The dashboard's own start stamp, from its `/api/diagnostics` (Stage 3). Until
- * that route exists nobody asks, and the page says so rather than guessing.
+ * The dashboard's own start stamp, from its `GET /api/diagnostics` (Stage 3).
+ * `unreachable` is a connection that failed; `unusable` is a dashboard that was
+ * reached and whose answer cannot be used — too slow, too large, non-2xx, or a
+ * shape the fleet's parser refuses (Sol's F4). Each is one line of the report;
+ * none stops the rest of it rendering.
  */
 export type DashboardReading =
   | { kind: "not-asked"; why: string }
   | { kind: "unreachable"; why: string }
+  | { kind: "unusable"; why: string }
   | { kind: "answered"; revision: StartRevision };
+
+/** How long `diagnose` waits for the dashboard. A report waits on nobody for long. */
+export const DASHBOARD_DIAGNOSTICS_TIMEOUT_MS = 5_000;
+/** The largest answer read. The real one is a few KB; anything near this is not it. */
+export const DASHBOARD_DIAGNOSTICS_MAX_BYTES = 256 * 1024;
+/** A reason from the wire is bounded before it reaches a terminal. */
+const DASHBOARD_REASON_MAX = 300;
+
+const boundedReason = (why: string): string => (why.length <= DASHBOARD_REASON_MAX ? why : `${why.slice(0, DASHBOARD_REASON_MAX - 1)}…`);
+
+class AnswerTooLarge extends Error {}
+
+/** The body, read as a stream and abandoned the moment it passes `maxBytes` — never buffered whole first. */
+async function boundedBody(response: Response, maxBytes: number): Promise<string> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body?.cancel();
+    throw new AnswerTooLarge();
+  }
+  if (response.body === null) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new AnswerTooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function fetchFailure(cause: unknown): string {
+  if (!(cause instanceof Error)) return String(cause);
+  const inner = cause.cause instanceof Error ? `: ${cause.cause.message}` : "";
+  return `${cause.message}${inner}`;
+}
+
+/**
+ * Ask the dashboard for its diagnostics: one `GET`, a deadline, a body bound,
+ * and the fleet's own parser (`tools/fleet/diagnostics-parse.ts`, the one the
+ * page uses). **Never throws**: every failure is a reading with its reason.
+ */
+export async function readDashboardDiagnostics(
+  fleetUrl: string,
+  deps: { fetch?: typeof fetch; timeoutMs?: number; maxBytes?: number } = {},
+): Promise<DashboardReading> {
+  const fetchImpl = deps.fetch ?? fetch;
+  const timeoutMs = deps.timeoutMs ?? DASHBOARD_DIAGNOSTICS_TIMEOUT_MS;
+  const maxBytes = deps.maxBytes ?? DASHBOARD_DIAGNOSTICS_MAX_BYTES;
+  const unusable = (why: string): DashboardReading => ({ kind: "unusable", why: boundedReason(why) });
+  let url: URL;
+  try {
+    url = new URL("/api/diagnostics", fleetUrl);
+  } catch {
+    return unusable(`${fleetUrl} is not a URL`);
+  }
+  const signal = AbortSignal.timeout(timeoutMs);
+  const late = (): DashboardReading => unusable(`no answer within ${timeoutMs / 1000}s from ${url.origin}`);
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { signal, headers: { accept: "application/json" } });
+  } catch (cause) {
+    if (signal.aborted) return late();
+    return { kind: "unreachable", why: boundedReason(`${url.origin}: ${fetchFailure(cause)}`) };
+  }
+  let text: string;
+  try {
+    text = await boundedBody(response, maxBytes);
+  } catch (cause) {
+    if (cause instanceof AnswerTooLarge) return unusable(`the answer is larger than ${maxBytes / 1024} KB`);
+    if (signal.aborted) return late();
+    return unusable(`the answer could not be read: ${fetchFailure(cause)}`);
+  }
+  let body: unknown;
+  let json = true;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    json = false;
+  }
+  const parsed = json ? parseDiagnosticsSummary(body) : null;
+  if (!response.ok) {
+    return unusable(`the dashboard answered ${response.status}${parsed?.kind === "unreadable" ? ` — ${parsed.why}` : ""}`);
+  }
+  if (parsed === null) return unusable("the answer is not JSON");
+  if (parsed.kind === "unreadable") return unusable(parsed.why);
+  return { kind: "answered", revision: parsed.summary.dashboard.start };
+}
 
 /**
  * A service's recorded start HEAD against this checkout's. `compared` carries
@@ -174,16 +318,41 @@ export type CheckpointSection =
 
 export type BootSection =
   | { kind: "same"; bootId: string }
-  /** The host has rebooted since the daemon last recorded its boot: the daemon has not run since. */
+  /**
+   * `recovery.json` names another boot than the host's. It is advanced only
+   * after an accepted collection, so this says nothing about whether the daemon
+   * has run since the reboot (Sol's F44).
+   */
   | { kind: "different"; recorded: string; host: string }
   | { kind: "unknown"; why: string };
 
-export type FileRow = {
-  probe: StoreFileProbe;
-  /** The schema(s) this build reads for the file, or null when it names none. */
-  known: readonly number[] | null;
-  match: "matches" | "mismatch" | "no-known-schema" | "cannot-tell" | "not-applicable";
-};
+export type EntryType = "file" | "directory" | "symbolic link" | "FIFO" | "socket" | "device" | "other";
+
+/** An `lstat` of one directory entry: never opened, never followed. */
+export type EntryStat =
+  | { state: "absent" }
+  | { state: "unreadable"; why: string }
+  | { state: "present"; type: EntryType; bytes: number; mtimeAgeMs: number };
+
+export type FileMatch = "matches" | "legacy" | "mismatch" | "no-known-schema" | "cannot-tell" | "not-applicable";
+
+export type FileRow =
+  | {
+      kind: "probed";
+      name: string;
+      meaning: string;
+      probe: StoreFileProbe;
+      /** The schema(s) this build reads for the file, or null when it names none. */
+      known: readonly number[] | null;
+      /** The schema an undeclared file is accepted as, where its reader accepts one; else null. */
+      legacySchema: number | null;
+      match: FileMatch;
+    }
+  /** Only `lstat`ed. `meaning: null` is a name this build's catalogue does not hold. */
+  | { kind: "stat"; name: string; meaning: string | null; stat: EntryStat };
+
+/** The store directory's own entries, as far as one bounded listing went. */
+export type StoreListing = { names: readonly string[]; truncated: boolean };
 
 export type DiagnoseReport = {
   root: string;
@@ -207,8 +376,10 @@ export type DiagnoseReport = {
   checkpoint: CheckpointSection;
   boot: BootSection;
   files: FileRow[];
+  /** Whether the directory listing stopped at the cap, so some entries have no row. */
+  listing: { truncated: boolean; cap: number };
   /** `overseer status`'s schedule block, as data: what the daemon previews, and the list this checkout builds. */
-  jobs: { builds: string; runningInstanceId: string | null; preview: SchedulePreviewRead };
+  jobs: { built: BuiltList; runningInstanceId: string | null; preview: SchedulePreviewRead };
 };
 
 export type DiagnoseInput = {
@@ -219,12 +390,16 @@ export type DiagnoseInput = {
   relate: GitReads["relate"];
   checkpoint: CheckpointRead;
   notes: ReadNotes;
-  alive: (pid: number) => boolean;
+  identify: PidReader;
   recovery: RecoveryFileReading;
   hostBootId: string | null;
-  files: StoreFileProbe[];
+  /** The catalogue's `probe` names, opened under the fleet probe's contract. */
+  probes: StoreFileProbe[];
+  /** The catalogue's `stat` names and every listed name the catalogue does not hold. */
+  stats: readonly { name: string; stat: EntryStat }[];
+  listing: StoreListing;
   schedule: SchedulePreviewRead;
-  builtListRevision: string;
+  builtList: BuiltList;
   dashboard: DashboardReading;
 };
 
@@ -236,8 +411,8 @@ export function diagnose(input: DiagnoseInput): DiagnoseReport {
   const { checkpoint: read, nowMs } = input;
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
   const start = startNoteOf(read, input.notes);
-  const files = input.files.map(fileRow);
-  const probeOfCheckpoint = files.find((row) => row.probe.name === CHECKPOINT_FILE)?.probe;
+  const files = fileRows(input);
+  const probeOfCheckpoint = input.probes.find((probe) => probe.name === CHECKPOINT_FILE);
   const ageOf = (iso: string | null): number | null => (iso === null ? null : nowMs - Date.parse(iso));
   const newer = input.notes.kind === "read" ? newerStartThanCheckpoint(checkpoint, input.notes.notes) : null;
 
@@ -246,7 +421,7 @@ export function diagnose(input: DiagnoseInput): DiagnoseReport {
     generatedAt: new Date(nowMs).toISOString(),
     checkout: { path: input.checkoutPath, head: input.head },
     daemon: {
-      standing: standingFromReads(read, input.notes, nowMs, input.alive),
+      standing: standingFromReads(read, input.notes, nowMs, input.identify),
       instanceId: checkpoint?.heartbeat.instanceId ?? null,
       pid: checkpoint?.heartbeat.pid ?? null,
       startedAt: checkpoint?.heartbeat.startedAt ?? null,
@@ -288,7 +463,8 @@ export function diagnose(input: DiagnoseInput): DiagnoseReport {
             },
     boot: bootOf(input.recovery, input.hostBootId),
     files,
-    jobs: { builds: input.builtListRevision, runningInstanceId: checkpoint?.heartbeat.instanceId ?? null, preview: input.schedule },
+    listing: { truncated: input.listing.truncated, cap: DIRECTORY_LISTING_CAP },
+    jobs: { built: input.builtList, runningInstanceId: checkpoint?.heartbeat.instanceId ?? null, preview: input.schedule },
   };
 }
 
@@ -358,13 +534,29 @@ function bootOf(recovery: RecoveryFileReading, host: string | null): BootSection
   return recorded === host ? { kind: "same", bootId: host } : { kind: "different", recorded, host };
 }
 
-function fileRow(probe: StoreFileProbe): FileRow {
-  const known = STORE_FILES.find((file) => nameOf(file.target) === probe.name)?.known ?? null;
-  if (probe.state !== "present") return { probe, known, match: "not-applicable" };
-  if (known === null) return { probe, known, match: "no-known-schema" };
-  if (probe.schema === null) return { probe, known, match: "cannot-tell" };
-  if (probe.schema === "none-declared") return { probe, known, match: "mismatch" };
-  return { probe, known, match: known.includes(probe.schema) ? "matches" : "mismatch" };
+/** The catalogue's rows in its order, then a row for every listed name it does not hold. */
+function fileRows(input: DiagnoseInput): FileRow[] {
+  const probes = new Map(input.probes.map((probe) => [probe.name, probe]));
+  const stats = new Map(input.stats.map((entry) => [entry.name, entry.stat]));
+  const statOf = (name: string): EntryStat => stats.get(name) ?? { state: "unreadable", why: "this reading did not look at it" };
+  const rows: FileRow[] = CATALOGUE.map((entry): FileRow => {
+    const name = nameOf(entry.target);
+    if (entry.read === "stat") return { kind: "stat", name, meaning: entry.meaning, stat: statOf(name) };
+    const probe: StoreFileProbe = probes.get(name) ?? { name, state: "unreadable", why: "this reading did not probe it" };
+    return { kind: "probed", name, meaning: entry.meaning, probe, known: entry.known, legacySchema: entry.legacyUndeclared ?? null, match: matchOf(probe, entry) };
+  });
+  const catalogued = new Set(CATALOGUE.map((entry) => nameOf(entry.target)));
+  for (const name of input.listing.names) if (!catalogued.has(name)) rows.push({ kind: "stat", name, meaning: null, stat: statOf(name) });
+  return rows;
+}
+
+function matchOf(probe: StoreFileProbe, entry: CatalogueEntry): FileMatch {
+  if (probe.state !== "present") return "not-applicable";
+  if (entry.known === null) return "no-known-schema";
+  if (probe.schema === null) return "cannot-tell";
+  // Undeclared matches only where that file's reader accepts it (Sol's F41) — never globally.
+  if (probe.schema === "none-declared") return entry.legacyUndeclared === undefined ? "mismatch" : "legacy";
+  return entry.known.includes(probe.schema) ? "matches" : "mismatch";
 }
 
 /* ------------------------------------------------------------------ *
@@ -419,6 +611,8 @@ function dashboardText(dashboard: DiagnoseReport["dashboard"]): string {
       return `not asked (${dashboard.reading.why})`;
     case "unreachable":
       return `unreachable: ${dashboard.reading.why}`;
+    case "unusable":
+      return `dashboard diagnostics unusable — ${dashboard.reading.why}`;
     case "answered":
       return dashboard.verdict === null ? "answered, and not compared" : verdictText(dashboard.verdict);
     default: {
@@ -428,7 +622,7 @@ function dashboardText(dashboard: DiagnoseReport["dashboard"]): string {
   }
 }
 
-const at = (iso: string, ageMs: number): string => `${iso} (${describeAge(ageMs)} ago)`;
+const at = (iso: string, ageMs: number): string => `${iso} (${describeSince(ageMs, "ago")})`;
 
 function checkpointLines(section: CheckpointSection): string[] {
   switch (section.kind) {
@@ -452,7 +646,7 @@ function checkpointLines(section: CheckpointSection): string[] {
         `${INDENT}${
           section.lastGoodSnapshotAt === null || section.lastGoodAgeMs === null
             ? "last good snapshot: never — the dashboard has not given this daemon a collection"
-            : `last good snapshot ${section.lastGoodSnapshotAt} (${describeAge(section.lastGoodAgeMs)} old)`
+            : `last good snapshot ${section.lastGoodSnapshotAt} (${describeSince(section.lastGoodAgeMs, "old")})`
         }`,
         `${INDENT}${
           section.lastTickAt === null || section.lastTickAgeMs === null ? "last tick: none yet" : `last tick ${at(section.lastTickAt, section.lastTickAgeMs)}`
@@ -468,9 +662,12 @@ function checkpointLines(section: CheckpointSection): string[] {
 function bootText(boot: BootSection): string {
   switch (boot.kind) {
     case "same":
-      return `same boot as the daemon last recorded (${boot.bootId})`;
+      return `same boot as ${RECOVERY_FILE} records (${boot.bootId})`;
     case "different":
-      return `DIFFERENT — the daemon last recorded boot ${boot.recorded} and this host is on ${boot.host}: the host has rebooted, and the daemon has not run since the reboot`;
+      return (
+        `DIFFERENT — ${RECOVERY_FILE} records boot ${boot.recorded}, the host is on ${boot.host}: ` +
+        `${RECOVERY_FILE} has not yet recorded the current boot (it updates only after an accepted collection)`
+      );
     case "unknown":
       return `unknown — ${boot.why}`;
     default: {
@@ -486,17 +683,36 @@ function size(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const ageColumn = (ageMs: number): string => describeSince(ageMs, "old").padStart(8);
+
 function fileLine(row: FileRow, width: number): string {
-  const name = `  ${row.probe.name.padEnd(width)}  `;
+  const name = `  ${row.name.padEnd(width)}  `;
+  return `${name}${row.kind === "probed" ? probedText(row) : statText(row)}`;
+}
+
+/** A row that was only `lstat`ed: its type, size and age, and what it is — or that nothing here knows. */
+function statText(row: Extract<FileRow, { kind: "stat" }>): string {
+  const stat = row.stat;
+  if (stat.state === "absent") return "absent";
+  if (stat.state === "unreadable") return `UNREADABLE — ${stat.why}`;
+  const column = stat.type === "file" ? size(stat.bytes) : stat.type;
+  const what = row.meaning === null ? "not in this build's catalogue: no known schema" : row.meaning;
+  return `${column.padStart(9)}  ${ageColumn(stat.mtimeAgeMs)}  ${what} — listed, never opened`;
+}
+
+function probedText(row: Extract<FileRow, { kind: "probed" }>): string {
   const probe = row.probe;
-  if (probe.state === "absent") return `${name}absent`;
-  if (probe.state === "unreadable") return `${name}UNREADABLE — ${probe.why}`;
+  if (probe.state === "absent") return "absent";
+  if (probe.state === "unreadable") return `UNREADABLE — ${probe.why}`;
   const reads = row.known === null ? "" : row.known.join(" or ");
   const declared = probe.schema === null ? "schema unreadable" : probe.schema === "none-declared" ? "no schema declared" : `schema ${probe.schema}`;
   let schema: string;
   switch (row.match) {
     case "matches":
       schema = declared;
+      break;
+    case "legacy":
+      schema = `${declared}; accepted as legacy schema ${row.legacySchema ?? "?"}`;
       break;
     case "mismatch":
       schema = `${declared} ✗ MISMATCH — this build reads ${reads}`;
@@ -517,7 +733,7 @@ function fileLine(row: FileRow, width: number): string {
   }
   const torn = probe.tornTail === true ? "  TORN TAIL — the last line has no newline (a write in progress, or one that died)" : "";
   const last = probe.lastLineAt === undefined ? "" : `, last line ${probe.lastLineAt}`;
-  return `${name}${size(probe.bytes).padStart(9)}  ${describeAge(probe.mtimeAgeMs).padStart(4)} old  ${schema}${last}${torn}`;
+  return `${size(probe.bytes).padStart(9)}  ${ageColumn(probe.mtimeAgeMs)}  ${schema}${last}${torn}`;
 }
 
 export function diagnoseLines(report: DiagnoseReport): string[] {
@@ -547,12 +763,15 @@ export function diagnoseLines(report: DiagnoseReport): string[] {
   lines.push(labelled("boot", bootText(report.boot)));
   lines.push("");
 
-  lines.push("store files");
-  const width = Math.max(...report.files.map((row) => row.probe.name.length));
+  lines.push("store files — this build's catalogue, and every other entry in the directory");
+  if (report.listing.truncated) {
+    lines.push(`  (only the first ${report.listing.cap} directory entries were listed; the directory holds more, and any past them that the catalogue does not name has no row)`);
+  }
+  const width = Math.max(...report.files.map((row) => row.name.length));
   for (const row of report.files) lines.push(fileLine(row, width));
   lines.push("");
 
-  lines.push(...schedulePreviewLines(report.jobs.preview, { listRevision: report.jobs.builds, runningInstanceId: report.jobs.runningInstanceId }, nowMs));
+  lines.push(...schedulePreviewLines(report.jobs.preview, { built: report.jobs.built, runningInstanceId: report.jobs.runningInstanceId }, nowMs));
   return lines;
 }
 
@@ -595,13 +814,14 @@ export function checkoutGit(checkout: string): GitReads {
 
 export type DiagnoseDeps = {
   now?: () => Date;
-  alive?: (pid: number) => boolean;
+  /** Who holds a pid, and when it started. `readPidIdentity`, off `/proc`, by default. */
+  identify?: PidReader;
   hostBootId?: () => string | null;
   /** The checkout whose HEAD and job list are compared. Defaults to the one this module sits in. */
   checkout?: string;
   git?: GitReads;
-  /** The job list this checkout builds, as `overseer status` computes it. Injected in tests. */
-  builtListRevision?: () => string;
+  /** The job list this checkout builds, as `overseer status` computes it (`checkoutJobList`). Injected in tests. */
+  builtList?: () => BuiltList;
   dashboard?: DashboardReading;
 };
 
@@ -609,26 +829,95 @@ export type DiagnoseDeps = {
  * Every read the report needs, lock-free and read-only. `ok: false` only when
  * the store root itself cannot be read — the one case the command exits 1.
  */
+/**
+ * The job list `checkout` builds, as the daemon's `schedulerWiring` builds it —
+ * or, when either builder reports a problem, no revision at all (Sol's F40).
+ * `overseer status` and `overseer diagnose` both come through here.
+ */
+export function checkoutJobList(checkout: string): BuiltList {
+  try {
+    const standing = standingJobs(checkout);
+    const rules = ruleJobs(checkout);
+    const problems = [...standing.problems, ...rules.problems];
+    if (problems.length > 0) return { kind: "unbuildable", problems };
+    return { kind: "built", listRevision: listRevision([...standing.jobs, ...rules.jobs]) };
+  } catch (cause) {
+    return { kind: "unbuildable", problems: [`building it threw: ${describeCause(cause)}`] };
+  }
+}
+
+const describeCause = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
+/** At most {@link DIRECTORY_LISTING_CAP} names of the store directory, and whether there were more. */
+function listStore(root: string): { ok: true; listing: StoreListing } | { ok: false; why: string } {
+  let dir: ReturnType<typeof opendirSync>;
+  try {
+    dir = opendirSync(root);
+  } catch (cause) {
+    return { ok: false, why: describeCause(cause) };
+  }
+  const names: string[] = [];
+  let truncated = false;
+  try {
+    for (let entry = dir.readSync(); entry !== null; entry = dir.readSync()) {
+      if (names.length === DIRECTORY_LISTING_CAP) {
+        truncated = true;
+        break;
+      }
+      names.push(entry.name);
+    }
+  } catch (cause) {
+    return { ok: false, why: describeCause(cause) };
+  } finally {
+    dir.closeSync();
+  }
+  return { ok: true, listing: { names: names.sort(), truncated } };
+}
+
+function entryType(stat: Stats): EntryType {
+  if (stat.isFile()) return "file";
+  if (stat.isDirectory()) return "directory";
+  if (stat.isSymbolicLink()) return "symbolic link";
+  if (stat.isFIFO()) return "FIFO";
+  if (stat.isSocket()) return "socket";
+  if (stat.isCharacterDevice() || stat.isBlockDevice()) return "device";
+  return "other";
+}
+
+/** One entry's `lstat`: nothing is opened, and a symbolic link is described, not followed. */
+function statEntry(root: string, name: string, nowMs: number): EntryStat {
+  let stat: Stats;
+  try {
+    stat = lstatSync(join(root, name));
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { state: "absent" };
+    return { state: "unreadable", why: describeCause(cause) };
+  }
+  return { state: "present", type: entryType(stat), bytes: stat.size, mtimeAgeMs: nowMs - Math.round(stat.mtimeMs) };
+}
+
 export function readDiagnoseInput(root: string, deps: DiagnoseDeps = {}): { ok: true; input: DiagnoseInput } | { ok: false; why: string } {
   try {
     if (!statSync(root).isDirectory()) return { ok: false, why: `the store root ${root} is not a directory` };
-    readdirSync(root);
   } catch (cause) {
-    return { ok: false, why: `the store root ${root} cannot be read: ${cause instanceof Error ? cause.message : String(cause)}` };
+    return { ok: false, why: `the store root ${root} cannot be read: ${describeCause(cause)}` };
   }
+  const listed = listStore(root);
+  if (!listed.ok) return { ok: false, why: `the store root ${root} cannot be read: ${listed.why}` };
   const now = (deps.now ?? (() => new Date()))();
   const checkoutPath = deps.checkout ?? fileURLToPath(new URL("../..", import.meta.url));
   const git = deps.git ?? checkoutGit(checkoutPath);
-  const built =
-    deps.builtListRevision ??
-    // The expression `overseer status` uses (scripts/overseer.ts), so an unchanged checkout reads as the same list.
-    (() => listRevision([...standingJobs(checkoutPath).jobs, ...ruleJobs(checkoutPath).jobs]));
-  let builtListRevision: string;
+  let builtList: BuiltList;
   try {
-    builtListRevision = built();
+    builtList = (deps.builtList ?? (() => checkoutJobList(checkoutPath)))();
   } catch (cause) {
-    builtListRevision = `(which this checkout could not build: ${cause instanceof Error ? cause.message : String(cause)})`;
+    builtList = { kind: "unbuildable", problems: [`building it threw: ${describeCause(cause)}`] };
   }
+  const catalogued = new Set(CATALOGUE.map((entry) => nameOf(entry.target)));
+  const statNames = [
+    ...CATALOGUE.filter((entry) => entry.read === "stat").map((entry) => nameOf(entry.target)),
+    ...listed.listing.names.filter((name) => !catalogued.has(name)),
+  ];
   return {
     ok: true,
     input: {
@@ -639,17 +928,19 @@ export function readDiagnoseInput(root: string, deps: DiagnoseDeps = {}): { ok: 
       relate: (start, head) => git.relate(start, head),
       checkpoint: readCheckpoint(root),
       notes: readNotes(root),
-      alive: deps.alive ?? isProcessAlive,
+      identify: deps.identify ?? ((pid) => readPidIdentity(pid)),
       recovery: readRecoveryIndexFile(root),
       hostBootId: (deps.hostBootId ?? readHostBootId)(),
-      files: probeStoreFiles(
+      probes: probeStoreFiles(
         root,
-        STORE_FILES.map((file) => file.target),
+        CATALOGUE.filter((entry) => entry.read === "probe").map((entry) => entry.target),
         now,
       ),
+      stats: statNames.map((name) => ({ name, stat: statEntry(root, name, now.getTime()) })),
+      listing: listed.listing,
       schedule: readSchedulePreviewFile(root),
-      builtListRevision,
-      dashboard: deps.dashboard ?? { kind: "not-asked", why: "no diagnostics route yet" },
+      builtList,
+      dashboard: deps.dashboard ?? { kind: "not-asked", why: "this caller did not ask the dashboard" },
     },
   };
 }

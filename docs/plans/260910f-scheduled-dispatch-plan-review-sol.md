@@ -1,6 +1,6 @@
 Verdict: **refuse**.
 
-The complete review is saved at [260910f-scheduled-dispatch-plan-review-sol-findings.md](260910f-scheduled-dispatch-plan-review-sol-findings.md) (Sol wrote it to `/tmp`; copied here).
+The complete review is saved at [260910f-scheduled-dispatch-plan-review-sol-findings.md](260910f-scheduled-dispatch-plan-review-sol-findings.md).
 
 The sandbox denied both attempts to write the required repository path; it permits writes only under `/tmp` and cache directories. I did not alter the repository or its existing in-progress implementation changes.
 

@@ -1,6 +1,6 @@
 # Launch protocol: one crash protocol for scheduling and recovery
 
-Roadmap stage: [260908f § Stage: Launch protocol](260908f-overseer-and-fleet-improvement-roadmap.md#stage-launch-protocol--give-scheduling-and-recovery-one-crash-protocol).
+Roadmap stage: [260908f § Stage: Launch protocol](260908f-overseer-and-fleet-improvement-roadmap.md#stage-launch-protocol-give-scheduling-and-recovery-one-crash-protocol).
 Queue item `qi-qzpjafp7`. Session `launch-protocol`, worktree `.claude/worktrees/launch-protocol`,
 dispatched by the Overseer 2026-09-10.
 
@@ -615,6 +615,47 @@ holds across the layers, and the SIGHUP change touches nothing but SIGHUP. It al
 paragraph had not disclosed F21 or F23 — right, and now it does. All four accepted; Stage 2b brief
 `260910f-launch-protocol-stage2b-fixes-task.md`, which also carries F20 and the read-only
 `view()` for `scheduled-dispatch`.
+
+**Stage 2b (2026-09-10): built by an Opus subagent against `260910f-launch-protocol-stage2b-fixes-task.md`;
+every item red first.** 454 tests across the ten launch, wrapper and env suites pass, typecheck exit
+0; `subagent-cli.ts` and `gjd-remote.ts` untouched this round.
+
+- **F22 — premise confirmed, fixed.** `loadRepoEnv()` → `src/env.ts`'s `loadEnvLocal()`, which
+  skips only names in `SPIDERYARN_ENV_PINNED` and protects a value only if this process changed it
+  after starting — so a `PATH` handed to a spawned wrapper counts as inherited and `.env.local`
+  replaces it. The unit setup pinned only `DATABASE_URL,SUPABASE_URL`. New
+  `tests/helpers/wrapper-env.ts` pins `PATH` and the account-routing names for every spawned
+  wrapper, and the preflight resolves the CLI through the wrapper's own `.env.local` load
+  (`resolve-cli-as-wrapper.ts`); a test keeps both halves (unpinned resolves the wrong stand-in).
+- **F20** — `probeAuth` gets its own `hangupBeforeRun()` (the run's `hangup` would have recorded the
+  probe's ending as the paid run's), and `hangup` joined the not-run causes the reader accepts.
+  run-codex spawns nothing before codex, so it had no such gap.
+- **F21** — under `--launch-dir` only, the last attempt's output is copied to the durable answer
+  path before the failure ladder; only if that attempt wrote a file.
+- **F23** — `launchStartLines` arms an `EXIT` trap after the durable start write;
+  `launchExitLines` writes the real record and disarms it. The trap records `exited` with the
+  script's status and a `null` verdict (the reader refuses `not-run` without a failed verdict, and a
+  job shell judges nothing).
+- **F24** — a SIGHUP test of run-codex in its own process group, seen red by removing the hook.
+- **`view()`** — `LaunchJournalView = Pick<LaunchJournal, "status" | "fold" | "attemptDir">`; the
+  composed protocol has nine keys.
+- **`RunSpec.account`** — required, `^[a-z0-9][a-z0-9-]{0,40}$`, in F5's conflict check; both
+  adapters pass `--account`; the tmux-headless command unsets the session's account-routing
+  variables. **Trade-off taken:** the real-tmux run-claude test can no longer reach `ok` offline,
+  because a routed run reads the account's live profile over the network; it now asserts run-claude's
+  own refusal of an unregistered handle (not-run, no claude spawned). The unrouted `ok` path is still
+  covered by run-claude's `--launch-dir` tests.
+- **An incident, now closed in the test but not undone:** the first red run of the new
+  session-environment test diffed the vitest worker's **whole environment** into the fixer's tool
+  output — the subagent's context, so it went to the model API — including real keys loaded from
+  `.env.local`. The test now compares variable **names** only. Reported to the Overseer, who took
+  the rotation question to Greg (live exposures: OpenRouter, the Google API key, the Google OAuth
+  client secret, the Claude Code messaging token; the Supabase key is the local stack's and the
+  Stripe key is test-mode). Postmortem to follow; no value is recorded anywhere in this repo.
+
+**Sol's narrow check of the three Stage 2 P1 fixes (F20, F21, F23) at e3bcace3: all three closed**,
+each with the exact lines (`…-stage2-fixcheck-sol.md`). Stage 2 is done reviewing. Stages 1, 1b, 2
+and 2b go to dev once the full suite on the merged tree (79a55e94) is accounted for.
 
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 

@@ -22,7 +22,7 @@
  * test here and it says so.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,14 +162,16 @@ describe("the job's pieces", () => {
     expect(launchExitLines(undefined, shellQuote)).toEqual([]);
   });
 
-  it("are one line each with a launch, and the exit line reads gjd-remote's own status variable", () => {
+  it("are two lines each with a launch — the record and the exit trap's arming or disarming — and the exit line reads gjd-remote's own status variable", () => {
     const f = makeLaunchDir({ launcherKind: "tmux" });
     const start = launchStartLines(flagsOf(f), "exit 1", shellQuote);
     const exit = launchExitLines(flagsOf(f), shellQuote);
-    expect(start).toHaveLength(1);
-    expect(exit).toHaveLength(1);
-    expect(start[0]).not.toContain("\n");
-    expect(exit[0]).not.toContain("\n");
+    expect(start).toHaveLength(2);
+    expect(exit).toHaveLength(2);
+    for (const line of [...start, ...exit]) expect(line).not.toContain("\n");
+    // Armed only after start.json, disarmed only after the real exit.json (F23).
+    expect(start[1]).toMatch(/^trap '.*' EXIT$/);
+    expect(exit[1]).toBe("trap - EXIT");
     expect(GJD_CLAUDE_STATUS_VAR).toBe("_gjd_claude_status");
     expect(exit[0]).toContain(`"$${GJD_CLAUDE_STATUS_VAR}"`);
   });
@@ -193,18 +195,70 @@ describe("the job's pieces", () => {
       ...launchExitLines(launch, shellQuote),
       "unset _gjd_claude_status",
       "echo END",
+      // Ends with a status of its own, so an exit trap still armed here would overwrite code 5 with 7 (F23).
+      "exit 7",
       "",
     ].join("\n");
     const jobPath = join(f.root, "job.sh");
     writeFileSync(jobPath, job);
     const r = spawnSync("bash", [jobPath], { encoding: "utf8" });
     expect(r.stdout).toContain("END");
+    expect(r.status).toBe(7);
     expect(existsSync(join(f.root, "saw-start"))).toBe(true);
     expect(existsSync(note)).toBe(false);
     const read = readArtefacts(f.dir, f.correlationId);
     expect(read.start.kind).toBe("present");
     expect(read.exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 5 }, answer: null } });
     expect(existsSync(join(f.root, "pwned"))).toBe(false);
+  });
+
+  it.runIf(linux)("a guard that ends the job after start.json still leaves exit.json: a vanished directory, and a PATH with no claude (F23)", () => {
+    /* start.json is the job's first command, but until F23 the only exit writer came after Claude —
+       so the directory guard, the missing-CLI check, the account checks and the bookkeeping could
+       all `failTo` out between the two, and reconciliation held a run the shell knew had ended. */
+    const bash = ["/usr/bin/bash", "/bin/bash"].find(existsSync);
+    if (bash === undefined) throw new Error("no bash at /usr/bin/bash or /bin/bash");
+    for (const which of ["directory", "no-claude"] as const) {
+      const f = makeLaunchDir({ parent: hostileParent(), launcherKind: "tmux" });
+      const launch = flagsOf(f);
+      // What the artefact lines need, and nothing else: no claude anywhere on this PATH.
+      const tools = join(f.root, "tools");
+      mkdirSync(tools);
+      for (const tool of ["cat", "date", "sync", "mv"]) {
+        const found = ["/usr/bin", "/bin"].map((dir) => join(dir, tool)).find(existsSync);
+        if (found === undefined) throw new Error(`no ${tool} in /usr/bin or /bin`);
+        symlinkSync(found, join(tools, tool));
+      }
+      const failTo = (msg: string) => `{ m=${shellQuote(msg)}; printf '%s\\n' "$m" >&2; exit 1; }`;
+      const claude = join(f.root, "claude");
+      writeFileSync(claude, `#!/usr/bin/env bash\necho ran > ${shellQuote(join(f.root, "claude-ran"))}\n`);
+      chmodSync(claude, 0o755);
+      const guard = which === "directory"
+        ? `cd ${shellQuote(join(f.root, "gone"))} || ${failTo("FATAL: cannot enter the directory")}`
+        : `command -v claude >/dev/null 2>&1 || ${failTo("FATAL: claude is not on this job's PATH")}`;
+      const job = [
+        "#!/usr/bin/env bash",
+        "export LANG=C.UTF-8",
+        ...launchStartLines(launch, failTo("FATAL: could not write start.json"), shellQuote),
+        guard,
+        `${shellQuote(claude)} --session-id x`,
+        "_gjd_claude_status=$?",
+        ...launchExitLines(launch, shellQuote),
+        "echo END",
+        "",
+      ].join("\n");
+      const jobPath = join(f.root, "job.sh");
+      writeFileSync(jobPath, job);
+      const r = spawnSync(bash, [jobPath], { encoding: "utf8", env: { PATH: tools } });
+      expect(r.status, which).toBe(1);
+      expect(r.stdout, which).not.toContain("END");
+      expect(existsSync(join(f.root, "claude-ran")), which).toBe(false);
+      const read = readArtefacts(f.dir, f.correlationId);
+      expect(read.start.kind, which).toBe("present");
+      // The shell's own status, as the job shell records every ending: it makes no judgement.
+      expect(read.exit, which).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 1 }, verdict: null, answer: null } });
+      expect(existsSync(join(f.root, "pwned")), which).toBe(false);
+    }
   });
 });
 

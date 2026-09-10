@@ -29,8 +29,8 @@ import {
 import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
-import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
+import { resolveAsWrapper, wrapperEnv } from "./helpers/wrapper-env.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
 const resultEvent = (fields: Record<string, unknown> = {}): string =>
@@ -552,7 +552,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", answerPath, ...extraArgs],
-      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
+      { encoding: "utf8", env: wrapperEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     return { ...r, answerPath };
   }
@@ -665,7 +665,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", both, "--activity-log", both],
-      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
+      { encoding: "utf8", env: wrapperEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("--activity-log");
@@ -762,7 +762,7 @@ describe("--launch-dir", () => {
     const bin = launchedClaude(fixture, body);
     const out = mkdtempSync(join(tmpdir(), "run-claude-launch-"));
     const answerPath = join(out, "answer.md");
-    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    const env = wrapperEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
     delete env.SPIDERYARN_LAUNCH_ID;
     const launchArgs = f === null ? [] : ["--launch-dir", fixture.dir];
     const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", answerPath, ...launchArgs, ...extraArgs], { encoding: "utf8", env });
@@ -856,7 +856,7 @@ describe("--launch-dir", () => {
   it("defaults the answer and the transcript into the launch directory, and an explicit flag still wins", () => {
     const f = makeLaunchDir();
     const bin = launchedClaude(f, `printf '%s\\n' '${resultEvent()}'`);
-    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    const env = wrapperEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
     const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", f.dir], { encoding: "utf8", env });
     expect(r.status).toBe(0);
     expect(readFileSync(join(f.dir, "answer.md"), "utf8")).toBe("THE-ANSWER");
@@ -869,7 +869,7 @@ describe("--launch-dir", () => {
     const g = makeLaunchDir();
     const log = join(mkdtempSync(join(tmpdir(), "run-claude-launch-log-")), "mine.log");
     const bin2 = launchedClaude(g, `printf '%s\\n' '${resultEvent()}'`);
-    const env2 = accountNeutralEnv({ PATH: `${bin2.dir}:${process.env.PATH}` });
+    const env2 = wrapperEnv({ PATH: `${bin2.dir}:${process.env.PATH}` });
     expect(spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", g.dir, "--activity-log", log], { encoding: "utf8", env: env2 }).status).toBe(0);
     expect(readArtefacts(g.dir, g.correlationId).exit).toMatchObject({ kind: "present", record: { answer: { path: join(g.dir, "answer.md") }, transcript: log } });
   }, 90_000);
@@ -885,7 +885,7 @@ describe("--launch-dir", () => {
   it("re-hashes the prompt file against intent.json: a tampered prompt.md is refused and the CLI never runs; an untouched one runs", () => {
     const runFile = (f: LaunchFixture, promptFile: string) => {
       const bin = launchedClaude(f, `printf '%s\\n' '${resultEvent()}'`);
-      const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+      const env = wrapperEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
       const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt-file", promptFile, "--launch-dir", f.dir], { encoding: "utf8", env });
       return { ...r, ran: existsSync(bin.calls) };
     };
@@ -913,7 +913,7 @@ describe("--launch-dir", () => {
     const f = makeLaunchDir();
     const empty = mkdtempSync(join(tmpdir(), "run-claude-no-claude-"));
     // node and tsx by absolute path, so PATH can be one that holds no claude anywhere.
-    const env = accountNeutralEnv({ PATH: `${empty}:/usr/bin:/bin` });
+    const env = wrapperEnv({ PATH: `${empty}:/usr/bin:/bin` });
     const r = spawnSync(process.execPath, [join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"), "scripts/run-claude.ts", "--prompt", "p", "--launch-dir", f.dir], { encoding: "utf8", env });
     expect(r.status).toBe(1);
     const read = readArtefacts(f.dir, f.correlationId);
@@ -925,7 +925,7 @@ describe("--launch-dir", () => {
     const f = makeLaunchDir();
     const bin = launchedClaude(f, "exit 0");
     const both = join(mkdtempSync(join(tmpdir(), "run-claude-launch-same-")), "same");
-    const env = accountNeutralEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
+    const env = wrapperEnv({ PATH: `${bin.dir}:${process.env.PATH}` });
     const r = spawnSync("npx", ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", both, "--activity-log", both, "--launch-dir", f.dir], { encoding: "utf8", env });
     expect(r.status).toBe(1);
     expect(existsSync(bin.calls)).toBe(false);
@@ -992,8 +992,11 @@ describe("--launch-dir", () => {
     };
     const command = `cd ${shellQuote(process.cwd())} && exec ${shellQuote(process.execPath)} ${shellQuote(join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"))} scripts/run-claude.ts --prompt p --launch-dir ${shellQuote(f.dir)}`;
     let child = 0;
+    // A new session takes the creating client's PATH (tmux 3.4); pinned, and checked as the wrapper will see it.
+    const env = wrapperEnv({ PATH: `${bin}:${process.env.PATH}` });
+    expect(resolveAsWrapper("claude", env)).toBe(join(bin, "claude"));
     try {
-      execFileSync("tmux", ["-S", sock, "-f", "/dev/null", "new-session", "-d", "-s", "wrapper", command], { env: accountNeutralEnv({ PATH: `${bin}:${process.env.PATH}` }) });
+      execFileSync("tmux", ["-S", sock, "-f", "/dev/null", "new-session", "-d", "-s", "wrapper", command], { env });
       expect(await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8") !== "", 60_000)).toBe(true);
       child = Number(readFileSync(pidFile, "utf8"));
       expect(alive(child)).toBe(true);
@@ -1007,6 +1010,67 @@ describe("--launch-dir", () => {
       });
     } finally {
       if (child > 0 && alive(child)) process.kill(child, "SIGKILL");
+      try {
+        execFileSync("tmux", ["-S", sock, "kill-server"], { stdio: "ignore" });
+      } catch {
+        /* already gone */
+      }
+      rmSync(base, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it.runIf(tmuxAvailable())("closing the pane during the auth probe still leaves exit.json: not-run, hangup — and the probe is gone (F20)", async () => {
+    /* The test above waits for the PAID child, so it cannot see this branch: the probe is a child of
+       its own, spawned through the same runChild, and before F20 it was spawned without the launch's
+       hangup hook — runChild re-raised the SIGHUP and the wrapper died with no exit.json. */
+    const base = mkdtempSync(join(tmpdir(), "run-claude-hup-probe-"));
+    const sock = join(base, "s");
+    const f = makeLaunchDir();
+    const bin = mkdtempSync(join(tmpdir(), "fake-claude-hup-probe-"));
+    const pidFile = join(bin, "probe.pid");
+    const ran = join(bin, "paid-run");
+    writeFileSync(
+      join(bin, "claude"),
+      `#!/usr/bin/env bash\nif [ "$1" = "auth" ]; then printf '%s' "$$" > ${shellQuote(pidFile)}; exec sleep 120; fi\n`
+        + `touch ${shellQuote(ran)}\n`,
+    );
+    chmodSync(join(bin, "claude"), 0o755);
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const until = async (done: () => boolean, ms: number): Promise<boolean> => {
+      const deadline = Date.now() + ms;
+      while (!done()) {
+        if (Date.now() > deadline) return false;
+        await new Promise((settle) => setTimeout(settle, 100));
+      }
+      return true;
+    };
+    const env = wrapperEnv({ PATH: `${bin}:${process.env.PATH}` });
+    expect(resolveAsWrapper("claude", env)).toBe(join(bin, "claude"));
+    const command = `cd ${shellQuote(process.cwd())} && exec ${shellQuote(process.execPath)} ${shellQuote(join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"))} scripts/run-claude.ts --prompt p --launch-dir ${shellQuote(f.dir)}`;
+    let probe = 0;
+    try {
+      execFileSync("tmux", ["-S", sock, "-f", "/dev/null", "new-session", "-d", "-s", "wrapper", command], { env });
+      expect(await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8") !== "", 60_000)).toBe(true);
+      probe = Number(readFileSync(pidFile, "utf8"));
+      expect(alive(probe)).toBe(true);
+      execFileSync("tmux", ["-S", sock, "kill-session", "-t", "=wrapper"]);
+      expect(await until(() => !alive(probe), 20_000)).toBe(true);
+      expect(await until(() => existsSync(join(f.dir, EXIT_FILE)), 10_000)).toBe(true);
+      // The probe is not the paid run: nothing ran, and the record says the hangup is why.
+      expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+        kind: "present",
+        record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "hangup" }, usageLimit: null, permissionDenials: null },
+      });
+      expect(existsSync(ran)).toBe(false);
+    } finally {
+      if (probe > 0 && alive(probe)) process.kill(probe, "SIGKILL");
       try {
         execFileSync("tmux", ["-S", sock, "kill-server"], { stdio: "ignore" });
       } catch {

@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { readStartRevision } from "../tools/fleet/revision.js";
+import { type RunGit, readModuleStartRevision, readStartRevision } from "../tools/fleet/revision.js";
 
 const dirs: string[] = [];
 
@@ -182,5 +182,38 @@ describe("readStartRevision against a real scratch repository", () => {
     dirs.push(dir);
     const stamp = readStartRevision(dir);
     expect(stamp.kind).toBe("unknown");
+  });
+});
+
+/**
+ * The daemon and the dashboard find their checkout from `import.meta.url`. Under
+ * jsdom that is not a `file:` URL, and `fileURLToPath` threw from the first line
+ * of `runOverseer` — tests/fleet-work-evidence-e2e.test.tsx went red on dev.
+ * A stamp is a diagnostic: it may say "unknown", it may never stop a start.
+ */
+describe("readModuleStartRevision — the checkout a module sits in", () => {
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  const fakeGit =
+    (seen: string[][]): RunGit =>
+    (argv) => {
+      seen.push(argv);
+      return { status: 0, stdout: `# branch.oid ${sha}\n# branch.head dev\n`, stderr: "" };
+    };
+
+  test("a module loaded from a file resolves its checkout and reads it there", () => {
+    const seen: string[][] = [];
+    const stamp = readModuleStartRevision("file:///srv/repo/tools/overseer/daemon.ts", "../..", { run: fakeGit(seen) });
+    expect(stamp).toMatchObject({ kind: "known", sha, dirty: false });
+    expect(seen[0]?.slice(0, 3)).toEqual(["git", "-C", "/srv/repo/"]);
+  });
+
+  test("a module not loaded from a file is unknown with the reason, never throws, and runs no git", () => {
+    const seen: string[][] = [];
+    const stamp = readModuleStartRevision("http://localhost:3000/tools/overseer/daemon.ts", "../..", {
+      run: fakeGit(seen),
+      now: () => new Date("2026-09-10T20:00:00.000Z"),
+    });
+    expect(stamp).toEqual({ kind: "unknown", why: expect.stringContaining("http:"), readAt: "2026-09-10T20:00:00.000Z" });
+    expect(seen).toEqual([]);
   });
 });

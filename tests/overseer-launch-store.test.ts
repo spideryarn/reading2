@@ -67,7 +67,7 @@ function planned(candidate: string, material = `material for ${candidate}`): Lau
 }
 /** A wrapper launch's plan carries its run spec (Stage 2). */
 function plannedHeadless(candidate: string): LaunchEvent {
-  return { ...planned(candidate), launcherKind: "tmux-headless", run: { timeoutMinutes: 30, access: "review" } } as LaunchEvent;
+  return { ...planned(candidate), launcherKind: "tmux-headless", run: { timeoutMinutes: 30, access: "review", account: "pool-test" } } as LaunchEvent;
 }
 function reserved(id: LaunchOccurrenceId): LaunchEvent {
   return { v: 1, kind: "reserved", occurrenceId: id, at: T0, reservationKey: reservationKeyOf(id), slot: "claude-session#1", ownerId: "local-admission", how: "granted" };
@@ -179,11 +179,13 @@ describe("a journal that cannot be replayed whole is history-lost, with nothing 
     ["a known kind missing a field", [{ ...planned("cand-a"), material: undefined }], 1],
     ["an unexpected field", [{ ...planned("cand-a"), note: "hi" }], 1],
     // Stage 2's run spec: exact, and paired with the launcher kind.
-    ["a tmux plan carrying a run spec", [{ ...planned("cand-a"), run: { timeoutMinutes: 5, access: "review" } }], 1],
+    ["a tmux plan carrying a run spec", [{ ...planned("cand-a"), run: { timeoutMinutes: 5, access: "review", account: "pool-test" } }], 1],
     ["a wrapper plan with no run spec", [{ ...plannedHeadless("cand-a"), run: null }], 1],
-    ["a run spec with a field nobody knows", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "review", model: "opus" } }], 1],
-    ["a run spec whose timeout is not a bounded whole number", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 0.5, access: "review" } }], 1],
-    ["a run spec whose access is not a profile", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "root" } }], 1],
+    ["a run spec with a field nobody knows", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "review", account: "pool-test", model: "opus" } }], 1],
+    ["a run spec whose timeout is not a bounded whole number", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 0.5, access: "review", account: "pool-test" } }], 1],
+    ["a run spec whose access is not a profile", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "root", account: "pool-test" } }], 1],
+    ["a run spec with no pool account", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "review" } }], 1],
+    ["a run spec whose account is not a registry handle", [{ ...plannedHeadless("cand-a"), run: { timeoutMinutes: 5, access: "review", account: "Pool A" } }], 1],
     ["a plan that leaves the run spec out entirely", [Object.fromEntries(Object.entries(planned("cand-a")).filter(([key]) => key !== "run"))], 1],
     ["an id that is not the hash of its origin", [{ ...planned("cand-a"), occurrenceId: B }], 1],
     ["a conflicting duplicate plan", [planned("cand-a"), planned("cand-a", "different material")], 2],
@@ -253,7 +255,7 @@ describe("material and attempt directories", () => {
     const root = tempRoot();
     const store = open(root);
     const correlationId = correlationIdOf(A, 1);
-    const intent = { v: 1, kind: "intent", correlationId, occurrenceId: A, attempt: 1, launcherKind: "headless", material: pinOf(Buffer.from("m")), run: { timeoutMinutes: 30, access: "review" }, bootId: null, at: T0 } as const;
+    const intent = { v: 1, kind: "intent", correlationId, occurrenceId: A, attempt: 1, launcherKind: "headless", material: pinOf(Buffer.from("m")), run: { timeoutMinutes: 30, access: "review", account: "pool-test" }, bootId: null, at: T0 } as const;
     expect(store.writeIntent(A, 1, intent)).toEqual({ ok: true });
     const dir = store.attemptDir(A, 1);
     expect(dir).toBe(join(root, LAUNCHES_DIR, OCCURRENCES_DIR, A, "a1"));

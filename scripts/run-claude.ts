@@ -606,12 +606,15 @@ export function parseAuthStatus(stdout: string): AuthStatus | undefined {
  * use. The subcommand has no flag that would make it match.
  */
 export async function probeAuth(
-  env: NodeJS.ProcessEnv, cwd: string, timeoutMs = PROBE_TIMEOUT_MS,
+  env: NodeJS.ProcessEnv, cwd: string, timeoutMs = PROBE_TIMEOUT_MS, onHangup?: () => void,
 ): Promise<AuthStatus | undefined> {
   const run = await runChild({
     bin: 'claude', argv: ['auth', 'status', '--json'], timeoutMs, stream: false, env, cwd,
     // A probe takes no prompt at all, so fd 0 is closed. See ChildStdin.
     stdin: { kind: 'closed' },
+    // Under `--launch-dir`, a hangup during the probe still gets its exit.json (F20). The probe's
+    // own ending is not the run's, so the hook is told nothing about it.
+    onHangup: onHangup === undefined ? undefined : () => onHangup(),
   });
   if (run.spawnError || run.timedOut) return undefined;
   return parseAuthStatus(run.stdout);
@@ -807,7 +810,7 @@ async function main(): Promise<void> {
   // Cheap — `claude auth status` makes no model call — and the only thing that knows about an
   // inherited endpoint override, a settings-file credential, or a key this machine has never
   // approved.
-  const probe = await probeAuth(env, cwd, Math.min(PROBE_TIMEOUT_MS, Math.max(1, remaining())));
+  const probe = await probeAuth(env, cwd, Math.min(PROBE_TIMEOUT_MS, Math.max(1, remaining())), launch?.hangupBeforeRun);
   if (account.kind === 'value' && profile !== undefined) {
     const routedConflict = routedAccountConflict(account.account, profile, probe);
     if (routedConflict) fail(`--account ${account.account.name}: ${routedConflict}`);
