@@ -730,7 +730,16 @@ export async function transcriptAfter(path: string, offset: number, read: ReadRa
     const reading = (newLines: Record<string, unknown>[]): TranscriptReading => ({ size: info.size, mtimeMs: info.mtimeMs, afterOffset: offset, newLines });
     if (info.size <= offset) return reading([]);
     const from = offset === 0 ? 0 : offset - 1;
-    const end = Math.min(info.size, from + VERIFY_TAIL_BYTES + 1);
+    // G20: growth that fits in two windows is read as ONE contiguous piece.
+    // Reading a first window and a separate tail only when the tail starts past
+    // it left a seam for growth between one and two windows: the first window
+    // dropped its cut-off last line and the tail was skipped, so a session line
+    // just past a long unrelated line was never read. Beyond two windows the
+    // tail necessarily starts after the first window, and the last
+    // `VERIFY_TAIL_BYTES` suffices: every line of a resumed conversation
+    // carries its sessionId. Either way at most 2 * VERIFY_TAIL_BYTES + 1 bytes.
+    const contiguous = info.size - from <= 2 * VERIFY_TAIL_BYTES + 1;
+    const end = contiguous ? info.size : Math.min(info.size, from + VERIFY_TAIL_BYTES + 1);
     const first = (await read(path, from, end - from)).toString("utf8").split("\n");
     // Up to and including the first newline began before the offset.
     if (offset > 0) first.shift();
