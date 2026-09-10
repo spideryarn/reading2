@@ -260,10 +260,91 @@ reconciliation reached. No paid call, no default tmux server, no live store.
 
 **Remaining ambiguity, per launcher, to be written into the module header:** tmux — a session
 created and killed before its first line ran leaves no `start.json`; if the probe also finds no
-session, the occurrence is `outcome-unknown`, correctly, and only Greg can say. Headless — a
-wrapper killed with SIGKILL after spawning its child writes no `exit.json`; its identity check says
-`gone`, so the record becomes `completed (vanished)`, but whether the child's process group
-outlived it is not something the wrapper can record.
+session, the occurrence is `outcome-unknown`, correctly, and only Greg can say. Both — a
+supervisor (job shell or wrapper) killed with SIGKILL writes no `exit.json`, and its children may
+outlive it, so on the same boot that is `outcome-unknown` too (F1); only a reboot or Greg ends it.
+
+## Review dispositions — Sol, plan round 1 (these override D1–D11 where they differ)
+
+Review: [260910f-launch-protocol-plan-review-sol.md](260910f-launch-protocol-plan-review-sol.md),
+full record [260910f-launch-protocol-plan-review-sol-findings.md](260910f-launch-protocol-plan-review-sol-findings.md).
+Verdict: refuse as written, three established P1s. All thirteen accepted; each checked against the
+code.
+
+- **F1 (P1) — a supervisor's disappearance is not the child's completion. Accepted.** The recorded
+  pid is the job shell or the wrapper, and Claude/Codex run as its children (the wrapper's in their
+  own process group), so SIGKILL of the supervisor can leave the child running. **`completed`
+  requires a valid correlation-bound `exit.json`, or `other-boot`** (a reboot ends every process of
+  the recorded boot). A same-boot disappearance of the supervisor without `exit.json` becomes
+  `outcome-unknown` and keeps its reservation; Greg's `dispose` is the way out. There is no
+  `completed (vanished)` arm. The contrary headless-ambiguity sentence below is struck. (Not taken:
+  scanning `/proc/*/environ` for the correlation id as descendant evidence — possible later, and
+  worth nothing while no job launches.)
+- **F2 (P1) — `history-lost` needs a real exit. Accepted.** A holed or illegal journal refuses
+  `plan()` until Greg submits an attributed `resolve-history --why … --accept-hidden-launch-risk`
+  request through the inbox. The daemon then preserves the old journal byte-for-byte (renamed, never
+  rewritten), inventories what it can still see — parseable occurrences, artefact directories, the
+  owner's reservations — and starts a fresh journal whose first record is `history-reset`, naming
+  the preserved file and saying the hole may conceal a launch nobody can enumerate. Reservations the
+  owner still holds stay held and are listed; each is released only by its own `dispose`. The same
+  rule for the admission owner's journal.
+- **F3 (P1) — the shell artefact must be durable and fail-closed. Accepted.** One checked helper,
+  generated from `launch-artefacts.ts`: create the temp file exclusively (`set -C` in a subshell),
+  write, `sync` the file, `mv`, `sync` the directory. Any failure goes through gjd-remote's existing
+  `failTo`, so **Claude is not invoked without a durable `start.json`**. `exit.json` uses the same
+  helper with `_gjd_claude_status` already saved; its failure leaves a note and never claims evidence.
+  Generated-job tests inject write, sync and rename failures.
+- **F4 (P2) — evidence by precedence, not a global veto. Accepted.** D7 becomes: valid `exit.json` →
+  `completed`; else `other-boot` → `completed` (interrupted by reboot, no exit code); else a matching
+  live identity or a tmux session carrying the id → `observed-running`; else, if any input the
+  remaining decision needs is unavailable, no change; else absence is inconclusive →
+  `outcome-unknown`. Weaker or unavailable evidence never overrides stronger conclusive evidence.
+- **F5 (P2) — the material is bound to what launches. Accepted.** An existing id with a different
+  origin, launcher kind, admission class, material size or hash is a conflict, not an idempotent
+  return. Immediately before `launching`, `material.txt` is re-read and re-hashed; the launcher is
+  handed those verified bytes and has no prompt parameter of its own.
+- **F6 (P2) — wrappers instrument the whole invocation. Accepted.** Not `runChild`, not one credential
+  attempt: `run-codex`'s read-only fallback can legitimately run twice and its write-capable
+  no-fallback rule stays load-bearing. One final `exit.json`, written after the wrapper's existing
+  final classification, through a synchronous outer finaliser that `fail()`'s `process.exit` also
+  reaches. The id joins the already-sanitised child env; nothing else moves.
+- **F7 (P2) — release after `failed-before-launch` and `disposed` too. Accepted.** A durable
+  terminal or disposition record licenses reconciliation to release a still-held reservation; if
+  the owner already says none, append `released`. No new attempt starts while that is unsettled.
+  Crash tests after the terminal append and between owner release and `released`.
+- **F8 (P2) — Stage 3 is too broad; keep D5. Accepted.** D5's separate owner stays: folding it into
+  the journal would pass the lost-reply test by deleting the failure mode. `lookup` returns only a
+  `reserved` grant or `none`. **The fleet route, client, panel and the `server.ts`/`App.tsx` lines
+  move to Scheduled dispatch**, when there are live occurrences to show; with no production caller
+  the page could only draw an empty state. That drops both out-of-set asks, and it departs from the
+  brief's "one section under `tools/fleet/web/src/`" — said in the debrief. Greg's controls in this
+  stage are the CLI: `list`, `show`, `dispose`, `resolve-history`.
+- **F9 (P2) — the prefix that makes "reserved ⇒ never invoked" true is structural. Accepted.**
+  `reserve → append reserved → write intent → append launching → invoke` is one synchronous,
+  non-yielding function; the owner is synchronous; reconciliation runs in the same event loop and
+  so cannot interleave. A failed `launching` append returns without invoking. Scheduler and recovery
+  get only `launchOccurrence`; the concrete launchers stay inside the protocol's composition, and a
+  test walks production imports to prove nothing else calls an adapter. A future asynchronous owner
+  needs an explicit current-attempt guard instead.
+- **F10 (P2) — the projection is bounded. Accepted.** At most 200 non-terminal records, most
+  actionable first, plus the newest 50 terminal, with `totalNonTerminal` and `omittedNonTerminal`;
+  crossing 200 is a visible overflow. Omitted records stay reachable through the CLI.
+- **F11 (P2) — replay validates legality, not only syntax. Accepted.** An exact runtime parser per
+  record; replay checks immutable fields, identity, monotonic attempts and legal transitions, and an
+  unknown schema, malformed known kind, conflicting duplicate or illegal transition is
+  `history-lost` with nothing folded past it. The `/proc` readers are reused from
+  `tools/fleet/execution-identity.ts` (or moved to a neutral leaf), not written a second time.
+- **F12 (P2) — the drill must fail on a no-op. Accepted.** Exact expected counts per boundary
+  (effects 0 before invocation, 1 at and after it; exactly one matching grant while held, none after
+  a licensed release), with the external marker counted independently of the protocol's own
+  counter, and a negative control: a no-op launcher must make the first post-invocation row fail.
+- **F13 (P2) — validation is not quoting. Accepted.** `SPIDERYARN_LAUNCH_DIR` goes through the
+  existing `shq` at every layer; both new options sit before the unchanged final `-p -`; the adapter
+  writes the verified material plus newline and closes stdin. Tested with a path holding a space, a
+  quote and `$()`, and a newline refused.
+- **Suspicion 3 — D10 stands.** Sol: defensible, since wiring now would double-record an armed path.
+  Added: a test asserting `launchOccurrence` has no production caller yet, so "built but uncalled"
+  is explicit.
 
 ## Stages
 
@@ -319,20 +400,23 @@ Red first:
 - A scratch-socket test: the tmux adapter creates a session whose first process sees the id,
   the probe finds it by id, and a session that exits at once still leaves `start.json` + `exit.json`.
 
-### Stage 3: the daemon, the controls, the page, the drill
+### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
 per checkpoint, drain the inbox, write `launches.json` — small targeted edits outside the usage
-pass, merged first), `tools/overseer/launch-inbox.ts`, `scripts/overseer-launches.ts`,
-`tools/overseer/launch-projection.ts`, `tools/fleet/wire.ts` (appended block),
-`tools/fleet/launches-feed.ts`, `tools/fleet/routes-launches.ts`, `tools/fleet/server.ts` and
-`tools/fleet/web/src/App.tsx` (one line each, if approved), `tools/fleet/web/src/LaunchesPanel.tsx`,
-`tools/fleet/web/src/launches-client.ts`, `scripts/launch-protocol-drill.ts`, tests.
+pass, merged first), `tools/overseer/launch-inbox.ts`, `scripts/overseer-launches.ts`
+(`list`/`show`/`dispose`/`resolve-history`), `tools/overseer/launch-projection.ts`,
+`tools/fleet/wire.ts` (appended block of the projection's types, for Scheduled dispatch's page to
+read), `scripts/launch-protocol-drill.ts`, tests.
 
-Red first: a dispose of an unknown occurrence is refused; a replayed request is applied once; a
-dispose of a completed occurrence is refused; the feed's four arms; the route's bytes through the
-client parser; the drill's output with every boundary ≤ 1 / ≤ 1.
+Red first: a dispose of an unknown or completed occurrence is refused; a replayed request is
+applied once; a crash after `disposed` still releases (F7); `resolve-history` preserves the old
+journal byte-for-byte and starts a fresh one with `history-reset` (F2); the projection's bound and
+overflow count (F10); the drill's exact counts, and its no-op negative control failing (F12).
 
 ## Status
 
-**2026-09-10 — Stage 0 in progress.** Plan written; Sol plan review next.
+**2026-09-10 — Stage 0 done.** Plan d7f5f3c7 reviewed by Sol (read-only, one round): refused on
+three established P1s, all thirteen findings accepted and folded in above. No second plan round —
+the dispositions adopt Sol's own replacement wording, and the stage reviews will check the code
+built from it. Stage 1 next.
