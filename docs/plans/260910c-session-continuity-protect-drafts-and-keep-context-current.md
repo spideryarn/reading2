@@ -33,6 +33,15 @@ now a named `<section>`, implicitly a `region`, so its label is announced; biome
 **Its one flag, taken as a follow-up:** `MessagesApi.recent` takes no abort signal, so a read the
 page abandons still finishes on the server — the same class as F5 for the feed.
 
+**The abort follow-up — built** (`f5fe6fec`), an Opus subagent. `MessagesApi.recent(row, signal?)`
+hands the signal to `fetch` only when it is defined, the shape F5 set for the other two feeds.
+**It found the step the brief did not name:** `App` hands the page the messages API wrapped in
+`withClockSkew`, not the API itself, and that wrapper dropped the signal — so tests written against
+the hook alone would have passed while the production read stayed uncancellable. The wrapper now
+passes it on, with one test on the wrapper and one that mounts the real `App`. Seven of the eight
+new tests were red before any source change, and each abort test also asserts the signal was *not*
+aborted a moment earlier, so a signal that is always aborted cannot pass.
+
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
 2026-09-09, dispatched by the Overseer 2026-09-10.
@@ -715,6 +724,32 @@ stays a string because the renderers in `ActionButtons.tsx` take one.
 stale threshold of `2 × pollMs + ACTIONS_READ_DEADLINE_MS`, checked against the tests that pass
 `actionsPollMs={0}`; and `SessionQueue` currently draws its error *instead of* its status line,
 which 4b must check still leaves the items drawn underneath.
+
+### Stage 4b — built
+
+An Opus subagent: `SessionDetail.tsx`, a targeted edit to `ActionButtons.tsx`, and a new describe in
+`tests/fleet-web.test.tsx`. One line, `read {age} ago`, at the top of "Waiting to go to it", wearing
+a tooltip that says the age covers both the queue and the list of actions above it. It is absent
+before the first good read and while reads work; it appears once no read has worked for
+`actionsStaleAfterMs(pollMs) = 2 × pollMs + ACTIONS_READ_DEADLINE_MS` — 28 s at the real 10 s poll,
+because a working poll leaves at most one interval plus one read between good feeds and one read
+lost to its deadline adds at most one more — or at once when a read fails, followed in the alarm
+colour by the reason. At a 0 ms poll the deadline is the floor, so a feed is never stale on arrival.
+The last good queue stays drawn underneath.
+
+- **Drawn once, above the queue, rather than beside both the queue and the action buttons** — a
+  deliberate reading of F8's "beside the action and queue surfaces". The buttons come from a list
+  that does not change while the server runs, and a button posts and lets the server decide, so an
+  old list changes nothing you would do; an old queue does. The tooltip says the age covers both.
+- **A side effect on a shared component, caught and made opt-in.** Its first build changed the
+  empty-queue branch of `SessionQueue` to say "Nothing was waiting at the last read that worked."
+  when a last good read exists — right for the session detail, where the error is already drawn in
+  the age line above, but `SessionQueue` is shared with the **Overseer** tab's `FleetQueues`, which
+  draws no age: a held, empty queue with a failed read there lost its reason. Sent back: the new
+  sentence is now behind an `errorDrawnAbove` prop only `SessionDetail` sets, the Overseer tab's
+  wording is back as it was, and a test on that tab went red on the first build and passes now.
+- **One vacuous test of its own, caught by itself:** a regex beginning `\b` against text that runs
+  straight into it ("…go to itread 0s ago") made every `not.toMatch` pass whatever was drawn.
 
 **One reader, not two — built.** 4a reported that its `actionsReader` and Stage 3's `feedReader`
 repeated the same core almost line for line — one read in flight, one pending, a deadline racing
