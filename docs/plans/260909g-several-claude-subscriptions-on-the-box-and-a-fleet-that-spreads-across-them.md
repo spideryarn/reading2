@@ -511,7 +511,7 @@ likely to go wrong silently, so it is enumerated rather than asserted:
 |---|---|
 | the config dir | create if absent; **never** delete or recreate |
 | `settings.json` | **merge** the keys we own, preserving hand edits; never overwrite the file |
-| the login | **skip entirely** if `auth status` already names the expected email — a re-login rotates a credential live sessions may be using |
+| the login | **skip entirely** if `/api/oauth/profile` already names the expected email — a re-login rotates a credential live sessions may be using |
 | `projects/` symlink | create only if absent; **refuse loudly if a real directory is there**, never replace it |
 | seeded `.claude.json` keys | merge named keys only; never copy the file wholesale (it carries identity, eligibility caches and live-session state) |
 | the registry entry | update in place, preserving fields it did not write |
@@ -530,6 +530,26 @@ re-run it" is the worst possible place for it.
 **I do not run the login step.** It is interactive, it is Greg's credential, and a wrong move rotates
 a live one. The login branch is tested with a fake `claude` on `PATH`; the real run is his.
 
+**The predicate is the profile, not `auth status`** — corrected 2026-09-10, and the plan said the
+wrong thing until then. A config dir can hold a valid credential and still report `email: null`,
+because identity comes from `.claude.json` rather than from the credential; so an `auth status` email
+is not evidence of who owns the credential. `/api/oauth/profile` is.
+
+**As built, the matrix fails closed in five directions** rather than the four specified, and the
+extra one is the important one:
+
+| state | what happens |
+|---|---|
+| profile matches the expected email | **skip** the login, and say so |
+| profile names someone else | **refuse**; the credential is not replaced |
+| profile unavailable **but a credential is present** | **refuse, and do not replace it** — names the recovery (`claude auth logout`, then re-run) |
+| `auth status` itself unreadable | **refuse** — it could not prove the account is logged out |
+| genuinely logged out, no credential | offer the login, then **re-verify the profile afterwards** |
+
+The third row is what stops an expired token (a 401, which is routine) from triggering a re-login
+that rotates a credential the fleet is using. The fourth is stricter than asked for and right: not
+being able to *prove* logged-out is not the same as being logged out.
+
 #### Designed so the Codex version is not a rewrite
 
 Codex accounts are next (queued as `qi-whppvck5`, Greg: *"we're going to want to do all the same
@@ -546,6 +566,23 @@ operations behind a per-family interface. Nothing Codex-specific is built now.
 
 **Why the registry first:** it is the one new concept everything else reads, and Stage 0 has already
 established what goes in it.
+
+#### The orchestrator account cannot be registered, and that is accepted for now
+
+**Discovered by registering a real account, 2026-09-10.** `add` requires `--config-dir`, but the
+orchestrator/ambient account is precisely *"no `CLAUDE_CONFIG_DIR`"* — and pointing one at
+`/home/greg/.claude` is **actively wrong**, not merely redundant: the CLI then looks for
+`.claude.json` *inside* the directory, where the default account's does not live, and the session
+gets no identity, no user-level MCP servers, no trust flags and no first-run state.
+
+The launcher already handles ambient correctly — `stateDir: null` emits no `env` prefix at all, just
+plain `claude` — so the gap is only that `add` cannot express it.
+
+**Accepted as is** (the Overseer, 2026-09-10): the registry holds pool accounts only, an unflagged
+launch stays ambient, and `auto` picks from the pool. That is the wanted behaviour anyway, so
+**`add --ambient` is not to be built unless the wizard turns out to need it.** Recorded here so the
+next reader does not mistake the gap for an oversight, or "fix" it by registering `main` with a
+`--config-dir` — which would be the one thing that actively breaks.
 
 **Where it lives.** Outside the repo — credentials never go in git:
 
@@ -728,6 +765,15 @@ Sol's round-1 P0-2, and the Overseer has authorised the change.
 
 ### Stage 3 — usage read per account
 
+> **Status: PART DONE, and the remaining part is the larger one.** The *printed* per-account block
+> landed on `dev` at `daa264aa` — `overseer usage` reads each registered account live and prints one
+> line per account. **Stage 3 is not finished.** The stored history, the daemon pass, the wire
+> `UsageReport` and the checkpoint are all still **single-account**, and making them plural needs a
+> **history schema change**: the chart cuts every series absent from the current record, so
+> alternating one-account lines would draw as disconnected points rather than two lines.
+> **[Stage 4](#stage-4-usage-limits-one-section-per-account-and-add-account), the Usage Limits tab,
+> depends on that plural work and not on what has landed.** Do not read `daa264aa` as Stage 3 done.
+
 > **Rewritten 2026-09-09** after Stage 0 and Sol's round-2 review. The previous version looped over
 > per-dir caches under the pool model. Both the source and the data model changed.
 
@@ -785,6 +831,70 @@ attributed to an account*.
 **The file set is therefore bigger than the earlier plan said**: history schema, wire types,
 checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
 JSON, the UI, and their tests.
+
+#### `sessions/` is shared too, and why that was not optional
+
+`<config dir>/sessions/<pid>.json` is **two things at once**: the listing behind
+`claude agents --json`, and the peer registry behind `SendMessage`/`ListAgents` — it carries `name`,
+`messagingSocketPath` and `sessionId`. The sockets themselves already live in the shared
+`/run/user/1000/cc-socks/`; only this listing was per config dir.
+
+So an unshared pool session was **invisible and mute**: `running-but-unlisted` in the register, and
+unable to message the Overseer at all. For a dispatched agent whose job ends in a debrief, that is
+close to fatal.
+
+**Sharing is safe here for the reason sharing memory would not be.** These files are pid-keyed and
+pids are unique on a box, so each has exactly one writer; the record also carries `procStart` and
+`pidDomain`, so the CLI disambiguates pid reuse itself. That is the opposite of `MEMORY.md`, where
+many writers share one path. **This plan had that backwards at first** — it cited pid-keying as the
+hazard, when pid-keying is precisely what makes it safe.
+
+**Proven live, 2026-09-10**, on two sessions that were already running:
+
+| | ambient `claude agents --json` |
+|---|---|
+| 02:04:14, before the re-seed | **10** — neither pool session |
+| 02:04:40, after | **12** — `admission-visibility` and `resource-history` by name |
+
+**No restart**, because the migration copies the existing records across before swapping the
+directory. Without that copy, re-seeding would have made two working sessions *vanish* rather than
+appear — the opposite of the bug being fixed.
+
+And from the pool session itself: `ListAgents` went from **2 rows, both Remote Control, no local
+sessions at all** to **13 peers**, and a `SendMessage` to the Overseer that had failed at ~00:50Z
+with *"No agent named 'Overseer' is reachable"* now succeeds. It also confirmed the shared
+`projects/` works **in both directions** — it loaded ~70 auto-memory files and wrote one back.
+
+##### The cheap tell, if this ever recurs
+
+The failure was not silent, but it was **ambiguous in the worst way**: *"No agent named 'Overseer' is
+reachable"* reads as *that peer has gone*, not as *you cannot see any peer*. A session hunting a
+missing Overseer will not find a seeding fault.
+
+**The diagnostic that is unambiguous — `admission-visibility`'s, and worth more than the error
+message — is `ListAgents` showing zero local sessions on a box that plainly has a dozen.** Absence of
+everything is a different claim from absence of one thing, and only the first names the real fault.
+
+#### The attribution proof, measured 2026-09-10 on live sessions
+
+**This is the evidence the Usage Limits tab rests on**, and until it existed the per-account claim was
+an inference from how the endpoint *ought* to behave.
+
+| `greg@mindstone.com` | five-hour | seven-day |
+|---|---|---|
+| 00:11:58Z, before any pool session | **0%** | 3% |
+| 00:33:02Z, two pool sessions running on it | **2%** | 3% |
+
+Work dispatched onto a pool account moves **that account's own reading**, and nothing was done to
+mindstone in between except run sessions on it. So `/api/oauth/usage` genuinely reports per account,
+and the tab can show one section per account rather than one number for the box.
+
+**The five-hour window is the sensitive instrument, and the seven-day is not.** The seven-day sat at
+3% throughout — as expected, since it is an integer percentage over a far larger denominator. Anyone
+checking attribution, or debugging a tab that looks stuck, should watch the five-hour: **a flat
+seven-day over twenty minutes is not evidence of anything**, and reading it as such would have
+produced a confident wrong conclusion here. The first check was very nearly reported that way, off a
+reminder set an hour too early.
 
 #### When the endpoint moves, we must find out — containment is not detection
 

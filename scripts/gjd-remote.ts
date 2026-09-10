@@ -2573,7 +2573,7 @@ function assertAccountRequest(requested: string | undefined): void {
 }
 
 /** Nothing — not even a blank line — when there is no resolved account. */
-function accountJobParts(account: ResolvedLaunchAccount | undefined, name: string, sessionUuid: string): string[] {
+function accountJobParts(account: ResolvedLaunchAccount | undefined, name: string, sessionUuid: string, cwd: string): string[] {
   if (account === undefined) return [];
   const failureOutcome = accountOutcomeCommand(sessionUuid, "failed");
   return [
@@ -2586,7 +2586,7 @@ function accountJobParts(account: ResolvedLaunchAccount | undefined, name: strin
         name,
         `FATAL: Claude account ${account.name} failed its provider identity check — refusing to start on another account`,
       )}; }`,
-    }),
+    }, undefined, cwd),
   ];
 }
 
@@ -2676,7 +2676,7 @@ async function cmdNewClaude(
   // conversation's transcript later, and so how we read back its title.
   const sessionId = randomUUID();
   const accountRequest = requestedClaudeAccount(opts.account);
-  const resolved = sshRun(accountResolveCommand(accountRequest, name, sessionId));
+  const resolved = sshRun(accountResolveCommand(accountRequest, name, sessionId, opts.wait?.seconds ?? 0));
   if (resolved.status !== 0) die(accountResolveFailure(resolved.stderr, accountRequest));
   const parsedAccount = parseResolvedLaunchAccount(resolved.stdout);
   if (parsedAccount.kind === "refused") {
@@ -2740,7 +2740,7 @@ async function cmdNewClaude(
     opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
     // Identity is checked after the optional wait: a credential can rotate
     // during those hours, and only the state immediately before spend counts.
-    ...accountJobParts(account, name, sessionId),
+    ...accountJobParts(account, name, sessionId, dir),
     // One line on the box, one instant before Claude starts, and it is the ONLY
     // trustworthy answer to "did this job ever run?". The laptop cannot know:
     // a session that a reboot ate mid-`sleep` and a session that finished

@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   authConflict, authHint, buildClaudeArgs, claudeEnv, credentialLine, credentialsPassed, parseArgs,
-  parseAuthStatus, parseResultEvent, resolveRunClaudeAccount, stderrTail,
+  parseAuthStatus, parseResultEvent, resolveRunClaudeAccount, routedAccountConflict, stderrTail,
 } from "../scripts/run-claude.js";
 import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
@@ -114,12 +114,48 @@ describe("account routing", () => {
       ANTHROPIC_API_KEY: "secret-b",
       ANTHROPIC_BASE_URL: "https://wrong.invalid",
       CLAUDE_CODE_OAUTH_TOKEN: "secret-c",
+      CLAUDE_FUTURE_PROVIDER: "some-new-precedence-rung",
     }, "machine", [], "/configs/pool-a");
     expect(env.CLAUDE_CONFIG_DIR).toBe("/configs/pool-a");
     expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(env.CLAUDE_FUTURE_PROVIDER).toBeUndefined();
+  });
+
+  it("refuses a routed child when the live profile no longer matches the registry pin", () => {
+    const account = registry.kind === "value" ? registry.accounts[0]! : null;
+    if (!account) throw new Error("fixture account missing");
+    expect(routedAccountConflict(
+      account,
+      {
+        kind: "value",
+        configDir: account.stateDir,
+        takenAt: "2026-09-10T00:00:00.000Z",
+        accountUuid: "somebody-else",
+        orgId: account.providerTenantId,
+        email: account.displayEmail!,
+      },
+      { loggedIn: true, method: "claude.ai", provider: "firstParty" },
+    )).toMatch(/registry pin|identity/i);
+  });
+
+  it("refuses routed paid work when the exact child environment has no effective-auth answer", () => {
+    const account = registry.kind === "value" ? registry.accounts[0]! : null;
+    if (!account) throw new Error("fixture account missing");
+    expect(routedAccountConflict(
+      account,
+      {
+        kind: "value",
+        configDir: account.stateDir,
+        takenAt: "2026-09-10T00:00:00.000Z",
+        accountUuid: account.providerAccountId,
+        orgId: account.providerTenantId,
+        email: account.displayEmail!,
+      },
+      undefined,
+    )).toMatch(/no answer|cannot.*bill|effective auth/i);
   });
 });
 

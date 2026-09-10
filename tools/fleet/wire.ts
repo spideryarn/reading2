@@ -3780,3 +3780,79 @@ export type WorkFeed =
 export type StoredWorkTurn =
   | { kind: "not-due" }
   | { kind: "due"; result: StoredWork };
+
+/* ================================================================== *
+ * ADMISSION FORECAST — A HYPOTHETICAL ANSWER, NEVER A RESERVATION
+ * ================================================================== */
+
+export type AdmissionKind = "test" | "review" | "browser";
+
+/** DECLARED by the requester, not measured. Nothing verifies it, and today nothing uses it. */
+export type AdmissionCostClass = "light" | "moderate" | "heavy";
+
+export type AdmissionRequest = {
+  kind: AdmissionKind;
+  /** Null when this transport had no caller declaration to carry. */
+  cost: AdmissionCostClass | null;
+  /**
+   * Who would do the work. A full execution identity rather than a bare pid,
+   * because a pid can be reused after the process it named exits.
+   */
+  owner: ExecutionToken | null;
+  /** The CALLER's clock. Diagnostic only — never sort or assign priority from it. */
+  requestedAtClientMs: number | null;
+};
+
+/** What sort of statement a block contains. There is deliberately no enforcement label. */
+export type AdmissionSignalLabel = "forecast" | "observed" | "not-modelled";
+
+/** The gate's revision paired with the only prose this dashboard knows for that revision. */
+export type AdmissionPolicy =
+  | { gateVersion: number; explanation: string; whyWithheld: null }
+  | { gateVersion: number; explanation: null; whyWithheld: string };
+
+export type AdmissionOutcome =
+  | {
+      kind: "would-admit" | "would-reduce";
+      /** The machine's default ask; a future run's own environment may ask for another value. */
+      nominalWorkers: number;
+      nominalWorkersSource: "machine-default";
+      workers: number;
+      capacity: number;
+      availableBytes: number;
+      reserveBytes: number;
+      /** Qualifies these forecast worker numbers; irrelevant outcomes do not carry it. */
+      caveat: string;
+    }
+  | {
+      kind: "would-refuse";
+      /** Verbatim output from the dashboard's call; it uses real-run grammar and names the dashboard pid. */
+      forecastCallMessage: string;
+      messageContext: "dashboard-forecast-call";
+    }
+  | { kind: "not-applicable"; why: string }
+  | { kind: "unknown"; why: string }
+  | { kind: "not-modelled"; why: string };
+
+/** `GET /api/admission`: a fresh forecast. It changes and reserves nothing. */
+type AdmissionPayloadBase = {
+  schema: 1;
+  request: AdmissionRequest;
+  /** When the server completed building this answer, by the SERVER's clock. */
+  computedAtMs: number;
+};
+
+/** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */
+export type AdmissionPayload = AdmissionPayloadBase &
+  (
+    | {
+        label: "forecast";
+        policy: AdmissionPolicy;
+        outcome: Exclude<AdmissionOutcome, { kind: "not-modelled" }>;
+      }
+    | {
+        label: "not-modelled";
+        outcome: Extract<AdmissionOutcome, { kind: "not-modelled" }>;
+        policy?: never;
+      }
+  );

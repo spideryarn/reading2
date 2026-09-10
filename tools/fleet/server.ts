@@ -33,6 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
+import { makeAdmission } from "./admission-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
@@ -171,6 +172,7 @@ const retention = makeHealthRetention({
   dir: process.env["FLEET_HEALTH_DIR"],
   refreshMs: REFRESH_MS,
 });
+const admission = makeAdmission();
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
@@ -714,6 +716,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // The last day of box health, for the chart on Box health. Read-only, and it
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
+  if (admission.route.handle(req, res)) return;
 
   // Whether dev is green, and the day behind it. Read-only, and it serves the
   // snapshot the refresh loop built rather than computing anything here.
