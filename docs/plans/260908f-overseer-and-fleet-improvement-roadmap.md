@@ -1180,6 +1180,21 @@ more (twenty-one P1s across four reviews). The would-refuse replay was cut rathe
 design survives in the plan's §6. Evidence not in the plan: the box killed the session's
 background processes twice at 17–20 GB available with 13.4 GB swapped, leaving no trace.
 
+**Stage 4 landed (2026-09-10, Overseer): on dev at 11189395, session `admission-census`, plan
+[260910d](260910d-admission-census-recognised-process-roots.md); the stage is complete.** The
+admission section's third block, "Recognised live process roots", counts vitest runners, Codex
+batch jobs and browsers observed during the census's last pass over `/proc`, with the pass's start
+and end, per-class uncertain, changed-under-read and unreadable counts, and claims presence only
+(never "heavy", never "active", and a Codex run is never called a review; even "alive right now"
+was too strong over a 0.3–0.6 s async pass). The worst bug was found by measuring on the box, not
+by any test or reviewer: Codex's sandbox sees a three-process pid namespace, so every fixture was a
+tidy table, while the real box returned 387 of 876 rows unreadable (kernel threads and zombies with
+empty cmdlines). Reuse surfaced a live Kill bug: `isVitestRunner` matched any argv token naming a
+vitest path, so the test-suites kill policy could have killed an editor; it now matches the
+executable position only and refuses strictly more. Final measurement: 875 processes, a 428 ms
+pass, 12.6 ms worst loop stall on a 30 s end-chained cadence. Reservation: the section's browser
+refresh grew ~130 lines of lifecycle code in review, the first thing to simplify if it moves.
+
 ### Stage: Enforced launch admission — bound work we actually launch
 
 - [ ] Decide with evidence whether existing memory admission plus serial parent gates is sufficient.

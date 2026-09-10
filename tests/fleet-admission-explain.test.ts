@@ -20,7 +20,7 @@ import {
   parseAdmissionRequest,
   type AdmissionRouteDeps,
 } from "../tools/fleet/routes-admission.js";
-import type { AdmissionPayload, AdmissionRequest } from "../tools/fleet/wire.js";
+import type { AdmissionCensusState, AdmissionPayload, AdmissionRequest } from "../tools/fleet/wire.js";
 
 const dirs: string[] = [];
 const previousOverride = process.env.VITEST_MAX_WORKERS;
@@ -59,6 +59,11 @@ function values(over: Partial<Parameters<typeof explainAdmission>[0]> = {}): Par
 }
 
 function routeDeps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
+  const census: AdmissionCensusState = {
+    kind: "not-yet-computed",
+    label: "observed",
+    startedAtMs: 1_789_000_000_000,
+  };
   return {
     nowMs: () => 1_789_000_000_000,
     readMemorySnapshot: () => linux(FIXED_RUN_PEAK_BYTES + 10 * PER_WORKER_PEAK_BYTES),
@@ -66,6 +71,8 @@ function routeDeps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     resolveParallelWorkers: () => 2,
     policyVersion: ADMISSION_POLICY_VERSION,
     readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
+    readCensus: () => census,
+    censusCadenceMs: 30_000,
     ...over,
   };
 }
