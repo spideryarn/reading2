@@ -116,12 +116,12 @@ const startedNote: DaemonNote = {
 
 describe("telling a dead daemon from a quiet one", () => {
   test("nothing at all is never-run, not healthy", () => {
-    const standing = daemonStanding({ read: { kind: "absent" }, lastNote: null, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: { kind: "absent" }, notes: [], nowMs: NOW, alive: () => true });
     expect(standing.state).toBe("never-run");
   });
 
   test("a fresh checkpoint from a live pid, with no stopping note, is running", () => {
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: startedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [startedNote], nowMs: NOW, alive: () => true });
     expect(standing.state).toBe("running");
   });
 
@@ -132,10 +132,10 @@ describe("telling a dead daemon from a quiet one", () => {
     // green for any value of the constant, which is how a threshold raised to
     // thirty hours survived the first mutation sweep of this file.
     expect(STALL_AFTER_MS).toBeLessThanOrEqual(120_000);
-    const standing = daemonStanding({ read: reads(checkpointAt(15 * 60_000)), lastNote: startedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(15 * 60_000)), notes: [startedNote], nowMs: NOW, alive: () => true });
     expect(standing.state).toBe("stalled");
     expect(standing.detail).toContain("has not written");
-    expect(daemonStanding({ read: reads(checkpointAt(STALL_AFTER_MS + 1_000)), lastNote: startedNote, nowMs: NOW, alive: () => true }).state).toBe("stalled");
+    expect(daemonStanding({ read: reads(checkpointAt(STALL_AFTER_MS + 1_000)), notes: [startedNote], nowMs: NOW, alive: () => true }).state).toBe("stalled");
   });
 
   test("a checkpoint this build cannot read is CANNOT TELL, never NEVER RUN", () => {
@@ -152,7 +152,7 @@ describe("telling a dead daemon from a quiet one", () => {
     // person who reads NEVER RUN goes and starts a second daemon.
     const standing = daemonStanding({
       read: { kind: "unusable", why: "checkpoint-malformed", detail: "schema 1 is not 2" },
-      lastNote: startedNote,
+      notes: [startedNote],
       nowMs: NOW,
       alive: () => true,
     });
@@ -170,14 +170,75 @@ describe("telling a dead daemon from a quiet one", () => {
   test("a stopping note means it went on purpose, whatever the pid says", () => {
     // A pid is reusable, so "the pid is alive" is weak evidence on its own; the
     // daemon's own last word is not.
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: stoppedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [stoppedNote], nowMs: NOW, alive: () => true });
     expect(standing.state).toBe("stopped");
   });
 
   test("no stopping note and a pid that is gone is a kill, and says so", () => {
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: startedNote, nowMs: NOW, alive: () => false });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [startedNote], nowMs: NOW, alive: () => false });
     expect(standing.state).toBe("killed");
     expect(standing.detail).toContain("4242");
+  });
+});
+
+describe("a stop closes only its own start: standing by instance, not by the last note", () => {
+  // GPT Sol's F3 on plan 260910f. The checkpoint names ONE instance; the notes
+  // log spans restarts. Reading the log's last line as if it described the
+  // checkpoint pairs one process's clean stop with another's checkpoint.
+  // Through the real readers, from files, with a pid above Linux's pid_max so
+  // "gone" does not depend on what happens to be running on the box.
+  const DEAD_PID = 2 ** 30;
+  const startOf = (instanceId: string, at: string, pid = DEAD_PID): DaemonNote => ({ ...startedNote, instanceId, at, pid });
+  const stopOf = (instanceId: string, at: string): DaemonNote => ({ kind: "daemon-stopped", at, instanceId, why: "SIGTERM" });
+
+  function storeWith(notes: DaemonNote[]): string {
+    const root = tempRoot();
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(checkpointAt(20 * 60_000, DEAD_PID)));
+    writeFileSync(join(root, NOTES_FILE), notes.map((note) => `${JSON.stringify(note)}\n`).join(""));
+    return root;
+  }
+  const daemonLine = (root: string): string => statusLines(root, NOW).find((line) => line.startsWith("daemon")) ?? "";
+
+  test("A checkpointed and was killed; B started and stopped before its first checkpoint", () => {
+    const line = daemonLine(
+      storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), startOf("i2", "2026-09-08T07:50:00.000Z"), stopOf("i2", "2026-09-08T07:51:00.000Z")]),
+    );
+    // B's clean stop is B's; it says nothing about the checkpoint, which is A's.
+    expect(line).not.toMatch(/stopped on purpose at [^;]*; the last checkpoint/);
+    expect(line).toContain("instance i2 started at 2026-09-08T07:50:00.000Z");
+    expect(line).toContain("without writing a checkpoint");
+    expect(line).toContain("the checkpoint on disk is instance i1's");
+    // And A is not dressed up as having stopped cleanly.
+    expect(line).toMatch(/i1 wrote no stopping note/);
+  });
+
+  test("B started and was killed before its first checkpoint, after A stopped cleanly", () => {
+    const line = daemonLine(
+      storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), stopOf("i1", "2026-09-08T07:40:00.000Z"), startOf("i2", "2026-09-08T07:50:00.000Z")]),
+    );
+    expect(line).toMatch(/^daemon\s+KILLED/);
+    expect(line).toContain("instance i2");
+    expect(line).toContain("without writing a checkpoint");
+    expect(line).toContain("i1 stopped on purpose");
+  });
+
+  test("A killed with no later instance still reads killed", () => {
+    expect(daemonLine(storeWith([startOf("i1", "2026-09-08T07:00:00.000Z")]))).toMatch(/^daemon\s+KILLED — pid \d+ is gone/);
+  });
+
+  test("A stopped cleanly reads stopped", () => {
+    expect(daemonLine(storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), stopOf("i1", "2026-09-08T07:59:00.000Z")]))).toMatch(
+      /^daemon\s+STOPPED — stopped on purpose at 2026-09-08T07:59:00.000Z/,
+    );
+  });
+
+  test("an OLDER instance's stop does not make the checkpoint's own instance stopped", () => {
+    // i0 stopped, then i1 started, checkpointed and was killed: the last stop in
+    // the log is i0's, and it closes only i0's start.
+    const line = daemonLine(
+      storeWith([startOf("i0", "2026-09-08T06:00:00.000Z"), stopOf("i0", "2026-09-08T06:30:00.000Z"), startOf("i1", "2026-09-08T07:00:00.000Z")]),
+    );
+    expect(line).toMatch(/^daemon\s+KILLED/);
   });
 });
 
