@@ -32,6 +32,7 @@ import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import { httpAdmissionApi, type AdmissionApi } from "./admission-client";
 import { httpDecisionsApi, type DecisionsApi } from "./decisions-client";
 import {
   FILTER_KEYS,
@@ -68,6 +69,7 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
+  admissionApi = httpAdmissionApi,
   feedApi = httpFeedApi,
   decisionsApi = httpDecisionsApi,
   deploysApi = httpDeploysApi,
@@ -94,6 +96,8 @@ export function App({
    * this page measures and the times that chart prints.
    */
   historyApi?: HistoryApi;
+  /** The Box health admission forecast, read only while that panel is mounted. */
+  admissionApi?: AdmissionApi;
   /**
    * The cross-agent feed. Injected like the rest, and — like `messagesApi` —
    * deliberately NOT wrapped in a hook here: it is asked for when the tab is
@@ -386,6 +390,7 @@ export function App({
               historyApi={historyApi}
               currentWork={feed.state?.currentWork ?? CURRENT_WORK_NOT_REPORTED}
               now={now}
+              admissionApi={admissionApi}
               /* **THE CHART'S LABELS ARE WALL-CLOCK TIMES**, so they are the
                  reader's to read off their own watch — and the masthead above
                  says the times on this page are corrected. A chart labelled on

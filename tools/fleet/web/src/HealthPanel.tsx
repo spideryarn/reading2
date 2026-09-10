@@ -29,8 +29,10 @@ import type { ReactNode } from "react";
 
 import { LONG_RUN_MS } from "../../resource-policy.js";
 import { BoxActionsCard } from "./ActionButtons";
+import { AdmissionSection } from "./AdmissionSection";
 import { HealthHistory } from "./HealthHistory";
 import { RawValue } from "./RawValue";
+import { httpAdmissionApi, type AdmissionApi } from "./admission-client";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
 import { readHealthStats, type Stat, type StatBar } from "./health-view";
@@ -139,6 +141,7 @@ export function HealthPanel({
   historyApi = httpHistoryApi,
   currentWork = CURRENT_WORK_NOT_REPORTED,
   now,
+  admissionApi = httpAdmissionApi,
   skew,
 }: {
   health: unknown;
@@ -149,9 +152,10 @@ export function HealthPanel({
   currentWork?: CurrentWorkView;
   /** Browser clock shared by the whole page, so reading age keeps moving. */
   now: number;
+  admissionApi?: AdmissionApi;
   /**
-   * **PASSED STRAIGHT THROUGH TO THE CHART'S LABELS, and nothing else here
-   * reads it.** Required rather than defaulted for the reason `parsePause`'s is:
+   * **PASSED STRAIGHT THROUGH TO THE CHART AND FORECAST LABELS.** Required
+   * rather than defaulted for the reason `parsePause`'s is:
    * a new caller has to say which clock it is holding, and a default of
    * "unmeasured" would let a page that HAS measured one quietly stop correcting
    * the only times on this panel that a reader compares against their watch.
@@ -179,9 +183,43 @@ export function HealthPanel({
   );
   const running = <CurrentWork currentWork={currentWork} now={now} />;
 
-  if (health === null || health === undefined) {
-    return (
-      <div>
+  const hasHealth = health !== null && health !== undefined;
+  const stats = hasHealth ? readHealthStats(health) : [];
+
+  return (
+    <div>
+      {hasHealth ? (
+        <>
+          <Verdict health={health} />
+
+          {stats.length > 0 ? (
+            <>
+              <SectionHeading>The numbers</SectionHeading>
+              {/* `auto-fit` with a `minmax` floor rather than a column count: the
+                  tiles are all the same shape, so this is the one case on the page
+                  where CSS can be trusted to do the arithmetic itself — unlike the
+                  session bands, whose widths depend on their content (fit.ts). */}
+              <div className="tw:grid tw:gap-2 tw:[grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
+                {stats.map((stat) => (
+                  <StatTile key={stat.key} stat={stat} />
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {/* **Under the tiles, above the raw dump.** The tiles say how the box is
+              now; this says how it has been, which is the question the tiles cannot
+              answer and the one Greg opens the page after an outage to ask. It
+              fetches its own data — the history is about a megabyte and changes
+              once a minute, so putting it in the five-second state poll would be
+              the wrong shape twice over. */}
+          {/* `now` rather than a fresh `Date.now()`: this panel now takes the
+              page's one ticking clock (it needs it for the work reading's age
+              below), and two clocks on one card is how an age freezes while the
+              chart beside it keeps moving. */}
+          <HealthHistory api={historyApi} nowMs={now} skew={skew} />
+        </>
+      ) : (
         <Card className="tw:border-l-4 tw:border-l-unknown tw:p-4">
           <h2 className="tw:font-medium">No box health data.</h2>
           <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
@@ -195,42 +233,22 @@ export function HealthPanel({
             it. This page will draw whatever shape the collector chooses without needing a change here.
           </p>
         </Card>
-        {running}
-        {acts}
-      </div>
-    );
-  }
+      )}
 
-  const stats = readHealthStats(health);
-
-  return (
-    <div>
-      <Verdict health={health} />
-
-      {stats.length > 0 ? (
-        <>
-          <SectionHeading>The numbers</SectionHeading>
-          {/* `auto-fit` with a `minmax` floor rather than a column count: the
-              tiles are all the same shape, so this is the one case on the page
-              where CSS can be trusted to do the arithmetic itself — unlike the
-              session bands, whose widths depend on their content (fit.ts). */}
-          <div className="tw:grid tw:gap-2 tw:[grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
-            {stats.map((stat) => (
-              <StatTile key={stat.key} stat={stat} />
-            ))}
-          </div>
-        </>
-      ) : null}
-
+      {/* **OUTSIDE THE HEALTH CONDITIONAL, and that is the point of it being
+          here rather than in a branch.** What the fleet is running is not a fact
+          about whether the box's health could be collected — and a box whose
+          health cannot be collected is precisely when somebody wants to know
+          what is on it. This section was mounted in BOTH of this panel's two
+          return branches until they were merged into one by `8eb04544`, whose
+          first P1 was the same defect in the forecast below: with `health: null`
+          the panel returned before ever reaching the mount, so the section was
+          absent exactly when it was needed. One mount, no conditional. */}
       {running}
 
-      {/* **Under the tiles, above the raw dump.** The tiles say how the box is
-          now; this says how it has been, which is the question the tiles cannot
-          answer and the one Greg opens the page after an outage to ask. It
-          fetches its own data — the history is about a megabyte and changes
-          once a minute, so putting it in the five-second state poll would be
-          the wrong shape twice over. */}
-      <HealthHistory api={historyApi} nowMs={now} skew={skew} />
+      {/* Independent of the current health reading: the forecast has its own
+          endpoint, and losing one source is not evidence about the other. */}
+      <AdmissionSection api={admissionApi} skew={skew} />
 
       {/* **The raw dump is a disclosure now, not the page.** It read as a debug
           view — load, memory, swap, disk and attribution as bare key-value
@@ -243,14 +261,16 @@ export function HealthPanel({
           A `<details>` rather than a button and a piece of state: it is a
           disclosure, the browser has one, and it needs no JavaScript to be
           keyboard-reachable and announced correctly. */}
-      <details open={stats.length === 0} className="tw:mt-3">
-        <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
-          Everything the server sent
-        </summary>
-        <Card className="tw:mt-2 tw:p-4">
-          <RawValue value={health} depth={0} />
-        </Card>
-      </details>
+      {hasHealth ? (
+        <details open={stats.length === 0} className="tw:mt-3">
+          <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
+            Everything the server sent
+          </summary>
+          <Card className="tw:mt-2 tw:p-4">
+            <RawValue value={health} depth={0} />
+          </Card>
+        </details>
+      ) : null}
 
       {/* Under the readings rather than over them: the numbers are what tell
           you whether to press anything, and a row of kill buttons above the
