@@ -338,9 +338,26 @@ async function runKeyed(
   const heard = await postEnvelope(envelope, fetchImpl);
   if (heard.kind === "not-confirmed") return heard;
   const shared = readKeyedArms(heard.status, heard.parsed);
-  if (shared !== null) return shared;
+  if (shared !== null) {
+    if (
+      shared.kind === "replay" &&
+      (shared.receipt.op !== "broadcast" ||
+        shared.receipt.origin !== "broadcast" ||
+        shared.receipt.target !== null ||
+        (shared.children !== null &&
+          shared.children.some(
+            (child) =>
+              child.op !== "broadcast-recipient" ||
+              child.origin !== "broadcast" ||
+              child.parentReceiptId !== shared.receipt.receiptId,
+          )))
+    ) {
+      return unreadableAnswer(heard.status);
+    }
+    return shared;
+  }
   const p = heard.parsed;
-  if (isRecord(p) && p["ok"] === true && p["op"] === "broadcast") {
+  if (heard.status === 200 && isRecord(p) && p["ok"] === true && p["op"] === "broadcast") {
     return { kind: "answered", outcome: { kind: "ran", op: "broadcast", result: parseResult(p["result"]) } };
   }
   if (isRecord(p) && p["ok"] === false && typeof p["code"] === "string" && typeof p["why"] === "string") {

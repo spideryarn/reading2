@@ -24,6 +24,7 @@ import { parseRequestId } from "../tools/fleet/receipt-journal.js";
 import {
   httpActionsApi,
   makeActionsApi,
+  parseReceiptsFeed,
   queueMessageEnvelope,
   runEnvelope,
   type ActionOutcome,
@@ -133,6 +134,7 @@ type Case = {
   send: (impl: typeof fetch, envelope: RequestEnvelope<object, null>) => Promise<KeyedOutcome<unknown>>;
   envelope: () => RequestEnvelope<object, null>;
   ordinary: { status: number; body: unknown };
+  replay: { status: number; body: unknown };
   isOrdinarySuccess: (outcome: unknown) => boolean;
 };
 
@@ -146,6 +148,7 @@ const CASES: Case[] = [
     send: (impl, envelope) =>
       makeSteerApi(impl).keyed.message(envelope as ReturnType<typeof messageEnvelope<null>>),
     ordinary: { status: 200, body: { ok: true, op: "message", sent: [["send-keys"]], verified: null, receiptId: "x" } },
+    replay: REPLAY,
     isOrdinarySuccess: (o) => (o as SteerOutcome).ok === true,
   },
   {
@@ -155,6 +158,10 @@ const CASES: Case[] = [
     send: (impl, envelope) =>
       makeActionsApi(impl).keyed.queueMessage(envelope as ReturnType<typeof queueMessageEnvelope<null>>),
     ordinary: { status: 200, body: { ok: true, op: "enqueued", item: { id: "q1" }, position: 1, durable: true } },
+    replay: {
+      status: 200,
+      body: { ok: true, op: "receipt", replay: true, receipt: receiptWire({ op: "queued-message", origin: "enqueue" }) },
+    },
     isOrdinarySuccess: (o) => (o as ActionOutcome).ok === true && (o as { kind: string }).kind === "queued",
   },
   {
@@ -169,6 +176,15 @@ const CASES: Case[] = [
         ok: true,
         op: "broadcast",
         result: { counts: { asked: 2, submitted: 2, queued: 0, skipped: 0, held: 0, notReached: 0 }, recipients: [] },
+      },
+    },
+    replay: {
+      status: 200,
+      body: {
+        ok: true,
+        op: "receipt",
+        replay: true,
+        receipt: receiptWire({ op: "broadcast", origin: "broadcast", target: null, state: "completed", reason: "fan-out-finished" }),
       },
     },
     isOrdinarySuccess: (o) => (o as BroadcastOutcome).kind === "ran",
@@ -224,7 +240,7 @@ describe("the envelope", () => {
 
 describe.each(CASES)("$name, sent as an envelope", (c) => {
   it("a lost response, then Check, resends the same id and byte-identical body to the same route", async () => {
-    const { impl, seen } = scripted(["lose", REPLAY]);
+    const { impl, seen } = scripted(["lose", c.replay]);
     const envelope = c.envelope();
 
     const first = await c.send(impl, envelope);
@@ -241,10 +257,32 @@ describe.each(CASES)("$name, sent as an envelope", (c) => {
   });
 
   it("a replay is a definitive success carrying the receipt", async () => {
-    const { impl } = scripted([REPLAY]);
+    const { impl } = scripted([c.replay]);
     const answer = await c.send(impl, c.envelope());
     expect(answer.kind).toBe("replay");
     expect(answer.kind === "replay" && answer.receipt.receiptId).toBe("f1f1f1f1-r7");
+  });
+
+  it("does not accept a replay carrying another operation's receipt", async () => {
+    const { impl } = scripted([
+      {
+        status: 200,
+        body: {
+          ok: true,
+          op: "receipt",
+          replay: true,
+          receipt: receiptWire({ op: "enacted-box", origin: "enacted", target: null, state: "completed", reason: "plan-passed" }),
+        },
+      },
+    ]);
+    const answer = await c.send(impl, c.envelope());
+    expect(answer.kind).toBe("not-confirmed");
+  });
+
+  it("does not accept a replay body under a non-success status", async () => {
+    const { impl } = scripted([{ ...c.replay, status: 500 }]);
+    const answer = await c.send(impl, c.envelope());
+    expect(answer.kind).toBe("not-confirmed");
   });
 
   it.each([
@@ -277,6 +315,12 @@ describe.each(CASES)("$name, sent as an envelope", (c) => {
     expect(outcome.kind === "answered" && c.isOrdinarySuccess(outcome.outcome)).toBe(true);
   });
 
+  it("does not accept an ordinary success body under a non-success status", async () => {
+    const { impl } = scripted([{ ...c.ordinary, status: 500 }]);
+    const outcome = await c.send(impl, c.envelope());
+    expect(outcome.kind).toBe("not-confirmed");
+  });
+
   it("an ordinary refusal is the client's ordinary answer, with the server's sentence", async () => {
     const { impl } = scripted([{ status: 409, body: { ok: false, code: "not-steerable", why: "it is a shell" } }]);
     const outcome = await c.send(impl, c.envelope());
@@ -287,17 +331,35 @@ describe.each(CASES)("$name, sent as an envelope", (c) => {
 
 describe("the other keyed writes", () => {
   it("an answer to a dialog and a session action go out as envelopes too", async () => {
-    const answerFetch = scripted([REPLAY]);
+    const answerFetch = scripted([
+      { status: 200, body: { ok: true, op: "receipt", replay: true, receipt: receiptWire({ op: "steer-answer" }) } },
+    ]);
     const answer = await makeSteerApi(answerFetch.impl).keyed.answer(answerEnvelope(ROW, 1, null, { now: NOW }));
     expect(answer.kind).toBe("replay");
     expect(answerFetch.seen[0]?.url).toBe("api/steer/answer");
     expect(JSON.parse(answerFetch.seen[0]?.body ?? "{}")).toMatchObject({ optionIndex: 1, requestId: expect.stringMatching(/^rq-/) });
 
-    const runFetch = scripted([REPLAY]);
+    const runFetch = scripted([
+      { status: 200, body: { ok: true, op: "receipt", replay: true, receipt: receiptWire({ op: "enacted-session", origin: "enacted" }) } },
+    ]);
     const run = await makeActionsApi(runFetch.impl).keyed.run(runEnvelope(ROW, "continue", null, { now: NOW }));
     expect(run.kind).toBe("replay");
     expect(runFetch.seen[0]?.url).toBe("api/actions/session");
     expect(JSON.parse(runFetch.seen[0]?.body ?? "{}")).toMatchObject({ actionId: "continue", requestId: expect.stringMatching(/^rq-/) });
+  });
+
+  it("reads a session action's real success, but not another gesture's success", async () => {
+    const ranFetch = scripted([
+      { status: 200, body: { ok: true, op: "ran", action: "continue", dryRun: false, result: { run: { steps: [] } } } },
+    ]);
+    const ran = await makeActionsApi(ranFetch.impl).keyed.run(runEnvelope(ROW, "continue", null, { now: NOW }));
+    expect(ran.kind).toBe("answered");
+
+    const wrongFetch = scripted([
+      { status: 200, body: { ok: true, op: "cancelled", item: { id: "q1" } } },
+    ]);
+    const wrong = await makeActionsApi(wrongFetch.impl).keyed.queueMessage(queueMessageEnvelope(ROW, "carry on", null, { now: NOW }));
+    expect(wrong.kind).toBe("not-confirmed");
   });
 
   it("the browser's own instances can send envelopes, so no composer silently falls back to an unkeyed send", () => {
@@ -313,6 +375,29 @@ describe("the other keyed writes", () => {
     const { impl, seen } = scripted([{ status: 200, body: { ok: true, op: "message", sent: [], verified: null } }]);
     await makeSteerApi(impl).message(ROW, "carry on");
     expect(JSON.parse(seen[0]?.body ?? "{}")).not.toHaveProperty("requestId");
+  });
+});
+
+describe("reading the receipts feed", () => {
+  it("does not turn a missing unknown-without-hold list into an empty one", () => {
+    expect(
+      parseReceiptsFeed({
+        ok: true,
+        op: "receipts",
+        durable: true,
+        status: {
+          neverOpened: false,
+          lockedOutBy: null,
+          failure: null,
+          unreadableLines: 0,
+          illegalTransitions: 0,
+          materialDeletionPending: [],
+        },
+        recovery: { blocked: false, reason: null },
+        recent: [receiptWire()],
+        nonTerminal: [],
+      }),
+    ).toBeNull();
   });
 });
 

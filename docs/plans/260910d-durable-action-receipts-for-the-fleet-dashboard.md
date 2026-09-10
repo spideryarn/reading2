@@ -529,6 +529,20 @@ composers carrying the original ticket, `ReceiptList.tsx` on the Overseer tab, a
   them is a follow-on that needs that authorisation.
 - Not built: the `?sessionId=` filter on the receipts route (the plan lists it; the brief did not).
 
+**Stage review, 2026-09-10 18:58** ([record](260910d-durable-action-receipts-stage4-review-sol.md), write-capable
+GPT Sol): "land with the fixes above", **six established P1s, each fixed red-first and kept**. F45: two
+taps in one React turn could send one intention twice — a synchronous in-flight ref now guards Send,
+Queue and Check in all three composers. F46: the replay-clears-the-draft suspicion, confirmed — a shared
+`replayConsumesDraft` accepts only `keys-submitted`/`completed`, or queued work on a queue path. F47: a
+success body under HTTP 500 was read as success. F48: the actions client could not tell the two
+intentions sharing `/api/actions/session` apart. F49: a missing `unknownWithoutHold` read as an empty
+safety list. F50: a replay carrying another operation's receipt was accepted.
+
+**A process finding for whoever runs the next review.** Twice (Stages 2 and 4) the answer file came
+back as a pointer to itself: the reviewer writes its full report into the `--output` file, and
+`run-codex.ts` then overwrites that path with the reviewer's closing message. Ask the reviewer to write
+its full report to a *separate* file, or recover it from the activity log as was done here.
+
 **Done:** a person on a phone can see, for recent actions, which were proven, which were withdrawn,
 which are unknown, and which unknowns somebody has since looked at — and pressing retry after a lost
 response does not send twice.

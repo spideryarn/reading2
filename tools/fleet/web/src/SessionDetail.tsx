@@ -144,7 +144,7 @@ import {
   type VerifiedReading,
 } from "./steer-client";
 import { EnvelopeNoticeCard } from "./ReceiptList";
-import type { EnvelopeNotice, RequestEnvelope } from "./request-envelope";
+import { replayConsumesDraft, type EnvelopeNotice, type RequestEnvelope } from "./request-envelope";
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
@@ -920,6 +920,10 @@ export function SessionDetail({
   const refused = useRef(stance.kind === "refused");
   refused.current = stance.kind === "refused";
   const [busy, setBusy] = useState(false);
+  /* React applies `busy` on the next render. This ref closes the interval in
+     which two taps can otherwise mint and send two envelopes. It is shared by
+     Send, Queue and Check because only one intention may be in flight. */
+  const envelopeInFlight = useRef(false);
   /** The composer, so the dictation knows where the caret is. */
   const box = useRef<HTMLTextAreaElement>(null);
   /* **Named, so the vocabulary leads with this session's own words.** Somebody
@@ -1098,7 +1102,7 @@ export function SessionDetail({
     switch (result.kind) {
       case "replay":
         setPending(null);
-        drafted.current.accept(sent.envelope.ticket);
+        if (replayConsumesDraft(result.receipt, sent.path === "queue")) drafted.current.accept(sent.envelope.ticket);
         return;
       case "not-confirmed":
         setPending(sent);
@@ -1117,6 +1121,8 @@ export function SessionDetail({
 
   const deliverSend = useCallback(
     async (sent: Extract<PendingEnvelope, { path: "send" }>): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
       setBusy(true);
       const result = await sendMessageEnvelope(steer, sent.row, sent.envelope);
       if (result.kind === "answered") {
@@ -1127,6 +1133,7 @@ export function SessionDetail({
         setOutcome(null);
         hear(sent, result);
       }
+      envelopeInFlight.current = false;
       setBusy(false);
     },
     [afterSteer, hear, steer],
@@ -1217,6 +1224,8 @@ export function SessionDetail({
 
   const deliverQueue = useCallback(
     async (sent: Extract<PendingEnvelope, { path: "queue" }>): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
       setBusy(true);
       const result = await sendQueueEnvelope(actions.api, sent.row, sent.envelope);
       if (result.kind === "answered") {
@@ -1228,6 +1237,7 @@ export function SessionDetail({
         setQueueOutcome(null);
         hear(sent, result);
       }
+      envelopeInFlight.current = false;
       setBusy(false);
       actions.refresh();
     },

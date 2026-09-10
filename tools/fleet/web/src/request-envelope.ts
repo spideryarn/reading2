@@ -213,6 +213,7 @@ export async function postEnvelope(
 export function readKeyedArms(status: number, parsed: unknown): EnvelopeNotice | null {
   if (!isRecord(parsed)) return null;
   if (parsed["ok"] === true && parsed["op"] === "receipt") {
+    if (status !== 200) return unreadableAnswer(status);
     if (parsed["replay"] !== true) return unreadableAnswer(status);
     const receipt = parseReceiptSummary(parsed["receipt"]);
     if (receipt === null) {
@@ -240,9 +241,23 @@ export function readKeyedArms(status: number, parsed: unknown): EnvelopeNotice |
   const code = parsed["code"];
   const why = parsed["why"];
   if (parsed["ok"] === false && typeof code === "string" && typeof why === "string" && KEY_REFUSALS.includes(code)) {
+    const expectedStatus = code === "receipt-unavailable" ? 503 : 409;
+    if (status !== expectedStatus) return unreadableAnswer(status);
     return { kind: code as KeyRefusalCode, why, status };
   }
   return null;
+}
+
+/**
+ * Whether a replay proves enough to consume the draft that produced it.
+ * "Replay" proves only that the request id is known; the receipt says whether
+ * the original action happened. Queued work is consumed once it entered the
+ * queue, including its non-terminal states. A refusal, withdrawal or unknown
+ * outcome keeps the words available to the person.
+ */
+export function replayConsumesDraft(receipt: ReceiptSummary, queued: boolean): boolean {
+  if (receipt.state === "keys-submitted" || receipt.state === "completed") return true;
+  return queued && (receipt.state === "accepted" || receipt.state === "attempted" || receipt.state === "returned");
 }
 
 /* ------------------------------------------------------------------ *

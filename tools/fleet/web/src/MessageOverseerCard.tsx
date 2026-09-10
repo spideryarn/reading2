@@ -104,7 +104,7 @@
  * comes back only when that same conversation is verified in front of it.
  * docs/plans/260910c-… § Stage 2.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useExecutionEpoch } from "./continuity";
@@ -117,7 +117,7 @@ import {
   type DraftSubmission,
 } from "./drafts";
 import { EnvelopeNoticeCard } from "./ReceiptList";
-import type { EnvelopeNotice, RequestEnvelope } from "./request-envelope";
+import { replayConsumesDraft, type EnvelopeNotice, type RequestEnvelope } from "./request-envelope";
 import {
   httpSteerApi,
   messageEnvelope,
@@ -289,6 +289,8 @@ export function MessageOverseerCard({
   steer?: SteerApi;
 }): ReactNode {
   const [busy, setBusy] = useState(false);
+  /* `setBusy` cannot close the same-event-loop double-tap window. */
+  const envelopeInFlight = useRef(false);
   /**
    * **The outcome and the target it was made against, as one value.**
    *
@@ -333,6 +335,8 @@ export function MessageOverseerCard({
    */
   const deliver = useCallback(
     async (sent: PendingMessage): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
       setBusy(true);
       const result = await sendMessageEnvelope(steer, sent.row, sent.envelope);
       switch (result.kind) {
@@ -349,7 +353,7 @@ export function MessageOverseerCard({
           setOutcome(null);
           setNotice(result);
           setPending(null);
-          draft.accept(sent.envelope.ticket);
+          if (replayConsumesDraft(result.receipt, false)) draft.accept(sent.envelope.ticket);
           break;
         case "not-confirmed":
           /* NEVER ACCEPTED: the words stay in the box and in storage, and the
@@ -370,6 +374,7 @@ export function MessageOverseerCard({
           void never;
         }
       }
+      envelopeInFlight.current = false;
       setBusy(false);
     },
     [draft, steer],

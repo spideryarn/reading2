@@ -56,7 +56,7 @@
  * mechanism unless somebody means it. The count moves when the box is ticked, so
  * what is being agreed to is always what is on screen.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -71,7 +71,7 @@ import {
 } from "./broadcast-client";
 import { draftNoticeSentence, useDraft, type DraftSubmission } from "./drafts";
 import { EnvelopeNoticeCard } from "./ReceiptList";
-import type { EnvelopeNotice, RequestEnvelope } from "./request-envelope";
+import { replayConsumesDraft, type EnvelopeNotice, type RequestEnvelope } from "./request-envelope";
 import { sentTarget, type SentTarget } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
@@ -238,6 +238,9 @@ export function BroadcastCard({
   const text = draft.text;
   const [includeOverseer, setIncludeOverseer] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* `busy` disables the button after rendering; this closes the double-tap
+     interval before that render so one broadcast intention leaves once. */
+  const envelopeInFlight = useRef(false);
   /**
    * The preview, and **exactly what it was a preview of** — the words, the
    * recipient signature, and the addresses that were posted.
@@ -280,6 +283,8 @@ export function BroadcastCard({
    */
   const run = useCallback(
     async (sending: PendingBroadcast): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
       setBusy(true);
       const result = await sendBroadcastEnvelope(api, sending.rows, sending.envelope);
       setPreview(null);
@@ -307,7 +312,7 @@ export function BroadcastCard({
           setDone(null);
           setNotice(result);
           setPending(null);
-          draft.accept(sending.envelope.ticket);
+          if (replayConsumesDraft(result.receipt, false)) draft.accept(sending.envelope.ticket);
           break;
         case "not-confirmed":
           setDone(null);
@@ -326,6 +331,7 @@ export function BroadcastCard({
           void never;
         }
       }
+      envelopeInFlight.current = false;
       setBusy(false);
     },
     [api, draft],

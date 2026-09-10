@@ -561,16 +561,26 @@ async function post(
  * `not-confirmed`, never a success with blanks filled in.
  */
 async function postKeyed(
-  envelope: RequestEnvelope<object, unknown>,
+  envelope: RequestEnvelope<SteerMessageBody | SteerAnswerBody, unknown>,
   op: "message" | "answer",
   fetchImpl: typeof fetch,
 ): Promise<KeyedOutcome<SteerOutcome>> {
   const heard = await postEnvelope(envelope, fetchImpl);
   if (heard.kind === "not-confirmed") return heard;
   const shared = readKeyedArms(heard.status, heard.parsed);
-  if (shared !== null) return shared;
+  if (shared !== null) {
+    if (
+      shared.kind === "replay" &&
+      (shared.receipt.op !== (op === "message" ? "steer-message" : "steer-answer") ||
+        shared.receipt.origin !== "direct-steer" ||
+        shared.receipt.target?.sessionId !== envelope.body.sessionId)
+    ) {
+      return unreadableAnswer(heard.status);
+    }
+    return shared;
+  }
   const p = heard.parsed;
-  if (isRecord(p) && p["ok"] === true && p["op"] === op) {
+  if (heard.status === 200 && isRecord(p) && p["ok"] === true && p["op"] === op) {
     return { kind: "answered", outcome: { ok: true, op, sent: parseSent(p["sent"]), verified: parseVerified(p["verified"]) } };
   }
   if (isRecord(p) && p["ok"] === false && typeof p["code"] === "string" && typeof p["why"] === "string") {

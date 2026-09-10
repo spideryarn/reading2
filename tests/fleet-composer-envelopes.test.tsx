@@ -123,6 +123,11 @@ function receipt(over: Partial<ReceiptSummary> = {}): ReceiptSummary {
 
 const NOT_CONFIRMED = { kind: "not-confirmed", why: "this browser could not reach the dashboard: Failed to fetch" } as const;
 const REPLAY = { kind: "replay", receipt: receipt(), children: null } as const;
+const NOT_SENT_REPLAY = {
+  kind: "replay",
+  receipt: receipt({ state: "not-sent", reason: "session-held", attemptedAt: null }),
+  children: null,
+} as const;
 const CONFLICT = {
   kind: "request-id-conflict",
   why: "request id rq-x was already used for a different request. Nothing was done.",
@@ -268,6 +273,29 @@ describe("the Overseer card", () => {
   ];
   const card = (steer: SteerApi) => <MessageOverseerCard rows={rows()} unreadableRows={0} steer={steer} />;
 
+  it("two taps before the first answer still send one intention once", () => {
+    const envelopes: RequestEnvelope<SteerMessageBody, unknown>[] = [];
+    const api: SteerApi = {
+      message: refuse,
+      answer: refuse,
+      keyed: {
+        message: (envelope) => {
+          envelopes.push(envelope);
+          return new Promise(() => {});
+        },
+        answer: refuse,
+      },
+    };
+    render(card(api));
+    type("hold the queue");
+    act(() => {
+      button("Send").click();
+      button("Send").click();
+    });
+
+    expect(envelopes).toHaveLength(1);
+  });
+
   it("keeps the words and offers Check, never a second Send, when a send is not confirmed", async () => {
     const { api, envelopes } = keyedSteer([NOT_CONFIRMED]);
     render(card(api));
@@ -312,6 +340,19 @@ describe("the Overseer card", () => {
     expect(box().value).toBe("");
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
     expect(button("Send").disabled).toBe(true); // empty box, nothing pending
+    expect(findButton("Check")).toBeNull();
+  });
+
+  it("a replay whose receipt proves the message was not sent keeps the draft", async () => {
+    const { api } = keyedSteer([NOT_CONFIRMED, NOT_SENT_REPLAY]);
+    render(card(api));
+    type("hold the queue");
+    await press("Send");
+    await press("Check");
+
+    expect(box().value).toBe("hold the queue");
+    expect(window.sessionStorage.getItem(KEY)).toBe("hold the queue");
+    expect(text()).toContain("not sent");
     expect(findButton("Check")).toBeNull();
   });
 
@@ -446,6 +487,17 @@ describe.each(["send", "queue"] as const)("the session composer's %s", (path) =>
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 
+  it("a replay whose receipt proves the action was not sent keeps the draft", async () => {
+    const s = seams([NOT_CONFIRMED, NOT_SENT_REPLAY]);
+    render(detail(s));
+    type("pull dev and carry on");
+    await press(label);
+    await press("Check");
+    expect(box().value).toBe("pull dev and carry on");
+    expect(window.sessionStorage.getItem(KEY)).toBe("pull dev and carry on");
+    expect(text()).toContain("not sent");
+  });
+
   it("a 409 keeps the draft and drops the envelope", async () => {
     const s = seams([CONFLICT]);
     render(detail(s));
@@ -555,6 +607,31 @@ describe("the broadcast", () => {
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
     // Each recipient's own receipt is accounted for.
     expect(text()).toContain("2 recipient");
+  });
+
+  it("a replay whose receipt does not show the broadcast happened keeps the draft", async () => {
+    const notSent = {
+      kind: "replay",
+      receipt: receipt({
+        receiptId: "e1e1e1e1-r8",
+        op: "broadcast",
+        origin: "broadcast",
+        target: null,
+        state: "not-sent",
+        reason: "interrupted-before-attempt",
+        attemptedAt: null,
+      }),
+      children: null,
+    } as const;
+    const { api } = keyedBroadcast([NOT_CONFIRMED, notSent]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("ease off for ten minutes");
+    await press("Preview");
+    await press("Send it");
+    await press("Check");
+    expect(box().value).toBe("ease off for ten minutes");
+    expect(window.sessionStorage.getItem(KEY)).toBe("ease off for ten minutes");
+    expect(text()).toContain("not sent");
   });
 
   it("a 409 keeps the sentence and drops the envelope", async () => {

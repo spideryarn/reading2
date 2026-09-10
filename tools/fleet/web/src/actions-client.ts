@@ -1945,15 +1945,42 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi & { 
    * keyed arm is the one that can offer a Check, and a shape nobody can read
    * is never a success.
    */
-  const keyedAction = async (envelope: RequestEnvelope<object, unknown>): Promise<KeyedOutcome<ActionOutcome>> => {
+  const keyedAction = async (
+    envelope: RequestEnvelope<SessionMessageBody | SessionActionBody, unknown>,
+    expected: "queue-message" | "run-action",
+  ): Promise<KeyedOutcome<ActionOutcome>> => {
     const heard = await postEnvelope(envelope, fetchImpl);
     if (heard.kind === "not-confirmed") return heard;
     const shared = readKeyedArms(heard.status, heard.parsed);
-    if (shared !== null) return shared;
+    if (shared !== null) {
+      if (shared.kind === "replay") {
+        const receipt = shared.receipt;
+        const matches =
+          receipt.target?.sessionId === envelope.body.sessionId &&
+          (expected === "queue-message"
+            ? receipt.op === "queued-message" && receipt.origin === "enqueue"
+            : (receipt.op === "queued-action" && receipt.origin === "enqueue") ||
+              (receipt.op === "enacted-session" && receipt.origin === "enacted"));
+        if (!matches) return unreadableAnswer(heard.status);
+      }
+      return shared;
+    }
     if (isServerRefusal(heard.parsed)) return { kind: "answered", outcome: readActionOutcome(heard, heard.parsed) };
-    if (isRecord(heard.parsed) && heard.parsed["ok"] === true) {
+    if (heard.status === 200 && isRecord(heard.parsed) && heard.parsed["ok"] === true) {
       const outcome = readActionOutcome(heard, heard.parsed);
-      if (outcome.ok && outcome.kind !== "accepted") return { kind: "answered", outcome };
+      if (expected === "queue-message" && heard.parsed["op"] === "enqueued" && outcome.ok && outcome.kind === "queued") {
+        return { kind: "answered", outcome };
+      }
+      if (
+        expected === "run-action" &&
+        "actionId" in envelope.body &&
+        heard.parsed["op"] === "ran" &&
+        heard.parsed["action"] === envelope.body.actionId &&
+        heard.parsed["dryRun"] === false &&
+        outcome.ok
+      ) {
+        return { kind: "answered", outcome };
+      }
     }
     return unreadableAnswer(heard.status);
   };
@@ -1962,8 +1989,19 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi & { 
     const heard = await postEnvelope(envelope, fetchImpl);
     if (heard.kind === "not-confirmed") return heard;
     const shared = readKeyedArms(heard.status, heard.parsed);
-    if (shared !== null) return shared;
-    if (isServerRefusal(heard.parsed) || (isRecord(heard.parsed) && heard.parsed["ok"] === true)) {
+    if (shared !== null) {
+      if (
+        shared.kind === "replay" &&
+        !(
+          (shared.receipt.op === "enacted-box" && shared.receipt.origin === "enacted") ||
+          (shared.receipt.op === "broadcast" && shared.receipt.origin === "broadcast")
+        )
+      ) {
+        return unreadableAnswer(heard.status);
+      }
+      return shared;
+    }
+    if (isServerRefusal(heard.parsed) || (heard.status === 200 && isRecord(heard.parsed) && heard.parsed["ok"] === true)) {
       return { kind: "answered", outcome: readBox(heard, heard.parsed, null, false) };
     }
     return unreadableAnswer(heard.status);
@@ -2004,8 +2042,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi & { 
     boxConfirm: (preview) => box(null, boxActionBody(preview), false),
 
     keyed: {
-      queueMessage: (envelope) => keyedAction(envelope),
-      run: (envelope) => keyedAction(envelope),
+      queueMessage: (envelope) => keyedAction(envelope, "queue-message"),
+      run: (envelope) => keyedAction(envelope, "run-action"),
       boxConfirm: (envelope) => keyedBox(envelope),
     },
   };
@@ -2093,18 +2131,19 @@ export function parseReceiptsFeed(v: unknown): ReceiptsFeed | null {
   }
   const unknownWithoutHold: ReceiptsFeed["unknownWithoutHold"] = [];
   const rows = v["unknownWithoutHold"];
-  if (Array.isArray(rows)) {
-    for (const row of rows) {
-      /* KEPT, NOT DROPPED, when it cannot be read: this is the loudest thing on
-         the list, and a session missing from it reads as a session that is fine. */
-      if (isRecord(row) && typeof row["sessionId"] === "string" && Array.isArray(row["receiptIds"])) {
-        unknownWithoutHold.push({
-          sessionId: row["sessionId"],
-          receiptIds: row["receiptIds"].filter((id): id is string => typeof id === "string"),
-        });
-      } else {
-        unknownWithoutHold.push({ sessionId: "(a row this build could not read)", receiptIds: [] });
-      }
+  /* Missing is not empty: this list says where nothing prevents a duplicate
+     send. An unreadable feed must leave the last good one on screen. */
+  if (!Array.isArray(rows)) return null;
+  for (const row of rows) {
+    /* KEPT, NOT DROPPED, when it cannot be read: this is the loudest thing on
+       the list, and a session missing from it reads as a session that is fine. */
+    if (isRecord(row) && typeof row["sessionId"] === "string" && Array.isArray(row["receiptIds"])) {
+      unknownWithoutHold.push({
+        sessionId: row["sessionId"],
+        receiptIds: row["receiptIds"].filter((id): id is string => typeof id === "string"),
+      });
+    } else {
+      unknownWithoutHold.push({ sessionId: "(a row this build could not read)", receiptIds: [] });
     }
   }
   return {
