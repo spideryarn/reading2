@@ -251,6 +251,12 @@ gate 3's last bullet made mechanical rather than remembered.
   critical that we have GPT (e.g. for cross-model-family reviews), so if we are running out of
   ChatGPT usage limits, that's as important as running out of Claude usage limits … Basically we
   can't continue working without both."*
+  <br>**Since 2026-09-10 that command also prints one block per REGISTERED account** — every Claude
+  and Codex subscription the box can launch work on, not just the one you are logged in as — and the
+  Usage limits tab draws the same readings as sections. What each says and what it may not claim is
+  [usage-per-account.md](usage-per-account.md). Two things changed in the output: a registry that
+  will not parse is now a `!` line and **exit 1** rather than a thrown command printing nothing, and
+  `--json`'s `accounts` field is a `StoredAccountUsage` rather than an array.
 
 ### The tick
 

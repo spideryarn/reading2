@@ -444,5 +444,18 @@ its signpost in `AGENTS.md`.
   sections including a failed one and a stale one. That is what caught two things no assertion did:
   the Claude window cards had no progress bar while the Codex ones did — Greg asked for one — and the
   Codex card at the foot of the tab was drawing the same subscription as the section above it.
+- **The full suite caught a bug the focused suites did not.** The first version passed
+  `headroomShownAbove` unconditionally, so against a server too old to send `accountUsage` — or before
+  the daemon's first per-account pass — the sections said *there is no per-account reading* **and**
+  the card below hid its own cached windows and Codex half. The tab then showed no percentage for any
+  account while looking complete: suppressing a reading with no replacement on screen, which is the
+  exact risk the code-review prompt had named in advance. Found by an existing test
+  (`fleet-web.test.tsx`, *gives both mounts the same newest Codex reading*); fixed by suppressing only
+  when the sections are `published`, and pinned from the other side by a new test.
+- **And it exposed three tests that could not fail.** Every test in `fleet-web.test.tsx` that
+  switched Usage → Overseer assigned `location.hash` and awaited a microtask — but the app re-renders
+  on `hashchange`, which jsdom delivers as a later task, so the Overseer tab was never drawn. The
+  assertions passed anyway because each checked text present on *both* tabs. All three now dispatch
+  the event inside `act` and prove the switch landed by asserting a Usage-only heading is gone.
 - Gates: `npm test` and `npm run typecheck`, and GPT Sol on the plan before building and on the code
   after.

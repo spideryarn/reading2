@@ -441,8 +441,17 @@ export function App({
               /* The sections above own every subscription's headroom on this
                  tab, so the card drops its cached copy and its Codex half
                  rather than drawing either a second time. The Overseer tab's
-                 mount passes nothing and keeps both. */
-              headroomShownAbove
+                 mount passes nothing and keeps both.
+
+                 **ONLY WHEN THE SECTIONS ACTUALLY PUBLISHED.** The first
+                 version passed `true` unconditionally, and the full suite
+                 caught what that did: against a server too old to send
+                 `accountUsage`, or before the daemon's first pass, the sections
+                 draw "there is no per-account reading" AND the card hid its
+                 own headroom — so the tab showed no percentage for any account
+                 while looking complete. Suppressing a reading is only honest
+                 when its replacement is on screen. */
+              headroomShownAbove={feed.state?.accountUsage.kind === "published"}
             />
             {/* **The history is on its OWN route, not in the snapshot.** That
                 route is active only on Usage and Overseer: the chart needs it
