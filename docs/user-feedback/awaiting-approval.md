@@ -79,19 +79,23 @@ options put to Greg. Two of them dissolved a trade-off an agent had accepted as 
 mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
 tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-## Six things are waiting on Greg
+## Answered 2026-09-11, by the Overseer under Greg's instruction
 
-**Three from 2026-09-07:** the dictation privacy wording, which is already live rather than pending;
-the 2A slug question; and whether to spend on settling what the repaired Socratic eval leaned
-towards.
+Greg, 2026-09-11, on the whole list: *"otherwise use your judgment. try to keep things simple."* So
+the six rows above are closed as follows, each the simplest ending, and each reversible by him:
 
-**Three from 2026-09-08**, added by three sessions that did not know about each other and whose rows
-met in two successive merges — which is worth noticing, because this file is where that collision is
-*supposed* to be visible: **2B**, how big a picture is worth how many bytes; **2G**, whether to fix
-the permalink's hover brightness, the cheapest thing on this page and the only one that is purely a
-matter of taste; and the entry-point edit that **2D** forced, which is the only one of the six that
-is a **review of something already done** rather than a decision still open — the doc is edited and
-on `dev`, and what is wanted is a yes or a no.
+| report | the decision |
+|---|---|
+| dictation privacy wording | **Reviewed, stands.** The live sentence is the corrected one; no change. |
+| the Socratic wording | **No spend.** The wording stays as Greg picked it; the replicates are not bought. Spending is the one gate the Overseer does not hold, and the finding is a lean, not a verdict. |
+| 2D — the entry-point doc edit | **Approved as it is on `dev`.** |
+| 2B — picture size | **Folded into cluster F** of the product plan: trial a ~1,280px candidate under the existing caps (Greg's default answer, 2026-09-11). |
+| 2G — permalink hover | **Fix it**, with the preview-page cleanup the Overseer dispatched the same night. |
+| 2A — the file name in the public URL | **Leave it.** The uploader chose the name and chose to publish; changing the slug shape would break every existing link for a leak the uploader controls. Revisit if a reader reports it. |
+
+The six-things section that stood here is history: three from 2026-09-07 and three from 2026-09-08,
+the latter added by three sessions that did not know about each other, which is the collision this
+file exists to make visible.
 
 Everything this file listed on 2026-09-06 has been answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
