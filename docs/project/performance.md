@@ -35,9 +35,10 @@ npx tsx scripts/measure-cpu.ts --local-sign-in \
 
 # What a CLICK costs, which is a different gesture from a scroll and has its own
 # budget. Prints click-to-next-painted-frame per mode switch. See § Clicking.
+# Structure replaced Outline in the Dock on 2026-09-10; the dated numbers below say Outline.
 npx tsx scripts/measure-cpu.ts --local-sign-in \
   --url "http://localhost:5273/read/constitution?perf=1" --settle 25 \
-  --modes "Hierarchy,Summary,Outline,Plain" --repeats 3
+  --modes "Hierarchy,Summary,Structure,Plain" --repeats 3
 
 # The same page while somebody scrolls it. Real wheel events, through the compositor.
 npx tsx scripts/measure-cpu.ts --local-sign-in \

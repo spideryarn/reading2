@@ -38,7 +38,7 @@
  * functionality altogether"; the later instruction wins, so ← now stops at
  * Parts and the arc is no longer a rung
  * (docs/plans/260905d-declutter-the-reading-view-top-bars.md). The arc
- * artefact itself is untouched — Outline mode still renders it.
+ * artefact itself is untouched — Structure's list face still renders it.
  * See navPlan. Off the ends the keys go back to the browser, which uses them to
  * pan a table wider than the window.
  *

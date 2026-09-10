@@ -288,7 +288,7 @@ const ARTICLE: PublicArticle = {
       },
       /* **A child, and the tree had none until 2026-09-02.** A one-node tree is
          a tree with no *structure*, and `outlineProjection` draws structure —
-         so Outline mode rendered an empty band in every run of this file, and
+         so Structure's list face rendered an empty band in every run of this file, and
          the sweep did not notice because it read the whole page and found the
          root's gist in the columns beside the prose. GPT Sol's review of stage
          1a found the assertion was vacuous; the fixture is why it was.
@@ -504,7 +504,7 @@ enableHistorySync();
  *
  * It went unnoticed until 2026-09-02, and that is the tell: this file's tree
  * fixture had a single node and therefore no sections, so the effect that needs
- * it had never run here. Giving the tree a child made Outline mode real and
+ * it had never run here. Giving the tree a child made Structure's list face real and
  * this the next thing in the way. The identity function is enough — the fixture's
  * block ids are `spya-…`, which need no escaping — and a real browser has the
  * real one.

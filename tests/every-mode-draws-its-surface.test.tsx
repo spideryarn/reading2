@@ -1010,10 +1010,8 @@ const SPENDS: Record<Mode, Spend> = {
   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
   /* The gist columns are drawn from the tree the pipeline already built. */
   hierarchy: { kind: "none", why: "the gist columns come from the tree that is already there" },
-  /* The same tree, one nested list. */
-  outline: { kind: "none", why: "the nested list is that same tree; no model call" },
-  /* And the same tree a third time, in linked columns. */
-  structure: { kind: "none", why: "the columns are that same tree; no model call" },
+  /* The same tree again, in linked columns or one nested list. */
+  structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
   /* And the same gists again, in a band instead of in the columns. */
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
   /* The five artefact modes, each arming its own name. */
@@ -1211,20 +1209,20 @@ const DRAWS: Record<Mode, Draws> = {
      fixture's structure can produce. Deliberately **not** a gist: gists are in
      the columns beside the prose as well, so a gist would pass over an empty
      band the moment the columns happened to be open. */
-  outline: { kind: "band", where: ".mode-band.outln", says: OUTLINE_ROW },
   /* **The part's title, and it is `OUTLINE_ROW` because the fixture has one
-     depth-1 node and that is its title** — not because this row was copied from
-     the one above. The two modes draw the same word here and the selectors are
-     what tell them apart, which is the scope this table's `where` exists to
-     provide: Outline's list and Structure's column A are the same tree read two
-     ways, so on a one-part fixture they necessarily agree about the word.
+     depth-1 node and that is its title.** The name is from when Outline was a
+     mode with its own row here; since 2026-09-10 Outline's list is Structure's
+     narrow face, and jsdom — which lays nothing out, so the band reports no
+     width — always gets the wide face, the columns. The list face is
+     asserted in tests/structure-mode-faces.test.tsx instead, which gives the
+     band a width.
 
      **This row can only ever prove column A**, and that is a limit of the
      fixture rather than of the table. The tree above has a root and one part and
      no section, so there is no depth-2 title to name and no reader position that
      puts column B on screen; a Structure that never rendered its right-hand
      column would satisfy this row exactly. Widening the fixture would change
-     what Hierarchy, Outline and Summary draw in the same run, so the other half
+     what Hierarchy and Summary draw in the same run, so the other half
      is asserted in a file of its own —
      tests/structure-panel-draws-both-columns.test.tsx, which mounts the panel on
      a two-part tree and reads both columns by position. GPT Sol's review of the

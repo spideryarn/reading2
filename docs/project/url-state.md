@@ -32,12 +32,12 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
-| `text` | `1` reading mode, `0` outline mode. **Nothing writes it and `0` does not survive arrival, since 2026-09-05** — an incoming `?mode=hierarchy&text=0` is rewritten to `?mode=outline` and the pair is dropped whatever the mode, because the pill that could put the prose back has gone; see below | push | `?text=0` |
+| `text` | `1` reading mode, `0` outline mode. **Nothing writes it and `0` does not survive arrival, since 2026-09-05** — an incoming `?mode=hierarchy&text=0` is rewritten to `?mode=structure` (to `?mode=outline` until 2026-09-10) and the pair is dropped whatever the mode, because the pill that could put the prose back has gone; see below | push | `?text=0` |
 | `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md) | push | `?mode=chat` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10 (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
@@ -148,7 +148,9 @@ on arrival: `?spine=0` still hides the rail.
 **`?text=0` does not survive arrival, since stage 3 of that plan.** It was the one address the
 reader could not leave: the `Text` pill was the only way back to the prose and it went with the bar.
 So `settleAddress` rewrites it (`liftStrandedText` in [router.ts](../../src/web/router.ts)) —
-**`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair is dropped whatever the mode was.**
+**`?mode=hierarchy&text=0` → `?mode=structure`, and the `text` pair is dropped whatever the mode was.**
+The target was `?mode=outline` until 2026-09-10, when Outline became Structure's narrow face
+([260910g](../plans/260910g-structure-mode-subsumes-outline.md)).
 
 Three things about that rule are not the obvious ones, and each is why it is written as it is:
 
@@ -161,7 +163,8 @@ Three things about that rule are not the obvious ones, and each is why it is wri
 - **Outline, not Plain** — arbitrated by Fable, 2026-09-05. Neither restores the no-prose state, so
   "honour what they asked for" cannot decide it. What does is that the reader who saved that link was
   looking at a bar that said **OUTLINE**: the old `reading`/`outline` chip flipped whenever `text=0`
-  was on, and this file's neighbour calls the compact table "outline mode" throughout.
+  was on, and this file's neighbour calls the compact table "outline mode" throughout. That mode is
+  now Structure, whose narrow face is the same nested list, so the reasoning carries over.
 
 The **server predicts the same rewrite** — `readMode` in [read-address.ts](../../src/read-address.ts)
 — or the tab would read Hierarchy and be replaced a second later

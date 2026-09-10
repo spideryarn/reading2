@@ -158,29 +158,21 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      point of the feature and cost nothing: they are drawn from the tree in the
      payload the visitor already has. */
   hierarchy: { kind: "available" },
-  /* Outline is the same bargain and had to be named to get it. The old
+  /* **Structure — which since 2026-09-10 is Outline too — is the same bargain,
+     and had to be named to get it.** Outline had to be first: the old
      fall-through was deliberately fail-closed, so a mode added later was
      owners-only until somebody said otherwise — which meant the plan's claim
-     that this mode "costs nothing, so a visitor gets it" was the *intent* and
-     false in the code. GPT Sol's review, 2026-08-28. It draws the same tree
-     from the same payload the visitor already holds, and reaches no artefact at
-     all: without arc.json it simply skips the arc rung. */
-  outline: { kind: "available" },
-  /* **And Structure, on exactly the same bargain, stated for the same reason
-     Outline had to be.** It is a third arrangement of the tree in the payload
-     the visitor already holds: no artefact, no request, nothing to be short of.
-     It draws no arc, so it does not even have Outline's one skipped rung.
+     that Outline "costs nothing, so a visitor gets it" was the *intent* and
+     false in the code. GPT Sol's review, 2026-08-28. Structure's two columns
+     are an arrangement of the tree in the payload the visitor already holds: no
+     artefact, no request, nothing to be short of. Its narrow face is Outline's
+     list, which reads the arc from the same payload and simply skips that rung
+     without it.
 
-     **Behind the experimental switch is not the same question as owners-only,
-     and this row is where the two get confused.** The switch decides whether
-     the *bar draws the button*; this table decides what a visitor is shown when
-     they arrive at the mode. A signed-out reader is treated as switch-off
-     (docs/project/experimental-features.md), so they will not find this in the
-     bar — but `?mode=structure` still works for them, because hiding a feature
-     never breaks a link to it, and what they then get has to be the same band
-     the owner sees. Marking it `owners-only` to "match" the switch would make a
-     shared URL show two people different things, which is the one thing that
-     doc says the switch must never do. */
+     It was behind the experimental switch until 2026-09-10, and this row was
+     `available` then too: the switch decides whether the *bar draws the
+     button*, this table decides what a visitor is shown on arrival, and a
+     shared URL must show two people the same thing. */
   structure: { kind: "available" },
   /* And summary, since 2026-08-31. It used to be an artefact mode, gated on a
      `summary.json` a visitor's payload might not carry. The generated ladder is
@@ -244,7 +236,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    *
    * `available` rather than `artefact`, because there is no artefact: the
    * picture comes from the tree in the payload every reader already holds, the
-   * same bargain `outline` and `summary` make.
+   * same bargain `structure` and `summary` make.
    */
   diagram: { kind: "available" },
   /**

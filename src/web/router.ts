@@ -1184,8 +1184,11 @@ function liftLegacyAbout(at: Address): Address {
 }
 
 /**
- * **`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair goes
- * whatever the mode was.**
+ * **`?mode=hierarchy&text=0` → `?mode=structure`, and the `text` pair goes
+ * whatever the mode was.** It went to `?mode=outline` from 2026-09-05 until
+ * Outline became Structure's narrow face on 2026-09-10 — the argument below is
+ * Outline's, and it carried over because the list it chose is still what a
+ * narrow band draws (docs/plans/260910g-structure-mode-subsumes-outline.md).
  *
  * The `Text` pill was the only way back to the prose, and it went with the rest
  * of the controls bar on 2026-09-05 — so an old `?mode=hierarchy&text=0` link is
@@ -1193,17 +1196,19 @@ function liftLegacyAbout(at: Address): Address {
  * is the fifth of these rewrites and the first that is about a state the app
  * used to be able to leave.
  *
- * **Outline, and the argument is not the obvious one.** Neither destination
+ * **Structure, because it preserves Outline's list — and the argument is not
+ * the obvious one.** Neither destination
  * restores the no-prose state — `proseVisible` is `modeBand || showText`, so a
  * mode band always shows the article — which means "honour what they asked for"
  * cannot decide it. What decides it is that **the reader who saved that link was
  * looking at a bar that said OUTLINE**: the old `reading`/`outline` chip flipped
  * to `outline` whenever `text=0` was on, granularity-zoom.md calls the compact
  * table "outline mode" throughout, and TableView still classes it `zoom outline`.
- * So Outline is the name that reader already associates with what they
- * bookmarked, and a nested list that expands around them beats a table whose
- * rows are separated by thousands of pixels of the prose it just put back.
- * Arbitrated by Fable, 2026-09-05.
+ * So Outline is the shape that reader already associates with what they
+ * bookmarked, and Structure preserves that nested list on the narrow band this
+ * rewrite was for. It beats a table whose rows are separated by thousands of
+ * pixels of the prose it just put back. Arbitrated by Fable, 2026-09-05;
+ * successor updated 2026-09-10.
  *
  * **The unconditional half looks like tidying an inert parameter and is not.**
  * `text=0` bites only in Hierarchy (`inMode` is `mode !== "hierarchy"`), so a
@@ -1212,16 +1217,16 @@ function liftLegacyAbout(at: Address): Address {
  * URL. Dropping it is defusing something with a delay on it.
  *
  * Everything else is carried through byte for byte, `?cols=0,1` included: a
- * stale column set is dead weight in Outline and harmless, where reserialising
+ * stale column set is dead weight in Structure and harmless, where reserialising
  * it would turn those commas into `%2C`. The mode is rewritten **in place**, so
  * the order the reader's link was written in survives too — and only the
  * **first** `mode` pair, because that is the one every reader of this query
  * gets back (`URLSearchParams.get` returns the first match, and so does nuqs).
  * A duplicate further along is somebody else's already-ignored pair, and
- * rewriting it would both be a lie and produce `?mode=outline&mode=outline`.
+ * rewriting it would both be a lie and produce `?mode=structure&mode=structure`.
  *
  * The server predicts all of this — `readMode` in src/read-address.ts — or the
- * tab would say Hierarchy and then say Outline a second later, which is the
+ * tab would say Hierarchy and then say Structure a second later, which is the
  * whole subject of docs/project/page-titles.md.
  */
 function liftStrandedText(at: Address): Address {
@@ -1245,7 +1250,7 @@ function liftStrandedText(at: Address): Address {
     .map((pair) => {
       if (!stranded || !hasKey(pair, "mode")) return pair;
       stranded = false;
-      return "mode=outline";
+      return "mode=structure";
     })
     .join("&");
   return { pathname: at.pathname, search: kept ? `?${kept}` : "", hash: at.hash };

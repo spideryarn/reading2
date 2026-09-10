@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Outline mode's panel — the half that needs a DOM: **which rung it chooses.**
+ * Structure mode's list face — the half that needs a DOM: **which rung it chooses.**
  *
  * ## What this can and cannot prove
  *
@@ -127,7 +127,13 @@ let reactRoot: Root;
  * layout: more rows, taller. The panel should then take the tallest candidate
  * that still fits.
  */
-function stubHeights(bandHeight: number, pxPerRow = 10, padding = 0, bandRight = 300) {
+function stubHeights(
+  bandHeight: number,
+  pxPerRow = 10,
+  padding = 0,
+  bandRight = 300,
+  wholeTitleExtraPerRow = 0,
+) {
   /* jsdom applies no stylesheet, so the panel's real `0.75rem` padding is not
      here to be read. Without stubbing it, a mutation deleting the padding
      subtraction from the fit is a no-op and the test stays green — which it
@@ -169,7 +175,10 @@ function stubHeights(bandHeight: number, pxPerRow = 10, padding = 0, bandRight =
     if (this.tagName === "OL" && this.dataset.rung) {
       const rows = this.querySelectorAll("li").length;
       const sentences = this.querySelectorAll(".outln-gist, .outln-arc").length;
-      return (rows + sentences * 2) * pxPerRow;
+      const wholeTitleCost = this.classList.contains("clamp")
+        ? 0
+        : rows * wholeTitleExtraPerRow;
+      return (rows + sentences * 2) * pxPerRow + wholeTitleCost;
     }
     return 0;
   });
@@ -184,8 +193,12 @@ function render(
   /* The labels are there unless a case says otherwise, which is what every
      revision says today — src/web/nav-labels.ts. */
   paragraphLabels = true,
+  /* Test-only stand-in for titles wrapping onto extra lines. Zero preserves the
+     original height model; a positive value makes the whole and clamped copies
+     observably different. */
+  wholeTitleExtraPerRow = 0,
 ) {
-  stubHeights(bandHeight, 10, padding, bandRight);
+  stubHeights(bandHeight, 10, padding, bandRight, wholeTitleExtraPerRow);
   act(() => {
     reactRoot.render(
       <OutlinePanel
@@ -267,6 +280,40 @@ describe("choosing a rung", () => {
       expect(n).toBeGreaterThanOrEqual(last);
       last = n;
     }
+  });
+
+  it("prefers the best whole-title rung even when a more detailed clamped rung fits", () => {
+    /* Whole rung 1 is 40px; whole rung 2 is 200px. At 60px the clamped rung 2
+       would fit, but whole titles are the product decision and therefore win
+       before the clamped candidates are considered. Codex code review,
+       2026-09-10. */
+    const panel = render(60, 0, true, 0, 300, true, 30);
+    const visible = panel.querySelector<HTMLOListElement>(
+      ".outln-list:not([data-rung])",
+    )!;
+    const measured = panel.querySelector<HTMLOListElement>(
+      '.outln-list[data-rung="1"][data-clamp="0"]',
+    )!;
+    expect(panel.dataset.outlineRung).toBe("1");
+    expect(panel.dataset.outlineClamp).toBe("0");
+    expect(visible.className).toBe(measured.className);
+    expect(visible.classList.contains("clamp")).toBe(false);
+  });
+
+  it("uses the clamped copy as the floor when no whole-title rung fits", () => {
+    /* Whole rung 1 is 40px and does not fit; clamped rung 1 is 10px and does.
+       The diagnostic and visible class must both describe that same choice. */
+    const panel = render(30, 0, true, 0, 300, true, 30);
+    const visible = panel.querySelector<HTMLOListElement>(
+      ".outln-list:not([data-rung])",
+    )!;
+    const measured = panel.querySelector<HTMLOListElement>(
+      '.outln-list[data-rung="1"][data-clamp="1"]',
+    )!;
+    expect(panel.dataset.outlineRung).toBe("1");
+    expect(panel.dataset.outlineClamp).toBe("1");
+    expect(visible.className).toBe(measured.className);
+    expect(visible.classList.contains("clamp")).toBe(true);
   });
 });
 

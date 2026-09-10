@@ -120,7 +120,7 @@ for is that the second one is worth reading. The rule is
 So `description` is the mode in one fragment — it is also what the command bar draws inline beside
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 these fourteen that is almost always one of three things: **it reads something already built**
-(Hierarchy, Outline, Summary), **its content is a model pass over the article, written once and
+(Hierarchy, Structure, Summary), **its content is a model pass over the article, written once and
 stored** (Glossary, Ideas, Quotes, Timeline, Debate and Diagram's Sketch — the six a press on the
 reading view can start paying for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the fourteenth
@@ -294,6 +294,31 @@ peer reviewer reading in their own field — [referee-mode.md](referee-mode.md).
 Watch for the rule fighting one already there. Chat and Remember may bring in what
 they found on the web, so neither may be told to use "no term the piece did not
 use" — that clause was written and then cut for exactly this reason.
+
+## Retiring a mode
+
+The checklist above read backwards, plus two things adding never needs. Outline was the first to go,
+on 2026-09-10, when its nested list became Structure's narrow face
+([260910g](../plans/260910g-structure-mode-subsumes-outline.md)):
+
+1. **Take the word out of `MODES` and put it in `RETIRED_MODES`** ([`src/modes.ts`](../../src/modes.ts)),
+   pointing at the mode that took it over, so links readers already have land somewhere.
+   `modeFromParam` is the one place both the view and the tab title read it.
+2. **Give the successor the retired name as an alias** in `MODE_CATALOG`, so a reader who types the
+   old word in the command bar lands on the new mode, and rewrite any `description` or `how` —
+   the successor's and its neighbours' — that named it.
+3. **The compiler lists the totals**: every table in [§ The client](#the-client), and in tests
+   `BAND_SAYS`, `SPENDS`, `DRAWS` and `GENERATES`.
+4. **The suite lists the rest**, and only the suite: `visitor-gaps`' `ALWAYS_FREE` and gap walk,
+   `page-title`'s `named`, `BEHIND_THE_SWITCH`, `last-view`'s mode list, `shared-inventory`'s
+   `WIRE_ROW` (any wire key the retired mode owned — Outline had `arc` and `navLabelStatus`) and its
+   always-shares list, the rewrite targets in `address-settling` and `public-read-rewrite`,
+   `SILENT` in `every-mode-says-which-passages-it-marks`, and the band shapes in
+   `mode-surface-changes-no-markup`.
+5. **Any rewrite that produced the retired mode** now produces its successor (`liftStrandedText`, in
+   [url-state.md](url-state.md)), and the mode's line in
+   [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
+   says where it went.
 
 ## Before you call it finished
 

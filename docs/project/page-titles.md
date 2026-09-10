@@ -511,10 +511,13 @@ Two things changed, and the second is the more important:
 
 **The fifth arrived on 2026-09-05**, `liftStrandedText`, and it is the first that changes the *mode*
 rather than the page: `?mode=hierarchy&text=0` became a state with no exit when the `Text` pill left
-the controls bar, so it is rewritten to `?mode=outline`
+the controls bar, so it is rewritten to `?mode=structure` (`?mode=outline` until 2026-09-10)
 ([url-state.md](url-state.md#the-parameters)). The mode is in the tab, so this is a title divergence
 by construction and `readMode` in [read-address.ts](../../src/read-address.ts) predicts it — the same
-shape as `redirectsToMetadata`, one function deciding for both sides. The cross-product below caught
+shape as `redirectsToMetadata`, one function deciding for both sides. A retired mode's name is the
+same shape again without a rewrite: `?mode=outline` is left in the address and means Structure on
+both sides, because `modeParam` and `readMode` both call `modeFromParam`
+([`src/modes.ts`](../../src/modes.ts)). The cross-product below caught
 it: with the server half removed it reports sixteen disagreements, which is the reason to believe
 the corpus rather than the reasoning.
 

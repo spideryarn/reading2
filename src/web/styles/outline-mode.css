@@ -1,10 +1,12 @@
-/* outline-mode.css — the Outline panel in the mode band: the whole document as
-   one nested list that never scrolls. OutlinePanel.tsx, outline.ts.
+/* outline-mode.css — Structure mode's narrow face in the mode band: the whole
+   document as one nested list that never scrolls. OutlinePanel.tsx, outline.ts.
+   It was Outline mode until 2026-09-10, and kept its name and its classes when
+   it became Structure's list (docs/plans/260910g-structure-mode-subsumes-outline.md).
 
    Not the same thing as prose.css § outline, which is the reading table with
    its text column switched off. Different feature, same word. */
 
-/* -------------------------------------------------------- § outline mode ----
+/* ------------------------------------------------- § structure list face ----
    The whole document as one nested list that never scrolls, in the mode band.
    The shell is `.mode-band` far above; everything here is what goes inside it.
 
@@ -72,9 +74,10 @@
 
 .outln-row {
   /* **A grid, so the number sits BESIDE the title instead of above it.**
-     `.outln-text` needs `display: -webkit-box` for its line clamp, and that is
-     a *block-level* box: as an inline-flow sibling of `.outln-num` it took a
-     line of its own, so every numbered row was two lines tall. Nothing
+     `.outln-text` becomes `display: -webkit-box` under the line clamp
+     (`.outln-list.clamp`, the floor since 2026-09-10; every row until then),
+     and that is a *block-level* box: as an inline-flow sibling of
+     `.outln-num` it took a line of its own, so every numbered row was two lines tall. Nothing
      errored and nothing measured wrong — the clamp still said one line, and
      the fit measures real markup so it saw the truth — the panel just spent
      half its height on numbers, and the header's "one line per row" was false
@@ -197,29 +200,47 @@
 .outln-row.lvl-3::before { left: var(--outln-rail); }
 .outln-row.lvl-3::after { left: calc(var(--outln-rail) + var(--outln-indent)); }
 
-/* **One line per row, which the fit's arithmetic assumes and nothing enforced
-   until now.** A wrapped title or a paragraph's navLabel silently made the
-   list taller than the row count implies and the boundary churn larger than
-   the plan's argument allows. `-webkit-line-clamp` rather than
-   `text-overflow: ellipsis`: `nowrap` + ellipsis cuts at the box's right edge,
-   which is right for a single-line box, but these rows can hold a long
-   unbroken token, and line-clamp is the mechanism the gist columns already
-   use. `overflow-wrap: anywhere` stays so a URL in a navLabel breaks rather
-   than being hard-clipped with nothing to say so. */
+/* **A title wraps; it is never cut.** Until 2026-09-10 every row was clamped to
+   one line (`-webkit-line-clamp: 1`), and in a 300px band with a nested number
+   gutter that is about thirty characters — Greg, 2026-09-08: "It seems like it
+   truncates each line after just a few words, and so it's really hard to tell
+   what each one's about." Structure's column rows never clamped, and this list
+   is Structure's narrow face now, so the two faces agree.
+
+   What the clamp had been protecting is the fit, and the fit mostly does not
+   need it: OutlinePanel measures every rung as real hidden markup and takes
+   the largest that fits, so a wrapped title makes a rung taller and a short
+   band simply gets a lower rung — fewer gist sentences, no paragraph rows —
+   rather than an overflow. That is the trade, named: whole titles over depth
+   of detail on a short band. Where not even rung 1 — every part — fits whole,
+   the clamp comes back as the floor (`.outln-list.clamp` below). `overflow-wrap: anywhere` stays so a URL in a navLabel breaks
+   rather than running off a panel that cannot scroll.
+   docs/plans/260910g-structure-mode-subsumes-outline.md. */
 .outln-text {
   /* Named, never auto-placed. Auto-placement would put the title in whichever
      column happened to be free — the `auto` one, on any row whose number is
-     missing — and there it would size itself to its own content: no clamping,
-     and a row that runs off a panel which cannot scroll. `minmax(0, 1fr)` is
-     the other half of that: a bare `1fr` has an `auto` minimum, so a long
-     unbroken token would push the column wider than the panel. */
+     missing — and there it would size itself to its own content and run off a
+     panel which cannot scroll. `minmax(0, 1fr)` is the other half of that: a
+     bare `1fr` has an `auto` minimum, so a long unbroken token would push the
+     column wider than the panel. */
   grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* **The one-line clamp, kept as the floor.** When not even rung 1 — every part
+   — fits with its titles whole, OutlinePanel falls back to the clamped
+   candidates, and the list is what it was before 2026-09-10: one line a row,
+   cut at the edge, all of it on screen. Better a cut title than a part missing
+   off the foot of a panel that cannot scroll (OutlinePanel.tsx § `fit`).
+   `-webkit-line-clamp` rather than `nowrap` + ellipsis, because these rows can
+   hold a long unbroken token, and line-clamp is what the gist columns use. */
+.outln-list.clamp .outln-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
   line-clamp: 1;
   overflow: hidden;
-  overflow-wrap: anywhere;
 }
 
 /* The tiers. Size and colour only — see the header. */
@@ -326,7 +347,6 @@
 .outln-card-gist { margin: 0; font-family: var(--font-reading); }
 
 /* The L0 column's "arc still being written" tint went with the column on
-   2026-09-05. Outline mode simply omits the rung until the sentence exists, so
-   it needs no such mark; `UseArc.working` is still there for whatever wants to
+   2026-09-05. Structure's list face simply omits the rung until the sentence
+   exists, so it needs no such mark; `UseArc.working` is still there for whatever wants to
    say so next. */
-

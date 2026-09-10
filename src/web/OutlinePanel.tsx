@@ -1,5 +1,10 @@
 /**
- * Outline mode — the whole document as one nested list that never scrolls.
+ * **Structure mode's list face** — the whole document as one nested list that
+ * never scrolls. It was Outline mode, 2026-08-28 to 2026-09-10; it is now what
+ * `StructureBand` draws when the band is too narrow for Structure's two columns
+ * (src/web/modes/structure/StructureMode.tsx § `structureFace`), and the
+ * names here — this file, `outline.ts`, `.outln-*` — are the ones it had.
+ * docs/plans/260910g-structure-mode-subsumes-outline.md.
  *
  * The list is built by `outlineProjection` (src/web/outline.ts), which is pure
  * and decides both what is drawn and which row is current. This file does the
@@ -63,6 +68,13 @@ interface Props {
    */
   paragraphLabels: boolean;
   onJump(id: BlockId): void;
+  /**
+   * Handed the band's `<aside>` as well as this panel's own ref, so
+   * `StructureBand` can measure the band's width and choose the face. A stable
+   * function (a state setter), so the merged ref below does not detach and
+   * re-attach on every render.
+   */
+  surfaceRef?: (el: HTMLElement | null) => void;
 }
 
 export function OutlinePanel({
@@ -73,10 +85,36 @@ export function OutlinePanel({
   proseBeside,
   paragraphLabels,
   onJump,
+  surfaceRef,
 }: Props) {
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const bandRef = useCallback(
+    (el: HTMLElement | null) => {
+      panelRef.current = el;
+      surfaceRef?.(el);
+    },
+    [surfaceRef],
+  );
   const measureRef = useRef<HTMLDivElement>(null);
-  const [rung, setRung] = useState<Rung>(1);
+  /**
+   * **What the fit chose: a rung, and whether its titles are cut to one line.**
+   *
+   * Titles wrap since 2026-09-10 (outline-mode.css § `.outln-text`), which is
+   * the whole of Greg's 2Q. That broke one promise the ladder made — rung 1,
+   * "every part, one line each — if this will not fit, nothing will" — because
+   * a whole title can be three lines, and a band that held every part at one
+   * line each may not hold them at three. The panel does not scroll, so an
+   * over-tall rung 1 would silently drop the last parts off the foot. GPT Sol's
+   * review of the plan, P1-2.
+   *
+   * So the one-line clamp stays, as the **floor**: every rung is measured both
+   * whole and clamped, a whole-title rung that fits always beats a clamped one
+   * (whole titles over more detail — the trade 2Q asked for), and the clamped
+   * set is only reached when not even rung 1 fits whole. Then the reader gets
+   * exactly what they had before 2026-09-10, which is the list that fitted.
+   */
+  const [fit, setFit] = useState<{ rung: Rung; clamp: boolean }>({ rung: 1, clamp: false });
+  const rung = fit.rung;
 
   /**
    * Every candidate, always built. Cheap — a few hundred objects — and building
@@ -188,19 +226,29 @@ export function OutlinePanel({
          fitting number would report `data-outline-rung="5"` for a list with no
          paragraphs in it. The attribute exists to be read in a browser as
          evidence of what the fit chose; a diagnostic that overstates how far
-         down the ladder it got is worse than none. */
-      let best: Rung = 1;
-      let bestHeight = -1;
-      for (const child of Array.from(box.children)) {
-        const el = child as HTMLElement;
-        const r = Number(el.dataset.rung) as Rung;
-        const h = el.scrollHeight;
-        if (h <= avail && h > bestHeight) {
-          best = r;
-          bestHeight = h;
+         down the ladder it got is worse than none.
+
+         **Whole titles first, then clamped** — `fit` above says why. One pass
+         per set; the clamped set is only asked when the whole set had nothing
+         that fits, and if neither has, it is clamped rung 1, the old floor. */
+      const bestOf = (clamp: boolean): Rung | null => {
+        let best: Rung | null = null;
+        let bestHeight = -1;
+        for (const child of Array.from(box.children)) {
+          const el = child as HTMLElement;
+          if ((el.dataset.clamp === "1") !== clamp) continue;
+          const r = Number(el.dataset.rung) as Rung;
+          const h = el.scrollHeight;
+          if (h <= avail && h > bestHeight) {
+            best = r;
+            bestHeight = h;
+          }
         }
-      }
-      setRung(best);
+        return best;
+      };
+      const whole = bestOf(false);
+      const next = whole !== null ? { rung: whole, clamp: false } : { rung: bestOf(true) ?? 1, clamp: true };
+      setFit((prev) => (prev.rung === next.rung && prev.clamp === next.clamp ? prev : next));
     };
     measure();
 
@@ -307,10 +355,14 @@ export function OutlinePanel({
   return (
     <ModeSurface
       feature="outln"
-      label="Outline"
+      /* The mode's name, which is what a screen reader should hear: since
+         2026-09-10 this is Structure's narrow face, and "Outline" names a mode
+         that is not on the Dock any more. */
+      label="Structure"
       /* **The band Outline measures**, so the ref goes to the surface's own
-         `ref` prop and lands on the same `<aside>` it always did. */
-      ref={panelRef}
+         `ref` prop and lands on the same `<aside>` it always did — merged with
+         `StructureBand`'s, which measures the same element's width. */
+      ref={bandRef}
       /* Evidence about the decision, never about the fit — a browser session
          can read which rung was chosen. Reaches the element through the
          surface's `{...rest}` passthrough, which exists for this attribute.
@@ -320,10 +372,12 @@ export function OutlinePanel({
          `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
          code at all. It needs a browser. docs/project/browser-testing.md. */
       data-outline-rung={rung}
+      /* And whether the titles had to be cut to fit — `fit` above. */
+      data-outline-clamp={fit.clamp ? "1" : "0"}
     >
       <TooltipGroup delay={{ open: 150, close: 90 }} timeoutMs={400}>
         <ol
-          className="outln-list"
+          className={listClass(fit.clamp)}
           /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: `role="tree"` on a real <ol> is the W3C tree-view pattern — the list IS the widget, owning the single tab stop and the arrow keys. Swapping in a <div> to satisfy the rule would throw away the list semantics for any AT that ignores the role. */
           role="tree"
           aria-label="The article's structure"
@@ -350,17 +404,28 @@ export function OutlinePanel({
           `<ol class="outln-list">` of `<li class="outln-row …">`, because a
           measurement of different markup is a measurement of something else.
           That is the whole point of measuring rather than estimating, and it
-          would be quietly undone by a measuring copy that merely looked alike. */}
+          would be quietly undone by a measuring copy that merely looked alike.
+
+          Each rung twice — titles whole, then titles clamped — because the fit
+          chooses between both sets (`fit` above), and the clamped rows are a
+          different height. */}
       <div className="outln-measure" aria-hidden="true" ref={measureRef}>
-        {candidates.map((c) => (
-          <ol className="outln-list" key={c.rung} data-rung={c.rung}>
-            {c.rows.map((row) => (
-              <li key={row.node.id} className={rowClass(row, false)}>
-                <RowBody row={row} />
-              </li>
-            ))}
-          </ol>
-        ))}
+        {[false, true].flatMap((clamp) =>
+          candidates.map((c) => (
+            <ol
+              className={listClass(clamp)}
+              key={`${c.rung}-${clamp ? "clamp" : "whole"}`}
+              data-rung={c.rung}
+              data-clamp={clamp ? "1" : "0"}
+            >
+              {c.rows.map((row) => (
+                <li key={row.node.id} className={rowClass(row, false)}>
+                  <RowBody row={row} />
+                </li>
+              ))}
+            </ol>
+          )),
+        )}
       </div>
     </ModeSurface>
   );
@@ -414,6 +479,14 @@ function Row({
       </li>
     </Tooltip>
   );
+}
+
+/**
+ * The list's classes, written once for the same reason as `rowClass` below:
+ * the visible list and the candidate it was measured as must be the same markup.
+ */
+function listClass(clamp: boolean): string {
+  return clamp ? "outln-list clamp" : "outln-list";
 }
 
 /**

@@ -3,7 +3,7 @@
  *
  * One rule, in one place, because three surfaces read it and they must agree:
  * the `Paragraphs` pill in the controls bar, the leaf column of the table when
- * it is open, and Outline mode's rung 5. A fourth — the spine's hover card —
+ * it is open, and Structure's list face at rung 5. A fourth — the spine's hover card —
  * degrades on its own and is left alone, which is why it is not listed.
  * `docs/project/granularity-zoom.md` § the tabular view has the surfaces;
  * `docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md` § F8 is why
