@@ -254,6 +254,25 @@ This was agreed with `launch-protocol`, 2026-09-10:
   `CLAUDE_SESSION_ID=<uuid>` in `-e` at creation. It keeps Stage 2's `start.json` first line and its
   `exit.json` line after `claude`. The job runs `claude --resume <uuid> --permission-mode auto --
   "$(cat prompt)"`, or whatever the spike shows is correct.
+- **What `launch-protocol`'s Stage 2 settled** (`3858a4a9` on its branch, 2026-09-10; it reaches
+  `dev` after its Stage 1b fixes):
+  - `PlanRequest` is a union keyed on `launcherKind`. `run` is required for `headless` and
+    `tmux-headless`, and forbidden for `tmux`. The `tmux-resume` arm adds `resume: {
+    conversationId, dir }` the same way.
+  - gjd-remote's launch pieces are pure functions in `scripts/gjd-remote-launch.ts`:
+    `parseLaunchFlags`, `launchBoxCheck`, `launchStartLines`, `launchExitLines` and
+    `launchTmuxFlags`. `gjd-remote.ts` has four small insertions behind `--launch-id`.
+    `--resume-conversation` goes beside them, with `start.json`'s line kept ahead of the directory
+    guard, and `exit.json`'s right after `_gjd_claude_status=$?`.
+  - gjd-remote's stdin is a complete regular file (the material plus a newline), not a pipe. The
+    adapter refuses anything over gjd-remote's 96 KB prompt cap; the nudge is far below it.
+  - The tmux adapter answers `started` once gjd-remote has a pid. A later gjd-remote failure
+    surfaces as `outcome-unknown`, through reconciliation.
+  - **A new tmux session takes its environment from the client that creates it, not from the
+    server.** The daemon, through gjd-remote, therefore passes its own environment into a resumed
+    session, and Stage 3 composes the launchers with a deliberate `env`. For a pinned account, the
+    config directory comes from `--account`'s `CLAUDE_CONFIG_DIR` prefix, never from whatever the
+    daemon happens to have.
 - **An admission class `recovery-resume`**, capacity 1, **released on `observed-running`**. From
   there it is an ordinary interactive session, and its hours of life must not block the scheduler's
   `claude-session` class. `launch-protocol` is building this in its next fix round. My pace rule
@@ -362,9 +381,20 @@ The sandbox refused Sol's findings file, so the answer file is the whole record.
     with no config-dir prefix). **Moving such a session onto a pool account is a product call for
     Greg**: it would work, because the transcript directory is shared, but it changes whose quota
     the session spends.
-  - **The quota gate is the pinned account's own live reading.** It comes from `readUsage`,
-    cached 5 minutes per account, and is fetched only when a request is at the head of the queue
-    and every other check has passed.
+  - **The quota gate is the pinned account's own reading, taken from the daemon's `accountUsage`
+    checkpoint field.** That is `StoredAccountUsage`, on `dev` since `74634fd3`, from
+    [usage-per-account.md](../project/usage-per-account.md): one live reading per account,
+    collected on each usage pass. Recovery makes **no network calls of its own**: a second reading
+    of one subscription would disagree with the page's by a point or two, which that doc names as
+    worse than either reading alone. The first draft of this entry had recovery call `readUsage`
+    behind a 5-minute cache; that was superseded the same evening, before any of it was built.
+    - The section used must be for the pinned registry name, in the `claude` family, **with a
+      non-null provider account id**.
+    - Its freshness is judged by that section's own `takenAt`, not by the pass's, with the same 15
+      minutes.
+    - `StoredAccountUsage` `none`, a missing section, an unproved identity, a stale `takenAt`, or
+      a non-empty `problems` list naming the registry all count as unknown, and recovery holds on
+      unknown.
     - It is judged by a new `accountQuotaGate(reading, nowMs, onUnknown)`, added to
       `launch-gate.ts` beside `launchGate`, with the same holding rules: a window at 100% or more
       holds until its reset; 80% or more holds; unreadable goes to `onUnknown`.
