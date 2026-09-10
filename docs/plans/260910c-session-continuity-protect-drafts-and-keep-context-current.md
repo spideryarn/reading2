@@ -1,7 +1,15 @@
 # Session continuity: protect drafts and keep context current
 
-**Status:** planning · revision 3, after GPT Sol refused revision 1 and Fable arbitrated ·
-worktree `session-continuity` · branch `worktree-session-continuity`
+**Status:** in progress · revision 3 of the plan, after GPT Sol refused revision 1 and Fable
+arbitrated · worktree `session-continuity` · branch `worktree-session-continuity`
+
+**Where it stands, 2026-09-10 ~09:00 UTC.** Pushed to `dev` at `536b1b68` (from `fc509eb0`), after
+all 95 `tests/fleet-*` files passed on the tree merged with `origin/dev` and `npm run typecheck` was
+exit 0: Stage 1 and its two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. The
+Overseer has been told a dashboard restart is needed for any of it to reach the live page, the
+double-launch fix most urgently. **In flight:** Sol's Stage 1 round 2 (the last discovery round
+for that stage) and the shared-reader extraction. **Still to build:** 2b, 4b, the `role="region"`
+fix, the Read-again regressions, the Sessions-filter decision and the browser check.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -565,6 +573,16 @@ messages cannot show a previous execution as the current one.
 
 ## The review ledger
 
+**Three plans share the letter `260910c` today** — this one, bounded transport and responsive
+collection — which the naming scheme allows by design (`docs/reusable/write-planning-doc.md`), so
+nothing already committed is renamed. But review artefacts named only `260910c-stageN-…` collide:
+on 2026-09-10 I overwrote responsive collection's `260910c-stage2-code-review-prompt.md` in this
+working tree with my own Stage 2 prompt, a file my merge of `origin/dev` had brought in. It was
+caught before any commit, from the write tool reporting *updated* rather than *created*, and
+restored from `HEAD`. **This plan's review artefacts from Stage 2 onwards carry the slug:**
+`260910c-session-continuity-stageN-code-review-*`. The unslugged Stage 1 and Stage 3 artefacts
+below are this plan's and stay where they are.
+
 Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 `npx vitest run tests/fleet-web.test.tsx` itself: 430 tests passed.
 
@@ -635,12 +653,27 @@ stale threshold of `2 × pollMs + ACTIONS_READ_DEADLINE_MS`, checked against the
 `actionsPollMs={0}`; and `SessionQueue` currently draws its error *instead of* its status line,
 which 4b must check still leaves the items drawn underneath.
 
-**One reader, not two.** 4a reports that its `actionsReader` and Stage 3's `feedReader` now
-repeat the same core almost line for line — one read in flight, one pending, a deadline racing the
-API promise, the generation check, abort on stop — and differ only in what triggers a read. Two
-copies of one mechanism is the drift this repo's "prefer simple" rule names, so it is extracted into
-one shared reader both hooks use, **after Sol's Stage 3 round-2 check is out of `FeedPanel.tsx`**,
-in 4b's slot.
+**One reader, not two — built.** 4a reported that its `actionsReader` and Stage 3's `feedReader`
+repeated the same core almost line for line — one read in flight, one pending, a deadline racing
+the API promise, the generation check, abort on stop — differing only in what triggers a read. Two
+copies of one mechanism is the drift this repo's "prefer simple" rule names, so once Sol's Stage 3
+round 2 was out of `FeedPanel.tsx`, an Opus subagent extracted it: `single-flight-reader.ts`, with
+its own eleven tests, which both hooks now use. A behaviour-preserving refactor, and the proof is
+that the four protected test files (`fleet-feed-freshness`, `fleet-feed-panel`,
+`fleet-actions-freshness`, `fleet-web`) passed without an edit.
+
+- **The gate stays with the caller**, through an `admit` hook the core asks only when the slot is
+  free. So the two hidden-tab rules stay deliberately different, as they were: the feed defers every
+  read while hidden (F52); the actions hook lets a person's refresh read from a hidden tab.
+- **One mutation shortfall, accepted rather than fixed.** Removing *only* the generation check —
+  keeping the in-flight check — turns the core's own suite red but neither hook's, because every
+  hook test settles the newer read before delivering the stale answer, so the in-flight check alone
+  catches it. That gap predates the refactor: the two originals had the same double guard and the
+  same tests. The core's suite now covers the case directly, which is where the guard lives. Adding
+  it to the hook suites would mean editing the files whose being untouched is the proof that nothing
+  changed, for no gain.
+- The Read-again guard in Stage 5 is a third instance of the same problem, and its brief says to
+  use this module rather than write a third copy.
 
 Stage 3 code review, round 1, GPT Sol, 2026-09-10, on `8465380d`
 (`260910c-stage3-code-review-sol.md`), concurrently with the Stage 1 review in disjoint files; its

@@ -34,7 +34,9 @@
  * queue you cannot currently read is not an empty queue.
  *
  * Since plan 260910c Stage 4 it also has transport.ts's manners, in the shape
- * FeedPanel.tsx's `feedReader` gave the recent-messages feed:
+ * FeedPanel.tsx's `feedReader` gave the recent-messages feed. The one-in-flight,
+ * deadline and generation rules below are single-flight-reader.ts, which both
+ * readers delegate to; the poll and the hidden-tab rule are this file's own:
  *
  *  - **Becoming visible reads at once, and so does coming back online** — the
  *    two moments the queue on screen is most likely to be wrong.
@@ -57,7 +59,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { httpActionsApi, type ActionsApi, type ActionsFeed, type FeedOutcome } from "./actions-client";
-import { describeError } from "./transport";
+import { singleFlightReader } from "./single-flight-reader";
 
 /** How often to ask. Cheap — this is the server's own memory, not a collection. */
 export const ACTIONS_POLL_MS = 10_000;
@@ -126,53 +128,28 @@ function tabHidden(): boolean {
  */
 function actionsReader(api: ActionsApi, intervalMs: number, sink: ReaderSink): ActionsReader {
   let stopped = false;
-  let generation = 0;
-  let inFlight: { controller: AbortController; deadline: ReturnType<typeof setTimeout> } | null = null;
-  let again = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const settle = (mine: number, outcome: FeedOutcome): void => {
-    if (stopped || mine !== generation || inFlight === null) return;
-    clearTimeout(inFlight.deadline);
-    inFlight = null;
-    // The feed is deliberately untouched by a failure, as in useFleetState.
-    if (outcome.ok) sink.onFeed(outcome.feed, Date.now());
-    else sink.onFailure(outcome.why);
-    if (again) {
-      again = false;
-      read();
-    }
-  };
-
-  /* Asked for — by a person, a mutation, or the tab coming back. It reads
-     whether or not the tab is hidden, as `refresh()` always has: somebody
-     asked, and a hidden tab only excuses the reads the page starts itself. */
-  const read = (): void => {
-    if (stopped) return;
-    if (inFlight !== null) {
-      again = true;
-      return;
-    }
-    generation += 1;
-    const mine = generation;
-    const controller = new AbortController();
-    const deadline = setTimeout(() => {
-      controller.abort();
-      settle(mine, {
-        ok: false,
-        why: `the dashboard did not answer within ${Math.round(ACTIONS_READ_DEADLINE_MS / 1000)}s, so this page stopped waiting — the box may be loaded, or the read stuck`,
-      });
-    }, ACTIONS_READ_DEADLINE_MS);
-    inFlight = { controller, deadline };
-    api.feed(controller.signal).then(
-      (outcome) => settle(mine, outcome),
-      (cause: unknown) => settle(mine, { ok: false, why: `the read failed before it answered: ${describeError(cause)}` }),
-    );
-  };
+  /* One read in flight, one pending, the deadline and the generation check —
+     single-flight-reader.ts. No `admit`: it reads whether or not the tab is
+     hidden, as `refresh()` always has. Somebody asked — a person, a mutation,
+     the tab coming back — and a hidden tab only excuses the reads the page
+     starts itself, which `tick` gates below. */
+  const core = singleFlightReader<FeedOutcome>({
+    read: (signal) => api.feed(signal),
+    deadlineMs: ACTIONS_READ_DEADLINE_MS,
+    noAnswer: (why) => ({ ok: false, why }),
+    onSettle: (outcome) => {
+      // The feed is deliberately untouched by a failure, as in useFleetState.
+      if (outcome.ok) sink.onFeed(outcome.feed, Date.now());
+      else sink.onFailure(outcome.why);
+    },
+  });
+  const read = (): void => core.request();
 
   const tick = (): void => {
     if (stopped) return;
-    if (!tabHidden() && inFlight === null) read();
+    if (!tabHidden() && !core.reading()) read();
     timer = setTimeout(tick, intervalMs);
   };
 
@@ -189,15 +166,9 @@ function actionsReader(api: ActionsApi, intervalMs: number, sink: ReaderSink): A
     stop: () => {
       if (stopped) return;
       stopped = true;
-      generation += 1;
-      again = false;
+      core.stop();
       if (timer !== null) clearTimeout(timer);
       timer = null;
-      if (inFlight !== null) {
-        clearTimeout(inFlight.deadline);
-        inFlight.controller.abort();
-        inFlight = null;
-      }
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
       if (typeof window !== "undefined") window.removeEventListener("online", read);
     },
