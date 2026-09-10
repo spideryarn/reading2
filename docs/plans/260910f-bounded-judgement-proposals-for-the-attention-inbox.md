@@ -247,6 +247,21 @@ went green). Where it departed from the brief, each accepted:
 - **Not covered by a test**: `runAttentionCommand` end to end (it needs tmux). That a `--no-write`
   hand run still goes through the budget rests on a structural test that only
   `attention-classify.ts` and `model-budget.ts` name `classifyTail` anywhere in the tree.
+**Sol's Stage 1 review** ([findings](260910f-bounded-judgement-proposals-for-the-attention-inbox-stage1-review-sol-findings.md)),
+read-only, of `f03d5571`: **stopped by the provider's content filter after about nine of its thirty
+minutes** (*"This content was flagged for possible cybersecurity risk"* — most likely its own
+reproduction scripts for the lock race), with no closing answer. Two established P1s before it
+stopped, both confirmed by reading the code:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F11 | a second budget instance can `settle` a reservation it did not mint, freeing its worst case and granting past the ceiling | fixing, red first — instance-private ownership of reservation ids |
+| F12 | an `unavailable` refusal while re-reading a STALE `no-question` publishes a calm empty list, because a stale verdict counts as judged | fixing, red first — a refused re-read counts its sessions unjudged, and the stale card stays |
+
+**Not reviewed by Sol, because of the stop:** attack items 4 (a cooldown that never starts or never
+ends) and 5 (a stale verdict never re-read, or a failure cached). The narrow P1 check covers the two
+fixes only, per the brief; Fable reads items 4 and 5 independently afterwards.
+
 - Lint is advisory here: `Published` in `AttentionPanel.tsx` now trips
   `noExcessiveCognitiveComplexity` with the `limited` branch added; the rest of the file-level
   findings are the repo's `u["kind"]` idiom and pre-existing `useYield`s.
@@ -263,6 +278,16 @@ went green). Where it departed from the brief, each accepted:
 - [ ] `src/spend-declarations.ts`: the row amended with the day ceiling and the widened prompt.
 
 ### Stage 3 — the evaluation, and the answer
+
+**Machinery built ahead of Stage 2**, because it touches only new files: `tools/overseer/attention-eval.ts`
+(`evaluate`, `describeEvaluation`, a documented fake classifier, `paidEvalClassifier` — a day budget
+of its own in a fresh temp directory, so an evaluation never eats the daemon's day),
+`scripts/attention-eval.ts` and `tests/overseer-attention-eval.test.ts` (16 tests, seen red); Opus
+subagent. It could not read the key without a second file naming the credential, so **I added
+`readGatewayKey()` to `attention-cli.ts` myself** (a few lines) — the one reader, now used by the
+hand run, the daemon's runner and the evaluation alike. Routing counts only question verdicts on
+scored items; `unplaced` is counted apart from N; W splits into *wrong holder* and *asked on a turn
+that asked nothing*.
 
 - [ ] Run both prompt versions for real over the labelled set (cents). Report **detection** for each
       (does the widened prompt damage it? — D1's trigger) and, for the widened one, routing

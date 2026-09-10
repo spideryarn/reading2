@@ -90,6 +90,26 @@ export type AttentionCommandOptions = {
   captureTo: string | null;
 };
 
+/**
+ * The gateway key, or `null` when none is set. **The one reader of it under
+ * tools/overseer/** — the hand run, the daemon's runner and the evaluation
+ * (scripts/attention-eval.ts) all come through here, so the spend scan in
+ * tests/no-undeclared-spend.test.ts still sees exactly one file naming the
+ * credential rather than one per caller.
+ *
+ * FROM THE ENVIRONMENT, AND DELIBERATELY NOT FROM `.env.local`. `loadEnvLocal`
+ * lives in src/env.ts and the Overseer must not depend on anything under src/
+ * (docs/project/overseer-direction.md § Principles) — and a second reader
+ * of the same file would be worse than none, because src/env.ts lets the FILE
+ * beat the shell, while a daemon's key comes from its unit file and the shell
+ * must win. Two precedence rules over one filename is how you get a process
+ * talking to the wrong account and reporting success.
+ */
+export function readGatewayKey(): string | null {
+  const key = process.env["OPENROUTER_API_KEY"];
+  return key === undefined || key === "" ? null : key;
+}
+
 export async function runAttentionCommand(options: AttentionCommandOptions): Promise<number> {
   const fleet =
     options.panes !== null
@@ -127,15 +147,9 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
     `cli-${process.pid}:tmux-${tmuxServerGeneration() ?? "unknown"}`,
   );
 
-  // FROM THE ENVIRONMENT, AND DELIBERATELY NOT FROM `.env.local`. `loadEnvLocal`
-  // lives in src/env.ts and the Overseer must not depend on anything under src/
-  // (docs/project/overseer-direction.md § Principles) — and a second reader
-  // of the same file would be worse than none, because src/env.ts lets the FILE
-  // beat the shell, while a daemon's key comes from its unit file and the shell
-  // must win. Two precedence rules over one filename is how you get a process
-  // talking to the wrong account and reporting success.
-  const apiKey = process.env["OPENROUTER_API_KEY"];
-  if (!options.dry && (apiKey === undefined || apiKey === "")) {
+  // From the environment, never `.env.local` — `readGatewayKey` says why.
+  const apiKey = readGatewayKey();
+  if (!options.dry && apiKey === null) {
     console.error(
       "OPENROUTER_API_KEY is not set, and this reads the environment rather than .env.local — see the\n" +
         "comment at this check for why. Export it first:\n" +
@@ -320,8 +334,8 @@ export { planClassifications };
  * person poking at a root a daemon owns.
  */
 export function attentionRunner(root: string, instance: string): (() => Promise<AttentionList>) | null {
-  const apiKey = process.env["OPENROUTER_API_KEY"];
-  if (apiKey === undefined || apiKey === "") return null;
+  const apiKey = readGatewayKey();
+  if (apiKey === null) return null;
   // The day budget, in the root this daemon holds — the same ledger a hand run
   // of `overseer attention` reserves against (plan 260910f D4). Stateless apart
   // from the directory, so one per runner is enough.
