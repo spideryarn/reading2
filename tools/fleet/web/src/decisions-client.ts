@@ -250,8 +250,14 @@ function record(value: unknown): value is DecisionWireRecord {
   if (!isRecord(value)) return false;
   if (!text(value["id"]) || !DECISION_ID.test(value["id"]) || !recorder(value["recordedBy"])) return false;
   if (!assessment(value)) return false;
-  // The drain copies only a session's decision; anything else it "recorded" is a forgery or a bug.
-  if (value["recordedBy"] === "daemon" && (value["author"] as DecisionWireAuthor).kind !== "session") return false;
+  /* There are exactly three schema-2 entrances: Greg and the Overseer use the
+     CLI for their own decisions; the drain copies a session's. A mismatch is
+     a forgery or a server bug, never another supported provenance. V1 remains
+     `legacy-unrecorded` with either historical human recorder. */
+  const authorKind = (value["author"] as DecisionWireAuthor).kind;
+  const expectedAuthor = value["recordedBy"] === "daemon" ? "session" : value["recordedBy"];
+  if (authorKind !== "legacy-unrecorded" && authorKind !== expectedAuthor) return false;
+  if (authorKind === "legacy-unrecorded" && value["recordedBy"] === "daemon") return false;
   if (value["class"] !== "assumption" && value["class"] !== "decision" && value["class"] !== "decline") {
     return false;
   }

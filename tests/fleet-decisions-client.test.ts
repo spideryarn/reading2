@@ -424,6 +424,23 @@ describe("schema 2 of the payload", () => {
 
   it.each([
     ["daemon recording an Overseer-authored decision", { ...ROW.record, recordedBy: "daemon" }],
+    ["the Overseer recorder claiming Greg authored the decision", { ...ROW.record, author: { kind: "greg" } }],
+    [
+      "Greg's recorder claiming the Overseer authored the decision",
+      {
+        ...ROW.record,
+        recordedBy: "greg",
+        touches: [{ ...ROW.record.touches[0], by: "greg" }],
+      },
+    ],
+    [
+      "the Overseer recorder claiming a session authored the decision",
+      {
+        ...SESSION_RECORD,
+        recordedBy: "overseer",
+        touches: [{ ...SESSION_RECORD.touches[0], by: "overseer" }],
+      },
+    ],
     [
       "a review touch by the daemon",
       {

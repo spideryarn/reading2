@@ -294,8 +294,25 @@ all accepted:
   neither can import the other; one test runs both over the same record.
 - Each card sits in a wrapper with `id="decision-<id>"` (`Card` takes no id, and `ui.tsx` is not ours).
 
-Not seen in a real browser; jsdom only. The frozen old-event-parser test was never seen red (its first
-version passed for the wrong reason — an id outside the alphabet — and was corrected after the code).
+Not seen in a real browser; jsdom only.
+
+**Sol's stage review** ([answer](260910e-work-reports-stage2-review-sol.md), one round, write-capable):
+*ready to land after these fixes*, three fixed in-stage, each red first —
+
+- **WR-S2-1 (P0)**: a hand-written schema-2 line could pair `by: overseer` with `author: greg`, and that
+  false attribution reached the fold, route, CLI and panel. Both parsers now admit only the matrix
+  overseer→overseer, greg→greg, daemon→session.
+- **WR-S2-2 (P1)**: `appendEvents` refused Stage 3's exact replay of a prepared event as a duplicate
+  event id before command-id idempotency ran. An already-persisted, command-keyed event with the same
+  id, timestamp and payload is now dropped before the preflight fold; a changed payload under the same
+  id still fails.
+- **WR-S2-3 (P1)**: the schema-2 bounds missed execution tokens and reasons, `chose.option`, command ids
+  and long fractional timestamps; verified tokens must now be canonical.
+
+It broke the frozen old event parser on purpose and saw it go red for the right reason, which closes
+the never-seen-red gap above. Wider, not fixed and not fixable here: a process running as the same
+Unix user can still write a consistent `by: greg, author: greg` line — the governance-not-OS boundary
+the record already names.
 
 - [x] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
 - [x] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.

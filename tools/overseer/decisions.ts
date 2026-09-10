@@ -87,6 +87,7 @@ import {
   untrustedTextProblem,
   type CheckedArtefact,
 } from "../fleet/artefact-ref.js";
+import { isExecutionTokenText } from "../fleet/execution-token.js";
 import type { QueueActor } from "../fleet/wire.js";
 import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "./lock.js";
@@ -206,6 +207,10 @@ export const DECISION_TEXT_LIMITS = {
   recommendation: 2000,
   plan: MAX_PATH_CHARS,
   sessionName: 200,
+  commandId: 200,
+  isoInstant: 64,
+  executionToken: 200,
+  executionWhy: 500,
   reviewText: 2000,
   options: 20,
   sessions: 20,
@@ -814,6 +819,19 @@ function asExecution(value: unknown): ExecutionRef | null {
   }
 }
 
+function executionTextProblem(name: string, execution: ExecutionRef): string | null {
+  if (execution.kind === "not-found") return null;
+  if (execution.kind === "unavailable") {
+    const why = untrustedTextProblem(execution.why, DECISION_TEXT_LIMITS.executionWhy);
+    return why === null ? null : `${name}.why ${why}`;
+  }
+  const token = untrustedTextProblem(execution.token, DECISION_TEXT_LIMITS.executionToken);
+  if (token !== null) return `${name}.token ${token}`;
+  if (!isExecutionTokenText(execution.token)) return `${name}.token is not a canonical execution token`;
+  const since = untrustedTextProblem(execution.since, DECISION_TEXT_LIMITS.isoInstant);
+  return since === null ? null : `${name}.since ${since}`;
+}
+
 function asBearsOn(value: unknown): BearsOn | null {
   if (!isRecord(value) || !Array.isArray(value["sessions"]) || !("plan" in value)) return null;
   const plan = asNullableString(value["plan"]);
@@ -837,6 +855,8 @@ function v1FieldTextProblem(fields: DecidedFields): string | null {
   const checks: Array<[string, string | null, number]> = [
     ["question", fields.question, limits.question],
     ["why", fields.why, limits.why],
+    ["decidedAt", fields.decidedAt, limits.isoInstant],
+    ["chose.option", fields.chose.option, limits.optionName],
     ["chose.note", fields.chose.note, limits.note],
     ["bearsOn.plan", fields.bearsOn.plan, limits.plan],
     ...fields.options.flatMap((option, index): Array<[string, string, number]> => [
@@ -856,6 +876,10 @@ function v1FieldTextProblem(fields: DecidedFields): string | null {
     const why = untrustedTextProblem(text, max);
     if (why !== null) return `${name} ${why}`;
   }
+  for (const [index, session] of fields.bearsOn.sessions.entries()) {
+    const why = executionTextProblem(`bearsOn.sessions[${index}].execution`, session.execution);
+    if (why !== null) return why;
+  }
   return null;
 }
 
@@ -874,6 +898,8 @@ function asAuthor(value: unknown): Result<DecisionAuthor> {
       }
       const execution = asExecution(value["execution"]);
       if (execution === null) return no("author.execution must be a verified, not-found or unavailable execution reference");
+      const why = executionTextProblem("author.execution", execution);
+      if (why !== null) return no(why);
       return ok({ kind: "session", name, execution });
     }
     default:
@@ -985,6 +1011,14 @@ export function parseEventDetailed(line: string): EventParse {
   if (!("commandId" in json) || commandId === undefined) return refuse("commandId must be present, as text or null");
   const at = asIso(json["at"]);
   if (at === null) return refuse("at must be an ISO instant");
+  if (schema === DECISIONS_SCHEMA) {
+    if (commandId !== null) {
+      const why = untrustedTextProblem(commandId, DECISION_TEXT_LIMITS.commandId);
+      if (why !== null) return refuse(`commandId ${why}`);
+    }
+    const why = untrustedTextProblem(at, DECISION_TEXT_LIMITS.isoInstant);
+    if (why !== null) return refuse(`at ${why}`);
+  }
   const by = asRecorder(json["by"]);
   if (by === null) return refuse("by must be greg, overseer or daemon");
   const id = json["id"];
@@ -1002,9 +1036,10 @@ export function parseEventDetailed(line: string): EventParse {
       if (text !== null) return refuse(text);
       const assessment = asAssessment(json);
       if (!assessment.ok) return refuse(assessment.why);
-      if (by === "daemon" && assessment.value.author.kind !== "session") {
+      const expectedAuthor = by === "daemon" ? "session" : by;
+      if (assessment.value.author.kind !== expectedAuthor) {
         return refuse(
-          `daemon records only a session's decision; this line names the ${assessment.value.author.kind} as its author`,
+          `${by} may record only a ${expectedAuthor} decision; this line names ${assessment.value.author.kind} as its author`,
         );
       }
       return { ok: true, event: { schema, eventId, commandId, at, by, ...fields.value, ...assessment.value } };
@@ -1241,29 +1276,48 @@ export function appendEvents(
        make the record worse?" A corrupt line still does not freeze every
        future legitimate append, which is important for a human-owned record. */
     const prefix = readEvents(root);
+    /* A prepared report event is replayed as the exact same event after a
+       crash. The fold deliberately treats a duplicate event id as a problem,
+       so recognise an already-persisted, command-keyed event at this write
+       boundary before asking the fold about genuinely new input. A matching
+       command with a fresh event id remains the older CLI retry case below;
+       the same event id with any changed field still reaches the fold and is
+       refused as a duplicate. */
+    const pending = events.filter(
+      (event) =>
+        event.commandId === null ||
+        !prefix.some(
+          (written) =>
+            written.commandId === event.commandId &&
+            written.eventId === event.eventId &&
+            written.at === event.at &&
+            sameCommandPayload(written, event),
+        ),
+    );
+    if (pending.length === 0) return { ok: true, view: current, path: file, repaired };
     const baseline = foldDecisions(prefix, []);
-    const candidate = foldDecisions([...prefix, ...events], []);
+    const candidate = foldDecisions([...prefix, ...pending], []);
     if (candidate.problems.length > baseline.problems.length) {
       const added = candidate.problems.slice(baseline.problems.length);
       return {
         ok: false,
         code: added.some((problem) => problem.kind === "command-conflict") ? "command-conflict" : "would-break",
         why:
-          `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
+          `refusing to write: these ${pending.length} event(s) would put ${added.length} new problem(s) into the ` +
           "decision record, and an append-only log has no way to take them back — " +
           added.map((problem) => `${problem.kind}: ${problem.why}`).join("; "),
       };
     }
 
-    /* Exact retries are evidence that the original write succeeded, not new
-       history. Filter them only after the fold has checked duplicate event ids
-       and command conflicts, so idempotency cannot mute either problem. */
+    /* The CLI retries one intent with a fresh event id and clock. Filter that
+       form only after the fold has checked duplicate event ids and command
+       conflicts, so command idempotency cannot mute either problem. */
     const commands = new Map<string, DecisionEvent>();
     for (const event of prefix) {
       if (event.commandId !== null && !commands.has(event.commandId)) commands.set(event.commandId, event);
     }
     const toAppend: DecisionEvent[] = [];
-    for (const event of events) {
+    for (const event of pending) {
       if (event.commandId !== null) {
         const original = commands.get(event.commandId);
         if (original !== undefined && sameCommandPayload(original, event)) continue;

@@ -565,13 +565,13 @@ describe("reading and appending", () => {
     expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(before);
   });
 
-  test("append reports duplicate-event even when the command id is duplicated too", () => {
+  test("append reports duplicate-event when the same event id is reused with a changed envelope clock", () => {
     const root = tempRoot();
     const firstEvent = decided(A, { ...eventEnvelope("overseer", undefined, "command-a") });
     expect(appendEvents([firstEvent], { root }).ok).toBe(true);
     const before = readFileSync(join(root, DECISIONS_FILE), "utf8");
 
-    const result = appendEvents([{ ...firstEvent }], { root });
+    const result = appendEvents([{ ...firstEvent, at: "2026-09-09T10:00:05.000Z" }], { root });
 
     expect(result).toMatchObject({ ok: false, code: "would-break" });
     expect(result.ok ? "unexpected success" : result.why).toContain("duplicate-event");

@@ -223,6 +223,17 @@ describe("schema 2 round-trips", () => {
     expect(foldDecisions([first, retry]).problems).toEqual([]);
     expect(foldDecisions([first, changed]).problems.map((problem) => problem.kind)).toEqual(["command-conflict"]);
   });
+
+  test("appendEvents accepts the exact prepared event again as an idempotent retry", () => {
+    const root = tempRoot();
+    const event = sessionDecided({ commandId: "report:prepared-event" });
+
+    expect(appendEvents([event], { root }).ok).toBe(true);
+    const retry = appendEvents([event], { root });
+
+    expect(retry.ok).toBe(true);
+    expect(readFileSync(join(root, DECISIONS_FILE), "utf8").trimEnd().split("\n")).toHaveLength(1);
+  });
 });
 
 describe("every new field is required on a schema-2 decided line", () => {
@@ -260,6 +271,67 @@ describe("every new field is required on a schema-2 decided line", () => {
     expect(parseEvent(JSON.stringify(sessionDecided({ recommendation: `ring${bell}` })))).toBeNull();
     expect(parseEvent(JSON.stringify(sessionDecided({ question: `abc${rlo}fed?` })))).toBeNull();
     expect(parseEvent(JSON.stringify(sessionDecided({ recommendation: "x".repeat(2001) })))).toBeNull();
+    expect(
+      parseEvent(
+        JSON.stringify(
+          sessionDecided({
+            author: { kind: "session", name: "work-reports", execution: { kind: "unavailable", why: `unknown${bell}` } },
+          }),
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      parseEvent(
+        JSON.stringify(
+          sessionDecided({
+            bearsOn: {
+              sessions: [{ name: "work-reports", execution: { kind: "unavailable", why: `unknown${rlo}` } }],
+              plan: null,
+            },
+          }),
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      parseEvent(
+        JSON.stringify(
+          sessionDecided({
+            chose: { option: "\tKeep it not-found", note: null },
+          }),
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      parseEvent(
+        JSON.stringify(
+          sessionDecided({
+            author: { kind: "session", name: "work-reports", execution: { kind: "verified", token: "not-a-token", since: "2026-09-10T08:00:00.000Z" } },
+          }),
+        ),
+      ),
+    ).toBeNull();
+  });
+
+  test("bounds the schema-2 envelope and ISO fields without changing schema 1", () => {
+    const rlo = String.fromCharCode(0x202e);
+    const longInstant = `2026-09-10T09:59:00.${"1".repeat(100)}Z`;
+
+    expect(parseEvent(JSON.stringify(sessionDecided({ commandId: `report:${rlo}hidden` })))).toBeNull();
+    expect(parseEvent(JSON.stringify(sessionDecided({ at: longInstant })))).toBeNull();
+    expect(parseEvent(JSON.stringify(sessionDecided({ decidedAt: longInstant })))).toBeNull();
+    expect(
+      parseEvent(
+        JSON.stringify(
+          sessionDecided({
+            author: { kind: "session", name: "work-reports", execution: { kind: "verified", token: SESSION_TOKEN, since: longInstant } },
+          }),
+        ),
+      ),
+    ).toBeNull();
+
+    const legacy = JSON.parse(legacyDecidedLine(S, "2026-09-09T10:00:00.000Z")) as Record<string, unknown>;
+    legacy["commandId"] = `legacy:${rlo}kept`;
+    expect(parseEvent(JSON.stringify(legacy))).not.toBeNull();
   });
 
   test("appendEvents refuses an event its own reader would refuse, and writes nothing", () => {
@@ -289,6 +361,16 @@ describe("the recorder is not the author, and neither is a reviewer", () => {
     expect(parseEvent(JSON.stringify(legacyByDaemon))).toBeNull();
     const reviewByDaemon = { ...envelope("greg"), by: "daemon", kind: "reviewed", id: S, note: null };
     expect(parseEvent(JSON.stringify(reviewByDaemon))).toBeNull();
+  });
+
+  test("each schema-2 author is accepted only through its one recorder", () => {
+    expect(parseEvent(JSON.stringify(overseerDecided()))).not.toBeNull();
+    expect(parseEvent(JSON.stringify(overseerDecided({ ...envelope("greg"), author: { kind: "greg" } })))).not.toBeNull();
+
+    expect(parseEvent(JSON.stringify(overseerDecided({ author: { kind: "greg" } })))).toBeNull();
+    expect(parseEvent(JSON.stringify(overseerDecided({ ...envelope("greg") })))).toBeNull();
+    expect(parseEvent(JSON.stringify(sessionDecided({ ...envelope("overseer") })))).toBeNull();
+    expect(parseEvent(JSON.stringify(sessionDecided({ ...envelope("greg") })))).toBeNull();
   });
 
   test.each(["daemon", "overseer"] as const)("a review recorded by %s does not review, whoever the author is", (by) => {
