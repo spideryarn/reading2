@@ -81,6 +81,13 @@ A failure that says nothing about the input, such as a checker that could not ru
 **pending** for the next pass. The details, including what a pass is bounded by and how a crash
 mid-pass is replayed, are in `tools/overseer/reports.ts` § `drainReports`.
 
+An inbox entry that can never become a report — a stray name, a directory, a symlink, a hard-linked
+file — is moved, unread, into `report-quarantine/`. **The quarantine is never emptied
+automatically:** the daemon only ever moves things into it, and never lists or deletes them. It grows
+until somebody looks at it and then deletes it. The Claims section says how many entries it holds
+and how old the oldest is, and `overseer reports` says the same and prints its path. On a flooded
+inbox, every count reads *at least*, because each directory is read only to its first 1 000 entries.
+
 What the daemon adds, once, at receipt:
 
 - **The run.** The reporter's own Claude run token, compared with the register's verified run for that

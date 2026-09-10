@@ -4141,20 +4141,37 @@ export type ReportWireProblem = {
   eventId: string | null;
 };
 
+/**
+ * A count, and whether it is all of them: `exact` when the server read the
+ * directory to its end, `atLeast` when it stopped at its cap. **Never a bare
+ * number**, which would be silently partial for a flooded inbox (WR-S3-5).
+ */
+export type ReportWireCount = { exact: number } | { atLeast: number };
+
+/**
+ * Inbox entries that can never be a report, moved aside by the daemon — which
+ * never empties that directory, so it grows until a person does. `oldestMovedAt`
+ * is read from the entry names: with an `atLeast` count it is the oldest SEEN,
+ * and it is null when no entry seen carries a stamp.
+ */
+export type ReportWireQuarantine = { count: ReportWireCount; oldestMovedAt: string | null };
+
+/** Schema 2: the counts became `ReportWireCount`s, and the quarantine arrived. */
 export type ReportsFeed =
   | {
-      schema: 1;
+      schema: 2;
       kind: "never-written";
       composedAt: string;
       why: string;
       /** Submitted and not yet recorded — the sign of a daemon that is not draining. */
-      inFlight: number;
-      refused: number;
+      inFlight: ReportWireCount;
+      refused: ReportWireCount;
+      quarantine: ReportWireQuarantine;
     }
-  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
-  | { schema: 1; kind: "oversized-file"; composedAt: string; why: string; sizeBytes: number; limitBytes: number }
+  | { schema: 2; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 2; kind: "oversized-file"; composedAt: string; why: string; sizeBytes: number; limitBytes: number }
   | {
-      schema: 1;
+      schema: 2;
       kind: "reports";
       path: string;
       composedAt: string;
@@ -4163,7 +4180,8 @@ export type ReportsFeed =
       recent: ReportWireClaim[];
       /** Claims left out by the 200-row cap or the 2 MiB byte cap. */
       recentWithheld: number;
-      inFlight: number;
-      refused: number;
+      inFlight: ReportWireCount;
+      refused: ReportWireCount;
+      quarantine: ReportWireQuarantine;
       problems: ReportWireProblem[];
     };

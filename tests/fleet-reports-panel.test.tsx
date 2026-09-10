@@ -61,15 +61,16 @@ function claim(over: Partial<ReportWireClaim> = {}): ReportWireClaim {
 
 function feed(recent: ReportWireClaim[], over: Partial<Extract<ReportsFeed, { kind: "reports" }>> = {}): ReportsFeed {
   return {
-    schema: 1,
+    schema: 2,
     kind: "reports",
     path: "/tmp/fake/reports.jsonl",
     composedAt: COMPOSED,
     sessions: { kind: "joined-with-register", rows: [] },
     recent,
     recentWithheld: 0,
-    inFlight: 0,
-    refused: 0,
+    inFlight: { exact: 0 },
+    refused: { exact: 0 },
+    quarantine: { count: { exact: 0 }, oldestMovedAt: null },
     problems: [],
     ...over,
   };
@@ -247,13 +248,62 @@ describe("a claim reads as a claim", () => {
 
 describe("the silences are distinct", () => {
   it("says what has been submitted but not recorded when nothing was ever written", async () => {
-    await render({ schema: 1, kind: "never-written", composedAt: COMPOSED, why: "reports.jsonl has never been written", inFlight: 2, refused: 0 });
+    await render({
+      schema: 2,
+      kind: "never-written",
+      composedAt: COMPOSED,
+      why: "reports.jsonl has never been written",
+      inFlight: { exact: 2 },
+      refused: { exact: 0 },
+      quarantine: { count: { exact: 0 }, oldestMovedAt: null },
+    });
     expect(claims().textContent).toContain("No report has been recorded here yet");
     expect(claims().textContent).toContain("2 submitted, not yet recorded");
   });
 
+  it("says 'at least' for a capped inbox count, before the first report and after", async () => {
+    await render({
+      schema: 2,
+      kind: "never-written",
+      composedAt: COMPOSED,
+      why: "reports.jsonl has never been written",
+      inFlight: { atLeast: 1000 },
+      refused: { exact: 0 },
+      quarantine: { count: { exact: 0 }, oldestMovedAt: null },
+    });
+    expect(claims().textContent).toContain("at least 1000 submitted, not yet recorded");
+    expect(claims().textContent).toContain("daemon may not be running");
+    await render(feed([claim()], { inFlight: { atLeast: 1000 }, refused: { atLeast: 1000 } }));
+    expect(claims().textContent).toContain("at least 1000 submitted, not yet recorded");
+    expect(claims().textContent).toContain("at least 1000 refused");
+  });
+
+  it("says how big the quarantine is and how old its oldest entry, and that nothing empties it", async () => {
+    await render(feed([claim()], { quarantine: { count: { exact: 12 }, oldestMovedAt: "2026-09-07T12:05:00.000Z" } }));
+    expect(claims().textContent).toContain("12 entries quarantined, the oldest 3d ago; nothing empties it automatically");
+    await render(feed([claim()], { quarantine: { count: { atLeast: 1000 }, oldestMovedAt: "2026-09-07T12:05:00.000Z" } }));
+    expect(claims().textContent).toContain("at least 1000 entries quarantined, the oldest seen 3d ago; nothing empties it automatically");
+    await render(feed([claim()], { quarantine: { count: { exact: 1 }, oldestMovedAt: null } }));
+    expect(claims().textContent).toContain("1 entry quarantined; nothing empties it automatically");
+  });
+
+  it("says nothing at all about an empty quarantine", async () => {
+    await render(feed([claim()]));
+    expect(claims().textContent).not.toMatch(/quarantin/i);
+    await render({
+      schema: 2,
+      kind: "never-written",
+      composedAt: COMPOSED,
+      why: "reports.jsonl has never been written",
+      inFlight: { exact: 0 },
+      refused: { exact: 0 },
+      quarantine: { count: { exact: 0 }, oldestMovedAt: null },
+    });
+    expect(claims().textContent).not.toMatch(/quarantin/i);
+  });
+
   it("does not draw an unreadable log as an empty one", async () => {
-    await render({ schema: 1, kind: "unreadable", composedAt: COMPOSED, why: "reports.jsonl is gone" });
+    await render({ schema: 2, kind: "unreadable", composedAt: COMPOSED, why: "reports.jsonl is gone" });
     expect(claims().textContent).toContain("could not be read");
     expect(claims().textContent).toContain("not an empty log");
   });
@@ -264,7 +314,7 @@ describe("the silences are distinct", () => {
   });
 
   it("says in-flight and refused counts and how many claims were withheld", async () => {
-    await render(feed([claim()], { inFlight: 3, refused: 1, recentWithheld: 7 }));
+    await render(feed([claim()], { inFlight: { exact: 3 }, refused: { exact: 1 }, recentWithheld: 7 }));
     expect(claims().textContent).toContain("3 submitted, not yet recorded");
     expect(claims().textContent).toContain("1 refused");
     expect(claims().textContent).toContain("7 older claims are not shown");

@@ -54,7 +54,16 @@
  * entries, and moves anything that can never become a report into
  * `report-quarantine/`, so a flood of junk is cleared a bounded slice at a time
  * instead of stalling the daemon's loop — heartbeat included — or starving the
- * submissions behind it.
+ * submissions behind it. The daemon only ever renames into `report-quarantine/`:
+ * it never lists it and never deletes from it, because one quarantined
+ * directory can hold a tree of any size (GPT Sol's WR-S3-4). Emptying it is a
+ * person's act; `readInbox` says how big it has grown, so growth shows.
+ *
+ * The reader keeps the same rule. `readInbox` — called on every
+ * `GET /api/reports` — reads each directory lazily under a cap, and every count
+ * it returns says `exact` or `atLeast` (WR-S3-5). **Nothing on a request path or
+ * in the daemon's loop does work proportional to what an untrusted writer put in
+ * the store.**
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -71,8 +80,8 @@ import {
   readFileSync,
   readSync,
   renameSync,
-  rmSync,
   unlinkSync,
+  type Dir,
   type Stats,
 } from "node:fs";
 import path from "node:path";
@@ -140,11 +149,13 @@ export const REFUSED_DIR = "report-refused";
  * Where an inbox entry goes when it can never become a report: a name that is
  * not `<uuid>.json` or `.tmp-<uuid>`, a directory, a symlink, a file with more
  * than one hard link. Moved by `rename`, which moves a symlink itself and never
- * its target; never read. The newest `QUARANTINE_KEPT` are kept for a person to
- * look at and the rest deleted.
+ * its target; never read, never listed by the drain, and **never emptied
+ * automatically**. A move costs no new disk — the writer already put it there —
+ * so there is nothing for the daemon to reclaim, and deleting someone else's
+ * files is not its job: look at it, then delete it. `readInbox` reports its size
+ * and the age of its oldest entry, read from the names.
  */
 export const QUARANTINE_DIR = "report-quarantine";
-export const QUARANTINE_KEPT = 200;
 
 export const MAX_SUBMISSION_BYTES = 16 * 1024;
 /**
@@ -978,13 +989,18 @@ type InboxCandidate = { readonly name: string; readonly eventId: string; readonl
 
 /** How many quarantined names a pass's note quotes; the count covers the rest. */
 const QUARANTINE_EXAMPLES = 5;
-/** Name order is arrival order even when two synchronous passes begin in the same wall-clock millisecond. */
-let lastQuarantineBatchMs = 0;
-
-function quarantineBatchStamp(): string {
-  lastQuarantineBatchMs = Math.max(Date.now(), lastQuarantineBatchMs + 1);
-  return String(lastQuarantineBatchMs).padStart(13, "0");
+/**
+ * A quarantined name's prefix: when it was moved there, as 13 zero-padded epoch
+ * milliseconds from the drain's clock. It is the entry's age, and `readInbox`
+ * reads it back from the name, so nothing in the quarantine is ever `stat`-ed.
+ * The sequence and random parts after it make each name unique. WR-S3-3's
+ * process-monotonic stamp is gone: it kept name order equal to arrival order for
+ * pruning, and nothing prunes, or reads that order, any more.
+ */
+function quarantineStamp(ms: number): string {
+  return String(Math.min(9_999_999_999_999, Math.max(0, Math.trunc(ms)))).padStart(13, "0");
 }
+const QUARANTINE_STAMP_RULE = /^(\d{13})-/;
 
 /**
  * **ONE BOUNDED LOOK AT THE INBOX.** Lazily, through `opendirSync`, stopping
@@ -1001,7 +1017,7 @@ function scanInbox(inboxDir: string, quarantineDir: string, cap: number, nowMs: 
   const candidates: InboxCandidate[] = [];
   const examples: string[] = [];
   const prefix = Buffer.from(`${inboxDir}${path.sep}`);
-  const stamp = quarantineBatchStamp();
+  const stamp = quarantineStamp(nowMs);
   let moved = 0;
   // The types only admit string encodings; Node honours "buffer" and hands back Buffer names.
   const dir = opendirSync(inboxDir, { encoding: "buffer" as BufferEncoding });
@@ -1072,24 +1088,11 @@ function scanInbox(inboxDir: string, quarantineDir: string, cap: number, nowMs: 
       `moved ${moved} inbox ${moved === 1 ? "entry" : "entries"} that can never become a report into ${QUARANTINE_DIR}/: ` +
         `${examples.join("; ")}${moved > examples.length ? "; …" : ""}`,
     );
-    pruneQuarantine(quarantineDir);
   }
   if (outcome.scanCapped) {
     outcome.notes.push(`the inbox scan stopped at its cap of ${cap} entries; order is approximate beyond the first ${cap} entries`);
   }
   return candidates;
-}
-
-/**
- * The newest `QUARANTINE_KEPT` stay. Names begin with a zero-padded time and
- * sequence, so name order is arrival order. This directory is written only by
- * the drain and pruned every time it grows, so listing it is bounded by us.
- */
-function pruneQuarantine(quarantineDir: string): void {
-  const names = readdirSync(quarantineDir).sort();
-  for (const old of names.slice(0, Math.max(0, names.length - QUARANTINE_KEPT))) {
-    rmSync(path.join(quarantineDir, old), { recursive: true, force: true });
-  }
 }
 
 /** Submissions among the first `cap` inbox entries — for the lost-log answer, which must not list a flood either. */
@@ -1633,44 +1636,126 @@ export function readReports(root: string): ReportsRead {
 export type InboxItem = { readonly eventId: string; readonly submission: ReportSubmission | null; readonly why: string | null };
 export type ProcessingItem = { readonly eventId: string; readonly event: ReportEvent | null; readonly why: string | null };
 export type RefusedItem = { readonly eventId: string; readonly refusedAt: string; readonly why: string };
+
+/**
+ * A count, and whether it is all of them: `exact` when the reader reached the
+ * end of the directory, `atLeast` when it stopped at its cap. **Never a bare
+ * number**, which anyone reading it would take for the whole count when it was a
+ * part.
+ */
+export type BoundedCount = { readonly exact: number } | { readonly atLeast: number };
+
+export function countValue(count: BoundedCount): number {
+  return "exact" in count ? count.exact : count.atLeast;
+}
+
+/** Exact only when both are. */
+export function addCounts(a: BoundedCount, b: BoundedCount): BoundedCount {
+  const total = countValue(a) + countValue(b);
+  return "exact" in a && "exact" in b ? { exact: total } : { atLeast: total };
+}
+
+/** One directory's matching entries: how many there are, and those read — at most `parseFiles`, so the list is not the count. */
+export type Listed<T> = { readonly items: readonly T[]; readonly count: BoundedCount };
+
+/**
+ * How big `report-quarantine/` has grown; it grows until a person empties it.
+ * `oldestMovedAt` is read from the names, never from the entries. With an
+ * `atLeast` count it is the oldest SEEN. Null when no entry seen carries a stamp.
+ */
+export type QuarantineSummary = { readonly path: string; readonly count: BoundedCount; readonly oldestMovedAt: string | null };
+
 export type InboxListing = {
-  readonly inFlight: readonly InboxItem[];
-  readonly processing: readonly ProcessingItem[];
-  /** Newest first. */
-  readonly refused: readonly RefusedItem[];
-  /** Entries in the inbox that are not submissions at all. */
-  readonly skippedEntries: number;
+  /** Submissions waiting in the inbox. */
+  readonly inFlight: Listed<InboxItem>;
+  readonly processing: Listed<ProcessingItem>;
+  /** Newest first, among those read. */
+  readonly refused: Listed<RefusedItem>;
+  /** Entries in the inbox that are not submissions at all; the next pass quarantines them. */
+  readonly skippedEntries: BoundedCount;
+  readonly quarantine: QuarantineSummary;
 };
 
-/** What has not been recorded: submitted, mid-flight, or refused and why. Read-only. */
-export function readInbox(root: string): InboxListing {
-  const inboxDir = path.join(root, INBOX_DIR);
-  const inFlight: InboxItem[] = [];
-  let skippedEntries = 0;
-  if (existsSync(inboxDir)) {
-    for (const name of readdirSync(inboxDir).sort()) {
-      if (name.startsWith(".tmp-")) continue;
-      const match = INBOX_NAME_RULE.exec(name);
-      if (match === null) {
-        skippedEntries += 1;
-        continue;
-      }
-      const eventId = match[1] ?? "";
-      const read = readBounded(path.join(inboxDir, name));
-      if (read.kind === "gone") continue;
-      if (read.kind === "not-regular") {
-        skippedEntries += 1;
-        continue;
-      }
-      if (read.kind === "oversize") {
-        inFlight.push({ eventId, submission: null, why: `over the ${MAX_SUBMISSION_BYTES}-byte limit; the daemon will refuse it` });
-        continue;
-      }
-      const parsed = parseSubmission(read.text);
-      inFlight.push(parsed.ok ? { eventId, submission: parsed.submission, why: null } : { eventId, submission: null, why: `unreadable, the daemon will refuse it: ${parsed.why}` });
-    }
+/** Per directory, per call: the drain's own scan window, and a cap on the files opened. */
+export type InboxReadLimits = { scanEntries: number; parseFiles: number };
+export const DEFAULT_INBOX_READ_LIMITS: InboxReadLimits = { scanEntries: DEFAULT_DRAIN_LIMITS.scanEntries, parseFiles: 200 };
+
+function counted(n: number, complete: boolean): BoundedCount {
+  return complete ? { exact: n } : { atLeast: n };
+}
+
+/**
+ * **One bounded look at a directory**: lazily, at most `cap` entries, then one
+ * read more to learn whether that was all of them — so a directory of exactly
+ * `cap` entries is still exact. Hands each name to `visit` and opens nothing. An
+ * absent directory is an empty one.
+ */
+function scanDirectory(directory: string, cap: number, visit: (name: string) => void): { complete: boolean } {
+  let dir: Dir;
+  try {
+    dir = opendirSync(directory);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { complete: true };
+    throw cause;
   }
-  const processing = uuidJsonNames(path.join(root, PROCESSING_DIR)).map((name): ProcessingItem => {
+  try {
+    for (let seen = 0; seen < cap; seen += 1) {
+      const entry = dir.readSync();
+      if (entry === null) return { complete: true };
+      visit(entry.name);
+    }
+    return { complete: dir.readSync() === null };
+  } finally {
+    dir.closeSync();
+  }
+}
+
+/**
+ * What has not been recorded — submitted, mid-flight, refused and why — and how
+ * big the quarantine is. Read-only, and **bounded** (GPT Sol's WR-S3-5): the
+ * dashboard calls this on every `GET /api/reports`, so each directory is read
+ * lazily to at most `scanEntries` entries, at most `parseFiles` files are opened
+ * in each, and every count says whether it was capped. `report-quarantine/` is
+ * listed, never opened.
+ */
+export function readInbox(root: string, limits: Partial<InboxReadLimits> = {}): InboxListing {
+  const { scanEntries, parseFiles } = { ...DEFAULT_INBOX_READ_LIMITS, ...limits };
+
+  const inboxDir = path.join(root, INBOX_DIR);
+  const submitted: string[] = [];
+  let notSubmissions = 0;
+  const inboxScan = scanDirectory(inboxDir, scanEntries, (name) => {
+    if (INBOX_NAME_RULE.test(name)) submitted.push(name);
+    else if (!TMP_NAME_RULE.test(name)) notSubmissions += 1;
+  });
+  const inFlight: InboxItem[] = [];
+  /** Named like a submission, and found not to be one — recorded since the scan, or not a regular file. */
+  let notWaiting = 0;
+  for (const name of submitted.sort().slice(0, parseFiles)) {
+    const eventId = name.slice(0, -".json".length);
+    const read = readBounded(path.join(inboxDir, name));
+    if (read.kind === "gone") {
+      notWaiting += 1;
+      continue;
+    }
+    if (read.kind === "not-regular") {
+      notWaiting += 1;
+      notSubmissions += 1;
+      continue;
+    }
+    if (read.kind === "oversize") {
+      inFlight.push({ eventId, submission: null, why: `over the ${MAX_SUBMISSION_BYTES}-byte limit; the daemon will refuse it` });
+      continue;
+    }
+    const parsed = parseSubmission(read.text);
+    inFlight.push(parsed.ok ? { eventId, submission: parsed.submission, why: null } : { eventId, submission: null, why: `unreadable, the daemon will refuse it: ${parsed.why}` });
+  }
+
+  const preparing: string[] = [];
+  const processingScan = scanDirectory(path.join(root, PROCESSING_DIR), scanEntries, (name) => {
+    if (INBOX_NAME_RULE.test(name)) preparing.push(name);
+  });
+  const processing = preparing.sort().slice(0, parseFiles).map((name): ProcessingItem => {
     const eventId = name.slice(0, -".json".length);
     try {
       const read = readBounded(path.join(root, PROCESSING_DIR, name), MAX_PREPARED_BYTES);
@@ -1684,12 +1769,20 @@ export function readInbox(root: string): InboxListing {
       return { eventId, event: null, why: `could not read its prepared report: ${String(cause)}` };
     }
   });
+  const refusals: string[] = [];
+  const refusedScan = scanDirectory(path.join(root, REFUSED_DIR), scanEntries, (name) => {
+    if (INBOX_NAME_RULE.test(name)) refusals.push(name);
+  });
   const refused: RefusedItem[] = [];
-  for (const name of uuidJsonNames(path.join(root, REFUSED_DIR))) {
+  let refusalsGone = 0;
+  for (const name of refusals.sort().slice(0, parseFiles)) {
     const eventId = name.slice(0, -".json".length);
     try {
       const read = readBounded(path.join(root, REFUSED_DIR, name), MAX_REFUSAL_BYTES);
-      if (read.kind === "gone") continue;
+      if (read.kind === "gone") {
+        refusalsGone += 1;
+        continue;
+      }
       if (read.kind !== "text") {
         refused.push({ eventId, refusedAt: "an unrecorded time", why: "the refusal record could not be read safely" });
         continue;
@@ -1710,5 +1803,26 @@ export function readInbox(root: string): InboxListing {
     }
   }
   refused.sort((a, b) => b.refusedAt.localeCompare(a.refusedAt));
-  return { inFlight, processing, refused, skippedEntries };
+
+  const quarantineDir = path.join(root, QUARANTINE_DIR);
+  let quarantined = 0;
+  let oldestMs = Number.POSITIVE_INFINITY;
+  const quarantineScan = scanDirectory(quarantineDir, scanEntries, (name) => {
+    quarantined += 1;
+    const stamp = QUARANTINE_STAMP_RULE.exec(name)?.[1];
+    if (stamp !== undefined) oldestMs = Math.min(oldestMs, Number(stamp));
+  });
+
+  return {
+    inFlight: { items: inFlight, count: counted(submitted.length - notWaiting, inboxScan.complete) },
+    processing: { items: processing, count: counted(preparing.length, processingScan.complete) },
+    refused: { items: refused, count: counted(refusals.length - refusalsGone, refusedScan.complete) },
+    skippedEntries: counted(notSubmissions, inboxScan.complete),
+    quarantine: {
+      path: quarantineDir,
+      count: counted(quarantined, quarantineScan.complete),
+      // Thirteen digits is at most the year 2286, inside the range a Date can hold.
+      oldestMovedAt: Number.isFinite(oldestMs) ? new Date(oldestMs).toISOString() : null,
+    },
+  };
 }
