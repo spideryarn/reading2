@@ -141,6 +141,20 @@ describe("subscribe / broadcast lifecycle", () => {
     expect(good.writes).toHaveLength(2);
   });
 
+  it("an initial write that throws removes the listeners attached before it", () => {
+    const before = subscriberCount();
+    const req = fakeReq();
+    const bad = fakeRes({ throwOnWrite: true });
+
+    expect(() => subscribe(req, bad.res, JSON.stringify({ rows: [], collectedAt: "initial" }))).not.toThrow();
+
+    expect(subscriberCount()).toBe(before);
+    expect(bad.destroyed()).toBe(true);
+    expect(req.listenerCount("close")).toBe(0);
+    expect(req.listenerCount("error")).toBe(0);
+    expect(bad.res.listenerCount("error")).toBe(0);
+  });
+
   it("does not double-count or double-remove a subscriber closed twice", () => {
     const before = subscriberCount();
     const req = fakeReq();
@@ -569,7 +583,9 @@ describe("backpressure, measured against a real Writable that delays its callbac
         stop();
       }
       const stalledAfter = phone.offered.length;
-      expect(stalledAfter).toBeGreaterThan(0);
+      // Small frames can accumulate below Node's byte threshold; the bound is
+      // the high-water mark plus the crossing write, not literally one frame.
+      expect(stalledAfter).toBeGreaterThan(1);
 
       phone.release();
       vi.advanceTimersByTime(1);

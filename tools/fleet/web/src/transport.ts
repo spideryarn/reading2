@@ -12,12 +12,13 @@
  * **The other half already exists.** tools/fleet/live.ts serves `/api/live` as
  * an event stream with two named events — `snapshot`, carrying the same JSON
  * this file parses, and `ping` as a heartbeat. So the swap is one function here
- * (an `EventSource`, `onmessage` on `snapshot` into `sink.onState`, `onerror`
- * into `sink.onError`, `close()` as `stop`) and one word in the default
- * argument of `useFleetState`. It is not done in this pass because polling is
- * what the plan asked for at this slice and because an `EventSource` written
- * against a stream nobody here has watched reconnect is exactly the kind of
- * change that looks finished — see docs/reusable/silent-success.md.
+ * (an `EventSource`, `addEventListener("snapshot", ...)` into `sink.onState`,
+ * `onerror` into `sink.onError`, `close()` as `stop`) and one word in the
+ * default argument of `useFleetState`. Named events do not reach `onmessage`.
+ * It is not done in this pass because polling is what the plan asked for at
+ * this slice and because an `EventSource` written against a stream nobody here
+ * has watched reconnect is exactly the kind of change that looks finished —
+ * see docs/reusable/silent-success.md.
  *
  * What a replacement must keep, because the UI depends on all four:
  *
@@ -33,10 +34,11 @@
  *    settles, not a press that quietly evaporates and not two overlapping asks.
  *  - **`stop()` must be idempotent**, since React calls it on every effect
  *    teardown including the double one in StrictMode.
- *  - **`stop()` must leave nothing running**: no timer, no window listener, and
- *    no request in flight. A transport that lets a fetch finish after the page
- *    has gone is not visibly broken, which is why it survived until somebody
- *    went looking (`tests/fleet-transport.test.ts`).
+ *  - **`stop()` must leave nothing owned that can keep working**: no timer, no
+ *    window listener, and any request in flight has been aborted. A transport
+ *    that lets a fetch finish after the page has gone is not visibly broken,
+ *    which is why it survived until somebody went looking
+ *    (`tests/fleet-transport.test.ts`).
  *
  * ## Why polling first
  *
@@ -144,9 +146,9 @@ export async function fetchFleetState(
  *
  * Three things beyond the timer, all of them about a phone:
  *
- *  - **A hidden tab does not poll.** Greg leaves this open; a backgrounded page
- *    asking a loaded box for a 12-second collection every five seconds is rude,
- *    and the answer would be stale by the time anybody looked at it anyway.
+ *  - **A hidden tab does not poll.** Greg leaves this open; even a cheap request
+ *    for the server's cached snapshot is wasted while nobody can see it, and
+ *    the answer would be stale by the time anybody looked at it anyway.
  *  - **Becoming visible refreshes immediately**, which is the moment the number
  *    on screen matters most and the moment it is most likely to be wrong.
  *  - **Coming back online refreshes too**, rather than waiting out a backoff

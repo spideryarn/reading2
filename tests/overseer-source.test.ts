@@ -410,11 +410,12 @@ describe("a consumer that walks away mid-stream", () => {
 /**
  * A body that streams for ever and **whose `cancel()` never settles.**
  *
- * No HTTP peer can arrange this: undici destroys the socket and resolves, which
- * is why the test above is a negative control rather than a reproduction. But
- * the streams standard permits a cancel promise to reflect an underlying source
- * shutting down asynchronously, so *nothing structural* bounded the wait — GPT
- * Sol's review of the plan, 2026-09-10. This is that permission, exercised.
+ * The real HTTP fixture does not arrange this: the current undici path cancels
+ * and resolves promptly, which is why the test above is a negative control
+ * rather than a reproduction. But the streams standard permits a cancel
+ * promise to reflect an underlying source shutting down asynchronously, so
+ * *nothing structural* bounded the wait — GPT Sol's review of the plan,
+ * 2026-09-10. This is that permission, exercised.
  */
 function uncancellableStream(): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -637,10 +638,11 @@ describe("sseFrames — the incomplete-frame bound", () => {
     expect(split.push(`${body}\n`)).toEqual([]);
     expect(split.push("\n")).toEqual([{ event: "message", data: "xx" }]);
 
-    // And the same for CRLF, where three of the four characters can be pending.
+    // And the same for CRLF. The final CR is already a complete line ending;
+    // the next LF is suppressed rather than delaying the frame.
     const crlf = sseFrames(8);
-    expect(crlf.push(`${body}\r\n\r`)).toEqual([]);
-    expect(crlf.push("\n")).toEqual([{ event: "message", data: "xx" }]);
+    expect(crlf.push(`${body}\r\n\r`)).toEqual([{ event: "message", data: "xx" }]);
+    expect(crlf.push("\n")).toEqual([]);
   });
 
   test("bare CR line endings are a stream, not a frame that never closes", () => {
@@ -651,22 +653,29 @@ describe("sseFrames — the incomplete-frame bound", () => {
        bare CR would have every frame retained as an incomplete one, growing the
        tail until the bound refused a perfectly valid stream. Bounded, and
        wrong. GPT Sol's review of plan 260910c, 2026-09-10. */
-    /* Two frames, so the first one's terminator is followed by a byte that
-       proves it was a bare CR. **The second is deliberately still pending**:
-       a chunk ending in `\r` cannot be resolved until the next byte says
-       whether it was a line ending or the first half of a CRLF, which is what
-       every conforming event-stream parser does and what the `heldCr` in
-       `sseFrames` is. */
+    /* A CR is a complete line ending by itself. A later LF can extend it to a
+       CRLF, but cannot make the frame incomplete again, so both frames arrive
+       without waiting for unrelated future traffic. */
     const parser = sseFrames(64);
     expect(parser.push('event: snapshot\rdata: {"a":1}\r\revent: ping\rdata: 2\r\r')).toEqual([
       { event: "snapshot", data: '{"a":1}' },
+      { event: "ping", data: "2" },
     ]);
-    // And the held one lands as soon as anything at all follows it.
-    expect(parser.push("event: ping\r")).toEqual([{ event: "ping", data: "2" }]);
+    expect(parser.push("event: ping\r")).toEqual([]);
 
     // Mixed, because a proxy rewriting one direction does not tidy the rest.
     expect(sseFrames(64).push("event: ping\r\ndata: 1\rdata: 2\n\n")).toEqual([
       { event: "ping", data: "1\n2" },
+    ]);
+  });
+
+  test("a bare-CR terminator closes a frame without needing a later byte", () => {
+    /* A CR is already a complete SSE line ending. The next byte only decides
+       whether a following LF belongs to the same line ending; it cannot make
+       this CR stop being one. Holding the final CR made a valid frame depend on
+       unrelated future traffic, and lost it altogether when the stream ended. */
+    expect(sseFrames(64).push("event: snapshot\rdata: {\"a\":1}\r\r")).toEqual([
+      { event: "snapshot", data: '{"a":1}' },
     ]);
   });
 

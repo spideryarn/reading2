@@ -78,15 +78,27 @@ describe("however the stream is cut, the frames are the same", () => {
     });
   }
 
-  test("a trailing bare CR is the one thing that legitimately waits", () => {
-    /* The exception, stated so it is a decision rather than a surprise: a chunk
-       ending in `\r` cannot be resolved until the next byte, because `\r` and
-       `\r\n` are one line ending each. Every conforming event-stream parser
-       holds it, and it costs one character and one frame's latency on a
-       CR-only producer — which no producer here is. */
-    const parser = sseFrames(64);
-    expect(parser.push("event: ping\rdata: 1\r\r")).toEqual([]);
-    expect(parser.push("x")).toEqual([{ event: "ping", data: "1" }]);
+  test("a frame ending in a bare CR is delivered at once, not held for the next byte", () => {
+    /* **THE FIRST IMPLEMENTATION HELD IT, and that was wrong** — found by GPT
+       Sol reviewing the code, 2026-09-10, after the same reviewer had asked for
+       the CR support in the first place.
+
+       The reasoning that produced the bug is seductive: `\r` and `\r\n` are one
+       line ending each, so a chunk ending in `\r` looks unresolved. But the
+       ambiguity is only ever about whether a FOLLOWING `\n` is a second line
+       ending — never about whether this one ended a line. `data: 1\r\r` is a
+       line and then an empty line, which dispatches, and `data: 1\r\r\n`
+       dispatches at exactly the same point. Holding it delayed every frame of a
+       CR-only stream by one chunk and **lost the last one entirely** if the
+       stream then ended, which is the failure this whole plan is about wearing
+       a very small hat. */
+    expect(sseFrames(64).push("event: ping\rdata: 1\r\r")).toEqual([{ event: "ping", data: "1" }]);
+
+    // And the split that made it tempting, still handled: a CRLF cut in half is
+    // one line ending, so this is the same frame and not two.
+    const split = sseFrames(64);
+    expect(split.push("event: ping\rdata: 1\r")).toEqual([]);
+    expect(split.push("\n\r\n")).toEqual([{ event: "ping", data: "1" }]);
   });
 });
 

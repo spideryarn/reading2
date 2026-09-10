@@ -174,9 +174,8 @@ export type SseFrame = { event: string; data: string };
  *
  * Per the spec: `data:` lines are joined with newlines, one leading space after
  * the colon is stripped, an absent `event:` means `message`, and a line
- * beginning `:` is a comment. `\r\n` is tolerated because a proxy may rewrite
- * line endings and a stray `\r` inside the JSON would be a parse failure with a
- * baffling message.
+ * beginning `:` is a comment. CR, LF and CRLF are all line endings; normalising
+ * them before parsing keeps transport spelling out of field values.
  *
  * **And the tail is bounded.** "Keep it until a blank line closes the frame" is
  * an unbounded buffer written as a sentence: a producer that never sends the
@@ -188,15 +187,9 @@ export type SseFrame = { event: string; data: string };
  */
 export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: string): SseFrame[] } {
   let buffer = "";
-  /**
-   * A trailing `\r`, held back until the next chunk says what it was.
-   *
-   * `\r` and `\r\n` are ONE line ending each, so a chunk ending in `\r` cannot
-   * be classified yet: deciding early manufactures a blank line out of a split
-   * CRLF and closes a frame in the middle. One character, and it is the whole
-   * price of normalising below.
-   */
-  let heldCr = "";
+  /** A CR is normalised immediately; if the next chunk starts with its optional
+   * LF, suppress that LF so a split CRLF remains one line ending. */
+  let dropLeadingLf = false;
   return {
     push(chunk: string): SseFrame[] {
       /* **LINE ENDINGS ARE NORMALISED ON THE WAY IN, and that is what makes
@@ -211,12 +204,16 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
 
          Normalising is safe because an event stream's payload cannot contain a
          raw CR or LF: they ARE the line endings, so there is nothing here to
-         corrupt. And it is the simpler answer as well as the more correct one —
-         one terminator to find, one separator to split on, and a one-character
-         partial instead of three. */
-      const text = heldCr + chunk;
-      heldCr = text.endsWith("\r") ? "\r" : "";
-      buffer += (heldCr === "" ? text : text.slice(0, -1)).replace(/\r\n?/g, "\n");
+         corrupt. A CR is already a complete line ending; only a following LF's
+         meaning is unresolved. Normalise the CR now so a bare-CR terminator can
+         close a frame immediately, and remember to suppress an LF at the start
+         of the next chunk. */
+      if (dropLeadingLf && chunk !== "") {
+        if (chunk.startsWith("\n")) chunk = chunk.slice(1);
+        dropLeadingLf = false;
+      }
+      if (chunk.endsWith("\r")) dropLeadingLf = true;
+      buffer += chunk.replace(/\r\n?/g, "\n");
       /**
        * **THE BOUND IS CHECKED AFTER THE COMPLETE FRAMES ARE TAKEN OUT, and an
        * earlier draft checked it before.** That draft threw on a single chunk
@@ -260,11 +257,9 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
          2026-09-08. Packetization is not something a producer controls, so it
          must not decide whether a stream is called broken.
 
-         Normalisation shrank this from three pending characters to one, and
-         `heldCr` does not need adding back: it is itself a piece of an
-         unfinished terminator, so counting it and discounting it are the same
-         move. `data: xx\r\n\r` under an eight-character bound is still
-         accepted, and `data: xxxxx\r\n\r` is still refused. */
+         Normalisation shrank this from three pending characters to one.
+         `data: xx\r\n\r` under an eight-character bound is still accepted, and
+         `data: xxxxx\r\n\r` is still refused. */
       if (buffer.length - partialDelimiter(buffer) > maxChars) {
         buffer = "";
         throw new Error(frameTooBig(maxChars));
@@ -277,8 +272,7 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
 /**
  * How many trailing characters could be the start of a terminator we have not
  * finished receiving — **one**, now that every line ending is a `\n` by the
- * time it reaches the buffer. (It used to be up to three, from `\r\n\r`; the
- * other two moved into `heldCr`.)
+ * time it reaches the buffer. It used to be up to three, from `\r\n\r`.
  *
  * A tail ending in `\n` might equally be the end of a `data:` line, and
  * discounting one character there costs nothing: the bound is four million.
@@ -398,8 +392,8 @@ async function* readStream(
      * the Overseer records, not a silence it sits in.*
      *
      * The status line is the whole answer; there is nothing in the body we
-     * were going to read. Cancelling releases the socket without waiting on
-     * whoever is holding it open.
+     * were going to read. Request cancellation without waiting on whoever is
+     * holding it open.
      */
     discardBody(response);
     yield { kind: "stream-closed", atMs: now(), why: `the stream answered ${response.status} ${response.statusText}` };
@@ -435,10 +429,10 @@ async function* readStream(
     yield { kind: "stream-closed", atMs: now(), why: silent ? silence() : `the stream broke: ${message(cause)}` };
   } finally {
     clearTimeout(deadline);
-    /* Cancelling releases the socket on every way out of this function — the
-       consumer breaking out of the loop, the parser refusing a frame, an
-       abort, an error — because otherwise each one leaks a connection and
-       `subscriberCount()` on the dashboard climbs for no reason.
+    /* Request cancellation on every way out of this function — the consumer
+       breaking out of the loop, the parser refusing a frame, an abort, an error
+       — because otherwise each one leaks a connection and `subscriberCount()`
+       on the dashboard climbs for no reason.
 
        **NOT AWAITED, and it was until 2026-09-10.** Same rule as `discardBody`
        and `readBounded` below, and this is the place it matters most: a cancel
@@ -450,10 +444,10 @@ async function* readStream(
        reported and permanently unrecovered, which is a worse shape than either
        half alone.
 
-       No HTTP peer can produce that: undici destroys the socket and resolves,
-       which is why an earlier draft of this comment cited a real-server
-       measurement as proof there was nothing to fix. There was — the probe
-       could not reach it. GPT Sol's review named the case, and
+       The real-server fixture did not produce that: the current undici path
+       cancelled and resolved promptly, which is why an earlier draft of this
+       comment cited that measurement as proof there was nothing to fix. There
+       was — the probe could not reach it. GPT Sol's review named the case, and
        `tests/overseer-source.test.ts` § "a body that refuses to be cancelled"
        arranges it with a `ReadableStream` whose `cancel()` never settles. It
        hangs for thirty seconds against the awaited version.
@@ -533,8 +527,8 @@ function readPayload(text: string, via: Transport, atMs: number): SourceMessage 
  *
  * Not `await body.cancel()`: the whole class of bug this closes is *we waited
  * on a peer that had stopped answering*, and re-entering it one level down to
- * be tidy would be the joke version of the fix. `cancel()` destroys the
- * underlying socket; whether that has finished by the time we yield the
+ * be tidy would be the joke version of the fix. `cancel()` requests release of
+ * the underlying resource; whether that has finished by the time we yield the
  * message is nobody's business. The `catch` is there because cancelling a
  * stream that is already errored rejects, and an unhandled rejection here
  * takes the daemon down.
