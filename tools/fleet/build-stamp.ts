@@ -10,14 +10,18 @@
  * or unreadable is `unknown`, with the reason, and is never defaulted — a
  * default would later read as "same as the server", which is the one
  * conclusion absence must not produce.
+ *
+ * A stamp is the checkout observed when the config loaded: a HEAD sha and a git
+ * status observation, not proof of which bytes went into the bundle. What
+ * `dirty` does and does not say is on `StartRevision` in `wire.ts`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseStartRevision, readStartRevision, type RunGit } from "./revision.js";
-import type { BuildStamp } from "./wire.js";
+import { isIsoInstant, parseStartRevision, readStartRevision, type RunGit } from "./revision.js";
+import type { BuildStamp, BuildStampReading } from "./wire.js";
 
-export type { BuildStamp } from "./wire.js";
+export type { BuildStamp, BuildStampReading } from "./wire.js";
 
 /** Beside `index.html` in `tools/fleet/web/dist/`. */
 export const BUILD_STAMP_FILE = "build-stamp.json";
@@ -32,7 +36,7 @@ export function buildStamp(dir: string, deps: { run?: RunGit; now?: () => Date }
   return { ...readStartRevision(dir, { ...deps, now }), builtAt: now().toISOString() };
 }
 
-export type ReadBuildStamp = { kind: "stamp"; stamp: BuildStamp } | { kind: "unknown"; why: string };
+export type ReadBuildStamp = BuildStampReading;
 
 /** The stamp in `distDir`, or why there is none. Four reasons, four sentences. */
 export function readBuildStamp(distDir: string): ReadBuildStamp {
@@ -54,7 +58,7 @@ export function readBuildStamp(distDir: string): ReadBuildStamp {
   }
   const revision = parseStartRevision(parsed);
   const builtAt = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>)["builtAt"] : undefined;
-  if (revision === null || typeof builtAt !== "string") {
+  if (revision === null || !isIsoInstant(builtAt)) {
     return { kind: "unknown", why: `${path} is not a build stamp: it does not have the shape vite.fleet.config.ts writes` };
   }
   return { kind: "stamp", stamp: { ...revision, builtAt } };

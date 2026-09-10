@@ -1,7 +1,7 @@
 # Operational finish: diagnose, restart and recovery visibility
 
 Queue item `qi-24bxpbxe`, dispatched by the Overseer on 2026-09-10. The spec is the roadmap stage
-[260908f § Stage: Operational finish](260908f-overseer-and-fleet-improvement-roadmap.md#stage-operational-finish--prove-failure-restart-and-recovery-visibility):
+[260908f § Stage: Operational finish](260908f-overseer-and-fleet-improvement-roadmap.md#stage-operational-finish-prove-failure-restart-and-recovery-visibility):
 its checkboxes and acceptance paragraph. This plan builds the first, the relevant half of the
 third, and writes the fourth as a proposal. Worktree `ops-diagnose`, session of the same name.
 
@@ -108,6 +108,17 @@ review returned, for speed; reworked if that review touches D1–D3.
 - [x] Client: `__FLEET_BUILD__` + `dist/build-stamp.json`. Red first: a test that builds a stamp
   from a fake run and that the server-side reader treats a missing/malformed stamp file as unknown.
 
+**Stage review (GPT Sol, findings-only, at `cb4c3ba7`): refuse, on established P1s; no P0.** Answer
+in `260910f-…stage1-review-answer.md`. Each finding was established by a scratch-repository run or a
+control-flow trace, and all four are accepted; an Opus subagent fixes them.
+
+| ID | Finding, short | Disposition |
+|----|----------------|-------------|
+| S1-F1 | `dirty` does not say whether the sha names the running code: an untracked imported file or an `assume-unchanged` flag stamps clean; an unrelated tracked Markdown edit stamps dirty | **Accepted as wording, no rename.** Every description of `dirty` now says only what git status reported about tracked files; neither value proves which bytes loaded. Rendering already never says "running code is" (plan-review F1). Scoping untracked files to `tools/`/`scripts/`/`src/` rejected as certification, per the reviewer: imports cross those boundaries |
+| S1-F2 | sha and cleanliness come from two git processes, so a commit landing between them pairs A's sha with B's cleanliness | **Fixed:** one `git status --porcelain=v2 --branch` call gives both (`branch.oid` plus change lines) |
+| S1-F3 | `vite build --watch` resolves the config once, so every rebuild carries the first build's stamp | **Fixed, smallest:** the config refuses watch mode with a sentence; the stamp is described as "checkout observed when the config loaded" |
+| S1-F4 (P2) | a malformed `readAt`/`builtAt` still reads as a known stamp | **Fixed:** finite ISO instants required; invalid-date cases in both readers' tests |
+
 **What the plan did not know.** Tracked-only dirtiness has a hole: a commit can import a file its
 author never added, and a checkout still holding it untracked stamps clean — the reason
 `readiness-git.ts`'s `stampTree` counts untracked files. Counting every untracked file in the
@@ -117,7 +128,34 @@ carry a real revision by default.
 
 ### Stage 2 — `overseer diagnose`
 
-- [ ] `tools/overseer/diagnose.ts`: composes the daemon's standing (`daemonStanding`), its start
+**Status, 2026-09-10: built (Opus subagent), 31 tests, typecheck 0; Sol stage review next.** Live
+read-only smoke: the running daemon reads *not stamped*, as it must until the Overseer restarts it;
+the held job list matches this checkout's.
+
+**What the plan did not know.** (1) A file has a *set* of schemas this build reads, not one:
+`decisions.jsonl` is schema 1 on the live store and `DECISIONS_SCHEMA` is 2, with 1 still read as
+`LEGACY_DECISIONS_SCHEMA` — a single number would flag a false mismatch. (2) `usage.jsonl` names its
+field `lineSchema`, so the probe takes a field name per file. (3) `last-snapshot.json`'s schema 1 is a
+bare literal in `daemon.ts`, so it shows *no known schema*. (4) An unusable checkpoint names no
+instance, so no start revision is shown; the lock file's `instanceId` could fill that and does not
+yet. (5) The "cannot tell" rule for incomplete notes lived inside `statusLines`; it is now the
+exported `standingFromReads`, shared by `status` and `diagnose`.
+
+**Stage review (GPT Sol, findings-only, at `3c69ddcd`): request changes, six established P1s, no
+P0.** Answer in `260910f-…stage2-review-answer.md`. It confirmed the command only reads — no locks,
+no torn-tail repair, no import side effects — and that a final JSONL line longer than the tail window
+fails safely to unknown. All six accepted; an Opus subagent fixes them.
+
+| ID | Finding, short | Disposition |
+|----|----------------|-------------|
+| F40 | job files that fail to load are hashed as an empty list, so it prints "the same list this checkout builds" | **Fix:** the built list is `built | unbuildable`; unbuildable is never hashed or compared. `status` checked for the same discard |
+| F41 | a valid legacy `cli-state.json` with no `schema` reads as a mismatch | **Fix:** per-file accepted legacy formats, never a global "undeclared matches" |
+| F42 | "every store file" is a fixed list missing `armed.json`, `usage.prev.jsonl`, `reconcile-occurrences.json`, the locks and `.created` markers | **Fix:** the union of the catalogue and a bounded `readdir`; unknown names still get a row |
+| F43 | a checkpoint dated in the future reads RUNNING ("last written in the future ago") | **Fix:** a future clock is `cannot-tell`, before liveness, in `status` too |
+| F44 | a boot mismatch claims "the daemon has not run since the reboot"; `recovery.json` only moves after an accepted collection | **Fix:** say only that `recovery.json` has not yet recorded the current boot |
+| F45 | RUNNING rests on the pid existing; pid reuse turns a killed daemon into a running one (the same gap Stage 4c named) | **Fix:** the live pid's `/proc` start time must fall within 120 s before `heartbeat.startedAt`, reusing the existing stat reader; unverifiable is not RUNNING |
+
+- [x] `tools/overseer/diagnose.ts`: composes the daemon's standing (`daemonStanding`), its start
   revision (last `daemon-started` of the checkpoint's instance), checkpoint schema vs `STORE_SCHEMA`,
   the two clocks and their ages, recorded vs host boot id, every store file via `store-probe.ts`,
   held vs built job list (`schedulePreviewLines`' comparison), and the dashboard's
@@ -128,7 +166,21 @@ carry a real revision by default.
 
 ### Stage 3 — Web summary
 
-- [ ] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
+**Status, 2026-09-10: built (Opus subagent), with F2, F4 and F8 folded in; `server.ts` wired by hand
+because the agent held off while another was editing it. 70/70 across six fleet suites; `build:fleet`
+0. Browser check and stage review wait on the Overseer's pause (the account's five-hour window).**
+
+**What the plan did not know.** (1) The runtime parser cannot live in the client file: the node
+tsconfig would type-check any browser file `diagnose.ts` imports, so it sits in
+`diagnostics-parse.ts` and the client re-exports it. (2) A fixed allow-list that refuses every other
+name would contradict F42 (a row for every entry), so allow-listed names are read and any other
+plain name is only `lstat`ed. (3) **The old probe hung for ever on a FIFO** — `openSync` blocks; it
+now opens `O_NOFOLLOW | O_NONBLOCK` after an `lstat`. (4) The JSON ceiling is 1 MB, not 4; the
+largest live file is ~110 KB. (5) App-level panel tests now make one failing relative `fetch`,
+because `App` does not pass the section an api — harmless, and threading one through is a small
+follow-up.
+
+- [x] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
   boundary; `DiagnosticsSection.tsx` in Box health: each service's revision and verdict, the bundle
   this tab runs vs the bundle on disk vs the one the server started with, collector clocks, store
   files. Browser check at desktop and phone widths on a fixture-backed server (Sonnet subagent).
@@ -144,7 +196,10 @@ across a restart (`fleet-receipt-restart`, `fleet-direct-steer-restart`), and th
 a stopped heartbeat (`fleet-overseer-status.test.ts`). **No test starts `server.ts` as a process,
 and no test runs the daemon twice with jobs.** The gaps, each a new test on scratch state:
 
-- [ ] **Dashboard, a real process** (`tests/fleet-server-process.test.ts`): spawn `server.ts` on a
+- [x] **Dashboard, a real process** (`tests/fleet-server-process.test.ts`, Opus subagent; 5/5 on three
+  runs; reads `/api/state`'s producer stamp, since `/api/diagnostics` did not exist yet; also found
+  the collector runs `claude agents --json`, so a stub `claude` leads `PATH`, and that a test
+  worker's environment carries `.env.local`, so the child's env is built, not inherited): spawn `server.ts` on a
   free port with every `FLEET_*`/`OVERSEER_*` path pointed at a scratch dir (the env list
   `fleet-decisions-route.test.ts` sets), `TMUX` unset and `TMUX_TMPDIR` a scratch dir (the collector
   has no socket override, so the default socket then names an empty server rather than the live
@@ -168,7 +223,12 @@ and no test runs the daemon twice with jobs.** The gaps, each a new test on scra
   asserts both phases. A spawn-window crash (lock overwritten by a dead pid from inside the
   dispatcher) records `reservation-abandoned`; a clean control proves a genuinely new occurrence runs
   exactly once. Each seen red on a one-line mutant.
-- [ ] **A killed daemon process** — only if `overseer run` can be started with no outbound calls
+- [x] **A killed daemon process — made required by F6, built** (`tests/overseer-daemon-process.test.ts`,
+  Opus subagent, 3/3): `--no-attention --no-usage` both exist and the child's output is asserted to
+  say so; jobs and rules disarmed; SIGKILL → `diagnose` says KILLED; a second child takes the dead
+  pid's lock; SIGTERM → stop note, lock released, *stopped*. **Known limit:** *killed* rests on the
+  pid being gone, so a reused pid reads as running or stalled. The outage test was strengthened for
+  F7 in the same stage. Original wording, kept for the record: only if `overseer run` can be started with no outbound calls
   (no model, no usage fetch, jobs disarmed); otherwise the in-process crash tests stand and this is
   recorded here. SIGKILL the child, `diagnose` says *killed*, a second child takes the lock.
 - [ ] **Stopped clock observed**: `diagnose` on a scratch store whose daemon stopped reports the
@@ -223,14 +283,60 @@ end-to-end test below.
 grace, and exactly one (dedup is the service's, per state change); (3) resume → one recovery
 notice; (4) point the watchdog at a scratch store with a stopped heartbeat → a `/fail` with body
 `stale`, and the body contains nothing but the vocabulary; (5) make the destination unreachable
-(bogus host) → the watchdog logs the failed ping locally and exits non-zero, and the service alerts
-because pings stopped — the monitor's own failure fails loud. Then the real check, and one
+from the disposable pinger → it logs the failed delivery locally and exits non-zero; if the
+provider remains healthy, its missing-ping alert proves a host-to-provider delivery failure is
+visible. This does **not** test a provider outage: the provider or the notification channel failing
+remains a stated residual risk, covered only by the monthly end-to-end test or by a separately
+authorised independent monitor (Sol's F9). Then the real check, and one
 deliberate alert end to end, repeated monthly.
 
 **What it needs from Greg**: pick A, B or C (and for A, Pushover or ntfy); authorise creating the
 account/check; say now, provisioning, or both for the timer unit and the secret file — the box's own
 rule ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)).
 
+## Plan review (GPT Sol, `--sandbox review`, at `2c751326`)
+
+Verdict *request changes*: established P1s F1, F2, F3, F5, F6; no P0. The answer is
+`260910f-…plan-review-answer.md` beside this file (the reviewer could not write the separate
+findings file from its sandbox and put them in the answer instead). Stage 1 had started before it
+returned. Every finding accepted; where it lands:
+
+| ID | Finding, short | Disposition |
+|----|----------------|-------------|
+| F1 | A start stamp names the checkout, not the loaded bytes; dirty starts typed `known`; "same" reads as "the running code is" | **Accepted, as wording.** D1 now reads: *a stamp is a checkout observation at start, not a code identity.* A dirty stamp renders `code revision unknown — base HEAD <sha>, checkout dirty at start`; a clean one only as `recorded start HEAD matches / is N behind / is not an ancestor of this checkout's HEAD`. No text says the running code or bundle *is* a revision. The type keeps `known` (renaming it is churn with no reader change); fixed in `diagnose.ts` and the page |
+| F2 | D5's payload cannot serve Stage 3: no daemon start stamp, no bundle stamp at server start, no store-path label, no health age | **Accepted.** D5 amended as the reviewer wrote it: add the client build stamp captured once before listeners open, the latest health-reading age, the resolved store-path label, and the daemon's start stamp from a fleet-owned tolerant reader of `daemon.jsonl` correlated to the checkpoint's `instanceId`. `HealthPanel.tsx` named in the file set |
+| F3 | `daemonStanding` pairs one global last note with the checkpoint: A checkpointed and was killed, B started and stopped cleanly → A's checkpoint with B's clean stop | **Accepted, a real bug in shared code** (now reached by `status` and `diagnose` both). Standing resolves from start/stop correlated by `instanceId`; regression test is the reviewer's scenario. `status-cli.ts` and `tests/overseer-cli.test.ts` added to the file set |
+| F4 | The dashboard read in `diagnose` has no deadline or body bound | **Accepted**, in Stage 3 where the route exists: injected `fetch`, 5 s `AbortSignal`, bounded body, non-2xx and malformed JSON each a named `unusable` line |
+| F5 | The spawned-server test is not isolated: readiness scans `process.cwd()`'s job logs at start; `openRouterKey()` reads the real `.env.local` before the zero budget; `OVERSEER_QUEUE_DIR` omitted | **Accepted**, relayed to the Stage 4b agent before it spawned anything: disposable git checkout as `cwd`, an invalid `OPENROUTER_API_KEY` sentinel, the reviewer's env list, and an assertion that every resolved path is beneath scratch |
+| F6 | The killed-daemon process test is optional; an aborted `runOverseer` is a graceful stop, not a crash | **Accepted — now required** (Stage 4c): `overseer run --no-attention --no-usage`, jobs and rules disabled, scratch everything, SIGKILL, `diagnose` says killed, a second child takes the lock |
+| F7 | The outage test must see a *moving* source clock stop, not start from null | **Accepted** (Stage 4c): assert non-null `t0` before the outage, `t0` held across ≥ 2 later checkpoints, `t1 > t0` after, and `diagnose` renders the stopped clock |
+| F8 | The per-request probe has no byte, file-type or symlink contract | **Accepted** (Stage 3, `store-probe.ts`): fixed allow-list, `lstat`, symlinks and non-regular files reported not followed, a JSON byte ceiling, JSONL tail-only |
+| F9 | Stage 5 item 5 claims more than it tests | **Accepted**; item 5 reworded below |
+
 ## Status
 
-2026-09-10: plan drafted; census and destination research in flight.
+2026-09-10, ~20:20 UTC. **All of it is on `dev` (`84b8c2a4`).** The full suite on the merged tree
+found one regression of this branch's own: `tests/fleet-work-evidence-e2e.test.tsx` had been red on
+`dev` since Stage 1 (`1c6e1e4e`). `runOverseer`'s first line derived its checkout with
+`fileURLToPath(new URL("../..", import.meta.url))`, which throws under jsdom, so a diagnostic stopped
+a daemon starting — invisible to every daemon test, because all of them run under node. Fixed in
+`3d6e851b`: `readModuleStartRevision` owns the derivation and makes a module with no file `unknown`,
+for the daemon and the dashboard both. Red first; the postmortem waits on the pause. Otherwise the
+suite's only reds were the two environment ones (`cold-start-lazy-imports`, `pdf-bundle-trace`).
+
+~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's
+fixes (`bfc0c3bf`), the plan review's F3/F1 (`52267541`), Stage 4c (`41508b7d`), and Stage 3 with the
+Stage 2 review's six P1 fixes (`b5bdea14` — one commit because they share files). `dev` merged in
+(19 commits, no conflicts), typecheck 0, full suite running on the merged tree. Paused by the
+Overseer at ~19:40 for the account's five-hour window: the narrow Sol check of the ten P1 fixes, the
+Fable pass, the browser check and the debrief wait for its resume. The live daemon was restarted by
+the Overseer meanwhile and now shows a recorded start HEAD; the live dashboard answers 404 on
+`/api/diagnostics` until it is restarted onto this code.
+
+Earlier, ~19:30 UTC. On `dev` (`6e0d42c0`): the plan and its review dispositions, Stage 1
+(`cb4c3ba7`), Stage 2 (`3c69ddcd`), Stage 4a (`349def9c`) and Stage 4b (`e7f39e4e`). In flight: the
+Stage 1 review's fixes (S1-F1–F4), the plan review's F3 standing fix and F1 wording, Stage 3 (the
+web summary, with F2/F4/F8), Stage 4c (killed daemon process, F6; the outage test strengthened,
+F7), and Sol's Stage 2 review. Then one narrow Sol check of the P1 fixes, and Fable. **No live
+restart has been done or is needed by this branch until it is finished**; when it is, both the
+dashboard and the daemon need one for their revision stamps to appear — the Overseer's to arrange.

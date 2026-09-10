@@ -25,6 +25,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { runOverseer } from "../tools/overseer/daemon.js";
+import { diagnose, diagnoseLines, readDiagnoseInput } from "../tools/overseer/diagnose.js";
+import { describeAge } from "../tools/overseer/format-age.js";
 import { readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { LOCK_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import { editableFixture } from "./overseer-fixtures.js";
@@ -123,12 +125,13 @@ function notesIn(root: string): DaemonNote[] {
   return read.notes;
 }
 
-type Heartbeat = { lastGoodSnapshotAt: string | null; lastTickAt: string | null; ticks: number };
+type Heartbeat = { writtenAt: string; lastGoodSnapshotAt: string | null; lastTickAt: string | null; ticks: number };
 
 function heartbeatOf(root: string): Heartbeat | null {
   const read = readCheckpoint(root);
   if (read.kind !== "checkpoint") return null;
   return {
+    writtenAt: read.checkpoint.writtenAt,
     lastGoodSnapshotAt: read.checkpoint.lastGoodSnapshotAt,
     lastTickAt: read.checkpoint.heartbeat.lastTickAt,
     ticks: read.checkpoint.heartbeat.ticks,
@@ -188,6 +191,11 @@ describe("a daemon over a dashboard that dies and comes back", () => {
     expect(hasNote(root, "condition-degraded", "sse-stream")).toBe(false);
     expect(hasNote(root, "condition-degraded", "poll")).toBe(false);
 
+    // t0: the last collection accepted before the outage. Non-null by the wait
+    // above, and it had already MOVED (A → B) — so the clock seen standing still
+    // below is a moving clock that stopped, not one that never started (F7).
+    const t0 = collectedB;
+
     // ── DOWN. Closed completely: every connection dropped and the port released.
     await first.close();
     await waitFor(
@@ -196,18 +204,50 @@ describe("a daemon over a dashboard that dies and comes back", () => {
     );
     const atOutage = heartbeatOf(root);
     if (atOutage === null) throw new Error("no checkpoint at the outage");
-    // DEAF, NOT DEAD: many ticks later the heartbeat has moved on and the last
-    // good collection is exactly where the outage left it.
-    await waitFor("the heartbeat to keep ticking while the source is gone", () => {
+    // DEAF, NOT DEAD: every checkpoint written from here on, sampled as it
+    // lands. At least two later writes, and long enough that the source clock's
+    // age renders as whole seconds while the heartbeat's stays near zero.
+    const writes: Heartbeat[] = [atOutage];
+    await waitFor("two later checkpoint writes, 5+ ticks on, and t0 at least 2.5s old", () => {
       const beat = heartbeatOf(root);
-      return beat !== null && beat.ticks >= atOutage.ticks + 5;
+      if (beat !== null && beat.writtenAt !== writes.at(-1)?.writtenAt) writes.push(beat);
+      return writes.length >= 3 && (writes.at(-1)?.ticks ?? 0) >= atOutage.ticks + 5 && now().getTime() - Date.parse(t0) >= 2_500;
     });
-    const deaf = heartbeatOf(root);
-    if (deaf === null || atOutage.lastTickAt === null || deaf.lastTickAt === null) throw new Error("no heartbeat");
-    expect(Date.parse(deaf.lastTickAt)).toBeGreaterThan(Date.parse(atOutage.lastTickAt));
-    expect(deaf.lastGoodSnapshotAt).toBe(collectedB);
-    expect(atOutage.lastGoodSnapshotAt).toBe(collectedB);
+    for (let i = 1; i < writes.length; i += 1) {
+      const before = writes[i - 1];
+      const beat = writes[i];
+      if (before === undefined || beat === undefined || before.lastTickAt === null || beat.lastTickAt === null) throw new Error("no heartbeat");
+      // The heartbeat advanced on every write, and the source clock did not move at all.
+      expect(beat.ticks).toBeGreaterThan(before.ticks);
+      expect(Date.parse(beat.lastTickAt)).toBeGreaterThan(Date.parse(before.lastTickAt));
+      expect(beat.lastGoodSnapshotAt).toBe(t0);
+    }
+    expect(atOutage.lastGoodSnapshotAt).toBe(t0);
     expect(hasNote(root, "condition-restored", "poll")).toBe(false);
+
+    // ── WHAT `diagnose` SAYS AT THIS MOMENT, on the daemon's own clock: the
+    // daemon running, its heartbeat fresh, and the last good snapshot t0 and old.
+    // The daemon runs INSIDE this test process, so the process holding its pid is vitest's,
+    // started long before the daemon's elapsed-clock `startedAt`: the /proc identity check
+    // (Sol's F45) would rightly call it a stranger. That check is overseer-cli.test.ts's; this
+    // test is about the clocks, so it names the daemon's own process as the holder.
+    const own = readCheckpoint(root);
+    const startedAtMs = own.kind === "checkpoint" ? Date.parse(own.checkpoint.heartbeat.startedAt) : Number.NaN;
+    const input = readDiagnoseInput(root, { now, identify: () => ({ kind: "started", atMs: startedAtMs - 1_000 }) });
+    if (!input.ok) throw new Error(input.why);
+    const report = diagnose(input.input);
+    expect(report.daemon.standing.state).toBe("running");
+    const section = report.checkpoint;
+    if (section.kind !== "checkpoint" || section.lastGoodAgeMs === null || section.lastTickAgeMs === null || section.lastTickAt === null) {
+      throw new Error(`diagnose read no clocks: ${JSON.stringify(section)}`);
+    }
+    expect(section.lastGoodSnapshotAt).toBe(t0);
+    expect(section.lastGoodAgeMs).toBeGreaterThanOrEqual(2_500);
+    expect(section.lastTickAgeMs).toBeLessThan(1_000);
+    const lines = diagnoseLines(report).map((line) => line.trim());
+    expect(lines).toContain(`last good snapshot ${t0} (${describeAge(section.lastGoodAgeMs)} old)`);
+    expect(Number.parseInt(describeAge(section.lastGoodAgeMs), 10)).toBeGreaterThanOrEqual(3);
+    expect(lines).toContain(`last tick ${section.lastTickAt} (${describeAge(section.lastTickAgeMs)} ago)`);
 
     // ── BACK, on the same port, with a newer collection.
     const collectedC = new Date(now().getTime() + 1).toISOString();
@@ -220,6 +260,10 @@ describe("a daemon over a dashboard that dies and comes back", () => {
         hasNote(root, "condition-restored", "sse-stream") &&
         heartbeatOf(root)?.lastGoodSnapshotAt === collectedC,
     );
+    // t1: the clock moves again, and forward of where it stopped.
+    const t1 = heartbeatOf(root)?.lastGoodSnapshotAt ?? null;
+    if (t1 === null) throw new Error("no last good snapshot after the source came back");
+    expect(Date.parse(t1)).toBeGreaterThan(Date.parse(t0));
 
     // The restorations close THIS outage: after the degradations, same instance.
     const notes = notesIn(root);

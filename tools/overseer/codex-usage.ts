@@ -513,11 +513,41 @@ function jsonMessages(buffer: string): { rest: string; messages: Record<string, 
   return { rest, messages };
 }
 
+/**
+ * **A PIN REFUSES SILENCE AS WELL AS CONTRADICTION.**
+ *
+ * Supplying `expectedAccountId` is a caller saying *I have routed this read at
+ * one particular account and I need to know it landed there*. So there are
+ * three outcomes, not two: the reply names the expected account (take it), the
+ * reply names a different one (refuse it), and **the reply names no account at
+ * all** (refuse it too — the app-server has declined to say whose numbers these
+ * are, which is exactly the question that was asked).
+ *
+ * Until 2026-09-10 the third case was let through unchanged, so a null-identity
+ * reading was indistinguishable from a verified one at this boundary. That is
+ * the per-account twin of the `/login`-swap bug `attributeCache` exists to
+ * prevent in `tools/overseer/usage.ts`: a plausible percentage drawn under the
+ * wrong account's heading, which is worse than drawing nothing. Nothing in
+ * production passed `expectedAccountId` at the time, so this changed no
+ * behaviour anyone was relying on — it closed the hole before the first caller
+ * (plan 260910c's per-account collection) arrived.
+ *
+ * **A caller that has NOT named an account is unaffected**: an ambient read is
+ * entitled to a null id, because it never claimed to be about anyone in
+ * particular. `tests/codex-usage.test.ts` pins both halves, since a fix that
+ * refused every null would break the ambient read and look like the same green.
+ */
 function enforceExpectedAccount(
   reading: CodexUsageReading,
   expectedAccountId: string | undefined,
 ): CodexUsageReading {
-  if (reading.kind !== "value" || reading.accountId === null || expectedAccountId === undefined) return reading;
+  if (reading.kind !== "value" || expectedAccountId === undefined) return reading;
+  if (reading.accountId === null) {
+    return unknownReply(
+      `Codex app-server did not say which account it answered for, and this read was pinned to ${expectedAccountId}`,
+      false,
+    );
+  }
   return reading.accountId === expectedAccountId
     ? reading
     : unknownReply(

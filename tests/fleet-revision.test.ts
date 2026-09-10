@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { readStartRevision } from "../tools/fleet/revision.js";
+import { type RunGit, readModuleStartRevision, readStartRevision } from "../tools/fleet/revision.js";
 
 const dirs: string[] = [];
 
@@ -28,45 +28,47 @@ const AT = new Date("2026-09-10T12:00:00.000Z");
 
 type Run = (argv: string[]) => { status: number; stdout: string; stderr: string };
 
-/** A git that answers by subcommand, and records what it was asked. */
-function fakeGit(answers: { revParse: ReturnType<Run>; status: ReturnType<Run> }): { run: Run; calls: string[][] } {
+/** A git that gives one answer to whatever it is asked, and records what it was asked. */
+function fakeGit(answer: ReturnType<Run>): { run: Run; calls: string[][] } {
   const calls: string[][] = [];
   const run: Run = (argv) => {
     calls.push(argv);
-    if (argv.includes("rev-parse")) return answers.revParse;
-    if (argv.includes("status")) return answers.status;
-    throw new Error(`unexpected git call: ${argv.join(" ")}`);
+    return answer;
   };
   return { run, calls };
 }
 
 const ok = (stdout: string): ReturnType<Run> => ({ status: 0, stdout, stderr: "" });
 
+/** `git status --porcelain=v2 --branch` output: the headers, then one line per change. */
+const porcelain = (oid: string, ...changes: string[]): string =>
+  [`# branch.oid ${oid}`, "# branch.head main", ...changes].map((line) => `${line}\n`).join("");
+
+const CHANGE = "1 .M N... 100644 100644 100644 0123456789abcdef0123456789abcdef01234567 0123456789abcdef0123456789abcdef01234567 tools/fleet/server.ts";
+
 describe("readStartRevision over a scripted git", () => {
-  test("a clean tree is known and not dirty", () => {
-    const git = fakeGit({ revParse: ok(`${SHA_A}\n`), status: ok("") });
+  test("a clean tree is known and not dirty — from ONE git call", () => {
+    const git = fakeGit(ok(porcelain(SHA_A)));
     expect(readStartRevision("/some/checkout", { run: git.run, now: () => AT })).toEqual({
       kind: "known",
       sha: SHA_A,
       dirty: false,
       readAt: AT.toISOString(),
     });
+    // One invocation, so the sha and the status describe the same moment: two
+    // calls let a commit land between them and pair A's sha with B's cleanness.
     // It asks about the directory it was given, and about tracked files only.
-    expect(git.calls).toContainEqual(["git", "-C", "/some/checkout", "rev-parse", "HEAD"]);
-    expect(git.calls).toContainEqual(["git", "-C", "/some/checkout", "status", "--porcelain", "--untracked-files=no"]);
+    expect(git.calls).toEqual([["git", "-C", "/some/checkout", "status", "--porcelain=v2", "--branch", "--untracked-files=no"]]);
   });
 
-  test("a tracked change makes it dirty", () => {
-    const git = fakeGit({ revParse: ok(SHA_A), status: ok(" M tools/fleet/server.ts\n") });
+  test("a tracked change makes it dirty, and the sha is the oid from the same output", () => {
+    const git = fakeGit(ok(porcelain(SHA_A, CHANGE)));
     const stamp = readStartRevision("/x", { run: git.run, now: () => AT });
-    expect(stamp).toMatchObject({ kind: "known", sha: SHA_A, dirty: true });
+    expect(stamp).toEqual({ kind: "known", sha: SHA_A, dirty: true, readAt: AT.toISOString() });
   });
 
   test("a git failure is unknown, with git's own reason", () => {
-    const git = fakeGit({
-      revParse: { status: 128, stdout: "", stderr: "fatal: not a git repository (or any of the parent directories): .git\n" },
-      status: ok(""),
-    });
+    const git = fakeGit({ status: 128, stdout: "", stderr: "fatal: not a git repository (or any of the parent directories): .git\n" });
     const stamp = readStartRevision("/not/a/repo", { run: git.run, now: () => AT });
     expect(stamp.kind).toBe("unknown");
     if (stamp.kind !== "unknown") throw new Error("expected unknown");
@@ -76,16 +78,32 @@ describe("readStartRevision over a scripted git", () => {
 
   test("a status that fails is unknown, not clean", () => {
     // Clean is a claim. A status we could not take must not make it.
-    const git = fakeGit({ revParse: ok(SHA_A), status: { status: 129, stdout: "", stderr: "error: unknown option" } });
+    const git = fakeGit({ status: 129, stdout: "", stderr: "error: unknown option" });
     const stamp = readStartRevision("/x", { run: git.run, now: () => AT });
     expect(stamp.kind).toBe("unknown");
     if (stamp.kind !== "unknown") throw new Error("expected unknown");
     expect(stamp.why).toContain("unknown option");
   });
 
-  test("something that is not a sha is unknown", () => {
-    const git = fakeGit({ revParse: ok("HEAD\n"), status: ok("") });
-    expect(readStartRevision("/x", { run: git.run, now: () => AT }).kind).toBe("unknown");
+  test("a repository with no commit yet is unknown, and says so", () => {
+    const stamp = readStartRevision("/x", { run: fakeGit(ok(porcelain("(initial)"))).run, now: () => AT });
+    expect(stamp.kind).toBe("unknown");
+    if (stamp.kind !== "unknown") throw new Error("expected unknown");
+    expect(stamp.why).toContain("no commit yet");
+  });
+
+  test("a missing or garbled oid line is unknown, never a clean guess", () => {
+    const outputs = [
+      "",
+      "# branch.head main\n",
+      `# branch.head main\n${CHANGE}\n`,
+      "# branch.oid HEAD\n# branch.head main\n",
+      `# branch.oid ${SHA_A.slice(0, 12)}\n`,
+      `#branch.oid ${SHA_A}\n`,
+    ];
+    for (const stdout of outputs) {
+      expect(readStartRevision("/x", { run: fakeGit(ok(stdout)).run, now: () => AT }).kind, JSON.stringify(stdout)).toBe("unknown");
+    }
   });
 
   test("a run that throws is unknown rather than a crash at startup", () => {
@@ -151,10 +169,51 @@ describe("readStartRevision against a real scratch repository", () => {
     expect(readStartRevision(repo.dir)).toMatchObject({ kind: "known", dirty: true });
   });
 
+  test("a repository with no commit yet is unknown, from the real git's output", () => {
+    const repo = scratchRepo();
+    const stamp = readStartRevision(repo.dir);
+    expect(stamp.kind).toBe("unknown");
+    if (stamp.kind !== "unknown") throw new Error("expected unknown");
+    expect(stamp.why).toContain("no commit yet");
+  });
+
   test("a directory that is not a repository is unknown", () => {
     const dir = mkdtempSync(join(tmpdir(), "fleet-revision-norepo-"));
     dirs.push(dir);
     const stamp = readStartRevision(dir);
     expect(stamp.kind).toBe("unknown");
+  });
+});
+
+/**
+ * The daemon and the dashboard find their checkout from `import.meta.url`. Under
+ * jsdom that is not a `file:` URL, and `fileURLToPath` threw from the first line
+ * of `runOverseer` — tests/fleet-work-evidence-e2e.test.tsx went red on dev.
+ * A stamp is a diagnostic: it may say "unknown", it may never stop a start.
+ */
+describe("readModuleStartRevision — the checkout a module sits in", () => {
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  const fakeGit =
+    (seen: string[][]): RunGit =>
+    (argv) => {
+      seen.push(argv);
+      return { status: 0, stdout: `# branch.oid ${sha}\n# branch.head dev\n`, stderr: "" };
+    };
+
+  test("a module loaded from a file resolves its checkout and reads it there", () => {
+    const seen: string[][] = [];
+    const stamp = readModuleStartRevision("file:///srv/repo/tools/overseer/daemon.ts", "../..", { run: fakeGit(seen) });
+    expect(stamp).toMatchObject({ kind: "known", sha, dirty: false });
+    expect(seen[0]?.slice(0, 3)).toEqual(["git", "-C", "/srv/repo/"]);
+  });
+
+  test("a module not loaded from a file is unknown with the reason, never throws, and runs no git", () => {
+    const seen: string[][] = [];
+    const stamp = readModuleStartRevision("http://localhost:3000/tools/overseer/daemon.ts", "../..", {
+      run: fakeGit(seen),
+      now: () => new Date("2026-09-10T20:00:00.000Z"),
+    });
+    expect(stamp).toEqual({ kind: "unknown", why: expect.stringContaining("http:"), readAt: "2026-09-10T20:00:00.000Z" });
+    expect(seen).toEqual([]);
   });
 });

@@ -129,11 +129,14 @@ describe("reading start notes, old and damaged", () => {
       { ...oldShape(), at, revision: "a1b2c3d4" },
       { ...oldShape(), at, revision: { kind: "known", sha: SHA, dirty: "yes", readAt: at } },
       { ...oldShape(), at, revision: { kind: "unknown", readAt: at } },
+      // Well-formed but for a readAt that is not an instant.
+      { ...oldShape(), at, revision: { kind: "known", sha: SHA, dirty: false, readAt: "not-a-date" } },
+      { ...oldShape(), at, revision: { kind: "unknown", why: "git failed", readAt: "2026-09-09" } },
     ]);
     const read = readNotes(root);
     if (read.kind !== "read") throw new Error("expected a read");
     expect(read.unreadable).toBe(0);
-    expect(read.notes).toHaveLength(4);
+    expect(read.notes).toHaveLength(6);
     for (const note of read.notes) {
       if (note.kind !== "daemon-started") throw new Error("expected start notes");
       expect(note.revision).toEqual({ kind: "unknown", why: "the note's revision field could not be read", readAt: at });
