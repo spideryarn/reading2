@@ -747,7 +747,13 @@ export function SessionDetail({
   /* **CHECKED WHERE IT IS DRAWN, not cleared by an effect one commit later.**
      Same argument as `Held` in RecentMessages.tsx: an effect runs after React
      has committed and possibly painted, so the frame in which a new dialog is
-     on screen under the old dialog's refusal would exist. */
+     on screen under the old dialog's refusal would exist. The state update is
+     also what makes a transition through `no-question` final: merely hiding a
+     mismatched refusal would let an identical later dialog resurrect it. It is
+     guarded by the key mismatch, so the immediate retry observes null. */
+  if (permissionRefusal !== null && permissionRefusal.dialog !== dialogKey) {
+    setPermissionRefusal(null);
+  }
   const grantsPermission =
     permissionRefusal !== null && permissionRefusal.dialog === dialogKey ? permissionRefusal.why : null;
   /**

@@ -34,7 +34,7 @@ import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Profiler, act } from "react";
+import { Profiler, StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10732,6 +10732,57 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
+  it("commits no stale-key frame on replacement under StrictMode", async () => {
+    const feed = manualTransport();
+    let frames: string[] = [];
+    act(() =>
+      root.render(
+        <StrictMode>
+          <Profiler id="continuity" onRender={() => frames.push(container.textContent ?? "")}>
+            <App
+              transport={feed.transport}
+              steer={recordingSteer().api}
+              newSession={fakeNewSession()}
+              rename={fakeRename()}
+              actionsApi={recordingActions().api}
+              messagesApi={recordingMessages().api}
+              actionsPollMs={3_600_000}
+            />
+          </Profiler>
+        </StrictMode>,
+      ),
+    );
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    typeInto(composer(), "belongs to the old execution");
+
+    frames = [];
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "the replacement execution",
+              status: { kind: "working" },
+              claudeSessionId: "conv-A",
+              execution: ran({ pid: 5150, startTicks: 90_000_000 }),
+            }),
+          ],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(frames.some((frame) => frame.includes("the replacement execution"))).toBe(true);
+    expect(
+      frames.filter(
+        (frame) => frame.includes("the replacement execution") && frame.includes("belongs to the old execution"),
+      ),
+    ).toEqual([]);
+  });
+
   /**
    * **THE ONE MOST LIKELY TO REGRESS.** The token is absent whenever the
    * reading is not `verified`, which on this box happens for a collection or
@@ -10758,6 +10809,65 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
   });
 
+  it("clears detail state when the claimed conversation changes inside one execution epoch", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+
+    /* The transcript reader already treats this as a different file. The rest
+       of the detail pane must do the same: all three requests are addressed
+       with the row's claimed conversation id, even when execution cannot be
+       verified. */
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "a session",
+              status: { kind: "working" },
+              claudeSessionId: "conv-B",
+              execution: CANNOT_TELL,
+            }),
+          ],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  it("clears detail state when the tmux world changes around the same unverifiable handle", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    expect(composer().value).toBe("a draft I am still writing");
+
+    /* `$a` only names a session inside one tmux server. Reusing the handle in
+       another server is a different target even when process identity could
+       not be collected in either snapshot. */
+    act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
   /**
    * The epoch alone would be equal for two sessions that have each been
    * replaced the same number of times — which, on a page whose default state is
@@ -10780,8 +10890,8 @@ describe("the detail pane's state follows the execution, not the handle", () => 
         feed.push(
           state({
             rows: [
-              steerable({ id: "$a", title: "session a", status: { kind: "working" }, claudeSessionId: "conv-A" }),
-              steerable({ id: "$b", title: "session b", status: { kind: "working" }, claudeSessionId: "conv-B" }),
+              steerable({ id: "$a", title: "session a", status: { kind: "working" }, claudeSessionId: "conv-shared" }),
+              steerable({ id: "$b", title: "session b", status: { kind: "working" }, claudeSessionId: "conv-shared" }),
             ],
           }),
         ),
@@ -10803,12 +10913,12 @@ describe("the detail pane's state follows the execution, not the handle", () => 
 /**
  * **WHICH CONVERSATION A TRANSCRIPT READING IS OF.**
  *
- * `identityOf` used to pair the handle with `row.claudeSessionId`, which is the
- * tmux environment's launch CLAIM: written once before the first Claude
+ * `identityOf` used to pair only the handle with `row.claudeSessionId`, which
+ * is the tmux environment's launch CLAIM: written once before the first Claude
  * started, never rewritten, and — since execution identity landed — capable of
- * being contradicted by what is actually in the pane. The identity now follows
- * the conversation the box could observe, and falls back to the claim only when
- * there is no observation to prefer.
+ * being contradicted by what is actually in the pane. The identity now adds the
+ * execution epoch while retaining the claim, because the claim is the file the
+ * transcript route actually reads.
  */
 describe("recent messages, when the execution reading contradicts the row's claim", () => {
   /** A messages api that records every ask. */
@@ -11014,6 +11124,32 @@ describe("recent messages, when the execution reading contradicts the row's clai
     expect(messages.asked).toHaveLength(asked + 1);
   });
 
+  it("keeps the established previous-conversation relabel through an unverifiable flicker", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(CONFLICTING) })));
+    openSession("a session");
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("previous conversation");
+
+    /* Unknown is no evidence that the established conflict has ended. The
+       transcript is deliberately fresh, so the age-based StaleNote cannot
+       accidentally qualify it for this test. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsWith({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(container.textContent ?? "").toContain("previous conversation");
+    expect(container.textContent ?? "").toContain("latest pass could not re-check");
+    expect(messages.asked).toHaveLength(1);
+  });
+
   /**
    * `StaleNote` asks, in violet, whether these turns belong to this session at
    * all — from an inference about transcript age. A verified conversation
@@ -11103,6 +11239,43 @@ describe("the two answering refusals, and who owns each", () => {
     act(() =>
       feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to write to disk?") })),
     );
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not resurrect a refusal when an identical dialog returns after no question", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* No question ends the dialog. A later dialog may have byte-for-byte equal
+       safety fields, but it is no longer the instance the refusal answered. */
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: { kind: "enabled" },
+          rows: [steerable({ id: "$a", title: "asking", status: { kind: "working" }, question: null })],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
     await act(async () => {});
     expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
   });
@@ -11214,5 +11387,48 @@ describe("the two answering refusals, and who owns each", () => {
 
     expect(container.textContent ?? "").toContain(REFUSED_SERVER);
     expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+
+  it("does not treat a payload received before the refusal as evidence received after it", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () => ({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } }),
+      answer: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: pending });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    /* This payload arrived after the tap, but before the server answered it.
+       It therefore cannot be the post-refusal evidence the latch requires. */
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+
+    await act(async () => {
+      settle?.({
+        ok: false,
+        code: "answering-disabled",
+        why: REFUSED_SERVER,
+        status: 503,
+        from: "server",
+        delivery: { kind: "none" },
+      });
+    });
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* Only a payload that arrives now is after the refusal. */
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    await act(async () => {});
+    /* The action receipt correctly keeps the server's refusal on screen; the
+       buttons returning is the observable fact that the page-level latch came
+       off. */
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
   });
 });

@@ -206,17 +206,31 @@ function StaleNote({ ms, execution }: { ms: number; execution: ExecutionReading 
  * Alarm tone rather than the violet, and that is the whole difference from
  * `StaleNote`: this is not *nobody could tell*, it is a fact that arrived.
  */
-function PreviousConversation({ claimed, observed }: { claimed: string; observed: string }): ReactNode {
+function PreviousConversation({
+  claimed,
+  observed,
+  current,
+}: {
+  claimed: string;
+  observed: string;
+  /** Whether this payload re-established the conflict, rather than merely failing to refute it. */
+  current: boolean;
+}): ReactNode {
   return (
     <div className="tw:mb-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
       <p className="tw:font-medium tw:text-alarm-ink">
-        These are the previous conversation in this pane, not what is running now.
+        {current
+          ? "These are the previous conversation in this pane, not what is running now."
+          : "These are the previous conversation in this pane; the latest pass could not re-check what is running now."}
       </p>
       <p className="tw:mt-1 tw:break-words tw:text-ink-soft">
-        Every address on this row still names <Mono>{claimed}</Mono>, and the box can see that the pane is
+        Every address on this row still names <Mono>{claimed}</Mono>, and {current ? "the box can see" : "the last verified reading found"} that the pane is
         running <Mono>{observed}</Mono> — a different Claude was started here since this session was launched.
         The turns below come from {claimed === "" ? "that conversation" : <Mono>{claimed}</Mono>}: real, well
-        formed and correctly attributed, and not what is on that screen.
+        formed and correctly attributed
+        {current
+          ? ", and not what is on that screen."
+          : ". The latest pass did not establish whether that is still what is on screen."}
       </p>
     </div>
   );
@@ -739,15 +753,41 @@ export function Conversation({
      the only thing on screen that explains why. `conflicting` is reachable from
      the `verified` arm and from nowhere else; wire.ts § `ExecutionReading` says
      so, and a check on the `claimed-only` arm would be dead code. */
-  const changedHands =
+  const observedConflict =
     row.execution.kind === "verified" && row.execution.conversation.kind === "conflicting"
       ? row.execution.conversation
       : null;
+  /* A failed collection is not evidence that a previously established conflict
+     ended. Hold that fact through unverifiable weather, but clear it in the
+     render where a verified conversation positively re-establishes coherence.
+     The guarded render-phase updates keep the relabel and its evidence in the
+     same committed frame. */
+  const [lastConflict, setLastConflict] = useState(observedConflict);
+  let changedHands = observedConflict;
+  let conflictIsCurrent = observedConflict !== null;
+  if (observedConflict !== null) {
+    if (
+      lastConflict === null ||
+      lastConflict.claimed !== observedConflict.claimed ||
+      lastConflict.observed !== observedConflict.observed
+    ) {
+      setLastConflict(observedConflict);
+    }
+  } else if (row.execution.kind === "verified" && row.execution.conversation.kind === "verified") {
+    if (lastConflict !== null) setLastConflict(null);
+  } else {
+    changedHands = lastConflict;
+    conflictIsCurrent = false;
+  }
 
   return (
     <div>
       {changedHands === null ? null : (
-        <PreviousConversation claimed={changedHands.claimed} observed={changedHands.observed} />
+        <PreviousConversation
+          claimed={changedHands.claimed}
+          observed={changedHands.observed}
+          current={conflictIsCurrent}
+        />
       )}
       {view === null ? (
         <p className="tw:text-[13px] tw:text-ink-soft">

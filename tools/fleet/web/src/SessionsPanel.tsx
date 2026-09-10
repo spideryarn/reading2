@@ -584,7 +584,16 @@ export function SessionsPanel({
    * continuity.ts for the whole argument. Called unconditionally, `null`
    * included, because it is a hook.
    */
-  const detailKey = useExecutionEpoch(selected);
+  const executionKey = useExecutionEpoch(selected);
+  /**
+   * The execution epoch is necessary but not sufficient to name the target the
+   * detail pane is drawing. A handle lives inside one tmux server, and every
+   * transcript and write request is resolved against the row's claimed Claude
+   * conversation. Either can change while execution is unverifiable, when the
+   * epoch deliberately holds. Keeping them in the mount key prevents state
+   * created against one resolvable target from riding into another.
+   */
+  const detailKey = JSON.stringify([tmuxServerPid, selected?.claudeSessionId ?? null, executionKey]);
 
   /**
    * **BRING THE DETAIL ONTO THE SCREEN WHEN A SELECTION ARRIVES.**
@@ -700,13 +709,15 @@ export function SessionsPanel({
       <MissingSession id={selectedId} onBack={() => onSelect(null)} />
     ) : (
       <SessionDetail
-        /* **KEYED BY THE SESSION *AND* BY WHICH RUN IS IN ITS PANE**, so that
+        /* **KEYED BY THE TMUX WORLD, SESSION, CONVERSATION CLAIM AND WHICH RUN
+           IS IN ITS PANE**, so that
            everything this component holds — the message box, the two outcome
            cards, the dialog refusal — is thrown away when it stops being about
            the agent it was created against.
 
-           Two changes reset it and they are both changes of recipient: picking
-           a different row, and a **verifiably replaced process** under this one.
+           Four changes reset it and they are all changes of resolvable target:
+           a different tmux server, a different row, a different conversation
+           claim, and a **verifiably replaced process** under this one.
            A pane outlives the `claude` inside it, and across that replacement
            the handle, the pane pid and `CLAUDE_SESSION_ID` are all unchanged —
            so `key={selected.id}` went on carrying one agent's half-typed

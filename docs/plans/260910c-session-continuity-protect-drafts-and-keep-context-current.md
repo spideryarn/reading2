@@ -52,8 +52,19 @@ could be *presented under, or delivered to*, an execution other than the one it 
 
 > After this stage, no state the browser **holds and draws** about a session — a draft, a transcript
 > reading, an action outcome, a refusal — can be **presented under**, or **restored for**, a
-> conversation other than the one it was created against. Whether a keystroke **reaches** the right
-> conversation is not decided here: the server decides it, freshly, at the moment of the write.
+> conversation other than the one it was created against, **among the changes the browser has
+> evidence for**. Whether a keystroke **reaches** the right conversation is not decided here: the
+> server decides it, freshly, at the moment of the write.
+
+**The evidence clause is Sol's F15, and it is a limit, not a gap to close later.** A replacement that
+happens entirely inside readings the box could not verify — a session first seen unverifiable,
+replaced, and then verified for the first time as the new run — leaves the browser no evidence that
+anything changed, so nothing on the page can detect it. The only way to guarantee otherwise is to
+withhold or discard everything created before the first verified reading, which is Sol's F2/F3 rule
+that Fable's arbitration declined: on this box that would blank the dashboard in exactly the weather
+it is most needed. Stage 2's drafts are safe regardless — they persist only under a verified
+conversation and restore only under a live verification of the same one — so what this limit can
+leave behind is an outcome card, not a message.
 
 ### Delivery — what the server already protects, and the one thing it does not
 
@@ -265,7 +276,23 @@ its buttons back; a server-wide refusal survives a tab change.
 
 ### Stage 2 — Unsent drafts, per execution and per input
 
-Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
+Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, `MessageOverseerCard.tsx`,
+`BroadcastCard.tsx`, tests.
+
+**Status: split in two, and the first half is in flight.** Widening the stage to all three inputs
+(below) changed what it is blocked on. The composer half needs `SessionDetail.tsx` and
+`tests/fleet-web.test.tsx`, where Sol's Stage 1 reviewer has write access; the rest does not. So:
+
+- **2a — in flight**, an Opus subagent: `drafts.ts` and its one hook, the Overseer message card,
+  the broadcast box, and tests in a new `tests/fleet-drafts.test.tsx` plus the two cards' own test
+  files. Disjoint from both reviewers' write scopes.
+- **2b — after Sol's Stage 1 round closes and 2a lands**: the session composer's wiring, the
+  composer under each reading (Fable's table), and the `conflicting` restore.
+
+**Stage 4 is held rather than started alongside**, although its hook-and-client half is disjoint
+too. With two reviewers and 2a running, three things in this worktree are running tests, and
+`docs/project/overseer.md` caps test-running work at three: *"beyond three the suites go red for
+reasons that are nobody's bug."* It starts when a reviewer finishes.
 
 - [ ] `drafts.ts`: `useDraft(purpose, key)` over **sessionStorage** — per tab, dies with the tab,
       survives the reload iOS forces. Key `sy.draft.v1:<purpose>:<verified conversation id>`;
@@ -329,9 +356,16 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
 - [ ] Tests: suspend/resume restores the draft; a different token restores nothing and leaves the
       old draft unread in storage; storage that throws on the accessor, on `getItem`, and on
       `setItem`; Clear removes the key; over-cap text is not stored.
-- [ ] **v1 wires one input**: the session composer, the one that can reach a stranger's terminal.
-      `purpose` exists so the Overseer message card and the broadcast box are one line each later;
-      both are page-level rather than execution-level and are not part of this stage.
+- [ ] **All three inputs, not one.** Revision 3 wired only the session composer and deferred the
+      other two. That was a narrowing of the roadmap's *"per execution and input purpose"*, and
+      `docs/project/overseer.md` gate 2 is explicit that narrowing scope is never the agent's call —
+      *"scope is where his fifth options come from."* Widened back, 2026-09-10, and reported to the
+      Overseer as a correction rather than a request:
+      - the **session composer**, keyed by its row's verified conversation id;
+      - the **Overseer message card**, keyed by the Overseer row's verified conversation id — the
+        strongest case of the three, because the Overseer is the session relaunched most often;
+      - the **broadcast box**, keyed by purpose alone, because it has no single recipient and so
+        nothing for a replacement to inherit.
 
 **Not built, and it is Greg's call, not mine** (Overseer ruling, 2026-09-10 — logged as an
 assumption pending Greg rather than decided):
@@ -509,6 +543,23 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 | F7 | `answeringOff` needs `questionSafetyKey` and a genuinely page-level owner in `App.tsx` | P1 established | **Accepted verbatim**, Stage 1. Found an existing helper I was about to reinvent. |
 | F8 | `lastGoodAt` planned as a field nothing renders | P2 established | **Accepted verbatim**, Stage 4. |
 | F9 | The late-discovery regression names no winner | P2 reasoned | **Accepted verbatim**, Stage 5. |
+
+Stage 1 code review, round 1, GPT Sol, 2026-09-10, on `93c3af30`
+(`260910c-stage1-code-review-sol.md`). Verdict: **refuse the guarantee as stated**. Run
+write-capable; its fixes verified by me: `fleet-web`, `fleet-overseer-badge`,
+`fleet-questions-panel` and `fixture-ids` pass; typecheck is red only in
+`tests/fleet-overseer-message.test.tsx`, which Stage 2a was rewriting at the time, and Sol's own
+typecheck passed. Mutation checks on each fix were Sol's, and are in its answer.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F10 | A transcript response carries no provenance: if the server's snapshot moves from claim C to D mid-request, D's turns arrive and are labelled C | P1 established | **Accepted; follow-up.** `readRecentMessages` stamps every answer with the conversation id it read; the browser discards an answer whose stamp differs from the claim it asked under. The brief allowed exactly this — a read-side addition "if identity must travel in a request". The world is not needed in the stamp: two tmux servers holding one conversation uuid hold one conversation. |
+| F11 | Under an unverifiable execution, a changed claim or tmux world kept the draft and both cards | P1 established | **Fixed by Sol, and the fix introduced a flicker — follow-up.** Sol put `tmuxServerPid` and the claim into the mount key; `collect.ts:550` returns `tmuxServerPid: null` whenever `list-panes` fails, which on a loaded box is weather, so the key can read `123 → null → 123` and wipe the composer. The same rule the epoch and Stage 3's digest already follow applies: hold the last known value and move the key only between two known values. |
+| F12 | An unverifiable flicker erased an established conflict, leaving the previous conversation's turns uncaveated | P1 established | **Fixed by Sol, accepted.** The last established conflict is held until a verified conversation positively refutes it, with wording that says the latest pass could not re-check. |
+| F13 | The page latch recorded the tap-time payload, so a payload that arrived while the answer was pending counted as evidence after the refusal | P1 established | **Fixed by Sol — and I had dismissed this.** I reasoned that the payload flag and the tap-time refusal read one env var and so only disagree across a restart; but the latch exists *for* the restart case, so that was the case in which the race matters. The boundary is now the latest committed payload at the moment the refusal arrives. |
+| F14 | `question A → refusal → no question → identical A` resurrected the old refusal | P1 established | **Fixed by Sol, accepted** — F7's rule that a transition through no dialog is a change, now made final rather than merely hidden. |
+| F15 | A replacement hidden entirely inside unverifiable readings cannot be detected, so the absolute guarantee is false | P1 established contract gap | **Guarantee narrowed**, the first of the two options Sol offered; see § What this guarantees. The second (withhold everything before a first verified reading) is the rule Fable's arbitration already declined. Not an overrule. |
+| F16 | `QuestionsPanel` owns a second `answering-disabled` latch for the same server-wide fact | P1 established, wider than the detail pane | **Accepted; follow-up.** `App` owns the one latch; `QuestionsPanel` takes it and its handler as props, and keeps only its dialog-scoped refusal local. |
 
 ## Risks, and what would catch each
 
