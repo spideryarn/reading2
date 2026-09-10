@@ -239,8 +239,30 @@ Daemon tests, through the real parser, gate, differ and store, driven by a scrip
 Unit tests for `parseObservation`'s three arms, each `unreadable` cause, `parseAttempt` on an
 unknown schema, and `admissible()`'s rule order.
 
-- [ ] Parse, gate, daemon wiring, condition.
-- [ ] Tests red then green; focused suites, typecheck; Sol review; commit.
+Status, 2026-09-10: started ~10:55 UTC, implemented by an **Opus subagent** (not Codex; see the
+budget note under Findings). Started before web-260910's `daemon.ts` push landed, on the Overseer's
+call: that push waits on Greg's own approval with no bound, and this stage's `take()`/conditions
+hunk does not overlap its usage-pass hunk. `origin/dev` merged immediately before the subagent
+started and again before the push.
+
+- [x] Parse, gate, daemon wiring, condition.
+- [ ] Tests red then green (48 new tests red before the implementation, all green after); focused
+  suites and typecheck green on the manager's own run (typecheck exit 0; 44 files / 1,581 tests);
+  Sol review; commit.
+
+Decisions the implementer made, recorded so the review can check them:
+
+- **An unknown schema makes the attempt reading "cannot say", not "unchanged".** `parseAttempt`
+  reports no attempt clock for an unsupported schema, and `take()` still folds that in as the
+  latest reading. So a schema-2 payload can neither restore nor clear `collector`: an open alarm
+  stays open, a closed one stays closed. This is Sol's plan-review recommendation ("install only a
+  cannot-tell attempt reading"), and it supersedes this plan's earlier wording that such a payload
+  "changes none of the attempt reading".
+- **"Never collected" ranks below every collection in the same run**, so a late placeholder
+  publication from before the first collection gets the out-of-order sentence.
+- **`producer: null` is unreadable**; only a missing key is unstamped.
+- **`INSTANCE_TOKEN` is imported from `tools/fleet/instance.ts`, not duplicated**: observation.ts
+  already imports two fleet leaf modules, and nothing forbids it.
 
 ### Stage 3 — the store and CLI readers
 

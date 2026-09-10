@@ -71,7 +71,14 @@ import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
-import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
+import {
+  parseAttempt,
+  parseObservation,
+  type JsonValue,
+  type ObservedAttemptClock,
+  type ObservedRow,
+  type SourceOrdering,
+} from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import { probeProcessTable } from "./work-probe.js";
 import { scanPaneWork } from "./work-reading.js";
@@ -575,7 +582,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 
   // TWO MARKS, NOT ONE, and the pair is the whole of the crash-recovery
   // design. `accepted` is the last snapshot `admissible()` blessed, and it is
-  // what the next payload's clock is compared against. `baseline` is the last
+  // what the next payload is ordered against — its run and collection when
+  // both are stamped, its clock when either is not. `baseline` is the last
   // world `diff()` agreed to stand on. They come apart on a `held` result: the
   // snapshot was perfectly admissible, so the clock must move on, and it could
   // not be placed in a world, so the baseline must not.
@@ -612,6 +620,29 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "started without one because there was no file" are different facts.
   const seeded = restored.accepted === null ? null : baselineOf(restored.accepted);
   let accepted: AdmissibleSnapshot | null = restored.accepted;
+  // THE DASHBOARD RUNS SEEN REPLACED, which is what lets `admissible()` refuse
+  // a late payload from a previous run rather than accept it as an unseen one.
+  // A run is retired when an accepted stamped snapshot's run differs from the
+  // previous accepted one's — here, in `take()`, beside the line that moves
+  // `accepted`.
+  //
+  // BOUNDED, because a daemon runs for weeks and the dashboard restarts several
+  // times a day: the last 16 runs, oldest let go first. A payload from a run
+  // older than that would be accepted as a new run — the cost of the bound, and
+  // a payload sixteen restarts late is not one the sequential source delivers.
+  //
+  // NOT PERSISTED, and it starts empty after a daemon restart. That is safe not
+  // because the old dashboard is gone — restarting the Overseer does not stop
+  // it — but because the source is sequential (stream and poll never overlap,
+  // source.ts) and the restored `accepted` carries its run: the first payload
+  // from a new run B retires the stored run A, and anything from A after that
+  // is refused. docs/plans/260910d § The daemon, and Sol's finding 4.
+  const RETIRED_RUNS_KEPT = 16;
+  const retired = new Set<string>();
+  // What the last payload that parsed said about its stamp, so the console
+  // says when the dashboard stops (or starts) stamping — once per transition,
+  // not once per payload.
+  let lastOrdering: SourceOrdering["kind"] | null = null;
   let baseline: Baseline | null = seeded !== null && seeded.ok ? seeded.baseline : null;
   let lastGoodSnapshotAt: string | null = restored.accepted?.snapshot.clock.at ?? null;
   let refreshMs = restored.accepted?.snapshot.refreshMs ?? MEASURED_CADENCE_MS;
@@ -1151,7 +1182,53 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // `latestAttempt`.
     attemptReading = latestAttempt(attemptReading, attempt);
 
-    const verdict = admissible(accepted, parsed);
+    // THE ORDERING CONDITION, from every payload that PARSED — accepted,
+    // duplicate or refused alike, because the stamp is a fact about the
+    // producer rather than about this collection. A payload that did not parse
+    // (an unread schema above all) says nothing either way: it neither raises
+    // the condition nor restores it.
+    //
+    // `unstamped` RESTORES rather than staying silent. An old producer is a
+    // supported fallback, so a rollback after one malformed stamp must close
+    // the alarm — conditions stay open until something restores them (Sol's
+    // finding 5). And it RAISES nothing: an old producer is ordered exactly as
+    // well as it was before stamps existed, and an alarm about something no
+    // worse than yesterday means nothing, which is the watchdog's own argument
+    // for its large threshold. The console says so instead, once per change.
+    if (parsed.ok) {
+      const ordering = parsed.value.ordering;
+      switch (ordering.kind) {
+        case "unreadable":
+          write(
+            conditions.degrade(
+              "ordering",
+              at,
+              `the dashboard's producer stamp cannot be believed, so its payloads are ordered by their clock alone: ${ordering.why}`,
+            ),
+          );
+          break;
+        case "unstamped":
+          write(conditions.restore("ordering", at, "the latest payload carries no stamp at all, which is ordered by its clock as before stamps existed"));
+          break;
+        case "stamped":
+          write(conditions.restore("ordering", at, `the latest payload's stamp is readable (dashboard run ${ordering.instance})`));
+          break;
+        default: {
+          const never: never = ordering;
+          throw new Error(String(never));
+        }
+      }
+      if ((ordering.kind === "unstamped") !== (lastOrdering === "unstamped")) {
+        log(
+          ordering.kind === "unstamped"
+            ? `${at} the dashboard sends no producer stamp (via ${via}), so its payloads are ordered by their clock, as before stamps existed`
+            : `${at} the dashboard's payloads carry a producer stamp again (via ${via})`,
+        );
+      }
+      lastOrdering = ordering.kind;
+    }
+
+    const verdict = admissible(accepted, parsed, retired);
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
@@ -1176,6 +1253,20 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // not the baseline; a snapshot that is held below is still the newest
     // collection this Overseer has seen, and forgetting that would let the next
     // one look like a duplicate.
+    //
+    // AND A NEW RUN RETIRES THE ONE IT REPLACED, here and only here: when an
+    // accepted stamped snapshot's run differs from the previous accepted one's.
+    // Not on a refused payload — a placeholder from a new run is refused, and
+    // the old run is not replaced until the new one has actually collected.
+    const replaced = accepted?.snapshot.ordering;
+    if (replaced?.kind === "stamped" && observed.ordering.kind === "stamped" && replaced.instance !== observed.ordering.instance) {
+      retired.add(replaced.instance);
+      // Insertion order is age order, so the first entries are the oldest.
+      for (const oldest of retired) {
+        if (retired.size <= RETIRED_RUNS_KEPT) break;
+        retired.delete(oldest);
+      }
+    }
     accepted = verdict.snapshot;
 
     // THE REGISTER IS THE THIRD INPUT, and it has to be read HERE rather than
@@ -1451,7 +1542,10 @@ function restoreBaseline(root: string): { accepted: AdmissibleSnapshot | null; w
   if (typeof stored !== "object" || stored === null || !("payload" in stored)) {
     return { accepted: null, why: `none usable: ${BASELINE_FILE} has no payload in it` };
   }
-  const verdict = admissible(null, parseObservation((stored as { payload: JsonValue }).payload));
+  // NO RETIRED RUNS: nothing has been replaced before the daemon has started,
+  // and there is no predecessor to be ordered against. `retired` is rebuilt
+  // from the payloads that arrive after this — see its declaration.
+  const verdict = admissible(null, parseObservation((stored as { payload: JsonValue }).payload), new Set());
   if (verdict.verdict !== "accept") {
     return { accepted: null, why: `none usable: the stored collection is not admissible (${verdict.reason})` };
   }
