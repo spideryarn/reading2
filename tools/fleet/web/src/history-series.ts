@@ -177,7 +177,7 @@ export type Reading =
   | { kind: "unknown"; why: string }
   | { kind: "absent"; why: string };
 
-export type SeriesKey = "load" | "memory" | "swap" | "io";
+export type SeriesKey = "load" | "memory" | "swap" | "disk" | "io";
 
 export type SeriesSpec = {
   key: SeriesKey;
@@ -273,7 +273,7 @@ function fraction(reading: Record<string, unknown>, key: string): Reading {
 }
 
 /**
- * The four series, in the order they are worth reading on a phone.
+ * The five series, in the order they are worth reading on a phone.
  *
  * **Every threshold is imported from `health-view.ts`, never restated.** Those
  * are `computeVerdict`'s own cutoffs, and a chart that went amber on a
@@ -344,6 +344,24 @@ export const SERIES: SeriesSpec[] = [
       readingFrom(sample, "swap", (reading) => fraction(reading, "usedFraction"), {
         /* An empty `swapon` is a real answer, and it is not a fault. */
         none: "no swap configured",
+      }),
+  },
+  {
+    key: "disk",
+    label: "Disk used",
+    unit: "%",
+    /* `df -k` already reports a whole-number percentage. This is deliberately
+       not treated as a fraction like swap, and the fixed ceiling keeps a bad
+       over-100 reading visible as a clipped outlier rather than rescaling the
+       whole day. */
+    max: 100,
+    bands: { ...THRESHOLDS.diskUsed },
+    read: (sample) =>
+      readingFrom(sample, "disk", (reading) => {
+        const usePercent = num(reading, "usePercent");
+        return usePercent === null
+          ? { kind: "unknown", why: "the reading had no numeric usePercent" }
+          : { kind: "value", value: usePercent };
       }),
   },
   {

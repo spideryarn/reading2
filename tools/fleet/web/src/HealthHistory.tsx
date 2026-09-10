@@ -50,6 +50,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
+import { WorkHistory } from "./WorkHistory";
 import { type HistoryApi, type HistoryView, type RetentionView } from "./health-history-client";
 import {
   collapseVerdict,
@@ -264,6 +265,8 @@ function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: num
           them; and the time axis it carries now sits under all five rather than
           labelling the first one only. */}
       <VerdictStrip plot={plot} at={at} />
+
+      <WorkHistory view={view} plot={plot} at={at} />
 
       <Legend />
 

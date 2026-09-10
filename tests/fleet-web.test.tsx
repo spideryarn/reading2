@@ -260,6 +260,9 @@ function state(over: Partial<FleetState> = {}): FleetState {
        quiet line on the Overseer tab, and any other default would have every
        fixture in this file silently claiming a usage pass had run. */
     usage: { kind: "not-asked" },
+    /* Live work is a required pushed field. The ordinary fixture represents an
+       older server which did not report it, never a successful empty scan. */
+    currentWork: { kind: "not-reported" },
     /* Same argument again. `readClockSkew` produces this for a payload with no
        `servedAt`, so a fixture that does not care about clocks gets the state
        the page would really build off an older server — and nothing is shifted.
@@ -1747,6 +1750,156 @@ describe("box health, whose shape belongs to somebody else", () => {
     mount(feed.transport);
     act(() => feed.push(state({ health: { verdict: "fine, probably" } })));
     expect(container.textContent).toContain("fine, probably");
+  });
+
+  it("carries current work through statePayload, the client boundary, and App even when history is empty", async () => {
+    window.location.hash = "#health";
+    const now = Date.now();
+    const payload = JSON.parse(
+      statePayload({
+        snapshot: null,
+        error: null,
+        health: { verdict: { level: "ok", reasons: [] } } as never,
+        refreshMs: 60_000,
+        answeringEnabled: true,
+        attemptedAt: null,
+        readCheckpoint: () => ({
+          attention: { kind: "not-asked" },
+          overseer: { kind: "not-asked" },
+          usage: { kind: "not-asked" },
+          work: {
+            kind: "published",
+            coordinatorWrittenAt: new Date(now - 30_000).toISOString(),
+            work: {
+              kind: "scan",
+              scannedAt: new Date(now - 2 * 60_000).toISOString(),
+              groups: [{
+                session: "live-resource-job",
+                recogniser: "vitest",
+                jobs: 1,
+                timing: {
+                  kind: "known",
+                  oldestStartedAt: new Date(now - 20 * 60_000).toISOString(),
+                  longestRanForMs: 18 * 60_000,
+                },
+              }],
+              groupsDropped: 0,
+              panes: { work: 1, none: 2, cannotTell: 1 },
+            },
+          },
+        }),
+      }),
+    ) as unknown;
+    const parsed = parseFleetState(payload, now);
+    expect(parsed.ok, parsed.ok ? "" : parsed.why).toBe(true);
+    if (!parsed.ok) return;
+
+    const emptyHistory: HistoryView = {
+      kind: "history",
+      windowHours: 1,
+      fromMs: now - 60 * 60_000,
+      toMs: now,
+      samples: [],
+      predecessor: null,
+      holes: [],
+      earliestAtMs: null,
+      rotated: false,
+      unreadableLines: 0,
+      refreshMs: 73_000,
+      unreadableSamples: 0,
+      retention: null,
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, historyApi: { window: async () => emptyHistory } });
+    act(() => feed.push(parsed.state));
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("live-resource-job");
+    expect(text).toContain("longest measured run 18m");
+    expect(text).toContain("long-running");
+    expect(text).toContain("Reading 2m old");
+    expect(text).toContain("1 pane could not be read at this sample");
+    expect(text).toContain("Nothing recorded in the last 24 hours");
+  });
+
+  it("draws historical work when the live checkpoint has none, without calling the history current", async () => {
+    window.location.hash = "#health";
+    const now = Date.now();
+    const parsed = parseFleetState(
+      JSON.parse(
+        statePayload({
+          snapshot: null,
+          error: null,
+          health: { verdict: { level: "ok", reasons: [] } } as never,
+          refreshMs: 60_000,
+          answeringEnabled: true,
+          attemptedAt: null,
+          readCheckpoint: () => ({
+            attention: { kind: "not-asked" },
+            overseer: { kind: "not-asked" },
+            usage: { kind: "not-asked" },
+            work: { kind: "checkpoint-absent" },
+          }),
+        }),
+      ),
+      now,
+    );
+    expect(parsed.ok, parsed.ok ? "" : parsed.why).toBe(true);
+    if (!parsed.ok) return;
+
+    const historicalAt = now - 30 * 60_000;
+    const history: HistoryView = {
+      kind: "history",
+      windowHours: 1,
+      fromMs: now - 60 * 60_000,
+      toMs: now,
+      samples: [{
+        kind: "reading",
+        atMs: historicalAt,
+        nextDueMs: 73_000,
+        report: {
+          load: { kind: "value", ratio1: 1 },
+          verdict: { level: "ok", reasons: [] },
+        },
+        workTurn: {
+          kind: "due",
+          result: {
+            kind: "scan",
+            scannedAt: new Date(historicalAt).toISOString(),
+            groups: [{
+              session: "historical-resource-job",
+              recogniser: "codex-exec",
+              jobs: 1,
+              timing: {
+                kind: "known",
+                oldestStartedAt: new Date(historicalAt - 25 * 60_000).toISOString(),
+                longestRanForMs: 25 * 60_000,
+              },
+            }],
+            groupsDropped: 0,
+            panes: { work: 1, none: 0, cannotTell: 0 },
+          },
+        },
+      }],
+      predecessor: null,
+      holes: [],
+      earliestAtMs: historicalAt,
+      rotated: false,
+      unreadableLines: 0,
+      refreshMs: 73_000,
+      unreadableSamples: 0,
+      retention: null,
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, historyApi: { window: async () => history } });
+    act(() => feed.push(parsed.state));
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("historical-resource-job");
+    expect(text).toContain("The Overseer has not published a current-work checkpoint yet");
+    expect(text).not.toContain("live-resource-job");
   });
 });
 

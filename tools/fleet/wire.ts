@@ -1200,6 +1200,13 @@ export type FleetState<Row, Health> = {
    */
   usage: UsageFeed;
   /**
+   * **WHAT EXPENSIVE WORK IS RUNNING NOW.** This is the work projection from
+   * the same single checkpoint read as `attention`, `overseer` and `usage`.
+   * It is live state, never inferred from the five-minute persistence cadence:
+   * that cadence governs what history keeps, not what this page calls current.
+   */
+  currentWork: WorkFeed;
+  /**
    * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
    * that is about us rather than about the box.
    *
