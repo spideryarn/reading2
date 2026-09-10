@@ -64,6 +64,7 @@ import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
 import { listRevision, readSchedulePreviewFile, schedulePreviewLines } from "../tools/overseer/schedule-preview.js";
+import { diagnose, diagnoseLines, readDiagnoseInput } from "../tools/overseer/diagnose.js";
 import { describeNote, readNotes } from "../tools/overseer/notes.js";
 import { describeArtefactCheck, parseArtefactSpec, spellArtefactRef, type ArtefactRef } from "../tools/fleet/artefact-ref.js";
 import { decisionsRoot } from "../tools/overseer/decisions.js";
@@ -761,6 +762,7 @@ export function positiveNumber(name: string, opts: { integer?: boolean } = {}): 
  */
 export type Parsed =
   | { command: "status" }
+  | { command: "diagnose"; json: boolean }
   | { command: "tick" }
   | { command: "last"; session: string; turns: number }
   | { command: "events"; limit: number }
@@ -826,6 +828,12 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
     .exitOverride();
 
   program.command("status").description("is the daemon alive, and what does it know").action(() => sink({ command: "status" }));
+
+  program
+    .command("diagnose")
+    .description("which revision each service started from, the checkpoint's schema and clocks, the boot, every store file, the job list")
+    .option("--json", "print the report as JSON", false)
+    .action((opts: { json: boolean }) => sink({ command: "diagnose", json: opts.json }));
 
   program
     .command("tick")
@@ -1617,6 +1625,17 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       const checkpoint = readCheckpoint(root);
       const runningInstanceId = checkpoint.kind === "checkpoint" ? checkpoint.checkpoint.heartbeat.instanceId : null;
       console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds, runningInstanceId }, Date.now())].join("\n"));
+      return 0;
+    }
+    case "diagnose": {
+      // A report, not a gate (plan 260910f § D4): 1 only when the store root cannot be read.
+      const read = readDiagnoseInput(root, { checkout: repoRoot() });
+      if (!read.ok) {
+        console.error(`✗ ${read.why}`);
+        return 1;
+      }
+      const report = diagnose(read.input);
+      console.log(parsed.json ? JSON.stringify(report, null, 2) : diagnoseLines(report).join("\n"));
       return 0;
     }
     case "tick":
