@@ -6,6 +6,11 @@ its five checkboxes and acceptance paragraph are the spec. Dispatched by the Ove
 queue item `qi-n5mt6p2a`. Owner of this plan: session `bounded-judgement`, worktree
 `.claude/worktrees/bounded-judgement`.
 
+**Revised 2026-09-10 after GPT Sol's plan review**
+([findings](260910f-bounded-judgement-proposals-for-the-attention-inbox-plan-review-sol-findings.md)), which
+refused the first draft on seven P1s. Every finding is disposed of in § The review, below; the
+decisions here are the revised ones.
+
 ## What this is for
 
 The attention inbox already finds prose questions: `tools/overseer/attention-classify.ts` asks
@@ -18,11 +23,11 @@ ceiling and **no per-day one, no cooldown, and no exhausted state**.
 So this stage adds three things to the existing detector rather than building a second one:
 
 1. **A proposal per surfaced prose question**: the sentence that asks, why it needs somebody, and who
-   holds the information — Sol, Fable, Greg — per
+   holds the information — per
    [overseer-direction.md § Route by who has the information](../project/overseer-direction.md#route-by-who-has-the-information-not-by-confidence).
    Shown on the card, attributed to the model that proposed it. **Nothing is sent to anyone.**
-2. **A day budget** the classifier and the proposer both spend against, held in a file beside the
-   checkpoint, with a cooldown after a quota refusal and an *exhausted* state that the inbox shows.
+2. **A day budget** that every paid attention call goes through, daemon or CLI, held in a file beside
+   the checkpoint, with a cooldown after a quota refusal and a *limited* state the inbox shows.
 3. **An evaluation**: the labelled set extended with the six cases the roadmap names, scored against
    the mechanical inbox, plus measured cost — and a plain answer to whether the proposals are worth
    it.
@@ -34,181 +39,239 @@ So this stage adds three things to the existing detector rather than building a 
 | Piece | Where | Reused as |
 |---|---|---|
 | Ended-turn tail + fingerprint | `tools/overseer/turn-tail.ts` | the classifier's input, unchanged |
-| Question classifier, gateway client, `callCost` | `attention-classify.ts` | the proposer's transport — **one seam**, per the ALLOWED entry's *"a second file here is a fork"* |
-| Per-pass plan + cache | `planClassifications`, `attention-memory.ts` | cache key gains a classifier version |
-| Pass + accounting | `attention-pass.ts` | runs the proposer after the verdicts |
-| Wire + three parsers | `wire.ts`, `store.ts`, `tools/fleet/attention.ts`, `web/src/types.ts` | one new field on `AttentionItem` |
+| Question classifier, gateway client, `callCost` | `attention-classify.ts` | **the only paid call**, widened when proposals are on |
+| Per-pass plan + cache, `CacheableVerdict` | `planClassifications`, `attention-memory.ts` | cache gains a prompt version |
+| Pass + accounting | `attention-pass.ts` | reserves each call against the day budget |
+| Kernel-backed exclusive claim | `tools/overseer/lock.ts` | the budget lock |
+| Wire + three parsers | `wire.ts`, `store.ts`, `tools/fleet/attention.ts`, `web/src/types.ts` | a `limited` list arm; a `proposal` item field |
 | Card | `web/src/AttentionPanel.tsx` | draws the proposal under the `why` |
-| Session claims | `tools/overseer/reports.ts` `readReports` | evidence read before spending a call |
 
 ## Decisions (and the simpler options passed over)
 
-**D1. A second, separate model call for the proposal — not a wider classifier prompt.** The simpler
-option is to add `recipient` to the existing classifier's JSON. Passed over because the new call has
-to be **default-off until Greg has seen the number** (the brief), and a field inside a call that is
-already live cannot be switched off separately; and because it would re-classify every cached tail
-the moment the prompt changed. The proposer runs only on *prose verdicts that said question* — a
-handful a day — so its cost is bounded by the classifier's yield, not by the fleet's size.
+**D1. One classifier call, widened when proposals are on** — Sol's F8, replacing the first draft's
+separate proposer. With proposals off, the prompt, version and output are exactly today's. With
+proposals on, a proposal-aware prompt version's `asked:true` arm also returns `recipient`, `reason`
+and a verbatim `asks`, validated through the same closed union. Enabling it makes one bounded cold
+re-read of the fleet under the day budget. The first draft's second call was passed over because it
+cost a module, a second cache lifecycle, a second failure state and a second billable request for
+every positive, to buy a switch that a prompt version buys for free. **If the evaluation shows the
+widened prompt damages question detection**, that is the trigger to split it — measured in Stage 3.
 
-**D2. The proposer lives in `attention-classify.ts`'s seam.** The gateway call is generalised to
-take a prompt and a parser; `attention-propose.ts` holds the prompt, the parse and the types, and
-imports the transport. No second `fetch` under `tools/overseer/` — the ALLOWED entry in
-`tests/no-undeclared-spend.test.ts` and the `UNMETERED_SPEND` row both say a second file would be a
-fork. The declaration is the existing row, amended to name the proposal call and its ceiling.
+**D2. No new paying file.** The transport stays in `attention-classify.ts`; the ALLOWED entry in
+`tests/no-undeclared-spend.test.ts` and the `UNMETERED_SPEND` row both say a second file under
+`tools/overseer/` would be a fork. The declaration is the existing row, amended with the day ceiling.
 
-**D3. The cache key is content hash + classifier version, not execution.** The roadmap says
-*"execution + content hash + classifier version"*. The pass has no execution token (it reads tmux,
-and `SessionToScan` carries none), and the existing design keys on the tail alone on purpose, so two
-sessions that ended identically cost one call. What the key must cover is **everything the model is
-shown**, so the proposer's key is a hash of `(tail, the report claims shown, PROPOSER_VERSION)` and
-the classifier's is `(fingerprint, CLASSIFIER_VERSION)`. A version bump re-asks; a verdict filed
-under an older version is a cache miss, not a hit. Recorded as a deviation from the roadmap wording.
+**D3. The cache key is fingerprint + prompt version; only successful judgements are cached.** The
+roadmap says *"execution + content hash + classifier version"*. The pass has no execution token, and
+the existing design keys on the tail alone on purpose so two sessions that ended identically cost one
+call; what the key must cover is **everything the model is shown**, and that is the tail and the
+prompt. Sol agreed this is sufficient for a pure model judgement (its note on D3). A verdict from
+another prompt version is **stale, not absent**: it still places the item in the inbox — which is
+today's behaviour — and is re-read first when the budget allows, with its proposal shown as
+`not-reached` until then. Treating it as absent would make every question vanish into *at least N*
+on the pass that enables proposals. **Failures are never cached** (Sol's F3), which the existing
+`CacheableVerdict` already enforces by type: a 429, an unreadable answer, and a proposal whose `asks`
+is not in the tail are all `unreadable`, and `unreadable` cannot be stored.
 
-**D4. The budget is one ledger file with components, and the ceiling is global.** `model-budget.ts`
-holds, per UTC day, calls / prompt tokens / completion tokens / cost / unpriced calls, per component
-(`attention-classify`, `attention-propose`) **and a global ceiling across all of them**, plus
-`cooldownUntil` and the last refusal. It is the seam gate 4 asks for, sized for the two components
-that exist; the scheduler and recovery are not wired to it here (not this stage's files), and
-overseer.md's **NOT BUILT** block stays until they are — the debrief says so.
+**D4. The budget is hard, global and shared by every process** — Sol's F1. `model-budget.ts` is the
+only way to a paid attention call, daemon or CLI:
 
-**D5. Quota-aware refusal = the gateway's own answer.** A 402 (credits) or 429 (rate) sets a cooldown
-(15 minutes, doubling to 2 hours) and every tail that pass did not reach is `unclassified` with that
-reason, so the inbox reads *at least N* rather than calm. No probe of OpenRouter's key endpoint in v1.
+- **Reserve before, settle after, under one lock.** Under a budget lock taken with `lock.ts`'s
+  `O_CREAT|O_EXCL` claim, `reserve` refuses if one more call at its worst case (a hard output-token
+  cap sent as `max_tokens`, and a worst-case cost constant) would cross the global or component
+  ceiling for calls, prompt tokens, completion tokens or cost; otherwise it persists and fsyncs the
+  reservation, then releases the lock. `settle` re-takes it and replaces the reservation with the
+  gateway's numbers; an unpriced call settles at the worst case. **A crash between the two leaves
+  the worst case spent.** The lock is *not* held across the request, which is where this departs
+  from Sol's wording: a 30-second call would block the other process for no gain, because the
+  persisted reservation already makes the second process see the first's spend.
+- **Refuse loudly, never reset.** A `model-budget.created` marker (the pattern `reports.ts` uses)
+  means an absent or unreadable ledger after initialisation refuses until the next UTC day, rather
+  than starting empty and re-granting a spent day. A ledger dated *after* today (the clock went
+  backwards) refuses too. A reservation records its day and settles into it across midnight.
+- **`--no-write` controls attention memory only**, never budget accounting: a hand run of
+  `overseer attention` spends against the same ceiling as the daemon.
+- **One call in flight** within a process (the pass is already sequential); the lock covers two.
+- **Starting ceilings, proposed rather than known:** global 1,500 calls / 3,000,000 tokens / $1.50 a
+  UTC day, from the measured $0.50–1.00/day in `src/spend-declarations.ts`; per pass the existing
+  12. These are the number put to the Overseer before proposals are enabled on the live daemon.
 
-**D6. Exhausted is loud.** When the day ceiling or a cooldown stops a pass, `AttentionList` carries
-`judgement: {kind:"exhausted"|"cooling-down", why, until}` and the panel draws one line saying the
-inbox is not being judged and until when. The mechanical half (dialogs, counts) keeps running —
-gate 4: *the cheap deterministic tick must keep working when the budget is exhausted*.
+**D5. Quota-aware refusal = the gateway's own answer.** `classifyTail` reports a 402 or 429 as a
+distinguishable arm, not only as prose; the budget sets a cooldown (15 minutes, doubling per
+consecutive strike to a 2-hour cap; a success clears it), and every tail that pass did not reach is
+unclassified with that reason. No probe of OpenRouter's key endpoint in v1.
 
-**D7. Default off.** `OVERSEER_PROPOSALS=1` (daemon env) or `overseer attention --propose` enables
-the proposer; without it every prose item carries `proposal: {kind:"off", why}`. The day ceiling is
-put to the Overseer as a number before anybody sets the variable on the live daemon.
+**D6. A stopped model pass is a new list arm, not a warning field** — Sol's F2, which found that all
+three parsers project known fields and ignore extras, so an additive `judgement` field on an empty
+list would draw *nothing is waiting on you* on every older reader. So: when the day ceiling or a
+cooldown refused at least one call, the pass publishes `kind:"limited"`, carrying the items it did
+find, the counts, and `stopped: {kind:"exhausted"|"cooling-down", why, until}`. **An older reader
+rejects an unknown kind into its own loud `unknown` state** (checked in each parser, and pinned by a
+test per parser); a newer reader draws the items with one line saying the inbox is not being fully
+judged and until when. `kind:"list"` keeps exactly its present meaning — fully judged within the
+pass's own budget — so an older producer's list needs no reinterpretation, which is where this
+departs from the second half of Sol's F2 (reading an old `list` as unknown would blank the live
+inbox between a dashboard restart and a daemon restart, for no gain in honesty). The mechanical half
+keeps running regardless — gate 4: *the cheap deterministic tick must keep working when the budget is
+exhausted*.
 
-D8–D11 were arbitrated by Fable on 2026-09-10; its reasons are quoted where they decide.
+**D7. Default off.** `OVERSEER_PROPOSALS=1` in the daemon's environment, or the same variable on a
+hand run, selects the proposal-aware prompt version; without it every prose item carries
+`proposal: {kind:"off", why}`. The day ceiling is put to the Overseer as a number before anybody sets
+the variable on the live daemon. The budget itself (D4–D6) is **on** for the existing classifier,
+because it only ever refuses.
 
-**D8. Five recipients and a visible "unplaced".** `sol | fable | greg | overseer | self`, and a
-separate `unplaced` arm. `overseer` is the direction doc's own arm — *"the Overseer answers only what
-it can verify"* (pull latest; "are the tests red because of me?") — and `self` is the agent that
-already has what it needs and stopped out of habit. **`unplaced` and `self` never promote to `greg`**:
-Fable, *"defaulting to Greg would make the inbox look the same with and without the feature, which is
-the one thing you're trying to measure."* The simpler three-recipient vocabulary was passed over for
-that reason.
+**D8. Five recipients and a visible "unplaced"** — Fable, 2026-09-10. `sol | fable | greg | overseer |
+self`, and a separate `unplaced` arm. `overseer` is the direction doc's own arm — *"the Overseer
+answers only what it can verify"* — and `self` is the agent that already has what it needs and
+stopped out of habit. **`unplaced` and `self` never promote to `greg`**: *"defaulting to Greg would
+make the inbox look the same with and without the feature, which is the one thing you're trying to
+measure."*
 
-**D9. Vetoable means recorded: a two-verb mark, from a new CLI.** `npx tsx scripts/overseer-proposals.ts
-mark <id> right|wrong [--why …]` appends to `proposal-marks.jsonl` in the store; the card then shows
-the mark. Fable: *"(a) is not vetoable, it is ignorable … an unrecorded veto teaches nothing"*, and a
-localStorage dismiss is *"a record that doesn't exist"*. `wrong` is the veto; `right` is the
-denominator. A page button needs a route, which is outside this stage's files — a later stage reads
-the same file. **Hedge, also Fable's:** Greg will rarely `ssh` in to mark, so the v1 judgement is the
-labelled set in Stage 1, labelled by us; his marks are a bonus, not the design. A new script file
-rather than a subcommand in `scripts/overseer.ts`, which another session owns.
+**D9. Attribution is stamped by the producer, never written by the model** — Sol's F4. `by` is
+`{kind:"model", model: ATTENTION_CLASSIFIER_MODEL, via:"overseer"}`, set by the code that made the
+call; the card reads *"Proposed by openai/gpt-5.6-luna via the Overseer — nothing has been sent."*
+No rendered arm uses Greg as a speaker.
 
-**D10. A session's own `blocked --on greg` report replaces the proposer call; `completed` suppresses
-nothing.** A report from the same verified run (`execution: "same-verified-run"`), received after the
-tail's prose verdict was first cached, whose session name matches, makes the proposal
-`{kind:"from-report", recipient:"greg", needs, eventId}` with no call. It does **not** create an item
-on its own — the classifier still has to find the question — because a third evidence arm would move
-every parser and the panel for a case the evaluation can count instead. `completed` does not suppress
-classification: Fable, *"debriefs end with 'shall I remove the worktree?' constantly, that's an
-irreversible question"*.
+**D10. The veto is a recorded mark, and it says who could have made it** — Fable (D9 of the first
+draft) and Sol's F4 together. `npx tsx scripts/overseer-proposals.ts mark <proposalId> right|wrong
+[--why …]` writes one file per proposal id, atomically, into `proposal-marks/` in the store; the pass
+reads the marks for the ids it is publishing and the card shows *"marked wrong via the local CLI
+(identity not verified)"*. Fable: *"(a) is not vetoable, it is ignorable … an unrecorded veto
+teaches nothing"*. Sol's note asked for a daemon-drained inbox into a loss-detecting log; passed over
+because a mark is a keyed record rather than an event history — last write per id wins, a lost file
+reads as *unjudged*, and there is nothing to append or replay. **Cuttable**: it is the last item of
+Stage 3, and Fable's hedge applies — Greg will rarely `ssh` in to mark, so the v1 judgement is the
+labelled set.
 
-**D11. Misdirection is out of scope for this detector, and the eval says so in numbers.** The
-wrong-task fixtures, and concluded work that is really misdirection (*"done — I skipped the gates"*),
-are labelled `out-of-scope-for-this-detector`, not expected-negative, and are **excluded from
-precision and recall**. A clean debrief with nothing pending is an ordinary `no-question` and is
-scored — the detector should stay silent on it, and that is checkable. Fable: *"an expected-negative counts
-toward precision; these are cases the detector is structurally blind to"*. The eval header reads
-*"N of M labelled items are misdirection; this stage detects 0 of them by design."* The proposer is
-not asked to flag them.
+**D11. Work reports inform the evaluation, not the runtime** — revised on Sol's F5. The first draft
+let a session's own `blocked --on greg` report replace the proposer call. Sol showed the join was
+unsound (`execution` is frozen at receipt, so a claude relaunched under the same name inherits the
+report, and corrected reports were not excluded), and D1 removed the call it saved. A sound runtime
+join needs the register's verified execution token carried into the pass — which lists tmux, not
+the register — and would save nothing once there is one call. So in v1 the evaluation compares what
+the model surfaced with what sessions reported, which is the roadmap's own question (*"if the model
+cannot improve on explicit reports at reasonable cost, retain reporting/manual triage"*). The brief
+asked the detector to read reports before spending; this is the reason it does not, for the
+Overseer to overrule.
 
-**D12. The proposer refuses when the speaker is not the agent.** `asks` must be a substring of the
-tail the classifier judged — which `readTurnTail` has already cut after the last user prompt — so a
-proposal cannot quote Greg's own sentence back as the agent's. Fable's first named risk.
+**D12. Misdirection is out of scope for this detector; concluded work is not** — Fable, then Sol's
+F7. The wrong-task fixtures (including *"done — I skipped the gates"*, which is misdirection wearing
+a debrief) are `out-of-scope-for-this-detector`, **excluded from precision and recall**, and the
+eval says *"N of M labelled items are misdirection; this stage detects 0 of them by design."*
+Concluded work, background review, rhetorical questions and permission defects are scored. A debrief
+holding a genuine cleanup decision (*"shall I remove the worktree?"*) is a positive; one ending on an
+optional offer is a negative.
+
+**D13. `asks` must be the agent's own words.** It must be a substring of the tail the classifier
+read (after whitespace normalisation) — `readTurnTail` has already cut after the last user prompt, so
+a proposal cannot quote Greg's own sentence back as the agent's. Fable's first named risk.
+
+**D14. `reach` is a live projection, never cached** — Sol's F9. Recomputed each pass and not part of
+the proposal id: `greg`, `self` → available; `fable` → unavailable when the checkpoint's usage
+verdict is `limited`, else not-checked; `sol`, `overseer` → not-checked, because the checkpoint
+carries no Codex reading. **Missing capability is shown, never substituted**: a Fable question whose
+Fable is unavailable still says Fable.
 
 ## The shape
 
 ```ts
-// wire.ts — appended; one new field on AttentionItem
+// wire.ts — appended
 export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
 export type ProposalReach =
   | { kind: "available" } | { kind: "unavailable"; why: string } | { kind: "not-checked"; why: string };
-export type ProposalMark = { kind: "right" | "wrong"; at: string; why: string | null };
+export type ProposalAuthor = { kind: "model"; model: string; via: "overseer" };
+export type ProposalMark = { verdict: "right" | "wrong"; at: string; why: string | null; recordedVia: "local-cli" };
 export type AttentionProposal =
-  | { kind: "proposed"; id: string; recipient: ProposalRecipient; reason: string;
-      /** The sentence(s) that ask, quoted from the tail — checked to be a substring of it. */
-      asks: string;
-      /** Which model proposed it, e.g. "openai/gpt-5.6-luna via the Overseer". Never "Greg". */
-      by: string; proposedAt: string; reach: ProposalReach; mark: ProposalMark | null }
-  | { kind: "unplaced"; id: string; why: string; by: string; proposedAt: string; mark: ProposalMark | null }
-  | { kind: "from-report"; id: string; needs: string; eventId: string; receivedAt: string; mark: ProposalMark | null }
-  | { kind: "off"; why: string }           // proposer disabled (the default)
-  | { kind: "not-reached"; why: string }   // budget, cooldown, 429, unreadable answer, quote not found
-  | { kind: "not-applicable" };            // a dialog: observed, answered in the detail pane
+  | { kind: "proposed"; id: string; recipient: ProposalRecipient; reason: string; asks: string;
+      by: ProposalAuthor; reach: ProposalReach; mark: ProposalMark | null }
+  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor; mark: ProposalMark | null }
+  | { kind: "off"; why: string }            // proposals not enabled (the default)
+  | { kind: "not-reached"; why: string }    // stale verdict not yet re-read, budget, cooldown
+  | { kind: "not-applicable" }              // a dialog: observed, answered in the detail pane
+  | { kind: "not-reported" };               // parsed from an older producer
+
+// AttentionItem gains `proposal: AttentionProposal` (older parsers drop it: poorer, not wrong).
+// AttentionList gains a third arm:
+  | { kind: "limited"; items; sessionsScanned; sessionsUnreadable; scannedAt;
+      stopped: { kind: "exhausted" | "cooling-down"; why: string; until: string } }
 ```
 
-`id` is the proposal cache key, so a mark made against it survives republishing and dies with the
-content it was about.
-
-`asks` is validated as a substring of the tail (after whitespace normalisation) — a quote the
-producer cannot find in its own evidence is refused to `not-reached`, because a card quoting a
-sentence nobody wrote is the injection risk the classifier header already names. It also fixes the
-panel's standing defect that the excerpt is chosen by position, not by content.
-
-`reach` in v1: `greg` is always `available`; `sol` and `fable` are `not-checked` with the reason,
-unless the usage report in the same checkpoint says the account is limited, in which case
-`unavailable`. **Missing capability is shown, never substituted**: a Fable question whose Fable is
-unavailable still says Fable.
+`id` is `fingerprint + prompt version`, so a mark survives republishing and dies with the content it
+was about.
 
 ## Stages
 
-Implementation by Opus subagents (the brief: Codex is the tighter budget). Sol reviews the plan once
-and each stage once, read-only, findings first to `<answer>-findings.md`; an Opus subagent fixes what
-it finds; P1 fixes get one narrow 20-minute check, then Fable, and no further round.
+Implementation by Opus subagents (the brief: Codex is the tighter budget). Sol reviews each stage
+once, read-only, findings first to `<answer>-findings.md`; an Opus subagent fixes what it finds; P1
+fixes get one narrow 20-minute check, then Fable, and no further round.
 
-### Stage 1 — the labelled set, the version in the key, and the day budget
+### Stage 1 — the labelled set, the budget, and the `limited` state
 
-- [x] Extend `tests/fixtures/overseer-turn-tails/` with labelled cases for the six the roadmap names:
-      prose question without `?`, rhetorical question, concluded work, background review, permission
-      defect, working confidently on the wrong task. A `labels.json` beside them: expected verdict,
-      expected recipient where it is a question, and what the **mechanical inbox** (dialog parse +
-      `?` grep) says about it. Sanitised, hand-written from real shapes; no live pane is committed.
-      **Built** (Opus subagent): 14 new fixtures, 24 labelled items, `tools/overseer/attention-labels.ts`
+- [x] **1a. The labelled set.** 14 new fixtures, 24 labelled items, `tools/overseer/attention-labels.ts`
       (`mechanicalInbox`, `scoreMechanical`), `tests/overseer-attention-labels.test.ts`, seen red
-      first. **The mechanical baseline: 3 of 8 questions caught, 1 false alarm in 9 non-questions**
-      (a rhetorical question at the end of a turn); 2 out-of-scope items not scored; the 1
-      permission defect seen as a permission dialog. The three it catches are the ones that end in
-      `?` — two `overseer`, one `self` — so **every question for Sol, Fable or Greg in the set is
-      invisible without a model**, which is the whole case for this stage in one line.
-- [ ] `CLASSIFIER_VERSION` in the cache key; a verdict from another version is a miss. Red first.
-- [ ] `model-budget.ts`: the ledger (D4), cooldown (D5), refusal before a call rather than after,
-      one call in flight, and the pass reporting `judgement` (D6) through the list. Red first:
-      a pass over a spent day makes zero calls and publishes `exhausted`, never an empty list.
+      first; Opus subagent; `ac02c4c9`. **The mechanical baseline: 3 of 8 questions caught, 1 false
+      alarm in 9 non-questions** (a rhetorical question at the end of a turn). The three it catches
+      all end in `?` — two `overseer`, one `self` — so **every question for Sol, Fable or Greg in the
+      set is invisible without a model**, which is the case for this stage in one line.
+- [ ] **1b.** Relabel per D12 (the premature-done fixture's category is misdirection) and add one
+      positive: a debrief holding a cleanup decision.
+- [ ] **1c. Prompt version in the key** (D3): stale-not-absent, re-read first; failures uncached.
+- [ ] **1d. The ledger** (D4, D5): `model-budget.ts` with lock, init marker, reserve/settle,
+      `max_tokens`, cooldown, the CLI and the daemon both through it. Tests race a daemon-shaped and a
+      CLI-shaped caller on one ledger, crash between reserve and settle, cross UTC midnight, delete
+      and corrupt an initialised ledger, and move the clock backwards; none may exceed or reset.
+- [ ] **1e. The `limited` arm** (D6) through `wire.ts`, the three parsers, `questions.ts` and the
+      panel's one line. A test per parser: the new producer's `limited` read by the parser as it was
+      before this stage (the arm rejected into `unknown`), and by the new one.
 
-### Stage 2 — the proposer, the projection, and the card
+### Stage 2 — the proposal
 
-- [ ] `attention-propose.ts`: prompt, strict parse (unknown recipient ⇒ unreadable, never a default),
-      `asks` substring check, cache keyed per D3, reports read first (D10).
-- [ ] The pass runs it after the verdicts, for prose questions only, under the same budget.
-- [ ] `AttentionItem.proposal` in `wire.ts`; all three parsers read it, and an absent field from an
-      older producer parses as `off` with *"this Overseer predates proposals"*, not as a failure.
-- [ ] `AttentionPanel.tsx`: the proposal under the `why` — *"Proposed: ask Sol — <reason>. Proposal by
-      openai/gpt-5.6-luna via the Overseer; nothing has been sent."* — and the `asks` quote in place
-      of the position-chosen excerpt when it is present. The veto per D9.
-- [ ] `src/spend-declarations.ts`: the row amended (D2) with the proposal call and its day ceiling.
+- [ ] The proposal-aware prompt version, `OVERSEER_PROPOSALS`, strict parse (unknown recipient ⇒
+      unreadable, never a default), `asks` substring check, producer-stamped `by`.
+- [ ] `AttentionItem.proposal` in `wire.ts` and the three parsers; absent ⇒ `not-reported`.
+- [ ] `reach` projected each pass from the checkpoint's usage (D14).
+- [ ] `AttentionPanel.tsx`: the proposal under the `why`; the `asks` quote in place of the
+      position-chosen excerpt when present (which fixes the panel's standing *"taken by position, not
+      by search"* defect); attribution; the mark when there is one.
+- [ ] `src/spend-declarations.ts`: the row amended with the day ceiling and the widened prompt.
 
 ### Stage 3 — the evaluation, and the answer
 
-- [ ] `scripts/overseer-proposals.ts`: `mark <id> right|wrong [--why]` and `stats` — the week in one
-      sentence, Fable's number: *"N proposals, $X; R right, W wrong, U unjudged; K would not have
-      needed Greg."* `K/N` is the decision value. The daemon appends each new proposal to
-      `proposals.jsonl` so the week is countable.
-- [ ] Run the classifier and proposer for real over the labelled set (cents), record precision /
-      recall against the labels and against the mechanical inbox, cost per useful proposal, and a
-      read-only `overseer attention --dry` census of the live fleet for the population sizes.
-- [ ] Write the answer: does the proposer beat explicit reports at reasonable cost? If not, say so,
-      leave it off, and keep manual triage — a legitimate ending.
-- [ ] Docs: the owning doc for the inbox gets the proposal and the budget; the roadmap row updated.
+- [ ] Run both prompt versions for real over the labelled set (cents). Report **detection** for each
+      (does the widened prompt damage it? — D1's trigger) and, for the widened one, routing
+      accuracy. Sol's F6 wording: *N proposed; R correct against the labels; W wrong; K of the R
+      correct named a non-Greg holder* — `K` is **"could have avoided asking Greg"**, and actual
+      avoided waiting is **not measured**, because this stage sends nothing. Decision metrics:
+      routing accuracy among judged items, correct non-Greg routes per true question, coverage, and
+      cost per correct non-Greg route.
+- [ ] A read-only census of the live fleet (`overseer attention --dry`) for the population sizes,
+      and the reports comparison (D11): how many sessions waiting on Greg had said so in a report.
+- [ ] The answer: does the model beat explicit reports at reasonable cost? If not, say so, leave
+      proposals off, keep manual triage — a legitimate ending.
+- [ ] `scripts/overseer-proposals.ts mark` (D10) — cuttable.
+- [ ] Docs: the owning doc for the inbox gets the proposal and the budget; overseer.md's gate 4
+      **NOT BUILT** block is narrowed to what is still unbuilt (the scheduler and recovery are not on
+      the ledger) — overseer.md is a rule doc, so this goes to the Overseer as a proposed edit rather
+      than being made here; the roadmap row updated.
+
+## The review
+
+GPT Sol, plan review, 2026-09-10, read-only: refused on F1–F7 (P1), with F8–F9 (P2).
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | the budget has a CLI bypass and a crash gap | **fixed** — D4; lock held for reserve and settle, not across the request (argued there) |
+| F2 | an additive `judgement` field is ignored by old consumers | **fixed** — D6, a `limited` arm; the second half (old `list` read as unknown) declined, argued there |
+| F3 | the proposal cache could store failures | **fixed** — D3; moot for a second cache after F8, and the existing type enforces it |
+| F4 | `by`, report-derived and marks have no trustworthy speaker | **fixed** — D9, D10; report-derived proposals are gone (D11) |
+| F5 | `same-verified-run` at receipt does not join to the current run | **fixed by removal** — D11; the runtime shortcut is dropped rather than repaired |
+| F6 | `K/N` cannot measure avoided waiting | **fixed** — Stage 3 wording |
+| F7 | concluded work wrongly out of scope | **fixed** — D12 |
+| F8 | the second call costs more than it buys | **accepted** — D1 |
+| F9 | cached `reach` goes stale | **fixed** — D14 |
+| note | `proposals.jsonl` unnecessary | **accepted** — dropped |
 
 ## Status
 
-Planning. Sol plan review next.
+Stage 1a committed (`ac02c4c9`). Plan revised after Sol's review; Stage 1b–1e next.
