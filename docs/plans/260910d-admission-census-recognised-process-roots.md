@@ -7,8 +7,8 @@ wrote before it stopped. Queue item `qi-5e9beszv`, final stage, dispatched by th
 2026-09-10 to session `admission-census`.
 
 **One sentence:** the Box health admission section gets a third block, headed **"Recognised live
-process roots"**, which says how many vitest runners, Codex batch jobs and browsers are alive right
-now, as an observation with an age, a finite recogniser scope and its own uncertain and unreadable
+process roots"**, which says how many vitest runners, Codex batch jobs and browsers were observed during its
+last pass over the process table, as an observation with a start and an end, a finite recogniser scope and its own uncertain and unreadable
 counts, computed on a timer and served from a cache that is a state and not a value.
 
 **What it must not claim.** Presence, and nothing more. A Chrome root may be parked and idle, a
@@ -23,8 +23,11 @@ plan's F8, F9 and F14 are why.
 1. **The census is pure over rows**, and the adapter that reads `/proc` is separate from it, so
    every case below is a fixture rather than a machine.
 2. **One row per pid, read in three steps and bracketed:** `stat` (ppid, comm, start tick), then
-   `cmdline`, then `stat` again. If the two start ticks differ, or the ppid changed, the `cmdline`
-   may belong to a different process than the `stat`, so the row is **changed-under-read**.
+   `cmdline`, then `stat` again. If the two start ticks differ, the `cmdline` may belong to a
+   different process than the `stat`; if only the ppid changed, the process was reparented. Either way
+   the row did not give one stable identity-and-parent observation, so it is **changed-under-read**
+   (F46). Argv keeps its boundaries: whitespace inside one element becomes `␣` before any recogniser
+   sees it (F42).
    Anything that vanished (ENOENT/ESRCH, or an empty `stat`) at any of the three reads is
    **unreadable**. This is `execution-identity.ts`'s before/after bracket, applied per row rather
    than per table, and it reuses that file's `parseProcStat` for the ppid and start tick rather than a
@@ -48,14 +51,16 @@ plan's F8, F9 and F14 are why.
 4. **The fold.** A recognised row is a *root* when no ancestor carries the same class. A Chrome
    helper (a `--type=` token in argv) is never a root and is not counted at all. A recognised row
    whose ancestry cannot be settled is **uncertain** for its class rather than guessed either way.
-   Unsettled means: the walk reaches a ppid that is not in the table, or an ancestor that is
+   `ppid === 0` is the kernel and ends the walk successfully (F43). Unsettled means: the walk reaches
+   a positive ppid that is not in the table, or an ancestor that is
    unreadable or changed-under-read, or a cycle, or a **parent whose start tick is later than its
    child's**, which cannot be a real parent relation and is a reused pid.
 5. **Counts.** Per class, `roots` and `uncertain`. Across the table, `changedUnderRead` and
    `unreadable`, which belong to no class, because a row whose identity moved under the read cannot
    honestly be attributed to one. Plus `processesSeen`. The block states all of them.
 6. **The cache is a three-state union**: `not-yet-computed` (with the instant the task started),
-   `value` (a census, the instant its pass completed, how long it took, and the cadence), `failed`
+   `value` (a census, the instants its pass started and completed, and the cadence — the counts mean
+   *observed during that pass*, F44), `failed`
    (the cause, the instant, and the last good value marked stale, or null). A `/proc` that cannot be
    enumerated at all is `failed`, never an empty census.
 7. **The task is end-chained**: pass, then wait the cadence, then pass — `server.ts`'s
@@ -157,3 +162,23 @@ reviews and commits.
 pid from the one it replaced, and the join between its two `ps` calls is exactly the "two reads are
 not one observation" defect §4 names. It is fine for a kill confirmation that re-reads immediately
 before acting; it is not fine for a count on a page that claims to be an observation.
+
+---
+
+## Review dispositions — the plan check
+
+Sol, 2026-09-10, `--sandbox review`, on my reading of the task file. Verdict **REFUSE as written**,
+F42–F44 established P1s. IDs continue from the parent plan's F1–F41. Each was checked against the
+code before being taken.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F42 | `recogniseHarnessCommand` reads flattened `ps args`; joining `/proc` cmdline with spaces throws away the argument boundaries, so an interactive `codex 'review this diff'` becomes `codex review this diff` and counts as `codex-batch` (`work.ts` documents exactly this, and a test pins it) | **Taken, and the reuse is kept.** The adapter encodes argv faithfully *into* the `ps`-shaped string: whitespace inside one argv element becomes `␣` (U+2423, which `\s` does not match), so one argument stays one token for every token-splitting recogniser — `recogniseHarnessCommand`, `isVitestRunner` and the `--type=` helper test alike. Test: argv `["codex", "review this diff"]` is not `codex-batch`; `["codex", "exec", "…"]` is |
+| F43 | The missing-parent rule has no kernel-root exception: every chain ends at pid 1, whose ppid is 0, and there is no `/proc/0` | **Taken.** `ppid === 0` ends the walk successfully; only a missing *positive* ppid is unsettled. Fixture added |
+| F44 | Rows are bracketed one at a time over an async pass, so a process read early may be gone by completion; the counts mean *observed during the pass*, not *alive at completion* | **Taken.** The `value` state carries `startedAtMs` as well as `completedAtMs`, and the block says *observed during a pass that ran from … to …*. "Alive right now" is gone from this plan and from the block |
+| F45 | Fallback (b) misreads `stat` field 24 (pages, not KiB) and misuses `cwd: null` | **Moot** — (a) was authorised; the fallback is not built |
+| F46 | A changed ppid with equal start ticks is reparenting, not a different process | **Taken**: such a row "did not give one stable identity-and-parent observation", and is counted in `changedUnderRead` either way |
+
+Sol also confirmed: the later-parent test holds on Linux with strict `>`; with F43 fixed the fold stops
+both workers and helpers being roots; Decision 1's narrowing is sound; Decisions 2–4 have no
+established P0/P1; and all three existing composition tests must stop the task they start.
