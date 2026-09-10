@@ -76,7 +76,7 @@
  * answer this module could give"*. Rounding a speaker this build cannot name to
  * "agent" would misattribute a message, so it is labelled as unknown instead.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   ofTheClaimAsked,
@@ -88,6 +88,7 @@ import {
 import { Explain } from "./Tooltip";
 import { Turn } from "./Turn";
 import { useExecutionEpoch } from "./continuity";
+import { singleFlightReader, type SingleFlightReader } from "./single-flight-reader";
 import type { FleetRow } from "./types";
 import type { ExecutionReading } from "../../wire.js";
 import { Button, Mono } from "./ui";
@@ -612,6 +613,24 @@ function identityOf(epochKey: string, row: FleetRow): string {
  */
 type Held = { identity: string; view: MessagesView };
 
+/**
+ * **HOW LONG ONE TRANSCRIPT READ MAY TAKE BEFORE THIS PANE STOPS WAITING**,
+ * enforced by the shared reader's own timer (single-flight-reader.ts), not by
+ * trusting the read to finish.
+ *
+ * Before the reader was shared there was no clock at all, and a read that
+ * never settled left "Reading…" on a disabled button for the life of the tab.
+ *
+ * **Thirty seconds is a trade, not a fact.** `/api/messages` sets no deadline
+ * of its own (server.ts), and a multi-megabyte transcript on a box at load 391
+ * is slow to read, so this sits well past a slow read rather than at the feed's
+ * fifteen, which rests on that route's five-second server-side limit. Too short
+ * costs something real: the page gives up, the person taps again, and the box
+ * reads one file twice, because `MessagesApi.recent` takes no signal and the
+ * first read is never cancelled.
+ */
+export const MESSAGES_READ_DEADLINE_MS = 30_000;
+
 export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesReading {
   const [held, setHeld] = useState<Held | null>(null);
   const [busy, setBusy] = useState(false);
@@ -620,89 +639,96 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
   const identity = identityOf(epochKey, row);
 
   /**
-   * WHICH READ IS THE NEWEST ONE ANYBODY STARTED. Only it may write.
+   * **ONE READER PER IDENTITY, BUILT BY THIS EFFECT AND STOPPED BY ITS CLEANUP.**
+   *
+   * The one-read-at-a-time machinery is single-flight-reader.ts, the core that
+   * `useActions` and the Recent messages feed already share. This hook was a
+   * third instance of the same problem, and it does not get a third copy (plan
+   * 260910c § Stage 5).
    *
    * **A read that lands after the reader has moved on must not be drawn.**
    * `Read again` on session A, then a tap on session B, and A's answer arrives
-   * to find B's panel on screen — so the turns of one agent render under the
-   * name and status of another. On a page whose entire job is telling you which
-   * session needs you, that is the worst thing it can get wrong, and it renders
-   * perfectly: real turns, well formed, correctly parsed, attached to the wrong
-   * row.
+   * to find B's panel on screen: real turns, well formed, correctly parsed,
+   * attached to the wrong row. On a page whose entire job is telling you which
+   * session needs you, that is the worst thing it can get wrong.
    *
-   * `fleet-health-history` flagged the general shape on 2026-09-08 (two
-   * overlapping polls of one endpoint resolving out of order); here it is not
-   * two polls of one thing but one poll of two different things, which is
-   * worse, because the stale answer is not merely old — it is about somebody
-   * else.
+   * **The identity rule is what shapes this.** A read for a different identity
+   * must REPLACE the one in flight, not queue behind it. The core's own
+   * one-pending rule would draw A's answer and only then read B, and A's answer
+   * is about somebody else. So the reader lives exactly as long as the identity
+   * does: a new identity runs this effect's cleanup, which `stop`s the old
+   * reader (the core's generation check makes its answer unwelcome), and builds
+   * a fresh reader for the new one. Unmounting runs the same cleanup, so closing
+   * the pane and picking another session need nothing of their own. The core's
+   * `discard()` would do the replacing too, but unmount would still need
+   * `stop()`; this way there is one teardown, not two.
    *
-   * **This was an identity comparison and identity is not an ordering**, which
-   * is the shape of the bug twice over. It began as `row.id`, and a pane that
-   * changed agent without changing handle compared `"$a"` with `"$a"`, agreed,
-   * and let the previous agent's turns through — the failure the guard existed
-   * to prevent, arriving down the one door it did not cover (roadmap finding
-   * E-session). Widening it to the full identity closes that door and leaves
-   * A→B→A open: hold a manual read of A, let the pane become B and then A
-   * again, and the held answer's identity equals the current one, so it
-   * overwrites a newer reading of the same conversation. Only a number that
-   * goes up can order two reads. **GPT Sol's fifth finding, 2026-09-08, and the
-   * general lesson is worth more than the fix: a freshness check written as an
-   * equality is a check that cannot tell two of the same thing apart.**
+   * **Built per effect run, not once per component**, because main.tsx turns
+   * StrictMode on. Its rehearsal mounts, cleans up and mounts again, and `stop`
+   * is final, so a reader built once and stopped in that cleanup would be dead
+   * by the real mount.
+   *
+   * **Ordering is by lifetime, never by equality.** The guard began as a
+   * comparison of `row.id`, then of the full identity, and both were
+   * equalities. The second let A→B→A through: a manual read of A held across a
+   * round trip through B carries the same identity as the current one, so it
+   * overwrote a newer reading of the same conversation. GPT Sol's fifth finding,
+   * 2026-09-08: *a freshness check written as an equality cannot tell two of the
+   * same thing apart.* A stopped reader cannot settle, whatever its identity
+   * says, so that read is dropped because the reader that asked for it is gone.
+   *
+   * **The row is captured here, not looked up again at read time.** The run
+   * half of the identity comes out of a hook, which cannot be called from a
+   * closure, and the row this effect saw has this identity. That means it has
+   * this handle and this claim, the two things `/api/messages` and
+   * `ofTheClaimAsked` read.
+   *
+   * **The dependency is the identity, not the row object, and that is the
+   * whole design of this section.** A new snapshot arrives every sixty seconds
+   * and replaces every row object on the page; depending on the object would put
+   * a disk read of a multi-megabyte transcript on the refresh loop, the one thing
+   * this section must not do. `identity` is a string built from the run's epoch
+   * and the claim, so an unchanged snapshot, or an execution reading that
+   * flickers unverifiable and back, produces an equal value and re-reads nothing.
+   * `identityOf` says which change counts as the session changing.
+   *
+   * There is no `setHeld(null)` here and that is deliberate: the old reading is
+   * hidden by the identity check below, during the very render in which the row
+   * changed, rather than cleared by this effect one commit later. See `Held`.
    */
-  const newest = useRef(0);
-
-  /**
-   * Start one read and let only the newest answer land.
-   *
-   * **The identity is passed in, not recomputed from `asked`.** The run half
-   * comes out of a hook, which cannot be called from a closure, and the value
-   * that matters is the one the render that ASKED had — a closure may be older
-   * than the current render, and recomputing from a newer row would label an
-   * old read with a new name.
-   */
-  const begin = useCallback(
-    (asked: FleetRow, askedFor: string): void => {
-      newest.current += 1;
-      const token = newest.current;
-      setBusy(true);
-      void api.recent(asked).then((answer) => {
-        if (newest.current !== token) return;
+  const reader = useRef<SingleFlightReader | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — depending on `row` rather than on `identity` would put the transcript read on the sixty-second refresh loop.
+  useEffect(() => {
+    const asked = row;
+    const askedFor = identity;
+    const core = singleFlightReader<MessagesView>({
+      /* The signal goes nowhere: `MessagesApi.recent` takes none, so a read this
+         page has given up on still finishes on the server. Its answer is
+         dropped all the same, because the core never settles a read it has
+         stopped waiting for. */
+      read: async () =>
         /* **COMPARED WITH THE CLAIM THIS REQUEST WAS ASKED UNDER**, which is
            `asked`'s rather than the current row's: the server resolved the
            conversation off its own row at request time, and the question is
            whether that is the one this page meant. A mismatch becomes the
            `moved` arm — a refusal on screen, never these turns under this
            row's name and never nothing. GPT Sol's F10. */
-        setHeld({ identity: askedFor, view: ofTheClaimAsked(answer, asked.claudeSessionId) });
+        ofTheClaimAsked(await api.recent(asked), asked.claudeSessionId),
+      deadlineMs: MESSAGES_READ_DEADLINE_MS,
+      noAnswer: (why) => ({ kind: "no-answer", why }),
+      onStart: () => setBusy(true),
+      onSettle: (view) => {
+        setHeld({ identity: askedFor, view });
         setBusy(false);
-      });
-    },
-    [api],
-  );
-
-  /**
-   * **THE ROW'S IDENTITY IS THE DEPENDENCY, NOT THE ROW OBJECT, and that is the
-   * whole design of this section.** A new snapshot arrives every sixty seconds
-   * and replaces every row object on the page; depending on the object would
-   * re-run this effect on each one and put a disk read of a multi-megabyte
-   * transcript on the refresh loop — the one thing this section must not do.
-   * `identity` is a string built from the run's epoch and the claim, so an
-   * unchanged snapshot — and an execution reading that flickers unverifiable
-   * and back — produces an equal value and re-reads nothing.
-   *
-   * **What changed on 2026-09-08 is which change counts as the session
-   * changing.** This read on `row.id` alone, and the sentence here used to say
-   * "the handle changing IS the session changing" — which is false in exactly
-   * the case `claudeSessionId` exists for. See `identityOf`.
-   *
-   * There is no `setHeld(null)` here and that is deliberate: the old reading is
-   * hidden by the identity check below, during the very render in which the row
-   * changed, rather than cleared by this effect one commit later. See `Held`.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — depending on `row` rather than on `identity` would put the transcript read on the sixty-second refresh loop.
-  useEffect(() => {
-    begin(row, identity);
-  }, [begin, identity]);
+      },
+    });
+    reader.current = core;
+    core.request();
+    return () => {
+      core.stop();
+      if (reader.current === core) reader.current = null;
+    };
+  }, [api, identity]);
 
   /**
    * **THE PAIRING IS CHECKED HERE, WHERE IT IS DRAWN.** A reading of somebody
@@ -712,7 +738,29 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
    */
   const view = held !== null && held.identity === identity ? held.view : null;
 
-  return { view, busy, read: () => begin(row, identity) };
+  /**
+   * **A TAP DURING A READ IS DROPPED, NOT QUEUED.** The button is disabled
+   * while a read is out, so the only tap that can land during one is in the
+   * frame before that redraw: a duplicate of the tap that started it, or one in
+   * the instant the opening read began. Either way the read in flight started a
+   * moment ago on this person's behalf, so its answer is as current as the one
+   * the second tap asked for. Coalescing it into one read after this one, the
+   * core's default, would buy a second multi-megabyte disk read for a
+   * sub-second freshness gain, on a box that has hit load average 391. Someone
+   * who wants a newer reading taps again once this one lands, and the button
+   * says when that is.
+   *
+   * **The guard is the core's own slot, not `busy`**, because `busy` is React
+   * state and a double tap arrives before the render that would set it: the
+   * same class as Stage 5a's double Start (NewSessionPanel.tsx).
+   */
+  const read = (): void => {
+    const core = reader.current;
+    if (core === null || core.reading()) return;
+    core.request();
+  };
+
+  return { view, busy, read };
 }
 
 /**
