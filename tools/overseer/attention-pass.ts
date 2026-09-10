@@ -60,7 +60,8 @@ import type {
 import { grantsPermission, parsePane, type PaneQuestion } from "../fleet/pane.js";
 import {
   addSpend,
-  ATTENTION_CLASSIFIER_MODEL,
+  asksOutOfBounds,
+  quotedIn,
   canonicalVerdict,
   CLASSIFIER_PROMPT_VERSION,
   isCacheable,
@@ -288,6 +289,10 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
             fingerprint: tail.fingerprint,
             classifiedAt: nowIso,
             promptVersion,
+            // WHICH MODEL ANSWERED, as the call itself reports it — GPT Sol's
+            // F18. A proposal drawn from this verdict later is attributed to
+            // it, whatever the constant says by then.
+            model: outcome.model,
             // Rebuilt from known fields: whatever else the object carried —
             // a `by`, say — is not remembered (D9).
             verdict: canonicalVerdict(outcome.verdict),
@@ -370,6 +375,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
         promptVersion,
         usage: options.usage ?? null,
         notReread: notReread.get(m.fingerprint),
+        excerpt: m.tail,
       }),
     });
   }
@@ -440,11 +446,12 @@ export const PROPOSALS_OFF_WHY =
   "proposals are off: the Overseer asks the plain question unless OVERSEER_PROPOSALS=1 is set in its environment";
 
 /**
- * Who proposed it — THIS CODE, from the constant, never the model's own output
- * (plan 260910f D9). A fresh object each time so no card can mutate another's.
+ * Who proposed it — THIS CODE, never the model's own output (plan 260910f D9),
+ * from the model the call reported and the pass recorded beside the verdict
+ * (GPT Sol's F18) — not from the constant, which may have changed since.
  */
-function proposalAuthor(): ProposalAuthor {
-  return { kind: "model", model: ATTENTION_CLASSIFIER_MODEL, via: "overseer" };
+function proposalAuthor(model: string): ProposalAuthor {
+  return { kind: "model", model, via: "overseer" };
 }
 
 /**
@@ -490,15 +497,18 @@ export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict |
  *
  * `off` when this pass is not proposal-aware, whatever the verdict holds — a
  * version-2 verdict left in memory after proposals are turned off is not
- * drawn. `not-reached` when the verdict came from another prompt (stale, D3):
- * it still places the card, and says whether its re-read was refused, failed,
- * or not reached by the per-pass budget.
+ * drawn. `not-reached` when the verdict came from another prompt (stale, D3),
+ * or when the model that made it was never recorded (F18): it still places the
+ * card, and says whether its re-read was refused, failed, or not reached by the
+ * per-pass budget.
  */
 function proposalFor(input: {
   cached: CachedVerdict;
   promptVersion: number;
   usage: UsageVerdict | null;
   notReread: string | undefined;
+  /** The tail this card publishes as its evidence, which a quote must be in. */
+  excerpt: string;
 }): AttentionProposal {
   const { cached, promptVersion } = input;
   if (promptVersion !== PROPOSAL_PROMPT_VERSION) return { kind: "off", why: PROPOSALS_OFF_WHY };
@@ -518,15 +528,41 @@ function proposalFor(input: {
   if (v.kind !== "question" || v.recipient === undefined) {
     return { kind: "not-reached", why: "the verdict carries no proposal" };
   }
-  const id = `${cached.fingerprint}:v${promptVersion}`;
-  if (v.recipient === "unplaced") return { kind: "unplaced", id, why: v.unplacedWhy, by: proposalAuthor() };
+  // WHO MADE IT, from the record — GPT Sol's F18. A verdict remembered before
+  // models were recorded has no author on disk, and today's constant is not
+  // one: it is re-read first (`authorUnknown`), and drawn under nobody's name
+  // until then.
+  if (cached.model === null) {
+    const unknown = "this card's verdict was remembered before the model that made it was recorded";
+    return {
+      kind: "not-reached",
+      why:
+        input.notReread === undefined
+          ? `${unknown}, and the pass's per-pass budget has not yet reached its re-read`
+          : `${unknown}, and ${input.notReread}`,
+    };
+  }
+  // The model is part of the identity: two models' proposals about one tail are
+  // two proposals, and a later mark or veto must say which it was about.
+  const id = `${cached.fingerprint}:v${promptVersion}:${cached.model}`;
+  const by = proposalAuthor(cached.model);
+  if (v.recipient === "unplaced") return { kind: "unplaced", id, why: v.unplacedWhy, by };
+  // THE PRODUCER NEVER PUBLISHES WHAT ITS CONSUMERS REFUSE. Every parser of the
+  // list refuses a quote outside its bounds or absent from the item's own
+  // excerpt (F15, F17), and one refused item degrades the WHOLE list to
+  // `unknown`. `parseVerdict` checked both before caching, against the tail the
+  // model read; this checks them again against the tail this card publishes,
+  // since a fingerprint excludes some of a pane and a verdict can outlive a
+  // bound. The card stays either way — only the proposal is withheld.
+  const problem = asksOutOfBounds(v.asks) ?? (quotedIn(v.asks, input.excerpt) ? null : "its quoted sentence is not in the tail this card shows");
+  if (problem !== null) return { kind: "not-reached", why: `this card's proposal is withheld: ${problem}` };
   return {
     kind: "proposed",
     id,
     recipient: v.recipient,
     reason: v.reason,
     asks: v.asks,
-    by: proposalAuthor(),
+    by,
     reach: projectReach(v.recipient, input.usage),
   };
 }

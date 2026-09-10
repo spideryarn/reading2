@@ -105,15 +105,15 @@ function detectionAnswer(extra: (l: AttentionLabel) => Record<string, unknown> =
     if (f === "concluded-clean-debrief.txt") {
       return { notCalled: { kind: "stopped", stopped: { kind: "exhausted", why: "day ceiling", until: "2026-09-11T00:00:00.000Z" } } };
     }
-    if (f === "background-review-sol-in-tmux.txt") return { verdict: { kind: "unreadable", why: "not JSON" }, spend: PRICED };
+    if (f === "background-review-sol-in-tmux.txt") return { verdict: { kind: "unreadable", why: "not JSON" }, spend: PRICED, model: "fake/test" };
     if (f === "question-self-reuse-helper.txt") {
-      return { verdict: { kind: "quota-refused", status: 429, why: "rate limited" }, spend: PRICED };
+      return { verdict: { kind: "quota-refused", status: 429, why: "rate limited" }, spend: PRICED, model: "fake/test" };
     }
-    if (f === "question-no-mark-sol-sort-order.txt") return { verdict: NO, spend: PRICED };
-    if (f === "rhetorical-closing-why-tests-missed-it.txt") return { verdict: question(extra(l)), spend: PRICED };
-    if (f === "wrong-task-hard-version-in-primary.txt") return { verdict: question(extra(l)), spend: PRICED };
-    if (l.case === "question") return { verdict: question(extra(l)), spend: PRICED };
-    return { verdict: NO, spend: PRICED };
+    if (f === "question-no-mark-sol-sort-order.txt") return { verdict: NO, spend: PRICED, model: "fake/test" };
+    if (f === "rhetorical-closing-why-tests-missed-it.txt") return { verdict: question(extra(l)), spend: PRICED, model: "fake/test" };
+    if (f === "wrong-task-hard-version-in-primary.txt") return { verdict: question(extra(l)), spend: PRICED, model: "fake/test" };
+    if (l.case === "question") return { verdict: question(extra(l)), spend: PRICED, model: "fake/test" };
+    return { verdict: NO, spend: PRICED, model: "fake/test" };
   };
 }
 
@@ -182,8 +182,8 @@ describe("detection", () => {
 
   it("counts unreadable, quota-refused and notCalled as unjudged, never as negatives", async () => {
     for (const outcome of [
-      { verdict: { kind: "unreadable", why: "x" }, spend: PRICED },
-      { verdict: { kind: "quota-refused", status: 402, why: "x" }, spend: PRICED },
+      { verdict: { kind: "unreadable", why: "x" }, spend: PRICED, model: "fake/test" },
+      { verdict: { kind: "quota-refused", status: 402, why: "x" }, spend: PRICED, model: "fake/test" },
       { notCalled: { kind: "unavailable", why: "lock" } },
     ] as ClassifyOutcome[]) {
       const r = await evaluate(labels, captures, fake(() => outcome).classify, OPTS);
@@ -257,8 +257,18 @@ describe("routing", () => {
     const byTail = labelByTail();
     const classify = async (tail: string): Promise<ClassifyOutcome> => {
       const label = byTail.get(tail);
-      if (label?.case !== "question") return { verdict: NO, spend: PRICED };
-      const lastLine = tail.split("\n").filter((l) => l.trim() !== "").pop()?.trim() ?? "";
+      if (label?.case !== "question") return { verdict: NO, spend: PRICED, model: "fake/test" };
+      // The LAST TWO lines, as one sentence: a pane wraps a sentence, so the
+      // last physical line alone can be a fragment — `"worktree."` in the
+      // cleanup-decision fixture — which the quote's minimum refuses (GPT Sol's
+      // F17). A model quotes the sentence, not the line.
+      const lastLine = tail
+        .split("\n")
+        .filter((l) => l.trim() !== "")
+        .slice(-2)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
       const raw = JSON.stringify({
         asked: true,
         topic: "t",
@@ -269,15 +279,15 @@ describe("routing", () => {
         reason: "the label says so",
         asks: lastLine,
       });
-      return { verdict: parseVerdict(raw, { promptVersion: PROPOSAL_PROMPT_VERSION, tail }), spend: PRICED };
+      return { verdict: parseVerdict(raw, { promptVersion: PROPOSAL_PROMPT_VERSION, tail }), spend: PRICED, model: "fake/test" };
     };
     const r = await evaluate(labels, captures, classify, { promptVersion: PROPOSAL_PROMPT_VERSION, model: "fake/v2" });
     if (r.routing.kind !== "measured") throw new Error(`expected routing to be measured: ${JSON.stringify(r.routing)}`);
     expect(r.routing.proposed).toBe(r.routing.trueQuestions);
     expect(r.routing.correct).toBe(r.routing.trueQuestions);
     expect(recipientOf(parseVerdict(
-      JSON.stringify({ asked: true, topic: "t", why: "w", kind: "other", answerable: "phone", recipient: "fable", reason: "r", asks: "abc" }),
-      { promptVersion: PROPOSAL_PROMPT_VERSION, tail: "xx abc yy" },
+      JSON.stringify({ asked: true, topic: "t", why: "w", kind: "other", answerable: "phone", recipient: "fable", reason: "r", asks: "Tell me which one." }),
+      { promptVersion: PROPOSAL_PROMPT_VERSION, tail: "xx Tell me which one. yy" },
     ))).toBe("fable");
   });
 
@@ -303,7 +313,7 @@ describe("the report as a person reads it", () => {
     const answer = detectionAnswer();
     const unpriced: Answer = (l) => {
       const o = answer(l);
-      return "verdict" in o ? { verdict: o.verdict, spend: UNPRICED } : o;
+      return "verdict" in o ? { verdict: o.verdict, spend: UNPRICED, model: "fake/test" } : o;
     };
     const r = await evaluate(labels, captures, fake(unpriced).classify, OPTS);
     expect(r.cost.spend.costUsd).toBeNull();

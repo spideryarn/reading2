@@ -1736,7 +1736,35 @@ function parseAttentionItem(raw: unknown, skew: ClockSkew): AttentionItem | null
   }
   const proposal = parseAttentionProposal(raw["proposal"]);
   if (proposal === null) return null;
+  /* THE QUOTE IS IN THIS ITEM'S OWN EXCERPT — GPT Sol's F15. The card labels
+     it "the sentence this proposal is about", so one the excerpt does not hold
+     is an invented sentence wearing the label. A dialog has no excerpt to hold
+     one. */
+  if (proposal.kind === "proposed" && !(evidence.kind === "prose" && quotedIn(proposal.asks, evidence.excerpt))) return null;
   return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates, proposal };
+}
+
+/**
+ * A quote, checked as the producer checks it — RESTATED from
+ * tools/overseer/attention-classify.ts (`normaliseSpace`, `MAX_ASKS_CHARS`,
+ * `MIN_ASKS_CHARS`, `MIN_ASKS_WORDS`, whose comments say why each value), like
+ * every parser in this file. tests/fleet-attention-proposal.test.tsx drives the
+ * bounds from those constants, so a copy that drifts goes red.
+ */
+function normaliseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+const MAX_ASKS_CHARS = 300;
+const MIN_ASKS_CHARS = 12;
+const MIN_ASKS_WORDS = 2;
+
+function asksInBounds(asks: string): boolean {
+  const s = normaliseSpace(asks);
+  return s.length <= MAX_ASKS_CHARS && s.length >= MIN_ASKS_CHARS && s.split(" ").length >= MIN_ASKS_WORDS;
+}
+
+function quotedIn(asks: string, text: string): boolean {
+  return normaliseSpace(text).includes(normaliseSpace(asks));
 }
 
 const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
@@ -1763,6 +1791,8 @@ function parseAttentionProposal(raw: unknown): AttentionProposal | null {
       const by = parseProposalAuthor(raw["by"]);
       const reach = parseProposalReach(raw["reach"]);
       if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      // Inside the producer's length bounds (F17), or the card could draw a whole tail in the flow.
+      if (!asksInBounds(asks)) return null;
       return { kind: "proposed", id, recipient, reason, asks, by, reach };
     }
     case "unplaced": {

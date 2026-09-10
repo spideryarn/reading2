@@ -505,8 +505,8 @@ export function fakeClassifierFromLabels(
 
   return async (tail) => {
     const l = byTail.get(tail);
-    if (l === undefined) return { verdict: { kind: "unreadable", why: "fake: a tail with no label" }, spend: NO_SPEND };
-    if (l.file === unreadable) return { verdict: { kind: "unreadable", why: "fake: perturbed to unreadable" }, spend: NO_SPEND };
+    if (l === undefined) return { verdict: { kind: "unreadable", why: "fake: a tail with no label" }, spend: NO_SPEND, model: FAKE_MODEL };
+    if (l.file === unreadable) return { verdict: { kind: "unreadable", why: "fake: perturbed to unreadable" }, spend: NO_SPEND, model: FAKE_MODEL };
     const asks = (l.case === "question" && l.file !== missed) || l.category === "rhetorical";
     const verdict: ClassifierVerdict = asks
       ? {
@@ -517,9 +517,12 @@ export function fakeClassifierFromLabels(
           answerability: { kind: "phone" },
         }
       : { kind: "no-question", why: `fake: answered from the label (${l.case}/${l.category})` };
-    return { verdict, spend: NO_SPEND };
+    return { verdict, spend: NO_SPEND, model: FAKE_MODEL };
   };
 }
+
+/** What the `--fake` classifier reports as the model that answered: no model did. */
+const FAKE_MODEL = "fake (answered from the labels)";
 
 /**
  * The real classifier for an evaluation run, built ONLY through the existing

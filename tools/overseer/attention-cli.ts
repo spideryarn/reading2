@@ -238,7 +238,8 @@ export async function runAttentionCommand(
     sessions,
     capture,
     classify: options.dry
-      ? async () => ({ verdict: { kind: "unreadable", why: "--dry: no model was asked" }, spend: NO_SPEND })
+      ? // No model answered, and the verdict is never cached, so `model` is never recorded.
+        async () => ({ verdict: { kind: "unreadable", why: "--dry: no model was asked" }, spend: NO_SPEND, model: "none (--dry)" })
       : paidClassifier(budget, classifierOptions(apiKey ?? "", promptVersion, seams)),
     memory,
     maxCalls: options.dry ? 0 : options.maxCalls,
@@ -347,7 +348,8 @@ export function describeList(list: AttentionList): readonly string[] {
       const proposal: AttentionProposal = item.proposal;
       if (proposal.kind === "proposed") {
         lines.push(
-          `    proposed: ${proposal.recipient} (${proposal.reach.kind}) — ${proposal.reason} · by ${proposal.by.model}, nothing sent`,
+          // "model:" before the identifier, never "by" — GPT Sol's F16, as on the card.
+          `    proposed: ${proposal.recipient} (${proposal.reach.kind}) — ${proposal.reason} · model proposal, model: ${proposal.by.model}, nothing sent`,
         );
         lines.push(`    asks: "${proposal.asks}"`);
       } else if (proposal.kind === "unplaced") {

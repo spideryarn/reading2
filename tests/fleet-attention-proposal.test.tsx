@@ -18,6 +18,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AttentionPanel } from "../tools/fleet/web/src/AttentionPanel";
 import { parseFleetState, type FleetState } from "../tools/fleet/web/src/types";
+import { MAX_ASKS_CHARS, MIN_ASKS_CHARS } from "../tools/overseer/attention-classify";
+
+/**
+ * A quote of exactly `n` characters, words joined by single spaces — already in
+ * the producer's normalised form, with several words at every length used here,
+ * so the character bound is what a case tests.
+ */
+function quoteOf(n: number): string {
+  const s = "shall I ship it to dev now ".repeat(Math.ceil(n / 27) + 1).slice(0, n);
+  return s.endsWith(" ") ? `${s.slice(0, -1)}x` : s;
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,7 +62,7 @@ afterEach(() => {
 });
 
 /** A prose item as the Overseer publishes it; `proposal` absent means an older producer. */
-function proseItem(proposal?: unknown): Record<string, unknown> {
+function proseItem(proposal?: unknown, excerpt = `Two wordings are in the plan.\n${QUOTE}`): Record<string, unknown> {
   const item: Record<string, unknown> = {
     id: "prose-1",
     sessionId: "$1",
@@ -60,7 +71,7 @@ function proseItem(proposal?: unknown): Record<string, unknown> {
     kind: "product",
     evidence: {
       kind: "prose",
-      excerpt: `Two wordings are in the plan.\n${QUOTE}`,
+      excerpt,
       why: "the turn ended by handing over a wording decision",
     },
     answerability: { kind: "phone" },
@@ -136,6 +147,32 @@ describe("the browser's parser", () => {
       expect(listOf(read([proseItem(JSON.parse(JSON.stringify(proposal)))])).kind, JSON.stringify(proposal)).toBe("unknown");
     }
   });
+
+  it("refuses a quote that is not in the same item's excerpt — the card would call it the sentence the proposal is about (F15)", () => {
+    // GPT Sol's input exactly: a valid prose item whose quote the excerpt does not hold.
+    const list = listOf(read([proseItem({ ...PROPOSED, asks: "This text is not in the excerpt." }, "Tell me which one.")]));
+    expect(list.kind).toBe("unknown");
+  });
+
+  it("finds the quote under the producer's whitespace normalisation, so a pane's wrapped line still matches (F15)", () => {
+    const list = listOf(read([proseItem(PROPOSED, "Tell me which wording\n   you'd rather and I'll use it.")]));
+    expect(list.kind).toBe("list");
+  });
+
+  it.each([
+    ["the longest accepted", MAX_ASKS_CHARS, "list"],
+    ["one over the longest", MAX_ASKS_CHARS + 1, "unknown"],
+    ["the shortest accepted", MIN_ASKS_CHARS, "list"],
+    ["one under the shortest", MIN_ASKS_CHARS - 1, "unknown"],
+  ])("bounds the quote's length — %s (F17)", (_name, length, kind) => {
+    const asks = quoteOf(length);
+    expect(asks).toHaveLength(length);
+    expect(listOf(read([proseItem({ ...PROPOSED, asks }, `Two wordings are in the plan.\n${asks}`)])).kind).toBe(kind);
+  });
+
+  it("refuses a one-word quote even when it is long enough (F17)", () => {
+    expect(listOf(read([proseItem({ ...PROPOSED, asks: "Unbelievably" }, "Unbelievably so.")])).kind).toBe("unknown");
+  });
 });
 
 describe("the card", () => {
@@ -165,6 +202,39 @@ describe("the card", () => {
     expect(text).toContain("openai/gpt-5.6-luna");
     expect(text).not.toMatch(/greg (says|said|proposes|proposed|decided|approved)/i);
     expect(text).not.toMatch(/(proposed|proposal) by greg/i);
+  });
+
+  it("never lets a model identifier stand where a speaker's name would, even one that reads `Greg` (F16)", () => {
+    // Accepted by all three parsers — `by.model` is any non-blank string — so
+    // the card's fixed words are what must keep it out of the speaker's slot.
+    const byGreg = { kind: "model", model: "Greg", via: "overseer" };
+    for (const proposal of [
+      { ...PROPOSED, by: byGreg },
+      { kind: "unplaced", id: "fp:v2", why: "it could be technical or product", by: byGreg },
+    ]) {
+      draw([proseItem(proposal)]);
+      const text = host.textContent ?? "";
+      expect(text, proposal.kind).toContain("Greg");
+      expect(text, proposal.kind).not.toMatch(/by greg/i);
+      expect(text, proposal.kind).not.toMatch(/proposal by greg/i);
+      // Every "Greg" on the card is a model identifier, and says so first.
+      expect(text.match(/Greg/g)?.length, proposal.kind).toBe(text.match(/model: Greg/g)?.length);
+    }
+  });
+
+  it("draws the longest accepted quote as prose that wraps, never as a line that can push the page sideways (F17)", () => {
+    // STRUCTURAL, because jsdom has no layout: this pins the two properties that
+    // bound the quote's box — no preserved newlines, so its height follows its
+    // bounded length; and `overflow-wrap: anywhere`, which breaks an unbroken
+    // run and so lets even a 298-character token wrap inside a 390px card.
+    const asks = `So ${"x".repeat(MAX_ASKS_CHARS - 3)}`;
+    expect(asks).toHaveLength(MAX_ASKS_CHARS);
+    draw([proseItem({ ...PROPOSED, asks }, `Two wordings are in the plan.\n${asks}`)]);
+    const quote = [...host.querySelectorAll("blockquote")].find((q) => q.textContent === asks);
+    expect(quote).toBeDefined();
+    const classes = [...(quote?.classList ?? [])];
+    expect(classes).toContain("tw:wrap-anywhere");
+    expect(classes.filter((c) => /whitespace-(pre|nowrap)/.test(c))).toEqual([]);
   });
 
   it("keeps the tail one tap away, with its position caveat, and labels the quote as what the proposal is about", () => {

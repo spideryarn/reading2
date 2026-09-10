@@ -29,7 +29,10 @@ import {
   ATTENTION_CLASSIFIER_MODEL,
   CLASSIFIER_PROMPT_VERSION,
   PROPOSAL_PROMPT_VERSION,
+  MAX_ASKS_CHARS,
+  MIN_ASKS_CHARS,
   MAX_COMPLETION_TOKENS,
+  isCacheable,
   WORST_CASE_PROMPT_TOKENS,
   addSpend,
   buildClassifierPrompt,
@@ -142,6 +145,7 @@ describe("planClassifications — the budget is enforced, not promised", () => {
     fingerprint: "aaaa",
     classifiedAt: "2026-09-08T13:00:00.000Z",
     promptVersion: CLASSIFIER_PROMPT_VERSION,
+    model: ATTENTION_CLASSIFIER_MODEL,
     verdict: { kind: "no-question", why: "a status report" },
   };
 
@@ -216,6 +220,7 @@ describe("the prompt version — a stale verdict is not an absent one (plan 2609
     fingerprint: "zz",
     classifiedAt: "2026-09-08T13:00:00.000Z",
     promptVersion: null,
+    model: null,
     verdict: { kind: "question", topic: "t", why: "w", attentionKind: "other", answerability: { kind: "phone" } },
   };
   const tails = [
@@ -535,6 +540,117 @@ describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () 
     expect(Buffer.byteLength(prompt.system, "utf8") + Buffer.byteLength(prompt.user, "utf8")).toBeLessThanOrEqual(
       WORST_CASE_PROMPT_TOKENS,
     );
+  });
+});
+
+/**
+ * A quote of exactly `n` characters, words joined by single spaces — already in
+ * the normalised form the bound measures, with several words at every length
+ * used here, so the character bound is what a case tests.
+ */
+function quoteOf(n: number): string {
+  const s = "shall I ship it to dev now ".repeat(Math.ceil(n / 27) + 1).slice(0, n);
+  return s.endsWith(" ") ? `${s.slice(0, -1)}x` : s;
+}
+
+describe("the quote's length is bounded at the model's own answer (GPT Sol's F17)", () => {
+  function read(asks: string, tail = `Some context comes first.\n${asks}\nAnd then the turn ends.`) {
+    const answer = JSON.stringify({
+      asked: true,
+      topic: "t",
+      why: "w",
+      kind: "technical",
+      answerable: "phone",
+      answerableWhy: "",
+      recipient: "sol",
+      reason: "r",
+      asks,
+    });
+    return parseVerdict(answer, { promptVersion: PROPOSAL_PROMPT_VERSION, tail });
+  }
+
+  it.each([
+    ["the longest accepted", MAX_ASKS_CHARS, "question"],
+    ["one over the longest", MAX_ASKS_CHARS + 1, "unreadable"],
+    ["the shortest accepted", MIN_ASKS_CHARS, "question"],
+    ["one under the shortest", MIN_ASKS_CHARS - 1, "unreadable"],
+  ])("%s — and a refused one is never cached", (_name, length, kind) => {
+    const asks = quoteOf(length);
+    expect(asks).toHaveLength(length);
+    const v = read(asks);
+    expect(v.kind).toBe(kind);
+    expect(isCacheable(v)).toBe(kind === "question");
+  });
+
+  it("refuses a one-word quote even when it is long enough", () => {
+    expect(read("Unbelievably").kind).toBe("unreadable");
+  });
+
+  it("refuses GPT Sol's two inputs: the whole 4,000-character tail quoted back, and `I`", () => {
+    const tail = quoteOf(MAX_TAIL_CHARS);
+    expect(read(tail, tail).kind).toBe("unreadable");
+    expect(read("I", "I can proceed once you choose.").kind).toBe("unreadable");
+  });
+
+  it("measures and keeps the quote in its normalised form, so a wrapped quote is a sentence, not a column", () => {
+    const v = read("Shall I\n    ship it?", "Shall I ship it? Say so.");
+    expect(v).toMatchObject({ kind: "question", asks: "Shall I ship it?" });
+  });
+});
+
+describe("the model a verdict came from (GPT Sol's F18)", () => {
+  const reply = (async () =>
+    new Response(
+      JSON.stringify({ choices: [{ message: { content: JSON.stringify({ asked: false, why: "a status report" }) } }], usage: { cost: 0.0001 } }),
+      { status: 200 },
+    )) as typeof fetch;
+
+  it("classifyTail says which model it asked: the constant by default…", async () => {
+    const r = await classifyTail("a tail", { apiKey: "k", fetchImpl: reply });
+    expect(r.model).toBe(ATTENTION_CLASSIFIER_MODEL);
+  });
+
+  it("…and the override when a caller passes one, which is the model the pass then records", async () => {
+    const r = await classifyTail("a tail", { apiKey: "k", fetchImpl: reply, model: "vendor/another-model" });
+    expect(r.model).toBe("vendor/another-model");
+  });
+
+  const proposal = {
+    kind: "question" as const,
+    topic: "t",
+    why: "w",
+    attentionKind: "technical" as const,
+    answerability: { kind: "phone" as const },
+    recipient: "sol" as const,
+    reason: "r",
+    asks: "Say the word and I'll shut it down.",
+  };
+  const cachedAs = (model: string | null, verdict: CachedVerdict["verdict"] = proposal, promptVersion = PROPOSAL_PROMPT_VERSION): CachedVerdict => ({
+    fingerprint: "ff",
+    classifiedAt: "2026-09-08T13:00:00.000Z",
+    promptVersion,
+    model,
+    verdict,
+  });
+  const plan = (hit: CachedVerdict, promptVersion: number = PROPOSAL_PROMPT_VERSION) =>
+    planClassifications({ tails: [{ sessionId: "$1", fingerprint: "ff", tail: "t" }], cache: new Map([["ff", hit]]), maxCalls: 10, promptVersion });
+
+  it("keeps a verdict made by another model CACHED — it is still that model's judgement, and costs no call", () => {
+    const p = plan(cachedAs("vendor/an-older-model"));
+    expect(p.cached).toHaveLength(1);
+    expect(p.toCall).toEqual([]);
+  });
+
+  it("re-reads a remembered PROPOSAL whose model was never recorded, rather than attribute it to whoever is current", () => {
+    const p = plan(cachedAs(null));
+    expect(p.stale.map((s) => s.fingerprint)).toEqual(["ff"]);
+    expect(p.toCall.map((t) => t.fingerprint)).toEqual(["ff"]);
+  });
+
+  it("does not re-read a verdict with no recorded model when nothing on it is attributed", () => {
+    const question = { kind: "question" as const, topic: "t", why: "w", attentionKind: "other" as const, answerability: { kind: "phone" as const } };
+    expect(plan(cachedAs(null, question, CLASSIFIER_PROMPT_VERSION), CLASSIFIER_PROMPT_VERSION).cached).toHaveLength(1);
+    expect(plan(cachedAs(null, { kind: "no-question", why: "w" })).cached).toHaveLength(1);
   });
 });
 

@@ -275,7 +275,7 @@ describe("the cooldown — the gateway's own 402 or 429 (D5)", () => {
     let made = 0;
     const classify = budgetedClassifier(budgetAt(root, T0), async () => {
       made += 1;
-      return { verdict: { kind: "quota-refused", status: 429, why: "the gateway returned 429: slow down" }, spend: { ...NO_SPEND, calls: 1 } };
+      return { verdict: { kind: "quota-refused", status: 429, why: "the gateway returned 429: slow down" }, spend: { ...NO_SPEND, calls: 1 }, model: "fake/test" };
     });
     await classify("first tail");
     const second = await classify("second tail");
@@ -316,7 +316,7 @@ describe("two callers, one ledger — only one gets the last call", () => {
     const classify = budgetedClassifier(budgetAt(root, T0), async () => {
       made += 1;
       await new Promise((resolve) => setTimeout(resolve, 5));
-      return { verdict: { kind: "no-question", why: "a status report" }, spend: SPEND };
+      return { verdict: { kind: "no-question", why: "a status report" }, spend: SPEND, model: "fake/test" };
     });
     const outcomes = await Promise.all([classify("a"), classify("b")]);
     expect(made).toBe(1);

@@ -26,7 +26,7 @@ import {
   PROPOSAL_PROMPT_VERSION,
   buildClassifierPrompt,
 } from "../tools/overseer/attention-classify.js";
-import { attentionRunner, runAttentionCommand, type AttentionSeams } from "../tools/overseer/attention-cli.js";
+import { attentionRunner, describeList, runAttentionCommand, type AttentionSeams } from "../tools/overseer/attention-cli.js";
 import { readAttentionMemory } from "../tools/overseer/attention-memory.js";
 
 const PANE = readFileSync(new URL("./fixtures/overseer-turn-tails/ended-prose-question-shut-it-down.txt", import.meta.url), "utf8");
@@ -147,5 +147,40 @@ describe("OVERSEER_PROPOSALS reaches both halves of both compositions", () => {
   it("the daemon's runner still declines to run without a key, proposals or not", () => {
     const { seams: s } = seams(true);
     expect(attentionRunner(tempRoot(), "test-instance", { ...s, apiKey: () => null })).toBeNull();
+  });
+});
+
+describe("the hand run's words for a proposal (GPT Sol's F16)", () => {
+  it("never lets a model identifier stand where a speaker's name would, even one that reads `Greg`", () => {
+    const text = describeList({
+      kind: "list",
+      items: [
+        {
+          id: "i",
+          sessionId: "$1",
+          sessionName: "asks",
+          waitingSince: "2026-09-08T13:50:00.000Z",
+          kind: "irreversible",
+          evidence: { kind: "prose", excerpt: "Say the word and I'll shut it down.", why: "it offered and stopped" },
+          answerability: { kind: "phone" },
+          duplicates: [],
+          proposal: {
+            kind: "proposed",
+            id: "fp:v2:Greg",
+            recipient: "fable",
+            reason: "it is a question of wording",
+            asks: "Say the word and I'll shut it down.",
+            by: { kind: "model", model: "Greg", via: "overseer" },
+            reach: { kind: "available" },
+          },
+        },
+      ],
+      sessionsScanned: 1,
+      sessionsUnreadable: 0,
+      scannedAt: "2026-09-08T14:00:00.000Z",
+    }).join("\n");
+    expect(text).toContain("Greg");
+    expect(text).not.toMatch(/by greg/i);
+    expect(text.match(/Greg/g)?.length).toBe(text.match(/model: Greg/g)?.length);
   });
 });

@@ -23,6 +23,7 @@ import { inboxLines } from "../scripts/overseer.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
 
 import type { AttentionList } from "../tools/fleet/wire.js";
+import { MAX_ASKS_CHARS, MIN_ASKS_CHARS } from "../tools/overseer/attention-classify.js";
 import {
   CHECKPOINT_FILE,
   attentionNotYetRun,
@@ -44,6 +45,16 @@ function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "overseer-attention-store-"));
   roots.push(root);
   return root;
+}
+
+/**
+ * A quote of exactly `n` characters, words joined by single spaces — already in
+ * the producer's normalised form, with several words at every length used here,
+ * so the character bound is what a case tests.
+ */
+function quoteOf(n: number): string {
+  const s = "shall I ship it to dev now ".repeat(Math.ceil(n / 27) + 1).slice(0, n);
+  return s.endsWith(" ") ? `${s.slice(0, -1)}x` : s;
 }
 
 function mustOpen(root: string, now?: () => Date): OverseerStore {
@@ -255,9 +266,14 @@ describe("the attention list on the checkpoint", () => {
 
 describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
   const BY = { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" };
+  /** LIST's own quote: in its excerpt, and inside the length bounds. */
+  const QUOTE = "Say the word and I'll shut it down.";
 
-  /** The checkpoint with its one item's `proposal` replaced by `proposal`, or removed when `undefined`. */
-  function readWithProposal(proposal: unknown): AttentionList {
+  /**
+   * The checkpoint with its one item's `proposal` replaced by `proposal`, or
+   * removed when `undefined` — and, when given, its `evidence` replaced too.
+   */
+  function readWithProposal(proposal: unknown, evidence?: unknown): AttentionList {
     const root = tempRoot();
     const store = mustOpen(root);
     store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
@@ -266,11 +282,46 @@ describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
     const list = raw["attention"] as { items: Record<string, unknown>[] };
     if (proposal === undefined) delete list.items[0]!["proposal"];
     else list.items[0]!["proposal"] = proposal;
+    if (evidence !== undefined) list.items[0]!["evidence"] = evidence;
     writeFileSync(path, JSON.stringify(raw, null, 2));
     const read = readCheckpoint(root);
     if (read.kind !== "checkpoint") throw new Error("the checkpoint must survive");
     return read.checkpoint.attention;
   }
+
+  const PROPOSED = { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } };
+
+  /** A prose excerpt and a quote, together. */
+  function readWithQuote(excerpt: string, asks: string): AttentionList {
+    return readWithProposal({ ...PROPOSED, asks }, { kind: "prose", excerpt, why: "it named an action and stopped" });
+  }
+
+  test("refuses a quote that is not in the same item's excerpt — the card would call it the sentence the proposal is about (F15)", () => {
+    expect(readWithQuote("Tell me which one.", "This text is not in the excerpt.").kind).toBe("unknown");
+  });
+
+  test("finds the quote under the producer's whitespace normalisation, so a pane's wrapped line still matches (F15)", () => {
+    expect(readWithQuote("Say the word and I'll\n   shut it down.", QUOTE).kind).toBe("list");
+  });
+
+  test("refuses a proposed quote on a dialog item, which has no excerpt to hold it (F15)", () => {
+    expect(readWithProposal(PROPOSED, { kind: "dialog", question: "Say the word?", options: ["Yes", "No"] }).kind).toBe("unknown");
+  });
+
+  test.each([
+    ["the longest accepted", MAX_ASKS_CHARS, "list"],
+    ["one over the longest", MAX_ASKS_CHARS + 1, "unknown"],
+    ["the shortest accepted", MIN_ASKS_CHARS, "list"],
+    ["one under the shortest", MIN_ASKS_CHARS - 1, "unknown"],
+  ])("bounds the quote's length — %s (F17)", (_name, length, kind) => {
+    const asks = quoteOf(length);
+    expect(asks).toHaveLength(length);
+    expect(readWithQuote(`It named an action.\n${asks}`, asks).kind).toBe(kind);
+  });
+
+  test("refuses a one-word quote even when it is long enough (F17)", () => {
+    expect(readWithQuote("Unbelievably so.", "Unbelievably").kind).toBe("unknown");
+  });
 
   test("an item from an older producer, with no proposal at all, reads as `not-reported` — not a failure", () => {
     const list = readWithProposal(undefined);
@@ -285,8 +336,8 @@ describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
     ["not-reached", { kind: "not-reached", why: "the budget refused the re-read" }],
     ["not-applicable", { kind: "not-applicable" }],
     ["not-reported", { kind: "not-reported" }],
-    ["proposed, reach available", { kind: "proposed", id: "i", recipient: "greg", reason: "r", asks: "a", by: BY, reach: { kind: "available" } }],
-    ["proposed, reach not checked", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY, reach: { kind: "not-checked", why: "no Codex reading" } }],
+    ["proposed, reach available", { kind: "proposed", id: "i", recipient: "greg", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } }],
+    ["proposed, reach not checked", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY, reach: { kind: "not-checked", why: "no Codex reading" } }],
   ])("reads the %s arm back whole", (_name, proposal) => {
     const list = readWithProposal(proposal);
     if (list.kind !== "list") throw new Error(`expected a list, got ${list.kind}`);
@@ -295,13 +346,14 @@ describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
 
   test.each([
     ["an unknown kind", { kind: "sent", why: "x" }],
-    ["an unknown recipient", { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: "a", by: BY, reach: { kind: "available" } }],
-    ["no reach", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY }],
+    // A quote that is valid in every other way, so each case refuses for its own reason.
+    ["an unknown recipient", { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } }],
+    ["no reach", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY }],
     ["a blank quote", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "", by: BY, reach: { kind: "available" } }],
-    ["an author that is not the model", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } }],
+    ["an author that is not the model", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } }],
     ["an author via somebody else", { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } }],
     ["an unplaced answer with no why", { kind: "unplaced", id: "i", by: BY }],
-    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "fable", reason: "r", asks: "a", by: BY, reach: { kind: "unavailable" } }],
+    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "fable", reason: "r", asks: QUOTE, by: BY, reach: { kind: "unavailable" } }],
     ["an off with no why", { kind: "off" }],
     ["a proposal that is not an object", "fable"],
   ])("refuses %s — the list degrades to `unknown`, never a proposal half-read", (_name, proposal) => {

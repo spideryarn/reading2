@@ -135,9 +135,10 @@ make the inbox look the same with and without the feature, which is the one thin
 measure."*
 
 **D9. Attribution is stamped by the producer, never written by the model** — Sol's F4. `by` is
-`{kind:"model", model: ATTENTION_CLASSIFIER_MODEL, via:"overseer"}`, set by the code that made the
-call; the card reads *"Proposed by openai/gpt-5.6-luna via the Overseer — nothing has been sent."*
-No rendered arm uses Greg as a speaker.
+`{kind:"model", model: <the model the call actually used>, via:"overseer"}`, set by the code that
+made the call and recorded with the cached verdict (Sol's F18); the card reads *"Model proposal via
+the Overseer · model: openai/gpt-5.6-luna · nothing has been sent"*, so the model identifier can
+never stand where a person's name would (Sol's F16). No rendered arm uses Greg as a speaker.
 
 **D10. Live marks are deferred; v1's judgement is the evaluation artefact** — Sol's F9, taking the
 fallback it offered. Fable wanted the veto recorded (*"(a) is not vetoable, it is ignorable … an
@@ -205,8 +206,9 @@ export type AttentionProposal =
       stopped: { kind: "exhausted" | "cooling-down"; why: string; until: string } }
 ```
 
-`id` is `fingerprint + prompt version`, so a proposal keeps its identity across republishing and a
-later stage's mark or veto can be keyed to it. No `mark` field in v1 (D10).
+`id` is `fingerprint + prompt version + the model that made it` (the model since Sol's F18), so a
+proposal keeps its identity across republishing, a later stage's mark or veto can be keyed to it,
+and two judgements by different models are never one. No `mark` field in v1 (D10).
 
 ## Stages
 
@@ -350,10 +352,16 @@ first in one pass:
 
 | ID | Finding | Disposition |
 |---|---|---|
-| F15 | the three wire parsers accept an `asks` that is not in the same item's excerpt, and the card labels it *"the sentence this proposal is about"* | fixing — a cross-field check in each parser, one bad item fails the list |
-| F16 | any `by.model` string is accepted, so a stored `"Greg"` renders *"Proposal by Greg via the Overseer"* | fixing — fixed words keep the model identifier out of the speaker's slot |
-| F17 | `asks` has no length bound: one character, or the whole 4,000-character tail, both accepted and drawn in full on a phone | fixing — a documented `MAX_ASKS_CHARS` and a minimum, at the model parse and in all three parsers. **Graded P2 by Sol; reachable from real model output, so treated as the most important of the four** |
-| F18 | a cached proposal forgets which model made it, so a model change re-attributes old judgements with no call | fixing — the model recorded beside the cached verdict, used for `by` and in the proposal id |
+| F15 | the three wire parsers accept an `asks` that is not in the same item's excerpt, and the card labels it *"the sentence this proposal is about"* | **fixed**, reproduced red first — a proposed quote must be in the same item's prose excerpt under the producer's normalisation, and one bad item fails the list; the fleet and store parsers also refuse a proposed quote on a dialog item |
+| F16 | any `by.model` string is accepted, so a stored `"Greg"` renders *"Proposal by Greg via the Overseer"* | **fixed**, reproduced — the card reads *"Model proposal via the Overseer · model: {model} · nothing has been sent"*; the `unplaced` tooltip and the hand-run CLI line take the same shape |
+| F17 | `asks` has no length bound: one character, or the whole 4,000-character tail, both accepted and drawn in full on a phone | **fixed**, reproduced — `MAX_ASKS_CHARS` = 300 (a sentence or two, about six lines on a phone card) and a minimum of 12 characters and two words, at the model parse, the memory file and all three parsers; quotes are stored with whitespace collapsed. **Graded P2 by Sol; reachable from real model output, so treated as the most important of the four** |
+| F18 | a cached proposal forgets which model made it, so a model change re-attributes old judgements with no call | **fixed**, reproduced — every call reports the model it used (an override included); the pass records it beside the cached verdict, and `by` and the proposal id come from that record. `ATTENTION_MEMORY_SCHEMA` 2 → 3, and 1 and 2 still read. **A pre-change entry with no recorded model is left stale and re-read** rather than credited to today's constant, since nothing on disk proves which model wrote it; until then its card shows no author |
+
+**One guard added beyond the findings, and it matters more than it looks:** the pass withholds a
+proposal whose quote its own parsers would refuse. Since F15 makes one bad item fail the whole list,
+a producer slip would otherwise blank the entire inbox rather than one card. Opus subagent; scoped
+suites 1,096 of 1,096, typecheck clean. The fix commit is P2 work and was not re-reviewed by Sol —
+the brief's narrow check is for P1 fixes only.
 
 ### Stage 3 — the evaluation, and the answer
 

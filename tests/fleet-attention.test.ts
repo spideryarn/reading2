@@ -40,6 +40,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { readAttention } from "../tools/fleet/attention.js";
 import { fleetState } from "../tools/fleet/state.js";
 import type { AttentionItem, AttentionList } from "../tools/fleet/wire.js";
+import { MAX_ASKS_CHARS, MIN_ASKS_CHARS } from "../tools/overseer/attention-classify.js";
+
+/**
+ * A quote of exactly `n` characters, words joined by single spaces — so it is
+ * already in the producer's normalised form and its length is the length the
+ * bound measures. Several words at every length used here, so the character
+ * bound is what a case tests, not the word count.
+ */
+function quoteOf(n: number): string {
+  const s = "shall I ship it to dev now ".repeat(Math.ceil(n / 27) + 1).slice(0, n);
+  return s.endsWith(" ") ? `${s.slice(0, -1)}x` : s;
+}
 
 const roots: string[] = [];
 const savedStoreDir = process.env["OVERSEER_STORE_DIR"];
@@ -129,6 +141,8 @@ function writeCheckpoint(root: string, over: Record<string, unknown> = {}): void
 
 describe("an item's proposal, read off the file (plan 260910f Stage 2)", () => {
   const BY = { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" };
+  /** PROSE_ITEM's own quote: in its excerpt, and inside the length bounds. */
+  const QUOTE = "Tell me which wording you'd rather.";
 
   function readWith(item: Record<string, unknown>): AttentionList | null {
     const root = tempRoot();
@@ -145,7 +159,7 @@ describe("an item's proposal, read off the file (plan 260910f Stage 2)", () => {
       { kind: "not-reached", why: "the budget refused" },
       { kind: "not-applicable" },
       { kind: "not-reported" },
-      { kind: "proposed", id: "i", recipient: "self", reason: "r", asks: "a", by: BY, reach: { kind: "available" } },
+      { kind: "proposed", id: "i", recipient: "self", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } },
     ]) {
       const list = readWith({ ...PROSE_ITEM, proposal });
       expect(list?.kind, JSON.stringify(proposal)).toBe("list");
@@ -165,16 +179,53 @@ describe("an item's proposal, read off the file (plan 260910f Stage 2)", () => {
   it("refuses a malformed proposal, so the list degrades rather than half-drawing one", () => {
     for (const proposal of [
       { kind: "sent" },
-      { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: "a", by: BY, reach: { kind: "available" } },
-      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY },
-      { kind: "proposed", id: "i", recipient: "sol", reason: " ", asks: "a", by: BY, reach: { kind: "available" } },
-      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } },
+      // A quote that is valid in every other way, so each case refuses for its own reason.
+      { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } },
+      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY },
+      { kind: "proposed", id: "i", recipient: "sol", reason: " ", asks: QUOTE, by: BY, reach: { kind: "available" } },
+      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } },
       { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } },
       { kind: "not-reached" },
       null,
     ]) {
       expect(readWith({ ...PROSE_ITEM, proposal })?.kind, JSON.stringify(proposal)).toBe("unknown");
     }
+  });
+
+  /** PROSE_ITEM with its excerpt and its quote replaced. */
+  function withQuote(excerpt: string, asks: string): Record<string, unknown> {
+    return {
+      ...PROSE_ITEM,
+      evidence: { kind: "prose", excerpt, why: "it offered two wordings and stopped" },
+      proposal: { ...PROSE_ITEM.proposal, asks },
+    };
+  }
+
+  it("refuses a quote that is not in the same item's excerpt — the card would call it the sentence the proposal is about (F15)", () => {
+    expect(readWith(withQuote("Tell me which one.", "This text is not in the excerpt."))?.kind).toBe("unknown");
+  });
+
+  it("finds the quote under the producer's whitespace normalisation, so a pane's wrapped line still matches (F15)", () => {
+    expect(readWith(withQuote("Tell me which wording\n   you'd rather.", "Tell me which wording you'd rather."))?.kind).toBe("list");
+  });
+
+  it("refuses a proposed quote on a dialog item, which has no excerpt to hold it (F15)", () => {
+    expect(readWith({ ...ITEM, proposal: PROSE_ITEM.proposal })?.kind).toBe("unknown");
+  });
+
+  it.each([
+    ["the longest accepted", MAX_ASKS_CHARS, "list"],
+    ["one over the longest", MAX_ASKS_CHARS + 1, "unknown"],
+    ["the shortest accepted", MIN_ASKS_CHARS, "list"],
+    ["one under the shortest", MIN_ASKS_CHARS - 1, "unknown"],
+  ])("bounds the quote's length — %s (F17)", (_name, length, kind) => {
+    const asks = quoteOf(length);
+    expect(asks).toHaveLength(length);
+    expect(readWith(withQuote(`Two wordings are in the plan.\n${asks}`, asks))?.kind).toBe(kind);
+  });
+
+  it("refuses a one-word quote even when it is long enough (F17)", () => {
+    expect(readWith(withQuote("Unbelievably so.", "Unbelievably"))?.kind).toBe("unknown");
   });
 });
 

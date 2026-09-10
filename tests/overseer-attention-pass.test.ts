@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import type { UsageVerdict } from "../tools/fleet/wire.js";
-import type { ClassifierVerdict } from "../tools/overseer/attention-classify.js";
+import type { CacheableVerdict, ClassifierVerdict } from "../tools/overseer/attention-classify.js";
 import {
   ATTENTION_CLASSIFIER_MODEL,
   CLASSIFIER_PROMPT_VERSION,
@@ -101,7 +101,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -120,7 +120,7 @@ describe("the accounting, which is the positive control", () => {
       capture: () => {
         throw new Error("no such pane");
       },
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -141,7 +141,7 @@ describe("the accounting, which is the positive control", () => {
       capture: () => {
         throw new Error("no such pane");
       },
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -163,6 +163,7 @@ describe("the accounting, which is the positive control", () => {
       classify: async () => ({
         verdict: { kind: "unreadable", why: "the gateway returned 429" },
         spend: { ...NO_SPEND, calls: 1 },
+        model: ATTENTION_CLASSIFIER_MODEL,
       }),
       maxCalls: 10,
       now: NOW,
@@ -181,7 +182,7 @@ describe("the accounting, which is the positive control", () => {
     const first = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -191,7 +192,7 @@ describe("the accounting, which is the positive control", () => {
       capture,
       classify: async () => {
         calls += 1;
-        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } };
+        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
       },
       memory: first.memory,
       maxCalls: 10,
@@ -210,7 +211,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 1,
       now: NOW,
     });
@@ -231,8 +232,8 @@ describe("the accounting, which is the positive control", () => {
       capture,
       classify: async (tail) =>
         tail.includes("shut it down")
-          ? { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }
-          : { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 } },
+          ? { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }
+          : { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL },
       maxCalls: 10,
       now: NOW,
     });
@@ -250,7 +251,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions: [],
       capture: () => "",
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -276,7 +277,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -303,7 +304,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -323,8 +324,8 @@ describe("the accounting, which is the positive control", () => {
       capture,
       classify: async (tail) =>
         tail.includes("shut it down")
-          ? { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }
-          : { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 } },
+          ? { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }
+          : { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL },
       maxCalls: 10,
       now: NOW,
     });
@@ -351,8 +352,8 @@ describe("the accounting, which is the positive control", () => {
       capture,
       classify: async (tail) =>
         tail.includes("shut it down")
-          ? { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 } }
-          : { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } },
+          ? { verdict: { kind: "unreadable", why: "429" }, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }
+          : { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL },
       maxCalls: 10,
       now: NOW,
     });
@@ -377,7 +378,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -390,7 +391,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions: [{ sessionId: "$1", sessionName: "nowhere", paneId: null }],
       capture: () => "",
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -411,7 +412,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -427,7 +428,7 @@ describe("the accounting, which is the positive control", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -451,7 +452,7 @@ describe("what reaches the model, and what does not", () => {
       capture,
       classify: async (tail) => {
         asked.push(tail);
-        return { verdict: askedSomething, spend: NO_SPEND };
+        return { verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL };
       },
       maxCalls: 10,
       now: NOW,
@@ -470,7 +471,7 @@ describe("what reaches the model, and what does not", () => {
       capture,
       classify: async (tail) => {
         asked.push(tail);
-        return { verdict: askedSomething, spend: NO_SPEND };
+        return { verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL };
       },
       maxCalls: 10,
       now: NOW,
@@ -490,7 +491,7 @@ describe("what reaches the model, and what does not", () => {
       capture,
       classify: async () => {
         calls += 1;
-        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } };
+        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
       },
       maxCalls: 10,
       now: NOW,
@@ -510,7 +511,7 @@ describe("what reaches the model, and what does not", () => {
     let calls = 0;
     const classify = async () => {
       calls += 1;
-      return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } };
+      return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
     };
     const first = await runAttentionPass({ sessions, capture, classify, maxCalls: 10, now: NOW });
     expect(calls).toBe(2);
@@ -528,7 +529,7 @@ describe("what reaches the model, and what does not", () => {
 
   it("keeps the first-seen instant across passes, so a wait is a wait", async () => {
     const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
-    const classify = async () => ({ verdict: askedSomething, spend: NO_SPEND });
+    const classify = async () => ({ verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL });
     const first = await runAttentionPass({ sessions, capture, classify, maxCalls: 10, now: NOW });
     const later = await runAttentionPass({
       sessions,
@@ -555,7 +556,7 @@ describe("what reaches the model, and what does not", () => {
       capture,
       classify: async () => {
         calls += 1;
-        return { verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } };
+        return { verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
       },
       maxCalls: 1,
       now: NOW,
@@ -577,7 +578,7 @@ describe("dialogs, which are observed rather than inferred", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedSomething, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -596,7 +597,7 @@ describe("dialogs, which are observed rather than inferred", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -627,7 +628,7 @@ describe("dialogs, which are observed rather than inferred", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND }),
+      classify: async () => ({ verdict: askedNothing, spend: NO_SPEND, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -657,7 +658,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     const first = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -712,7 +713,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
       capture,
       classify: async (): Promise<ClassifyOutcome> => {
         attempts += 1;
-        return attempts === 1 ? { verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } } : refuse();
+        return attempts === 1 ? { verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL } : refuse();
       },
       maxCalls: 10,
       now: NOW,
@@ -730,7 +731,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 1,
       now: NOW,
     });
@@ -768,7 +769,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
       capture,
       classify: async (tail) => {
         asked.push(tail);
-        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } };
+        return { verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
       },
       memory,
       maxCalls: 1,
@@ -792,13 +793,14 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
   const unreadableAnswer = async (): Promise<ClassifyOutcome> => ({
     verdict: { kind: "unreadable", why: "not JSON" },
     spend: { ...NO_SPEND, calls: 1 },
+    model: ATTENTION_CLASSIFIER_MODEL,
   });
 
   async function staleQuiet() {
     const fleet = fleetOf([["quiet", pane("ended-prose-no-question-status-report.txt")]]);
     const first = await runAttentionPass({
       ...fleet,
-      classify: async () => ({ verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -854,7 +856,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       memory,
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
@@ -869,7 +871,7 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       memory,
       maxCalls: 10,
       now: NOW,
@@ -897,7 +899,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
   it("marks every prose item `off`, naming the variable, when proposals are not enabled (D7)", async () => {
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -912,7 +914,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       usage: USAGE_OK,
@@ -922,7 +924,8 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     const fingerprint = [...result.memory.verdicts.keys()][0];
     expect(proposal).toEqual({
       kind: "proposed",
-      id: `${fingerprint}:v${PROPOSAL_PROMPT_VERSION}`,
+      // The model is part of the identity (GPT Sol's F18): two models' proposals about one tail are two proposals.
+      id: `${fingerprint}:v${PROPOSAL_PROMPT_VERSION}:${ATTENTION_CLASSIFIER_MODEL}`,
       recipient: "fable",
       reason: "it is fable's kind of question",
       asks: "Say the word and I'll shut it down.",
@@ -931,12 +934,12 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     });
   });
 
-  it("stamps `by` from the constant even when the verdict object carries one of its own (D9)", async () => {
+  it("stamps `by` from the model the call reported, even when the verdict object carries one of its own (D9, F18)", async () => {
     // Through `unknown`: the type rightly has no `by`, which is the point.
     const forged = { ...proposing("greg"), by: { kind: "person", model: "Greg", via: "overseer" } } as unknown as ClassifierVerdict;
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: forged, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: forged, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       now: NOW,
@@ -953,7 +956,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     const unplaced = { ...askedSomething, recipient: "unplaced", unplacedWhy: "could be technical or product" } as ClassifierVerdict;
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: unplaced, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: unplaced, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       now: NOW,
@@ -966,7 +969,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     for (const promptVersion of [CLASSIFIER_PROMPT_VERSION, PROPOSAL_PROMPT_VERSION]) {
       const result = await runAttentionPass({
         ...fleetOf([["dialog", fleetPane("dialog-ask-user-question.txt")]]),
-        classify: async () => ({ verdict: proposing("sol"), spend: { ...NO_SPEND, calls: 1 } }),
+        classify: async () => ({ verdict: proposing("sol"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
         maxCalls: 10,
         promptVersion,
         now: NOW,
@@ -979,7 +982,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     const fleet = asks();
     const first = await runAttentionPass({
       ...fleet,
-      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -1027,7 +1030,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
       sessions,
       capture,
       memory,
-      classify: async () => ({ verdict: { kind: "unreadable", why: "the quote is not in the tail" }, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: { kind: "unreadable", why: "the quote is not in the tail" }, spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       now: NOW,
@@ -1041,7 +1044,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
   it("remembers recipient, reason and quote with the verdict, and never `reach` (D14)", async () => {
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       usage: USAGE_LIMITED,
@@ -1058,7 +1061,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     let calls = 0;
     const classify = async (): Promise<ClassifyOutcome> => {
       calls += 1;
-      return { verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } };
+      return { verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
     };
     let memory: AttentionMemory | undefined;
     const reaches: string[] = [];
@@ -1088,7 +1091,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     for (const recipient of ["greg", "self", "sol", "overseer"] as const) {
       const result = await runAttentionPass({
         ...asks(),
-        classify: async () => ({ verdict: proposing(recipient), spend: { ...NO_SPEND, calls: 1 } }),
+        classify: async () => ({ verdict: proposing(recipient), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
         maxCalls: 10,
         promptVersion: PROPOSAL_PROMPT_VERSION,
         usage: USAGE_LIMITED,
@@ -1099,5 +1102,102 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
       reach[recipient] = proposal.reach.kind;
     }
     expect(reach).toEqual({ greg: "available", self: "available", sol: "not-checked", overseer: "not-checked" });
+  });
+});
+
+describe("which model a remembered proposal came from (GPT Sol's F18)", () => {
+  const A = "vendor/model-a";
+  const B = "vendor/model-b";
+  const fleet = () => fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+
+  function proposalOf(list: Awaited<ReturnType<typeof runAttentionPass>>["list"]) {
+    if (list.kind === "unknown") throw new Error(`expected items, got unknown: ${list.why}`);
+    const item = list.items[0];
+    if (item === undefined) throw new Error("expected one item");
+    return item.proposal;
+  }
+
+  /** A proposal-aware pass whose classifier answers as `model`, counting its calls. */
+  function passUnder(model: string, memory?: AttentionMemory, calls = { n: 0 }) {
+    return runAttentionPass({
+      ...fleet(),
+      ...(memory === undefined ? {} : { memory }),
+      classify: async (): Promise<ClassifyOutcome> => {
+        calls.n += 1;
+        return { verdict: proposing("sol"), spend: { ...NO_SPEND, calls: 1 }, model };
+      },
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+  }
+
+  it("records the model the call answered with beside the verdict it caches", async () => {
+    const first = await passUnder(A);
+    expect([...first.memory.verdicts.values()].map((v) => v.model)).toEqual([A]);
+  });
+
+  it("attributes a cached proposal to the model that made it after the classifier changes — with no call, and a different id", async () => {
+    const first = await passUnder(A);
+    const calls = { n: 0 };
+    const later = await passUnder(B, first.memory, calls);
+    expect(calls.n).toBe(0);
+    const cached = proposalOf(later.list);
+    expect(cached).toMatchObject({ kind: "proposed", by: { kind: "model", model: A, via: "overseer" } });
+
+    const fresh = proposalOf((await passUnder(B)).list);
+    expect(fresh).toMatchObject({ kind: "proposed", by: { kind: "model", model: B, via: "overseer" } });
+    if (cached.kind !== "proposed" || fresh.kind !== "proposed") return;
+    expect(cached.id).not.toBe(fresh.id);
+  });
+
+  it("re-reads a remembered proposal whose model was never recorded, and never stamps the current model on it", async () => {
+    const first = await passUnder(A);
+    // A memory entry from before the model was recorded (schema 1 or 2).
+    const legacy: AttentionMemory = {
+      ...first.memory,
+      verdicts: new Map([...first.memory.verdicts].map(([k, v]) => [k, { ...v, model: null }])),
+    };
+    // The re-read is refused: the card stays, its proposal is drawn under nobody's name.
+    const refused = await runAttentionPass({
+      ...fleet(),
+      memory: legacy,
+      classify: async (): Promise<ClassifyOutcome> => ({ notCalled: { kind: "unavailable", why: "the budget's lock was held" } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    const shown = proposalOf(refused.list);
+    expect(shown.kind).toBe("not-reached");
+    expect(JSON.stringify(refused.list)).not.toContain(ATTENTION_CLASSIFIER_MODEL);
+
+    // The re-read is answered: attributed to the model that answered it.
+    const calls = { n: 0 };
+    const reread = await passUnder(B, legacy, calls);
+    expect(calls.n).toBe(1);
+    expect(proposalOf(reread.list)).toMatchObject({ kind: "proposed", by: { model: B } });
+  });
+
+  it("never publishes a remembered quote that the pane it is filed under does not hold", async () => {
+    // Every consumer refuses such an item and degrades the WHOLE list (F15), so
+    // the producer must not write one: the card stays, the proposal is not drawn.
+    const first = await passUnder(A);
+    const altered = new Map(
+      [...first.memory.verdicts].map(([k, v]) => [
+        k,
+        { ...v, verdict: { ...v.verdict, asks: "A sentence this pane never held at all." } as CacheableVerdict },
+      ]),
+    );
+    const later = await runAttentionPass({
+      ...fleet(),
+      memory: { ...first.memory, verdicts: altered },
+      classify: async (): Promise<ClassifyOutcome> => {
+        throw new Error("a cached verdict needs no call");
+      },
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    expect(proposalOf(later.list).kind).toBe("not-reached");
   });
 });

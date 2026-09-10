@@ -701,7 +701,10 @@ function Proposal({ proposal }: { proposal: AttentionProposal }): ReactNode {
           tip={{
             head: "No proposal",
             what: `The model could not tell who holds the answer: ${proposal.why}.`,
-            how: `That is a reading by ${proposal.by.model} via the Overseer, not a default — it is never turned into "ask you". Nothing has been sent.`,
+            // THE WORD "model" COMES FIRST, so the identifier can never stand
+            // where a speaker's name would (GPT Sol's F16): any non-blank
+            // string crosses the parsers, including one that reads "Greg".
+            how: `That is a model's reading via the Overseer (model: ${proposal.by.model}), not a default — it is never turned into "ask you". Nothing has been sent.`,
           }}
           placement="bottom"
           className="tw:mt-2 tw:block tw:text-[12px] tw:text-ink-faint"
@@ -715,10 +718,18 @@ function Proposal({ proposal }: { proposal: AttentionProposal }): ReactNode {
         <div className="tw:mt-2">
           {/* THE SENTENCE, quoted. Found by the model and checked by the
               producer to be in the tail it read (D13) — so unlike the tail
-              below, it is chosen by what it says rather than by where it sits. */}
+              below, it is chosen by what it says rather than by where it sits.
+
+              Its box is bounded by its length (F17): every parser holds it to
+              MAX_ASKS_CHARS, it is prose rather than terminal output, so NO
+              preserved newlines (a quote of one word per line would otherwise
+              be as tall as it has words); and `wrap-anywhere` rather than
+              `break-words`, because only `overflow-wrap: anywhere` lets an
+              unbroken run shrink the box, so even a 298-character token wraps
+              inside a 390px card instead of pushing the page sideways. */}
           <figure className="tw:m-0">
             <figcaption className="tw:text-[11px] tw:text-ink-faint">the sentence this proposal is about</figcaption>
-            <blockquote className="tw:mt-0.5 tw:border-l-2 tw:border-rule tw:pl-2 tw:text-[13px] tw:break-words tw:whitespace-pre-wrap tw:text-ink-soft">
+            <blockquote className="tw:mt-0.5 tw:border-l-2 tw:border-rule tw:pl-2 tw:text-[13px] tw:wrap-anywhere tw:text-ink-soft">
               {proposal.asks}
             </blockquote>
           </figure>
@@ -736,8 +747,12 @@ function Proposal({ proposal }: { proposal: AttentionProposal }): ReactNode {
                 cannot take it. */}
             {proposal.reach.kind === "unavailable" ? <span className="tw:text-ink-faint"> · not available now</span> : null}
           </p>
+          {/* FIXED WORDS CARRY THE TYPE — GPT Sol's F16. The identifier is only
+              ever drawn after "model:", never after "by": any non-blank string
+              crosses the parsers, and "Proposal by Greg" must not be a
+              sentence this card can produce. */}
           <p className="tw:mt-0.5 tw:text-[11px] tw:break-words tw:text-ink-faint">
-            Proposal by {proposal.by.model} via the Overseer · nothing has been sent
+            Model proposal via the Overseer · model: {proposal.by.model} · nothing has been sent
           </p>
         </div>
       );

@@ -46,6 +46,7 @@ import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
 import {
   PROPOSAL_PROMPT_VERSION,
   PROPOSAL_RECIPIENTS,
+  asksOutOfBounds,
   type CacheableVerdict,
   type CachedVerdict,
   type VerdictRoute,
@@ -71,11 +72,22 @@ export const ATTENTION_MEMORY_FILE = "attention.json";
  * file and rebuilds (a fleet's worth of cheap calls, once), rather than
  * misfiling. THIS build still reads schema 1 (`READABLE_SCHEMAS`), so the
  * upgrade costs nothing: every field schema 1 has means the same here.
+ *
+ * **Bumped to 3 by the recorded model (GPT Sol's F18).** Each verdict now
+ * carries the `model` that made it, and a proposal is attributed to that. A
+ * schema-2 reader would ignore the field and stamp its own constant on every
+ * remembered proposal — wrong rather than poorer, once the constant or an
+ * override differs — so it refuses this file and rebuilds instead. This build
+ * reads 1 and 2 with every `model` unknown (`null`).
  */
-export const ATTENTION_MEMORY_SCHEMA = 2;
+export const ATTENTION_MEMORY_SCHEMA = 3;
 
-/** The schemas this build can read. Schema 1 is a subset of 2: no verdict in it carries a proposal. */
-const READABLE_SCHEMAS: readonly unknown[] = [1, ATTENTION_MEMORY_SCHEMA];
+/**
+ * The schemas this build can read. 1 is a subset of 2 (no verdict carries a
+ * proposal), and 2 of 3 (no verdict records its model: each reads as `null`,
+ * and a remembered proposal among them is re-read before it is drawn).
+ */
+const READABLE_SCHEMAS: readonly unknown[] = [1, 2, ATTENTION_MEMORY_SCHEMA];
 
 export type AttentionMemory = {
   readonly waits: AttentionWaits;
@@ -162,7 +174,9 @@ function nonBlank(u: unknown): string | null {
  * corrupted memory, never a default (plan 260910f D8). The quote cannot be
  * re-checked against the tail here — the tail is not in the file — but it was
  * checked before it was ever cached (D13), and a verdict filed under a
- * fingerprint is about exactly that tail.
+ * fingerprint is about exactly that tail. Its LENGTH can be checked, and is
+ * (F17): `parseVerdict` refuses a quote outside the bounds, so a remembered one
+ * was not written by this build's pass.
  */
 function parseRoute(v: Record<string, unknown>): VerdictRoute | null {
   const recipient = v["recipient"];
@@ -173,7 +187,7 @@ function parseRoute(v: Record<string, unknown>): VerdictRoute | null {
   const known = PROPOSAL_RECIPIENTS.find((r) => r === recipient);
   const reason = nonBlank(v["reason"]);
   const asks = nonBlank(v["asks"]);
-  if (known === undefined || reason === null || asks === null) return null;
+  if (known === undefined || reason === null || asks === null || asksOutOfBounds(asks) !== null) return null;
   return { recipient: known, reason, asks };
 }
 
@@ -247,7 +261,20 @@ export function parseAttentionMemory(u: unknown): AttentionMemoryRead {
     if (promptVersion === PROPOSAL_PROMPT_VERSION && verdict.kind === "question" && verdict.recipient === undefined) {
       return { kind: "unusable", why: `the verdict for ${k} is filed under prompt version ${promptVersion} and carries no proposal` };
     }
-    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], promptVersion, verdict });
+    // THE MODEL THAT MADE IT — GPT Sol's F18. Absent (schemas 1 and 2) is
+    // UNKNOWN, `null`, and never the current constant: which model wrote a
+    // schema-2 verdict is not on disk, and `ClassifierOptions.model` could
+    // always override the constant, so no build can vouch for it. A proposal
+    // with an unknown author is re-read before it is drawn (`authorUnknown`); a
+    // verdict nothing attributes is used as it is. Present and not a model id
+    // is corruption, refused like the prompt version: it would be drawn as an
+    // author.
+    const rawModel = r["model"];
+    let model: string | null;
+    if (rawModel === undefined || rawModel === null) model = null;
+    else if (typeof rawModel === "string" && rawModel.trim() !== "") model = rawModel;
+    else return { kind: "unusable", why: `the verdict for ${k} names model ${JSON.stringify(rawModel)}, which is not a model id` };
+    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], promptVersion, model, verdict });
   }
   return { kind: "memory", memory: { waits, verdicts, epoch } };
 }

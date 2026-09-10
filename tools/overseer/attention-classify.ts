@@ -111,7 +111,8 @@ export const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable"
  *
  * FLAT ON THE VERDICT rather than nested, so `recipientOf` in attention-eval.ts
  * reads it where it already looks. **There is no `by` and no `reach`**: who
- * proposed it is stamped by the pass from `ATTENTION_CLASSIFIER_MODEL` (D9), and
+ * proposed it is stamped by the pass from the model the call reported, recorded
+ * beside the verdict as `CachedVerdict.model` (D9, GPT Sol's F18), and
  * whether the holder can take it now is projected every pass and never
  * remembered (D14) — this is the part of an answer that is true about the text,
  * so it is the part the memory keeps.
@@ -205,8 +206,33 @@ export type CachedVerdict = {
    * refused (plan 260910f D3; attention-memory.ts parses it).
    */
   promptVersion: number | null;
+  /**
+   * The classifier model that produced it — GPT Sol's F18. Stamped by the pass
+   * from the model the call itself reports (`ClassifierAnswer.model`, which
+   * follows a `ClassifierOptions.model` override), never from the constant; a
+   * proposal's `by` and `id` are built from this. So a verdict cached under one
+   * model and drawn after the constant changes is still attributed to the model
+   * that made it, at no call.
+   *
+   * `null` for a verdict remembered before models were recorded (memory schemas
+   * 1 and 2): unknown. Such a verdict that carries a proposal is STALE
+   * (`authorUnknown`) — re-read first, and drawn with no author until it is —
+   * because stamping today's constant on it is the bug this field fixes.
+   */
+  model: string | null;
   verdict: CacheableVerdict;
 };
+
+/**
+ * A remembered proposal whose model was never recorded (F18).
+ *
+ * Only a verdict that carries an attribution needs its author: a version-1
+ * question or a `no-question` is drawn under nobody's name, so re-reading one
+ * would spend a call to learn nothing.
+ */
+export function authorUnknown(hit: CachedVerdict): boolean {
+  return hit.model === null && hit.verdict.kind === "question" && hit.verdict.recipient !== undefined;
+}
 
 export type TailToClassify = { sessionId: string; fingerprint: string; tail: string };
 
@@ -219,7 +245,8 @@ export type ClassificationPlan = {
   /** Fingerprints answered from the cache under the active prompt version. */
   cached: readonly { fingerprint: string; verdict: CachedVerdict }[];
   /**
-   * Fingerprints whose cached verdict came from ANOTHER prompt version — every
+   * Fingerprints whose cached verdict came from ANOTHER prompt version, or is a
+   * proposal whose model was never recorded (`authorUnknown`, F18) — every
    * one of them, whether or not this pass reaches it. They still place their
    * cards (stale is not absent, D3), and the ones within `maxCalls` are also in
    * `toCall`. Never in `overBudget`: a tail with an answer is not unjudged.
@@ -261,7 +288,9 @@ export function planClassifications(input: {
     // assumption. A record filed under one fingerprint and holding another is a
     // corrupted memory, and it is refused here instead of being rendered.
     if (hit === undefined || hit.fingerprint !== fingerprint) fresh.push(tail);
-    else if (hit.promptVersion === input.promptVersion) cached.push({ fingerprint, verdict: hit });
+    // A proposal whose author is unknown is stale like one from another prompt
+    // (F18): it places its card, is re-read first, and is not drawn until then.
+    else if (hit.promptVersion === input.promptVersion && !authorUnknown(hit)) cached.push({ fingerprint, verdict: hit });
     else stale.push({ fingerprint, verdict: hit, tail });
   }
   stale.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
@@ -490,9 +519,63 @@ export type VerdictContext =
   | { promptVersion: typeof CLASSIFIER_PROMPT_VERSION }
   | { promptVersion: typeof PROPOSAL_PROMPT_VERSION; tail: string };
 
-/** Runs of whitespace as one space. A pane wraps lines; a model quoting a sentence does not. Nothing else is forgiven. */
-function normaliseSpace(s: string): string {
+/**
+ * Runs of whitespace as one space. A pane wraps lines; a model quoting a
+ * sentence does not. Nothing else is forgiven.
+ *
+ * **THE ONE NORMALISATION for a quote**, here and wherever a quote is checked
+ * again: store.ts imports it, and the two dashboard parsers (fleet/attention.ts,
+ * fleet/web/src/types.ts), which may not import this file, restate it
+ * character for character — their tests hold all three to the same cases.
+ */
+export function normaliseSpace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The longest `asks` may be, in characters of its normalised form — GPT Sol's
+ * F17.
+ *
+ * **300: a sentence or two**, which is what the prompt asks for ("the sentence
+ * or sentences … that hand over the decision"). The card draws the quote in
+ * full, in the flow, above the tail's disclosure — so without a bound a model
+ * could quote the whole 4,000-character tail back and recreate the exact
+ * failure the disclosure was built to prevent: one card tens of lines tall on a
+ * phone, pushing every other card off the screen. At 13px in a 390px card, 300
+ * characters is about six lines. A turn that ends on a long numbered list of
+ * options can exceed it; that answer is refused (unreadable, never cached) and
+ * the card still stands on its `why` — a quote that cannot fit is not a quote.
+ */
+export const MAX_ASKS_CHARS = 300;
+
+/**
+ * The shortest `asks` may be — both bounds must hold: at least this many
+ * characters AND at least `MIN_ASKS_WORDS` words, of the normalised form.
+ *
+ * GPT Sol's F17 input was `asks: "I"`, accepted because `I` is in any tail.
+ * A quote is the sentence a person acts on, so a fragment is refused rather
+ * than labelled *"the sentence this proposal is about"*. **12 characters and two
+ * words** refuses a single token of any length (`"Unbelievably"`) and a
+ * two-letter fragment (`"I can"`), while `"Shall I push?"` (13) or
+ * `"Push to dev?"` (12) passes. The cost of setting it a little high is small:
+ * the card still stands on its `why`, and the call is re-asked on a later pass.
+ */
+export const MIN_ASKS_CHARS = 12;
+export const MIN_ASKS_WORDS = 2;
+
+/** Why a quote falls outside the bounds, in words — or `null` when it is inside them. */
+export function asksOutOfBounds(asks: string): string | null {
+  const s = normaliseSpace(asks);
+  if (s.length > MAX_ASKS_CHARS) return `the quoted sentence is ${s.length} characters, over the ${MAX_ASKS_CHARS} a card can draw`;
+  if (s.length < MIN_ASKS_CHARS || s.split(" ").length < MIN_ASKS_WORDS) {
+    return `the quoted sentence ${JSON.stringify(s)} is a fragment: under ${MIN_ASKS_CHARS} characters or ${MIN_ASKS_WORDS} words`;
+  }
+  return null;
+}
+
+/** Whether `asks` is in `text`, under the one normalisation (D13). */
+export function quotedIn(asks: string, text: string): boolean {
+  return normaliseSpace(text).includes(normaliseSpace(asks));
 }
 
 /**
@@ -517,9 +600,14 @@ function parseRoute(o: Record<string, unknown>, tail: string): VerdictRoute | st
   }
   const reason = str(o["reason"])?.trim() ?? "";
   if (reason === "") return "it proposed a holder and gave no reason";
-  const asks = str(o["asks"])?.trim() ?? "";
+  // KEPT IN ITS NORMALISED FORM: the pane's line wrapping is not part of the
+  // sentence, and this is the form the bounds measure and the card draws — so a
+  // quote inside the bounds is a quote of bounded height (F17).
+  const asks = normaliseSpace(str(o["asks"]) ?? "");
   if (asks === "") return "it proposed a holder and quoted no sentence";
-  if (!normaliseSpace(tail).includes(normaliseSpace(asks))) {
+  const outside = asksOutOfBounds(asks);
+  if (outside !== null) return outside;
+  if (!quotedIn(asks, tail)) {
     return `the quoted sentence is not in the tail it read: ${JSON.stringify(asks.slice(0, 120))}`;
   }
   return { recipient: known, reason, asks };
@@ -735,7 +823,16 @@ export type ClassifierOptions = {
 };
 
 /**
- * One call. Returns a verdict and what it cost, and never throws.
+ * What one call returns: the verdict, what it cost, and WHICH MODEL answered —
+ * the id the request was sent with, so `options.model` when a caller overrode
+ * the constant. The pass records it beside a cached verdict (GPT Sol's F18), so
+ * a proposal is attributed to the model that made it rather than to whichever
+ * constant is live when the card is next drawn.
+ */
+export type ClassifierAnswer = { verdict: ClassifierVerdict; spend: ClassifierSpend; model: string };
+
+/**
+ * One call. Returns a verdict, what it cost and which model answered, and never throws.
  *
  * A network failure and a wedged socket come back as `unreadable` with the
  * reason in words, because from the pass's point of view they are the same
@@ -750,8 +847,10 @@ export type ClassifierOptions = {
 export async function classifyTail(
   tail: string,
   options: ClassifierOptions,
-): Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }> {
+): Promise<ClassifierAnswer> {
   const version = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
+  // The one value both sent and reported, so the two cannot disagree (F18).
+  const model = options.model ?? ATTENTION_CLASSIFIER_MODEL;
   // The model reads the CLIPPED text, so a version-2 quote is checked against
   // exactly that (D13) — not against the longer input it never saw.
   const input = clipForClassifier(tail);
@@ -767,7 +866,7 @@ export async function classifyTail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: options.model ?? ATTENTION_CLASSIFIER_MODEL,
+        model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -791,11 +890,13 @@ export async function classifyTail(
         return {
           verdict: { kind: "quota-refused", status: res.status, why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
           spend: { ...NO_SPEND, calls: 1 },
+          model,
         };
       }
       return {
         verdict: { kind: "unreadable", why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
         spend: { ...NO_SPEND, calls: 1 },
+        model,
       };
     }
     const json = (await res.json()) as {
@@ -816,6 +917,7 @@ export async function classifyTail(
         costUsd: money.costUsd,
         unpricedCalls: money.unpriced ? 1 : 0,
       },
+      model,
     };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
@@ -826,6 +928,7 @@ export async function classifyTail(
     return {
       verdict: { kind: "unreadable", why: `the call failed: ${why}` },
       spend: { ...NO_SPEND, calls: 1, unpricedCalls: 1 },
+      model,
     };
   } finally {
     clearTimeout(timer);

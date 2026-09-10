@@ -123,6 +123,7 @@ import type {
   StoredUsage,
 } from "../fleet/wire.js";
 import { parseAccountUsageSections } from "./account-usage.js";
+import { asksOutOfBounds, quotedIn } from "./attention-classify.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -2813,6 +2814,11 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
   }
   const proposal = parseAttentionProposal(u["proposal"]);
   if (proposal === null) return null;
+  // THE QUOTE IS IN THIS ITEM'S OWN EXCERPT — GPT Sol's F15. The card labels it
+  // "the sentence this proposal is about", so one the excerpt does not hold is
+  // an invented sentence wearing the label. The producer's check (D13), made
+  // again here with its own normalisation; a dialog has no excerpt to hold one.
+  if (proposal.kind === "proposed" && !(evidence.kind === "prose" && quotedIn(proposal.asks, evidence.excerpt))) return null;
   return {
     id,
     sessionId,
@@ -2854,6 +2860,9 @@ function parseAttentionProposal(u: unknown): AttentionProposal | null {
       const by = parseProposalAuthor(u["by"]);
       const reach = parseProposalReach(u["reach"]);
       if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      // Inside the length bounds the producer holds it to (F17), or the card
+      // could draw a whole tail in the flow.
+      if (asksOutOfBounds(asks) !== null) return null;
       return { kind: "proposed", id, recipient, reason, asks, by, reach };
     }
     case "unplaced": {

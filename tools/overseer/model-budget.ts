@@ -72,10 +72,10 @@ import {
   NO_SPEND,
   WORST_CASE_PROMPT_TOKENS,
   classifyTail,
+  type ClassifierAnswer,
   isCacheable,
   type ClassifierOptions,
   type ClassifierSpend,
-  type ClassifierVerdict,
 } from "./attention-classify.js";
 import { writeAtomically } from "./jsonl.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "./lock.js";
@@ -172,7 +172,7 @@ export type BudgetRefusal = { kind: "stopped"; stopped: AttentionJudgementStoppe
 export type ReserveResult = { ok: true; reservation: Reservation } | { ok: false; refusal: BudgetRefusal };
 
 /** What the pass gets back for one tail: an answer, or the reason it was not asked. */
-export type ClassifyOutcome = { verdict: ClassifierVerdict; spend: ClassifierSpend } | { notCalled: BudgetRefusal };
+export type ClassifyOutcome = ClassifierAnswer | { notCalled: BudgetRefusal };
 
 /** The ledger as a person should read it — today's, with in-flight calls at their worst case. */
 export type BudgetReading = {
@@ -664,12 +664,12 @@ export function modelBudget(options: ModelBudgetOptions): ModelBudget {
  */
 export function budgetedClassifier(
   budget: ModelBudget,
-  call: (tail: string) => Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }>,
+  call: (tail: string) => Promise<ClassifierAnswer>,
 ): (tail: string) => Promise<ClassifyOutcome> {
   return async (tail) => {
     const reserved = budget.reserve();
     if (!reserved.ok) return { notCalled: reserved.refusal };
-    let answer: { verdict: ClassifierVerdict; spend: ClassifierSpend };
+    let answer: ClassifierAnswer;
     try {
       answer = await call(tail);
     } catch (cause) {
