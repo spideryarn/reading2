@@ -1756,6 +1756,26 @@ hard budget; 36 sessions do not imply 36 model calls each minute. No proposal be
 works, and existing guards are tested at the HTTP/browser boundary. This is not a top-priority
 security rewrite and does not override Greg's explicit deferrals.
 
+**Status (2026-09-10, Overseer): finished, on dev at 8089052c and served by the dashboard since
+20:46Z; session `access-review`, plan 260910f-fleet-access-review-composed-server, worktree
+`fleet-access-review` standing and clean.** Boxes 2–4 done on the real composed server: a Host
+guard before routing (421 with the security headers unless Host is one field holding one IP
+literal, `localhost`, a `*.ts.net` name or a single label; the read routes had checked no Host, so
+a DNS-rebinding page could have read state, messages and the live stream), exact path and method
+on the four inline read routes (405 otherwise), and `tests/fleet-composed-access.test.ts` (76
+tests) starting the real `server.ts` as an isolated child on a private loopback port, every guard
+mutated and seen red; hostile framing refused in Chrome's own words. Box 3's "prove production
+composition shares the queue with the refresh drainer" was scoped out by the Overseer at plan
+review and is queued as qi-3mgbkjrn with the receipt actor. Box 1 stands as it was: loopback plus
+the tailnet bind Greg already has, the Serve-plus-owner-check widening still his to authorise
+(A5 corrected in overseer-direction.md). Smoke after the restart: evil Host 421, plain 200,
+localhost 200, tailnet IP 200, MagicDNS 200. Reusable child-server harness in
+`tests/helpers/fleet-child-server.ts`, pointed to from security-map.md. Sol: plan 10 findings, 8
+taken; stage 6 taken (two P1s: a killed vitest orphaning the child, a lax Host parser); narrow
+check clean. Learned: Sol's fixer sandbox cannot bind loopback, so its two composed tests were
+never run before they failed; tsx runs the script in a grandchild, so killing the started pid
+leaves the real process.
+
 ### Stage: Operational finish — prove failure, restart, and recovery visibility
 
 - [ ] Add a cheap diagnostics/status command and web summary naming producer instance/revision,
