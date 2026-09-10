@@ -43,6 +43,7 @@ import type {
   NotifyOutcomeView,
   QueuedItem,
 } from "../tools/fleet/wire.js";
+import type { PaneJob, PaneWork } from "../tools/fleet/wire.js";
 import type { ClientAction } from "../tools/fleet/web/src/actions-client.js";
 import type { DrainDeps } from "../tools/fleet/drain.js";
 import { realActionDeps, type ActionDeps } from "../tools/fleet/routes-actions.js";
@@ -93,6 +94,55 @@ describe("an enacted action is never one-tap", () => {
  * deliberately re-type an id it read from JSON, and may read an absent stagger
  * as null, but it may not silently omit a new required field the server sends.
  */
+describe("a positive work reading cannot be jobless", () => {
+  /**
+   * `PaneWork`'s `work` arm holds a NON-EMPTY TUPLE, and this is what makes that
+   * a fact rather than a comment.
+   *
+   * It was an ordinary `readonly PaneJob[]` until 2026-09-10. Three separate
+   * parsers — the store's, the fleet projection's and the browser's — each
+   * refused an empty `jobs`, and the type still permitted one, so
+   * `OverseerPanel`'s `workLine` had grown a *"the positive reading carried no
+   * job"* branch that nothing could reach and no test could cover. A cross-family
+   * review named it; widening the tuple back to an array would bring it straight
+   * back, and this line is what stops that being silent.
+   *
+   * The stake is not the branch. It is that `{kind: "work", jobs: []}` reads on a
+   * page as a session with recognised work and nothing to say about it — a
+   * positive claim with no evidence under it, which is the one shape this whole
+   * area exists to refuse.
+   */
+  it("refuses to type a work reading with no jobs", () => {
+    const job: PaneJob = {
+      recogniser: "codex-exec",
+      label: "GPT review",
+      startedAt: "2026-09-09T23:00:00.000Z",
+      ranForMs: 1_080_000,
+      pid: 1_370_771,
+      depth: 8,
+      command: "codex exec",
+    };
+    const legal: PaneWork = {
+      kind: "work",
+      jobs: [job],
+      inspected: 9,
+      paneCommand: "bash",
+      paneStartedAt: "2026-09-09T20:00:00.000Z",
+    };
+    expect(legal.kind === "work" && legal.jobs.length).toBe(1);
+
+    // @ts-expect-error a positive work reading with an empty `jobs` must not compile.
+    const illegal: PaneWork = { ...legal, kind: "work", jobs: [] };
+    void illegal;
+
+    // The runtime half, so `npm test` says something too: the first job is
+    // reachable without a presence check, which is what the tuple buys the renderer.
+    if (legal.kind !== "work") throw new Error("the fixture above is a positive reading");
+    const [first] = legal.jobs;
+    expect(first.recogniser).toBe("codex-exec");
+  });
+});
+
 describe("the actions catalogue's shared wire shapes", () => {
   type EveryKeyRequired<T> = [T] extends [Required<T>] ? true : false;
   type EnactedWire = Extract<ActionWire, { effect: "enacted" }>;

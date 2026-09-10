@@ -984,6 +984,19 @@ Sessions usable. This is the cheapest major new capability and the first deliver
 
 ### Stage: Work evidence — connect the classifier that is already written
 
+**Status, 2026-09-10 (session `work-evidence`, queue item qi-z8ascd78): landed on `dev` at 99dbefaa; plan
+`docs/plans/260909h-wire-the-work-classifier-into-the-overseer-daemon.md` carries four review rounds
+and a live measurement.** Every checkbox below is done: one process-table read per inventory that
+reaches a checkpoint (below the `held` check, not "accepted" — an accepted inventory can still be
+held and thrown away), a timestamped `work` field beside pane status, *cannot tell* on a failed
+probe, the evidence in session detail, and a daemon integration test for the once-per-checkpoint
+probe. The measured ceiling, written into `overseer-direction.md`: on the live box the two sessions
+carrying work (`codex exec` reviews at depth 5, 27m and 13m) already read as `shell`, so this
+enriches busy rows rather than revealing idle-but-working ones. GPT Sol's placement of the classifier
+in `tools/fleet/collect.ts` is queued as qi-b4kthmn5. Daemon and dashboard restarted by the
+Overseer 2026-09-10 00:28Z.
+
+
 - [ ] Add a daemon integration test proving `probeProcessTable` is called once per accepted fresh
   inventory, and `classifyPaneWork` results reach persisted projection and browser. A helper unit
   test alone does not close E-work.

@@ -50,10 +50,10 @@
  *
  * The register rows are what the Overseer REMEMBERS. They are not matched to
  * the fleet rows on the Sessions tab, and the card says so on screen. The
- * generation tuple can stay fixed while the child inside a pane is replaced, so
- * *"blocked for at least 20 minutes"* said against a live row needs continuity
- * evidence this build does not have — wire.ts § `OverseerRegister`, and the
- * plan's Execution identity stage is what earns that join.
+ * generation tuple can stay fixed while the child inside a pane is replaced.
+ * Execution identity now provides a key that could support a continuity-aware
+ * join, but this slice deliberately leaves that for later — wire.ts §
+ * `OverseerRegister`. Here the rows remain history under their own heading.
  */
 import type { ReactNode } from "react";
 
@@ -68,6 +68,7 @@ import type {
   OverseerSessionHistory,
   OverseerStatus,
   OverseerView,
+  PaneWork,
   UsageView,
 } from "./types";
 import type { ActionsUi } from "./useActions";
@@ -192,15 +193,105 @@ function schedulerLine(scheduler: OverseerScheduler): string {
  * The rule is `describeStatusAge`'s in scripts/overseer.ts — copied, because
  * that is a node module and this file compiles under DOM-only libs.
  */
-function HistoryRow({ entry, asOf }: { entry: OverseerSessionHistory; asOf: number }): ReactNode {
+type WorkScan = { scannedAt: string; shownAge: string; fresh: boolean };
+
+/** The frozen observation in one line. Its tense comes from the scan, not the process start. */
+function workLine(work: PaneWork | null, paneStatus: string, scan: WorkScan): string {
+  const prefix = `pane: ${paneStatus} · work: `;
+  if (work === null) {
+    return scan.fresh
+      ? `${prefix}the scan carried no reading for this session`
+      : `${prefix}the scan carried no reading for this session when checked ${scan.shownAge}`;
+  }
+  switch (work.kind) {
+    case "cannot-tell":
+      return scan.fresh
+        ? `${prefix}cannot tell — ${work.why}`
+        : `${prefix}could not tell when checked ${scan.shownAge} — ${work.why}`;
+    case "none":
+      return scan.fresh
+        ? `${prefix}nothing recognised under it (${work.inspected} processes inspected)`
+        : `${prefix}nothing was recognised under it when checked ${scan.shownAge} (${work.inspected} processes inspected)`;
+    case "work": {
+      // `jobs` is a non-empty tuple, so there is no jobless arm to write a sentence
+      // for. There used to be one, and it was unreachable: three parsers refused an
+      // empty array and the type still allowed it, which is the shape that grows a
+      // branch nobody can test. The type carries it now.
+      const [first] = work.jobs;
+      const more = work.jobs.length > 1 ? ` + ${work.jobs.length - 1} more` : "";
+      const ranFor = first.ranForMs === null ? "an unreadable duration" : formatDuration(first.ranForMs);
+      return scan.fresh
+        ? `${prefix}${first.label}${more}, running ${ranFor}`
+        : `${prefix}${first.label}${more} — was running ${ranFor} when checked ${scan.shownAge}`;
+    }
+    default: {
+      const never: never = work;
+      return `${prefix}${JSON.stringify(never)}`;
+    }
+  }
+}
+
+/** The evidence behind one work phrase, including facts too dense for a phone-width row. */
+function workEvidence(work: PaneWork | null, scan: WorkScan): { head: string; what: string; how: string } {
+  const order = "Rows are ordered by pane-status age, not by child-work age.";
+  if (work === null) {
+    return {
+      head: "No pane reading in this scan",
+      what: "The process-table scan carried no entry for this session. That is not a no-work result.",
+      how: `Process table read ${scan.scannedAt}. ${order}`,
+    };
+  }
+  switch (work.kind) {
+    case "cannot-tell":
+      return {
+        head: "Work could not be measured",
+        what: `The process-tree scan could not classify this pane: ${work.why}`,
+        how: `Cause ${work.cause}. Process table read ${scan.scannedAt}. ${order}`,
+      };
+    case "none":
+      return {
+        head: "No recognised child work",
+        what: `The scan inspected ${work.inspected} processes without matching a known long-running job.`,
+        how: `Pane command ${work.paneCommand}; pane started ${work.paneStartedAt}; process table read ${scan.scannedAt}. ${order}`,
+      };
+    case "work": {
+      const jobs = work.jobs
+        .map(
+          (job) =>
+            `${job.label}: ${job.command}, pid ${job.pid}, depth ${job.depth}, started ${job.startedAt ?? "at an unreadable time"}`,
+        )
+        .join("; ");
+      return {
+        head: "Recognised child work",
+        what: `The process-tree scan matched ${work.jobs.length} known long-running ${work.jobs.length === 1 ? "job" : "jobs"} under this pane.`,
+        how: `${jobs}. ${work.inspected} processes inspected beneath pane command ${work.paneCommand}; pane started ${work.paneStartedAt}; process table read ${scan.scannedAt}. ${order}`,
+      };
+    }
+    default: {
+      const never: never = work;
+      return { head: "Work evidence", what: JSON.stringify(never), how: order };
+    }
+  }
+}
+
+function HistoryRow({ entry, asOf, scan }: { entry: OverseerSessionHistory; asOf: number; scan: WorkScan | null }): ReactNode {
   const ms = ageMs(entry.since.at, asOf);
   const shown = ms === null ? "unreadable" : `${entry.since.kind === "lower-bound" ? "≥" : ""}${formatDuration(ms)}`;
   return (
-    <li className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[13px]">
-      <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{entry.status}</span>
-      <span className="tw:tabular-nums tw:text-ink-soft">{shown}</span>
-      <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-ink-soft">{entry.name}</span>
-      <span className="tw:font-mono tw:text-[11px] tw:text-ink-faint">{entry.tmuxId}</span>
+    <li className="tw:text-[13px]">
+      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
+        <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{entry.status}</span>
+        <span className="tw:tabular-nums tw:text-ink-soft">{shown}</span>
+        <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-ink-soft">{entry.name}</span>
+        <span className="tw:font-mono tw:text-[11px] tw:text-ink-faint">{entry.tmuxId}</span>
+      </div>
+      {scan !== null ? (
+        <div className="tw:min-w-0 tw:whitespace-normal tw:break-words tw:pl-0 tw:text-[12px] tw:text-ink-faint">
+          <Explain tip={workEvidence(entry.work, scan)} placement="bottom" className="tw:max-w-full tw:whitespace-normal tw:text-left">
+            {workLine(entry.work, entry.status, scan)}
+          </Explain>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -305,7 +396,7 @@ function Reading({ status, asOf }: { status: OverseerStatus; asOf: number }): Re
           : null}
       </p>
 
-      <History register={status.register} asOf={asOf} />
+      <History register={status.register} asOf={asOf} sourceStaleAfterMs={sourceStaleAfterMs} />
     </>
   );
 }
@@ -324,7 +415,15 @@ function Reading({ status, asOf }: { status: OverseerStatus; asOf: number }): Re
  * held was idle — and the second is worth saying: a register of thirty-six
  * idle sessions is a calm fleet, not an absent one.
  */
-function History({ register, asOf }: { register: OverseerStatus["register"]; asOf: number }): ReactNode {
+function History({
+  register,
+  asOf,
+  sourceStaleAfterMs,
+}: {
+  register: OverseerStatus["register"];
+  asOf: number;
+  sourceStaleAfterMs: number;
+}): ReactNode {
   if (register.kind === "unreadable") {
     return (
       <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">
@@ -333,13 +432,36 @@ function History({ register, asOf }: { register: OverseerStatus["register"]; asO
       </p>
     );
   }
+  /* One process-table reading serves every row, so its age and freshness are
+     computed once here. Per-row clocks would imply measurements that did not happen. */
+  const scanMs = register.work.kind === "scanned" ? ageMs(register.work.scannedAt, asOf) : null;
+  const shownScanAge = scanMs === null ? "at a time this page cannot read" : `${formatDuration(scanMs)} ago`;
+  const scan: WorkScan | null =
+    register.work.kind === "scanned"
+      ? {
+          scannedAt: register.work.scannedAt,
+          shownAge: shownScanAge,
+          fresh: scanMs !== null && scanMs <= sourceStaleAfterMs,
+        }
+      : null;
+  const workState =
+    register.work.kind === "unavailable" ? (
+      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">Work evidence is unavailable — {register.work.why}.</p>
+    ) : (
+      <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">Process table read {shownScanAge}.</p>
+    );
   if (register.sessions.length === 0) {
     return (
-      <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">
-        {register.total === 0
-          ? "The Overseer is holding no sessions in its register."
-          : `All ${register.total} sessions in the Overseer's register were idle when it last wrote.`}
-      </p>
+      <>
+        <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">
+          {register.total === 0
+            ? "The Overseer is holding no sessions in its register."
+            : register.work.kind === "scanned"
+              ? `All ${register.total} sessions in the Overseer's register had pane status idle, and the scan found no recognised child work under them.`
+              : `All ${register.total} sessions in the Overseer's register had pane status idle when it last wrote.`}
+        </p>
+        {workState}
+      </>
     );
   }
   return (
@@ -348,17 +470,18 @@ function History({ register, asOf }: { register: OverseerStatus["register"]; asO
         <Explain
           tip={{
             head: "The Overseer's history, not this page's sessions",
-            what: "How long each has been in the state the Overseer last recorded.",
-            how: "These rows are NOT matched to the sessions on the Sessions tab, deliberately: a pane can keep its identifiers while the agent inside it is replaced, so a duration said against a live row would need continuity evidence this build does not have. Read them as what the Overseer remembers.",
+            what: "The oldest pane-status records worth showing: non-idle sessions, plus idle sessions with recognised child work or without a usable pane reading.",
+            how: "Rows are ordered by pane-status age, not by child-work age. They are not matched to Sessions-tab rows: a pane can keep its identifiers while the agent inside it is replaced, so read them only as what the Overseer remembers.",
           }}
         >
-          {register.total} sessions in the Overseer's register — the longest-waiting {register.sessions.length}, as
-          history rather than as a claim about the rows on the Sessions tab
+          {register.total} sessions in the Overseer's register — the oldest {register.sessions.length} status records
+          worth showing, as history rather than as a claim about the rows on the Sessions tab
         </Explain>
       </p>
+      {workState}
       <ul className="tw:mt-2 tw:space-y-1">
         {register.sessions.map((entry) => (
-          <HistoryRow key={`${entry.tmuxId}:${entry.name}`} entry={entry} asOf={asOf} />
+          <HistoryRow key={`${entry.tmuxId}:${entry.name}`} entry={entry} asOf={asOf} scan={scan} />
         ))}
       </ul>
       {/* ONLY WHEN ONE IS ON SCREEN. A legend printed under every healthy pass

@@ -56,10 +56,13 @@ import type {
   HarnessKind,
   OverseerHeartbeat,
   OverseerRegister,
+  OverseerRegisterWork,
   OverseerScheduler,
   OverseerSessionHistory,
   OverseerStatus,
   OverseerStatusFeed,
+  PaneJob,
+  PaneWork,
   Pause,
   PauseUnknownCause,
   ScanCoverage,
@@ -86,10 +89,13 @@ export type {
   AttentionList,
   OverseerHeartbeat,
   OverseerRegister,
+  OverseerRegisterWork,
   OverseerScheduler,
   OverseerSessionHistory,
   OverseerStatus,
   OverseerStatusFeed,
+  PaneJob,
+  PaneWork,
   Pause,
   PauseUnknownCause,
   ScanCoverage,
@@ -1891,7 +1897,7 @@ function parseOverseerStatus(raw: unknown, skew: ClockSkew): OverseerStatus | nu
     sourceStaleAfterMs,
     heartbeat: parseOverseerHeartbeat(raw["heartbeat"], skew),
     scheduler: parseOverseerScheduler(raw["scheduler"], skew),
-    register: parseOverseerRegister(raw["register"], skew),
+    register: parseOverseerRegister(raw["register"], skew, writtenAt),
   };
 }
 
@@ -1960,12 +1966,14 @@ function parseOverseerScheduler(raw: unknown, skew: ClockSkew): OverseerSchedule
 }
 
 /**
- * The Overseer's history of what has been running — **and one bad entry
+ * The Overseer's oldest status records worth showing — **and one bad entry
  * degrades the whole register**, for the reason the server's projection gives:
- * the list claims *these are the ones that have waited longest*, which is a
- * negative claim about everything not in it.
+ * it is a bounded, ordered selection of non-idle sessions, idle sessions with
+ * recognised child work, and idle sessions without a usable pane reading.
+ * Quietly dropping one would make a false claim about both what qualified and
+ * which pane-status records were oldest.
  */
-function parseOverseerRegister(raw: unknown, skew: ClockSkew): OverseerRegister {
+function parseOverseerRegister(raw: unknown, skew: ClockSkew, writtenAt: string): OverseerRegister {
   const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
   if (!isRecord(raw)) return bad("the server sent no register this page can read");
   if (raw["kind"] === "unreadable") {
@@ -1976,11 +1984,17 @@ function parseOverseerRegister(raw: unknown, skew: ClockSkew): OverseerRegister 
   if (total === null) return bad("the register arrived without a count of what it holds");
   const rawSessions = raw["sessions"];
   if (!Array.isArray(rawSessions)) return bad("the register's sessions are not a list");
+  let work = parseOverseerRegisterWork(raw["work"], skew, writtenAt);
   const sessions: OverseerSessionHistory[] = [];
   for (const entry of rawSessions) {
-    const parsed = parseOverseerHistory(entry, skew);
-    if (parsed === null) return bad("an entry in the register is not one this page can read");
-    sessions.push(parsed);
+    const parsed = parseOverseerHistory(entry, skew, work.kind === "scanned" ? work.scannedAt : null);
+    if (parsed.kind === "bad-entry") return bad("an entry in the register is not one this page can read");
+    sessions.push(parsed.entry);
+    /* A work scan is disposable enrichment. A bad value here cannot make the
+       register — the only copy of its history — disappear from the page. */
+    if (parsed.kind === "bad-work" && work.kind === "scanned") {
+      work = { kind: "unavailable", why: parsed.why };
+    }
   }
   /* MORE SHOWN THAN HELD IS CORRUPTION, not a reading: `sessions` is a capped
      projection OF `total`, so it cannot be longer than it, and the card
@@ -1988,22 +2002,169 @@ function parseOverseerRegister(raw: unknown, skew: ClockSkew): OverseerRegister 
   if (sessions.length > total) {
     return bad(`the register shows ${sessions.length} sessions out of a register it says holds ${total}`);
   }
-  return { kind: "read", total, sessions };
+  return { kind: "read", total, sessions, work };
 }
 
+/** A scan-level reading. Bad work stays one sentence rather than poisoning the register. */
+function parseOverseerRegisterWork(raw: unknown, skew: ClockSkew, writtenAt: string): OverseerRegisterWork {
+  const bad = (why: string): OverseerRegisterWork => ({ kind: "unavailable", why });
+  if (!isRecord(raw)) return bad("this page could not read the Overseer's work scan");
+  if (raw["kind"] === "unavailable") {
+    return bad(nonBlank(raw["why"]) ?? "the server sent no reason the work scan is unavailable");
+  }
+  if (raw["kind"] !== "scanned") {
+    return bad(`this page does not know the work scan ${JSON.stringify(raw["kind"] ?? null)}`);
+  }
+  const scannedAt = iso(raw["scannedAt"]);
+  if (scannedAt === null) return bad("the work scan arrived without a readable time");
+  const shifted = shiftToBrowserClock(scannedAt, skew) ?? scannedAt;
+  return Date.parse(shifted) > Date.parse(writtenAt)
+    ? bad("the work scan is later than the checkpoint that reports it")
+    : { kind: "scanned", scannedAt: shifted };
+}
+
+type ParsedPaneWork =
+  | { kind: "read"; work: PaneWork | null }
+  | { kind: "unreadable"; why: string };
+
+/** `ps etimes` gives whole seconds, so its derived start and duration may differ by one second. */
+const PROCESS_START_TOLERANCE_MS = 1_000;
+
+/** One pane's work measurement, with every instant moved onto the browser's clock. */
+function parsePaneWork(raw: unknown, skew: ClockSkew, scannedAt: string | null): ParsedPaneWork {
+  const bad = (why: string): ParsedPaneWork => ({ kind: "unreadable", why });
+  if (raw === null) return { kind: "read", work: null };
+  if (!isRecord(raw)) return bad("a session's work reading is not an object or null");
+  if (raw["kind"] === "cannot-tell") {
+    const cause = nonBlank(raw["cause"]);
+    const why = nonBlank(raw["why"]);
+    return cause === null || why === null
+      ? bad("a cannot-tell work reading arrived without its cause or reason")
+      : { kind: "read", work: { kind: "cannot-tell", cause, why } };
+  }
+  if (raw["kind"] !== "none" && raw["kind"] !== "work") {
+    return bad(`this page does not know the pane work ${JSON.stringify(raw["kind"] ?? null)}`);
+  }
+  const inspected = count(raw["inspected"]);
+  const paneCommand = nonBlank(raw["paneCommand"]);
+  const paneStartedAt = iso(raw["paneStartedAt"]);
+  if (inspected === null || paneCommand === null || paneStartedAt === null) {
+    return bad("a measured work reading arrived without its count, pane command or pane start time");
+  }
+  const shiftedPaneStartedAt = shiftToBrowserClock(paneStartedAt, skew) ?? paneStartedAt;
+  if (scannedAt !== null && Date.parse(shiftedPaneStartedAt) > Date.parse(scannedAt)) {
+    return bad("a measured pane start is later than the scan that reports it");
+  }
+  if (raw["kind"] === "none") {
+    return { kind: "read", work: { kind: "none", inspected, paneCommand, paneStartedAt: shiftedPaneStartedAt } };
+  }
+  if (!Array.isArray(raw["jobs"]) || raw["jobs"].length === 0) {
+    return bad("a positive work reading arrived without any jobs");
+  }
+  if (inspected < raw["jobs"].length) {
+    return bad("a positive work reading contains more jobs than processes it says were inspected");
+  }
+  const jobs: PaneJob[] = [];
+  const pids = new Set<number>();
+  for (const rawJob of raw["jobs"]) {
+    if (!isRecord(rawJob)) return bad("a job in the work reading is not an object");
+    const recogniser = nonBlank(rawJob["recogniser"]);
+    const label = nonBlank(rawJob["label"]);
+    const pid = count(rawJob["pid"]);
+    const depth = count(rawJob["depth"]);
+    const command = nonBlank(rawJob["command"]);
+    const rawStartedAt = rawJob["startedAt"];
+    const startedAt = rawStartedAt === null ? null : iso(rawStartedAt);
+    const rawRanForMs = rawJob["ranForMs"];
+    /* `ranForMs` is a duration frozen at the scan, not an instant. Clock skew
+       must never be applied to it, however tempting the neighbouring shifts look. */
+    const ranForMs = rawRanForMs === null ? null : count(rawRanForMs);
+    if (
+      recogniser === null ||
+      label === null ||
+      pid === null ||
+      pid === 0 ||
+      depth === null ||
+      depth === 0 ||
+      depth > inspected ||
+      command === null ||
+      (startedAt === null && rawStartedAt !== null) ||
+      (ranForMs === null && rawRanForMs !== null)
+    ) {
+      return bad("a job in the work reading is missing evidence this page requires");
+    }
+    if (pids.has(pid)) return bad("the same process appears more than once in a work reading");
+    pids.add(pid);
+    const shiftedStartedAt = startedAt === null ? null : shiftToBrowserClock(startedAt, skew) ?? startedAt;
+    if (startedAt === null && ranForMs !== null) {
+      return bad("a job with an unreadable start arrived with a measured duration");
+    }
+    if (startedAt !== null && ranForMs === null) {
+      return bad("a job with a readable start arrived without its measured duration");
+    }
+    if (scannedAt !== null && shiftedStartedAt !== null && Date.parse(shiftedStartedAt) > Date.parse(scannedAt)) {
+      return bad("a job start is later than the scan that reports it");
+    }
+    if (shiftedStartedAt !== null && Date.parse(shiftedStartedAt) < Date.parse(shiftedPaneStartedAt)) {
+      return bad("a child job start is earlier than the pane process that contains it");
+    }
+    if (
+      scannedAt !== null &&
+      shiftedStartedAt !== null &&
+      ranForMs !== null &&
+      Math.abs(Date.parse(scannedAt) - Date.parse(shiftedStartedAt) - ranForMs) > PROCESS_START_TOLERANCE_MS
+    ) {
+      return bad("a job's measured duration disagrees with its start and scan clocks");
+    }
+    jobs.push({
+      recogniser,
+      label,
+      startedAt: shiftedStartedAt,
+      ranForMs,
+      pid,
+      depth,
+      command,
+    });
+  }
+  const [first, ...rest] = jobs;
+  // The emptiness check at the top of this arm already refused a jobless positive
+  // reading; destructuring is how that reaches the TYPE, so `PaneWork`'s non-empty
+  // tuple is satisfied without a cast and the renderer needs no unreachable branch.
+  if (first === undefined) return bad("a positive work reading arrived without any jobs");
+  return {
+    kind: "read",
+    work: { kind: "work", jobs: [first, ...rest], inspected, paneCommand, paneStartedAt: shiftedPaneStartedAt },
+  };
+}
+
+type ParsedOverseerHistory =
+  | { kind: "bad-entry" }
+  | { kind: "bad-work"; entry: OverseerSessionHistory; why: string }
+  | { kind: "read"; entry: OverseerSessionHistory };
+
 /** One remembered session. `≥` lives in the rendering; the arm lives here. */
-function parseOverseerHistory(raw: unknown, skew: ClockSkew): OverseerSessionHistory | null {
-  if (!isRecord(raw)) return null;
+function parseOverseerHistory(raw: unknown, skew: ClockSkew, scannedAt: string | null): ParsedOverseerHistory {
+  if (!isRecord(raw)) return { kind: "bad-entry" };
   const name = nonBlank(raw["name"]);
   const tmuxId = nonBlank(raw["tmuxId"]);
   const status = nonBlank(raw["status"]);
-  if (name === null || tmuxId === null || status === null) return null;
+  if (name === null || tmuxId === null || status === null) return { kind: "bad-entry" };
   const since = raw["since"];
-  if (!isRecord(since)) return null;
+  if (!isRecord(since)) return { kind: "bad-entry" };
   const at = iso(since["at"]);
-  if (at === null) return null;
-  if (since["kind"] !== "observed" && since["kind"] !== "lower-bound") return null;
-  return { name, tmuxId, status, since: { kind: since["kind"], at: shiftToBrowserClock(at, skew) ?? at } };
+  if (at === null) return { kind: "bad-entry" };
+  if (since["kind"] !== "observed" && since["kind"] !== "lower-bound") return { kind: "bad-entry" };
+  const parsedWork = parsePaneWork(raw["work"], skew, scannedAt);
+  const entry: OverseerSessionHistory = {
+    name,
+    tmuxId,
+    status,
+    work: parsedWork.kind === "read" ? parsedWork.work : null,
+    since: { kind: since["kind"], at: shiftToBrowserClock(at, skew) ?? at },
+  };
+  return parsedWork.kind === "read"
+    ? { kind: "read", entry }
+    : { kind: "bad-work", entry, why: `${parsedWork.why} for ${name}` };
 }
 
 /* ------------------------------------ can this account afford more work? -- */

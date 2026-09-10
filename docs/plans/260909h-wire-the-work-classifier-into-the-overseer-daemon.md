@@ -1,6 +1,6 @@
 # Wire the work classifier into the Overseer daemon
 
-**Status:** in progress, 2026-09-09.
+**Status:** done, 2026-09-10. On `dev`; the live daemon needs a restart before any of it is visible.
 **Roadmap stage:** [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § "Stage: Work
 evidence — connect the classifier that is already written". Queue item `qi-z8ascd78`.
 **Waits on:** Execution identity (landed) and Overseer status (landed). Both are in.
@@ -127,14 +127,16 @@ not what the acceptance asks for. **Recorded for the Overseer as the obvious nex
 
 `projectRegister` currently drops every `idle` entry from the history card: *"an idle session that
 has been idle for six hours wants nothing"*. That filter is exactly what would hide the four codex
-sessions this stage exists to find. **An idle entry with recognised child work is kept**; an idle
-entry with none, or with a `cannot-tell`, is dropped as before. The rank is unchanged.
+sessions this stage exists to find. **An idle entry with recognised child work is kept.** An idle
+entry with measured `none` is still dropped; `cannot-tell` and a missing scan entry are kept, because
+filtering either would render an unmeasured absence as idle. The rank is unchanged.
 
 **And the card's sentence changes with it**, on Sol's fifth finding. Today it claims *these are the
 ones that have waited longest*, and an idle row admitted for an 18-minute review may sort first
 because it went idle six hours ago — which is not a wait. The card now says what it is: the oldest
-status records worth showing — non-idle sessions, and idle sessions with recognised child work — and
-the tooltip says the order is by pane-status age, not by child-work age.
+status records worth showing — non-idle sessions, idle sessions with recognised child work, and idle
+sessions without a usable pane reading — and the tooltip says the order is by pane-status age, not
+by child-work age.
 
 ## Product default, recorded rather than asked
 
@@ -307,25 +309,171 @@ projects, lint clean bar the pre-existing `daemon.ts:602` warning.
 
 ### Stage 3 — the projection and the browser
 
-- [ ] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when
+- [x] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when
   `sourceCollectedAt` matches `lastGoodSnapshotAt`** (finding 2); keep idle-with-work; restate the
   card's ranking claim (finding 5).
-- [ ] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, and the register's own work clock.
-- [ ] `tools/fleet/web/src/types.ts`: parse it, on the browser's clock.
-- [ ] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line in **both** its
+- [x] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, and the register's own work clock.
+- [x] `tools/fleet/web/src/types.ts`: parse it, on the browser's clock.
+- [x] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line in **both** its
   sentences — fresh and stale (finding 1) — and the evidence detail.
-- [ ] `tests/fleet-overseer-status.test.ts` and `tests/fleet-overseer-panel.test.tsx`, including the
+- [x] `tests/fleet-overseer-status.test.ts` and `tests/fleet-overseer-panel.test.tsx`, including the
   acceptance fixture: `pane: idle` beside `work: … running 18m`; the stale sentence; a failed probe
   reading *cannot tell*; and a `sourceCollectedAt` mismatch refusing the join rather than making it.
 
-**Status:** not started.
+**Status:** done, 2026-09-09. The server refuses stale, future-clock and malformed work without
+losing the register; the browser keeps the scan's duration frozen, shifts only instants to its own
+clock, and exposes the process evidence in an `Explain` tooltip. A real-daemon end-to-end test now
+drives an injected captured process table through the checkpoint, projection, browser parser and DOM.
+
+### Round 3: GPT Sol on its own stage 3 code — and what that is worth
+
+**This round is Sol reviewing its own work**, and it says so itself: its usual wrapper could not
+start a nested process in that sandbox, so it dispatched the same brief through the runner it
+already had. That is closer to re-reading your own work than to an independent check: the same model
+that chose a framing is the worst-placed thing to notice the framing was wrong. It found two real
+P1s, so it was not worthless — but it is **not** the cross-family round the house workflow asks for,
+and Round 4 below is. Recorded rather than quietly counted as one.
+
+Two established P1s were found and fixed in the review-capable pass, then accepted unchanged in a
+fixes-only second round ([review artefact](260909h-stage3-code-review-sol.md)):
+
+- A stale positive reading changed tense, but stale `none` and `cannot-tell` readings still sounded
+  current. They now say what *was* observed and when; fresh copy is unchanged.
+- A semantically impossible pane start after the scan clock passed both parsers. Both boundaries now
+  reject pane or job starts after `scannedAt` and depth-zero positive child jobs, while keeping valid
+  bare panes (`inspected: 0`) and unknown job starts.
+
+**Gates after the fixes:** five focused suites green (505 tests), including the real-daemon browser
+join; all four TypeScript projects clean when run directly; fleet production build and diff check
+clean. The `npm run typecheck` wrapper itself could not open tsx's IPC socket in this sandbox, so its
+four underlying projects were run separately.
+
+### Round 4: independent review of stage 3
+
+An independent review on 2026-09-10 refused the candidate on five established P1s, all fixed
+red-first without changing the register when only work was bad:
+
+- **F17:** the row filter discarded idle `cannot-tell` and missing-pane readings, and `HistoryRow`
+  rendered a meaningful `work: null` as silence. Both facts now remain visible and distinct from
+  measured `none`; the all-idle sentence names pane status and says what the scan did or did not know.
+- **F18:** a scan could predate the inventory it claimed to describe. The projection now requires
+  `sourceCollectedAt <= scannedAt <= writtenAt` as well as exact inventory equality.
+- **F19:** the exact-inventory check covered `scan` but not `probe-failed`, so an old probe failure
+  could be attributed to the current register. Both attempted arms now enforce the same provenance.
+- **F20:** the parsers shape-checked `ranForMs`, starts, depths and counts without checking that the
+  facts agreed. Both boundaries now reject incoherent durations, impossible ancestry/counts and
+  duplicate job pids, while preserving bare panes and genuinely unknown job starts.
+- **F21:** duplicate register keys attached one pane measurement to two sessions. The register now
+  becomes unreadable on a repeated join key rather than duplicating the claim.
+
+**F22 (P2) was fixed:** the end-to-end test used the four named implementations but passed the
+projection object directly to `parseOverseer`; it did not cover `statePayload`, JSON serialization or
+the top-level `parseFleetState` field. It now does. The source stream and process-table probe remain
+controlled inputs, and the HTTP route/default `probeProcessTable` adapter remain outside its claim.
+
+**F23 (P2) remains wider than stage 3:** `PaneWork.jobs` is typed as an ordinary array even though
+the producer and both parsers require it to be non-empty. That is why `workLine` still carries the
+otherwise unreachable “positive reading carried no job” sentence. The complete fix is a non-empty
+tuple through the wire and the stage-1 store parser, not another renderer branch.
+
+**F24 (P2) was fixed:** the parser tests did not assert the cases Round 3 said were preserved or
+rejected: `inspected: 0`, unknown job starts, equality with the scan clock, future job starts and
+depth zero. After the missing assertions were added, removing the depth-zero checks at both
+boundaries made both strengthened suites fail until the checks were put back.
+
+**Gates after Round 4:** all five requested focused suites green (518 tests), the TypeScript wrapper
+clean across all four projects, scoped lint without errors, and diff check clean. The whole suite was
+not run, as this review explicitly excludes it.
+
+### F23 closed after all: `jobs` is a non-empty tuple
+
+The independent round left F23 open as *wider than stage 3* — `PaneWork.jobs` was an ordinary
+`readonly PaneJob[]` though the producer and all three parsers require it non-empty, which is why
+`workLine` had grown a *"the positive reading carried no job"* branch nothing could reach.
+
+It is closed, because every file it touches is this stage's own: `wire.ts`, the store's parser, the
+projection's, the browser's, and the renderer. The type is now
+`readonly [PaneJob, ...PaneJob[]]`, the three parsers destructure to satisfy it rather than cast, and
+the unreachable sentence is gone.
+
+**The stake is not the dead branch.** `{kind: "work", jobs: []}` renders as a session with recognised
+work and nothing to say about it — a positive claim with no evidence under it, which is the one shape
+this area exists to refuse. The type refuses it now.
+
+**And the guard was mutation-tested**, because `vitest` never type-checks and a type-level guard that
+has never been seen to fail is not evidence. `tests/fleet-compile-guards.test.ts` gained a block whose
+`@ts-expect-error` asserts `jobs: []` does not compile. Widening the tuple back to an array makes
+`npm run typecheck` fail with three errors — the unused directive, and two `'first' is possibly
+undefined` in the guard and in `OverseerPanel` — and reverting makes it green again. Both directions
+observed, 2026-09-10.
+
+### What it actually says about this box — measured, 2026-09-10 00:18 UTC
+
+The suite proves the wire carries a reading. It cannot say whether the reading is worth having, so I
+ran the same computation by hand against the live `~/.overseer/current.json` register and one real
+`ps`. Read-only; the live daemon was not restarted and still runs the old code.
+
+```
+register: 20 sessions, last inventory 2026-09-09T23:17:09.965Z
+
+  18  none
+   2  work
+
+  shell:true  codex-round2-260909g-2351-1382811   GPT review (codex exec) running 27m, depth 5
+  shell:true  bc-s3rev-0004-1444220               GPT review (codex exec) running 13m, depth 5
+
+idle sessions: 10; of those RETAINED on the card by the new rule: 0
+```
+
+Three things worth having written down:
+
+1. **It finds real work.** Two live `codex exec` reviews, at depth 5, with honest durations. Both are
+   other agents' Sol reviews, running while this was measured.
+2. **And it did NOT find an idle-but-working session at this instant.** Both rows already read as
+   `shell:true`, so the dashboard already knew something was running in them. **This is the
+   direction doc's caveat coming true rather than a disappointment** — what work evidence adds here
+   is *which* review and *how long*, not the discovery that the pane is busy. The original finding's
+   four `idle` rows were a different moment; nothing in this measurement contradicts it, and nothing
+   in it confirms that this stage fixes it either. Claiming otherwise would be the kind of
+   unearned conclusion this whole area exists to refuse.
+3. **The crowding risk from F17 measures zero today.** Retaining idle `cannot-tell` rows could have
+   filled an eight-row card and pushed out the sessions worth acting on; on this box, right now, no
+   pane classifies as `cannot-tell` at all. **That is one snapshot, not a rule** — a survey cannot see
+   a state that happens to be absent — so it is a reason to stop worrying now and a reason to look
+   again once the daemon has been running this code for a day.
+
+### What only the full suite found: the register now refuses a keyless entry
+
+Three failures in `tests/fleet-decisions-view.test.ts`, and **none of the focused runs could have
+seen them** — that file was not in any of my scoped lists, which is the argument for the 26-minute
+gate rather than a formality.
+
+The cause is a real widening, not a fixture nit. `projectRegister` now reads each entry's `key`,
+because that is the join a pane's work reading hangs on, and it **refuses the whole register** when
+one is missing. `decisions-view.ts` builds on `projectOverseerStatus`, so its own view degraded to
+`checkpoint-unavailable` — a wide blast radius from one field.
+
+**Kept rather than softened, and the alternative is worth stating.** The forgiving version — treat a
+missing `key` as *no work join for this entry* — would give that entry `work: null`, which the card
+renders as *the scan carried no reading for this session*. That is a specific claim, and a producer
+that had stopped writing keys would make it about every session at once: an unmeasured absence
+dressed as a measurement, which is the one thing this stage exists to refuse. Refusing the register
+is loud and wrong-in-the-safe-direction; the forgiving version is quiet and wrong.
+
+**And it is safe against a real artefact, checked rather than reasoned.** `key` has been a required
+field of `RegisterEntry` since the register existed, and the live `~/.overseer/current.json` — written
+by the *old* daemon, before any of this — carries one on all 19 entries. The fixtures that broke were
+synthetic register entries that had never been realistic; they now carry a key, with a comment saying
+why it is not decoration.
 
 ### Stage 4 — gates, review, docs
 
-- [ ] `npm test`, `npm run typecheck`, lint on touched files.
-- [ ] GPT Sol code review, `--sandbox workspace-write`, two rounds.
-- [ ] A section in [overseer-direction.md](../project/overseer-direction.md) or
-  [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) saying where work evidence lives
-  and what it may not claim.
+- [x] `npm test`, `npm run typecheck`, lint on touched files.
+- [x] GPT Sol code review, `--sandbox workspace-write` — four rounds in the end, not two: the plan,
+  stages 1–2, Sol's own pass over stage 3, and an independent pass over the same commit.
+- [x] A section in [overseer-direction.md](../project/overseer-direction.md) § "Where the work reading
+  now lives, and the four things it may not claim", plus a line closing one of the two instances in
+  its "Built, tested, and called from nothing but its own tests" section — which is the class this
+  classifier had been sitting in for two days.
 
-**Status:** not started.
+**Status:** done, 2026-09-10.
