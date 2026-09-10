@@ -37,6 +37,7 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDocument,
+  type JobRunSpec,
   type LaunchOccurrence,
   type OccurrenceKey,
   type ScheduleIndex,
@@ -261,10 +262,10 @@ const sha = (text: string): string => createHash("sha256").update(text).digest("
 
 const DOC_TEXT = "Reply with the single line `sweep ran` and stop.\n";
 const DOC: JobDocument = { path: "docs/fixture/scheduled-dispatch-job.md", sha256: sha(DOC_TEXT) };
-const RUN: RunSpec = { timeoutMinutes: 30, access: "read-only" };
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
 const ARMED: Arming = { kind: "armed", at: "2026-09-10T08:00:00.000Z" };
 
-function sessionJob(id: string, options: { what?: string; everyMs?: number; initialDelayMs?: number; run?: RunSpec } = {}): AuthorisedJob {
+function sessionJob(id: string, options: { what?: string; everyMs?: number; initialDelayMs?: number; run?: JobRunSpec } = {}): AuthorisedJob {
   const behaviour: JobBehaviour = {
     id,
     what: options.what ?? `Follow ${DOC.path}.`,
@@ -516,7 +517,8 @@ describe("the material handed to the child is pinned (D3)", () => {
     const w = world(m);
     tick(w, [sessionJob("sweep")]);
     const [only] = m.invocations;
-    expect(only?.run).toEqual(RUN);
+    // THE JOB'S AUTHORISED TIMEOUT AND ACCESS, ON THE POOL ACCOUNT THE PLANNER CHOSE (M11).
+    expect(only?.run).toEqual({ ...RUN, account: "pool-a" });
     expect(only?.material).toContain(`Follow ${DOC.path}.`);
     expect(only?.material).toContain(DOC_TEXT);
     expect(only?.material).toContain(DOC.path);

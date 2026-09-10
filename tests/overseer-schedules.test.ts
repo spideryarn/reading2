@@ -43,6 +43,7 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDefinition,
+  type JobRunSpec,
   type JobWork,
   type Occurrence,
   type OccurrenceId,
@@ -50,7 +51,7 @@ import {
 } from "../tools/overseer/jobs.js";
 import { openLocalAdmission, type LocalAdmission } from "../tools/overseer/launch-admission.js";
 import { readArtefacts, writeExitFile } from "../tools/overseer/launch-artefacts.js";
-import { composeLaunchProtocol, type CorrelationId, type LaunchOccurrenceId, type LaunchProtocol, type Launcher, type RunSpec } from "../tools/overseer/launch-protocol.js";
+import { composeLaunchProtocol, type CorrelationId, type LaunchOccurrenceId, type LaunchProtocol, type Launcher } from "../tools/overseer/launch-protocol.js";
 import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 import {
   describeReport,
@@ -81,7 +82,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
 
 /** A session job's work, with the run spec that has been part of its fingerprint since plan 260910f (scheduled dispatch) § D4. */
-const RUN: RunSpec = { timeoutMinutes: 30, access: "read-only" };
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
 const SESSION: JobWork = { kind: "session", run: RUN };
 
 /** The two real jobs whose run specs await Greg, and whose pins were deliberately not moved (plan 260910f § D4). */

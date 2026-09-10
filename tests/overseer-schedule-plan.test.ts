@@ -42,13 +42,14 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDocument,
+  type JobRunSpec,
   type Occurrence,
   type OccurrenceId,
   type OccurrenceKey,
 } from "../tools/overseer/jobs.js";
 import { openLocalAdmission, type LocalAdmission } from "../tools/overseer/launch-admission.js";
 import { readArtefacts, writeExitFile } from "../tools/overseer/launch-artefacts.js";
-import { composeLaunchProtocol, type LaunchProtocol, type Launcher, type RunSpec } from "../tools/overseer/launch-protocol.js";
+import { composeLaunchProtocol, type LaunchProtocol, type Launcher } from "../tools/overseer/launch-protocol.js";
 import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 import {
   planJobs,
@@ -83,7 +84,7 @@ function fakeClock(startIso: string): { now: () => Date; set(iso: string): void;
 
 const ARMED_LONG_AGO: Arming = { kind: "armed", at: "2026-09-01T00:00:00.000Z" };
 const NO_SPACING = 0;
-const RUN: RunSpec = { timeoutMinutes: 30, access: "read-only" };
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
 const ACCOUNTS: AccountChoice = { chosen: { kind: "chosen", account: "pool-a", notes: [] }, standing: () => ({ kind: "clear" }) };
 
 /** The one document the session jobs here lean on, and the digest it was pinned at. */

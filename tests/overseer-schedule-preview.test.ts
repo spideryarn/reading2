@@ -30,13 +30,14 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDocument,
+  type JobRunSpec,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
 } from "../tools/overseer/jobs.js";
-import { emptyFold, occurrenceIdOf, plan, scheduleOrigin, type PlanRequest, type RunSpec } from "../tools/overseer/launch-protocol.js";
+import { emptyFold, occurrenceIdOf, plan, scheduleOrigin, type PlanRequest } from "../tools/overseer/launch-protocol.js";
 import type { LaunchJournalReading } from "../tools/overseer/launch-occurrences.js";
 import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 import { ruleJobs } from "../tools/overseer/rule-jobs.js";
@@ -76,7 +77,7 @@ const ALL: HeldCapabilities = { session: true, rules: true };
 const NONE: HeldCapabilities = { session: false, rules: false };
 
 const DOC: JobDocument = { path: "docs/fixture/preview-test-job.md", sha256: "a".repeat(64) };
-const RUN: RunSpec = { timeoutMinutes: 30, access: "read-only" };
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
 
 /** A launch journal that is whole and empty: every session job's history is known, and there is none yet. */
 const EMPTY_JOURNAL: LaunchJournalReading = { status: () => ({ kind: "whole" }), fold: () => emptyFold() };
@@ -452,7 +453,7 @@ describe("a session job's occurrence, read from a real launch journal", () => {
       material: `run ${job.definition.behaviour.id}\n`,
       admissionClass: "claude-session",
       launcherKind: "tmux-headless",
-      run: RUN,
+      run: { ...RUN, account: "pool-a" },
     };
   }
 
@@ -476,7 +477,7 @@ describe("a session job's occurrence, read from a real launch journal", () => {
     const parsed = parseSchedulePreview(JSON.parse(JSON.stringify(preview)));
     if (parsed.kind !== "preview") throw new Error(`expected a preview, got ${parsed.kind}`);
     expect(parsed.preview.jobs).toEqual([{ kind: "job", job: row }]);
-    const text = schedulePreviewLines(parsed, { listRevision: listRevision([job]) }, NOW.getTime()).join("\n");
+    const text = schedulePreviewLines(parsed, { built: { kind: "built", listRevision: listRevision([job]) } }, NOW.getTime()).join("\n");
     expect(text).toContain("WOULD RESUME");
     expect(text).toContain("PLANNED — planned");
     expect(text).toContain(occurrenceIdOf(request.origin));

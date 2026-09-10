@@ -44,6 +44,7 @@ import type {
   ScheduledOccurrencesFile,
   ScheduledOccurrencesJob,
   ScheduledResult,
+  ScheduledJobRunSpec,
   ScheduledResultKind,
   ScheduledRunSpec,
 } from "./wire.js";
@@ -101,6 +102,7 @@ const RESULT_KINDS: { readonly [K in ScheduledResultKind]: true } = {
   "admission-waiting": true,
   running: true,
   unknown: true,
+  superseded: true,
   "launch-failed": true,
   "timed-out": true,
   "quota-refused": true,
@@ -134,7 +136,9 @@ const RESULTS_WITHOUT_ENDING: ReadonlySet<ScheduledResultKind> = new Set(["pendi
  * **`interrupted` on every state nobody has ended**: the protocol's `disposed`
  * event does not change a record's state, and a disposition outranks the four
  * rows that are not endings (occurrence-result.ts § A disposition outranks…).
- * `succeeded` comes only from `completed`.
+ * `succeeded` comes only from `completed`. **`superseded` comes only from
+ * `failed-before-launch`** (its `superseded` proof), and is an ending, so it
+ * carries an instant like the others outside `RESULTS_WITHOUT_ENDING`.
  */
 const RESULTS_OF_STATE: { readonly [S in ScheduledLaunchState]: ReadonlySet<ScheduledResultKind> } = {
   planned: new Set<ScheduledResultKind>(["pending", "interrupted"]),
@@ -143,11 +147,18 @@ const RESULTS_OF_STATE: { readonly [S in ScheduledLaunchState]: ReadonlySet<Sche
   launching: new Set<ScheduledResultKind>(["running", "interrupted"]),
   "observed-running": new Set<ScheduledResultKind>(["running", "interrupted"]),
   "outcome-unknown": new Set<ScheduledResultKind>(["unknown", "interrupted"]),
-  "failed-before-launch": new Set<ScheduledResultKind>(["launch-failed"]),
+  "failed-before-launch": new Set<ScheduledResultKind>(["launch-failed", "superseded"]),
   completed: new Set<ScheduledResultKind>(ENDINGS),
 };
 
 const ACCESS: { readonly [K in ScheduledRunSpec["access"]]: true } = { "read-only": true, review: true, write: true };
+
+/**
+ * A Claude pool account handle, restated from `launch-protocol.ts`'s
+ * `ACCOUNT_HANDLE` (and `accounts.ts`'s `ACCOUNT_NAME`), because this leaf
+ * imports nothing that reaches node. The page prints it, so it is checked.
+ */
+const ACCOUNT_HANDLE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 /**
  * Parse whatever `JSON.parse` gave back. Never throws.
@@ -202,7 +213,7 @@ function parseJob(value: unknown): ParsedOccurrencesJob {
   return {
     jobId,
     dispatch: parseDispatch(object(job["dispatch"], `${where}'s dispatch`), where),
-    run: parseRun(object(job["run"], `${where}'s run spec`), where),
+    run: parseJobRun(object(job["run"], `${where}'s run spec`), where),
     next: next.next,
     occurrences: occurrences.map(parseOccurrenceRow),
     omitted: count(job, "omitted", where, Number.MAX_SAFE_INTEGER),
@@ -280,12 +291,24 @@ function parseAnswer(value: Obj, where: string): ScheduledAnswer {
   return { kind, attempt, bytes: count(value, "bytes", `${where}'s answer`, Number.MAX_SAFE_INTEGER), sha256, usable };
 }
 
-function parseRun(value: Obj, where: string): ScheduledRunSpec {
+/** A job's run spec: its timeout and access, and no account — the job's authority names none. */
+function parseJobRun(value: Obj, where: string): ScheduledJobRunSpec {
   const timeoutMinutes = count(value, "timeoutMinutes", `${where}'s run spec`, MAX_TIMEOUT_MINUTES);
   if (timeoutMinutes < 1) fail(`${where}'s run spec has no timeout`);
   const access = text(value, "access", where);
   if (!Object.hasOwn(ACCESS, access)) fail(`${where}'s run spec has an access this build does not know (${access})`);
   return { timeoutMinutes, access: access as ScheduledRunSpec["access"] };
+}
+
+/** An occurrence's run spec: the job's two fields, and the pool account it ran on — a handle, or null for a record that pinned no run spec. Required, never defaulted. */
+function parseRun(value: Obj, where: string): ScheduledRunSpec {
+  const job = parseJobRun(value, where);
+  if (!Object.hasOwn(value, "account")) fail(`${where}'s run spec does not say which pool account it ran on`);
+  const account = value["account"];
+  if (account !== null && (typeof account !== "string" || !ACCOUNT_HANDLE.test(account))) {
+    fail(`${where}'s run spec names an account that is not a pool account handle (lower-case letters, digits and dashes)`);
+  }
+  return { ...job, account };
 }
 
 function parseCommands(value: Obj, where: string): ScheduledOccurrence["commands"] {

@@ -28,7 +28,9 @@
  *     admission-waiting  waiting-admission
  *     running            launching, observed-running
  *     unknown            outcome-unknown
- *     launch-failed      failed-before-launch (any proof, superseded included); ending not-run;
+ *     superseded         failed-before-launch with proof superseded — abandoned on purpose,
+ *                        and nothing ran; NOT a failure (M13)
+ *     launch-failed      failed-before-launch (any other proof); ending not-run;
  *                        verdict cause spawn or prompt-unverified
  *     timed-out          verdict cause timeout
  *     quota-refused      usageLimit true
@@ -42,6 +44,14 @@
  *                        record its exit.json could not confirm
  *     succeeded          exit 0 AND verdict ok AND a usable projected answer AND exactly 0 denials
  *                        AND usageLimit false
+ *
+ * **`superseded` is its own kind, not a `launch-failed`** (the plan's M13). The
+ * scheduler abandons a waiting occurrence deliberately — a newer authorised
+ * revision replaced it, or the pool account it was pinned to is gone (M12) —
+ * and the protocol records that as `failed-before-launch` with proof
+ * `superseded`. Nothing ran and nothing went wrong, so a red pill would be an
+ * alarm about a decision. Its `why` is the abandon's own reason, verbatim, and
+ * it is not in `RESULT_FAILED`.
  *
  * **A permission denial with a usable answer is still `permission-denied`.** An
  * unattended job that could not do something it tried is the case somebody must
@@ -115,7 +125,7 @@
  * ## `at`
  *
  * Null for `pending`, `admission-waiting` and `running`, which have no ending
- * yet. For `completed` and `failed-before-launch`, the record's **`endedAt`** —
+ * yet. For `completed` and `failed-before-launch` (so `superseded` too), the record's **`endedAt`** —
  * the `at` of the line that entered the state, which a later release never
  * moves (Sol's plan F4). For `unknown`, the record's `updatedAt`, since it is
  * dated by when the uncertainty was recorded. A disposition is dated by the
@@ -180,12 +190,13 @@ const STATES_AGREE_WITH_PROTOCOL: Same<ObservedState["kind"], LaunchState["state
 void STATES_AGREE_WITH_WIRE;
 void STATES_AGREE_WITH_PROTOCOL;
 
-/** Which results are failures, which are not endings yet, and the one good ending. The compiler counts them. */
-const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "failed" | "succeeded">> = {
+/** Which results are failures, which are not endings yet, the one set aside on purpose, and the one good ending. The compiler counts them. */
+const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "set-aside" | "failed" | "succeeded">> = {
   pending: "open",
   "admission-waiting": "open",
   running: "open",
   unknown: "open",
+  superseded: "set-aside",
   "launch-failed": "failed",
   "timed-out": "failed",
   "quota-refused": "failed",
@@ -198,7 +209,8 @@ const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "failed" | "su
 
 /**
  * The failure kinds, for the page's red pill and the CLI. `unknown` is not
- * among them: it is not an ending, it is an ending nobody can read yet.
+ * among them: it is not an ending, it is an ending nobody can read yet. Nor is
+ * `superseded`: it is an ending, and a deliberate one.
  */
 export const RESULT_FAILED: ReadonlySet<ScheduledResultKind> = new Set(
   (Object.keys(RESULT_CLASS) as ScheduledResultKind[]).filter((kind) => RESULT_CLASS[kind] === "failed"),
@@ -229,6 +241,9 @@ export function classifyOccurrence(o: ObservedLaunch): ScheduledResult {
       return notEnded(state, o.updatedAt);
     }
     case "failed-before-launch":
+      // SUPERSEDED BEFORE LAUNCH-FAILED: the scheduler set it aside on purpose
+      // and nothing ran, so it is not a failure — the header's M13 section.
+      if (state.proof === "superseded") return { kind: "superseded", why: state.why, at: state.endedAt };
       return {
         kind: "launch-failed",
         why: `it failed before launch, with proof that nothing ran (${state.proof}${state.attempt === null ? "" : `, attempt ${state.attempt}`}): ${state.why}`,

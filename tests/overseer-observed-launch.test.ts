@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
+import type { JobRunSpec } from "../tools/overseer/jobs.js";
 import { EXIT_FILE, artefactText, readArtefacts, type ArtefactRead, type ExitRecord } from "../tools/overseer/launch-artefacts.js";
 import {
   correlationIdOf,
@@ -45,8 +46,8 @@ const SCHEDULED = "2026-09-10T09:00:00.000Z";
 const ORIGIN: LaunchOrigin = { kind: "schedule", jobId: "schedule-fixture", scheduledAt: SCHEDULED, behaviourHash: "abcdef012345" };
 const ID = occurrenceIdOf(ORIGIN);
 const CORRELATION = correlationIdOf(ID, 1);
-const RECORD_RUN: RunSpec = { timeoutMinutes: 7, access: "review" };
-const CALLER_RUN: RunSpec = { timeoutMinutes: 5, access: "read-only" };
+const RECORD_RUN: RunSpec = { timeoutMinutes: 7, access: "review", account: "pool-b" };
+const CALLER_RUN: JobRunSpec = { timeoutMinutes: 5, access: "read-only" };
 const SCHEDULER_ID = "occ-fixture-1";
 
 /** `2026-09-10T09:00:<s>.000Z`. */
@@ -148,12 +149,12 @@ describe("the fields every state carries", () => {
     });
   });
 
-  test("the run spec is the record's — what actually launched — not the caller's", () => {
-    expect(observe(recordOf([planned(1)])).run).toEqual(RECORD_RUN);
+  test("the run spec is the record's — what actually launched, on the pool account it was pinned to — not the caller's", () => {
+    expect(observe(recordOf([planned(1)])).run).toEqual({ timeoutMinutes: 7, access: "review", account: "pool-b" });
   });
 
-  test("a tmux launch pins no run spec, so the caller's is used", () => {
-    expect(observe(recordOf([planned(1, { launcherKind: "tmux" })])).run).toEqual(CALLER_RUN);
+  test("a tmux launch pins no run spec, so the caller's is used — and it names no account", () => {
+    expect(observe(recordOf([planned(1, { launcherKind: "tmux" })])).run).toEqual({ timeoutMinutes: 5, access: "read-only", account: null });
   });
 
   test("a recovery origin is not a schedule row", () => {

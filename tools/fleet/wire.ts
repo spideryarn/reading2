@@ -4367,7 +4367,7 @@ export type SchedulePreviewJob = {
 
 export type SchedulePreviewHash = { kind: "computed"; hash: string } | { kind: "not-computed"; why: string };
 
-/** A session job's authorised run spec, as `RunSpec` in `tools/overseer/launch-protocol.ts` has it; a rule has none. */
+/** A session job's authorised run spec, as `JobRunSpec` in `tools/overseer/jobs.ts` has it; a rule has none. No account: that is chosen per occurrence, not authorised per job. */
 export type SchedulePreviewRun = { kind: "run-spec"; timeoutMinutes: number; access: "read-only" | "review" | "write" } | { kind: "not-a-session" };
 
 /** Every kind the planner can give a job. `JobPlan` in `tools/overseer/schedule-plan.ts`, one for one. */
@@ -4859,13 +4859,22 @@ export type ScheduledOccurrencesFile = {
 
 export type ScheduledJournalStanding = { kind: "whole" } | { kind: "history-lost"; why: string } | { kind: "not-open"; why: string };
 
-/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour. */
-export type ScheduledRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour, which names no account. */
+export type ScheduledJobRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+
+/**
+ * One occurrence's run spec: the job's, as the launch record pinned it, and
+ * the Claude pool account it ran on — chosen by the scheduler when it planned
+ * the occurrence, so it is per occurrence, not per job. `account` is null only
+ * for a record that pins no run spec (a `tmux` launch, which the scheduler
+ * never plans).
+ */
+export type ScheduledRunSpec = ScheduledJobRunSpec & { account: string | null };
 
 export type ScheduledOccurrencesJob = {
   jobId: string;
   dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
-  run: ScheduledRunSpec;
+  run: ScheduledJobRunSpec;
   /** When it could next run — the preview's own answer, copied. */
   next: SchedulePreviewNext;
   /** Newest first by `scheduledAt`, at most `OCCURRENCES_PER_JOB`. */
@@ -4890,14 +4899,17 @@ export type ScheduledLaunchState =
  *
  * `tools/overseer/occurrence-result.ts` derives it from the launch record and
  * the attempt's `exit.json`; the ladder and its precedence are there. The first
- * four are not endings; `succeeded` is the only good ending; every other kind is
- * a failure that names itself.
+ * four are not endings; `superseded` is an ending that is neither a failure nor
+ * a success — the scheduler abandoned the occurrence on purpose, before it
+ * launched, so nothing ran; `succeeded` is the only good ending; every other
+ * kind is a failure that names itself.
  */
 export type ScheduledResultKind =
   | "pending"
   | "admission-waiting"
   | "running"
   | "unknown"
+  | "superseded"
   | "launch-failed"
   | "timed-out"
   | "quota-refused"

@@ -43,9 +43,11 @@
  *
  * ## The run spec is the record's when it has one
  *
- * The record's `run` is what the launcher was actually given. The caller's is
- * the job's current spec, used only for a `tmux` launch, which pins none. When
- * the two differ the record's wins without comment: the job's own row in the
+ * The record's `run` is what the launcher was actually given, the pool account
+ * it ran on included. The caller's is the job's current spec — timeout and
+ * access, never an account, which is not the job's to name — used only for a
+ * `tmux` launch, which pins none; its account is then null. When the two
+ * differ the record's wins without comment: the job's own row in the
  * projection carries the current spec, so both stay visible.
  *
  * ## The tmux session
@@ -57,6 +59,7 @@
  * null rather than a name a cancel command would miss.
  */
 import type { ScheduledAnswer, ScheduledRunSpec } from "../fleet/wire.js";
+import type { JobRunSpec } from "./jobs.js";
 import type { ArtefactRead, ExitRecord } from "./launch-artefacts.js";
 import type { CompletionEvidence, ExitAnswer, ExitFacts, LaunchRecord, RunSpec } from "./launch-protocol.js";
 import type { ObservedCompletion, ObservedDisposition, ObservedLaunch, ObservedState } from "./occurrence-result.js";
@@ -64,8 +67,8 @@ import type { ObservedCompletion, ObservedDisposition, ObservedLaunch, ObservedS
 export type ObservedOfInput = {
   /** The current attempt's `exit.json`, as `readArtefacts` read it; null when there is no attempt to read. */
   readonly exit: ArtefactRead<ExitRecord> | null;
-  /** The job's current run spec — used only when the record pins none. */
-  readonly run: RunSpec;
+  /** The job's current run spec — used only when the record pins none, and then with no account. */
+  readonly run: JobRunSpec;
   /** The scheduler's own key for this occurrence (`jobs.ts § occurrenceId`). */
   readonly schedulerOccurrenceId: string;
 };
@@ -89,7 +92,7 @@ export function observedOf(record: LaunchRecord, input: ObservedOfInput): Observ
     plannedAt: record.plannedAt,
     updatedAt: record.updatedAt,
     attempts: record.attempts.length,
-    run: runOf(record.run ?? input.run),
+    run: runOf(record.run, input.run),
     tmuxSession: tmuxSessionOf(record),
     transcriptPath: seen.transcriptPath,
     answer: seen.answer,
@@ -189,8 +192,10 @@ function answerOf(answer: ExitAnswer | null, attempt: number): ScheduledAnswer {
   return answer === null ? ABSENT : { kind: "present", attempt, bytes: answer.bytes, sha256: answer.sha256, usable: answer.usable };
 }
 
-function runOf(run: RunSpec): ScheduledRunSpec {
-  return { timeoutMinutes: run.timeoutMinutes, access: run.access };
+/** The record's pinned spec, account and all; or, for a record that pins none, the job's with no account — the header's run spec section. */
+function runOf(pinned: RunSpec | null, job: JobRunSpec): ScheduledRunSpec {
+  if (pinned !== null) return { timeoutMinutes: pinned.timeoutMinutes, access: pinned.access, account: pinned.account };
+  return { timeoutMinutes: job.timeoutMinutes, access: job.access, account: null };
 }
 
 function tmuxSessionOf(record: LaunchRecord): string | null {

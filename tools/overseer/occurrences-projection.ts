@@ -44,8 +44,8 @@ import type {
   ScheduledOccurrence,
   ScheduledOccurrencesFile,
   ScheduledOccurrencesJob,
+  ScheduledJobRunSpec,
   ScheduledResult,
-  ScheduledRunSpec,
   SchedulePreviewNext,
 } from "../fleet/wire.js";
 import { writeAtomically } from "./jsonl.js";
@@ -60,7 +60,8 @@ const LAUNCH_OCCURRENCE_ID_PATTERN = /^lo-[0-9a-f]{20}$/;
 export type OccurrencesProjectionJob = {
   readonly jobId: string;
   readonly dispatch: ScheduledOccurrencesJob["dispatch"];
-  readonly run: ScheduledRunSpec;
+  /** The job's authorised spec. No account: each occurrence carries the one it ran on. */
+  readonly run: ScheduledJobRunSpec;
   /** The preview's own answer from the same planner pass, copied — `schedule.json` is its home. */
   readonly next: SchedulePreviewNext;
   /** Every schedule-origin launch of this job, in the launch fold's insertion order. */
@@ -98,7 +99,9 @@ function jobOf(job: OccurrencesProjectionJob): ScheduledOccurrencesJob {
   return {
     jobId: job.jobId,
     dispatch: job.dispatch,
-    run: job.run,
+    // THE TWO FIELDS BY NAME, so an occurrence's spec handed in here cannot
+    // put its account on the job's row, whose authority names none.
+    run: { timeoutMinutes: job.run.timeoutMinutes, access: job.run.access },
     next: job.next,
     occurrences: newestFirst.slice(0, OCCURRENCES_PER_JOB).map(occurrenceOf),
     omitted: Math.max(0, newestFirst.length - OCCURRENCES_PER_JOB),

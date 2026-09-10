@@ -102,13 +102,23 @@ function carriedStanding(disposition: CarriedOccurrence["disposition"], why: str
 }
 
 /**
- * The pool account a record was planned on, or null. **2b: `RunSpec.account`** —
- * until the protocol's next round puts it in the run spec, no record says, and
- * the planner gates a resume of an unpinned record the way it gates a new plan.
+ * The pool account a record was planned on: its pinned run spec's `account`,
+ * read directly, because the protocol requires one on every wrapper launch.
+ *
+ * **Null only for a record that pins no run spec: a `tmux` launch.** That kind
+ * is interactive, and the scheduler never plans one (it plans `tmux-headless`
+ * only, `scheduler.ts` § `planSession`), so a schedule-origin record of that
+ * kind was written by something other than this scheduler. What the code does
+ * with one:
+ *  - it is still projected, never dropped, because its job's clock must see it;
+ *  - with no pinned account, nothing can say that account is gone, so it is
+ *    never superseded on that ground, only for a moved revision;
+ *  - a resume of it waits on the account choice a new plan would make
+ *    (`schedule-plan.ts` § `resumeHold`);
+ *  - and then the protocol drives its stored request on, tmux launcher and all.
  */
-function accountOf(record: LaunchRecord): string | null {
-  const run = record.run;
-  return run !== null && "account" in run && typeof run.account === "string" ? run.account : null;
+export function accountOf(record: LaunchRecord): string | null {
+  return record.run === null ? null : record.run.account;
 }
 
 /**
@@ -174,7 +184,7 @@ export function launchHistoryOf(status: JournalStatus): OccurrenceHistory {
 export const NO_LAUNCH_JOURNAL_WHY =
   "this process holds no launch protocol, so the launch journal — every session job's history — cannot be read, and nothing can start a session";
 
-/** What the merge needs of the journal: its status and its fold, read now. The scheduler's `LaunchJournalView` is one. */
+/** What the merge needs of the journal: its status and its fold, read now. The protocol's `LaunchJournalView` is one. */
 export type LaunchJournalReading = { status(): JournalStatus; fold(): LaunchFold };
 
 /**

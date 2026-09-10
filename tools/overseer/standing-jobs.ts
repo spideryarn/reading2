@@ -71,8 +71,8 @@ import {
   type JobDefinition,
   type JobDispatch,
   type JobDocument,
+  type JobRunSpec,
 } from "./jobs.js";
-import type { RunSpec } from "./launch-protocol.js";
 import type { ReadDocument, ReadDocumentBytes } from "./schedule-plan.js";
 import {
   LAUNCH_SEPARATION_MS,
@@ -167,9 +167,9 @@ export const SCHEDULE_FIXTURE_DISPATCH: JobDispatch = {
  * today loses anything. Neither licenses a push to `main` or a production
  * write: that is in their documents, not here.
  */
-export const SCHEDULE_FIXTURE_RUN: RunSpec = { timeoutMinutes: 5, access: "read-only" };
-export const GET_READY_TO_DEPLOY_RUN: RunSpec = { timeoutMinutes: 180, access: "write" };
-export const FEEDBACK_SWEEP_RUN: RunSpec = { timeoutMinutes: 120, access: "write" };
+export const SCHEDULE_FIXTURE_RUN: JobRunSpec = { timeoutMinutes: 5, access: "read-only" };
+export const GET_READY_TO_DEPLOY_RUN: JobRunSpec = { timeoutMinutes: 180, access: "write" };
+export const FEEDBACK_SWEEP_RUN: JobRunSpec = { timeoutMinutes: 120, access: "write" };
 
 /**
  * The documents each job's authority actually comes from, repo-relative.
@@ -374,7 +374,7 @@ export function standingJobs(repoRoot: string): StandingJobs {
     return { jobs: [], problems: configProblems.map((problem) => `no standing job is being scheduled: ${problem}`) };
   }
 
-  const build = (id: StandingJobId, what: string, paths: readonly string[], dispatch: JobDispatch, run: RunSpec): void => {
+  const build = (id: StandingJobId, what: string, paths: readonly string[], dispatch: JobDispatch, run: JobRunSpec): void => {
     const documents: JobDocument[] = [];
     for (const path of paths) {
       const read = digestDocument(repoRoot, path);

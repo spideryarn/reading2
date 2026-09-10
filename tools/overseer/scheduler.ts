@@ -144,17 +144,15 @@ import {
   type OccurrenceIndex,
   type OccurrenceKey,
 } from "./jobs.js";
-import { NO_LAUNCH_JOURNAL_WHY, scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
+import { accountOf, NO_LAUNCH_JOURNAL_WHY, scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
 import {
   occurrenceIdOf,
   scheduleOrigin,
   type AbandonResult,
-  type LaunchJournal,
   type LaunchOccurrenceId,
   type LaunchOutcome,
   type LaunchProtocol,
   type LaunchRecord,
-  type RunSpec,
   type SlotAnswer,
 } from "./launch-protocol.js";
 import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
@@ -226,7 +224,8 @@ export type SchedulerReport =
    * result. What the run came to is the journal's and its `exit.json`'s to
    * say (`occurrence-result.ts`). `via` says whether this tick planned the
    * occurrence or resumed a waiting one; `account` is the pool account it was
-   * planned or pinned on, null when the record does not say (before 2b).
+   * planned or pinned on, null only for a record that pins no run spec (a
+   * `tmux` launch — `launch-occurrences.ts` § `accountOf`).
    */
   | {
       readonly kind: "launch";
@@ -296,30 +295,14 @@ export type SchedulerReport =
   | { readonly kind: "unaccounted"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly why: string };
 
 /**
- * The read-only look at the launch journal the scheduler may take: its status,
- * its fold, and where an attempt's artefacts live — over the same open store
- * the protocol writes.
- *
- * COLLAPSE when launch-protocol ships view(): this becomes the protocol's own
- * `LaunchJournalView` (`Pick<LaunchJournal, "status" | "fold" | "attemptDir">`,
- * the same `Pick`), and `SchedulerLaunch` a plain `Pick` of `LaunchProtocol`.
- */
-export type LaunchJournalView = Pick<LaunchJournal, "status" | "fold" | "attemptDir">;
-
-/**
  * **THE WHOLE CAPABILITY THE SCHEDULER HOLDS** (plan 260910f scheduled
  * dispatch, § D2 and F1): plan-and-drive a new occurrence, resume a waiting
- * one, abandon a superseded one, and look. Never a launcher, a journal or an
- * owner — the protocol's F9.
+ * one, abandon a superseded one, and look — `view()` is the protocol's
+ * read-only `LaunchJournalView` (status, fold, attempt directories) over the
+ * same open store it writes. Never a launcher, a writable journal or an owner
+ * — the protocol's F9.
  */
-export type SchedulerLaunch = Pick<LaunchProtocol, "launchOccurrence" | "resumeOccurrence" | "abandon"> & { readonly view: () => LaunchJournalView };
-
-/**
- * A job's run spec with the pool account the scheduler chose for it — carried
- * as far as the launch call until the protocol's 2b puts `account` in
- * `RunSpec` itself. See `planSession`.
- */
-export type ScheduledLaunchRun = RunSpec & { readonly account: string };
+export type SchedulerLaunch = Pick<LaunchProtocol, "launchOccurrence" | "resumeOccurrence" | "abandon" | "view">;
 
 /** No account choice was handed over, so no pool account may start a session: held, never a guess. What an absent `TickInput.accounts` means. */
 export const NO_ACCOUNT_CHOICE: AccountChoice = {
@@ -994,7 +977,7 @@ function called(jobId: string, via: "new" | "resume", account: string | null, ca
 /** What the journal already holds under an id, asked before a plan so the scheduler never plans an id twice. */
 type InJournal =
   | { readonly kind: "absent" }
-  | { readonly kind: "resumable" }
+  | { readonly kind: "resumable"; readonly account: string | null }
   | { readonly kind: "present"; readonly state: LaunchRecord["state"] }
   | { readonly kind: "carried" }
   | { readonly kind: "unreadable"; readonly why: string };
@@ -1005,7 +988,7 @@ function inJournal(capability: SchedulerLaunch, id: LaunchOccurrenceId): InJourn
     if (fold.carried.has(id)) return { kind: "carried" };
     const found = fold.occurrences.get(id);
     if (found === undefined) return { kind: "absent" };
-    if (found.state === "planned" || found.state === "waiting-admission") return { kind: "resumable" };
+    if (found.state === "planned" || found.state === "waiting-admission") return { kind: "resumable", account: accountOf(found) };
     return { kind: "present", state: found.state };
   } catch (cause) {
     return { kind: "unreadable", why: cause instanceof Error ? cause.message : String(cause) };
@@ -1045,7 +1028,7 @@ function planSession(input: TickInput, job: AuthorisedJob, how: Extract<LaunchHo
     case "absent":
       break;
     case "resumable":
-      return resumeSession(input, jobId, launchId, null);
+      return resumeSession(input, jobId, launchId, existing.account);
     case "present":
       return {
         launched: false,
@@ -1076,20 +1059,24 @@ function planSession(input: TickInput, job: AuthorisedJob, how: Extract<LaunchHo
   const material = materialOf(job, input.readDocumentBytes);
   if (!material.ok) return { launched: false, reports: [{ kind: "material-moved", jobId, why: material.why }] };
 
-  // (3) THE RUN, ON THE CHOSEN ACCOUNT. 2b: RunSpec.account — the protocol's
-  // run-spec parser refuses a field it does not know, so until 2b the request
-  // carries the timeout and access only and the account stops here, in the
-  // report. When 2b lands this becomes `run: scheduled`.
-  const scheduled: ScheduledLaunchRun = { ...work.run, account: how.account };
-  const run: RunSpec = { timeoutMinutes: scheduled.timeoutMinutes, access: scheduled.access };
-  return called(jobId, "new", scheduled.account, () =>
-    capability.launchOccurrence({ origin, material: material.text, admissionClass: "claude-session", launcherKind: "tmux-headless", run }),
+  // (3) THE RUN: the job's authorised timeout and access, on the pool account
+  // the planner chose this tick. The account is not the job's authority and is
+  // not in its hash (M11); it is pinned in `planned` by the protocol, so a
+  // resume of this occurrence keeps it.
+  return called(jobId, "new", how.account, () =>
+    capability.launchOccurrence({
+      origin,
+      material: material.text,
+      admissionClass: "claude-session",
+      launcherKind: "tmux-headless",
+      run: { ...work.run, account: how.account },
+    }),
   );
 }
 
 /**
  * **A WAITING OCCURRENCE, DRIVEN ON FROM ITS STORED RECORD** (F1): no re-plan,
- * no rebuilt request — the material, launcher, class, run spec and (from 2b)
+ * no rebuilt request — the material, launcher, class, run spec and its
  * account are the ones `planned` pinned, so a mechanical change to the
  * material's framing can never turn a resume into a conflict.
  */

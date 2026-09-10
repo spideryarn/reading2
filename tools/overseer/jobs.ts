@@ -84,6 +84,20 @@ import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
 import type { ScheduleConfig } from "./schedules.js";
 
 /**
+ * **A SESSION JOB'S RUN SPEC: its timeout and its access profile, and nothing
+ * else.** It is the launch protocol's `RunSpec` less its `account` (the plan's
+ * M11). Which pool account runs an occurrence is chosen by the scheduler at plan
+ * time and pinned in the launch record, not authorised per job, so it is not
+ * here and not in `behaviourHash`. The scheduler adds it when it plans
+ * (`scheduler.ts` § `planSession`).
+ *
+ * Its own name, so a job's spec cannot be mistaken for the protocol's, which a
+ * launch needs whole. A `Pick` rather than an `Omit`, so a field the protocol
+ * adds later stays out of the job's authority until somebody decides it belongs.
+ */
+export type JobRunSpec = Pick<RunSpec, "timeoutMinutes" | "access">;
+
+/**
  * WHAT A JOB ACTUALLY IS, and it is in the fingerprint.
  *
  * Two arms, because two things wear the word "job": one starts a Claude session
@@ -105,9 +119,9 @@ export type JobWork =
    * dispatch, § D4): the timeout and the access profile an unattended session
    * gets are things Greg authorised, so moving either one re-pins. Which POOL
    * ACCOUNT it runs on is deliberately not here: that is a runtime choice the
-   * scheduler makes at plan time, not authority.
+   * scheduler makes at plan time, not authority — see `JobRunSpec`.
    */
-  | { readonly kind: "session"; readonly run: RunSpec }
+  | { readonly kind: "session"; readonly run: JobRunSpec }
   /** A deterministic rule, run in process by the scheduler's two-phase protocol. No model calls, no session. */
   | { readonly kind: "rule"; readonly rule: RuleSpec };
 
@@ -190,19 +204,18 @@ function canonicalWork(work: JobWork): string {
 }
 
 /**
- * HOW EACH FIELD OF A RUN SPEC IS ENCODED — the compiler counts them, for the
- * reason `BEHAVIOUR_ENCODERS` gives: a field added to `RunSpec` (2b adds
- * `account`, which is deliberately NOT authority) is a compile error here until
- * somebody decides whether it belongs in the fingerprint. The encoders are
- * `Pick`ed to the two that are authority, so adding `account` to `RunSpec`
- * leaves this table as it is and the decision is the `Pick`.
+ * HOW EACH FIELD OF A JOB'S RUN SPEC IS ENCODED — the compiler counts them, for
+ * the reason `BEHAVIOUR_ENCODERS` gives: a field added to `JobRunSpec` is a
+ * compile error here until somebody writes its encoder. What is authority at
+ * all is decided once, by `JobRunSpec`'s `Pick` — which is why the protocol's
+ * `account` is not here.
  */
-const RUN_ENCODERS: { readonly [K in keyof Pick<RunSpec, "timeoutMinutes" | "access">]-?: (value: RunSpec[K]) => string } = {
+const RUN_ENCODERS: { readonly [K in keyof JobRunSpec]-?: (value: JobRunSpec[K]) => string } = {
   timeoutMinutes: (minutes) => `timeoutMinutes:${minutes}`,
   access: (access) => `access:${access.length}:${access}`,
 };
 
-function canonicalRun(run: RunSpec): string {
+function canonicalRun(run: JobRunSpec): string {
   return ["run", RUN_ENCODERS.timeoutMinutes(run.timeoutMinutes), RUN_ENCODERS.access(run.access)].join("\n");
 }
 
@@ -681,8 +694,8 @@ export type LaunchStanding =
   /**
    * `planned` or `waiting-admission`: **not a run**. The planner resumes it
    * rather than planning a sibling (F1). `account` is the pool account it was
-   * planned on, or null when the record does not say — every record, until the
-   * protocol's 2b puts `account` in `RunSpec`.
+   * planned on, read from the record's pinned run spec; null only for a record
+   * that pins none, a `tmux` launch (`launch-occurrences.ts` § `accountOf`).
    */
   | { readonly kind: "resumable"; readonly state: "planned" | "waiting-admission"; readonly account: string | null; readonly why: string }
   /**

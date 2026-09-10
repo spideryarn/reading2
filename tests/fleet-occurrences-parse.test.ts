@@ -31,7 +31,7 @@ const SUCCEEDED: ScheduledOccurrence = {
   updatedAt: "2026-09-10T11:03:00.000Z",
   attempts: 1,
   state: "completed",
-  run: { timeoutMinutes: 5, access: "read-only" },
+  run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
   result: { kind: "succeeded", why: "exit 0, a usable answer, no denials", at: "2026-09-10T11:03:00.000Z" },
   answer: { kind: "present", attempt: 1, bytes: 21, sha256: "0123456789abcdef".repeat(4), usable: true },
   transcriptPath: "/scratch/launches/o/lo-0123456789abcdef0123/a1/transcript.ndjson",
@@ -172,6 +172,38 @@ describe("what it does not know, it says it does not know — per row", () => {
     }
   });
 
+  test("SUPERSEDED IS READ ONLY ON failed-before-launch, and as an ending it carries an instant (M13)", () => {
+    const superseded = { kind: "superseded", why: "superseded by fedcba987654", at: "2026-09-10T11:04:00.000Z" };
+    const ok = copy();
+    const row = occurrencesOf(ok)[0] as Record<string, unknown>;
+    row["state"] = "failed-before-launch";
+    row["result"] = superseded;
+    row["answer"] = { kind: "absent" };
+    const okJob = parsed(ok).jobs[0];
+    if (okJob?.kind !== "job") throw new Error("expected the job row");
+    expect(okJob.job.occurrences[0]).toMatchObject({ kind: "occurrence", occurrence: { state: "failed-before-launch", result: superseded } });
+
+    for (const state of ["planned", "reserved", "waiting-admission", "launching", "observed-running", "outcome-unknown", "completed"]) {
+      const value = copy();
+      const other = occurrencesOf(value)[0] as Record<string, unknown>;
+      other["state"] = state;
+      other["result"] = superseded;
+      other["answer"] = { kind: "absent" };
+      const job = parsed(value).jobs[0];
+      if (job?.kind !== "job") throw new Error("expected the job row");
+      expect(job.job.occurrences[0]?.kind, state).toBe("unreadable");
+    }
+
+    const undated = copy();
+    const noInstant = occurrencesOf(undated)[0] as Record<string, unknown>;
+    noInstant["state"] = "failed-before-launch";
+    noInstant["result"] = { ...superseded, at: null };
+    noInstant["answer"] = { kind: "absent" };
+    const undatedJob = parsed(undated).jobs[0];
+    if (undatedJob?.kind !== "job") throw new Error("expected the job row");
+    expect(undatedJob.job.occurrences[0]?.kind).toBe("unreadable");
+  });
+
   test("result instants follow the classifier: open rows have none, unknown and endings have one", () => {
     const pendingWithEnding = copy();
     const pending = occurrencesOf(pendingWithEnding)[0] as Record<string, unknown>;
@@ -219,6 +251,38 @@ describe("what it does not know, it says it does not know — per row", () => {
       if (job?.kind !== "job") throw new Error("expected the job row");
       expect(job.job.occurrences[0]?.kind).toBe("unreadable");
     }
+  });
+
+  test("AN OCCURRENCE'S RUN SPEC NAMES ITS POOL ACCOUNT: a handle or null, never missing or malformed", () => {
+    const tmux = copy();
+    (occurrencesOf(tmux)[0] as Record<string, unknown>)["run"] = { timeoutMinutes: 5, access: "read-only", account: null };
+    const tmuxJob = parsed(tmux).jobs[0];
+    if (tmuxJob?.kind !== "job") throw new Error("expected the job row");
+    expect(tmuxJob.job.occurrences[0]).toMatchObject({ kind: "occurrence", occurrence: { run: { timeoutMinutes: 5, access: "read-only", account: null } } });
+
+    for (const run of [
+      { timeoutMinutes: 5, access: "read-only" },
+      { timeoutMinutes: 5, access: "read-only", account: "Pool A" },
+      { timeoutMinutes: 5, access: "read-only", account: "-pool" },
+      { timeoutMinutes: 5, access: "read-only", account: 7 },
+      { timeoutMinutes: 5, access: "read-only", account: "" },
+    ]) {
+      const value = copy();
+      (occurrencesOf(value)[0] as Record<string, unknown>)["run"] = run;
+      const job = parsed(value).jobs[0];
+      if (job?.kind !== "job") throw new Error("expected the job row");
+      expect(job.job.occurrences[0], JSON.stringify(run)).toEqual({ kind: "unreadable", launchOccurrenceId: SUCCEEDED.launchOccurrenceId, why: expect.stringContaining("account") });
+      /* ONLY THAT ROW. */
+      expect(job.job.occurrences[1]?.kind).toBe("occurrence");
+    }
+  });
+
+  test("a JOB's run spec names no account — its authority has none — and one written there is not read back", () => {
+    const value = copy();
+    (jobsOf(value)[0] as Record<string, unknown>)["run"] = { timeoutMinutes: 5, access: "read-only", account: "pool-a" };
+    const job = parsed(value).jobs[0];
+    if (job?.kind !== "job") throw new Error("expected the job row");
+    expect(job.job.run).toEqual({ timeoutMinutes: 5, access: "read-only" });
   });
 
   test("a present answer without the sha256 it was judged on — missing, short, upper-case, not a string — is an unreadable occurrence row", () => {

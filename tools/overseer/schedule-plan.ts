@@ -651,7 +651,7 @@ export function planJobs(input: PlanInput, ports: PlanPorts): readonly JobPlan[]
   }
 }
 
-/** The pool account a waiting launch was planned on, or null when its record does not say (2b: `RunSpec.account`). */
+/** The pool account a waiting launch was planned on, or null for a record that pins no run spec (a `tmux` launch — `launch-occurrences.ts` § `accountOf`). */
 function pinnedAccountOf(occurrence: LaunchOccurrence): string | null {
   return occurrence.standing.kind === "resumable" ? occurrence.standing.account : null;
 }
@@ -681,7 +681,8 @@ function resumeDecision(occurrence: LaunchOccurrence, authorisedHash: BehaviourH
  * key on a different run spec would be a conflict at the protocol (F5), and a
  * held account is a reason to wait, not a reason to replace. (A `gone` account
  * never reaches here — `resumeDecision` supersedes it.) A record that names no
- * account — every one, until 2b — waits on the account choice a new plan would.
+ * account — a `tmux` launch, which pins no run spec (`launch-occurrences.ts` §
+ * `accountOf`) — waits on the account choice a new plan would.
  */
 function resumeHold(occurrence: LaunchOccurrence, accounts: AccountChoice): { readonly why: string; readonly until: string | null; readonly account: string | null } | null {
   const account = pinnedAccountOf(occurrence);

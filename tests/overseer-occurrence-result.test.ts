@@ -15,7 +15,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { ScheduledResultKind } from "../tools/fleet/wire.js";
-import type { FailureCause } from "../tools/overseer/launch-protocol.js";
+import type { FailedProof, FailureCause } from "../tools/overseer/launch-protocol.js";
 import {
   classifyOccurrence,
   RESULT_FAILED,
@@ -40,7 +40,7 @@ function launch(state: ObservedState, over: Partial<ObservedLaunch> = {}): Obser
     plannedAt: "2026-09-10T09:00:05.000Z",
     updatedAt: UPDATED,
     attempts: 1,
-    run: { timeoutMinutes: 5, access: "read-only" },
+    run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
     tmuxSession: null,
     transcriptPath: null,
     answer: { kind: "present", attempt: 1, bytes: 6, sha256: SHA, usable: true },
@@ -120,10 +120,17 @@ describe("launch-failed: nothing ran", () => {
     expect(result.why).toContain("material.txt no longer matched its pin");
   });
 
-  test("a superseded record is launch-failed, naming the proof", () => {
-    const result = classify({ kind: "failed-before-launch", attempt: null, proof: "superseded", why: "superseded by fedcba", endedAt: ENDED });
-    expect(result.kind).toBe("launch-failed");
-    expect(result.why).toContain("superseded");
+  /** Every proof but `superseded`, with the compiler counting: a new proof is a compile error here until somebody says what it reads as. */
+  const FAILURE_PROOFS: { readonly [P in Exclude<FailedProof, "superseded">]: true } = {
+    "admission-refused": true,
+    "restarted-before-launching": true,
+    "material-mismatch": true,
+    "intent-not-written": true,
+    "launcher-refused": true,
+  };
+
+  test.each(Object.keys(FAILURE_PROOFS) as Exclude<FailedProof, "superseded">[])("proof %s is still launch-failed", (proof) => {
+    expect(classify({ kind: "failed-before-launch", attempt: null, proof, why: "the reason", endedAt: ENDED }).kind).toBe("launch-failed");
   });
 
   test.each(["wrapper", "prompt-unverified", "spawn"] as const)("a not-run ending with cause %s is launch-failed, saying which", (cause) => {
@@ -344,6 +351,20 @@ describe("only a completed exit record can be succeeded", () => {
 
   test("and the good exit record is — the control that shows the loop above could fail", () => {
     expect(kindOf(good)).toBe("succeeded");
+  });
+});
+
+describe("superseded: set aside on purpose, and nothing ran — not a failure (M13)", () => {
+  test.each([
+    "superseded by fedcba987654",
+    "pinned account pool-b is no longer usable: it is not a registered Claude pool account",
+  ])("a failed-before-launch with proof superseded is superseded, its why the abandon's reason (%s), dated by endedAt", (reason) => {
+    const result = classify({ kind: "failed-before-launch", attempt: null, proof: "superseded", why: reason, endedAt: ENDED });
+    expect(result).toEqual({ kind: "superseded", why: reason, at: ENDED });
+  });
+
+  test("it is not a failure kind", () => {
+    expect(RESULT_FAILED.has("superseded")).toBe(false);
   });
 });
 
