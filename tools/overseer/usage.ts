@@ -190,6 +190,20 @@ function resetsAtToMs(v: unknown): number | null {
  * function and can be tested. That case is `unknown`, and emphatically not an
  * empty window list, which would render as "0% used everywhere".
  */
+/**
+ * Does this value look like a utilization window at all?
+ *
+ * A window is an object carrying `utilization` and/or `resets_at`. Everything
+ * else in the payload — however new — is some other field and is not this
+ * module's business. Deliberately permissive about *which* window: a rotating
+ * codename we have never seen still matches, which is what keeps
+ * usage-history.md's rule 6 ("an unrecognised window is a named row") working.
+ */
+function isWindowShaped(value: unknown): boolean {
+  const window = obj(value);
+  return window !== null && (Object.hasOwn(window, "utilization") || Object.hasOwn(window, "resets_at"));
+}
+
 export function parseUsageCache(claudeJson: unknown, nowMs: number): UsageCacheReading {
   const root = obj(claudeJson);
   if (!root) return { kind: "unknown", why: "~/.claude.json did not parse as an object" };
@@ -233,6 +247,18 @@ export function parseUsageCache(claudeJson: unknown, nowMs: number): UsageCacheR
     // A null window means "this window does not apply to this account". Silence,
     // not failure, and not a reading — it must not appear as 0%.
     if (raw === null || raw === undefined) continue;
+    // **And skip anything that is not window-SHAPED**, not merely anything on
+    // the two-name list above. The endpoint has since grown `spend` (an object
+    // that is not a window), `seven_day_breakdown` and
+    // `member_dashboard_available` (a bool), and the CLI caches whatever it
+    // returns — so on 2026-09-10 `overseer usage` grew two junk rows reading
+    // "member_dashboard_available: unknown — window entry was not an object:
+    // false". A name list has to be updated whenever the API grows a field;
+    // asking what a window looks like does not. The name check above still
+    // earns its place, because `extra_usage` carries a `utilization` of its own
+    // and so passes this test while being a credit balance rather than a
+    // window.
+    if (!isWindowShaped(raw)) continue;
     windows.push(parseUsageWindow(window, raw, nowMs));
   }
 

@@ -159,6 +159,63 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("parseUsageCache — the cache is a hint, and resets_at is the validity check", () => {
+  // Red before the fix on 2026-09-10, and seen on the live box: the loop skipped
+  // two non-window keys BY NAME and treated everything else as a window, so as
+  // the endpoint grew fields the CLI caches, `overseer usage` grew junk rows —
+  //   spend: unknown — no resets_at, so the utilization (absent) cannot be checked…
+  //   member_dashboard_available: unknown — window entry was not an object: false
+  // Neither is a window. An exclusion list has to be updated whenever the API
+  // grows a field; asking what a window looks like does not.
+  it("ignores non-window fields the endpoint has grown, rather than reporting them as unreadable windows", () => {
+    const r = parseUsageCache(
+      {
+        cachedUsageUtilization: {
+          fetchedAtMs: NOW_REAL - 60_000,
+          accountUuid: "0f5e9c11-1111-4111-8111-000000000001",
+          utilization: {
+            five_hour: { utilization: 9, resets_at: new Date(NOW_REAL + 3600_000).toISOString() },
+            spend: { some: "object that is not a window" },
+            member_dashboard_available: false,
+            seven_day_breakdown: null,
+            // Still a window, and still reported: the shape is what decides.
+            nimbus_quill: { utilization: 0, resets_at: new Date(NOW_REAL + 3600_000).toISOString() },
+          },
+        },
+      },
+      NOW_REAL,
+    );
+    expect(r.kind).toBe("value");
+    if (r.kind !== "value") throw new Error("unreachable");
+    const names = r.windows.map((w) => w.window);
+    expect(names).toContain("five_hour");
+    expect(names).toContain("nimbus_quill");
+    expect(names).not.toContain("spend");
+    expect(names).not.toContain("member_dashboard_available");
+    expect(names).not.toContain("seven_day_breakdown");
+  });
+
+  // `extra_usage` still needs excluding BY NAME as well: it carries a
+  // `utilization` field of its own, so it passes any shape test, but it is a
+  // credit balance rather than a rolling window and plotting it beside
+  // `seven_day` would be a category error.
+  it("still ignores extra_usage, which looks like a window and is not one", () => {
+    const r = parseUsageCache(
+      {
+        cachedUsageUtilization: {
+          fetchedAtMs: NOW_REAL - 60_000,
+          accountUuid: "a",
+          utilization: {
+            seven_day: { utilization: 85, resets_at: new Date(NOW_REAL + 3600_000).toISOString() },
+            extra_usage: { utilization: 99, is_enabled: true },
+          },
+        },
+      },
+      NOW_REAL,
+    );
+    if (r.kind !== "value") throw new Error("unreachable");
+    expect(r.windows.map((w) => w.window)).not.toContain("extra_usage");
+  });
+
   it("reads the real file's five_hour and seven_day windows while they are still open", () => {
     const r = parseUsageCache(fxJson("claude-json-real.json"), NOW_REAL);
     expect(r.kind).toBe("value");

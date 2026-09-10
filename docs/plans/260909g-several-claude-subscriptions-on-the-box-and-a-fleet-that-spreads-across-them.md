@@ -765,6 +765,15 @@ Sol's round-1 P0-2, and the Overseer has authorised the change.
 
 ### Stage 3 — usage read per account
 
+> **Status: PART DONE, and the remaining part is the larger one.** The *printed* per-account block
+> landed on `dev` at `daa264aa` — `overseer usage` reads each registered account live and prints one
+> line per account. **Stage 3 is not finished.** The stored history, the daemon pass, the wire
+> `UsageReport` and the checkpoint are all still **single-account**, and making them plural needs a
+> **history schema change**: the chart cuts every series absent from the current record, so
+> alternating one-account lines would draw as disconnected points rather than two lines.
+> **[Stage 4](#stage-4-usage-limits-one-section-per-account-and-add-account), the Usage Limits tab,
+> depends on that plural work and not on what has landed.** Do not read `daa264aa` as Stage 3 done.
+
 > **Rewritten 2026-09-09** after Stage 0 and Sol's round-2 review. The previous version looped over
 > per-dir caches under the pool model. Both the source and the data model changed.
 
