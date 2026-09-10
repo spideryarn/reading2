@@ -77,7 +77,7 @@ import {
   publishRevision,
   recordStepRun,
 } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type {
   Arc,
   Block,
@@ -338,7 +338,7 @@ async function writeBlocks(articleId: string, revisionId: string, blocks: Block[
   );
 }
 
-/** One step run, as the seam records it — see src/store/revisions.ts. */
+/** One step run, as the seam records it — the stamp is defined in src/store/artifacts.ts. */
 const step = (
   revisionId: string,
   name: StepName,

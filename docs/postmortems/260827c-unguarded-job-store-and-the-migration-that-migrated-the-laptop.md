@@ -38,7 +38,7 @@ header makes the argument in as many words:
 It then left the applying to whoever wired a store up. Three Postgres stores are selected **outside**
 `src/store/index.ts` — [`src/jobs.ts`](../../src/jobs.ts),
 [`src/upload-records.ts`](../../src/upload-records.ts) and
-[`src/store/revisions.ts`](../../src/store/revisions.ts) — each for a good and separately documented
+`src/store/revisions.ts` (deleted 2026-09-10) — each for a good and separately documented
 reason: `index.ts` imports `fs.ts`, which imports half the app, and `npm run check` gates on import
 cycles. All three were selected raw. The file that argues against relying on memory relied on memory
 three lines later.

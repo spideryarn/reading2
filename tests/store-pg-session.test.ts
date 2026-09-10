@@ -201,7 +201,12 @@ import type {
   StepProduct,
 } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
-import type { ArtifactOutcome, ArtifactReads } from "../src/store/artifacts.js";
+import {
+  type ArtifactOutcome,
+  type ArtifactReads,
+  NO_INPUT_HASH,
+  PIPELINE_RUN,
+} from "../src/store/artifacts.js";
 import { isGuardedStore } from "../src/store/db-errors.js";
 import { StaleAttemptError, mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
@@ -212,7 +217,6 @@ import {
   publishRevision,
   recordStepRun,
 } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
 import type { JobTransition, StoreSession } from "../src/store/session.js";
 import type {
   Arc,
@@ -409,7 +413,7 @@ function threadSaying(slug: string, text: string): TweetThread {
   } as TweetThread;
 }
 
-/** One step run, as the seam records it — see src/store/revisions.ts. */
+/** One step run, as the seam records it — the stamp is defined in src/store/artifacts.ts. */
 const stepRun = (revisionId: string, name: StepName, inputHash = NO_INPUT_HASH) =>
   recordStepRun({
     revisionId,

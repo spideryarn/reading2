@@ -21,9 +21,9 @@ run.**
   exhaustive grep over `src tests scripts evals api` returns the definition and about twenty
   comments. [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) reasons in detail, twice, about what it does to a draft —
   *"spares a revision that any job row names"*, *"a draft it spares for ever"* — and design around
-  it. Meanwhile [`src/store/revisions.ts`](../../src/store/revisions.ts) concedes the consequence in
-  writing: every abandoned draft carries a full copy of the article's `revision_blocks`, *"so that is
-  storage rather than tidiness, and it remains a real gap"*.
+  it. The consequence is storage rather than tidiness; `sweepAbandonedDrafts`'s header records the
+  copied payload a crashed worker can leave behind and a dated size example. A compatibility file,
+  `src/store/revisions.ts`, repeated that consequence until it was deleted on 2026-09-10.
 - **`sweepable`/`SWEEP_GRACE_MS`** ([`src/source.ts`](../../src/source.ts)) — the same. The predicate
   exists and is correct, and `acquireUpload` in [`src/pipeline.ts`](../../src/pipeline.ts) explains
   in a comment that it deliberately does *not* delete a staging object because *"staging litter is
@@ -50,7 +50,10 @@ On demand means: when an article next runs a step, that article's old drafts go.
 scheduler, it is self-limiting, and it has the property that an article nobody touches keeps its
 drafts — which is also the article that is not growing. **It is not built yet**; this records the
 decision so that whoever builds it does not re-open the choice, and so that the next person to
-notice `sweepAbandonedDrafts` has no caller finds the reason rather than a mystery.
+notice `sweepAbandonedDrafts` has no caller finds the reason rather than a mystery. Its argument is
+an age threshold; the last one chosen was six hours (`ABANDONED_DRAFT_MS`, deleted with its only
+use on 2026-09-01), reasoned as comfortably longer than any ingest and short enough that
+abandoned copies do not pile up for a week.
 
 The general form of that answer is the one to reach for first: **attach the periodic work to a
 request that is already happening on the same object**. It costs nothing to run, it cannot drift out

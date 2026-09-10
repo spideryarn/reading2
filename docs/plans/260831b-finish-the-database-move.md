@@ -1204,7 +1204,7 @@ places nobody thinks of as storage:
 - The filesystem runtime adapters — `artifacts-fs.ts`, `jobs-fs.ts`, `checkpoints-fs.ts`,
   `ai-calls-fs.ts`, `uploads-fs.ts`, `blobs-fs.ts` and the `fs*` halves of every `guarded(...)` pair
   in [`src/store/index.ts`](../../src/store/index.ts). Each one goes with its branch, not before it.
-- **`revisionLifecycle`** ([`src/store/revisions.ts`](../../src/store/revisions.ts)) — a dead seam no
+- **`revisionLifecycle`** (`src/store/revisions.ts`, deleted 2026-09-10) — a dead seam no
   production module imports; the only reference is a guard test.
 - **`readArticleFromDir`** in [`src/article-input.ts`](../../src/article-input.ts), and with it the
   last filesystem read in the article half of the pipeline. This is the payoff for having put it in

@@ -7,6 +7,7 @@ not authorise implementing every product decision below.
 
 **Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
+I (retire the revision alias) built the same day — see § I.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -539,6 +540,15 @@ rewrite handler bodies during migration, or use total file length as the accepta
   writers and the stronger tests instead; no current security drift was found.
 
 ## I — remove a compatibility address with no production consumer
+
+**Status, 2026-09-10: built.** The census over `src tests scripts api evals` found the same 13
+importers and no other consumer; all 13 now import from `src/store/artifacts.js`, and
+`src/store/revisions.ts` is deleted. Its retention context is preserved from
+[cron scheduler](../project/cron-scheduler.md): that doc points to the existing source explanation
+of the copied-payload cost and records the historical six-hour threshold beside the on-demand
+cleanup decision. Doc-links went red on two relative links to the file (a dated plan and a dated
+postmortem) before they were unlinked. Past-tense, dated comments naming the file
+(`pg-revisions.ts`, `store-guarded.test.ts`, `pg-session-exact-base.test.ts`) were left as history.
 
 `src/store/revisions.ts` exports only `NO_INPUT_HASH` and `PIPELINE_RUN` from `artifacts.ts`.
 The header says seven test importers; this audit counted **13** actual import statements:

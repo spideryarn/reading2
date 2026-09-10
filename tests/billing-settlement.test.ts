@@ -154,7 +154,7 @@ import { reserveIngest } from "../src/store/pg-billing.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
 import type { Arc, Block, Job, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
