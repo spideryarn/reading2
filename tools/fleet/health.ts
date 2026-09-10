@@ -27,6 +27,8 @@
  */
 import { execFileSync } from "node:child_process";
 
+import { RESOURCE_POLICY } from "./resource-policy.js";
+
 // ---------------------------------------------------------------------------
 // Readings: one discriminated union per measurement, each with an explicit
 // "I could not tell" arm. `why` is always the tool's own words (a caught
@@ -416,16 +418,19 @@ export function computeVerdict(input: {
     reasons.push(`could not measure load: ${input.load.why}`);
   } else {
     // "Equal to cores is busy; several times cores is oversubscribed." — the
-    // doc's own wording. "Several times" is read here as >2x for strained and
-    // >4x for critical; the doc names no exact multiplier.
-    if (input.load.ratio1 > 4) raise("critical", `load average ${input.load.load1.toFixed(1)} is over 4x the ${input.load.cores} cores (ratio ${input.load.ratio1.toFixed(1)})`);
-    else if (input.load.ratio1 > 2) raise("strained", `load average ${input.load.load1.toFixed(1)} is over 2x the ${input.load.cores} cores (ratio ${input.load.ratio1.toFixed(1)})`);
+    // doc's own wording, read as a multiplier in `RESOURCE_POLICY.loadRatio`,
+    // which is also what the tile and the chart's bands compare against.
+    const { strained, critical } = RESOURCE_POLICY.loadRatio;
+    if (input.load.ratio1 > critical) raise("critical", `load average ${input.load.load1.toFixed(1)} is over ${critical}x the ${input.load.cores} cores (ratio ${input.load.ratio1.toFixed(1)})`);
+    else if (input.load.ratio1 > strained) raise("strained", `load average ${input.load.load1.toFixed(1)} is over ${strained}x the ${input.load.cores} cores (ratio ${input.load.ratio1.toFixed(1)})`);
   }
 
   if (input.memory.kind === "unknown") {
     reasons.push(`could not measure memory: ${input.memory.why}`);
   } else {
-    // "available near zero" per the doc. 5%/15% are this module's own cutoffs.
+    // "available near zero" per the doc. The exact fractions are this project's
+    // own and live in `RESOURCE_POLICY.memoryAvailable`, which is the same
+    // object the tile and the chart colour themselves from.
     //
     // **THE COMPARISON IS ON `availableFraction`; ONLY THE SENTENCE FLIPPED.**
     // Greg, 2026-09-09: *"always show X% used rather than 100-X% free"* — and
@@ -434,8 +439,8 @@ export function computeVerdict(input: {
     // place on that page a reader had to turn a number round in their head. The
     // available figure stays in brackets because it is the measured one and the
     // one the cutoff is written against.
-    if (input.memory.availableFraction < 0.05) raise("critical", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — only ${(input.memory.availableFraction * 100).toFixed(1)}% available, near zero`);
-    else if (input.memory.availableFraction < 0.15) raise("strained", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — ${(input.memory.availableFraction * 100).toFixed(1)}% available`);
+    if (input.memory.availableFraction < RESOURCE_POLICY.memoryAvailable.critical) raise("critical", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — only ${(input.memory.availableFraction * 100).toFixed(1)}% available, near zero`);
+    else if (input.memory.availableFraction < RESOURCE_POLICY.memoryAvailable.strained) raise("strained", `memory is ${(100 - input.memory.availableFraction * 100).toFixed(1)}% used — ${(input.memory.availableFraction * 100).toFixed(1)}% available`);
   }
 
   if (input.swap.kind === "unknown") {
@@ -444,9 +449,13 @@ export function computeVerdict(input: {
     // "Swap is a cliff, not a slope. Some swap used is normal. ALL of it used
     // means the next allocation fails and the OOM killer picks a victim." —
     // the doc, verbatim in spirit. So this is a step function, not a ramp:
-    // nothing below 95% raises the level on swap fill alone.
-    if (input.swap.usedFraction >= 0.98) raise("critical", `swap is ${(input.swap.usedFraction * 100).toFixed(0)}% full — at the cliff the doc warns about, next allocation can trigger the OOM killer`);
-    else if (input.swap.usedFraction >= 0.9) raise("strained", `swap is ${(input.swap.usedFraction * 100).toFixed(0)}% full — approaching the cliff`);
+    // nothing below `RESOURCE_POLICY.swapUsed.strained` raises the level on
+    // swap fill alone. (This comment said "95%" until 2026-09-10, against code
+    // that has compared 90% since it was written — a number in prose beside the
+    // number it describes, drifting where nothing could see it. That is the
+    // whole argument for the constants being somewhere a comment can cite.)
+    if (input.swap.usedFraction >= RESOURCE_POLICY.swapUsed.critical) raise("critical", `swap is ${(input.swap.usedFraction * 100).toFixed(0)}% full — at the cliff the doc warns about, next allocation can trigger the OOM killer`);
+    else if (input.swap.usedFraction >= RESOURCE_POLICY.swapUsed.strained) raise("strained", `swap is ${(input.swap.usedFraction * 100).toFixed(0)}% full — approaching the cliff`);
   }
   // swap.kind === "none" contributes nothing: no swap configured is not itself a strain signal.
 
@@ -454,7 +463,7 @@ export function computeVerdict(input: {
     // Actively swapping is a live signal independent of how full swap is —
     // pages are moving right now. Combined with high `wa` (doc: "high wa =
     // thrashing"), that is a stronger signal than either alone.
-    const thrashing = input.swapActivity.waPercent >= 50;
+    const thrashing = input.swapActivity.waPercent >= RESOURCE_POLICY.ioWait.thrashing;
     if (input.swapActivity.activelySwapping && thrashing) {
       raise("critical", `actively swapping (si ${input.swapActivity.siKBs}, so ${input.swapActivity.soKBs} KB/s) with ${input.swapActivity.waPercent}% IO wait — thrashing`);
     } else if (input.swapActivity.activelySwapping) {
@@ -471,9 +480,9 @@ export function computeVerdict(input: {
     reasons.push(`could not measure disk: ${input.disk.why}`);
   } else {
     // The doc's survey lists disk but gives no numeric reading rule for it;
-    // 90%/97% are ordinary sysadmin defaults, not from the doc.
-    if (input.disk.usePercent >= 97) raise("critical", `/ is ${input.disk.usePercent}% full`);
-    else if (input.disk.usePercent >= 90) raise("strained", `/ is ${input.disk.usePercent}% full`);
+    // `RESOURCE_POLICY.diskUsed` is ordinary sysadmin defaults, not from the doc.
+    if (input.disk.usePercent >= RESOURCE_POLICY.diskUsed.critical) raise("critical", `/ is ${input.disk.usePercent}% full`);
+    else if (input.disk.usePercent >= RESOURCE_POLICY.diskUsed.strained) raise("strained", `/ is ${input.disk.usePercent}% full`);
   }
 
   if (!coreReadable) {

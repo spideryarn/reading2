@@ -42,13 +42,28 @@ So four things are missing, and they are this plan:
    `projectOverseerStatus` reads it, but `projectRegister` then keeps only a *bounded, ranked*
    subset of sessions for the Overseer card. Ranking for a card and recording for a history are
    different jobs.
-4. **The cutoffs are declared twice.** `computeVerdict` in `tools/fleet/health.ts` hardcodes `> 4`
-   and `> 2` times cores, and `< 0.05` and `< 0.15` available memory, as literals in `if`
-   statements. `tools/fleet/web/src/health-view.ts` declares `THRESHOLDS` with the same numbers and
-   its header says they are "`computeVerdict`'s own cutoffs". **Nothing relates the two.** A grep of
-   `tests/` for `THRESHOLDS` finds one unrelated file. That is precisely the class the 2026-09-08
-   postmortem counted ten of — a consumer keeping its own copy of what a producer already said
-   carefully — sitting inside the feature whose whole subject is not contradicting yourself.
+4. **The cutoffs are declared twice, deliberately, and the reason has expired.** `computeVerdict` in
+   `tools/fleet/health.ts` hardcodes `> 4` and `> 2` times cores, `< 0.05` and `< 0.15` available
+   memory, `>= 0.9` and `>= 0.98` swap, `>= 90` and `>= 97` disk and `>= 50` IO wait, as literals in
+   `if` statements. `tools/fleet/web/src/health-view.ts` declares `THRESHOLDS` with the same
+   numbers. **This is not an oversight — the duplication is argued for in that file's header**:
+
+   > Every cutoff below is `computeVerdict`'s in tools/fleet/health.ts, restated rather than
+   > imported — that file opens with `node:child_process`, so a type-only import still makes
+   > TypeScript walk a module this browser project has no node types for. […] The failure it buys is
+   > specific and worth naming: a tile coloured amber beside a badge that says `ok`, because one of
+   > the two moved. So the numbers are all in `THRESHOLDS` below rather than scattered through the
+   > readers, and tests/fleet-web.test.tsx pins each boundary. If health.ts's cutoffs change, that
+   > test is what should go red.
+
+   **The argument is sound and its premise is avoidable, and the last sentence is not true.**
+   `tests/fleet-web.test.tsx` pins the *tile's* boundary at the literal `0.15`; it never calls
+   `computeVerdict` — the name appears in that file only in comments. So moving health.ts's literal
+   to `0.20` leaves the whole suite green with the badge and the tile disagreeing, which is exactly
+   the failure the header names. And the premise — *importing health.ts drags node in* — is dissolved
+   by a **pure leaf with no imports at all**, which is how the browser already reaches `zones.ts`,
+   `attempt-clock.ts`, `overseer-claim.ts` and `execution-token.ts`. So this stage does not overturn
+   a decision; it removes the cost that decision was paying.
 
 ## The simpler option this passed over
 
@@ -126,15 +141,48 @@ default is five minutes. The arithmetic that makes this safe, written down becau
 knows the expected spacing because `WORK_EVERY_MS` is imported rather than restated. A work turn
 that produced `unavailable` is a different fact and is written down as one.
 
+**THE WORK SUMMARY MUST NEVER COST US THE HEALTH READING.** Reading `append` closely turned up the
+sharp edge in this design. A line over `MAX_LINE_BYTES` is not written; a `sample-omitted` record
+goes down in its place and *the whole health reading for that turn is lost* — which is right when the
+reading itself is the thing that is too big, and completely wrong when a decoration pushed it over.
+So the order is: **bound the work summary so it cannot plausibly do that** (30 groups ≈ 2.2 KB
+against a 64 KiB limit and an 869-byte typical sample), and then, if a line is oversized anyway,
+**retry once without `work`** and record that the work summary was dropped, before the existing
+`sample-omitted` path is allowed to run. A reader must be able to tell "we dropped the work summary
+to keep the reading" from "we could not keep the reading", so that is a stated fact and not a
+silence.
+
+**Where the cadence state lives:** in the wiring, not the store — the store has no business holding
+an opinion about how often work is interesting. It starts `null`, so **the first turn after every
+restart carries a work summary**, which is deliberate: a restart is exactly the moment somebody wants
+to know what was running. A dashboard restarting faster than the cadence would write one every turn;
+that is a much louder problem than a slightly dense history, and it is written down here rather than
+guarded against.
+
 ### Where the reading comes from
 
-A new leaf, `tools/fleet/work-groups.ts`, projects the checkpoint's raw `work` value into
-`StoredWork`. It is **read-only over `~/.overseer/`** and changes nothing the daemon writes.
+**Reading the plan's first draft against the code changed this.** The draft was going to export
+`parsePaneWork` and walk the `panes` array again. It does not need to: `resolveWork` in
+`overseer-status.ts` already parses the whole scan into a `Map<string, PaneWork>` — **uncapped**,
+because the capping happens later, in `projectRegister`, when it picks which sessions to *show*. It
+also already enforces the producer invariants a history would otherwise have to re-derive: that the
+scan belongs to the register's accepted inventory, that `scannedAt` is not after the checkpoint that
+reports it, that a pane's start is not after the scan, that a job's `ranForMs` agrees with its
+`startedAt`, and that no pid appears twice.
 
-It reuses `parsePaneWork` from `overseer-status.ts` rather than declaring a second parser for the
-same JSON — the one out-of-file-set change in this plan, and it is adding the word `export` to an
-existing function. A hand-written second copy of that contract is the twin this repo has already
-paid for twice.
+So the read side is **a fourth projection out of the one `loadCheckpoint` read**, beside `attention`,
+`overseer` and `usage`. That file's header already argues for exactly this and has been extended once
+before, for `usage`:
+
+> The sharing is a correctness property, not a saving. […] One read, three projections, each with
+> its own compatibility policy.
+
+**The `work` feed must come from the same `resolveWork` call the register uses**, not a second one,
+or the page could show a scan the register rejected. That is the one thing a reviewer should check in
+Stage 2.
+
+`tools/fleet/work-groups.ts` is then a pure leaf with one job: `Map<string, PaneWork>` → `StoredWork`,
+grouping, ranking, capping and counting. No I/O, no clock, no checkpoint knowledge.
 
 The grouping rule, and why it does not double-count:
 
@@ -184,20 +232,40 @@ Each stage ends with `npm test`-scoped suites plus `npm run typecheck`, and a GP
 
 ### Stage 1 — one policy module for the cutoffs (mine, small)
 
-- [ ] New `tools/fleet/resource-policy.ts`: a pure leaf with no imports, holding `RESOURCE_POLICY`
+**Status 2026-09-10: built, green, not yet committed** — waiting on the plan review, which asks
+directly whether this extraction can change behaviour rather than relocate it. Done myself because
+it is an import and five comparisons; the tests and the mutation check are the substance.
+`npx vitest run tests/fleet-resource-policy.test.ts tests/fleet-health.test.ts tests/fleet-web.test.tsx`
+→ 467 passed; `npm run typecheck` → exit 0 over all four projects.
+
+**The mutation check, run rather than reasoned about** (`docs/reusable/silent-success.md`): the new
+test is green against the code as written, so on its own it proves nothing — a boundary test whose
+subject and whose definition of the boundary both come from the same constant would stay green
+however the comparison moved. So `computeVerdict`'s load comparison was changed from `>` to `>=` and
+the suite re-run: *`load is STRICTLY greater than, so exactly the cutoff is not yet strained` — expected
+'strained' to be 'ok'*. Reverted, green again. The identity assertion was likewise red before the
+extraction, with vitest reporting *"serializes to the same string / Compared values have no visual
+difference"* — which is exactly what a silent duplicate looks like.
+
+- [x] New `tools/fleet/resource-policy.ts`: a pure leaf with no imports, holding `RESOURCE_POLICY`
       (load ratio, memory available, swap used, disk used, IO wait) with the evidence for each
       number moved from wherever it currently lives, plus `LOAD_BAR_CEILING` and
       `MEMORY_USED_PERCENT` derived from it, plus the work policy (which recogniser ids are
       expensive, and what counts as a long run).
-- [ ] `health.ts`'s `computeVerdict` uses it instead of literals; `health-view.ts`'s `THRESHOLDS`
-      becomes the policy rather than a copy of it.
-- [ ] **The header states the rule the roadmap asks for**: an unavailable reading is not zero load
+- [x] `health.ts`'s `computeVerdict` uses it instead of literals; `health-view.ts`'s `THRESHOLDS`
+      becomes the policy rather than a copy of it. All five groups moved: load, memory, swap, disk
+      and IO wait.
+- [x] **The header states the rule the roadmap asks for**: an unavailable reading is not zero load
       and not unlimited capacity, so the policy contains no fallback value for a reading that was
-      never taken.
-- [ ] Red first: `tests/fleet-resource-policy.test.ts` drives `computeVerdict` at each cutoff
-      *computed from the policy constant*, so the two can no longer drift. Plus the mutation check
-      by hand — change a constant, watch both the verdict and the tile move — recorded here, since
-      `re-reading-your-own-work-is-a-zero-check`.
+      never taken, and says why one must not be added.
+- [x] Red first: `tests/fleet-resource-policy.test.ts` drives `computeVerdict` at each cutoff
+      *computed from the policy constant*, and asserts `THRESHOLDS` is the policy by **identity**
+      rather than by deep equality — a `toEqual` would pass against a second object holding the same
+      numbers, which is the state this file exists to make impossible.
+- [x] One pre-existing prose defect fixed on the way past: `computeVerdict`'s swap comment said
+      "nothing below 95%" beside code that has compared 90% since it was written. A number in prose
+      beside the number it describes, drifting where nothing could see it — which is the same
+      argument as the rest of this stage.
 
 ### Stage 2 — the read side over `checkpoint.work` (Codex, gpt-5.6-sol)
 
@@ -249,5 +317,16 @@ Each stage ends with `npm test`-scoped suites plus `npm run typecheck`, and a GP
   from this session. So a pool-account session currently has no working channel back to the
   Overseer, which affects every session it dispatches this way, not just this one. Recorded here and
   raised in the debrief.
-- `parseDisk` has run on every collection since Box Health shipped and no chart has ever drawn it.
-- `attribution` — memory by process kind — is in every stored sample and is likewise undrawn.
+- **Both "undrawn" claims needed narrowing after checking them.** `disk` *is* drawn — as a tile, by
+  `readHealthStats` — it is only the 24-hour *chart* that has no disk line, which is what the roadmap
+  asks for. And `attribution` is not invisible either: `HealthPanel`'s generic disclosure renders
+  whatever arrives, so it is already on the page as a raw nested object, just not as anything a
+  person would read. So Stage 4 adds a series and a rendering, not a reading; neither is a discovery
+  that something was being thrown away.
+- **The no-double-counting guarantee is real and is one line.** `classifyPaneWork` in
+  `tools/overseer/work.ts` ends its walk at a recognised job — `// Stop here: everything below a
+  recognised job belongs to that job.` — so a wrapper and its leaf cannot both be reported. The
+  grouping in Stage 2 relies on this and does not re-derive it.
+- **`projectRegister` really does cap.** `.slice(0, MAX_HISTORY)` after filtering out idle sessions
+  with no work, so a history built from the register's `sessions` would silently omit both the tail
+  and every quiet pane. The uncapped `Map` inside `resolveWork` is the right source, and this is why.
