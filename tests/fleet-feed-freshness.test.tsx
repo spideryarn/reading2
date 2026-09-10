@@ -33,6 +33,7 @@ import { FEED_READ_DEADLINE_MS, FEED_REREAD_FLOOR_MS, FeedPanel, useFeed } from 
 import {
   NO_FILTERS,
   feedEvidence,
+  makeFeedApi,
   type FeedApi,
   type FeedView,
   type SessionListReading,
@@ -355,8 +356,37 @@ describe("re-reading on evidence, never on a timer", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("ignores row prose and object identity, but not a changed conversation claim", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")])));
+    await answer(calls, 0, feedWith("first"));
+
+    await advance(FEED_REREAD_FLOOR_MS);
+    await render(
+      panel(
+        api,
+        collected([
+          row("$1", {
+            name: "renamed prose",
+            title: "different title",
+            description: {
+              kind: "described",
+              title: "different description title",
+              description: "different description",
+              describedAt: "2026-09-10T08:30:00.000Z",
+            },
+          }),
+        ]),
+      ),
+    );
+    expect(calls).toHaveLength(1);
+
+    await render(panel(api, collected([row("$1", { claudeSessionId: "conv-b" })])));
+    expect(calls).toHaveLength(2);
+  });
+
   /* ------------------------------------------------------------------ *
-   * The execution, as the LAST VERIFIED TOKEN — not the reading's kind.
+   * The execution, as an epoch derived from the last verified token — not the reading's kind.
    * ------------------------------------------------------------------ */
 
   const verifiedAs = (pid: number): FleetRow["execution"] => ({
@@ -396,6 +426,22 @@ describe("re-reading on evidence, never on a timer", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("treats the first verified token as a baseline, then reads on a replacement", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, withExecution(unverified)));
+    await answer(calls, 0, feedWith("first"));
+
+    await advance(FEED_REREAD_FLOOR_MS);
+    await render(panel(api, withExecution(verifiedAs(100))));
+    expect(calls).toHaveLength(1);
+
+    await render(panel(api, withExecution(verifiedAs(101))));
+    expect(calls).toHaveLength(2);
+    await answer(calls, 1, feedWith("replacement"));
+    await advance(FEED_REREAD_FLOOR_MS * 2);
+    expect(calls).toHaveLength(2);
+  });
+
   it("re-reads once when a run is really replaced", async () => {
     const { api, calls } = manualApi();
     await render(panel(api, withExecution(verifiedAs(100))));
@@ -432,13 +478,86 @@ describe("re-reading on evidence, never on a timer", () => {
     const a = row("$1");
     const b = row("$2", { status: { kind: "working" } });
     expect(feedEvidence(collected([a, b]))).toEqual(feedEvidence(collected([b, a])));
-    expect(feedEvidence(collected([a, b]))).not.toEqual(feedEvidence(collected([a, b], 43)));
+    expect(feedEvidence(collected([a, b]))?.digest).toEqual(feedEvidence(collected([a, b], 43))?.digest);
+    expect(feedEvidence(collected([a, b]))?.tmuxServerPid).not.toEqual(
+      feedEvidence(collected([a, b], 43))?.tmuxServerPid,
+    );
     expect(feedEvidence({ kind: "not-arrived" })).toBeNull();
     expect(feedEvidence({ kind: "not-collected" })).toBeNull();
     // A waiting session's countdown ticks every snapshot; only its kind is evidence.
     expect(feedEvidence(collected([row("$1", { status: { kind: "waiting", secondsLeft: 30 } })]))).toEqual(
       feedEvidence(collected([row("$1", { status: { kind: "waiting", secondsLeft: 12 } })])),
     );
+  });
+
+  it("ignores a missing and restored tmux pid, but reads once for a different named server", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")], 42)));
+    await answer(calls, 0, feedWith("first", 42));
+
+    await advance(FEED_REREAD_FLOOR_MS);
+    await render(panel(api, collected([row("$1")], null)));
+    await render(panel(api, collected([row("$1")], 42)));
+    expect(calls).toHaveLength(1);
+
+    await render(panel(api, collected([row("$1")], 43)));
+    expect(calls).toHaveLength(2);
+    await answer(calls, 1, feedWith("new world", 43));
+    await advance(FEED_REREAD_FLOOR_MS * 2);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("forgets execution baselines across tmux worlds", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1", { execution: verifiedAs(100) })], 42)));
+    await answer(calls, 0, feedWith("old world", 42));
+
+    await render(panel(api, collected([row("$1", { execution: unverified })], 43)));
+    expect(calls).toHaveLength(2);
+    await answer(calls, 1, feedWith("new world", 43));
+
+    await advance(FEED_REREAD_FLOOR_MS);
+    await render(panel(api, collected([row("$1", { execution: verifiedAs(101) })], 43)));
+    expect(calls).toHaveLength(2);
+  });
+
+  it("reads once for a new session and once for a dialog appearing, under the floor", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")])));
+    await answer(calls, 0, feedWith("first"));
+
+    await advance(1_000);
+    await render(panel(api, collected([row("$1"), row("$2")])));
+    await advance(FEED_REREAD_FLOOR_MS - 1_001);
+    expect(calls).toHaveLength(1);
+    await advance(1);
+    expect(calls).toHaveLength(2);
+    await answer(calls, 1, feedWith("session added"));
+
+    await advance(1_000);
+    await render(
+      panel(
+        api,
+        collected([
+          row("$1", {
+            rawQuestion: {
+              kind: "question",
+              prompt: "Continue?",
+              material: { kind: "read", fingerprint: "dialog-a" },
+              options: [{ label: "Yes", consequence: "Continue", key: "y" }],
+            },
+          }),
+          row("$2"),
+        ]),
+      ),
+    );
+    await advance(FEED_REREAD_FLOOR_MS - 1_001);
+    expect(calls).toHaveLength(2);
+    await advance(1);
+    expect(calls).toHaveLength(3);
+    await answer(calls, 2, feedWith("dialog appeared"));
+    await advance(FEED_REREAD_FLOOR_MS * 2);
+    expect(calls).toHaveLength(3);
   });
 });
 
@@ -479,6 +598,23 @@ describe("one read at a time, with a deadline that does not trust the api", () =
     await advance(FEED_REREAD_FLOOR_MS * 2);
     expect(calls).toHaveLength(2);
     expect(handle.current?.busy).toBe(false);
+  });
+
+  it("coalesces two button activations before React draws the disabled state", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")])));
+    await answer(calls, 0, feedWith("first"));
+
+    await act(async () => {
+      readAgainButton().click();
+      readAgainButton().click();
+    });
+    expect(calls).toHaveLength(2);
+
+    await answer(calls, 1, feedWith("second"));
+    expect(calls).toHaveLength(3);
+    await answer(calls, 2, feedWith("third"));
+    expect(readAgainButton().disabled).toBe(false);
   });
 
   it("releases a read that never answers, says so, and lets the next one through", async () => {
@@ -540,15 +676,65 @@ describe("one read at a time, with a deadline that does not trust the api", () =
 
   it("aborts and discards a read superseded by a new limit", async () => {
     const { api, calls } = manualApi();
+    const added = vi.spyOn(document, "addEventListener");
+    const removed = vi.spyOn(document, "removeEventListener");
     await render(panel(api, collected([row("$1")]), 50));
     await render(panel(api, collected([row("$1")]), 100));
     expect(calls.map((c) => c.limit)).toEqual([50, 100]);
     expect(calls[0]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    expect(added.mock.calls.filter(([type]) => type === "visibilitychange")).toHaveLength(2);
+    expect(removed.mock.calls.filter(([type]) => type === "visibilitychange")).toHaveLength(1);
 
     await answer(calls, 1, feedWith("the fresh answer"));
     await answer(calls, 0, feedWith("the stale answer"));
     expect(visibleText()).toContain("the fresh answer");
     expect(visibleText()).not.toContain("the stale answer");
+    added.mockRestore();
+    removed.mockRestore();
+  });
+
+  it("does not start on a hidden tab, including after a limit change", async () => {
+    const { api, calls } = manualApi();
+    setVisibility("hidden");
+    await render(panel(api, collected([row("$1")]), 50));
+    expect(calls).toHaveLength(0);
+
+    await act(async () => setVisibility("visible"));
+    expect(calls.map((call) => call.limit)).toEqual([50]);
+    await answer(calls, 0, feedWith("first"));
+
+    await act(async () => setVisibility("hidden"));
+    await render(panel(api, collected([row("$1")]), 100));
+    expect(calls.map((call) => call.limit)).toEqual([50]);
+    await act(async () => setVisibility("visible"));
+    expect(calls.map((call) => call.limit)).toEqual([50, 100]);
+  });
+
+  it("defers a hook refresh made while hidden until the tab is visible", async () => {
+    const { api, calls } = manualApi();
+    let handle: { current: ReturnType<typeof useFeed> | null } = { current: null };
+    await act(async () => {
+      handle = harness(api);
+    });
+    await answer(calls, 0, feedWith("first"));
+
+    await act(async () => setVisibility("hidden"));
+    await act(async () => handle.current?.refresh());
+    expect(calls).toHaveLength(1);
+    expect(handle.current?.busy).toBe(false);
+
+    await act(async () => setVisibility("visible"));
+    expect(calls).toHaveLength(2);
+  });
+
+  it("does not launch an old-limit read when the limit and tmux world change together", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")], 42), 50));
+
+    await render(panel(api, collected([row("$1")], 43), 100));
+    expect(calls.map((call) => call.limit)).toEqual([50, 100]);
+    expect(calls[0]?.signal?.aborted).toBe(true);
   });
 
   /**
@@ -564,11 +750,40 @@ describe("one read at a time, with a deadline that does not trust the api", () =
     await render(panel(api, collected([row("$1")], 43)));
     expect(calls).toHaveLength(2);
     expect(calls[0]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
 
     await answer(calls, 1, feedWith("the new world", 43));
     await answer(calls, 0, feedWith("the old world", 42));
     expect(visibleText()).toContain("the new world");
     expect(visibleText()).not.toContain("the old world");
+  });
+
+  it("clears its deadline and visibility listener on unmount", async () => {
+    const { api, calls } = manualApi();
+    const added = vi.spyOn(document, "addEventListener");
+    const removed = vi.spyOn(document, "removeEventListener");
+    await render(panel(api, collected([row("$1")])));
+    expect(vi.getTimerCount()).toBe(1);
+
+    await act(async () => root.unmount());
+    expect(calls[0]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(added.mock.calls.filter(([type]) => type === "visibilitychange")).toHaveLength(1);
+    expect(removed.mock.calls.filter(([type]) => type === "visibilitychange")).toHaveLength(1);
+    added.mockRestore();
+    removed.mockRestore();
+    root = createRoot(host);
+  });
+
+  it("passes the abort signal through the real feed client", async () => {
+    const calls: RequestInit[] = [];
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return { json: async () => ({ kind: "unreadable", why: "fixture" }), status: 200 } as Response;
+    });
+    const controller = new AbortController();
+    await makeFeedApi(fetchImpl as typeof fetch).recent(50, controller.signal);
+    expect(calls[0]?.signal).toBe(controller.signal);
   });
 });
 

@@ -589,6 +589,31 @@ typecheck passed. Mutation checks on each fix were Sol's, and are in its answer.
 | F15 | A replacement hidden entirely inside unverifiable readings cannot be detected, so the absolute guarantee is false | P1 established contract gap | **Guarantee narrowed**, the first of the two options Sol offered; see § What this guarantees. The second (withhold everything before a first verified reading) is the rule Fable's arbitration already declined. Not an overrule. |
 | F16 | `QuestionsPanel` owns a second `answering-disabled` latch for the same server-wide fact | P1 established, wider than the detail pane | **Accepted; follow-up.** `App` owns the one latch; `QuestionsPanel` takes it and its handler as props, and keeps only its dialog-scoped refusal local. |
 
+Stage 3 code review, round 1, GPT Sol, 2026-09-10, on `8465380d`
+(`260910c-stage3-code-review-sol.md`), concurrently with the Stage 1 review in disjoint files; its
+IDs start at F50 to keep the two apart. Verdict: **"no P0/P1 remains after the fixes. I would
+accept the revised Stage 3."** Its fixes verified by me: `fleet-feed-freshness`, `fleet-feed-panel`,
+`fixture-ids` and `doc-links` pass; typecheck shows no error in any Stage 3 file.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F50 | A first `unknown → verified` reading triggered a re-read though it proved no replacement; the execution memory also crossed tmux worlds | P1 established | **Fixed by Sol, accepted.** Per-row, per-world epochs: a first verification is epoch 0, only a later different token advances it. |
+| F51 | `tmuxServerPid` going `42 → null → 42` caused a re-read with no world change | P1 established | **Fixed by Sol, accepted.** The pid travels beside the digest rather than inside it; only two different *named* pids take the immediate world path. **The same flicker class as the one Sol's own Stage 1 F11 fix introduced** into the detail pane's mount key, found independently here — which is some evidence the class is real rather than theoretical. |
+| F52 | Mounting, refreshing or changing the limit while hidden started requests | P1 established | **Fixed by Sol, accepted.** Every read entry point defers until visible. |
+| F53 | The verified-token memory was written during render, so a render React discards could move it | P2 reasoned | **Fixed by Sol, accepted.** Written from an effect; `rememberVerified` returns the same object when nothing changed, so the effect does not retrigger. The implementer's argument that a render-time write was harmless did not hold: a discarded render could make a later unverifiable snapshot look like a replacement. |
+| F54 | "Never sooner than the floor" omitted the deliberate tmux-restart exception | P3 established | **Fixed by Sol, accepted** — the doc says two different named pids re-read at once. |
+| F55 | "One read in flight" is impossible when an injected API ignores abort and never settles | P3 reasoned | **Fixed by Sol, accepted** — the accurate claim is one live reader slot, with abandoned promises generation-discarded. |
+
+Sol also answered two of my stated doubts and I accept both: anchoring the floor to a read's
+*start* is right (a 15 s timeout then permits the next evidence read at 20 s; anchoring to
+completion would make it 35 s for nothing), and the Read again button does keep the one-pending-refresh
+promise — two activations before React draws `disabled` coalesce into one trailing read, now with a
+UI-level test.
+
+**Round 2 is narrow, not a second discovery pass.** The fixes to F50–F52 are P1 fixes nobody but
+their author has read, and the rule is that such a fix gets a scoped check of that fix. Scope:
+F50–F53 only.
+
 ## Risks, and what would catch each
 
 - **A remount that fires on flicker** wipes a draft mid-typing and looks like the tool eating your

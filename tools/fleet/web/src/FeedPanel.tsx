@@ -34,14 +34,16 @@
  *
  * A refresh costs the box ~250 ms and about 10 MB of transcript reads; the
  * answer itself is only 40 kB (8 kB gzipped). **The disk is what decides the
- * cadence, not the wire.** So there is no timer. It reads when the tab opens,
+ * cadence, not the wire.** So there is no timer. It reads when the tab opens visibly,
  * when the reader asks, and when the session list — which *is* polled, and
  * costs this tab nothing extra — shows something that could make the list out
  * of date: a session appearing or going, changing status, getting or losing a
  * dialog, claiming a different conversation, having its run replaced, or the
  * tmux server restarting (feed-client.ts § `feedEvidence`). A row that merely
  * fails to verify its run is not evidence. At most once per
- * `FEED_REREAD_FLOOR_MS`, never from a hidden tab. Docs/plans/260910c Stage 3.
+ * `FEED_REREAD_FLOOR_MS`, except that a change between two named tmux servers
+ * discards the old-world read and starts again at once; never from a hidden
+ * tab. Docs/plans/260910c Stage 3.
  *
  * **That is not "current", and the page does not say it is.** An agent that
  * writes ten turns without changing status produces no evidence at all. So the
@@ -72,6 +74,7 @@ import { Explain, TipCard, Tooltip, TooltipGroup } from "./Tooltip";
 import { instantTip } from "./instant";
 import {
   NO_FILTERS,
+  EMPTY_FEED_EVIDENCE_MEMORY,
   applyFilters,
   feedEvidence,
   httpFeedApi,
@@ -80,6 +83,7 @@ import {
   turnAge,
   type FeedApi,
   type FeedEvidence,
+  type FeedEvidenceMemory,
   type FeedFilters,
   type FeedRow,
   type FeedSessionStatus,
@@ -175,9 +179,10 @@ function tabHidden(): boolean {
  *
  * Its rules, each of which has a test in tests/fleet-feed-freshness.test.tsx:
  *
- *  - **One read in flight.** A read asked for during one becomes exactly one
+ *  - **One live read slot.** A read asked for during one becomes exactly one
  *    more, after it — neither overlapping nor vanishing, however many times it
- *    is asked for.
+ *    is asked for. A timed-out API promise may remain unresolved if that API
+ *    ignores abort, but it no longer owns the slot and its answer is unwelcome.
  *  - **Its own deadline.** Each read is raced against `FEED_READ_DEADLINE_MS`
  *    on this machine's timer; on expiry the signal is aborted, a `no-answer` is
  *    recorded and the slot is released. Nothing here waits on an api honouring
@@ -195,7 +200,7 @@ function tabHidden(): boolean {
  *    floor: every handle in a read begun against the old server now names
  *    somebody else's session, so it is not worth waiting for. It is only a
  *    *change* between two named servers; a pid going to or from `null` is the
- *    collector failing to say, which is ordinary evidence under the floor.
+ *    collector failing to say, and counts for nothing.
  *
  * The first digest seen is the baseline and reads nothing — whether it arrived
  * with the first read or after it. A session list arriving is not news about
@@ -254,6 +259,12 @@ function feedReader(
     if (stopped) return;
     if (inFlight !== null) {
       again = true;
+      return;
+    }
+    if (tabHidden()) {
+      cancelTrailing();
+      dueWhileHidden = true;
+      sink.onBusy(false);
       return;
     }
     cancelTrailing();
@@ -366,24 +377,18 @@ export function useFeed(
   const [error, setError] = useState<FeedFailure | null>(null);
   const [busy, setBusy] = useState(true);
 
-  /* **EACH ROW'S LAST VERIFIED TOKEN, HELD IN A REF AND WRITTEN DURING
-     RENDER** — feed-client.ts § `feedEvidence` says why the digest wants the
-     last verified token rather than the reading.
-
-     continuity.ts keeps the same memory in state, and has to: its answer is a
-     React key, so it changes what is drawn, and a render-time write there
-     would be a render that is not a function of its inputs. This one decides
-     nothing on screen — only whether to *schedule a read* — and the write is
-     idempotent: rendering the same `sessions` twice, as StrictMode does, or
-     rendering one React then throws away, stores the same tokens, each of
-     which is a real observation. State would cost a second render per
-     collection for no gain. */
-  const lastVerified = useRef<ReadonlyMap<string, string>>(new Map());
+  /* **THE LAST VERIFIED TOKEN AND EPOCH PER ROW, COMMITTED IN AN EFFECT.**
+     feed-client.ts § `feedEvidence` explains the epoch. The ref is not written
+     during render: React may discard a render, and letting one mutate the
+     baseline can make a later unverifiable snapshot look like a replacement.
+     `rememberVerified` returns the old object when nothing changed, so an
+     identical snapshot does not retrigger the effect. */
+  const evidenceMemory = useRef<FeedEvidenceMemory>(EMPTY_FEED_EVIDENCE_MEMORY);
   /* Computed every render rather than memoised: App builds `sessions` afresh on
      every render, so a memo keyed on it would never hit — and what the effects
      below compare is the digest string, which is a value. */
-  const evidence = feedEvidence(sessions, lastVerified.current);
-  lastVerified.current = rememberVerified(sessions, lastVerified.current);
+  const evidence = feedEvidence(sessions, evidenceMemory.current);
+  const nextEvidenceMemory = rememberVerified(sessions, evidenceMemory.current);
   const digest = evidence?.digest ?? null;
   const pid = evidence?.tmuxServerPid ?? null;
   /* The latest evidence, for a read to take as its own when it starts. Seeded
@@ -398,10 +403,11 @@ export function useFeed(
      then takes the new digest as its own rather than scheduling a second read
      for evidence it has already seen. */
   useEffect(() => {
+    evidenceMemory.current = nextEvidenceMemory;
     const next = digest === null ? null : { digest, tmuxServerPid: pid };
     latest.current = next;
     reader.current?.observe(next);
-  }, [digest, pid]);
+  }, [digest, pid, nextEvidenceMemory]);
 
   useEffect(() => {
     const running = feedReader(
