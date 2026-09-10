@@ -1,11 +1,13 @@
 # Durable action receipts for the fleet dashboard
 
-**Status, 2026-09-10 13:30: Stages 1–3 are on `dev`** — Stage 1 (`afbfcf2c`, live): queued work
-writes receipts and survives a restart. Stage 2 (`d85b487f`, live since the Overseer's restart):
-request ids and replay on the steer and enqueue routes, receipts for direct steer and answer, and the
-catalogue's `holdsDurable`. Stage 3 (`a034938b`, live after the next restart): receipts for enacted
-plans and both broadcasts, a keyed kill or worktree removal never run twice. **Stage 4 is being
-implemented by an Opus subagent**; its web files are authorised. The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
+**Status, 2026-09-11 05:30: all four stages are on `dev`** — Stage 1 (`afbfcf2c`, live): queued work
+writes receipts and survives a restart. Stage 2 (`d85b487f`, live): request ids and replay on the
+steer and enqueue routes, receipts for direct steer and answer, and the catalogue's `holdsDurable`.
+Stage 3 (`a034938b`, live since the 3dc65697 restart): receipts for enacted plans and both
+broadcasts, a keyed kill or worktree removal never run twice. Stage 4 (`0b1ca394`, review fixes
+`1babc997`, merged at `82c5088f`; live after the next dashboard restart): the clients keep one
+envelope per intention, `ReceiptList` on the Overseer tab, and the reconcile route. Left over is in
+§ Stage 4. The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
 arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
 
 **Learned on the way, for whoever finishes this:** a stage's gates here have been the fleet suites
@@ -473,11 +475,11 @@ by re-posting it, before or after a restart.
 
 ### Stage 4 — reading receipts, and the clients keeping envelopes
 
-- [ ] `ReceiptView` in `wire.ts`; `?sessionId=`.
-- [ ] A reconciliation gesture for an unknown receipt of an enacted plan — the person's statement,
+- [x] `ReceiptView` in `wire.ts` — built as `ReceiptSummary`. `?sessionId=` not built.
+- [x] A reconciliation gesture for an unknown receipt of an enacted plan — the person's statement,
   labelled as theirs, never as proof.
-- [ ] `ReceiptList.tsx`, self-contained, with its test.
-- [ ] **Each client constructs and keeps an immutable `{requestId, body}` envelope before sending.**
+- [x] `ReceiptList.tsx`, self-contained, with its test.
+- [x] **Each client constructs and keeps an immutable `{requestId, body}` envelope before sending.**
   A network failure or a missing definitive response leaves the envelope pending and offers an
   explicit *retry / check* that resubmits the same id and identical body — never a silent retry of a
   keystroke. Only a deliberate new action after a definitive response mints a new id (Sol F11). Test
@@ -542,6 +544,13 @@ safety list. F50: a replay carrying another operation's receipt was accepted.
 back as a pointer to itself: the reviewer writes its full report into the `--output` file, and
 `run-codex.ts` then overwrites that path with the reviewer's closing message. Ask the reviewer to write
 its full report to a *separate* file, or recover it from the activity log as was done here.
+
+**Landed, 2026-09-11:** Stage 4 at `0b1ca394`, the review's fixes at `1babc997`, merged with
+`origin/dev` at `82c5088f`. There was one conflict, in `OverseerPanel.tsx` against schedule-preview,
+and both sides were kept. Still left: the unkeyed callers named above; the `?sessionId=` filter; the
+broadcast route's four refusals after the one-way door, which look unreachable through the route;
+the coordinator-to-outcome mapping, which exists twice; and the pending envelope, which lives only in
+memory (a reload drops it).
 
 **Done:** a person on a phone can see, for recent actions, which were proven, which were withdrawn,
 which are unknown, and which unknowns somebody has since looked at — and pressing retry after a lost
