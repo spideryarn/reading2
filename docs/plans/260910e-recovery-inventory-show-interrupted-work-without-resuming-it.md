@@ -1,0 +1,374 @@
+# Recovery inventory: show interrupted work without resuming it
+
+The roadmap stage is
+[260908f § Stage: Recovery inventory](260908f-overseer-and-fleet-improvement-roadmap.md#stage-recovery-inventory--show-interrupted-work-without-resuming-it);
+its six checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
+Queue item `qi-z4q4rkg3`, dispatched by the Overseer on 2026-09-10. **Zero sessions are started by
+anything in this plan, and there is no execute button.** Resuming is the next roadmap stage
+(Gradual recovery), which consumes what this one records.
+
+## What is wrong today, in one paragraph
+
+The register is "what is running now": `foldEvents` in `store.ts` *deletes* an entry on
+`tmux-session-gone`. After a reboot, the dashboard's first accepted collection has no tmux server,
+so it arrives as `rows: []` with `tmuxServerPid: null`. `diff()` treats an empty fleet with an
+unreadable generation as comparable, and closes every session as `absent-from-snapshot`. The fold
+deletes all of them in the same append. From that moment `current.json` holds nothing about the
+work that was interrupted. The facts recovery needs are then spread across the log — the working
+directory, the conversation claim, the last verified run, the last status — and nothing gathers them
+back up. The live log has had one tmux server since it began (0 of 561 gone events are
+`tmux-server-changed`), so this has never happened for real. That is also why nobody has noticed.
+
+**Measured, 2026-09-10 ~13:00 UTC, read-only:** `~/.overseer/events.jsonl` is 812 KB, 2,059 events,
+561 `tmux-session-gone`, all `absent-from-snapshot`. The register holds 19 entries.
+
+## The design
+
+### 1. A candidate is written before the removal it explains, in the same append
+
+A new event, `recovery-candidate`, is added to `OverseerEvent`:
+
+```ts
+// tools/overseer/recovery.ts (the new module) — the event arm is re-exported through diff.ts's union
+type RecoveryCandidateEvent = {
+  kind: "recovery-candidate";
+  at: string;                    // the gone event's `at`
+  id: RecoveryCandidateId;       // see "Idempotency" below
+  source: "live" | "replay";
+  entry: RegisterEntry;          // the FINAL COMPLETE entry, from the register before this batch folds
+  lastSeen: RecoveryLastSeen | null; // from the baseline row, when the daemon had one; null otherwise
+  disappearance: {
+    goneWhy: GoneReason;
+    /** The entry's generation against the snapshot that removed it. */
+    generation: "same" | "changed" | "unverifiable";
+    /** Whether the dashboard run changed between the baseline and this snapshot (the 260910d stamp). */
+    producerRun: "same" | "changed" | "cannot-tell";
+    /** False when this came from `goneWhileAway`: the daemon had no baseline, so nobody watched it go. */
+    watched: boolean;
+  };
+};
+
+type RecoveryLastSeen = {
+  statusKey: string;              // e.g. "working", "no-claude", "shell:true"
+  title: string | null;           // capped at 200 chars; for reading only, never a command
+  harness: HarnessKind | null;    // from a verified execution, else null
+  executionToken: string | null;
+  conversation: ConversationReading | null;
+  collectedAt: string;            // the baseline's clock: when this was last true
+};
+```
+
+**The daemon writes it, not `diff()`.** `diff()` stays pure and knows nothing about the register,
+but the final complete entry lives in `store.register`. One pure function,
+`withRecoveryCandidates(events, register, baselineRows, context)`, inserts each candidate
+immediately before its `tmux-session-gone` in the batch `take()` is about to append. It runs over
+`goneWhileAway`'s events too. The register has not folded the batch yet, so `register.get(key)` is
+still the last complete entry. One `store.append` is one `write` + `fsync` (store.ts § `append`),
+so the candidate and its removal go into the log in a single write.
+
+**Which disappearances get a candidate — every one except a watched, same-world close.** A candidate
+is written unless *all* of these hold: the generation relation is `same` (both readable and equal);
+the producer run is `same`; and the daemon had a baseline (`watched`). That rule catches:
+
+| Case | generation | producerRun | watched | Candidate? |
+|---|---|---|---|---|
+| A session ends while the box carries on | same | same | yes | **no**: an ordinary close, recorded by its gone event as today |
+| The tmux server is replaced (a reboot with sessions already back) | changed | changed | yes | yes |
+| **The first empty snapshot after a reboot** (no tmux server yet) | unverifiable | changed | yes | yes |
+| `tmux kill-server` under a running dashboard | unverifiable | same | yes | yes |
+| The last session closes and tmux exits on its own | unverifiable | same | yes | yes (see classification: this is `unknown`, which it genuinely is) |
+| The dashboard restarts and a session happens to end meanwhile | same | changed | yes | yes (`unknown`, not `interrupted`) |
+| The daemon was down (`goneWhileAway`) | — | — | no | yes |
+
+Writing a candidate on every close would add about 280 records a day at ~1.5 KB each, roughly a third
+of the log's daily growth, so that option was passed over. Nobody would read any of it: a close
+the daemon watched under a live tmux server and an unchanged dashboard run is not something
+recovery can act on.
+
+**Idempotency.** `id` is a hash of `(key, entry.tmuxServerPid, entry.startedAt,
+entry.verifiedExecution?.token ?? "none")`: the run that disappeared, and the world it disappeared
+from. It does not include `at`. After a crash between the append and the baseline write, the
+restarted daemon diffs the *next* collection against the older baseline, so the re-derived gone has
+a later `at` but the same id. The fold keeps the first candidate with a given id and ignores later
+ones, so a replayed duplicate is harmless in the log and invisible in the index.
+
+### 2. A daemon-owned recovery register, with its own checkpoint
+
+A third fold over the same events, beside `foldEvents` and `foldOccurrences`: `foldRecovery` in
+`recovery.ts`. It keeps one `RecoveryRecord` per candidate id: the candidate, plus its disposition.
+It is persisted in its own file, **`~/.overseer/recovery.json`**, with its own byte cursor:
+
+- **Not inside `current.json`.** Every dashboard poll parses that file already (110 KB today).
+  After a reboot the index is ~40 records at ~1.5 KB each, and it only grows until Greg
+  dismisses things. The recovery file is written only when the fold or the view changed. A reader
+  asks for it only when the section is open.
+- **Its own cursor, so crash order stays the register's argument.** The writes go in this order:
+  events, baseline, `current.json`, `recovery.json`. On open, the recovery fold restores from
+  `recovery.json` and replays the log from *its* cursor, so a crash before the recovery write
+  replays the tail. Any other order would be an index claiming events that were never written.
+- **Opened by `openStore`, held by `Store`**, like the other two folds, and written by
+  `store.checkpoint()` through the same `writeAtomically`. The daemon stays the single writer.
+- **Rebuilt once at startup, never on a page request.** The route reads the file; nothing on the
+  request path folds or scans a log.
+
+**Dispositions, each an event, never a mutation.** A `recovery-disposition` event
+`{ id, disposition, at, evidence }`:
+
+- `unresolved`: the default, never written.
+- `resumed`: a verified execution in an accepted inventory whose conversation reading is
+  `verified`, with an id equal to the candidate's claim, or `conflicting` with `observed` equal to
+  it. Evidence: the new execution token. **Derived by the daemon.**
+- `superseded`: a newer candidate for the same conversation claim (the same work, interrupted
+  again). Evidence: the newer candidate's id. **Derived by the daemon.**
+- `dismissed`: an operator's decision, with their sentence. **Written only from a request.** See §5.
+
+**Unresolved records never expire.** Resolved records older than 30 days are dropped from the
+**index** but stay in the journal. That is the retention policy the spec asks us to state, and v1
+deletes no journal history.
+
+**Caps, and what happens past them — the evidence is never dropped silently:**
+
+- **Record size**: a candidate whose serialised size is over 16 KB goes into the index as a stub
+  `{ id, key, name, at, oversize: true }`, and the view says the full record is in the journal. The
+  event itself is written whole. `RegisterEntry` is bounded, and `lastSeen.title` is capped at
+  construction, so this is a guard, not a path we expect to hit.
+- **Capacity**: 500 unresolved records. Past that, new candidates still go into the journal. The
+  index counts them in `overflow` and does not hold them, and the page puts that count at the top.
+  Evicting unresolved records to make room would be exactly the silent expiry the spec forbids.
+- **The first page** is 100 records: unresolved first, newest disappearance first, then resolved.
+  It carries `olderCount`. There is no pagination API in v1. The page says "and N more, in
+  `npx tsx scripts/overseer-recovery.ts list`".
+
+### 3. Logs that predate the event: a one-time startup replay
+
+When `recovery.json` is absent, or its schema is unknown, `openStore` scans the log once from byte
+0, bounded by the existing `REPLAY_CEILING_BYTES`. It folds `session-*` events through a scratch
+register, so each `tmux-session-gone` can be joined to the entry it removed. Then:
+
+- Every `recovery-candidate` and `recovery-disposition` already in the log is folded as usual.
+- **A legacy candidate is derived only where the log itself proves a world change.** That means:
+  a `tmux-session-gone` with `why: "tmux-server-changed"`; or a run of `absent-from-snapshot`
+  gones sharing one `at` that emptied the scratch register, where the next `session-seen` names a
+  different `tmuxServerPid`. That second pattern is the reboot signature in an old log. Derived
+  candidates get `source: "replay"`, `producerRun: "cannot-tell"`, `lastSeen: null`.
+- **Missing evidence becomes `unknown`, never a fabricated entry.** A gone whose key the scratch
+  register never saw (the log began mid-life, or an earlier cold start lost the prefix) yields a
+  stub candidate with `entry: null`. It is classified `unknown`, with "no register entry survives
+  for this session".
+- Replay candidates **are appended to the journal** in one batch, ending with a
+  `recovery-replay-done` marker. A later rebuild finds the marker and does not replay again. A
+  crash mid-batch leaves a torn tail, which is truncated, and the replay runs again under the same
+  ids.
+- **Over the ceiling, or across a hole, the replay does not run.** The index then says
+  `replay: { kind: "not-run", why }`, which the page shows. It does not show an empty list.
+
+On today's log this finds nothing (0 world changes), and the page will say exactly that.
+
+### 4. The view: evidence against the current verified inventory
+
+`recovery-view.ts`, run by the daemon, **never on a request**. It runs after any change to the fold,
+after each accepted inventory, and at most once a minute in any case. Classification is pure. The
+filesystem checks are async and bounded to the first page.
+
+**Classification, per unresolved record, first match wins:**
+
+1. **`unknown` — the inventory cannot be trusted right now.** No inventory has been accepted in
+   this daemon's life; or the latest payload was refused, or failed, or was held since the last
+   accept; or the record has no entry. *An empty list from a failed collection is not evidence of
+   interruption*, and nothing in this arm looks at rows.
+2. **`already-live`**: a row in the accepted inventory with a verified execution whose conversation
+   matches, as in `resumed` above. The daemon also appends the `resumed` disposition, so this
+   state lasts one view.
+3. **`present-but-unmatched`**: a row with the same `claimedConversationId`, or the same `name` and
+   `meta.dir`, that is not proven to be the same conversation. It is shown with both rows' facts.
+4. **`ended-before-reboot`**: `lastSeen` or `entry` says the agent had already stopped. For a Claude
+   session that is `lastStatusKey` `no-claude`. A shell pane counts as `shell:false`, at its prompt
+   with nothing running.
+5. **`interrupted`**: `disappearance.generation` is `changed` or `unverifiable`, and `watched` is
+   true, and none of the above.
+6. **`unknown`**: everything else, including every `watched: false` record and the dashboard-restart
+   row in the table. The page shows the sentence saying why.
+
+**Evidence, per record on the first page, with one clock for the whole pass (`checkedAt`):**
+
+- `dir`: `entry.meta.dir`, `stat`ted. `exists` / `missing` / `not-recorded` (legacy meta).
+- `worktree`: the same, for `entry.worktree` when it is a path.
+- `transcript`: `findTranscript(~/.claude/projects, claimedConversationId, meta.dir)` from
+  `tools/fleet/transcript.ts`, reused rather than rewritten (it already handles the `EnterWorktree`
+  relocation). `found` with path and mtime / `not-found` with its reason / `no-claim`.
+- `lastActivity`: the later of `entry.lastSeenAlive` (a floor, and labelled as one) and the
+  transcript's mtime.
+- `resume`: `supported` only when the harness is `claude-code`, the claim is a uuid, and the
+  transcript was found. Otherwise `not-supported` with the reason — `codex-*` ("resume not wired
+  in v1"), `claude-headless`, `unknown`, missing transcript. Shells and manual jobs (`shell`, or
+  meta kind not `claude`) get **`manual`**, with the SSH path: the host name and `cd <dir>`.
+- **No command is synthesised, from a title or from anything else.** The page shows facts. The next
+  stage turns them into a launch. The roadmap's rule rules out a title as the source of a command;
+  building one from a uuid and a path invites the same copy-paste into a terminal, and nothing in v1
+  needs a command at all.
+- **No filesystem read is evidence that work was completed.** A missing directory is a missing
+  directory: it is never a disposition. `worktree:check` is not called.
+
+### 5. Operator dismissal, without a second writer to the store
+
+`scripts/overseer-recovery.ts` (new): `list` reads `recovery.json` read-only;
+`dismiss <id> --why "<sentence>"` writes one request file, named by a fresh request id, into
+**`~/.overseer/recovery-inbox/`**. This is the same drop-directory shape `work-reports` (plan
+260910e-work-reports…) uses for `report-inbox/`; one shape for "somebody asks the single writer to
+write", not two. On each tick the daemon reads the inbox and checks each request against the index.
+It appends a `recovery-disposition` event, carrying the request id, for a valid one, and then deletes
+the file. After a crash between the append and the delete, the same request comes round again. The
+fold ignores a disposition whose request id it has already applied. A request for an unknown or
+resolved id is recorded as refused, in a daemon note with its reason, and never applied. The daemon
+stays the only thing that appends events.
+
+There is no dismiss button in v1: that would be an action route, and action routes belong to
+`action-receipts`.
+
+### 6. The page
+
+- **`tools/fleet/wire.ts`**: one appended block of types (`RecoveryFeed` and its record and
+  evidence shapes). Types only, no imports.
+- **`tools/fleet/recovery-feed.ts`** (new): reads `recovery.json` **asynchronously**, and parses it at
+  the fleet boundary with its own validator. It does not import `tools/overseer/`: fleet parses the
+  daemon's files itself. It returns `published` / `absent` / `unreadable` /
+  `unsupported-schema`, and never an empty list standing in for one of those.
+- **`tools/fleet/server.ts`**: one `GET /api/recovery` branch, modelled on `/api/decisions`
+  (approved by the Overseer, 2026-09-10).
+- **`tools/fleet/web/src/recovery-client.ts`** + **`RecoveryPanel.tsx`** (new): a self-contained
+  section, polled only while mounted. Records are grouped by classification, with interrupted first.
+  Each shows the name, the recorded directory and worktree (with existence), transcript existence,
+  last activity (with the floor marked), latest evidence, resume support, and the manual SSH path
+  for shells. Overflow, replay-not-run and unknown-inventory banners go at the top. **No buttons.**
+- **`tools/fleet/web/src/App.tsx`**: one line mounting `<RecoveryPanel/>` below `<OverseerPanel/>`
+  in the `overseer` arm (approved; `schedule-preview` is told where). A
+  `tests/fleet-recovery-wiring.test.ts` guard pins the mount and the route, because a missing mount
+  is invisible to every other test (Overseer's condition).
+
+## Stages
+
+Each stage is implemented by an **Opus subagent** in this worktree, not Codex (the brief: Codex's
+weekly window is the tighter one). Each stage ends with **one** GPT Sol review, write-capable, run
+at `--effort high --timeout-minutes 30`. I commit each stage. I tell the Overseer before any second
+review round.
+
+### Stage 0: this plan, reviewed
+
+- [ ] Plan reviewed by GPT Sol (read-only).
+
+### Stage 1: the journal and the fold
+
+Files: `tools/overseer/recovery.ts` (new: event types, id, candidate rule, `withRecoveryCandidates`,
+`foldRecovery`, caps, legacy replay), `tools/overseer/diff.ts` (the two new arms in
+`OverseerEvent` only), `tools/overseer/store.ts` (`parseEvent` for the new kinds, the third fold,
+`recovery.json` write/restore/replay, `OverseerStore.recovery`), `tools/overseer/daemon.ts` (the
+candidate insertion before `store.append` in `take()`, and the startup replay append — **merge
+first, re-read before editing; the usage pass is web-260910's**), and new tests
+`tests/overseer-recovery.test.ts` and `tests/overseer-daemon-recovery.test.ts`.
+
+Tests, red first, through the real parser, gate, differ and store, driven by a scripted source:
+
+- **The first accepted empty post-reboot snapshot**: run A with sessions under generation G1, then
+  run B with `rows: []` and a null generation. Every session gets a candidate immediately before its
+  gone, in the same append. The register is empty afterwards. **The index still holds every
+  candidate**, with the final entry intact.
+- **Generation change with sessions back**: G1 → G2 with rows. There is a candidate for every G1 row
+  (`changed`), and none for the G2 rows.
+- **An ordinary close** (same generation, same run, watched): **no** candidate.
+- **The daemon was down** (`goneWhileAway`): a candidate, with `watched: false`.
+- **Crash before candidate append**: the process dies before `append`. The restart re-diffs, and
+  there is exactly one candidate.
+- **Crash between candidate and removal**: the log ends with a complete candidate line and a torn
+  gone line. `openStore` truncates the tail. The restart re-derives both, and the index holds one
+  record (a duplicate id is folded once).
+- **Crash before the recovery checkpoint**: `recovery.json` is one batch behind. `openStore` replays
+  its tail, and the index matches a fold from byte 0.
+- **Old schema**: a log and `current.json` from before this plan, with no `recovery.json`. The
+  replay runs once and appends its marker, and the second start does not replay again. A log with a
+  `tmux-server-changed` batch yields replay candidates. A gone with no surviving entry yields an
+  `entry: null` stub. A log with no world change yields none, and the index says so.
+- **Caps**: a 17 KB candidate goes in as an `oversize` stub with the event intact, and 501
+  unresolved records give `overflow: 1` with none evicted.
+- **The live-log check, read-only**: a frozen copy of `~/.overseer/events.jsonl` taken at stage
+  start goes through the new parser and the replay in a scratch root. It must refuse 0 lines and
+  derive 0 candidates. It fails outright if it read fewer events than the copy holds.
+
+- [ ] Implementation, tests red → green, typecheck, focused suites; Sol review; commit.
+
+### Stage 2: the view, the dispositions and the CLI
+
+Files: `tools/overseer/recovery-view.ts` (new), `tools/overseer/recovery.ts`,
+`tools/overseer/daemon.ts` (the view pass on its triggers; derived `resumed` and `superseded`
+appends; reading the request inbox), `tools/overseer/store.ts` (the view in `recovery.json`),
+`scripts/overseer-recovery.ts` (new), and tests `tests/overseer-recovery-view.test.ts` and
+additions to `tests/overseer-daemon-recovery.test.ts`.
+
+Tests, red first (the spec's list, plus the spec's failed-collection rule):
+
+- **Missing directory**: `dir: missing`. The record stays `interrupted` and is not resolved.
+- **Transcript absent**: `transcript: not-found`, `resume: not-supported`, with the reason.
+- **Valid Claude transcript** in a temp `projects/<slug>/<uuid>.jsonl`, including one relocated
+  to a worktree slug: `found`, `resume: supported`.
+- **Already-live matching execution**: `already-live`, and one `resumed` disposition event is
+  appended with the new token. A second view appends nothing.
+- **Empty rebooted fleet** (accepted, `rows: []`, readable new generation): every candidate is
+  `interrupted`, or `ended-before-reboot` where `no-claude`.
+- **A failed or refused collection after the reboot**: every record is `unknown`, whatever the
+  rows said.
+- **Present-but-unmatched**: a same-name, same-dir row without a verified matching conversation.
+- **A shell session**: `manual`, with the SSH path, and no resume claim.
+- **Dismissal**: a valid request yields one disposition event. A duplicate request, or one for an
+  unknown or resolved id, is refused with a reason. The CLI never touches `events.jsonl`.
+- **Superseded**: two candidates for one conversation claim leave the older one `superseded`, naming
+  the newer.
+
+- [ ] Implementation, tests red → green, typecheck, focused suites; Sol review; commit.
+
+### Stage 3: the fleet boundary and the page
+
+Files: `tools/fleet/wire.ts` (appended block), `tools/fleet/recovery-feed.ts` (new),
+`tools/fleet/server.ts` (the route, approved), `tools/fleet/web/src/recovery-client.ts` and
+`RecoveryPanel.tsx` (new), `tools/fleet/web/src/App.tsx` (the mount, approved), and tests
+`tests/fleet-recovery-feed.test.ts` and `tests/fleet-recovery-wiring.test.ts`.
+
+- **The feed's arms**: absent, unreadable, unsupported schema, and published. There is no path from
+  a failure to an empty list.
+- **The simulated-reboot acceptance**: a disposable store built by driving the real daemon through
+  G1 (four sessions: a Claude that was working, one whose Claude had exited, a shell running a job,
+  one with a missing directory) → an empty post-reboot snapshot → G2 with one session resumed. It
+  is served by a fixture-backed fleet server on its own port. **A browser check by an Opus
+  subagent** (the Sonnet budget is exhausted until 2026-09-12) at desktop and phone widths, via
+  Playwright on this box, against a disposable server started by the subagent. It must not touch
+  the shared 8787 dashboard, and must kill only its own PID.
+- `npm run build:fleet`; the full suite through `scripts/tmux-job.ts`; typecheck; lint the touched
+  files.
+
+- [ ] Implementation, tests red → green, the browser check, full suite; Sol review; commit; push.
+
+## What this deliberately does not do
+
+- **Start, resume or offer to resume anything.** No command text, no button, no route that acts.
+- **Read `worktree:check`, or any filesystem state, as proof that work finished.**
+- **Mark a candidate resolved because its directory is gone.**
+- **Add the recovery index to `current.json` or to `/api/state`.** See §2.
+- **Emit a candidate for ordinary watched closes.** See §1.
+- **Paginate beyond the first page in the UI.** The CLI lists everything.
+- **Change `diff()`'s behaviour.** It stays pure. The empty post-reboot snapshot still closes
+  every session, which is now safe, because the evidence goes into the log first.
+
+## The simpler options passed over
+
+- **Keep gone entries in the register, marked closed**, rather than adding a fold. Every register
+  consumer (attention, work, the Overseer panel, `known` executions) would then have to learn to
+  skip them, and `current.json` would grow for ever. A separate index keeps "what is running" and
+  "what was interrupted" as two facts.
+- **Reconstruct candidates from the log on every page request.** That is simple, and it is exactly
+  what the spec rules out: the log is unbounded, and the request path must not fold it.
+- **Have the fleet server classify against its own live inventory.** It is fresher. But
+  interpretation is the Overseer's under the roadmap's ownership contract, and the fleet cannot
+  tell "the Overseer refused that collection" from "that collection was fine".
+- **A candidate on every gone.** About 280 records a day that nobody would read. See §1.
+
+## Status
+
+2026-09-10: plan written, awaiting Sol's plan review.
