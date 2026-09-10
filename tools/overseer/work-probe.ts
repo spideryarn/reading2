@@ -41,6 +41,52 @@ import { parseProcessTable, type ProcessTableReading } from "./work.js";
  */
 export const PS_ARGV: readonly string[] = ["-eo", "pid=,ppid=,etimes=,args="];
 
+export type ProcessTableSource = { bin: string; selfPid: number };
+
+/**
+ * Turn already-fetched `ps` output into a checked reading of this machine.
+ *
+ * Pure so an owned asynchronous child and the legacy synchronous adapter use
+ * exactly the same parse, empty-table refusal, and per-reading positive
+ * control. Spawn-shaped failures do not belong here: only the caller has an
+ * exit status, signal, or spawn error to interpret.
+ */
+export function readingFromPs(
+  stdout: string,
+  atMs: number,
+  source: ProcessTableSource,
+): ProcessTableReading {
+  const parsed = parseProcessTable(stdout, atMs);
+  if (!parsed.ok) return { read: false, why: `${source.bin} output was not a process table: ${parsed.reason}` };
+  // A LIVE MACHINE ALWAYS HAS PROCESSES. Zero rows means ps printed nothing
+  // while exiting 0 - which is the silent-success shape this area keeps
+  // meeting, and it must not become "no session is doing anything".
+  if (parsed.rows.length === 0) return { read: false, why: `${source.bin} exited 0 but listed no processes` };
+
+  // THE POSITIVE CONTROL, ON EVERY CALL, FOR THE PRICE OF ONE PASS.
+  //
+  // This module's whole output can honestly be "nothing is running under any
+  // pane", and that answer is indistinguishable from an instrument that has
+  // stopped detecting. Every other check here asks whether the output *looks*
+  // like a process table; this one asks whether it is a process table OF THIS
+  // MACHINE, by demanding the one row we can prove must be in it. A `ps` that
+  // listed a thousand plausible processes, none of them ours — a pid namespace
+  // we do not share, a stale capture piped in, a `bin` that is not ps at all —
+  // would otherwise produce `no-child-work` for all 33 sessions and look calm.
+  //
+  // No spawn, no second command, nothing to keep in sync: the assertion is a
+  // property of the reading we already have. See the POSITIVE CONTROL block in
+  // tests/overseer-work.test.ts for the other half of this argument.
+  if (!parsed.rows.some((row) => row.pid === source.selfPid)) {
+    return {
+      read: false,
+      why: `${source.bin} listed ${parsed.rows.length} processes but did not include this process (pid ${source.selfPid}), so it is not a reading of this machine`,
+    };
+  }
+
+  return { read: true, rows: parsed.rows, atMs };
+}
+
 /**
  * Long enough that a swapping box still answers, short enough that a tick does
  * not wedge. Measured at ~40 ms on an ordinary read of ~1000 processes here;
@@ -91,33 +137,5 @@ export function probeProcessTable(opts: { bin?: string; selfPid?: number } = {})
     return { read: false, why: `${bin} exited ${String(run.status)}${stderr === "" ? "" : `: ${stderr}`}` };
   }
 
-  const parsed = parseProcessTable(run.stdout ?? "", atMs);
-  if (!parsed.ok) return { read: false, why: `${bin} output was not a process table: ${parsed.reason}` };
-  // A LIVE MACHINE ALWAYS HAS PROCESSES. Zero rows means ps printed nothing
-  // while exiting 0 - which is the silent-success shape this area keeps
-  // meeting, and it must not become "no session is doing anything".
-  if (parsed.rows.length === 0) return { read: false, why: `${bin} exited 0 but listed no processes` };
-
-  // THE POSITIVE CONTROL, ON EVERY CALL, FOR THE PRICE OF ONE PASS.
-  //
-  // This module's whole output can honestly be "nothing is running under any
-  // pane", and that answer is indistinguishable from an instrument that has
-  // stopped detecting. Every other check here asks whether the output *looks*
-  // like a process table; this one asks whether it is a process table OF THIS
-  // MACHINE, by demanding the one row we can prove must be in it. A `ps` that
-  // listed a thousand plausible processes, none of them ours — a pid namespace
-  // we do not share, a stale capture piped in, a `bin` that is not ps at all —
-  // would otherwise produce `no-child-work` for all 33 sessions and look calm.
-  //
-  // No spawn, no second command, nothing to keep in sync: the assertion is a
-  // property of the reading we already have. See the POSITIVE CONTROL block in
-  // tests/overseer-work.test.ts for the other half of this argument.
-  if (!parsed.rows.some((row) => row.pid === selfPid)) {
-    return {
-      read: false,
-      why: `${bin} listed ${parsed.rows.length} processes but did not include this process (pid ${selfPid}), so it is not a reading of this machine`,
-    };
-  }
-
-  return { read: true, rows: parsed.rows, atMs };
+  return readingFromPs(run.stdout ?? "", atMs, { bin, selfPid });
 }

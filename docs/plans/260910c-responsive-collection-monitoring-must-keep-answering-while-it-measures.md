@@ -153,7 +153,7 @@ is not enforced at all.
       client-side timeout that reports a lower bound rather than being lost, exactly one line is
       emitted per request, and `stop()` is itself bounded so a poller that will not drain becomes a
       loud accounting failure instead of a hung bench.
-- [ ] Once Stage 1 exists, drive the real `runOwned` path in the fixture rather than an injected
+- [x] Once Stage 1 exists, drive the real `runOwned` path in the fixture rather than an injected
       `execFileSync("sleep")`.
 
 ## Stage 1 — Owned children: a probe you can stop waiting for and still be responsible for
@@ -333,16 +333,64 @@ could not isolate the owned pass or let its slow child live the full 30 s, so it
 proved the acceptance sentence at all (`--variant`, and the slow child's default deadline).
 
 **A correction, and a finding that predates this plan.** This plan's 3a brief said an unreadable
-pane listing "is an empty map, and the snapshot still arrives". **The second half is false in
-production.** The dashboard runs under tmux, so `selfCheck` looks for its own pane in that empty map,
-returns `absent`, and `collect()` throws *"this is not a listing of this box"* — naming the wrong
-cause for what was a slow or failed `list-panes`, and contradicting `panes()`'s own comment that the
-row is still worth showing. It predates `b2029e4d`, but 3a makes it more reachable: an owned
-timeout now produces that empty map too. **Stage 3b fixes the sentence** — the listing says whether
-it was read, and an unread one fails the collection *truthfully* — and keeps today's safe
-behaviour of not publishing a listing that cannot be verified. **Whether to publish the rows anyway,
-marked unverified, is a safety trade-off put to the Overseer**, not taken here: it would give up the
-check `selfCheck` exists for. A postmortem is being written.
+pane listing "is an empty map, and the snapshot still arrives". **The second half is false whenever
+the collector runs inside a tmux pane** — a tmux-job dashboard, or this plan's bench run from a
+pane: `selfCheck` looks for its own pane in that empty map, returns `absent`, and `collect()` throws
+*"this is not a listing of this box"* — naming the wrong cause for a slow or failed `list-panes`,
+and contradicting `panes()`'s own comment that the row is still worth showing. It predates
+`b2029e4d`; 3a makes it more reachable, since an owned timeout now produces that map too. **Stage 3b
+fixes the sentence**: the listing is a union of *read* and *unread*, and an unread one fails the
+collection truthfully, still without publishing a listing nobody could verify.
+
+**And the premise the reviewer and I both held was itself wrong.** The review said this fires "under
+production's tmux environment", and I copied that into this plan and 3b's brief before checking it.
+**Production has not run under tmux since 2026-09-08**: the dashboard is `fleet-dashboard.service`
+under systemd, and the process that runs `collect()` has no `TMUX` and no `TMUX_PANE` (verified
+read-only on the live process). So in production `selfCheck` returns `cannot-check` on every
+collection: this bug is masked there — **and so is the wrong-box protection**, which has been off
+in production since the move, about 13 hours after it landed. Postmortem:
+[260910b — a later check reads an earlier fallback as evidence](../postmortems/260910b-a-later-check-reads-an-earlier-fallback-as-evidence.md).
+The Overseer queued a `selfCheck` that works under systemd, with its verdict reported on
+`/api/state`, as its own stage (`qi-j4jyf3ab`), and withdrew the "publish the rows unverified?"
+question as moot.
+
+**Status — 3b (2026-09-10): built by Codex; independent review next.** `readExecutions`' two `ps`
+calls now run through the owner, one after the other under one shared key, with every `/proc` read
+between them — **the order is the pid-reuse defence and it is unchanged**; a stuck first `ps` refuses
+the second and the refusal carries its pid, an honest half-bracket rather than a false whole one.
+`atMs` is stamped after the child returns. The `/proc` reads stay synchronous on purpose:
+microseconds, not subprocesses, and their position between the two tables is the defence.
+**`tools/overseer/work-probe.ts`**, under the Overseer's three conditions: the checks moved verbatim
+into a pure `readingFromPs`; `probeProcessTable` calls it, so there is one copy; its spawn-shaped
+checks — including the known unreachable "killed by SIGTERM" message — are untouched; and a test
+drives `readingFromPs` alone with a foreign process table and watches it refuse. The pane listing is
+a union of `read` and `unread`, `snapshotFrom` accepts only a read one, and an unread one fails the
+collection with *"could not read this box's tmux pane listing: …"*.
+
+**The whole collection on the real box, before and after, in one run** (`npx tsx
+scripts/fleet-collect-bench.ts --mode=real --runs=2`, load ~9–10, 23–24 sessions; request
+accounting 1084 issued = 1084 completed):
+
+| phase | loop lag max |
+|---|---|
+| *before, same run:* `tmux capture-pane` × 24, synchronous | 297 / 293 ms |
+| *before:* `ps` × 2, synchronous | 190 / 167 ms |
+| *before:* `collectHealth`, synchronous | 1161 / 1185 ms |
+| **after: `collect()` end to end, every probe owned** | **31.6 / 28.1 ms** (p95 2.3 / 2.5 ms) |
+| **after: `collectHealthAsync`, owned** | **34.6 / 36.9 ms** (0 children live after) |
+
+Every earlier run of this bench had `collect()` holding the thread for up to **409–478 ms**; it is
+now under 32 ms, roughly 15× lower, while its wall time is unchanged at ~5.3 s because the async
+inventory script still dominates it. **So a production turn — collection plus health — never holds
+the request thread for more than about 40 ms.** What remains on the thread is `statePayload()` at
+~2.5 ms per request, and `drain.ts`, which is out of this plan's scope and now queued. (The run's
+overall HTTP p95 still includes the bench's synchronous *before* phases, so it is not an *after*
+number; the HTTP acceptance is 3a's fixture above.)
+
+**Two things for the 3b review**: `panes()`'s new comment says *"In production `collect` must verify
+that its own pane is present"* — the false premise above, now in a source comment — and the older
+comment near `collect.ts:616` says the collector "runs under `tmux-job.ts` in production". Both are
+to be corrected, and `selfCheck`'s behaviour is not to change.
 
 - [x] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
       and `readPanes` becomes async over `limit(4)`. `tests/fleet-launch-mode.test.ts` drives
@@ -350,7 +398,7 @@ check `selfCheck` exists for. A postmortem is being written.
 - [x] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
       unreadable listing is an empty map, an unreadable generation is `null` meaning *unverifiable*,
       and only two numbers that disagree are drift.
-- [ ] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
+- [x] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
       measured, against a 470 ms synchronous tail and a 250 ms target, they are responsiveness work.
       It needs the "is this a reading of THIS machine" positive control inside `probeProcessTable`
       reachable from an already-fetched stdout — **a pure extraction in
@@ -359,10 +407,10 @@ check `selfCheck` exists for. A postmortem is being written.
       copy, and **a test that drives the extracted function alone with a foreign process table and
       watches it refuse** — the positive control has to be shown firing from the new entry point, not
       only from the old one.
-- [ ] **Per-field unknowns are preserved**, and each now says which kind of not-looking it was: a
+- [x] **Per-field unknowns are preserved**, and each now says which kind of not-looking it was: a
       pane not reached because its probe was refused behind a stuck child reads differently from a
       pane whose capture failed.
-- [ ] Re-run the bench with the fixed accounting. Before/after in this file, or no claim.
+- [x] Re-run the bench with the fixed accounting. Before/after in this file, or no claim.
 
 ## Stage 4 — The title lookup
 

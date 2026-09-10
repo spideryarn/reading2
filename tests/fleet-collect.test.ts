@@ -15,11 +15,24 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { execFileMock, inventoryRunMock } = vi.hoisted(() => {
+  const inventory = vi.fn<() => Promise<{ stdout: string; stderr: string }>>();
+  const execFile = vi.fn();
+  Object.defineProperty(execFile, Symbol.for("nodejs.util.promisify.custom"), { value: inventory });
+  return { execFileMock: execFile, inventoryRunMock: inventory };
+});
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, execFile: execFileMock };
+});
 
 import {
   generationNow,
   generationDrift,
+  collect,
   panes,
   panesBySession,
   readPanes,
@@ -39,7 +52,7 @@ import { readAttemptClock } from "../tools/fleet/attempt-clock.js";
 import { fleetState } from "../tools/fleet/state.js";
 import type { AttentionFeed, OverseerStatusFeed, UsageFeed } from "../tools/fleet/wire.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
+import { buildSessionScript, ROW_COUNT, SESSION_SENTINEL, type Session } from "../scripts/gjd-remote-tmux.js";
 import { report as reportCollectBench } from "../scripts/fleet-collect-bench.js";
 
 /** No status derived for anyone — the map `toRows` falls back from. */
@@ -91,6 +104,11 @@ function permissionWhy(row: ReturnType<typeof toRows>[number]): string {
   }
   return row.permissionMode.why;
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  inventoryRunMock.mockReset();
+});
 
 describe("worktreeOf", () => {
   it("names the worktree a session is in", () => {
@@ -337,6 +355,7 @@ describe("owned tmux probes", () => {
     expect(src).toContain("const generationBefore = await generationNow(owner)");
     expect(src).toContain("const listing = await panes(owner)");
     expect(src).toContain("await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId))");
+    expect(src).toContain("await readExecutions(rows, { probe: () => probeProcessTableAsync(owner) })");
   });
 
   it("finishes the other captures when one owner call reports a bounded timeout", async () => {
@@ -455,7 +474,7 @@ describe("owned tmux probes", () => {
     expect(rows.every((row) => permissionWhy(row) !== "this session's pane has not been read yet")).toBe(true);
   });
 
-  it("keeps a timed-out pane listing empty and a timed-out generation unverifiable", async () => {
+  it("distinguishes a timed-out pane listing from one that was read and empty", async () => {
     const specs: ProbeSpec[] = [];
     const owner = ownerReturning((spec) => {
       specs.push(spec);
@@ -470,8 +489,7 @@ describe("owned tmux probes", () => {
 
     const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
 
-    expect(listing.panes.size).toBe(0);
-    expect(listing.tmuxServerPid).toBeNull();
+    expect(listing).toEqual({ kind: "unread", why: 'probe "tmux:list-panes" reached its deadline' });
     expect(generation).toBeNull();
     expect(generationDrift(generation, 132280)).toBeNull();
     expect(specs).toEqual(expect.arrayContaining([
@@ -490,7 +508,7 @@ describe("owned tmux probes", () => {
     ]));
   });
 
-  it("keeps a refused pane listing empty and a refused generation unverifiable", async () => {
+  it("distinguishes a refused pane listing from one that was read and empty", async () => {
     const asked: string[] = [];
     const owner = ownerReturning((spec) => {
       asked.push(spec.key);
@@ -505,9 +523,66 @@ describe("owned tmux probes", () => {
     const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
 
     expect(asked.sort()).toEqual(["tmux:generation", "tmux:list-panes"]);
-    expect(listing).toEqual({ panes: new Map(), tmuxServerPid: null });
+    expect(listing).toEqual({ kind: "unread", why: 'probe "tmux:list-panes" still has an unaccounted child' });
     expect(generation).toBeNull();
     expect(generationDrift(132_280, generation)).toBeNull();
+  });
+
+  it("reports why an unread pane listing failed instead of calling it another box", async () => {
+    inventoryRunMock.mockResolvedValue({ stdout: `${ROW_COUNT} 0\n${SESSION_SENTINEL}`, stderr: "" });
+    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,132280,1");
+    vi.stubEnv("TMUX_PANE", "%9999");
+
+    const failures: Array<Exclude<OwnedOutcome, { kind: "ok" }>> = [
+      {
+        kind: "refused",
+        why: 'probe "tmux:list-panes" still has child pid 8123 unaccounted for after 7500ms; no second child was started',
+        pid: 8123,
+        liveForMs: 7_500,
+      },
+      {
+        kind: "timed-out",
+        why: 'probe "tmux:list-panes" reached its 10000ms deadline; child pid 8124 did not exit',
+        tookMs: 11_000,
+        pid: 8124,
+        exitObserved: false,
+      },
+      {
+        kind: "failed",
+        why: "tmux exited with code 1: server busy",
+        tookMs: 4,
+        exitCode: 1,
+        signal: null,
+      },
+    ];
+
+    for (const failure of failures) {
+      const owner = ownerReturning((spec) =>
+        spec.key === "tmux:generation"
+          ? { kind: "ok", stdout: "132280\n", stderr: "", tookMs: 1 }
+          : failure);
+      const error = await collect(owner).then(
+        () => null,
+        (cause: unknown) => cause instanceof Error ? cause : new Error(String(cause)),
+      );
+      expect(error?.message).toContain("pane listing");
+      expect(error?.message).toContain(failure.why);
+      expect(error?.message).not.toContain("not a listing of this box");
+    }
+  });
+
+  it("still lets selfCheck refuse a pane listing that was read but does not contain us", async () => {
+    inventoryRunMock.mockResolvedValue({ stdout: `${ROW_COUNT} 0\n${SESSION_SENTINEL}`, stderr: "" });
+    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,132280,1");
+    vi.stubEnv("TMUX_PANE", "%9999");
+    const owner = ownerReturning((spec) => ({
+      kind: "ok",
+      stdout: spec.key === "tmux:generation" ? "132280\n" : "$1 %1 100 132280\n",
+      stderr: "",
+      tookMs: 1,
+    }));
+
+    await expect(collect(owner)).rejects.toThrow("not a listing of this box");
   });
 });
 
@@ -810,7 +885,7 @@ describe("the collector's wiring", () => {
     };
     const snap = snapshotFrom(
       parsed,
-      { panes: new Map([["$7", { paneId: "%70", panePid: 700 }]]), tmuxServerPid: 132280 },
+      { kind: "read", panes: new Map([["$7", { paneId: "%70", panePid: 700 }]]), tmuxServerPid: 132280 },
       5,
     );
     const round = JSON.parse(JSON.stringify(snap)) as FleetSnapshot;
@@ -837,7 +912,7 @@ describe("the collector's wiring", () => {
       agentsWhy: "claude: command not found",
     };
     expect(
-      snapshotFrom(parsed, { panes: new Map(), tmuxServerPid: null }, 5).rows[0]?.status.kind,
+      snapshotFrom(parsed, { kind: "read", panes: new Map(), tmuxServerPid: null }, 5).rows[0]?.status.kind,
     ).toBe("unknown");
   });
 });

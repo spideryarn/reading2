@@ -45,7 +45,7 @@ import { describeKey } from "./describe-pass.js";
 import { descriptionsRoot, readDescriptionMemory } from "./describe-store.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
 import { classifyPaneHarness } from "../overseer/harness.js";
-import { probeProcessTable } from "../overseer/work-probe.js";
+import { PS_ARGV, readingFromPs } from "../overseer/work-probe.js";
 import type { ProcessTableReading } from "../overseer/work.js";
 
 /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
@@ -531,14 +531,21 @@ export async function readPanes(rows: FleetRow[], capture: (paneId: string) => P
  * belong to. Grouped rather than passed as two arguments because a caller that
  * can supply the panes and omit the generation is a caller that will.
  */
-export type PaneListing = { panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid: number | null };
+export type PaneListing =
+  | { kind: "read"; panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid: number | null }
+  | { kind: "unread"; why: string };
+
+type ReadPaneListing = Extract<PaneListing, { kind: "read" }>;
 
 /**
- * Every pane on the box, keyed by its session, and the server they are on.
+ * Every pane on the box, keyed by its session, and the server they are on, or
+ * the reason no listing arrived.
  *
- * Empty on failure rather than throwing: not knowing a pane costs a question,
- * while the row itself is still worth showing. A null generation is the same
- * bargain — it says "unverifiable", which is what a consumer needs to hear.
+ * Failure is a separate arm rather than an empty map. In production `collect`
+ * must verify that its own pane is present before publishing anything, so a
+ * failed listing cannot safely produce a snapshot; calling it empty made that
+ * guard blame a different box instead of the tmux failure that actually
+ * happened.
  */
 export async function panes(owner: ProbeOwner): Promise<PaneListing> {
   try {
@@ -551,10 +558,13 @@ export async function panes(owner: ProbeOwner): Promise<PaneListing> {
       args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
       timeoutMs: 10_000,
     });
-    if (outcome.kind !== "ok") return { panes: new Map(), tmuxServerPid: null };
-    return { panes: panesBySession(outcome.stdout), tmuxServerPid: tmuxServerPid(outcome.stdout) };
-  } catch {
-    return { panes: new Map(), tmuxServerPid: null };
+    if (outcome.kind !== "ok") return { kind: "unread", why: outcome.why };
+    return { kind: "read", panes: panesBySession(outcome.stdout), tmuxServerPid: tmuxServerPid(outcome.stdout) };
+  } catch (cause) {
+    return {
+      kind: "unread",
+      why: `reading tmux panes threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
   }
 }
 
@@ -579,7 +589,7 @@ export function sessionScript(): string {
  */
 export function snapshotFrom(
   parsed: ReturnType<typeof parseSessions>,
-  listing: PaneListing,
+  listing: ReadPaneListing,
   tookMs: number,
   now = new Date(),
 ): FleetSnapshot {
@@ -796,6 +806,9 @@ export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
   const listing = await panes(owner);
+  if (listing.kind === "unread") {
+    throw new Error(`could not read this box's tmux pane listing: ${listing.why}`);
+  }
   const drift = generationDrift(generationBefore, listing.tmuxServerPid);
   if (drift) throw new Error(drift);
   // Before anything is derived from the listing, not after: a listing of the
@@ -818,7 +831,7 @@ export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
   /* AND ONE PASS FOR WHICH RUN IS IN EACH PANE. One `ps` for the whole fleet
      and one small `/proc` read per pane, so this is the third pass rather than
      a probe per row — see `readExecutions`. */
-  readExecutions(rows);
+  await readExecutions(rows, { probe: () => probeProcessTableAsync(owner) });
 
   /* AND ONE PASS FOR WHY A QUIET SESSION IS QUIET. Separate from `readPanes`
      because it reads files rather than terminals, and because it is allowed to
@@ -858,28 +871,61 @@ export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
  */
 /** What {@link readExecutions} touches, so a test can drive it without a box. */
 export type ExecutionIo = {
-  probe: () => ProcessTableReading;
+  probe: () => Promise<ProcessTableReading>;
+  // These are direct `/proc` reads measured in microseconds, not
+  // subprocesses. Keeping them synchronous also keeps every start read
+  // physically inside the two awaited process tables below.
   boot: () => BootIdentity;
   uptime: () => UptimeReading;
   readStart: (pid: number) => ProcessStartTicks;
 };
 
+/** Read one process table without blocking the dashboard's request thread. */
+export async function probeProcessTableAsync(owner: ProbeOwner): Promise<ProcessTableReading> {
+  try {
+    const outcome = await owner.run({
+      // Both ends of the bracket deliberately share one key and are awaited
+      // sequentially. If the first `ps` is still unaccounted for, starting a
+      // second cannot produce a usable bracket and would multiply stuck
+      // children; the owner's refusal instead carries that first child's pid.
+      key: "process-table",
+      cmd: "ps",
+      args: PS_ARGV,
+      timeoutMs: 10_000,
+      maxBytes: 32 * 1024 * 1024,
+    });
+    if (outcome.kind !== "ok") return { read: false, why: outcome.why };
+
+    // TIMED AFTER ps RETURNS. `etimes` is relative to when ps read /proc, so a
+    // stamp from before the await would make every derived start time early by
+    // the entire probe duration — worst on the swapping box this watches.
+    const atMs = Date.now();
+    return readingFromPs(outcome.stdout, atMs, { bin: "ps", selfPid: process.pid });
+  } catch (cause) {
+    return {
+      read: false,
+      why: `the owned process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
+}
+
 /**
- * **FILL IN `execution` ON EVERY ROW, FROM ONE READING OF THE PROCESS TABLE.**
+ * **FILL IN `execution` ON EVERY ROW, FROM TWO READINGS OF THE PROCESS TABLE.**
  *
- * **ONE `ps` FOR THE WHOLE FLEET, NOT ONE PER ROW**, and the same for the boot
- * id. That is the collector contract the roadmap states — *"Bounded
+ * **ONE BRACKET OF TWO `ps` CALLS FOR THE WHOLE FLEET, NOT ONE PER ROW**, and
+ * one boot-id read. That is the collector contract the roadmap states — *"Bounded
  * process/transcript probes have one owner/cadence"* — and it is also the only
  * way the answers can be consistent with each other: thirty separate `ps` runs
  * would describe thirty slightly different boxes, so two rows could disagree
  * about a process they share. The per-row cost after that is one
  * `/proc/<pid>/stat` read, which is a few hundred bytes.
  *
- * **IT REUSES THE PROBE THAT ALREADY EXISTS.** `probeProcessTable` was written
- * for this box, carries its own positive control (a `ps` that does not contain
- * this process is refused as not being a reading of this machine), and until
- * this call site had no production caller at all. `classifyPaneHarness` is the
- * same story. Nothing here re-walks a tree or re-reads a `claude` command line.
+ * **IT REUSES THE CHECKS THE EXISTING PROBE USES.** `readingFromPs` carries the
+ * parse, the empty-table refusal, and the positive control: a `ps` that does
+ * not contain this process is not a reading of this machine. Both the owned
+ * path here and the synchronous `probeProcessTable` adapter call it, so the
+ * safety check cannot drift between them. `classifyPaneHarness` is reused too;
+ * nothing here re-walks a tree or re-reads a `claude` command line.
  *
  * **COST, MEASURED ON THIS BOX RATHER THAN ASSUMED — and it is not the ~40 ms
  * this comment first claimed.** The whole pass over **26 live sessions took
@@ -888,25 +934,28 @@ export type ExecutionIo = {
  * quoting it for the pass was the kind of borrowed number that becomes a source
  * comment nobody re-derives.
  *
- * 236 ms against a collection that already takes 8–12 seconds is ~2–3%, so it
- * is affordable — but it is all `spawnSync` and `readFileSync` **on the request
- * process**, and the Responsive collection stage should take it along with the
- * two `execFileSync` calls it is already going after, rather than leave it as
- * the one nobody remembered. Named here so it is found.
+ * The wait is affordable against an 8–12 second collection, but the two `ps`
+ * calls used to be `spawnSync` on the request process and blocked it for the
+ * whole interval. They now run through the child owner; the three direct
+ * `/proc` readers remain synchronous because they take microseconds and their
+ * exact position inside the two tables is the pid-reuse defence below.
  *
  * **A FAILURE COSTS NOTHING BUT THE READING.** Every arm of `ExecutionReading`
  * is a value, including all the failures, so a box whose `ps` will not run
  * produces rows that say why rather than rows that are missing.
  */
-export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}): void {
-  const probe = io.probe ?? probeProcessTable;
+export async function readExecutions(
+  rows: FleetRow[],
+  io: Pick<ExecutionIo, "probe"> & Partial<Omit<ExecutionIo, "probe">>,
+): Promise<void> {
+  const probe = io.probe;
   const bootOf = io.boot ?? (() => readBootIdentity());
   const uptimeOf = io.uptime ?? (() => readUptime());
   const readStart = io.readStart ?? ((pid: number) => readProcessStart(pid));
 
   let table: ProcessTableReading;
   try {
-    table = probe();
+    table = await probe();
   } catch (cause) {
     table = { read: false, why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
@@ -939,7 +988,7 @@ export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}):
   /* AND THE FAR END OF THE BRACKET. A second `ps`, ~40 ms, after every read. */
   let after: ProcessTableReading;
   try {
-    after = probe();
+    after = await probe();
   } catch (cause) {
     after = { read: false, why: `the second process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
