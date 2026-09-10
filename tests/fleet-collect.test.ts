@@ -15,11 +15,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
+  generationNow,
   generationDrift,
+  panes,
   panesBySession,
+  readPanes,
   sessionScript,
   snapshotFrom,
   tmuxServerPid,
@@ -29,6 +32,8 @@ import {
   selfCheck,
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
+import { probeOwner, type OwnedOutcome, type ProbeOwner, type ProbeSpec } from "../tools/fleet/child.js";
+import { capturePaneAsync } from "../tools/fleet/pane.js";
 import { parseBinds } from "../tools/fleet/config.js";
 import { readAttemptClock } from "../tools/fleet/attempt-clock.js";
 import { fleetState } from "../tools/fleet/state.js";
@@ -60,6 +65,30 @@ function session(over: Partial<Session> = {}): Session {
     role: { kind: "none" },
     ...over,
   };
+}
+
+function interactiveRows(n: number): ReturnType<typeof toRows> {
+  const sessions = Array.from({ length: n }, (_, index) =>
+    session({ id: `$${index + 1}`, name: `session-${index + 1}` }));
+  return toRows(
+    sessions,
+    new Map(sessions.map((item) => [item.id, { kind: "working" } as FleetStatus])),
+    new Map(sessions.map((item, index) => [item.id, { paneId: `%${index + 1}`, panePid: index + 100 }])),
+  );
+}
+
+function ownerReturning(outcomeFor: (spec: ProbeSpec) => OwnedOutcome | Promise<OwnedOutcome>): ProbeOwner {
+  return {
+    run: async (spec) => outcomeFor(spec),
+    live: () => [],
+  };
+}
+
+function permissionWhy(row: ReturnType<typeof toRows>[number]): string {
+  if (row.permissionMode.kind !== "cannot-tell") {
+    throw new Error(`expected cannot-tell, got ${row.permissionMode.kind}`);
+  }
+  return row.permissionMode.why;
 }
 
 describe("worktreeOf", () => {
@@ -296,6 +325,159 @@ describe("panesBySession", () => {
       expect(info?.paneId).toBe("%20");
       expect(info?.panePid).toBeNull();
     }
+  });
+});
+
+describe("owned tmux probes", () => {
+  it("finishes the other captures when one owner call reports a bounded timeout", async () => {
+    const rows = interactiveRows(6);
+    const completedBeforeSlow: string[] = [];
+    let slowFinished = false;
+    const owner = ownerReturning(async (spec) => {
+      if (spec.key !== "capture-pane:%1") {
+        if (!slowFinished) completedBeforeSlow.push(spec.key);
+        return { kind: "ok", stdout: "", stderr: "", tookMs: 1 };
+      }
+
+      /* The child-side operation never settles; the owner is the boundary that
+         releases its caller. This is the failure a real SIGKILL cannot arrange
+         reliably in a test, and the same seam child.test.ts uses for it. */
+      const never = new Promise<OwnedOutcome>(() => {});
+      const bound = new Promise<OwnedOutcome>((resolve) => {
+        setTimeout(() => {
+          slowFinished = true;
+          resolve({
+            kind: "timed-out",
+            why: `probe "${spec.key}" reached its 10ms deadline`,
+            tookMs: 12,
+            pid: 4312,
+            exitObserved: false,
+          });
+        }, 10);
+      });
+      return Promise.race([never, bound]);
+    });
+
+    const startedAt = Date.now();
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(slowFinished).toBe(true);
+    expect(completedBeforeSlow).toHaveLength(5);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(rows[0]?.permissionMode).toMatchObject({ kind: "cannot-tell" });
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toContain("timed-out");
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toContain("4312");
+    expect(rows.slice(1).every((row) => permissionWhy(row) !== "this session's pane has not been read yet")).toBe(true);
+  });
+
+  it("drives a slow capture through the real owner and releases the other panes", async () => {
+    const rows = interactiveRows(6);
+    const realOwner = probeOwner();
+    const completed: string[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        const slow = spec.key === "capture-pane:%1";
+        const outcome = await realOwner.run({
+          ...spec,
+          cmd: slow ? "sleep" : "true",
+          args: slow ? ["10"] : [],
+          timeoutMs: slow ? 20 : 1_000,
+          graceMs: 20,
+        });
+        if (!slow && outcome.kind === "ok") completed.push(spec.key);
+        return outcome;
+      },
+      live: realOwner.live,
+    };
+
+    const startedAt = Date.now();
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(completed).toHaveLength(5);
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toMatch(/timed-out.*child pid/);
+    await vi.waitFor(() => expect(realOwner.live()).toHaveLength(0), { timeout: 2_000 });
+  });
+
+  it("puts a refused child's pid and age in a different reason from an ordinary failure", async () => {
+    const rows = interactiveRows(2);
+    const owner = ownerReturning((spec) =>
+      spec.key === "capture-pane:%1"
+        ? {
+            kind: "refused",
+            why: `probe "${spec.key}" was refused because its previous child is still live`,
+            pid: 8123,
+            liveForMs: 7_500,
+          }
+        : {
+            kind: "failed",
+            why: "tmux exited with code 1: no such pane",
+            tookMs: 3,
+            exitCode: 1,
+            signal: null,
+          });
+
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toMatch(/refused.*8123.*7500ms/);
+    expect(permissionWhy(rows[1] as ReturnType<typeof toRows>[number])).toContain("tmux exited with code 1");
+    expect(permissionWhy(rows[1] as ReturnType<typeof toRows>[number])).not.toContain("8123");
+  });
+
+  it("runs at most four captures at once and still reads all rows", async () => {
+    const rows = interactiveRows(11);
+    const seen: string[] = [];
+    let active = 0;
+    let highWater = 0;
+
+    await readPanes(rows, async (paneId) => {
+      seen.push(paneId);
+      active += 1;
+      highWater = Math.max(highWater, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return "";
+    });
+
+    expect(highWater).toBe(4);
+    expect(seen).toHaveLength(11);
+    expect(new Set(seen).size).toBe(11);
+    expect(rows.every((row) => permissionWhy(row) !== "this session's pane has not been read yet")).toBe(true);
+  });
+
+  it("keeps a timed-out pane listing empty and a timed-out generation unverifiable", async () => {
+    const specs: ProbeSpec[] = [];
+    const owner = ownerReturning((spec) => {
+      specs.push(spec);
+      return {
+        kind: "timed-out",
+        why: `probe "${spec.key}" reached its deadline`,
+        tookMs: spec.timeoutMs + 1_000,
+        pid: 9911,
+        exitObserved: false,
+      };
+    });
+
+    const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
+
+    expect(listing.panes.size).toBe(0);
+    expect(listing.tmuxServerPid).toBeNull();
+    expect(generation).toBeNull();
+    expect(generationDrift(generation, 132280)).toBeNull();
+    expect(specs).toEqual(expect.arrayContaining([
+      {
+        key: "tmux:list-panes",
+        cmd: "tmux",
+        args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+        timeoutMs: 10_000,
+      },
+      {
+        key: "tmux:generation",
+        cmd: "tmux",
+        args: ["display-message", "-p", "#{pid}"],
+        timeoutMs: 5_000,
+      },
+    ]));
   });
 });
 

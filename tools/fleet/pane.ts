@@ -53,6 +53,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import type { OwnedOutcome, ProbeOwner } from "./child.js";
+
 /**
  * What to send to choose an option.
  *
@@ -1398,4 +1400,47 @@ export function capturePane(paneId: string): string {
     maxBuffer: 4 * 1024 * 1024,
     timeout: 10_000,
   });
+}
+
+function ownedCaptureFailure(outcome: Exclude<OwnedOutcome, { kind: "ok" }>): string {
+  if (outcome.kind === "refused") {
+    return (
+      `capture refused: ${outcome.why}; owned child pid ${outcome.pid} has been alive for ` +
+      `${Math.max(1, outcome.liveForMs)}ms`
+    );
+  }
+  if (outcome.kind === "timed-out") {
+    const pid = outcome.pid === null ? "no child pid was observable" : `child pid ${outcome.pid}`;
+    return (
+      `capture timed-out: ${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms; ${pid}`
+    );
+  }
+  return `capture ${outcome.kind}: ${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms`;
+}
+
+/**
+ * Read a pane without holding Node's request thread while tmux answers.
+ *
+ * The key is the pane handle, not one fleet-wide capture key. A pane whose
+ * child survives its deadline must refuse only its own next capture; otherwise
+ * one wedged terminal would make every healthy row unreadable on every turn.
+ * Non-success outcomes throw with the owner's pid and clock intact, preserving
+ * `capturePane`'s bargain that unreadable is not an empty pane.
+ */
+export async function capturePaneAsync(owner: ProbeOwner, paneId: string): Promise<string> {
+  if (!isPaneId(paneId)) throw new Error(`not a tmux pane id: ${paneId}`);
+  let outcome: OwnedOutcome;
+  try {
+    outcome = await owner.run({
+      key: `capture-pane:${paneId}`,
+      cmd: "tmux",
+      args: ["capture-pane", "-p", "-t", paneId],
+      timeoutMs: 10_000,
+      maxBytes: 4 * 1024 * 1024,
+    });
+  } catch (cause) {
+    throw new Error(`capture failed: the owned probe threw: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+  if (outcome.kind === "ok") return outcome.stdout;
+  throw new Error(ownedCaptureFailure(outcome));
 }

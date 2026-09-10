@@ -49,6 +49,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  capturePaneAsync,
   capturePane,
   classifyConsequence,
   classifyGate,
@@ -62,6 +63,7 @@ import {
   type PaneMaterial,
   type PaneOption,
 } from "../tools/fleet/pane.js";
+import type { ProbeOwner, ProbeSpec } from "../tools/fleet/child.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-panes");
 
@@ -923,6 +925,40 @@ describe("addressing a pane", () => {
 
   it("refuses to shell out for anything that is not a pane id", () => {
     expect(() => capturePane("fleet-v01")).toThrow(/not a tmux pane id/);
+  });
+
+  it("refuses an invalid pane before asking the owned child registry", async () => {
+    let runs = 0;
+    const owner: ProbeOwner = {
+      run: async () => {
+        runs += 1;
+        return { kind: "ok", stdout: "", stderr: "", tookMs: 1 };
+      },
+      live: () => [],
+    };
+
+    await expect(capturePaneAsync(owner, "fleet-v01")).rejects.toThrow(/not a tmux pane id/);
+    expect(runs).toBe(0);
+  });
+
+  it("owns one key per pane and keeps the synchronous capture's exact tmux address", async () => {
+    const specs: ProbeSpec[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        specs.push(spec);
+        return { kind: "ok", stdout: "the pane", stderr: "", tookMs: 2 };
+      },
+      live: () => [],
+    };
+
+    await expect(capturePaneAsync(owner, "%123")).resolves.toBe("the pane");
+    expect(specs).toEqual([{
+      key: "capture-pane:%123",
+      cmd: "tmux",
+      args: ["capture-pane", "-p", "-t", "%123"],
+      timeoutMs: 10_000,
+      maxBytes: 4 * 1024 * 1024,
+    }]);
   });
 });
 

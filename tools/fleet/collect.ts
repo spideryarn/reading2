@@ -16,7 +16,7 @@
  * differently is run it through `bash` instead of `ssh`, because we are already
  * on the box it wants to ask.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
@@ -28,7 +28,8 @@ import {
   type SessionMeta,
   type SessionRole,
 } from "../../scripts/gjd-remote-tmux.js";
-import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
+import { capturePaneAsync, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
+import { limit, type ProbeOwner } from "./child.js";
 import { statusesOf, type FleetStatus } from "./status.js";
 import type { ExecutionReading, Pause, SessionDescription } from "./wire.js";
 import {
@@ -465,25 +466,29 @@ export function toRows(
  * shows its status, which is true and useful; the page says it could not read
  * the pane rather than pretending there was nothing on it.
  */
-export function readPanes(rows: FleetRow[], capture: (paneId: string) => string = capturePane): void {
-  for (const row of rows) {
-    if (modeApplicability(row.status).kind !== "read-the-pane") continue;
+export async function readPanes(rows: FleetRow[], capture: (paneId: string) => Promise<string>): Promise<void> {
+  const runCapture = limit(4);
+  await Promise.all(rows.map(async (row) => {
+    if (modeApplicability(row.status).kind !== "read-the-pane") return;
     if (row.paneId === null) {
       row.permissionMode = {
         kind: "cannot-tell",
         why: "tmux gave this session no pane, so there is no screen to read it off",
       };
-      continue;
+      return;
     }
+    const paneId = row.paneId;
     let text: string | null = null;
+    let failureWhy = "this session's pane could not be captured";
     try {
-      text = capture(row.paneId);
-    } catch {
+      text = await runCapture(() => capture(paneId));
+    } catch (cause) {
       text = null;
+      failureWhy += `: ${cause instanceof Error ? cause.message : String(cause)}`;
     }
     if (text === null) {
-      row.permissionMode = { kind: "cannot-tell", why: "this session's pane could not be captured" };
-      continue;
+      row.permissionMode = { kind: "cannot-tell", why: failureWhy };
+      return;
     }
     row.permissionMode = readPaneMode(text);
     // ONLY THE BLOCKED ROWS GET A QUESTION. Parsing every pane would be free
@@ -491,13 +496,13 @@ export function readPanes(rows: FleetRow[], capture: (paneId: string) => string 
     // `question` on a row nobody is waiting on is a card the page draws about a
     // session that is not asking, and `parsePane`'s whole bias is calibrated
     // against being generous on panes that are merely working.
-    if (row.status.kind !== "needs-you") continue;
+    if (row.status.kind !== "needs-you") return;
     try {
       row.question = parsePane(text);
     } catch {
       row.question = null;
     }
-  }
+  }));
 }
 
 /**
@@ -535,17 +540,19 @@ export type PaneListing = { panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid:
  * while the row itself is still worth showing. A null generation is the same
  * bargain — it says "unverifiable", which is what a consumer needs to hear.
  */
-function panes(): PaneListing {
+export async function panes(owner: ProbeOwner): Promise<PaneListing> {
   try {
-    const out = execFileSync(
-      "tmux",
+    const outcome = await owner.run({
+      key: "tmux:list-panes",
+      cmd: "tmux",
       // `#{pid}` is the SERVER's pid, not the pane's — a fourth field on a call
       // we were already making, and the only cheap way to tell one tmux server's
       // `$1643` from the next one's.
-      ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
-      { encoding: "utf8", timeout: 10_000 },
-    );
-    return { panes: panesBySession(out), tmuxServerPid: tmuxServerPid(out) };
+      args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+      timeoutMs: 10_000,
+    });
+    if (outcome.kind !== "ok") return { panes: new Map(), tmuxServerPid: null };
+    return { panes: panesBySession(outcome.stdout), tmuxServerPid: tmuxServerPid(outcome.stdout) };
   } catch {
     return { panes: new Map(), tmuxServerPid: null };
   }
@@ -679,10 +686,16 @@ export function generationDrift(before: number | null, after: number | null): st
  * that is the point: it is read once BEFORE the inventory and once WITH the
  * panes, and the two must agree. See `collect`.
  */
-function generationNow(): number | null {
+export async function generationNow(owner: ProbeOwner): Promise<number | null> {
   try {
-    const out = execFileSync("tmux", ["display-message", "-p", "#{pid}"], { encoding: "utf8", timeout: 5_000 });
-    return /^\d{1,10}$/.test(out.trim()) ? Number(out.trim()) : null;
+    const outcome = await owner.run({
+      key: "tmux:generation",
+      cmd: "tmux",
+      args: ["display-message", "-p", "#{pid}"],
+      timeoutMs: 5_000,
+    });
+    if (outcome.kind !== "ok") return null;
+    return /^\d{1,10}$/.test(outcome.stdout.trim()) ? Number(outcome.stdout.trim()) : null;
   } catch {
     return null;
   }
@@ -724,7 +737,7 @@ export const COLLECT_DEADLINE_MS = 120_000;
  * which is the one behaviour that cannot be arranged with a real tmux.
  */
 export async function collectWithDeadline(
-  run: () => Promise<FleetSnapshot> = collect,
+  run: () => Promise<FleetSnapshot>,
   ms: number = COLLECT_DEADLINE_MS,
 ): Promise<FleetSnapshot> {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -747,7 +760,7 @@ export function collectionAbandoned(ms: number): string {
   );
 }
 
-export async function collect(): Promise<FleetSnapshot> {
+export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
   const startedAt = Date.now();
   /**
    * THE GENERATION, READ BEFORE THE INVENTORY AND CHECKED AFTER IT.
@@ -767,7 +780,7 @@ export async function collect(): Promise<FleetSnapshot> {
    * stale, which is the honest outcome — a twelve-second gap in the history
    * beats twelve seconds of confident nonsense.
    */
-  const generationBefore = generationNow();
+  const generationBefore = await generationNow(owner);
   // ASYNC, AND THAT IS NOT TIDINESS. This was `execFileSync`, which blocks the
   // whole event loop — so for the eight to twelve seconds a collection takes,
   // the server answered nothing at all. The cache made the *data* instant and
@@ -782,7 +795,7 @@ export async function collect(): Promise<FleetSnapshot> {
   });
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
-  const listing = panes();
+  const listing = await panes(owner);
   const drift = generationDrift(generationBefore, listing.tmuxServerPid);
   if (drift) throw new Error(drift);
   // Before anything is derived from the listing, not after: a listing of the
@@ -800,7 +813,7 @@ export async function collect(): Promise<FleetSnapshot> {
      modal covers the status bar), so a check that ran only there would never
      have fired. See `readPanes` and `modeApplicability`; the cost of the extra
      captures is measured on the latter. */
-  readPanes(rows);
+  await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
 
   /* AND ONE PASS FOR WHICH RUN IS IN EACH PANE. One `ps` for the whole fleet
      and one small `/proc` read per pane, so this is the third pass rather than
