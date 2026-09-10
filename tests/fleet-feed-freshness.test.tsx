@@ -25,15 +25,17 @@
  * assertion counts only when the positive path is shown working in the same
  * test, against the same mounted panel.
  */
-import { act, type ReactNode } from "react";
+import { act, startTransition, Suspense, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FEED_READ_DEADLINE_MS, FEED_REREAD_FLOOR_MS, FeedPanel, useFeed } from "../tools/fleet/web/src/FeedPanel";
 import {
+  EMPTY_FEED_EVIDENCE_MEMORY,
   NO_FILTERS,
   feedEvidence,
   makeFeedApi,
+  rememberVerified,
   type FeedApi,
   type FeedView,
   type SessionListReading,
@@ -455,6 +457,38 @@ describe("re-reading on evidence, never on a timer", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("does not remember a verified token from a render React abandons", async () => {
+    const { api, calls } = manualApi();
+    const never = new Promise<never>(() => {});
+    function Suspends(): ReactNode {
+      throw never;
+    }
+    function Candidate({ execution, suspend }: { execution: FleetRow["execution"]; suspend: boolean }): ReactNode {
+      return (
+        <Suspense fallback={null}>
+          {panel(api, withExecution(execution))}
+          {suspend ? <Suspends /> : null}
+        </Suspense>
+      );
+    }
+
+    await render(<Candidate execution={verifiedAs(100)} suspend={false} />);
+    await answer(calls, 0, feedWith("first"));
+    await advance(FEED_REREAD_FLOOR_MS);
+
+    await act(async () => {
+      startTransition(() => root.render(<Candidate execution={verifiedAs(101)} suspend />));
+    });
+    await render(<Candidate execution={unverified} suspend={false} />);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("reuses unchanged evidence memory", () => {
+    const first = rememberVerified(withExecution(verifiedAs(100)), EMPTY_FEED_EVIDENCE_MEMORY);
+    expect(rememberVerified(withExecution(verifiedAs(100)), first)).toBe(first);
+    expect(rememberVerified({ kind: "not-collected" }, first)).toBe(first);
+  });
+
   /** The replacement is the evidence, and the gap before it seeing it is not. */
   it("re-reads once for a replacement seen across an unverified gap", async () => {
     const { api, calls } = manualApi();
@@ -504,6 +538,19 @@ describe("re-reading on evidence, never on a timer", () => {
     expect(calls).toHaveLength(2);
     await answer(calls, 1, feedWith("new world", 43));
     await advance(FEED_REREAD_FLOOR_MS * 2);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("does not treat the first named tmux pid after null as a restart", async () => {
+    const { api, calls } = manualApi();
+    await render(panel(api, collected([row("$1")], null)));
+    await answer(calls, 0, feedWith("first", null));
+
+    await advance(FEED_REREAD_FLOOR_MS);
+    await render(panel(api, collected([row("$1")], 42)));
+    expect(calls).toHaveLength(1);
+
+    await render(panel(api, collected([row("$1")], 43)));
     expect(calls).toHaveLength(2);
   });
 

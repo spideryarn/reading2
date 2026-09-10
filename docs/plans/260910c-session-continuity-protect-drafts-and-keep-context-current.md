@@ -667,6 +667,18 @@ UI-level test.
 their author has read, and the rule is that such a fix gets a scoped check of that fix. Scope:
 F50–F53 only.
 
+Stage 3 code review, round 2, GPT Sol, 2026-09-10, on `f5c7b048`
+(`260910c-stage3-code-review-r2-sol.md`). Verdict: **"no production defect remains in F50–F53"** —
+each fix holds, with the sequences it was asked about walked through. Two coverage findings, both
+fixed in the test file only; production code unchanged.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F56 | Making `null → 42` count as a tmux restart left the suite green | P2 established | **Fixed by Sol, accepted** — a regression for `null → 42 → 43`, proved by that mutation. |
+| F57 | Moving the evidence memory back into render, or disabling the unchanged-object reuse, left the suite green | P2 established | **Fixed by Sol, accepted** — abandoned-render and identity tests, proved by those mutations. |
+
+**Stage 3 is closed**: two rounds, the second a scoped check, no open P0 or P1.
+
 ## Risks, and what would catch each
 
 - **A remount that fires on flicker** wipes a draft mid-typing and looks like the tool eating your
