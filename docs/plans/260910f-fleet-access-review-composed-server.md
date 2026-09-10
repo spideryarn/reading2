@@ -222,3 +222,11 @@ Sol's stage review follows.
 - **Known gap, handed to the stage review**: if vitest itself is killed, the detached child keeps
   listening on its random port.
 - Gates: the focused set green, `npm run typecheck` exit 0, biome clean on the new files.
+- **The browser boundary (F8), 2026-09-10 ~19:25Z**, headless Chrome through Playwright against a
+  child started by the helper: the built page rendered at both `127.0.0.1` and `localhost` with **no
+  console line at any level** — no CSP or permissions-policy violation. A page on another loopback
+  port that framed it was refused, Chrome's own words:
+  `Framing 'http://127.0.0.1:38295/' violates the following Content Security Policy directive:
+  "frame-ancestors 'none'". The request has been blocked.` The headers on `/` matched
+  `SECURITY_HEADERS` exactly. A hostile string *through* the composed server stays at the component
+  level, for the reason given under F8.
