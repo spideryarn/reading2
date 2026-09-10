@@ -68,6 +68,7 @@ import {
   nonBlank,
   projectAttention,
 } from "./attention.js";
+import { projectAccountUsage } from "./account-usage-feed.js";
 import { projectUsage } from "./usage-feed.js";
 import {
   boundStoredWorkText,
@@ -75,6 +76,7 @@ import {
   type ResolvedWork,
 } from "./work-groups.js";
 import type {
+  AccountUsageFeed,
   AttentionFeed,
   OverseerHeartbeat,
   OverseerRegister,
@@ -301,6 +303,8 @@ export type CheckpointFeeds = {
   attention: AttentionFeed;
   overseer: OverseerStatusFeed;
   usage: UsageFeed;
+  /** One live reading per account-subscription. Plan 260910c; `tools/fleet/account-usage-feed.ts`. */
+  accountUsage: AccountUsageFeed;
   work: WorkFeed;
 };
 
@@ -315,6 +319,7 @@ export function readCheckpointFeeds(
         attention: { kind: "checkpoint-absent" },
         overseer: { kind: "checkpoint-absent" },
         usage: { kind: "checkpoint-absent" },
+        accountUsage: { kind: "checkpoint-absent" },
         work: { kind: "checkpoint-absent" },
       };
     case "unreadable":
@@ -322,6 +327,7 @@ export function readCheckpointFeeds(
         attention: { kind: "checkpoint-unreadable", why: load.why },
         overseer: { kind: "checkpoint-unreadable", why: load.why },
         usage: { kind: "checkpoint-unreadable", why: load.why },
+        accountUsage: { kind: "checkpoint-unreadable", why: load.why },
         work: { kind: "checkpoint-unreadable", why: load.why },
       };
     case "json": {
@@ -330,6 +336,7 @@ export function readCheckpointFeeds(
         attention: projectAttention(load.json),
         overseer: projected.overseer,
         usage: projectUsage(load.json),
+        accountUsage: projectAccountUsage(load.json),
         work: projected.work,
       };
     }
@@ -342,6 +349,7 @@ export function readCheckpointFeeds(
         attention: { kind: "checkpoint-unreadable", why },
         overseer: { kind: "checkpoint-unreadable", why },
         usage: { kind: "checkpoint-unreadable", why },
+        accountUsage: { kind: "checkpoint-unreadable", why },
         work: { kind: "checkpoint-unreadable", why },
       };
     }

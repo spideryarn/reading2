@@ -52,18 +52,14 @@ import { describeStandingJobs, readJobDocument, standingJobs } from "../tools/ov
    a page and a terminal come to disagree about how many things happened. */
 import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
 import { makeUsageRetention, type UsageRetention } from "../tools/fleet/usage-history-wiring.js";
-import type { CodexUsageReading } from "../tools/fleet/wire.js";
+import type { AccountUsageSection, CodexUsageReading, StoredAccountUsage } from "../tools/fleet/wire.js";
+import { collectAccountUsage, defaultAccountUsageDeps } from "../tools/overseer/account-usage.js";
 import { reconcileArming } from "../tools/overseer/arming.js";
-import {
-  readAccountRegistry,
-  readUsage,
-  type AccountEntry,
-  type AccountUsageReading,
-} from "../tools/overseer/accounts.js";
 import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
 import { listRevision, readSchedulePreviewFile, schedulePreviewLines } from "../tools/overseer/schedule-preview.js";
+import { diagnose, diagnoseLines, readDiagnoseInput } from "../tools/overseer/diagnose.js";
 import { describeNote, readNotes } from "../tools/overseer/notes.js";
 import { describeArtefactCheck, parseArtefactSpec, spellArtefactRef, type ArtefactRef } from "../tools/fleet/artefact-ref.js";
 import { decisionsRoot } from "../tools/overseer/decisions.js";
@@ -155,32 +151,71 @@ export function usageHistoryDaemonOptions(
   collectors: {
     claude: () => Promise<UsageReport>;
     codex: () => Promise<CodexUsageReading>;
+    /**
+     * Every account-subscription's headroom, given this pass's ambient Codex
+     * observation. Omitted in tests that are not about the per-account
+     * sections; a daemon that gets no collector publishes no sections.
+     */
+    accounts?: (ambientCodex: CodexUsageReading | null) => Promise<StoredAccountUsage>;
   } = {
     claude: () => collectUsage(),
     codex: () => collectCodexUsage(),
+    accounts: (ambientCodex) => collectAccountUsage(defaultAccountUsageDeps(), ambientCodex),
   },
 ): NonNullable<DaemonOptions["usage"]> {
   const settle = <T>(run: () => Promise<T>): Promise<T> => Promise.resolve().then(run);
 
+  /**
+   * **ONE CODEX READING PER PASS, FANNED TO TWO CONSUMERS.**
+   *
+   * The history recorder and the per-account sections both want the ambient
+   * Codex account's headroom, and collecting it twice would be two app-server
+   * spawns every five minutes AND — the part that matters — two independently
+   * measured numbers for one subscription on one page, a point apart, each
+   * undermining the other. GPT Sol's P0 on plan 260910c, 2026-09-10.
+   *
+   * Stashed rather than passed, for the reason the Codex stash beside it is:
+   * `daemon.ts`'s `accounts` hook takes no argument and runs strictly after
+   * `run` in the same continuation. That ordering is what makes this safe, and
+   * it holds only while the daemon refuses to overlap usage passes — which it
+   * does, by the `usageRunning` guard, and which is stated there too.
+   */
+  let ambientCodex: CodexUsageReading | null = null;
+
+  const accounts = collectors.accounts;
   return {
     run: async () => {
       const [claude, codex] = await Promise.allSettled([
         settle(collectors.claude),
         settle(collectors.codex),
       ]);
-      retention.stashCodex(
+      const reading: CodexUsageReading =
         codex.status === "fulfilled"
           ? codex.value
           : {
               kind: "unknown",
               why: `the Codex usage collector rejected: ${codex.reason instanceof Error ? codex.reason.message : String(codex.reason)}`,
               retryable: true,
-            },
-      );
+            };
+      retention.stashCodex(reading);
+      ambientCodex = reading;
       if (claude.status === "rejected") throw claude.reason;
       return claude.value;
     },
     onPass: retention.onPass,
+    ...(accounts === undefined
+      ? {}
+      : {
+          accounts: async () => {
+            /* Consumed rather than merely read: a pass whose `run` never got as
+               far as collecting Codex must not hand the previous pass's reading
+               to the sections, which would put a five-minute-old number under a
+               heading dated now. */
+            const forThisPass = ambientCodex;
+            ambientCodex = null;
+            return accounts(forThisPass);
+          },
+        }),
   };
 }
 
@@ -276,23 +311,29 @@ function codexUsageLines(codex: CodexUsageReading): string[] {
   return out;
 }
 
-type RegisteredAccountUsage = { account: AccountEntry; usage: AccountUsageReading };
+/* THE CLI AND THE DASHBOARD READ ONE COLLECTOR AND ONE IDENTITY PIN.
+   `registeredAccountLines` used to loop over the registry itself and compare
+   `providerAccountId` / `providerTenantId` / `displayEmail` inline, which meant
+   two implementations of the pin: this one, and the daemon's. They would have
+   drifted, and the drift would have shown up as one surface refusing a reading
+   the other drew. GPT Sol's simplification on plan 260910c, 2026-09-10.
 
-/* LIVE CLI PROJECTION ONLY. The daemon pass, wire `UsageReport`, checkpoint,
-   and stored history remain singular. Making those plural needs the separate
-   history-schema change from Stage 3; alternating account records would break
-   every series that is absent from the current record. */
+   The STORED history, the wire `UsageReport` and the checkpoint's `usage` block
+   are still singular. Making those plural is the separate history-schema change
+   named in the plan's unbuilt stage: alternating account records would break
+   every series absent from the current record. */
 
 function shortAccountUuid(uuid: string): string {
   return uuid.length > 8 ? `${uuid.slice(0, 8)}…` : uuid;
 }
 
 function accountWindow(
-  usage: AccountUsageReading,
+  section: AccountUsageSection,
   windowName: "five_hour" | "seven_day",
 ): { text: string; why: string | null } {
-  if (usage.kind === "unknown") return { text: "unknown", why: usage.why };
-  const matches = usage.windows.filter((window) => window.window === windowName);
+  if (section.family !== "claude") return { text: "unknown", why: "not a Claude account" };
+  if (section.reading.kind === "unknown") return { text: "unknown", why: section.reading.why };
+  const matches = section.reading.windows.filter((window) => window.window === windowName);
   if (matches.length === 0) return { text: "unknown", why: `${windowName} was not reported` };
   if (matches.length > 1) return { text: "unknown", why: `${windowName} was reported more than once` };
   const window = matches[0]!;
@@ -305,38 +346,49 @@ function accountWindow(
   return { text: "unknown", why: window.why };
 }
 
-function registeredAccountLines(readings: readonly RegisteredAccountUsage[]): string[] {
-  if (readings.length === 0) return [];
+function registeredAccountLines(stored: StoredAccountUsage): string[] {
+  if (stored.kind === "none") return ["Claude accounts (registry)", `  none read — ${stored.why}`];
+  /* REGISTERED ONLY, and the filter is not tidiness. The ambient login already
+     has the whole `Claude subscription` block at the top of this output, with
+     its verdict and its 429s; listing it again here would print one
+     subscription twice in one command, three lines apart, with two
+     independently-taken readings that will differ. The page has the same rule
+     and reaches it the other way round — there, these sections own the
+     percentages. */
+  const readings = stored.accounts.filter(
+    (section) => section.family === "claude" && section.origin === "registered",
+  );
+  if (readings.length === 0 && stored.problems.length === 0) return [];
+  if (readings.length === 0) return ["Claude accounts (registry)", ...stored.problems.map((problem) => `  ! ${problem}`)];
   const out = ["Claude accounts (registry)"];
-  const nameWidth = Math.max(...readings.map(({ account }) => account.name.length));
-  const roleWidth = Math.max(...readings.map(({ account }) => account.role.length));
-  const emailWidth = Math.max(...readings.map(({ account, usage }) =>
-    (usage.kind === "value" ? usage.identity.displayEmail : undefined)?.length ?? account.displayEmail?.length ?? 1
-  ));
+  const nameWidth = Math.max(...readings.map((section) => section.name.length));
+  const roleWidth = Math.max(...readings.map((section) => section.role.length));
+  const emailWidth = Math.max(...readings.map((section) => section.displayEmail?.length ?? 1));
 
-  for (const { account, usage } of readings) {
-    const fiveHour = accountWindow(usage, "five_hour");
-    const sevenDay = accountWindow(usage, "seven_day");
-    const email = usage.kind === "value"
-      ? usage.identity.displayEmail ?? account.displayEmail ?? "?"
-      : account.displayEmail ?? "?";
-    const accountUuid = usage.kind === "value"
-      ? usage.identity.providerAccountId
-      : account.providerAccountId;
+  for (const section of readings) {
+    const fiveHour = accountWindow(section, "five_hour");
+    const sevenDay = accountWindow(section, "seven_day");
+    const email = section.displayEmail ?? "?";
     const reasons = [...new Set([fiveHour.why, sevenDay.why].filter((why): why is string => why !== null))];
     out.push(
-      `  ${account.name.padEnd(nameWidth)}  ${account.role.padEnd(roleWidth)}  ${email.padEnd(emailWidth)}  ` +
-        `5h ${fiveHour.text}   7d ${sevenDay.text}   uuid ${shortAccountUuid(accountUuid)}   ` +
-        `taken ${usage.takenAt}${reasons.length === 0 ? "" : ` — ${reasons.join("; ")}`}`,
+      `  ${section.name.padEnd(nameWidth)}  ${section.role.padEnd(roleWidth)}  ${email.padEnd(emailWidth)}  ` +
+        `5h ${fiveHour.text}   7d ${sevenDay.text}   ` +
+        `uuid ${section.providerAccountId === null ? "unknown" : shortAccountUuid(section.providerAccountId)}   ` +
+        `taken ${section.takenAt}${reasons.length === 0 ? "" : ` — ${reasons.join("; ")}`}`,
     );
   }
+  /* A SHORT LIST IS NOT A COMPLETE ONE. A registry that would not parse loses
+     every registered account and leaves the ambient sections drawing perfectly,
+     so the fault has to be said out loud or the output claims the box has one
+     subscription. `StoredAccountUsage`'s header. */
+  for (const problem of stored.problems) out.push(`  ! ${problem}`);
   return out;
 }
 
 export function usageLines(
   report: UsageReport,
   codex: CodexUsageReading,
-  accounts: readonly RegisteredAccountUsage[] = [],
+  accounts: StoredAccountUsage = { kind: "none", why: "no per-account pass was run for this command", at: new Date(0).toISOString() },
 ): string[] {
   const out: string[] = ["Claude subscription"];
   const a = report.account;
@@ -409,7 +461,8 @@ export function usageLines(
     }
   }
   out.push(`took      ${report.tookMs}ms, at ${when(report.collectedAt)}`);
-  if (accounts.length > 0) out.push("", ...registeredAccountLines(accounts));
+  const accountLines = registeredAccountLines(accounts);
+  if (accountLines.length > 0) out.push("", ...accountLines);
   out.push("", ...codexUsageLines(codex));
   return out;
 }
@@ -418,8 +471,8 @@ export function usageLines(
 export function usageJson(
   report: UsageReport,
   codex: CodexUsageReading,
-  accounts: readonly RegisteredAccountUsage[] = [],
-): UsageReport & { codex: CodexUsageReading; accounts: readonly RegisteredAccountUsage[] } {
+  accounts: StoredAccountUsage = { kind: "none", why: "no per-account pass was run for this command", at: new Date(0).toISOString() },
+): UsageReport & { codex: CodexUsageReading; accounts: StoredAccountUsage } {
   return { ...report, codex, accounts };
 }
 
@@ -429,27 +482,24 @@ export async function runUsageCommand(
   deps: {
     claude: typeof collectUsage;
     codex: typeof collectCodexUsage;
-    registry: typeof readAccountRegistry;
-    accountUsage(configDir: string): Promise<AccountUsageReading>;
+    /**
+     * The same per-account collector the daemon runs, so the terminal and the
+     * dashboard cannot disagree about whose reading belongs to whom.
+     *
+     * **The ambient Codex reading is not passed here**, and that is not an
+     * oversight: this command's own `deps.codex()` already reports the ambient
+     * Codex account in its own block above, so handing it in again would print
+     * one subscription twice in one output.
+     */
+    accounts(): Promise<StoredAccountUsage>;
     out(line: string): void;
   } = {
     claude: collectUsage,
     codex: collectCodexUsage,
-    registry: readAccountRegistry,
-    // `readUsage` reads only the access token and owns the 401 policy: it may
-    // re-read a token another Claude process already rotated, but never reads
-    // or spends the refresh token itself.
-    accountUsage: (configDir) => readUsage(configDir, { fetch }),
+    accounts: () => collectAccountUsage(defaultAccountUsageDeps()),
     out: console.log,
   },
 ): Promise<number> {
-  const registry = await deps.registry();
-  if (registry.kind === "error") {
-    throw new Error(`Claude account registry is unusable: ${registry.why}`);
-  }
-  const registeredAccounts = registry.kind === "value"
-    ? registry.accounts.filter((account) => account.family === "claude")
-    : [];
   const [claudeResult, codexResult, accountResults] = await Promise.all([
     Promise.resolve().then(() => deps.claude({
       ...(parsed.sinceHours === undefined ? {} : { sinceMs: parsed.sinceHours * 3600_000 }),
@@ -462,38 +512,10 @@ export async function runUsageCommand(
       (value) => ({ status: "fulfilled" as const, value }),
       (reason: unknown) => ({ status: "rejected" as const, reason }),
     ),
-    Promise.all(registeredAccounts.map(async (account): Promise<RegisteredAccountUsage> => {
-      try {
-        const usage = await deps.accountUsage(account.stateDir);
-        if (
-          usage.kind === "value" &&
-          (usage.identity.providerAccountId !== account.providerAccountId ||
-            usage.identity.providerTenantId !== account.providerTenantId ||
-            (account.displayEmail !== undefined && usage.identity.displayEmail !== account.displayEmail))
-        ) {
-          return {
-            account,
-            usage: {
-              kind: "unknown",
-              configDir: account.stateDir,
-              takenAt: usage.takenAt,
-              why: "live identity does not match the registry pin",
-            },
-          };
-        }
-        return { account, usage };
-      } catch (cause) {
-        return {
-          account,
-          usage: {
-            kind: "unknown",
-            configDir: account.stateDir,
-            takenAt: new Date().toISOString(),
-            why: `account usage reader rejected: ${cause instanceof Error ? cause.message : String(cause)}`,
-          },
-        };
-      }
-    })),
+    /* ONE COLLECTOR, and one identity pin. This loop used to be written out
+       here with its own `providerAccountId` / `providerTenantId` comparison,
+       which was a second implementation of a rule the daemon also holds. */
+    deps.accounts(),
   ]);
   if (claudeResult.status === "rejected") throw claudeResult.reason;
   const codex: CodexUsageReading =
@@ -509,7 +531,14 @@ export async function runUsageCommand(
       ? JSON.stringify(usageJson(claudeResult.value, codex, accountResults), null, 2)
       : usageLines(claudeResult.value, codex, accountResults).join("\n"),
   );
-  return 0;
+  /* **A BROKEN REGISTRY IS A NON-ZERO EXIT, NOT A THROWN COMMAND**, and this
+     changed on 2026-09-10. It used to throw before printing anything, which
+     meant a person whose registry file had a stray comma got no usage reading
+     at all — including the ambient account's, which needs no registry. Now
+     everything readable is printed, the fault is printed beside it with a `!`,
+     and the exit code still says something is wrong. Loud and useful rather
+     than loud instead of useful. */
+  return accountResults.kind === "reading" && accountResults.problems.length > 0 ? 1 : 0;
 }
 
 /**
@@ -761,6 +790,7 @@ export function positiveNumber(name: string, opts: { integer?: boolean } = {}): 
  */
 export type Parsed =
   | { command: "status" }
+  | { command: "diagnose"; json: boolean }
   | { command: "tick" }
   | { command: "last"; session: string; turns: number }
   | { command: "events"; limit: number }
@@ -826,6 +856,12 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
     .exitOverride();
 
   program.command("status").description("is the daemon alive, and what does it know").action(() => sink({ command: "status" }));
+
+  program
+    .command("diagnose")
+    .description("which revision each service started from, the checkpoint's schema and clocks, the boot, every store file, the job list")
+    .option("--json", "print the report as JSON", false)
+    .action((opts: { json: boolean }) => sink({ command: "diagnose", json: opts.json }));
 
   program
     .command("tick")
@@ -1617,6 +1653,17 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       const checkpoint = readCheckpoint(root);
       const runningInstanceId = checkpoint.kind === "checkpoint" ? checkpoint.checkpoint.heartbeat.instanceId : null;
       console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds, runningInstanceId }, Date.now())].join("\n"));
+      return 0;
+    }
+    case "diagnose": {
+      // A report, not a gate (plan 260910f § D4): 1 only when the store root cannot be read.
+      const read = readDiagnoseInput(root, { checkout: repoRoot() });
+      if (!read.ok) {
+        console.error(`✗ ${read.why}`);
+        return 1;
+      }
+      const report = diagnose(read.input);
+      console.log(parsed.json ? JSON.stringify(report, null, 2) : diagnoseLines(report).join("\n"));
       return 0;
     }
     case "tick":

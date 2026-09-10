@@ -30,6 +30,7 @@ import { QuestionsPanel } from "./QuestionsPanel";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { RecoveryPanel } from "./RecoveryPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { AccountUsageSections } from "./AccountUsageSections";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
@@ -462,12 +463,48 @@ export function App({
             the history route above both mounts. */}
         {mode === "usage" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
+            {/* **THE PER-ACCOUNT SECTIONS COME FIRST, AND THAT ORDER IS THE
+                ANSWER TO THE QUESTION THE TAB EXISTS FOR.** *Which subscription
+                still has room* is a question about every login on the box; the
+                card below answers it in depth for exactly one of them, the
+                Overseer's own. Putting the deep single-account card first made
+                the page look like it was about one subscription, which is what
+                it was about until 2026-09-10 and is no longer.
+
+                Plan 260910c, and Greg's ask: *"sections for each Claude and
+                Codex account-subscription, summarising 5d and weekly X% used
+                and when they reset"*. */}
+            <AccountUsageSections
+              view={feed.state === null ? { kind: "not-asked" } : feed.state.accountUsage}
+              /* **THE CARD'S ANCHOR, NOT THE BARE TICK.** `now` moves once a
+                 second, so a section read in the gap after the last tick has a
+                 `takenAt` later than `now` and reads as "in the future" — and
+                 the sections withhold a reading whose instant cannot be
+                 compared with this clock. A payload cannot arrive before the
+                 reading inside it was taken, so `receivedAt` is a floor on any
+                 honest `asOf`. `UsageCard` below has anchored this way from the
+                 start; the two must agree, or one section and the card beside it
+                 would age the same instant differently. */
+              asOf={feed.receivedAt === null ? now : Math.max(now, feed.receivedAt)}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+            {/* **The same `UsageCard` the Overseer tab draws, mounted a second
+                time rather than copied**, and kept here for what the sections
+                above cannot carry: the transcript scan, the 429s it found, the
+                coverage that makes their absence believable, and the verdict.
+                None of those can be made per-account honestly — a rejection in
+                a transcript carries no account id at all. */}
             <UsageCard
               usage={feed.state === null ? null : feed.state.usage}
               codex={codexUsage}
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+              /* Hand over the evidence rather than a container-level boolean.
+                 UsageCard suppresses each provider only when a current live
+                 section proves the same account and covers every numeric
+                 fallback window it would otherwise draw. */
+              {...(feed.state === null ? {} : { accountUsageAbove: feed.state.accountUsage })}
             />
             {/* **The history is on its OWN route, not in the snapshot.** That
                 route is active only on Usage and Overseer: the chart needs it

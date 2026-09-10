@@ -448,6 +448,7 @@ describe("the shared wire state cannot acquire an optional field", () => {
       { kind: "not-asked" },
       { kind: "not-asked" },
       { kind: "not-asked" },
+      { kind: "not-asked" },
       { kind: "checkpoint-absent" },
       { instance: "1a2b3c4d", publication: 0, inventory: null },
     );

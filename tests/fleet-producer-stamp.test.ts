@@ -29,6 +29,7 @@ function payloadDeps(producer: ProducerStamp, over: Partial<{
       attention: { kind: "not-asked" },
       overseer: { kind: "not-asked" },
       usage: { kind: "not-asked" },
+      accountUsage: { kind: "not-asked" },
       work: { kind: "checkpoint-absent" },
     }),
     ...over,
@@ -99,6 +100,7 @@ describe("the stamp on the fleet payload", () => {
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
             usage: { kind: "not-asked" },
+            accountUsage: { kind: "not-asked" },
             work: { kind: "checkpoint-absent" },
           };
         },

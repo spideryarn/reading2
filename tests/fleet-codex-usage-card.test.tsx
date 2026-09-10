@@ -325,6 +325,14 @@ describe("the tolerant browser boundary", () => {
 });
 
 describe("Codex card claims", () => {
+  it("withholds every number when the provider did not identify the account", () => {
+    draw(codex({ accountId: null }));
+    expect(screen()).toContain("Account not attributed");
+    expect(screen()).toContain("cannot be shown without knowing which account they belong to");
+    expect(screen()).not.toContain("24% used");
+    expect(screen()).not.toContain("2 reset credits");
+  });
+
   it("uses durations rather than slots, keeps unfamiliar windows, and preserves over-100 values", () => {
     const reading = codex({
       buckets: [

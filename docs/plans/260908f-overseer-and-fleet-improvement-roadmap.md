@@ -1472,6 +1472,27 @@ unrelated queue/box behaviours; existing integration tests exercise the same exe
 again. A receipt explains what is proven and unknown. **Simpler option:** a volatile warning was
 acceptable for v1; durable receipts become worth it before broader unattended work and recovery.
 
+**Status (2026-09-10, Overseer): landed on dev at c1117570 (code at 82c5088f), session
+`action-receipts`, plan
+[260910d](260910d-durable-action-receipts-for-the-fleet-dashboard.md); the stage is complete, all
+five checkboxes met, live since the 2921634d restart.** A single-writer receipt journal beside the
+hold ledger under one lock, over a JSONL core extracted from it; queued work journals `accepted`
+before it enters memory, the drain writes `attempted` before any keystroke and refuses to send if
+that cannot land, and a restart restores queued work under its original ids, concludes an
+interrupted attempt as outcome-unknown and never re-sends it. A client-minted request id bound to
+the route and body replays the receipt for the same request and refuses a different body; keyed
+kills and worktree removals are never run twice, even after a restart with the preview gone;
+broadcasts have one parent receipt only as certain as its least certain child; the browser keeps
+one envelope per intention for an explicit Check that resends the same bytes; a reconcile route
+records a person's statement without changing an outcome. Learned: nothing on the box observes
+reception, so keys-submitted is the strongest message state; a fail-open journal defeats idempotency,
+so keyed accepts fail closed (503 when the stores cannot open). Left: a per-session filter on the
+receipts list; the dialog-answer buttons and the run/box confirms still send unkeyed (their keyed
+client methods exist); a pending envelope is memory-only. Defaults pending Greg: queued work
+survives a restart and goes out without re-arming; receipts kept seven days and a queued message's
+text in a 0600 file until it resolves; whether the hold ledger should stop failing open for durable
+sends; whether a 503 client should offer to resend without an id.
+
 ### Stage: Launch protocol — give scheduling and recovery one crash protocol
 
 - [ ] Define durable occurrence and attempt records owned by the Overseer: `planned`,

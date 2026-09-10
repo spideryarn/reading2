@@ -624,6 +624,9 @@ describe("the producer's disagreement sentinel", () => {
         attention: { kind: "not-asked" },
         overseer: { kind: "not-asked" },
         usage: { kind: "not-asked" },
+        /* Required since plan 260910c: a composition that forgets the
+           per-account feed is a compile error, not a page with no sections. */
+        accountUsage: { kind: "not-asked" },
         work: { kind: "checkpoint-absent" },
       }),
     };
