@@ -290,6 +290,40 @@ F1 is also my own finding M1, made independently while the review was running.
     note that a newer revision replaced it. The new revision plans its own occurrence.
   - Tests: a restart after `planned`, and a wait followed by free capacity, must each invoke the
     launcher exactly once.
+- **F1, after the narrow check ([…-plan-fixcheck-sol.md](260910f-scheduled-dispatch-plan-fixcheck-sol.md)):
+  not closed; two gaps.** Two small operations are agreed with `launch-protocol` and land with
+  its Stage 1b:
+  - `resumeOccurrence(id)` never re-plans. It answers `not-launchable` with the state for anything
+    past `waiting-admission`, and `refused` for an unknown id or a lost history.
+  - `abandon(id, why)` also looks the key up at the owner and releases it, covering a lost-reply
+    reservation, or reports `held`, which reconciliation's F7 release settles later.
+  - **Resume the stored request.** Rebuilding a `PlanRequest` can conflict, because the material's
+    framing is outside the pin and F5 compares material, launcher, class and run. So `resume` calls
+    **`resumeOccurrence(id)`**, which drives the stored, pinned record and is refused unless the
+    record is `planned` or `waiting-admission`.
+  - **The scheduler never calls `launchOccurrence` for an id already in the fold.** An existing id
+    is resumed if it is resumable, and otherwise skipped with a report.
+  - **One durable winner.**
+    1. For each job, the candidate is the newest schedule-origin record, by `plannedAt` then by
+       journal order (never by `scheduledAt` alone: siblings share it).
+    2. It is resumed only if its `behaviourHash` equals the job's current authorised hash.
+    3. If the job's newest non-launched record (`planned` or `waiting-admission`) carries a
+       different hash, the scheduler first calls **`abandon(id, "superseded by <hash>")`**: a
+       protocol-owned `failed-before-launch` with proof `superseded`, legal only when no attempt
+       exists. Only then does it plan the new revision.
+    4. So there is at most one live, non-launched occurrence per job, and every older sibling is
+       terminal in the journal, not merely ignored by a selector.
+  - **Rollback.** An abandoned record's id cannot be planned again: it is terminal, so `plan()`
+    answers `not-launchable`. So rolling back to hash A at the same due instant waits one interval
+    from the abandonment's `endedAt`, because a superseded `failed-before-launch` counts as settled,
+    the same way a refusal does today. That costs one interval, only for a rollback during an
+    admission wait, and it never costs a double launch. Named, and accepted.
+  - **The acceptance test Sol named:**
+    1. revision A waits;
+    2. revision B supersedes it (A abandoned, B planned);
+    3. capacity clears, and B is invoked once;
+    4. a rollback to A at the same due instant plans nothing, and later ticks invoke nothing more
+       until the next due instant.
 - **F2 (P1): history authority is per ledger. Accepted.**
   - `PlanInput.history` becomes a history per kind: rules read `events.jsonl`'s `OccurrenceHistory`,
     and session jobs read the launch journal's `JournalStatus`.
