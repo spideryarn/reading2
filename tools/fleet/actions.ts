@@ -992,6 +992,10 @@ function tokens(args: string): string[] {
  * `grep -r vitest`, has "vitest" on its command line and must not be killed for
  * it.
  *
+ * The argument position matters too: `vim /repo/node_modules/.bin/vitest`
+ * names a Vitest executable path, but argv[0] says the process is an editor.
+ * Searching every token would turn that editor into a kill candidate.
+ *
  * The real shapes on this box, measured 2026-09-08:
  *
  *   sh   -c vitest run
@@ -1003,12 +1007,37 @@ function tokens(args: string): string[] {
  */
 export function isVitestRunner(proc: Pick<ProcRecord, "args">): boolean {
   const parts = tokens(proc.args);
-  return parts.some(
-    (t) =>
-      t.endsWith("/node_modules/.bin/vitest") ||
-      t.endsWith("/node_modules/vitest/vitest.mjs") ||
-      /\/node_modules\/vitest\/dist\/.*\.m?js$/.test(t),
-  );
+  const isVitestExecutable = (part: string): boolean =>
+    part.endsWith("/node_modules/.bin/vitest") ||
+    part.endsWith("/node_modules/vitest/vitest.mjs") ||
+    /\/node_modules\/vitest\/dist\/.*\.m?js$/.test(part);
+
+  const argv0 = parts[0];
+  if (argv0 === undefined) return false;
+  if (isVitestExecutable(argv0)) return true;
+
+  const argv0Basename = argv0.slice(argv0.lastIndexOf("/") + 1);
+  if (argv0Basename !== "node" && argv0Basename !== "nodejs") return false;
+
+  const optionsWithSeparateValues = new Set([
+    "--require",
+    "-r",
+    "--import",
+    "--conditions",
+    "-C",
+    "--loader",
+    "--experimental-loader",
+  ]);
+  for (let i = 1; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (part === undefined) return false;
+    if (part !== "-" && part.startsWith("-")) {
+      if (optionsWithSeparateValues.has(part)) i += 1;
+      continue;
+    }
+    return isVitestExecutable(part);
+  }
+  return false;
 }
 
 /** Is this one of the exact browser program names used by the kill rule? */

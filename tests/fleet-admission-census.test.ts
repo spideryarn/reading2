@@ -113,6 +113,13 @@ describe("the admission census recognisers and fold", () => {
     expect(foldCensus([worker, init]).byClass.test).toEqual({ roots: 0, uncertain: 0 });
   });
 
+  it("does not count vim with a vitest-path argument as a test root", () => {
+    const editor = row(20, 1, "vim /repo/node_modules/.bin/vitest", { comm: "vim" });
+    const init = row(1, 0, "/sbin/init", { comm: "systemd", startTicks: 1 });
+
+    expect(foldCensus([editor, init]).byClass.test).toEqual({ roots: 0, uncertain: 0 });
+  });
+
   it("reuses executable recognisers without matching prose, fake tools, MCP arguments or crashpad", () => {
     expect(recogniseCensusClass(row(30, 1, "vim vitest.config.ts", { comm: "vim" }))).toBeNull();
     expect(recogniseCensusClass(row(31, 1, "grep -r vitest", { comm: "grep" }))).toBeNull();

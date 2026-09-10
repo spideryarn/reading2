@@ -82,6 +82,16 @@ first, and `actions.ts` named in the commit message. The Overseer also confirmed
 one tested recogniser for `codex exec` already exists, and a second copy is what the task file's own
 reasoning forbids.
 
+**Widened once, for F61, also authorised by the Overseer on 2026-09-10.** Round 1 found that
+`isVitestRunner` matched the vitest path in *any* argument, so `vim /repo/node_modules/.bin/vitest`
+was a "runner". The census would over-count it, and **the Kill "test suites" action would kill that
+editor**. The fix matches the executable position only: argv0 itself, or the first non-option
+argument after a `node`, skipping the values of `--require`, `--import`, `--conditions` and
+`--loader`. The Overseer's conditions: red-first with vim, grep, cat and unrelated-node negatives;
+the two real captured shapes kept green; and a comment at the function saying why position matters.
+**Its consequence for Kill, stated because it changes what Kill does: the `test-suites` policy now
+refuses more processes than before, and never kills one it previously refused.**
+
 The rule lives inline in `isOrphanedDebugPipeBrowser`. Three ways to reuse it:
 
 - **(a) A small export in `actions.ts`**, outside my file set: extract
@@ -224,4 +234,4 @@ not allowed to fix.
 | F58 | A backwards clock produced a pass that ended before it began | **Fixed**, in the producer (a failed pass) and in the client |
 | F59 | A read resolving after `stop()` still folded and wrote the cache; unrelated composition tests started real `/proc` reads | **Fixed** |
 | F60 | The cadence was written twice, and a throwing `readCensus` was stamped with the route's copy | **Fixed.** `admission-constants.ts` owns it, and the chosen cadence reaches the route |
-| F61 | `isVitestRunner` matches the vitest path in *any* argument, so `vim /repo/node_modules/.bin/vitest` is a runner. The census over-counts, and **the Kill "test suites" action would kill that editor** | **Open**, because it is outside the authorised `actions.ts` edit. Asked of the Overseer: fix it in `actions.ts` by matching the executable position only, which can only make Kill refuse more |
+| F61 | `isVitestRunner` matches the vitest path in *any* argument, so `vim /repo/node_modules/.bin/vitest` is a runner. The census over-counts, and **the Kill "test suites" action would kill that editor** | **Fixed** after the Overseer widened the authorisation (Decision 1). Implemented by Codex in its own run so round 2 reviews it as someone else's code: argv0 itself, or the first non-option argument after `node`/`nodejs`, skipping the values of `--require`/`-r`, `--import`, `--conditions`/`-C`, `--loader`/`--experimental-loader`; `node -` is not a runner. Red first: vim, grep, cat and an unrelated node script each returned `true`; the vim row through `killVerdict` returned `kill: true`; the census counted it as a test root. No existing test changed. **The test-suites kill policy now refuses more, never kills more** |
