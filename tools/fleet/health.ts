@@ -8,15 +8,15 @@
  * are docs/reusable/diagnose-box-resources.md; do not restate its reasoning
  * here, cite it.
  *
- * THE SPLIT IS THE WHOLE TESTABILITY STORY. `collectHealth` shells out and
- * does nothing else; every `parse*` function is pure — string in, typed
- * reading out — so it can be tested against fixtures captured from the real
- * box (tests/fixtures/fleet-health/) without a shell in the test run. Follow
- * the pattern in tools/fleet/pane.ts (`parsePane` vs `capturePane`), not a
- * mock of `execFileSync`.
+ * THE SPLIT IS THE WHOLE TESTABILITY STORY. The synchronous and asynchronous
+ * collectors gather command outcomes and do nothing else; `assembleHealth`
+ * and every `parse*` function are pure, so one set of captured fixtures can
+ * prove both gatherers mean the same thing. Follow the pattern in
+ * tools/fleet/pane.ts (`parsePane` vs `capturePane`): gathering and meaning
+ * stay on opposite sides of an explicit seam.
  *
  * NO IMPORT SIDE EFFECTS: nothing at module scope runs a command. Only calling
- * `collectHealth()` does.
+ * a collector does.
  *
  * A ZERO MUST NEVER MEAN "HEALTHY". Every reading is a discriminated union
  * with a `kind: "unknown"` arm carrying why, so a command that fails or a
@@ -27,6 +27,7 @@
  */
 import { execFileSync } from "node:child_process";
 
+import { limit, type OwnedOutcome, type ProbeOwner, type ProbeSpec } from "./child.js";
 import { RESOURCE_POLICY } from "./resource-policy.js";
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,20 @@ export type HealthReport = {
   verdict: Verdict;
   collectedAt: string;
   tookMs: number;
+};
+
+/** One command's result, or the tool's own words for why there is not one. */
+export type CommandOutcome = { ok: true; out: string } | { ok: false; why: string };
+
+export type HealthReads = {
+  uptime: CommandOutcome;
+  nproc: CommandOutcome;
+  free: CommandOutcome;
+  swapon: CommandOutcome;
+  df: CommandOutcome;
+  /** `skipped` is the caller opting out of `vmstat`, which is not a failure. */
+  vmstat: CommandOutcome | { skipped: true };
+  ps: CommandOutcome;
 };
 
 // ---------------------------------------------------------------------------
@@ -511,13 +526,60 @@ export function computeVerdict(input: {
   return { level, reasons };
 }
 
+/**
+ * Give both command gatherers one interpretation of their output. The
+ * equivalence test is the reason timestamps arrive as values too: no clock or
+ * subprocess is hidden inside the assembly seam.
+ */
+export function assembleHealth(reads: HealthReads, startedAtMs: number, nowMs: number): HealthReport {
+  const cores = reads.nproc.ok ? parseNproc(reads.nproc.out) : null;
+  const load: LoadReading = !reads.uptime.ok
+    ? { kind: "unknown", why: `uptime failed: ${reads.uptime.why}` }
+    : !reads.nproc.ok
+      ? { kind: "unknown", why: `nproc failed: ${reads.nproc.why}` }
+      : cores === null
+        ? { kind: "unknown", why: `nproc's output did not parse as a positive integer: ${JSON.stringify(reads.nproc.out)}` }
+        : parseLoad(reads.uptime.out, cores);
+
+  const memory: MemoryReading = reads.free.ok
+    ? parseMemory(reads.free.out)
+    : { kind: "unknown", why: `free failed: ${reads.free.why}` };
+  const swap: SwapReading = reads.swapon.ok
+    ? parseSwap(reads.swapon.out)
+    : { kind: "unknown", why: `swapon failed: ${reads.swapon.why}` };
+  const disk: DiskReading = reads.df.ok
+    ? parseDisk(reads.df.out)
+    : { kind: "unknown", why: `df failed: ${reads.df.why}` };
+  const swapActivity: SwapActivityReading = "skipped" in reads.vmstat
+    ? { kind: "skipped" }
+    : reads.vmstat.ok
+      ? parseSwapActivity(reads.vmstat.out)
+      : { kind: "unknown", why: `vmstat failed: ${reads.vmstat.why}` };
+  const attribution: AttributionReading = reads.ps.ok
+    ? parseAttribution(reads.ps.out)
+    : { kind: "unknown", why: `ps failed: ${reads.ps.why}` };
+  const verdict = computeVerdict({ load, memory, swap, disk, swapActivity });
+
+  return {
+    load,
+    memory,
+    swap,
+    disk,
+    swapActivity,
+    attribution,
+    verdict,
+    collectedAt: new Date(nowMs).toISOString(),
+    tookMs: nowMs - startedAtMs,
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Shelling out. Everything above this line is pure and tested against
-// fixtures; everything below is the one place that runs a command.
+// Gathering. Everything above this line is pure and tested against fixtures;
+// the two functions below are the only places that run commands.
 // ---------------------------------------------------------------------------
 
 /** Runs one command, returning its stdout or an `unknown`-shaped reason. Never throws. */
-function run(cmd: string, args: string[]): { ok: true; out: string } | { ok: false; why: string } {
+function run(cmd: string, args: string[]): CommandOutcome {
   try {
     const out = execFileSync(cmd, args, { encoding: "utf8", timeout: 5_000, maxBuffer: 16 * 1024 * 1024 });
     return { ok: true, out };
@@ -549,62 +611,156 @@ export type CollectHealthOptions = {
  *
  * Each command is run and parsed independently — one failing (missing
  * binary, non-zero exit, a format that shifted) never prevents the others
- * from being read, and never becomes a 0 in the one that failed. This
- * function is the only place in the module that touches the outside world;
- * everything it calls above is pure and importable without side effects.
+ * from being read, and never becomes a 0 in the one that failed. This is the
+ * synchronous gathering path retained for existing on-demand callers;
+ * everything it calls above the gathering seam is pure.
  */
 export function collectHealth(options: CollectHealthOptions = {}): HealthReport {
-  const startedAt = Date.now();
+  const startedAtMs = Date.now();
   const includeSwapActivity = options.includeSwapActivity ?? true;
 
-  const uptimeRes = run("uptime", []);
-  const nprocRes = run("nproc", []);
-  const cores = nprocRes.ok ? parseNproc(nprocRes.out) : null;
-  const load: LoadReading = !uptimeRes.ok
-    ? { kind: "unknown", why: `uptime failed: ${uptimeRes.why}` }
-    : !nprocRes.ok
-      ? { kind: "unknown", why: `nproc failed: ${nprocRes.why}` }
-      : cores === null
-        ? { kind: "unknown", why: `nproc's output did not parse as a positive integer: ${JSON.stringify(nprocRes.out)}` }
-        : parseLoad(uptimeRes.out, cores);
-
-  const freeRes = run("free", ["-b"]);
-  const memory: MemoryReading = freeRes.ok ? parseMemory(freeRes.out) : { kind: "unknown", why: `free failed: ${freeRes.why}` };
-
-  const swaponRes = run("swapon", ["--show", "--bytes"]);
-  const swap: SwapReading = swaponRes.ok ? parseSwap(swaponRes.out) : { kind: "unknown", why: `swapon failed: ${swaponRes.why}` };
-
-  const dfRes = run("df", ["-k", "/"]);
-  const disk: DiskReading = dfRes.ok ? parseDisk(dfRes.out) : { kind: "unknown", why: `df failed: ${dfRes.why}` };
-
-  let swapActivity: SwapActivityReading;
-  if (!includeSwapActivity) {
-    swapActivity = { kind: "skipped" };
-  } else {
+  const reads: HealthReads = {
+    uptime: run("uptime", []),
+    nproc: run("nproc", []),
+    free: run("free", ["-b"]),
+    swapon: run("swapon", ["--show", "--bytes"]),
+    df: run("df", ["-k", "/"]),
     // "1 2" (one second apart, two samples): the first line is a since-boot
     // average and is discarded by parseSwapActivity, so two samples are the
     // minimum that yields one real reading — about 1s, not the doc survey's
     // 3s from "1 3". Cheaper for a per-minute poll; still a live sample.
-    const vmstatRes = run("vmstat", ["1", "2"]);
-    swapActivity = vmstatRes.ok ? parseSwapActivity(vmstatRes.out) : { kind: "unknown", why: `vmstat failed: ${vmstatRes.why}` };
-  }
-
-  const psRes = run("ps", ["-eo", "rss,args", "--no-headers"]);
-  const attribution: AttributionReading = psRes.ok
-    ? parseAttribution(psRes.out)
-    : { kind: "unknown", why: `ps failed: ${psRes.why}` };
-
-  const verdict = computeVerdict({ load, memory, swap, disk, swapActivity });
-
-  return {
-    load,
-    memory,
-    swap,
-    disk,
-    swapActivity,
-    attribution,
-    verdict,
-    collectedAt: new Date().toISOString(),
-    tookMs: Date.now() - startedAt,
+    vmstat: includeSwapActivity ? run("vmstat", ["1", "2"]) : { skipped: true },
+    ps: run("ps", ["-eo", "rss,args", "--no-headers"]),
   };
+  return assembleHealth(reads, startedAtMs, Date.now());
+}
+
+const CHEAP_TIMEOUT_MS = 5_000;
+const VMSTAT_TIMEOUT_MS = 10_000;
+const HEALTH_MAX_BYTES = 16 * 1024 * 1024;
+
+function errorText(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** Keep the owner's explanation intact, adding the child identity that makes a stuck probe actionable. */
+function fromOwned(outcome: OwnedOutcome): CommandOutcome {
+  if (outcome.kind === "ok") return { ok: true, out: outcome.stdout };
+  if (outcome.kind === "refused") {
+    return {
+      ok: false,
+      why:
+        `${outcome.why}; owned child pid ${outcome.pid} has been alive for ` +
+        `${Math.max(1, outcome.liveForMs)}ms`,
+    };
+  }
+  if (outcome.kind === "timed-out") {
+    const pid = outcome.pid === null ? "no child pid was observable" : `child pid ${outcome.pid}`;
+    return {
+      ok: false,
+      why:
+        `${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms; ` +
+        pid,
+    };
+  }
+  return {
+    ok: false,
+    why: `${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms`,
+  };
+}
+
+async function runOwned(owner: ProbeOwner, spec: ProbeSpec): Promise<CommandOutcome> {
+  try {
+    return fromOwned(await owner.run(spec));
+  } catch (cause) {
+    // The real owner returns a failed arm, but keep this boundary non-throwing
+    // if an injected or future owner violates that contract. One broken probe
+    // must still leave the other six readings available.
+    return { ok: false, why: `probe "${spec.key}" threw: ${errorText(cause)}` };
+  }
+}
+
+const HEALTH_CHILD_CAP = 4;
+
+/**
+ * Refuse locally when timed-out calls have released limiter slots but their
+ * children are still alive. `limit(3)` bounds unresolved cheap-probe calls;
+ * this bounds the children those calls can leave behind, with vmstat beside
+ * them, across this turn and later turns owned by the same registry.
+ */
+async function runHealthOwned(owner: ProbeOwner, spec: ProbeSpec, nowMs: () => number): Promise<CommandOutcome> {
+  let live: ReturnType<ProbeOwner["live"]>;
+  try {
+    live = owner.live().filter((child) => child.key.startsWith("health:"));
+  } catch (cause) {
+    return { ok: false, why: `probe "${spec.key}" could not inspect the health child registry: ${errorText(cause)}` };
+  }
+  /* A same-key call cannot add a sibling: the owner first re-checks the old
+     child's kernel identity, then either refuses the call or replaces a child
+     it proved gone. Let that check happen so one missed exit event cannot pin
+     the local cap for ever. */
+  const ownerCanRecheckThisKey = live.some((child) => child.key === spec.key);
+  if (live.length >= HEALTH_CHILD_CAP && !ownerCanRecheckThisKey) {
+    let now: number;
+    try {
+      now = nowMs();
+    } catch {
+      now = Number.NaN;
+    }
+    const children = live
+      .map((child) => {
+        const duration = Number.isFinite(now) ? ` for ${Math.max(1, now - child.startedAtMs)}ms` : "";
+        return `pid ${child.pid}${duration}`;
+      })
+      .join(", ");
+    return {
+      ok: false,
+      why:
+        `probe "${spec.key}" was not started because ${live.length} health children remain unaccounted for ` +
+        `(${children}); the ${HEALTH_CHILD_CAP}-child health cap was kept`,
+    };
+  }
+  return runOwned(owner, spec);
+}
+
+/** Gather the survey without holding Node's request thread while children run. */
+export async function collectHealthAsync(options: {
+  owner: ProbeOwner;
+  includeSwapActivity?: boolean;
+  nowMs?: () => number;
+}): Promise<HealthReport> {
+  const nowMs = options.nowMs ?? Date.now;
+  const startedAtMs = nowMs();
+  const runCheap = limit(3);
+  const cheap = (key: string, cmd: string, args: readonly string[]) =>
+    runCheap(() => runHealthOwned(
+      options.owner,
+      { key, cmd, args, timeoutMs: CHEAP_TIMEOUT_MS, maxBytes: HEALTH_MAX_BYTES },
+      nowMs,
+    ));
+  const includeSwapActivity = options.includeSwapActivity ?? true;
+
+  // vmstat is outside the cheap-command limiter because its one-second sample
+  // is deliberate waiting, not pressure worth making `free` queue behind. Its
+  // ten-second deadline gives the sample room to finish on a loaded box while
+  // distinguishing it from a wedged child.
+  const [uptime, nproc, free, swapon, df, ps, vmstat] = await Promise.all([
+    cheap("health:uptime", "uptime", []),
+    cheap("health:nproc", "nproc", []),
+    cheap("health:free", "free", ["-b"]),
+    cheap("health:swapon", "swapon", ["--show", "--bytes"]),
+    cheap("health:df", "df", ["-k", "/"]),
+    cheap("health:ps", "ps", ["-eo", "rss,args", "--no-headers"]),
+    includeSwapActivity
+      ? runHealthOwned(options.owner, {
+          key: "health:vmstat",
+          cmd: "vmstat",
+          args: ["1", "2"],
+          timeoutMs: VMSTAT_TIMEOUT_MS,
+          maxBytes: HEALTH_MAX_BYTES,
+        }, nowMs)
+      : Promise.resolve({ skipped: true } as const),
+  ]);
+
+  return assembleHealth({ uptime, nproc, free, swapon, df, vmstat, ps }, startedAtMs, nowMs());
 }

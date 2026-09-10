@@ -15,7 +15,7 @@
  * Codex observation feeds cards on two different tabs. Each seam is injectable,
  * so tests drive the page without a clock or network.
  */
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
 import { DecisionsPanel } from "./DecisionsPanel";
@@ -54,7 +54,13 @@ import { httpQueueApi, type QueueApi } from "./queue-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
-import { ANSWERING_NOT_REPORTED, CLOCK_SKEW_UNMEASURED, questionsAtTime, type ClockSkew } from "./types";
+import {
+  ANSWERING_NOT_REPORTED,
+  CLOCK_SKEW_UNMEASURED,
+  questionsAtTime,
+  type ClockSkew,
+  type FleetState,
+} from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -194,6 +200,57 @@ export function App({
     return Number.isSafeInteger(raw) && raw > 0 ? raw : null;
   })();
 
+  /* **NEITHER DEFAULT IS `false`/`0`.** Before the first payload arrives this
+     page has been told nothing, and inventing `false` here would print
+     "answering is switched off" over a server that has said no such thing.
+     `ANSWERING_NOT_REPORTED` says the true thing instead, and withholds the
+     control while it says it. types.ts § `AnsweringReading`. Hoisted to one
+     const because two panels read it and the latch below compares against it. */
+  const answeringEnabled = feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED;
+  /**
+   * **A SERVER-WIDE ANSWERING REFUSAL, LATCHED AT THE PAGE.**
+   *
+   * `POST /api/steer/answer` can come back 503 saying answering is switched off
+   * on this box. That is a claim about the whole server, and until 2026-09-10 it
+   * was held in `SessionDetail` alongside a completely different refusal about
+   * one dialog — under a comment claiming both lasted for the life of the
+   * dialog, which was true of neither. The one that matters here is the wrong
+   * direction: the refusal was **lost by pressing a tab and pressing back**,
+   * because the arm below unmounts the whole Sessions panel on a mode change.
+   * Somebody refused a tap, went to look at Box health to see whether the box
+   * was in trouble, came back, and was offered the buttons again. GPT Sol's F7.
+   *
+   * So it lives here, above every panel and independent of selection, dialog and
+   * mode. **`under` is the payload it was refused against**, and the latch comes
+   * off only when a payload *received after that one* reports answering
+   * `enabled` — the server changing its mind, said in the payload, rather than
+   * time passing. Object identity rather than `receivedAt`: two payloads can
+   * arrive in one millisecond, and a clock comparison would then fail to clear,
+   * which is the harmless direction but is a comparison that cannot answer the
+   * question it is asked.
+   */
+  const [answeringRefusal, setAnsweringRefusal] = useState<{ why: string; under: FleetState | null } | null>(null);
+  /* The refusal arrives after an await. Its boundary is the newest payload the
+     transport DELIVERED before that answer, not the payload at tap time and not
+     merely the latest one React had time to commit. React may batch an onState
+     and the promise resolution in one turn; useFleetState records their order
+     synchronously at the transport boundary. */
+  /* An EFFECT here, unlike the render-phase checks in `SessionDetail` and
+     `continuity.ts`, and the difference is which way a late frame errs. Holding
+     a spent refusal for one more commit withholds a control that would have
+     worked; the frames those two are avoiding show one agent's words under
+     another agent's name. Only one of those is worth a render-phase update. */
+  useEffect(() => {
+    if (answeringRefusal === null) return;
+    if (feed.state === answeringRefusal.under) return;
+    if (answeringEnabled.kind !== "enabled") return;
+    setAnsweringRefusal(null);
+  }, [answeringRefusal, feed.state, answeringEnabled]);
+  const onAnsweringRefused = useCallback(
+    (why: string) => setAnsweringRefusal({ why, under: feed.latestDeliveredState() }),
+    [feed.latestDeliveredState],
+  );
+
   const fresh = freshness({
     state: feed.state,
     receivedAt: feed.receivedAt,
@@ -262,14 +319,9 @@ export function App({
               now={now}
               collected={feed.state?.collectedAt != null}
               unreadableRows={feed.state?.unreadableRows ?? 0}
-              /* **NEITHER DEFAULT IS `false`/`0`.** Before the first payload
-                 arrives this page has been told nothing, and inventing `false`
-                 here would print "answering is switched off" over a server that
-                 has said no such thing — the mirror of the drop this stage
-                 repairs. `ANSWERING_NOT_REPORTED` says the true thing instead,
-                 and withholds the control while it says it. types.ts §
-                 `AnsweringReading`. */
-              answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
+              answeringEnabled={answeringEnabled}
+              answeringRefusal={answeringRefusal?.why ?? null}
+              onAnsweringRefused={onAnsweringRefused}
               tmuxServerPid={feed.state?.tmuxServerPid ?? null}
               order={order}
               onOrder={(next) => setParam("order", next === "status" ? null : next)}
@@ -531,7 +583,9 @@ export function App({
             <QuestionsPanel
               view={questions}
               rows={rows}
-              answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
+              answeringEnabled={answeringEnabled}
+              answeringRefusal={answeringRefusal?.why ?? null}
+              onAnsweringRefused={onAnsweringRefused}
               queueApi={queueApi}
               refreshNonce={refreshNonce}
               onOpenQueue={() => go("ideas")}

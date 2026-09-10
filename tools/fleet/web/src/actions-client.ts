@@ -1626,7 +1626,8 @@ export type FeedOutcome = { ok: true; feed: ActionsFeed } | { ok: false; why: st
 
 /** The seam, the same shape as `SteerApi` and for the same reason. */
 export type ActionsApi = {
-  feed: () => Promise<FeedOutcome>;
+  /** `signal` reaches `fetch` (plan 260910c, F5): a controller in the hook cannot abort a fetch it does not make. */
+  feed: (signal?: AbortSignal) => Promise<FeedOutcome>;
   run: (row: FleetRow, actionId: string) => Promise<ActionOutcome>;
   queueMessage: (row: FleetRow, text: string) => Promise<ActionOutcome>;
   cancel: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
@@ -1839,10 +1840,10 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
   };
 
   return {
-    async feed(): Promise<FeedOutcome> {
+    async feed(signal?: AbortSignal): Promise<FeedOutcome> {
       let response: Response;
       try {
-        response = await fetchImpl(ACTIONS_URL, { cache: "no-store" });
+        response = await fetchImpl(ACTIONS_URL, { cache: "no-store", ...(signal === undefined ? {} : { signal }) });
       } catch (cause) {
         return { ok: false, why: `this browser could not reach the dashboard: ${describe(cause)}` };
       }
@@ -1880,7 +1881,7 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
  * in a test that imports this module first.
  */
 export const httpActionsApi: ActionsApi = {
-  feed: () => makeActionsApi().feed(),
+  feed: (signal) => makeActionsApi().feed(signal),
   run: (row, actionId) => makeActionsApi().run(row, actionId),
   queueMessage: (row, text) => makeActionsApi().queueMessage(row, text),
   cancel: (sessionId, itemId) => makeActionsApi().cancel(sessionId, itemId),

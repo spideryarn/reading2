@@ -243,6 +243,28 @@ export type RecentMessages =
       why: string;
     };
 
+/**
+ * A reading, and **which conversation it is a reading OF** — every arm, the
+ * failures included.
+ *
+ * `claudeSessionId` is exactly the id this reader was asked to read
+ * (`RecentMessagesOptions.claudeSessionId`), so it is the reader's own truth
+ * and needs no second lookup. It exists because `/api/messages` resolves the
+ * claim off the server's *current* row: if that row moved from claim C to D
+ * between the browser's snapshot and the request, D's answer arrives at a page
+ * that asked about C, and without a stamp nothing in it says so. With one, the
+ * page can compare (RecentMessages.tsx). GPT Sol's F10, docs/plans/260910c.
+ *
+ * **The tmux world is deliberately not part of it**: two tmux servers holding
+ * one conversation uuid hold one conversation, and the claim is the whole of
+ * the identity a transcript has.
+ *
+ * A separate type rather than a field on `RecentMessages` so the change is
+ * additive: everything that consumes or fakes a `RecentMessages` goes on doing
+ * so unchanged.
+ */
+export type RecentMessagesOf = RecentMessages & { claudeSessionId: string | null };
+
 export type RecentMessagesOptions = {
   /** `row.claudeSessionId` — the conversation uuid. Null is a first-class answer, not an error to throw. */
   claudeSessionId: string | null;
@@ -1031,7 +1053,21 @@ export async function readOpeningMessages(opts: OpeningMessagesOptions): Promise
   };
 }
 
-export async function readRecentMessages(opts: RecentMessagesOptions): Promise<RecentMessages> {
+/**
+ * The tail of one conversation, stamped with the conversation it is of.
+ *
+ * **One stamp, applied once, over every arm** — rather than a field written
+ * into each `return` below, where the next arm somebody adds could forget it.
+ * Snapshot the options before the first await so a caller cannot mutate the
+ * claim into a stamp for a conversation this invocation did not read.
+ * `RecentMessagesOf` says why the stamp exists.
+ */
+export async function readRecentMessages(opts: RecentMessagesOptions): Promise<RecentMessagesOf> {
+  const asked = { ...opts };
+  return { ...(await readUnstamped(asked)), claudeSessionId: asked.claudeSessionId };
+}
+
+async function readUnstamped(opts: RecentMessagesOptions): Promise<RecentMessages> {
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxTextChars = opts.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;

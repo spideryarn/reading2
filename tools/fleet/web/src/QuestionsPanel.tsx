@@ -29,6 +29,18 @@ type DialogItem = Extract<QuestionItem, { kind: "dialog" }>;
 type UnaddressableDialogItem = Extract<QuestionItem, { kind: "dialog-unaddressable" }>;
 type ProseItem = Extract<QuestionItem, { kind: "prose" | "prose-unaddressable" }>;
 
+/** The row/item facts that would let a dialog card offer option buttons. */
+function hasAnswerableTarget(item: DialogItem, row: FleetRow | undefined): row is FleetRow {
+  return (
+    row !== undefined &&
+    isLocallyAnswerableDialog(row) &&
+    row.paneId !== null &&
+    row.claudeSessionId !== null &&
+    item.target.sessionId === row.id &&
+    item.target.sessionName === row.name
+  );
+}
+
 function executionKey(row: FleetRow | undefined): string {
   if (row?.execution.kind !== "verified") return "unverified";
   const { boot, pid, startTicks } = row.execution.token;
@@ -169,15 +181,21 @@ function DialogStub({ item }: { item: DialogItem | UnaddressableDialogItem }): R
 }
 
 /** State lives here so a changed execution token makes React discard it. */
-function AnswerableDialog({ item, row, question, answeringEnabled, steer }: {
+function AnswerableDialog({ item, row, question, answeringEnabled, answeringRefusal, onAnsweringRefused, steer }: {
   item: DialogItem;
   row: FleetRow;
   question: NonNullable<FleetRow["question"]>;
   answeringEnabled: AnsweringReading;
+  answeringRefusal: string | null;
+  onAnsweringRefused: (why: string) => void;
   steer: SteerApi;
 }): ReactNode {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
+  /* **Only the dialog-scoped refusal is held here.** `grants-permission` is a
+     fact about this dialog, so it dies with this card's key. `answering-disabled`
+     is a fact about the whole server and goes to `App`'s one latch, which the
+     Session detail reads as well — a second latch here was F16. */
   const [stickyRefusal, setStickyRefusal] = useState<string | null>(null);
 
   /* A confirmed send and an uncertain or partial delivery all require a fresh
@@ -186,13 +204,10 @@ function AnswerableDialog({ item, row, question, answeringEnabled, steer }: {
   const repeatUnsafe = outcome !== null && (outcome.result.ok || outcome.result.delivery.kind !== "none");
   const canAnswer =
     answeringEnabled.kind === "enabled" &&
+    answeringRefusal === null &&
     stickyRefusal === null &&
     !repeatUnsafe &&
-    isLocallyAnswerableDialog(row) &&
-    row.paneId !== null &&
-    row.claudeSessionId !== null &&
-    item.target.sessionId === row.id &&
-    item.target.sessionName === row.name;
+    hasAnswerableTarget(item, row);
 
   const onAnswer = useCallback((index: number) => {
     if (!canAnswer) return;
@@ -202,12 +217,11 @@ function AnswerableDialog({ item, row, question, answeringEnabled, steer }: {
     const target = sentTarget(row);
     void steer.answer(row, index).then((result) => {
       setOutcome({ result, target });
-      if (!result.ok && (result.code === "answering-disabled" || result.code === "grants-permission")) {
-        setStickyRefusal(result.why);
-      }
+      if (!result.ok && result.code === "answering-disabled") onAnsweringRefused(result.why);
+      if (!result.ok && result.code === "grants-permission") setStickyRefusal(result.why);
       setBusy(false);
     });
-  }, [canAnswer, row, steer]);
+  }, [canAnswer, row, steer, onAnsweringRefused]);
 
   return (
     <Card className="tw:mb-3 tw:p-3">
@@ -366,10 +380,12 @@ function ProseCaveat(): ReactNode {
   );
 }
 
-function QuestionItems({ items, rows, answeringEnabled, onSelect, steer, now }: {
+function QuestionItems({ items, rows, answeringEnabled, answeringRefusal, onAnsweringRefused, onSelect, steer, now }: {
   items: readonly QuestionItem[];
   rows: readonly FleetRow[];
   answeringEnabled: AnsweringReading;
+  answeringRefusal: string | null;
+  onAnsweringRefused: (why: string) => void;
   onSelect: (sessionId: string) => void;
   steer: SteerApi;
   now: number;
@@ -388,7 +404,18 @@ function QuestionItems({ items, rows, answeringEnabled, onSelect, steer, now }: 
           case "dialog":
             return row === undefined || row.question === null
               ? <DialogStub key={key} item={item} />
-              : <AnswerableDialog key={key} item={item} row={row} question={row.question} answeringEnabled={answeringEnabled} steer={steer} />;
+              : (
+                <AnswerableDialog
+                  key={key}
+                  item={item}
+                  row={row}
+                  question={row.question}
+                  answeringEnabled={answeringEnabled}
+                  answeringRefusal={answeringRefusal}
+                  onAnsweringRefused={onAnsweringRefused}
+                  steer={steer}
+                />
+              );
           case "dialog-unaddressable":
             return row === undefined || row.question === null
               ? <DialogStub key={key} item={item} />
@@ -471,6 +498,8 @@ export function QuestionsPanel({
   view,
   rows,
   answeringEnabled,
+  answeringRefusal,
+  onAnsweringRefused,
   onSelect,
   queueApi = httpQueueApi,
   refreshNonce = 0,
@@ -482,6 +511,14 @@ export function QuestionsPanel({
   view: QuestionsView | null;
   rows: readonly FleetRow[];
   answeringEnabled: AnsweringReading;
+  /**
+   * An `answering-disabled` refusal the server has already made, latched by
+   * `App` — and the way to tell it about a new one. The same latch the Session
+   * detail reads, so a refusal in either withholds the buttons in both. App.tsx
+   * § `answeringRefusal` owns when it comes off. GPT Sol's F16.
+   */
+  answeringRefusal: string | null;
+  onAnsweringRefused: (why: string) => void;
   onSelect: (sessionId: string) => void;
   /** Read on entry, outside the pushed fleet-state collection loop. */
   queueApi?: QueueApi;
@@ -511,6 +548,11 @@ export function QuestionsPanel({
   const sessionsQuiet = view?.kind === "complete" && view.items.length === 0;
   const hasDialogItem =
     view !== null && view.kind !== "not-observed" && view.items.some((item) => item.kind === "dialog");
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const hasAnswerableDialog =
+    view !== null &&
+    view.kind !== "not-observed" &&
+    view.items.some((item) => item.kind === "dialog" && hasAnswerableTarget(item, rowsById.get(item.rowId)));
   let body: ReactNode;
   if (view === null) {
     body = (
@@ -533,7 +575,7 @@ export function QuestionsPanel({
           <>
             <p className="tw:mt-3 tw:px-1 tw:text-[13px] tw:font-medium tw:text-unknown-ink">This list may be incomplete.</p>
             <Gaps gaps={view.gaps} />
-            <QuestionItems items={view.items} rows={rows} answeringEnabled={answeringEnabled} onSelect={onSelect} steer={steer} now={now} />
+            <QuestionItems items={view.items} rows={rows} answeringEnabled={answeringEnabled} answeringRefusal={answeringRefusal} onAnsweringRefused={onAnsweringRefused} onSelect={onSelect} steer={steer} now={now} />
           </>
         );
         break;
@@ -545,7 +587,7 @@ export function QuestionsPanel({
             <p className="tw:mt-3 tw:px-1 tw:text-[13px] tw:text-ink-soft">Sessions were observed and found quiet.</p>
           ) : null
         ) : (
-          <QuestionItems items={view.items} rows={rows} answeringEnabled={answeringEnabled} onSelect={onSelect} steer={steer} now={now} />
+          <QuestionItems items={view.items} rows={rows} answeringEnabled={answeringEnabled} answeringRefusal={answeringRefusal} onAnsweringRefused={onAnsweringRefused} onSelect={onSelect} steer={steer} now={now} />
         );
         break;
       default: {
@@ -569,6 +611,16 @@ export function QuestionsPanel({
           default exists to prevent, one level along. The notice explains why
           cards have no buttons; with no view there are no cards. */}
       {hasDialogItem ? <AnsweringNotice reading={answeringEnabled} /> : null}
+      {/* **WITHHELD WITH ITS REASON.** The refusal may have been made in the
+          Session detail, where its receipt is; on this tab the buttons would
+          otherwise simply be missing, which reads as a bug rather than as the
+          server having said no. */}
+      {hasAnswerableDialog && answeringRefusal !== null ? (
+        <p className="tw:mt-3 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px] tw:text-alarm-ink">
+          The server refused an answer from this page, so option buttons are withheld until a later reading says
+          answering is on: {answeringRefusal}
+        </p>
+      ) : null}
       {body}
       <QueuePointer view={queue} onOpenQueue={onOpenQueue} sessionsQuiet={sessionsQuiet} />
     </section>

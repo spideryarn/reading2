@@ -127,7 +127,9 @@ import {
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
+import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
+import { useExecutionEpoch } from "./continuity";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
@@ -247,8 +249,9 @@ function Outcome({
  * being wrong is expensive. GPT Sol's M1.
  *
  * The comparison is against the row **as it was when the send was requested**
- * (`SentTarget`), not the row on screen now. The detail pane is keyed by session
- * id, so an outcome outlives the payload it was made against; comparing with the
+ * (`SentTarget`), not the row on screen now. The detail pane is keyed by the
+ * session and its execution, so an outcome outlives every payload that does not
+ * change either — which is all of them, sixty seconds apart; comparing with the
  * live row asks a question nobody asked and can answer it wrongly in both
  * directions.
  *
@@ -613,6 +616,8 @@ export function SessionDetail({
   row,
   now,
   answeringEnabled,
+  answeringRefusal,
+  onAnsweringRefused,
   tmuxServerPid,
   steer,
   rename,
@@ -632,6 +637,20 @@ export function SessionDetail({
    * of. `HeldBack` says what each of the four answers looks like.
    */
   answeringEnabled: AnsweringReading;
+  /**
+   * **The server's own sentence, once it has answered a tap with
+   * `answering-disabled`** — or null while it has not.
+   *
+   * A PROP rather than state here, and the owner is `App`. The refusal is a
+   * claim about the whole box: it has nothing to do with which session is open
+   * or which dialog is on screen, and it must still be true after a trip to
+   * another tab. `App` unmounts the entire Sessions panel on a mode change, so
+   * a latch held anywhere below `App` is lost by pressing a tab and pressing
+   * back — which is exactly the gesture somebody makes after being refused.
+   */
+  answeringRefusal: string | null;
+  /** Tell that owner the server has just refused, so it can latch it. */
+  onAnsweringRefused: (why: string) => void;
   /**
    * **Which tmux server the handles below belong to**, or null when it could
    * not be read. Drawn in "Where it is", beside the handles it qualifies —
@@ -678,21 +697,71 @@ export function SessionDetail({
    * **THE LAST SEND, WITH THE TARGET IT WAS MADE AGAINST**, held as one value
    * because they are one fact.
    *
-   * The outcome outlives the payload: this component is keyed by session id
-   * alone, so the row underneath is replaced at every refresh while the card
-   * stays on screen. Keeping only the outcome and comparing it with whatever
+   * The outcome outlives the payload: this component is keyed by the session
+   * and its execution, so the row underneath is replaced at every refresh —
+   * sixty seconds apart, none of it a change of key — while the card stays on
+   * screen. Keeping only the outcome and comparing it with whatever
    * `row` is by then answers a different question from the one that was asked —
    * see `SentTarget` for both ways that goes wrong. GPT Sol's M1.
    */
   const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
   /**
-   * The server's own sentence, once it has told us answering is switched off.
+   * **THE DIALOG A `grants-permission` REFUSAL WAS ABOUT**, held with the
+   * refusal because they are one fact.
    *
-   * Held rather than shown once and forgotten: after a refusal the options stop
-   * being buttons, because a control that refuses every time you press it is
-   * worse than one that says why it is not a control.
+   * The server refuses a tap when answering the dialog would grant a capability
+   * rather than take a turn, and after that the options stop being buttons —
+   * a control that refuses every time you press it is worse than one that says
+   * why it is not a control. But that refusal is about **one dialog**, and the
+   * previous version of this was a bare `string | null` under a comment saying
+   * it "can only change when the dialog does — at which point the row is
+   * replaced and this state with it". That was false in both directions: this
+   * component is keyed by session and execution, so the row object underneath is
+   * replaced every sixty seconds without remounting it, and a session that
+   * answers one dialog and is asked a completely different one keeps its
+   * buttons withheld for ever.
+   *
+   * So the refusal carries the dialog it was made against, and is handed out
+   * only while that dialog is still the one on screen. `questionSafetyKey`
+   * decides what "still the same" means — it mirrors the server's own
+   * `sameQuestion` fields, so identical prompt text over different material is
+   * a different dialog, which object identity and prompt text alone both miss —
+   * and `"no-question"` is one of its answers, so a transition through *no
+   * dialog at all* clears this too. GPT Sol's F7, docs/plans/260910c.
+   *
+   * **The run is in the tuple as `useExecutionEpoch`'s key, never as the raw
+   * token.** The token is absent on every collection the box is too loaded to
+   * verify, so a key built from it changed with the weather — and each time
+   * it did, the refusal stopped matching and the option buttons the server
+   * had just refused came back, until the token returned and took them away
+   * again. The epoch holds the last VERIFIED run and moves only on a
+   * replacement, which is the one change of run that should clear this. It is
+   * the same machinery that keys this component, and it is here as well
+   * because that is what makes this value correct on its own terms rather than
+   * correct because a caller happens to remount it. The epoch key carries
+   * `row.id`, so the session is in the tuple too.
    */
-  const [answeringOff, setAnsweringOff] = useState<string | null>(null);
+  const epochKey = useExecutionEpoch(row);
+  const dialogKey = JSON.stringify([epochKey, questionSafetyKey(row.rawQuestion)]);
+  const [permissionRefusal, setPermissionRefusal] = useState<{ dialog: string; why: string } | null>(null);
+  /* **CHECKED WHERE IT IS DRAWN, not cleared by an effect one commit later.**
+     Same argument as `Held` in RecentMessages.tsx: an effect runs after React
+     has committed and possibly painted, so the frame in which a new dialog is
+     on screen under the old dialog's refusal would exist. The state update is
+     also what makes a transition through `no-question` final: merely hiding a
+     mismatched refusal would let an identical later dialog resurrect it. It is
+     guarded by the key mismatch, so the immediate retry observes null. */
+  if (permissionRefusal !== null && permissionRefusal.dialog !== dialogKey) {
+    setPermissionRefusal(null);
+  }
+  const grantsPermission =
+    permissionRefusal !== null && permissionRefusal.dialog === dialogKey ? permissionRefusal.why : null;
+  /**
+   * **THE TWO REFUSALS DRAWN IN ONE CARD, and the server-wide one goes first.**
+   * `answeringRefusal` is a claim about the whole box and outlives everything
+   * this component owns; it is latched in `App` and arrives as a prop.
+   */
+  const answeringOff = answeringRefusal ?? grantsPermission;
 
   const label = statusLabel(row.status);
   const where = whereLine(row);
@@ -729,17 +798,22 @@ export function SessionDetail({
          read the render that resolved the promise, which is the bug. */
       const result = await run();
       setOutcome({ result, target });
-      // Both are sticky, and for the same reason: neither will come right by
-      // pressing again. `answering-disabled` is the whole server switched off;
-      // `grants-permission` is this dialog, and it can only change when the
-      // dialog does — at which point the row is replaced and this state with it.
-      if (!result.ok && (result.code === "answering-disabled" || result.code === "grants-permission")) {
-        setAnsweringOff(result.why);
+      /* **BOTH ARE STICKY AND THEY STICK TO DIFFERENT THINGS**, which is why
+         they are no longer one piece of state. Neither will come right by
+         pressing again, but `answering-disabled` is a claim about the whole
+         server and must survive a tab change, a different session and a
+         different dialog — so it is latched in `App`, which is the only owner
+         above the panel `App` unmounts on a mode change. `grants-permission` is
+         a claim about the dialog on screen and must come off the moment that
+         dialog is not the one on screen. GPT Sol's F7. */
+      if (!result.ok && result.code === "answering-disabled") onAnsweringRefused(result.why);
+      if (!result.ok && result.code === "grants-permission") {
+        setPermissionRefusal({ dialog: dialogKey, why: result.why });
       }
       if (result.ok && clear) setText("");
       setBusy(false);
     },
-    [],
+    [dialogKey, onAnsweringRefused],
   );
 
   const onAnswer = useCallback(

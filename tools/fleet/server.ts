@@ -33,9 +33,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
+import { probeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
 import { parseBinds } from "./config.js";
-import { collectHealth, type HealthReport } from "./health.js";
+import { collectHealthAsync, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
@@ -127,10 +128,17 @@ let lastError: string | null = null;
  * The box's own vital signs, refreshed alongside the fleet.
  *
  * Null until the first reading, and null again only if a reading throws — which
- * `collectHealth` is built not to do: every field of it can say "I could not
+ * `collectHealthAsync` is built not to do: every field of it can say "I could not
  * tell" rather than returning a zero that reads as healthy.
  */
 let health: HealthReport | null = null;
+
+/**
+ * One owner for the process lifetime. Building this inside `refreshHealth`
+ * would forget a stuck child every minute and start it a new sibling, which is
+ * the multiplication the owned-child registry exists to prevent.
+ */
+const healthProbeOwner = probeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
@@ -422,14 +430,17 @@ function statePayload(): string {
  * GPT Astra's A17, 2026-09-08.
  *
  * Still separately guarded, for the original reason: a health reading that
- * throws must not cost us the session list. `collectHealth` is built not to
+ * throws must not cost us the session list. `collectHealthAsync` is built not to
  * throw — every field of it can say "I could not tell" rather than returning a
  * zero that reads as healthy — so this catch is for the case where that is
  * itself wrong.
  */
-function refreshHealth(): HealthTurn {
+async function refreshHealth(): Promise<HealthTurn> {
   try {
-    const report = collectHealth({ includeSwapActivity: true });
+    const report = await collectHealthAsync({
+      owner: healthProbeOwner,
+      includeSwapActivity: true,
+    });
     health = report;
     return { kind: "reading", report };
   } catch (err) {
@@ -442,7 +453,7 @@ function refreshHealth(): HealthTurn {
        under a fresh timestamp, which is a reading nobody took wearing a clock.
        The turn is the truth about this turn; the variable is the best thing we
        have to draw. They are different, and now they are separate. */
-    return { kind: "collector-failed", why: `collectHealth threw: ${why}` };
+    return { kind: "collector-failed", why: `collectHealthAsync threw: ${why}` };
   }
 }
 
@@ -764,6 +775,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
           kind: "not-found",
           reason: "no-such-session",
           why: "no session with that handle in the current snapshot",
+          /* A current server's answer, not an old unstamped wire shape. The
+             absence of a row means it resolved no conversation claim. */
+          claudeSessionId: null,
         }),
       );
       return;
@@ -787,6 +801,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
           JSON.stringify({
             kind: "unreadable",
             path: null,
+            /* The read threw, but which claim it attempted is still known and
+               must not be accepted under a different browser snapshot. */
+            claudeSessionId: row.claudeSessionId,
             why: `reading the transcript threw: ${err instanceof Error ? err.message : String(err)}`,
           }),
         );
