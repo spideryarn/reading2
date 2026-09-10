@@ -14,20 +14,25 @@
  * really dispatched would put two agents on the box every time somebody ran the
  * suite.
  */
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { schedulerWiring } from "../scripts/overseer.js";
-import { behaviourHash, type Arming, type JobDefinition, type OccurrenceKey } from "../tools/overseer/jobs.js";
+import { behaviourHash, type Arming, type AuthorisedJob, type JobDefinition, type OccurrenceKey } from "../tools/overseer/jobs.js";
 import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR, sessionName, TSX_RELATIVE_PATH, type ChildSpawner } from "../tools/overseer/dispatch.js";
+import { ruleJobs } from "../tools/overseer/rule-jobs.js";
+import { hours } from "../tools/overseer/schedules.js";
 import {
   AUTHORISED_HASHES,
   describeStandingJobs,
   FEEDBACK_SWEEP_DOCS,
+  FEEDBACK_SWEEP_PROMPT,
   GET_READY_TO_DEPLOY_DOCS,
+  GET_READY_TO_DEPLOY_PROMPT,
+  SCHEDULE_FIXTURE_DOCS,
   standingJobs,
 } from "../tools/overseer/standing-jobs.js";
 
@@ -56,10 +61,11 @@ function tempRoot(): string {
 const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
 
 describe("the standing jobs, as this checkout would actually run them", () => {
-  test("both are built, and each names the document its authority comes from", () => {
+  test("all three are built, and each names the document its authority comes from", () => {
     const built = standingJobs(REPO);
     expect(built.problems).toEqual([]);
-    expect(built.jobs.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep"]);
+    // The third is the dry-run fixture (plan 260910e § D5).
+    expect(built.jobs.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "schedule-fixture"]);
     for (const job of built.jobs) {
       expect(job.definition.behaviour.what.length).toBeGreaterThan(20);
       expect(job.definition.behaviour.documents.length).toBeGreaterThan(0);
@@ -85,7 +91,7 @@ describe("the standing jobs, as this checkout would actually run them", () => {
     for (const job of standingJobs(REPO).jobs) {
       expect(`${job.definition.behaviour.id} ${behaviourHash(job.definition.behaviour)}`).toBe(`${job.definition.behaviour.id} ${job.authorisedHash}`);
     }
-    expect(Object.keys(AUTHORISED_HASHES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy"]);
+    expect(Object.keys(AUTHORISED_HASHES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy", "schedule-fixture"]);
   });
 
   test("a document that cannot be read drops its job AND says so, rather than dropping it quietly", () => {
@@ -94,7 +100,7 @@ describe("the standing jobs, as this checkout would actually run them", () => {
     // and no sentence saying why.
     const built = standingJobs(tempRoot());
     expect(built.jobs).toEqual([]);
-    expect(built.problems).toHaveLength(2);
+    expect(built.problems).toHaveLength(3);
     expect(built.problems.join("\n")).toContain("get-ready-to-deploy");
     expect(built.problems.join("\n")).toContain("could not be read");
   });
@@ -114,6 +120,63 @@ describe("the standing jobs, as this checkout would actually run them", () => {
     expect(behaviourHash(after[0]!.definition.behaviour)).not.toBe(behaviourHash(before[0]!.definition.behaviour));
     // The other job is untouched: one document changing must not disarm the lot.
     expect(behaviourHash(after[1]!.definition.behaviour)).toBe(behaviourHash(before[1]!.definition.behaviour));
+  });
+});
+
+describe("per-document pins, the dispatch mode, and the fixture (plan 260910e)", () => {
+  const SHIPPED = (): readonly AuthorisedJob[] => [...standingJobs(REPO).jobs, ...ruleJobs(REPO).jobs];
+
+  test("THE PINS AGREE: each job's authorised documents rebuild its authorised hash exactly", () => {
+    // Plan § D4. The behaviour hash is the only gate; `authorisedDocuments`
+    // exists so a refusal can name WHICH document moved. That is only true if
+    // the two literals describe the same authorisation, so this ties them.
+    const shipped = SHIPPED();
+    expect(shipped.map((job) => job.definition.behaviour.id)).toEqual([
+      "get-ready-to-deploy",
+      "feedback-sweep",
+      "schedule-fixture",
+      "wedged-work",
+      "launch-mode",
+    ]);
+    for (const job of shipped) {
+      const behaviour = job.definition.behaviour;
+      expect(job.authorisedDocuments.map((document) => document.path)).toEqual(behaviour.documents.map((document) => document.path));
+      expect(`${behaviour.id} ${behaviourHash({ ...behaviour, documents: job.authorisedDocuments })}`).toBe(`${behaviour.id} ${job.authorisedHash}`);
+    }
+  });
+
+  test("and it is not vacuous: altering one pinned digest breaks the agreement", () => {
+    for (const job of SHIPPED()) {
+      const [first, ...rest] = job.authorisedDocuments;
+      if (first === undefined) throw new Error(`${job.definition.behaviour.id} pins no document, so this test would prove nothing about it`);
+      const flipped = `${first.sha256.slice(0, -1)}${first.sha256.endsWith("0") ? "1" : "0"}`;
+      expect(flipped).not.toBe(first.sha256);
+      const altered = [{ ...first, sha256: flipped }, ...rest];
+      expect(behaviourHash({ ...job.definition.behaviour, documents: altered })).not.toBe(job.authorisedHash);
+    }
+  });
+
+  test("every session prompt says the Overseer owns the recurrence (plan § D3b)", () => {
+    // The roadmap's "No cron hidden inside a Claude session": get-ready-to-deploy.md
+    // still tells its runner that the recurring form is a /loop. Until that rule
+    // doc changes, the prompt is the mechanism.
+    for (const prompt of [GET_READY_TO_DEPLOY_PROMPT, FEEDBACK_SWEEP_PROMPT]) {
+      expect(prompt.endsWith(" This run is one occurrence of a schedule the Overseer owns: do not create a /loop, cron job, timer or any follow-up schedule.")).toBe(true);
+    }
+  });
+
+  test("the fixture is a dry-run session job on its own harmless document; every other shipped job is live", () => {
+    const shipped = SHIPPED();
+    const fixture = shipped.find((job) => job.definition.behaviour.id === "schedule-fixture");
+    if (fixture === undefined) throw new Error("expected the schedule fixture");
+    expect(fixture.definition.behaviour.work).toEqual({ kind: "session" });
+    expect(fixture.definition.behaviour.dispatch.kind).toBe("dry-run");
+    expect(fixture.definition.behaviour.documents.map((document) => document.path)).toEqual([...SCHEDULE_FIXTURE_DOCS]);
+    expect(fixture.definition.schedule).toEqual({ everyMs: hours(24), leaseMs: hours(1), initialDelayMs: hours(2) });
+    expect(readFileSync(join(REPO, "tools/overseer/schedule-fixture.md"), "utf8")).toContain("schedule fixture ran");
+    for (const job of shipped.filter((one) => one !== fixture)) {
+      expect(`${job.definition.behaviour.id} ${job.definition.behaviour.dispatch.kind}`).toBe(`${job.definition.behaviour.id} live`);
+    }
   });
 });
 
@@ -178,7 +241,7 @@ describe("the wiring the shipped CLI actually does", () => {
     // The deterministic rule rides along under the full arming, which is the
     // superset; `tests/overseer-rules.test.ts` covers the rules-only one, where
     // the daemon is handed no spawner at all.
-    expect(on.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
+    expect(on.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "schedule-fixture", "wedged-work", "launch-mode"]);
     expect(typeof on.jobs?.spawn).toBe("function");
     expect(on.detail).not.toContain(JOBS_ENABLED_VAR);
     expect(on.problems).toEqual([]);
@@ -187,7 +250,13 @@ describe("the wiring the shipped CLI actually does", () => {
   test("the definitions are built either way, so a disarmed daemon can still say what it would run", () => {
     // Off must not mean blind. A disarmed scheduler that could not name its jobs
     // would be indistinguishable from one that has none.
-    expect(schedulerWiring({}, ARMED).definitions.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
+    expect(schedulerWiring({}, ARMED).definitions.map((job) => job.definition.behaviour.id)).toEqual([
+      "get-ready-to-deploy",
+      "feedback-sweep",
+      "schedule-fixture",
+      "wedged-work",
+      "launch-mode",
+    ]);
   });
 });
 
@@ -195,12 +264,12 @@ describe("what actually starts a session", () => {
   const KEY: OccurrenceKey = {
     jobId: "get-ready-to-deploy",
     scheduledAt: "2026-09-08T17:32:00.000Z",
-    behaviourHash: behaviourHash({ id: "x", what: "x", documents: [], work: { kind: "session" } }),
+    behaviourHash: behaviourHash({ id: "x", what: "x", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } }),
   };
 
   /** A one-off session job. The schedule is arbitrary here: nothing in this describe consults the clock — the dispatcher is handed a definition and a key. */
   function job(id: string, what: string): JobDefinition {
-    return { behaviour: { id, what, documents: [], work: { kind: "session" } }, schedule: { everyMs: 1, leaseMs: 1, initialDelayMs: 0 } };
+    return { behaviour: { id, what, documents: [], work: { kind: "session" }, dispatch: { kind: "live" } }, schedule: { everyMs: 1, leaseMs: 1, initialDelayMs: 0 } };
   }
 
   function fakeSpawner(): { spawn: ChildSpawner; calls: { command: string; args: readonly string[]; cwd: unknown }[]; stdin: string[]; exit(code: number | null): void } {

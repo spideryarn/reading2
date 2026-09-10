@@ -35,10 +35,10 @@
  * ## A TypeScript module rather than JSON
  *
  * Sol's call, and it is the right one: comments survive, `hours(6)` reads at 3am
- * where `21600000` does not, and the two job ids come from this object's own
- * keys — so a third entry here is a compile error in `standing-jobs.ts` until
- * somebody writes the job and pins it. No dependency, no parser, no second
- * schema.
+ * where `21600000` does not, and the job ids come from this object's own keys —
+ * so a new entry here is a compile error in `standing-jobs.ts` until somebody
+ * writes the job and pins it, which is how `schedule-fixture` arrived. No
+ * dependency, no parser, no second schema.
  */
 
 /** Milliseconds in `n` hours. Exported because a test and a doc should read the same way this file does. */
@@ -150,6 +150,19 @@ export const STANDING_JOB_SCHEDULES = {
     // what actually keeps them apart afterwards; this only makes the opening
     // move tidy.
     initialDelayMs: minutes(90),
+  },
+  /**
+   * **THE FIXTURE, and it is dry-run** — `standing-jobs.ts` § the fixture job,
+   * plan 260910e § D5. Daily, because it exists to be seen in every state by
+   * the preview rather than to do work; an hour's lease, because the thing it
+   * would launch replies one line; and two hours after arming, so it is never
+   * the first thing an armed box does. Making it live is Greg's decision and a
+   * re-pin, not an edit here.
+   */
+  "schedule-fixture": {
+    everyMs: hours(24),
+    leaseMs: hours(1),
+    initialDelayMs: hours(2),
   },
 } satisfies Record<string, ScheduleConfig>;
 
