@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { RECOVERY_INBOX_DIR, REFUSED_DIR, writeDismissRequest } from "../tools/overseer/recovery-inbox.js";
+import { writeResumeRequest } from "../tools/overseer/recovery-resume-request.js";
 import { recoveryOrder } from "../tools/overseer/recovery-view.js";
 import { RECOVERY_UNRESOLVED_CAPACITY, type RecoveryRecord } from "../tools/overseer/recovery.js";
 import { readRecoveryIndexFile, RECOVERY_FILE, storeRoot } from "../tools/overseer/store.js";
@@ -31,6 +32,7 @@ const USAGE = [
   "usage:",
   "  npx tsx scripts/overseer-recovery.ts list",
   '  npx tsx scripts/overseer-recovery.ts dismiss <id> --why "<sentence>"',
+  "  npx tsx scripts/overseer-recovery.ts resume <id>",
 ].join("\n");
 
 export type CliIo = { root?: string; out?: (line: string) => void };
@@ -44,6 +46,8 @@ export async function main(argv: readonly string[], io: CliIo = {}): Promise<num
       return list(root, out);
     case "dismiss":
       return dismiss(root, rest, out);
+    case "resume":
+      return resume(root, rest, out);
     default:
       out(USAGE);
       return 2;
@@ -89,6 +93,93 @@ function dismiss(root: string, args: readonly string[], out: (line: string) => v
     out(`HELD: the recovery index is incomplete (${read.index.replay.why}); this request stays pending until a daemon start can read the whole log`);
   }
   return 0;
+}
+
+/**
+ * `resume <id>` — the CLI twin of the dashboard's Resume button (plan
+ * 260910f § 1). It writes ONE request file through the same leaf the route
+ * uses, with `actor: "cli"`, and nothing else: the daemon decides, gates,
+ * revalidates and launches, one at a time.
+ *
+ * `seen` is what the current `recovery.json` view says about the record — the
+ * thing a person at a terminal is looking at. **Refused here, before anything
+ * is written**: a record not on the view's first page, one the view does not
+ * classify `interrupted`, or one with no `supported` resume evidence — the
+ * same records the page offers no button for. The daemon checks all of it
+ * again against the state at launch.
+ */
+function resume(root: string, args: readonly string[], out: (line: string) => void): number {
+  const [id, ...extra] = args;
+  if (id === undefined || extra.length > 0) {
+    out(`resume needs exactly one id\n${USAGE}`);
+    return 2;
+  }
+  const read = readRecoveryIndexFile(root);
+  if (read.kind !== "file") {
+    out(read.kind === "absent" ? `no ${RECOVERY_FILE} in ${root}: nothing to resume` : `${join(root, RECOVERY_FILE)} is unusable: ${read.why}`);
+    return 1;
+  }
+  const view = read.view;
+  const page = isObject(view) && Array.isArray(view["page"]) ? (view["page"] as unknown[]) : [];
+  const item = page.find((raw): raw is Record<string, unknown> => isObject(raw) && raw["id"] === id);
+  if (item === undefined || !isObject(view)) {
+    out(`not resumable: ${id} is not on the recovery view's first page (the daemon has not checked it, or it is not a record)`);
+    return 2;
+  }
+  const classification = item["classification"];
+  if (!isObject(classification) || classification["kind"] !== "interrupted") {
+    const kind = isObject(classification) ? textOf(classification["kind"]) : undefined;
+    const why = isObject(classification) ? textOf(classification["why"]) : undefined;
+    out(`not resumable: the record is ${kind ?? "not classified"}${why === undefined ? "" : ` (${why})`}, and only an interrupted record can be resumed`);
+    return 2;
+  }
+  const evidence = item["evidence"];
+  const resumeEvidence = isObject(evidence) ? evidence["resume"] : undefined;
+  if (!isObject(evidence) || evidence["kind"] !== "checked" || !isObject(resumeEvidence) || resumeEvidence["kind"] !== "supported") {
+    const why = isObject(resumeEvidence) ? textOf(resumeEvidence["why"]) : undefined;
+    out(`not resumable: its resume evidence is not supported${why === undefined ? "" : ` (${why})`}`);
+    return 2;
+  }
+  const dir = isObject(evidence["dir"]) ? textOf(evidence["dir"]["path"]) : undefined;
+  const conversationId = textOf(resumeEvidence["conversationId"]);
+  const checkedAt = textOf(view["checkedAt"]);
+  if (dir === undefined || conversationId === undefined || checkedAt === undefined) {
+    out("not resumable: the view does not carry the directory, conversation and check time a request needs");
+    return 2;
+  }
+  const written = writeResumeRequest(root, { candidateId: id, actor: "cli", seen: { checkedAt, conversationId, dir } });
+  if (written.kind === "refused") {
+    out(`not written: ${written.why}`);
+    return 2;
+  }
+  out(`wrote resume request ${written.path}`);
+  out("the daemon looks at it on its next tick: one resume starts at a time, after the box, the quota and the session's evidence are checked");
+  if (read.index.replay.kind === "not-run") {
+    out(`HELD: the recovery index is incomplete (${read.index.replay.why}); this request stays pending until a daemon start can read the whole log`);
+  }
+  return 0;
+}
+
+/** Each candidate's resume state, from the optional `resume` field (plan 260910f, G9). Display only, checked field by field. */
+function resumeLines(resume: unknown): { header: string | null; byId: Map<string, string> } {
+  const byId = new Map<string, string>();
+  if (!isObject(resume)) return { header: null, byId };
+  const launcher = isObject(resume["launcher"]) ? resume["launcher"] : {};
+  const header =
+    launcher["kind"] === "wired"
+      ? "resume      the launcher is wired"
+      : `resume      NOT WIRED: ${textOf(launcher["why"]) ?? "the daemon did not say why"}`;
+  for (const raw of Array.isArray(resume["requests"]) ? (resume["requests"] as unknown[]) : []) {
+    if (!isObject(raw) || !isObject(raw["state"])) continue;
+    const id = textOf(raw["candidateId"]);
+    const state = raw["state"];
+    const kind = textOf(state["kind"]);
+    if (id === undefined || kind === undefined) continue;
+    const why = textOf(state["why"]) ?? textOf(state["waitingFor"]) ?? textOf(state["how"]);
+    const position = typeof state["position"] === "number" ? ` #${state["position"]}` : "";
+    byId.set(id, `    resume     ${kind}${position}${why === undefined ? "" : `: ${why}`}`);
+  }
+  return { header, byId };
 }
 
 /**
@@ -202,6 +293,8 @@ function list(root: string, out: (line: string) => void): number {
   }
   const { items, header } = viewItems(read.view);
   out(header);
+  const resumed = resumeLines(read.resume);
+  if (resumed.header !== null) out(resumed.header);
   const records = [...index.records.values()].sort(recoveryOrder);
   if (records.length === 0) {
     out("records     none: nothing has been recorded as interrupted");
@@ -214,6 +307,8 @@ function list(root: string, out: (line: string) => void): number {
     out(`    ${stateOf(record, item)}`);
     if (record.oversize) out("    the full candidate was too large for the index and is in events.jsonl");
     for (const line of describeEvidence(item?.evidence)) out(line);
+    const resumeLine = resumed.byId.get(record.id);
+    if (resumeLine !== undefined) out(resumeLine);
   }
   return 0;
 }

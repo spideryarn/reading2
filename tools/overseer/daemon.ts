@@ -75,7 +75,18 @@ import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
 import { drainRecoveryInbox, pendingRecoveryRequestCount } from "./recovery-inbox.js";
-import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust } from "./recovery-view.js";
+import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust, type RecoveryView } from "./recovery-view.js";
+import {
+  defaultProjectsRoots,
+  newPreviewCache,
+  productionAccountPort,
+  runResumePass,
+  UNWIRED_LAUNCH_PORT,
+  type ReadRange,
+  type ResumeAccountPort,
+  type ResumeLaunchPort,
+} from "./recovery-resume.js";
+import type { StoredAccountUsage } from "./launch-gate.js";
 import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
 import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
@@ -389,7 +400,36 @@ export type DaemonOptions = {
    * prompts it. Each defaults to the real one (`evidenceDeps`), and is injected
    * so a test needs no fake home. See the view pass in `runOverseer`.
    */
-  recovery?: { projectsDir?: string; stat?: EvidenceDeps["stat"]; hostname?: () => string; viewIntervalMs?: number };
+  recovery?: {
+    projectsDir?: string;
+    /** Every projects root, when a test needs more than one. Absent with no `projectsDir`: `defaultProjectsRoots()`. */
+    projectsRoots?: () => Promise<readonly string[]>;
+    stat?: EvidenceDeps["stat"];
+    hostname?: () => string;
+    viewIntervalMs?: number;
+  };
+  /**
+   * GRADUAL RECOVERY'S RESUME PASS (plan 260910f): the launch port, the
+   * account port, and two test seams. `port` defaults to `unwired` until the
+   * launch protocol is on `dev` (Stage 3) — requests then queue and nothing
+   * launches. `accounts` defaults to the production port, which reads the
+   * account ledger and registry and makes the live quota call only for a
+   * request at the head of the queue that passed every cheaper check.
+   */
+  recoveryResume?: {
+    port?: ResumeLaunchPort;
+    accounts?: ResumeAccountPort;
+    /**
+     * The per-account usage reading the gate judges the pinned account by. On
+     * dev the daemon holds it as `accountUsage` (74634fd3); this worktree
+     * predates that, so it is taken here and wired at the merge. Absent: no
+     * reading, which the gate holds on.
+     */
+    accountUsage?: () => StoredAccountUsage | null;
+    readRange?: ReadRange;
+    /** Test seam: awaited between the pass's async phase and its synchronous stretch. */
+    beforeRecapture?: () => Promise<void>;
+  };
   /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
@@ -896,7 +936,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // bytes, not a current inventory.
   // `recoveryEvidence`, not `evidence`: the schedule preview below and the
   // ticker use `evidence` for the job documents' reading, a different thing.
-  const recoveryEvidence = evidenceDeps(options.recovery ?? {});
+  const recoveryOverrides = options.recovery ?? {};
+  const recoveryEvidence = evidenceDeps({
+    ...recoveryOverrides,
+    // EVERY ACCOUNT'S PROJECTS DIRECTORY, unless a caller named one (plan 260910f, G4).
+    ...(recoveryOverrides.projectsDir === undefined && recoveryOverrides.projectsRoots === undefined ? { projectsRoots: defaultProjectsRoots() } : {}),
+  });
   const viewIntervalMs = options.recovery?.viewIntervalMs ?? RECOVERY_VIEW_INTERVAL_MS;
   let inventory: InventoryTrust = { kind: "untrusted", why: "no inventory has been accepted in this daemon's life yet" };
   // ONE VIEW PASS AT A TIME, and a request during one is remembered rather than
@@ -910,6 +955,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // caught up. The revision makes an obsolete pass disposable.
   let viewRevision = 0;
   let lastViewAtMs = Number.NEGATIVE_INFINITY;
+  // The latest completed view, for the resume pass's previews.
+  let latestView: RecoveryView | null = null;
   const startView = (): void => {
     viewWanted = false;
     const revision = viewRevision;
@@ -922,6 +969,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       .then((view) => {
         if (revision !== viewRevision) return;
         lastViewAtMs = now().getTime();
+        latestView = view;
         if (halted() !== null) return;
         // Written when it changed — `setRecoveryView` decides — through the same
         // checkpoint, so the write order stays events, baseline, current.json,
@@ -1017,6 +1065,59 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         recoveryRunning = null;
       });
   };
+  // ══ THE RESUME PASS — plan 260910f, tools/overseer/recovery-resume.ts
+  //
+  // One pass at a time, the guard every pass here uses, and none while the
+  // recovery replay is `not-run`: the fold is then deliberately stale, and a
+  // record it calls unresolved may be resolved in the unread tail. The pass
+  // recaptures through `observe()` in its synchronous stretch (Sol's G5), and
+  // the copy of the records map is what makes a capture taken before an await
+  // stay the capture it was. The gate's inputs are the latest ACCEPTED
+  // snapshot's `health` and the pinned account's section of the per-account
+  // usage reading; the ambient usage report is about the default login and is
+  // not used here (G4).
+  const resumeOptions = options.recoveryResume;
+  const resumePort: ResumeLaunchPort = resumeOptions?.port ?? UNWIRED_LAUNCH_PORT;
+  const resumeAccounts: ResumeAccountPort = resumeOptions?.accounts ?? productionAccountPort();
+  const previewCache = newPreviewCache();
+  let resumeRunning: Promise<void> | null = null;
+  const recoveryResumeTick = (): void => {
+    if (resumeRunning !== null || halted() !== null) return;
+    if (store.recovery.replay.kind === "not-run") return;
+    resumeRunning = runResumePass({
+      root,
+      now,
+      log,
+      port: resumePort,
+      accounts: resumeAccounts,
+      evidence: recoveryEvidence,
+      observe: () => {
+        const index = store.recovery;
+        return { inventory, health: accepted?.snapshot.health ?? null, index: { ...index, records: new Map(index.records) } };
+      },
+      view: () => latestView,
+      accountUsage: resumeOptions?.accountUsage ?? (() => null),
+      previewCache,
+      ...(resumeOptions?.readRange === undefined ? {} : { readRange: resumeOptions.readRange }),
+      ...(resumeOptions?.beforeRecapture === undefined ? {} : { beforeRecapture: resumeOptions.beforeRecapture }),
+    })
+      .then((result) => {
+        const head = result.head;
+        if (head !== null && head.decision !== "defer") {
+          log(`${now().toISOString()} recovery resume: ${head.candidateId} ${head.decision}${head.outcome === null ? "" : ` (${head.outcome})`}: ${head.why}`);
+        }
+        if (halted() !== null) return;
+        // Through the same checkpoint that writes `view` (Sol's G9).
+        if (store.setRecoveryResume(result.projection)) guard(store.checkpoint({ ...checkpointUpdate(), tick: false }));
+      })
+      .catch((cause: unknown) => {
+        log(`recovery resume pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        resumeRunning = null;
+      });
+  };
+
   // AT START, before the source: a request left while the daemon was down is
   // applied now, and the first view is drawn — against no inventory, so every
   // record is `unknown` until a collection is accepted, which says so.
@@ -1102,6 +1203,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     if (halted() !== null) return;
     checkFreshness();
     recoveryTick();
+    recoveryResumeTick();
     if (halted() !== null) return;
     // ONE DOCUMENT READING, THEN ONE HEADLINE FOR BOTH FILES written this tick.
     // Re-reading between them lets a file edit in that tiny window produce an
@@ -1441,8 +1543,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     }
     // THE VIEW PASS, in a loop: one that finishes with a request pending starts
     // the next, and that one writes through the store too.
-    while (viewRunning !== null || recoveryRunning !== null) {
+    while (viewRunning !== null || recoveryRunning !== null || resumeRunning !== null) {
       if (recoveryRunning !== null) await recoveryRunning;
+      if (resumeRunning !== null) await resumeRunning;
       if (viewRunning !== null) await viewRunning;
     }
     await settleRuleRuns();

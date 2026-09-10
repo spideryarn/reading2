@@ -273,6 +273,24 @@ This was agreed with `launch-protocol`, 2026-09-10:
     session, and Stage 3 composes the launchers with a deliberate `env`. For a pinned account, the
     config directory comes from `--account`'s `CLAUDE_CONFIG_DIR` prefix, never from whatever the
     daemon happens to have.
+- **What `launch-protocol`'s Stage 1b settled** (`9662df2f` on its branch, on top of Stage 2; not on
+  `dev` until its checks finish):
+  - `OccurrenceSummary` is `{ occurrenceId, state, attempt, reservationHeld, disposed, endedAt,
+    completion }`. It is a frozen copy: mutating one throws. `attempt` is the latest attempt made,
+    null before any.
+  - `LaunchProtocol` gains `inspect(origin)` and `inFlight(originKind)`. "In flight" is `planned`,
+    `waiting-admission`, `reserved`, `launching`, `observed-running` or `outcome-unknown`, **plus
+    any record whose reservation is still held**.
+  - `failed-before-launch` carries `reservation: released | held`, the actual release result.
+  - `usesTmux(kind)` is an exhaustive switch; `tmux-resume` adds its arm there.
+  - `admissionPolicy("recovery-resume")` is `{ capacity: 1, holdUntil: "observed-running" }`. The
+    release happens when reconciliation records `observed-running`, even after a crash between the
+    record and the release.
+  - `AttemptRef` no longer carries `artefactDir`.
+  - **`inspect` answers `null` for an occurrence carried over a history reset**, and `inFlight`
+    omits it, yet `launchOccurrence` still refuses it as `not-launchable`. So Stage 3's port adapter
+    must read **a `null` inspect followed by a refusal as "held by a history reset"**, which is a
+    `refused` request that names the reset and never counts as free to launch. A test says so.
 - **An admission class `recovery-resume`**, capacity 1, **released on `observed-running`**. From
   there it is an ordinary interactive session, and its hours of life must not block the scheduler's
   `claude-session` class. `launch-protocol` is building this in its next fix round. My pace rule
@@ -584,6 +602,86 @@ Red first:
 - the footer says what the control does;
 - a browser check at 1280 px and 400 px by an Opus subagent, on its own fixture server and never on
   8787.
+
+**Stage 1 status, 2026-09-10 ~20:05: built by an Opus subagent. Uncommitted in the worktree, and
+not yet reviewed** (paused by the Overseer for the `mindstone` five-hour window).
+
+- **What landed:**
+  - `recovery-resume-request.ts` (the leaf);
+  - `recovery-resume.ts`;
+  - small edits to `launch-gate.ts`: `healthGate`, `accountQuotaGate`, `bothGates`, and local
+    copies of `dev`'s account-usage types, replaced at the merge;
+  - `recovery-inbox.ts`, `recovery-view.ts` (the multi-root locator), `store.ts` (the optional
+    `resume` field), `daemon.ts` (`recoveryResumeTick`) and `scripts/overseer-recovery.ts`;
+  - two suites, plus shared fakes.
+- **Tests:** 60 tests. They were written after the code, so red was shown by five mutations, each
+  turning its tests red.
+- **The manager's own changes after the build:**
+  - **codename windows**. The builder found that the live endpoint's 0%-with-no-reset codename
+    windows would have held every resume for ever. `five_hour` and `seven_day` are now required,
+    and a codename window counts only with a number. It went red first:
+    `tests/overseer-account-quota-gate.test.ts`, 3 red and then 7 green;
+  - the shared fake gained a `seven_day` window.
+- **The combined tree, the manager's run:**
+  - 8 files / 224 tests pass;
+  - typecheck exit 0;
+  - Stage 2's own gates as above.
+- **Still to do at the merge:** wire `dev`'s real `accountUsage` into the pass. Until then, the
+  daemon's default is "no reading", so the gate holds.
+
+**Stage 2 status, 2026-09-10 ~20:00: built by an Opus subagent. Not yet committed** (it commits
+with Stage 1, because the route imports Stage 1's request leaf) **and not yet reviewed.**
+
+- **What landed:**
+  - `routes-recovery-resume.ts` (POST only);
+  - `recovery-feed.ts` parsing the `resume` section;
+  - `recovery-client.ts` and `RecoveryPanel.tsx` (the control, the seven state lines, the pace
+    line, manual instructions, and the §5 footer);
+  - `server.ts`: one import, one construction, one dispatch line, **placed before
+    `/api/recovery`'s**, because that route claims every path under it. The wiring test fails if
+    the order is swapped;
+  - one argued `fleet-attention` allowlist entry.
+- **Red then green:**
+  - feed: 7 failed, then 35 passed;
+  - route: 35 failed against a stub, then 38 passed;
+  - panel: 19 failed, then 37 passed;
+  - wiring: 3 failed, then 15 passed.
+
+  The browser parser was written before its tests. Mutation 5 is the proof they can fail.
+- **Five mutations**, each turning its test red and each reverted:
+  - a POST without `Origin`;
+  - Resume… offered for an unknown account;
+  - manual instructions built from a non-uuid;
+  - an unreadable section blanking the records, server-side and browser-side.
+- **Gates**:
+  - focused suites 218 of 218, exit 0;
+  - `build:fleet` exit 0;
+  - typecheck exit 0;
+  - lint shows no errors;
+  - the manager's own re-run of `fixture-ids` and the route test is 43 of 43.
+
+  The builder's first gate run failed `fixture-ids`, on a uuid it had copied between two test
+  files. It fixed that itself.
+- **The browser check**, on its own server (8795; 8787 untouched), at 1280 px and 400 px:
+  - exactly one card offered Resume…, and a refused card offered it again;
+  - one tap wrote exactly one `pending/` file, and a second tap said "Already requested…" and
+    wrote nothing;
+  - there was no overflow and no console errors.
+
+  The manager looked at the confirmation screenshot.
+- **Decisions the plan did not settle**, recorded for the review:
+  - A wrong content type gets 415 (from `checkRequest`), not 400.
+  - "Already launched" covers launched, resumed, needs-greg, ended-unverified and disposed.
+  - `pendingFor`'s `cannot-tell` goes ahead and writes: the check is a courtesy, and the occurrence
+    is the guarantee.
+  - A server with no `resume` field reads "not available", not broken.
+  - The confirmation has a Cancel button.
+  - **The parser is stricter than the wire types, so Stage 1 must write exactly this:**
+    - positions start at 1;
+    - each request's `name` and the pace's `name` match the record's;
+    - a preview's conversation matches the conversation its record's evidence supports.
+
+    Any mismatch marks the section unreadable, and the records stay visible.
 
 ### Stage 3: the launch, for real (after `launch-protocol` Stages 1–2 are on `dev`)
 

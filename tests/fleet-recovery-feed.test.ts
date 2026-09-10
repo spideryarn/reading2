@@ -443,3 +443,206 @@ describe("no failure is an empty list", () => {
     }
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * The optional `resume` field (plan 260910f, Sol's G9): its own arms, its
+ * own strict validator, and never a hand on the records.
+ * ------------------------------------------------------------------ */
+
+const LAUNCH: Json = {
+  occurrenceId: "lo-7f3a9c",
+  state: "observed-running",
+  attempt: 1,
+  reservationHeld: false,
+  disposed: false,
+  endedAt: null,
+  completion: null,
+};
+
+function requestStates(): Json[] {
+  const requestedAt = "2026-09-10T14:50:00.000Z";
+  return [
+    { kind: "pending", position: 1, requestedAt, actor: "dashboard", why: "the box's health is critical", until: null },
+    { kind: "refused", requestedAt, refusedAt: "2026-09-10T14:51:00.000Z", why: "the transcript is gone since the preview" },
+    {
+      kind: "launched",
+      requestedAt,
+      launch: LAUNCH,
+      verification: { inventoryResumed: true, observedRunning: true, transcriptGrew: false, sessionLineSeen: false },
+      waitingFor: "the transcript to grow",
+    },
+    {
+      kind: "ended-unverified",
+      requestedAt,
+      launch: { ...LAUNCH, state: "completed", endedAt: "2026-09-10T14:55:00.000Z", completion: { kind: "exit", code: 1 } },
+      how: "it exited with code 1",
+    },
+    {
+      kind: "needs-greg",
+      requestedAt,
+      launch: { ...LAUNCH, state: "outcome-unknown" },
+      why: "the launch's outcome is unknown",
+      disposeCommand: "npx tsx scripts/overseer-launch.ts dispose lo-7f3a9c",
+    },
+    { kind: "disposed", requestedAt, launch: { ...LAUNCH, disposed: true } },
+    { kind: "resumed", requestedAt: null, launch: null, verifiedAt: "2026-09-10T14:56:00.000Z" },
+  ];
+}
+
+function preview(id: string, over: Json = {}): Json {
+  return {
+    candidateId: id,
+    conversationId: CONVERSATION,
+    dir: "/work/x",
+    title: "Fix the glossary",
+    brief: { kind: "quoted", text: "Please fix the glossary hover", truncated: false },
+    lastWords: { kind: "unavailable", why: "the transcript's tail holds no assistant text" },
+    uncertainty: ["lastActivity is only a floor"],
+    nudge: "This session was interrupted. Re-read your plan.",
+    account: { kind: "pinned", name: "mindstone", configDir: "/home/greg/.claude-gregmindstone" },
+    ...over,
+  };
+}
+
+function resumeProjection(over: Json = {}): Json {
+  return {
+    schema: 1,
+    writtenAt: "2026-09-10T14:59:00.000Z",
+    launcher: { kind: "wired" },
+    gate: { kind: "held", why: "the box's health is critical", until: null },
+    pace: { kind: "free" },
+    requests: [],
+    previews: [],
+    pendingOverflow: 0,
+    ...over,
+  };
+}
+
+describe("the resume section (260910f): its arms, and never a hand on the records", () => {
+  const ids = ["rc-r0", "rc-r1", "rc-r2", "rc-r3", "rc-r4", "rc-r5", "rc-r6"];
+  const records = ids.map((id, i) => rawRecord(id, `2026-09-10T14:0${i}:00.000Z`));
+  const page = records.map((r) => item(r, { kind: "interrupted", why: "the host rebooted while this session was running" }));
+  const base = (): Json => file(records, view(page));
+  const withResume = (resume: unknown): Json => ({ ...base(), resume });
+  const full = (): Json =>
+    resumeProjection({
+      requests: requestStates().map((state, i) => ({ candidateId: ids[i], name: `session-${ids[i]}`, state })),
+      previews: [preview("rc-r0")],
+      pace: { kind: "waiting-for-verification", candidateId: "rc-r2", name: "session-rc-r2", since: "2026-09-10T14:52:00.000Z" },
+    });
+
+  /** Everything but `resume`, so a test can say the rest of the feed did not move. */
+  function rest(feed: RecoveryFeed): Json {
+    const { resume: _resume, ...others } = published(feed) as unknown as Json;
+    return others;
+  }
+
+  it("no resume field is absent, with a sentence; so is null", () => {
+    for (const json of [base(), withResume(null)]) {
+      const feed = published(project(json));
+      expect(feed.resume).toMatchObject({ kind: "absent", why: expect.stringMatching(/resume/) });
+    }
+  });
+
+  it("a whole projection, every one of the seven request states, passes through as itself", () => {
+    const feed = published(project(withResume(full())));
+    expect(feed.resume.kind).toBe("published");
+    if (feed.resume.kind !== "published") return;
+    expect(feed.resume.projection).toEqual(full());
+    expect(feed.resume.projection.requests.map((r) => r.state.kind)).toEqual(["pending", "refused", "launched", "ended-unverified", "needs-greg", "disposed", "resumed"]);
+    expect(rest(feed)).toEqual(rest(project(base())));
+  });
+
+  it("an unknown resume schema says what it saw and what it knows, and the records are untouched", () => {
+    const feed = published(project(withResume(resumeProjection({ schema: 2 }))));
+    expect(feed.resume).toMatchObject({ kind: "unsupported-schema", saw: "2", known: 1, why: expect.stringMatching(/2/) });
+    expect(rest(feed)).toEqual(rest(project(base())));
+  });
+
+  it("a malformed resume field is unreadable, names what was wrong, and changes nothing else in the feed", () => {
+    const states = requestStates();
+    const req = (state: Json): Json => ({ candidateId: "rc-r0", name: "session-rc-r0", state });
+    const mutants: [string, unknown, RegExp][] = [
+      ["a string", "yes please", /not an object/],
+      ["a list", [], /not an object/],
+      ["writtenAt", resumeProjection({ writtenAt: "yesterday" }), /writtenAt/],
+      ["the launcher", resumeProjection({ launcher: { kind: "maybe" } }), /launcher/],
+      ["an unwired launcher with no why", resumeProjection({ launcher: { kind: "unwired" } }), /launcher/],
+      ["the gate", resumeProjection({ gate: { kind: "held" } }), /gate/],
+      ["the pace", resumeProjection({ pace: { kind: "slow" } }), /pace/],
+      ["requests not a list", resumeProjection({ requests: {} }), /requests/],
+      ["a state this reader does not know", resumeProjection({ requests: [req({ kind: "vanished" })] }), /vanished/],
+      ["a launched state short of a verification part", resumeProjection({ requests: [req({ ...states[2], verification: { inventoryResumed: true } })] }), /verification/],
+      ["a pending position of 0", resumeProjection({ requests: [req({ ...states[0], position: 0 })] }), /position/],
+      ["an actor nobody is", resumeProjection({ requests: [req({ ...states[0], actor: "cron" })] }), /actor/],
+      ["a launch state the protocol does not have", resumeProjection({ requests: [req({ ...states[5], launch: { ...LAUNCH, state: "flying" } })] }), /launch/],
+      ["an account of auto", resumeProjection({ previews: [preview("rc-r0", { account: { kind: "auto" } })] }), /account/],
+      ["a quote with no text", resumeProjection({ previews: [preview("rc-r0", { brief: { kind: "quoted", truncated: false } })] }), /brief/],
+      ["an uncertainty that is not sentences", resumeProjection({ previews: [preview("rc-r0", { uncertainty: [3] })] }), /uncertainty/],
+      ["a blank nudge", resumeProjection({ previews: [preview("rc-r0", { nudge: " " })] }), /nudge/],
+      ["a negative overflow", resumeProjection({ pendingOverflow: -1 }), /pendingOverflow/],
+    ];
+    const untouched = rest(project(base()));
+    for (const [name, resume, why] of mutants) {
+      const feed = published(project(withResume(resume)));
+      expect(feed.resume, name).toMatchObject({ kind: "unreadable", why: expect.stringMatching(why) });
+      expect(rest(feed), name).toEqual(untouched);
+      expect(feed.records, name).toHaveLength(ids.length);
+    }
+  });
+
+  it("a request, a preview or a pace for a candidate the file does not hold is unreadable (the F29 spirit)", () => {
+    const mutants: [string, Json, RegExp][] = [
+      ["a request", resumeProjection({ requests: [{ candidateId: "rc-ghost", name: "session-rc-ghost", state: requestStates()[0] }] }), /rc-ghost/],
+      ["a preview", resumeProjection({ previews: [preview("rc-ghost")] }), /rc-ghost/],
+      ["the pace", resumeProjection({ pace: { kind: "waiting-for-verification", candidateId: "rc-ghost", name: "x", since: "2026-09-10T14:52:00.000Z" } }), /rc-ghost/],
+    ];
+    for (const [name, resume, why] of mutants) {
+      const feed = published(project(withResume(resume)));
+      expect(feed.resume, name).toMatchObject({ kind: "unreadable", why: expect.stringMatching(why) });
+      expect(rest(feed), name).toEqual(rest(project(base())));
+    }
+  });
+
+  it("one candidate's state, preview or name never lands on another's", () => {
+    const [pending, refused] = requestStates();
+    const mutants: [string, Json, RegExp][] = [
+      [
+        "two request states for one candidate",
+        resumeProjection({ requests: [{ candidateId: "rc-r0", name: "session-rc-r0", state: pending }, { candidateId: "rc-r0", name: "session-rc-r0", state: refused }] }),
+        /twice/,
+      ],
+      ["two previews for one candidate", resumeProjection({ previews: [preview("rc-r0"), preview("rc-r0")] }), /twice/],
+      ["a request carrying another record's name", resumeProjection({ requests: [{ candidateId: "rc-r0", name: "session-rc-r1", state: pending }] }), /name/],
+      [
+        "a pace carrying another record's name",
+        resumeProjection({ pace: { kind: "waiting-for-verification", candidateId: "rc-r0", name: "session-rc-r1", since: "2026-09-10T14:52:00.000Z" } }),
+        /name/,
+      ],
+      [
+        "two pending requests at one position",
+        resumeProjection({ requests: [{ candidateId: "rc-r0", name: "session-rc-r0", state: pending }, { candidateId: "rc-r1", name: "session-rc-r1", state: pending }] }),
+        /position/,
+      ],
+    ];
+    for (const [name, resume, why] of mutants) {
+      expect(published(project(withResume(resume))).resume, name).toMatchObject({ kind: "unreadable", why: expect.stringMatching(why) });
+    }
+  });
+
+  it("a preview whose conversation is not the one its record's evidence supports is unreadable", () => {
+    const supported = { ...checked(), resume: { kind: "supported", conversationId: CONVERSATION, transcriptPath: "/p/a.jsonl" } };
+    const one = [rawRecord("rc-s", "2026-09-10T14:00:00.000Z")];
+    const json = file(one, view([item(one[0] as Json, { kind: "interrupted", why: "x" }, supported)]));
+    expect(published(project({ ...json, resume: resumeProjection({ previews: [preview("rc-s")] }) })).resume.kind).toBe("published");
+    expect(published(project({ ...json, resume: resumeProjection({ previews: [preview("rc-s", { conversationId: CLAIM })] }) })).resume).toMatchObject({
+      kind: "unreadable",
+      why: expect.stringMatching(/conversation/),
+    });
+  });
+
+  it("the resume field is read under a published index only: every failure arm of the file is still itself", () => {
+    expect(project({ ...base(), schema: 2, resume: full() }).kind).toBe("unsupported-schema");
+    expect(project({ ...base(), records: "nope", resume: full() }).kind).toBe("unreadable");
+  });
+});
