@@ -425,6 +425,60 @@ with F7–F8 (P2). Answer: [plan-review-sol](260910f-bounded-judgement-proposals
 
 ## Status
 
+**STOPPED HERE, on Greg's reprioritisation, 2026-09-10 ~21:40Z** (relayed by the Overseer): Overseer
+and dashboard work drops to the very bottom and Spideryarn product work comes up. Instruction: bring
+the stage in hand to green and pushed, including the approved gate 4 edit, write the debrief, and
+stop — **do not start Stage 3's evaluation.** So Stages 1 and 2 are finished, reviewed, fixed and on
+`dev`; Stage 3's machinery and docs are on `dev`; Stage 3's evaluation run, and the answer it would
+give, are not done.
+
+**The final full suite** ran on `c82caed4`: 6 files red, none of them this work's — the four known
+environment files (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-decisions-route`,
+`fleet-reports-route`); `load-article-serialisation`, which passes 2 of 2 run alone (shared-Postgres
+contention); and `no-raw-nul-bytes`, which names `tests/overseer-recovery-resume.test.ts` — the
+gradual-recovery session's file, merged in from `dev`, so `dev` is red on it for everyone. Reported
+to the Overseer rather than edited.
+
+### Stage 3, for whoever picks it up — what it would have done, and what it needs
+
+Everything below can be done without re-reading this plan's history.
+
+1. **Run the evaluation, both prompt versions.** From a shell where `OPENROUTER_API_KEY` is already
+   exported (this session had none, and its worktree guard rightly refused exporting it from
+   `.env.local`):
+
+   ```
+   npx tsx scripts/attention-eval.ts --prompt-version 1 --out docs/plans/260910f-bounded-judgement-proposals-for-the-attention-inbox-eval-v1.json
+   npx tsx scripts/attention-eval.ts --prompt-version 2 --out docs/plans/260910f-bounded-judgement-proposals-for-the-attention-inbox-eval-v2.json
+   ```
+
+   Each reserves against a day budget of its own in a fresh temp directory — never the daemon's —
+   about twenty calls over the 25-item labelled set (`tests/fixtures/overseer-turn-tails/labels.json`),
+   a few cents in all. `--fake` prints the same report with no call, to check the plumbing first.
+2. **Read the two reports against three questions**, in this order:
+   - **Does the widened prompt hurt detection?** Compare version 1's and version 2's question
+     precision and recall. If version 2 is materially worse, D1's trigger fires: split the proposal
+     into its own call rather than ship a worse detector.
+   - **Is routing any good?** Version 2 only: of the questions it found, how many named the
+     labelled holder (R), how many the wrong one (W), and of the right ones how many were not Greg —
+     *"could have avoided asking Greg"* (K). **Avoided waiting is not measured, because nothing is
+     sent**; say so rather than infer it.
+   - **Does it beat explicit reports at reasonable cost?** The roadmap's own exit: if routing is poor
+     or the cost per correct non-Greg route is out of proportion, leave `OVERSEER_PROPOSALS` off and
+     keep reporting and manual triage. That is a legitimate ending, not a failure.
+3. **Write the answer here**, under Stage 3, with the two JSON reports committed beside this plan.
+4. **Then, and only then, the enabling decision is Greg's**: the day ceiling (1,500 calls, 3,000,000
+   tokens, $1.50 per UTC day — in `tools/overseer/model-budget.ts`) put to him as a number, and
+   `OVERSEER_PROPOSALS=1` set in the daemon's unit only if he says so.
+5. **Nothing here is live until the Overseer daemon and the fleet dashboard restart on this code** —
+   the budget, the `limited` state and the (default-off) proposal alike. Older readers are safe in
+   the meantime: they turn `limited` into `unknown` and ignore `proposal`.
+
+**Deferred, not forgotten:** live right/wrong marks (D10, Sol's F9 — needs a daemon-drained inbox);
+reports read before spending (D11); wiring the scheduler and recovery to the same ledger so gate 4 is
+global (260908g Stage 7); a browser check of the card at 390px; the two P2s Fable recorded (a 429 on
+the last tail publishes a floor, not `limited`; an always-failing tail takes a slot every pass).
+
 **Stage 1 closed** at `44b9eb3c` (the budget and the `limited` arm, `f03d5571`; F11/F12 fixed,
 `2eccd2a6`; the narrow check and Fable, above). The Stage 3 evaluation machinery landed early, at
 `4380ff57`. `origin/dev` merged at `261b4759` — one conflict, in `store.ts`'s type import, where both
