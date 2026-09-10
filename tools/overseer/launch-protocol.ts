@@ -204,10 +204,56 @@ function sameOrigin(a: LaunchOrigin, b: LaunchOrigin): boolean {
  * D3. The vocabulary a record is made of.
  * ------------------------------------------------------------------ */
 
-export type LauncherKind = "tmux" | "headless";
+/**
+ * `tmux` — an interactive session through `gjd-remote new-claude`. `headless` —
+ * a wrapper (`run-claude`/`run-codex`) spawned directly. `tmux-headless` — a
+ * wrapper run inside a tmux session on the already-running server, so a daemon
+ * restart does not take it down with the unit's cgroup (plan § Stage 2, the
+ * scheduled-dispatch seam).
+ */
+export type LauncherKind = "tmux" | "headless" | "tmux-headless";
 
 export function isLauncherKind(u: unknown): u is LauncherKind {
-  return u === "tmux" || u === "headless";
+  return u === "tmux" || u === "headless" || u === "tmux-headless";
+}
+
+/** Whether a launch of this kind lives in a tmux session, so the tmux probe is evidence about it. */
+export function runsInTmux(kind: LauncherKind): boolean {
+  return kind === "tmux" || kind === "tmux-headless";
+}
+
+/**
+ * What a wrapper launch may be, pinned with the plan: its timeout and its
+ * access profile — the adapter's only source for both. A `tmux` launch has
+ * none, because the session is interactive; the pairing is a type in
+ * {@link PlanRequest} and a parse rule everywhere else.
+ */
+export type RunAccess = "read-only" | "review" | "write";
+export type RunSpec = { readonly timeoutMinutes: number; readonly access: RunAccess };
+
+export const RUN_ACCESS: readonly RunAccess[] = ["read-only", "review", "write"];
+/** A day. A run that needs longer is not one this protocol should start unattended. */
+export const MAX_RUN_TIMEOUT_MINUTES = 24 * 60;
+
+export function parseRunSpec(u: unknown): Parsed<RunSpec> {
+  const o = object(u, "run", ["timeoutMinutes", "access"]);
+  if (!o.ok) return o;
+  const { timeoutMinutes, access } = o.value;
+  if (!isPositiveInteger(timeoutMinutes) || timeoutMinutes > MAX_RUN_TIMEOUT_MINUTES) return { ok: false, why: `run.timeoutMinutes is not a whole number of minutes in 1..${MAX_RUN_TIMEOUT_MINUTES}` };
+  if (!(RUN_ACCESS as readonly unknown[]).includes(access)) return { ok: false, why: `run.access is not one of ${RUN_ACCESS.join(", ")}` };
+  return { ok: true, value: { timeoutMinutes, access: access as RunAccess } };
+}
+
+/** THE PAIRING RULE, once: a `tmux` launch carries `null`, a wrapper launch a valid spec. Anything else is refused. */
+export function runFor(kind: LauncherKind, u: unknown): Parsed<RunSpec | null> {
+  if (kind === "tmux") return u === null ? { ok: true, value: null } : { ok: false, why: "a tmux launch carries no run spec" };
+  if (u === null || u === undefined) return { ok: false, why: `a ${kind} launch needs a run spec` };
+  return parseRunSpec(u);
+}
+
+function sameRun(a: RunSpec | null, b: RunSpec | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.timeoutMinutes === b.timeoutMinutes && a.access === b.access;
 }
 
 /** The pinned material: its size and hash, recorded before `planned`. */
@@ -225,14 +271,72 @@ export type VerifiedMaterial = { readonly bytes: Buffer; readonly pin: MaterialP
 
 export type AttemptRef = { readonly attempt: number; readonly correlationId: CorrelationId; readonly artefactDir: string };
 
-/** How the launched side ended, as its `exit.json` says. Shared with the artefact reader, which is its other half. */
+/**
+ * How the supervised CHILD ended, as the supervisor observed it — a fact about a
+ * process, never a judgement. Shared with the artefact reader, its other half.
+ *
+ * Stage 2 replaced Stage 1's `supervisor-failed` arm, which put "there was no
+ * child" and "why" in one place: the first is `not-run` here, the second is the
+ * {@link WrapperVerdict}, so the two cannot disagree.
+ */
 export type ExitEnding =
   | { readonly kind: "exited"; readonly code: number }
   | { readonly kind: "signalled"; readonly signal: string }
-  /** The supervisor itself failed (spawn error, a refusal after start) and says so. */
-  | { readonly kind: "supervisor-failed"; readonly why: string };
+  /** There was no child to end: the wrapper refused on its own account, or the spawn itself failed. */
+  | { readonly kind: "not-run" }
+  /** A child ran and the wrapper stopped waiting before the kernel reported it (the forced settle after a SIGKILL). */
+  | { readonly kind: "unobserved" };
+
+/**
+ * The causes a wrapper's existing final classification names, in its own order — plus three of
+ * its own: `wrapper` (it failed on its own account, not about the child), `prompt-unverified` (the
+ * prompt was not the bytes `intent.json` pinned, or could not be read to check, so nothing ran),
+ * and `hangup` (its pane or terminal closed; the hangup was forwarded to the child and waited for).
+ */
+export const FAILURE_CAUSES = ["wrapper", "prompt-unverified", "spawn", "overflow", "timeout", "cli-error", "no-result", "nonzero", "empty-answer", "hangup"] as const;
+export type FailureCause = (typeof FAILURE_CAUSES)[number];
+
+/** The causes that can explain a child that never ran. */
+export const NOT_RUN_CAUSES: readonly FailureCause[] = ["wrapper", "prompt-unverified", "spawn"];
+
+/** The supervisor's judgement of the run. A job shell makes none, and says so with `null`. */
+export type WrapperVerdict = { readonly kind: "ok" } | { readonly kind: "failed"; readonly cause: FailureCause; readonly why: string };
 
 export type ExitAnswer = { readonly path: string; readonly bytes: number; readonly sha256: string; readonly usable: boolean };
+
+/**
+ * **EVERYTHING AN EXIT RECORD SAYS, AS ONE SHAPE** — `exit.json` and the
+ * `completed` evidence that copies it into the journal read it the same way.
+ *
+ * `usageLimit` and `permissionDenials` are readings the verdict rests on, so
+ * they are `null` wherever there is no verdict, or no child to read them from.
+ */
+export type ExitFacts = {
+  readonly ending: ExitEnding;
+  readonly verdict: WrapperVerdict | null;
+  /** The CLI's own stderr said it hit a usage or rate limit. */
+  readonly usageLimit: boolean | null;
+  /** Tool calls the CLI denied, from its result event; null when there was none to read. */
+  readonly permissionDenials: number | null;
+  readonly answer: ExitAnswer | null;
+  /** The captured transcript (activity log), when one was written. */
+  readonly transcript: string | null;
+};
+
+export const EXIT_FACT_FIELDS = ["ending", "verdict", "usageLimit", "permissionDenials", "answer", "transcript"] as const;
+
+/** Why a set of exit facts cannot all be true at once, or null. The reader refuses what this refuses. */
+export function exitIncoherence(facts: ExitFacts): string | null {
+  const { ending, verdict } = facts;
+  if (verdict === null && (facts.usageLimit !== null || facts.permissionDenials !== null)) return "a record with no verdict carries no readings of one";
+  if (ending.kind === "not-run" && (verdict === null || verdict.kind !== "failed" || !NOT_RUN_CAUSES.includes(verdict.cause))) {
+    return `a child that never ran can only end in a ${NOT_RUN_CAUSES.join(", ")} failure`;
+  }
+  if (ending.kind === "not-run" && (facts.usageLimit !== null || facts.permissionDenials !== null)) return "a child that never ran has no readings";
+  if (verdict?.kind === "failed" && verdict.cause === "spawn" && ending.kind !== "not-run") return "a spawn failure has no child ending";
+  if (verdict?.kind === "ok" && !(ending.kind === "exited" && ending.code === 0)) return "an ok verdict needs a child that exited 0";
+  return null;
+}
 
 export type RunningEvidence =
   | { readonly kind: "start-artefact"; readonly pid: number; readonly startTicks: number; readonly bootId: string }
@@ -240,7 +344,7 @@ export type RunningEvidence =
 
 /** F1: an exit record, or a reboot. There is deliberately no `vanished` arm. */
 export type CompletionEvidence =
-  | { readonly kind: "exit-record"; readonly ending: ExitEnding; readonly timedOut: boolean; readonly answer: ExitAnswer | null }
+  | ({ readonly kind: "exit-record" } & ExitFacts)
   | { readonly kind: "rebooted"; readonly recordedBootId: string; readonly currentBootId: string };
 
 /** Which proof licensed a `failed-before-launch`. Each names why no external effect can have happened. */
@@ -282,6 +386,8 @@ export type LaunchEvent =
       readonly origin: LaunchOrigin;
       readonly material: MaterialPin;
       readonly launcherKind: LauncherKind;
+      /** `null` for `tmux`; the pinned spec for a wrapper launch ({@link runFor}). */
+      readonly run: RunSpec | null;
       readonly admissionClass: AdmissionClass;
     })
   | (Common & { readonly kind: "waiting-admission"; readonly why: string })
@@ -359,6 +465,7 @@ type RecordCommon = {
   readonly origin: LaunchOrigin;
   readonly material: MaterialPin;
   readonly launcherKind: LauncherKind;
+  readonly run: RunSpec | null;
   readonly admissionClass: AdmissionClass;
   readonly plannedAt: string;
   readonly updatedAt: string;
@@ -443,6 +550,7 @@ function commonOf(prev: LaunchRecord, at: string): RecordCommon {
     origin: prev.origin,
     material: prev.material,
     launcherKind: prev.launcherKind,
+    run: prev.run,
     admissionClass: prev.admissionClass,
     plannedAt: prev.plannedAt,
     updatedAt: at,
@@ -473,6 +581,8 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
     if (prev !== undefined) return illegal(`${event.occurrenceId} was planned twice`);
     const expected = occurrenceIdOf(event.origin);
     if (expected !== event.occurrenceId) return illegal(`${event.occurrenceId} is not the id of its own origin (${expected})`);
+    const run = runFor(event.launcherKind, event.run);
+    if (!run.ok) return illegal(`${event.occurrenceId}: ${run.why}`);
     return {
       ok: true,
       record: {
@@ -480,6 +590,7 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
         origin: event.origin,
         material: event.material,
         launcherKind: event.launcherKind,
+        run: run.value,
         admissionClass: event.admissionClass,
         plannedAt: event.at,
         updatedAt: event.at,
@@ -726,12 +837,15 @@ export function parseExitEnding(u: unknown): Parsed<ExitEnding> {
       if (!isText(signal)) return { ok: false, why: "ending.signal is not a signal name" };
       return { ok: true, value: { kind: "signalled", signal } };
     }
-    case "supervisor-failed": {
-      const o = object(u, "ending", ["kind", "why"]);
+    case "not-run": {
+      const o = object(u, "ending", ["kind"]);
       if (!o.ok) return o;
-      const why = o.value["why"];
-      if (!isText(why)) return { ok: false, why: "ending.why is not a reason" };
-      return { ok: true, value: { kind: "supervisor-failed", why } };
+      return { ok: true, value: { kind: "not-run" } };
+    }
+    case "unobserved": {
+      const o = object(u, "ending", ["kind"]);
+      if (!o.ok) return o;
+      return { ok: true, value: { kind: "unobserved" } };
     }
     default:
       return { ok: false, why: `ending kind ${JSON.stringify(u["kind"])} is not one this version knows` };
@@ -748,6 +862,41 @@ export function parseExitAnswer(u: unknown): Parsed<ExitAnswer | null> {
   if (!isSha256(sha256)) return { ok: false, why: "answer.sha256 is not a sha256" };
   if (typeof usable !== "boolean") return { ok: false, why: "answer.usable is not a boolean" };
   return { ok: true, value: { path, bytes, sha256, usable } };
+}
+
+function parseVerdict(u: unknown): Parsed<WrapperVerdict | null> {
+  if (u === null) return { ok: true, value: null };
+  if (!isRecord(u)) return { ok: false, why: "verdict is not an object or null" };
+  if (u["kind"] === "ok") {
+    const o = object(u, "verdict", ["kind"]);
+    return o.ok ? { ok: true, value: { kind: "ok" } } : o;
+  }
+  if (u["kind"] === "failed") {
+    const o = object(u, "verdict", ["kind", "cause", "why"]);
+    if (!o.ok) return o;
+    const { cause, why } = o.value;
+    if (!(FAILURE_CAUSES as readonly unknown[]).includes(cause)) return { ok: false, why: `verdict.cause ${JSON.stringify(cause)} is not one this version knows` };
+    if (!isText(why)) return { ok: false, why: "verdict.why is not a reason" };
+    return { ok: true, value: { kind: "failed", cause: cause as FailureCause, why } };
+  }
+  return { ok: false, why: `verdict kind ${JSON.stringify(u["kind"])} is not one this version knows` };
+}
+
+/** The six exit facts off an object whose other fields the caller has already checked. Exact, and coherent ({@link exitIncoherence}). */
+export function parseExitFacts(u: Record<string, unknown>): Parsed<ExitFacts> {
+  const ending = parseExitEnding(u["ending"]);
+  if (!ending.ok) return ending;
+  const verdict = parseVerdict(u["verdict"]);
+  if (!verdict.ok) return verdict;
+  const answer = parseExitAnswer(u["answer"]);
+  if (!answer.ok) return answer;
+  const { usageLimit, permissionDenials, transcript } = u;
+  if (usageLimit !== null && typeof usageLimit !== "boolean") return { ok: false, why: "usageLimit is not a boolean or null" };
+  if (permissionDenials !== null && !isNonNegativeInteger(permissionDenials)) return { ok: false, why: "permissionDenials is not a count or null" };
+  if (transcript !== null && !isText(transcript)) return { ok: false, why: "transcript is not a path or null" };
+  const facts: ExitFacts = { ending: ending.value, verdict: verdict.value, usageLimit, permissionDenials, answer: answer.value, transcript };
+  const incoherent = exitIncoherence(facts);
+  return incoherent === null ? { ok: true, value: facts } : { ok: false, why: incoherent };
 }
 
 function parseRunning(u: unknown): Parsed<RunningEvidence> {
@@ -772,15 +921,11 @@ function parseRunning(u: unknown): Parsed<RunningEvidence> {
 function parseCompletion(u: unknown): Parsed<CompletionEvidence> {
   if (!isRecord(u)) return { ok: false, why: "evidence is not an object" };
   if (u["kind"] === "exit-record") {
-    const o = object(u, "evidence", ["kind", "ending", "timedOut", "answer"]);
+    const o = object(u, "evidence", ["kind", ...EXIT_FACT_FIELDS]);
     if (!o.ok) return o;
-    const ending = parseExitEnding(o.value["ending"]);
-    if (!ending.ok) return ending;
-    const answer = parseExitAnswer(o.value["answer"]);
-    if (!answer.ok) return answer;
-    const timedOut = o.value["timedOut"];
-    if (typeof timedOut !== "boolean") return { ok: false, why: "evidence.timedOut is not a boolean" };
-    return { ok: true, value: { kind: "exit-record", ending: ending.value, timedOut, answer: answer.value } };
+    const facts = parseExitFacts(o.value);
+    if (!facts.ok) return facts;
+    return { ok: true, value: { kind: "exit-record", ...facts.value } };
   }
   if (u["kind"] === "rebooted") {
     const o = object(u, "evidence", ["kind", "recordedBootId", "currentBootId"]);
@@ -887,7 +1032,7 @@ export function parseJournalLine(text: string): Parsed<JournalLine> {
   const kind = u["kind"];
   switch (kind) {
     case "planned": {
-      const extra = fields("origin", "material", "launcherKind", "admissionClass");
+      const extra = fields("origin", "material", "launcherKind", "run", "admissionClass");
       if (extra !== null) return { ok: false, why: extra };
       const origin = parseOrigin(u["origin"]);
       if (!origin.ok) return origin;
@@ -896,8 +1041,10 @@ export function parseJournalLine(text: string): Parsed<JournalLine> {
       const launcherKind = u["launcherKind"];
       const admissionClass = u["admissionClass"];
       if (!isLauncherKind(launcherKind)) return { ok: false, why: "launcherKind is not a launcher" };
+      const run = runFor(launcherKind, u["run"]);
+      if (!run.ok) return run;
       if (!isAdmissionClass(admissionClass)) return { ok: false, why: "admissionClass is not an admission class" };
-      return { ok: true, value: { ...common, kind, origin: origin.value, material: material.value, launcherKind, admissionClass } };
+      return { ok: true, value: { ...common, kind, origin: origin.value, material: material.value, launcherKind, run: run.value, admissionClass } };
     }
     case "waiting-admission": {
       const extra = fields("why");
@@ -1031,6 +1178,8 @@ export type LaunchInput = {
   readonly artefactDir: string;
   /** The verified bytes. There is no other prompt parameter (F5). */
   readonly material: VerifiedMaterial;
+  /** The pinned run spec: `null` for `tmux`, and the wrapper adapters' only source of timeout and access. */
+  readonly run: RunSpec | null;
 };
 
 /**
@@ -1050,7 +1199,7 @@ export type EvidencePorts = {
   readonly artefacts: (dir: string, correlationId: CorrelationId) => ArtefactReadings;
   readonly identity: (start: StartRecord) => IdentityReading;
   readonly boot: () => BootIdentity;
-  /** Asked only about tmux launches. */
+  /** Asked only about launches that live in tmux: `tmux` and `tmux-headless` ({@link runsInTmux}). */
   readonly tmux: (correlationId: CorrelationId) => TmuxReading;
 };
 
@@ -1068,13 +1217,21 @@ export type LaunchParts = {
  * plan().
  * ------------------------------------------------------------------ */
 
-export type PlanRequest = {
+type PlanCommon = {
   readonly origin: LaunchOrigin;
   /** The exact prompt the child will be given. Pinned to disk before `planned`. */
   readonly material: string;
-  readonly launcherKind: LauncherKind;
   readonly admissionClass: AdmissionClass;
 };
+
+/**
+ * A union, so the compiler refuses a wrong pairing: an interactive `tmux`
+ * launch has no run spec, and a wrapper launch cannot be asked for without one.
+ * `plan()` checks the same rule at runtime ({@link runFor}) for callers that
+ * reach it with a cast.
+ */
+export type PlanRequest = PlanCommon &
+  ({ readonly launcherKind: "tmux"; readonly run?: never } | { readonly launcherKind: "headless" | "tmux-headless"; readonly run: RunSpec });
 
 export type PlanResult =
   | { readonly kind: "planned"; readonly record: LaunchRecord; readonly created: boolean }
@@ -1110,6 +1267,9 @@ export function plan(parts: Pick<LaunchParts, "journal" | "now">, request: PlanR
   const problem = originProblem(request.origin);
   if (problem !== null) return { kind: "refused", why: `the origin is not launchable: ${problem}` };
   if (!isLauncherKind(request.launcherKind) || !isAdmissionClass(request.admissionClass)) return { kind: "refused", why: "unknown launcher kind or admission class" };
+  const asked = (request as { readonly run?: unknown }).run;
+  const run = runFor(request.launcherKind, request.launcherKind === "tmux" && asked === undefined ? null : asked);
+  if (!run.ok) return { kind: "refused", why: `the run spec is not launchable: ${run.why}` };
   const bytes = Buffer.from(request.material, "utf8");
   if (bytes.byteLength === 0) return { kind: "refused", why: "the material is empty, so there is nothing to launch" };
   if (bytes.byteLength > MAX_MATERIAL_BYTES) return { kind: "refused", why: `the material is ${bytes.byteLength} bytes, over the ${MAX_MATERIAL_BYTES} limit` };
@@ -1124,6 +1284,7 @@ export function plan(parts: Pick<LaunchParts, "journal" | "now">, request: PlanR
     if (!sameOrigin(existing.origin, request.origin)) differences.push("origin");
     if (existing.launcherKind !== request.launcherKind) differences.push("launcher kind");
     if (existing.admissionClass !== request.admissionClass) differences.push("admission class");
+    if (!sameRun(existing.run, run.value)) differences.push("run spec");
     if (existing.material.bytes !== pin.bytes || existing.material.sha256 !== pin.sha256) differences.push("material");
     if (differences.length > 0) return { kind: "conflict", existing, why: `${id} already exists with a different ${differences.join(", ")}` };
     return { kind: "planned", record: existing, created: false };
@@ -1139,6 +1300,7 @@ export function plan(parts: Pick<LaunchParts, "journal" | "now">, request: PlanR
     origin: request.origin,
     material: pin,
     launcherKind: request.launcherKind,
+    run: run.value,
     admissionClass: request.admissionClass,
   });
   if (!wrote.ok) return { kind: "refused", why: `the plan could not be recorded: ${wrote.why}` };
@@ -1272,6 +1434,7 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
     attempt,
     launcherKind: record.launcherKind,
     material: record.material,
+    run: record.run,
     bootId: boot.read ? boot.id : null,
     at: at(),
   };
@@ -1285,7 +1448,7 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
   // (5) THE INVOCATION, exactly once.
   let answer: LauncherAnswer;
   try {
-    answer = launcher.launch({ occurrenceId: id, attempt, correlationId, artefactDir, material: { bytes: read.bytes, pin } });
+    answer = launcher.launch({ occurrenceId: id, attempt, correlationId, artefactDir, material: { bytes: read.bytes, pin }, run: record.run });
   } catch (cause) {
     return { kind: "invoked", occurrenceId: id, correlationId, launcher: "threw", detail: cause instanceof Error ? cause.message : String(cause) };
   }
@@ -1357,7 +1520,16 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
   // 1. The exit record.
   if (art.exit.kind === "present") {
     const exit = art.exit.record;
-    return { kind: "record", occurrenceId: record.id, event: { ...common, kind: "completed", evidence: { kind: "exit-record", ending: exit.ending, timedOut: exit.timedOut, answer: exit.answer } } };
+    const evidence: CompletionEvidence = {
+      kind: "exit-record",
+      ending: exit.ending,
+      verdict: exit.verdict,
+      usageLimit: exit.usageLimit,
+      permissionDenials: exit.permissionDenials,
+      answer: exit.answer,
+      transcript: exit.transcript,
+    };
+    return { kind: "record", occurrenceId: record.id, event: { ...common, kind: "completed", evidence } };
   }
   if (art.exit.kind === "unreadable") unavailable.push(`exit.json unreadable: ${art.exit.why}`);
   else looked.push("no exit.json");
@@ -1402,7 +1574,7 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
   } else {
     looked.push("no start.json");
   }
-  if (running === null && record.launcherKind === "tmux") {
+  if (running === null && runsInTmux(record.launcherKind)) {
     const tmux = guarded("probing tmux", () => ports.tmux(current.correlationId), (why): TmuxReading => ({ kind: "cannot-tell", why }));
     if (tmux.kind === "found") running = { kind: "tmux-session", sessionId: tmux.sessionId };
     else if (tmux.kind === "cannot-tell") unavailable.push(`tmux: ${tmux.why}`);

@@ -11,8 +11,10 @@ run spec and a `tmux-headless` launcher kind) before editing — do not undo any
 
 Sol's review of Stage 1: `docs/plans/260910f-launch-protocol-stage1-review-sol-b.md`, full record
 `docs/plans/260910f-launch-protocol-stage1-review-sol-b-findings.md`. Its four reproductions are in
-`logs/lp-repros/` (gitignored — read them for the exact failing input, then write proper regression
-tests in the real suites; do not copy them into `tests/` verbatim). Each has been checked against
+`logs/lp-repros/*.test.ts.txt` (gitignored, renamed `.txt` so the typecheck skips them — read them
+for the exact failing input, then write proper regression tests in the real suites; do not copy
+them into `tests/` verbatim). They were written against commit 25bd82bf, and Stage 2 has since
+changed the record shapes (the run spec, `exit.json`'s `ending`/`verdict`): adapt the inputs. Each has been checked against
 the code and is real.
 
 - **F16 (P1)** — reconciliation reads evidence from the absolute `artefactDir` stored in the

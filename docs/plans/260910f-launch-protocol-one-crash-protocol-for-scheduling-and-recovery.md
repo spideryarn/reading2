@@ -519,6 +519,45 @@ Red first:
 - A scratch-socket test: the tmux adapter creates a session whose first process sees the id,
   the probe finds it by id, and a session that exits at once still leaves `start.json` + `exit.json`.
 
+**Status (2026-09-10): built by an Opus subagent, not yet Sol-reviewed.** New:
+`tools/overseer/launchers.ts` (the `tmux`, `headless` and `tmux-headless` adapters and the tmux
+evidence port), `scripts/gjd-remote-launch.ts` (gjd-remote's launch pieces as pure functions,
+because `gjd-remote.ts` has no exports and runs `main()` on import), `scripts/launch-dir.ts` (the
+wrappers' shared `--launch-dir` handling, loaded only when the flag is given). Changed:
+`gjd-remote.ts` (four small insertions, all behind `--launch-id`), `run-claude.ts`, `run-codex.ts`,
+Stage 1's `launch-protocol.ts` (the run spec, the probe covering `tmux-headless`) and
+`launch-artefacts.ts` (the writers). **One file outside the set, approved by the Overseer**:
+`scripts/subagent-cli.ts`, where `runChild` now forwards SIGHUP to the child's process group and
+waits within the 5 s grace, with an `onHangup` hook the wrapper uses to write `exit.json` first —
+an orphan fix that benefits every wrapper run. 384 tests across the launch, wrapper and
+sanitised-env suites pass; typecheck exit 0 (once my copies of Sol's reproductions were renamed out
+of its reach). Red first, including the SIGHUP case for its real reason (the child alive 20 s after
+the pane closed).
+
+- **`exit.json`'s shape settled:** `ending` (`exited` / `signalled` / `not-run` / `unobserved`) says
+  how the child ended; `verdict` is `ok`, or `failed` with a cause (`wrapper`, `prompt-unverified`,
+  `spawn`, `overflow`, `timeout`, `cli-error`, `no-result`, `nonzero`, `empty-answer`, `hangup`), or
+  `null` from a job shell, which judges nothing; plus `usageLimit`, `permissionDenials` (both `null`
+  from `run-codex`), `transcript`, and `answer.usable` exactly as `answerIsUsable` says. Stage 1's
+  `supervisor-failed` and `timedOut` are gone. The reader refuses incoherent combinations.
+- **Departures, accepted:** gjd-remote's stdin is a complete regular file, not a pipe, so a daemon
+  dying mid-write cannot hand it a truncated prompt; `start.json` follows the two `export` lines;
+  the box-side check is a `grep -F` of the correlation id in `intent.json`; `--launch-dir` with
+  `--dry-run` is refused and a directory that fails its checks is never written to; **both** wrapper
+  adapters write a private `prompt.md`; a duplicate tmux session name throws (so reconciliation's
+  probe decides) rather than claiming a refusal; a `planned` line without `run` is `history-lost`.
+- **Real money was spent by a test, about $0.12**, before the builder caught it: the first
+  real-tmux `tmux-headless` test ran the real `claude`. **A new tmux session takes its environment
+  from the creating client, not the server** — so in production a daemon-created session inherits
+  the daemon's whole environment. Stage 3's brief now requires passing `env` deliberately.
+- **Gaps left, named:** a hangup during `run-claude`'s auth probe, or outside any running child,
+  writes no `exit.json`; `tmux-headless` has a window where a tmux server exiting between the check
+  and `new-session` starts one inside the daemon's cgroup; a job shell records a signalled child as
+  `exited` 128+n (bash cannot tell them apart); gjd-remote takes prompts up to 96 KB while the
+  protocol pins up to 1 MB, so the adapter refuses above gjd-remote's limit (a test keeps the two in
+  step); gjd-remote reserves a box account before the launch-directory check; the placement of the
+  launch lines inside `cmdNewClaude` is checked against its source text, the weakest test here.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and

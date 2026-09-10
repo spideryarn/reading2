@@ -53,6 +53,7 @@ import {
   type LauncherAnswer,
   type LauncherKind,
   type PlanRequest,
+  type RunSpec,
 } from "../tools/overseer/launch-protocol.js";
 import { LAUNCHES_DIR, LAUNCH_JOURNAL, MATERIAL_FILE, OCCURRENCES_DIR, openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 
@@ -88,6 +89,8 @@ type Shared = {
   mode: LauncherMode;
   invocations: number;
   received: Buffer[];
+  /** The run spec each invocation was handed (Stage 2). */
+  runs: (RunSpec | null)[];
   /** At each invocation: the journal's last line ON DISK, and whether intent.json was there. */
   atInvocation: { lastKind: string | null; intentPresent: boolean }[];
   procs: Map<number, number>;
@@ -99,6 +102,10 @@ type Shared = {
 
 const SUPERVISOR_PID = 4242;
 const SUPERVISOR_TICKS = 777;
+
+/** What a job shell's exit.json says: how the child ended, and no judgement of it (Stage 2's shape). */
+const SHELL_EXIT_0 = { ending: { kind: "exited", code: 0 }, verdict: null, usageLimit: null, permissionDenials: null, answer: null, transcript: null } as const;
+const shellExit = (code: number) => ({ ...SHELL_EXIT_0, ending: { kind: "exited" as const, code } });
 
 let tick = Date.parse("2026-09-10T12:00:00.000Z");
 const now = (): Date => {
@@ -118,7 +125,7 @@ afterEach(() => {
 function newShared(mode: LauncherMode = "writes-start"): Shared {
   const root = mkdtempSync(join(tmpdir(), "overseer-launch-protocol-"));
   roots.push(root);
-  return { root, mode, invocations: 0, received: [], atInvocation: [], procs: new Map(), bootId: "boot-one", bootReadable: true, procReadable: true, tmuxReadable: true };
+  return { root, mode, invocations: 0, received: [], runs: [], atInvocation: [], procs: new Map(), bootId: "boot-one", bootReadable: true, procReadable: true, tmuxReadable: true };
 }
 
 const effectsLog = (shared: Shared): string => join(shared.root, "effects.log");
@@ -235,6 +242,7 @@ function world(shared: Shared, options: WorldOptions = {}): World {
       alive();
       shared.invocations += 1;
       shared.received.push(Buffer.from(input.material.bytes));
+      shared.runs.push(input.run);
       shared.atInvocation.push({ lastKind: lastKindOnDisk(shared), intentPresent: existsSync(join(input.artefactDir, INTENT_FILE)) });
       const mode = shared.mode;
       if (mode === "refuses") return { kind: "refused-before-effect", why: "the fake launcher refused before doing anything" };
@@ -256,7 +264,7 @@ function world(shared: Shared, options: WorldOptions = {}): World {
       if (mode === "exits-at-once") {
         writeFileSync(
           join(input.artefactDir, EXIT_FILE),
-          artefactText({ v: 1, kind: "exit", correlationId: input.correlationId, ending: { kind: "exited", code: 0 }, timedOut: false, answer: null, at: now().toISOString() }),
+          artefactText({ v: 1, kind: "exit", correlationId: input.correlationId, ...SHELL_EXIT_0, at: now().toISOString() }),
         );
         shared.procs.delete(SUPERVISOR_PID);
       }
@@ -307,8 +315,12 @@ function restart(shared: Shared, old: World, options: WorldOptions = {}): World 
   return world(shared, options);
 }
 
-function request(candidate = "cand-a", material = "Summarise the plan, then stop.\n", launcherKind: LauncherKind = "tmux"): PlanRequest {
-  return { origin: recoveryOrigin(candidate), material, launcherKind, admissionClass: "claude-session" };
+const RUN: RunSpec = { timeoutMinutes: 30, access: "review" };
+
+/** A tmux plan carries no run spec; a wrapper plan must (Stage 2 — the union makes the pairing a type error). */
+function request(candidate = "cand-a", material = "Summarise the plan, then stop.\n", launcherKind: LauncherKind = "tmux", run: RunSpec = RUN): PlanRequest {
+  const common = { origin: recoveryOrigin(candidate), material, admissionClass: "claude-session" as const };
+  return launcherKind === "tmux" ? { ...common, launcherKind } : { ...common, launcherKind, run };
 }
 
 const idOf = (req: PlanRequest): LaunchOccurrenceId => occurrenceIdOf(req.origin);
@@ -536,7 +548,7 @@ describe("D4: a crash at every boundary, then reopen and reconcile", () => {
     reconcileOk(w);
     expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 0, state: "completed" });
     const record = recordOf(w, idOf(req));
-    expect(record.state === "completed" ? record.evidence : null).toEqual({ kind: "exit-record", ending: { kind: "exited", code: 0 }, timedOut: false, answer: null });
+    expect(record.state === "completed" ? record.evidence : null).toEqual({ kind: "exit-record", ...SHELL_EXIT_0 });
   });
 
   test("after completed, before the release: the next reconciliation releases", () => {
@@ -576,7 +588,7 @@ describe("D4: a crash at every boundary, then reopen and reconcile", () => {
     expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 1, state: "observed-running" });
     writeFileSync(
       join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(req), "a1", EXIT_FILE),
-      artefactText({ v: 1, kind: "exit", correlationId: `${idOf(req)}-a1` as CorrelationId, ending: { kind: "exited", code: 3 }, timedOut: false, answer: null, at: now().toISOString() }),
+      artefactText({ v: 1, kind: "exit", correlationId: `${idOf(req)}-a1` as CorrelationId, ...shellExit(3), at: now().toISOString() }),
     );
     reconcileOk(w);
     expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 0, state: "completed" });
@@ -737,6 +749,70 @@ describe("identity and idempotence (D2, F5)", () => {
   });
 });
 
+describe("the run spec (Stage 2): pinned with the plan, part of F5, handed to the launcher", () => {
+  const all = ["tmux", "headless", "tmux-headless"] as const;
+
+  test("a wrapper launch hands the launcher its run spec, and intent.json and the planned line record it", () => {
+    const shared = newShared();
+    const w = world(shared, { launchers: all });
+    const req = request("cand-run", "m\n", "tmux-headless", { timeoutMinutes: 12, access: "read-only" });
+    expect(w.protocol.launchOccurrence(req).kind).toBe("invoked");
+    expect(shared.runs).toEqual([{ timeoutMinutes: 12, access: "read-only" }]);
+    const intent = JSON.parse(readFileSync(join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(req), "a1", INTENT_FILE), "utf8")) as { run: unknown; launcherKind: unknown };
+    expect(intent.run).toEqual({ timeoutMinutes: 12, access: "read-only" });
+    expect(intent.launcherKind).toBe("tmux-headless");
+    expect(recordOf(w, idOf(req)).run).toEqual({ timeoutMinutes: 12, access: "read-only" });
+  });
+
+  test("a tmux launch has no run spec, all the way down", () => {
+    const shared = newShared();
+    const w = world(shared, { launchers: all });
+    w.protocol.launchOccurrence(request("cand-tmux"));
+    expect(shared.runs).toEqual([null]);
+    expect(recordOf(w, idOf(request("cand-tmux"))).run).toBeNull();
+  });
+
+  test("plan refuses a wrong pairing or a spec it cannot honour, and writes nothing", () => {
+    const shared = newShared();
+    const w = world(shared, { launchers: all });
+    const common = { origin: recoveryOrigin("cand-bad"), material: "m\n", admissionClass: "claude-session" as const };
+    const bad: unknown[] = [
+      { ...common, launcherKind: "tmux", run: RUN },
+      { ...common, launcherKind: "headless" },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 0, access: "review" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 2.5, access: "review" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 100_000, access: "review" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "admin" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", extra: true } },
+    ];
+    for (const one of bad) expect(w.protocol.plan(one as PlanRequest).kind, JSON.stringify(one)).toBe("refused");
+    expect(existsSync(journalPath(shared)) ? readFileSync(journalPath(shared), "utf8") : "").toBe("");
+  });
+
+  test("F5: the same id with a different run spec is a conflict, and writes nothing", () => {
+    const shared = newShared();
+    const w = world(shared, { launchers: all });
+    w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review" }));
+    const lines = readFileSync(journalPath(shared), "utf8");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 11, access: "review" })).kind).toBe("conflict");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "write" })).kind).toBe("conflict");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "headless", { timeoutMinutes: 10, access: "review" })).kind).toBe("conflict");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review" })).kind).toBe("planned");
+    expect(readFileSync(journalPath(shared), "utf8")).toBe(lines);
+  });
+
+  test("a tmux-headless launch is looked for in tmux, like a tmux one: a session carrying the id is running", () => {
+    const shared = newShared("effect-only");
+    const w = world(shared, { launchers: all });
+    const req = request("cand-th", "m\n", "tmux-headless");
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    const record = recordOf(w, idOf(req));
+    expect(record.state).toBe("observed-running");
+    expect(record.state === "observed-running" ? record.evidence : null).toEqual({ kind: "tmux-session", sessionId: "$7" });
+  });
+});
+
 describe("failed-before-launch versus a launch that may have happened", () => {
   test("a launcher that refuses before any effect: failed-before-launch, released at once, and a re-offer is attempt 2", () => {
     const shared = newShared("refuses");
@@ -838,7 +914,7 @@ describe("F9: the prefix is one synchronous function", () => {
     expect(waits).toHaveLength(1);
     writeFileSync(
       join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(first), "a1", EXIT_FILE),
-      artefactText({ v: 1, kind: "exit", correlationId: `${idOf(first)}-a1` as CorrelationId, ending: { kind: "exited", code: 0 }, timedOut: false, answer: null, at: now().toISOString() }),
+      artefactText({ v: 1, kind: "exit", correlationId: `${idOf(first)}-a1` as CorrelationId, ...SHELL_EXIT_0, at: now().toISOString() }),
     );
     reconcileOk(w);
     expect(w.protocol.launchOccurrence(second).kind).toBe("invoked");
@@ -861,7 +937,18 @@ describe("F4: evidence by precedence, and cannot-tell never moves a record on it
   const exitFor = (shared: Shared, id: LaunchOccurrenceId): void =>
     writeFileSync(
       join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, id, "a1", EXIT_FILE),
-      artefactText({ v: 1, kind: "exit", correlationId: `${id}-a1` as CorrelationId, ending: { kind: "signalled", signal: "SIGTERM" }, timedOut: true, answer: null, at: now().toISOString() }),
+      artefactText({
+        v: 1,
+        kind: "exit",
+        correlationId: `${id}-a1` as CorrelationId,
+        ending: { kind: "signalled", signal: "SIGTERM" },
+        verdict: { kind: "failed", cause: "timeout", why: "killed after its timeout" },
+        usageLimit: false,
+        permissionDenials: null,
+        answer: null,
+        transcript: null,
+        at: now().toISOString(),
+      }),
     );
 
   test.each([
@@ -1058,8 +1145,13 @@ describe("the harness can fail", () => {
 
 describe("suspicion 3: built, and deliberately not called yet", () => {
   const REPO = fileURLToPath(new URL("..", import.meta.url));
-  const LAUNCH_FILES = new Set(["launch-protocol.ts", "launch-store.ts", "launch-admission.ts", "launch-artefacts.ts"].map((name) => join("tools", "overseer", name)));
+  /** The protocol's modules, and — added deliberately in Stage 2 — the adapters its composition is handed. */
+  const LAUNCH_FILES = new Set(["launch-protocol.ts", "launch-store.ts", "launch-admission.ts", "launch-artefacts.ts", "launchers.ts"].map((name) => join("tools", "overseer", name)));
+  /** Stage 2's launched side: it writes artefacts, so it imports the artefact module — and nothing else of the protocol. */
+  const ARTEFACT_WRITERS = new Set([join("scripts", "launch-dir.ts"), join("scripts", "gjd-remote-launch.ts")]);
   const IMPORTS_LAUNCH = /from\s+["'][^"']*\/launch-(?:protocol|store|admission|artefacts)(?:\.js)?["']/;
+  const IMPORTS_BEYOND_ARTEFACTS = /from\s+["'][^"']*\/launch-(?:protocol|store|admission)(?:\.js)?["']/;
+  const IMPORTS_LAUNCHERS = /(?:from\s+|import\(\s*)["'][^"']*\/launchers(?:\.js)?["']/;
 
   function walk(dir: string, into: string[]): void {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -1074,8 +1166,20 @@ describe("suspicion 3: built, and deliberately not called yet", () => {
     const files: string[] = [];
     for (const top of ["tools", "scripts", "src", "api", "evals"]) if (existsSync(join(REPO, top))) walk(join(REPO, top), files);
     const importers = files.map((file) => relative(REPO, file)).filter((file) => IMPORTS_LAUNCH.test(readFileSync(join(REPO, file), "utf8")));
-    // THE DETECTOR WORKS: it sees the launch modules importing each other.
+    // THE DETECTOR WORKS: it sees the launch modules importing each other, and the writers importing the artefacts.
     expect(importers).toContain(join("tools", "overseer", "launch-store.ts"));
-    expect(importers.filter((file) => !LAUNCH_FILES.has(file))).toEqual([]);
+    for (const writer of ARTEFACT_WRITERS) expect(importers).toContain(writer);
+    expect(importers.filter((file) => !LAUNCH_FILES.has(file) && !ARTEFACT_WRITERS.has(file))).toEqual([]);
+    // A writer reaches the artefact module and nothing past it, so it cannot reach launchOccurrence.
+    for (const writer of ARTEFACT_WRITERS) expect(IMPORTS_BEYOND_ARTEFACTS.test(readFileSync(join(REPO, writer), "utf8")), writer).toBe(false);
+  });
+
+  test("nothing outside the protocol's composition calls a launcher adapter — no production file imports launchers.ts", () => {
+    const files: string[] = [];
+    for (const top of ["tools", "scripts", "src", "api", "evals"]) if (existsSync(join(REPO, top))) walk(join(REPO, top), files);
+    // The detector sees the adapters' own module, which names itself in its header; the regex wants an import.
+    expect(files.map((file) => relative(REPO, file))).toContain(join("tools", "overseer", "launchers.ts"));
+    const importers = files.map((file) => relative(REPO, file)).filter((file) => IMPORTS_LAUNCHERS.test(readFileSync(join(REPO, file), "utf8")));
+    expect(importers).toEqual([]);
   });
 });

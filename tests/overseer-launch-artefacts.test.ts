@@ -55,11 +55,13 @@ const intent: LaunchIntent = {
   attempt: 1,
   launcherKind: "tmux",
   material: pinOf(Buffer.from("the prompt")),
+  run: null,
   bootId: "boot-one",
   at: AT,
 };
 const start: StartRecord = { v: 1, kind: "start", correlationId: CID, pid: 4242, startTicks: 777, bootId: "boot-one", tmuxPane: "%3", at: AT };
-const exit: ExitRecord = { v: 1, kind: "exit", correlationId: CID, ending: { kind: "exited", code: 0 }, timedOut: false, answer: null, at: AT };
+/** A job shell's exit: how the child ended, and no judgement (Stage 2's shape). */
+const exit: ExitRecord = { v: 1, kind: "exit", correlationId: CID, ending: { kind: "exited", code: 0 }, verdict: null, usageLimit: null, permissionDenials: null, answer: null, transcript: null, at: AT };
 
 describe("the reader", () => {
   test("the protocol's intent writer round-trips through the reader; the other two are absent", () => {
@@ -73,9 +75,17 @@ describe("the reader", () => {
     writeFileSync(join(dir, START_FILE), artefactText(start));
     const endings: ExitRecord[] = [
       exit,
-      { ...exit, ending: { kind: "signalled", signal: "SIGTERM" }, timedOut: true },
-      { ...exit, ending: { kind: "supervisor-failed", why: "spawn ENOENT" } },
-      { ...exit, answer: { path: "/tmp/answer.md", bytes: 12, sha256: "a".repeat(64), usable: true } },
+      { ...exit, ending: { kind: "signalled", signal: "SIGTERM" }, verdict: { kind: "failed", cause: "timeout", why: "killed after 30.0s" }, usageLimit: false },
+      { ...exit, ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "spawn", why: "spawn ENOENT" } },
+      { ...exit, ending: { kind: "unobserved" }, verdict: { kind: "failed", cause: "hangup", why: "hung up" }, usageLimit: false },
+      {
+        ...exit,
+        verdict: { kind: "ok" },
+        usageLimit: false,
+        permissionDenials: 0,
+        answer: { path: "/tmp/answer.md", bytes: 12, sha256: "a".repeat(64), usable: true },
+        transcript: "/tmp/transcript.ndjson",
+      },
     ];
     for (const one of endings) {
       writeFileSync(join(dir, EXIT_FILE), artefactText(one));
@@ -94,6 +104,11 @@ describe("the reader", () => {
     ["a fractional pid", START_FILE, JSON.stringify({ ...start, pid: 1.5 })],
     ["a date that is not toISOString's", START_FILE, JSON.stringify({ ...start, at: "2026-09-10" })],
     ["an exit ending this version does not know", EXIT_FILE, JSON.stringify({ ...exit, ending: { kind: "vanished" } })],
+    // Stage 2 reshaped the exit record; Stage 1's spellings are not read as the new ones.
+    ["Stage 1's timedOut field", EXIT_FILE, JSON.stringify({ ...exit, timedOut: false })],
+    ["Stage 1's supervisor-failed ending", EXIT_FILE, JSON.stringify({ ...exit, ending: { kind: "supervisor-failed", why: "x" } })],
+    ["an ok verdict over a failed child", EXIT_FILE, JSON.stringify({ ...exit, ending: { kind: "exited", code: 2 }, verdict: { kind: "ok" }, usageLimit: false })],
+    ["a wrapper plan's intent without its run spec", INTENT_FILE, JSON.stringify({ ...intent, launcherKind: "headless" })],
     ["an answer with a bad hash", EXIT_FILE, JSON.stringify({ ...exit, answer: { path: "/a", bytes: 1, sha256: "nope", usable: true } })],
     ["another launch's exit", EXIT_FILE, JSON.stringify({ ...exit, correlationId: OTHER_CID })],
     ["an intent whose correlation id is not its occurrence's attempt", INTENT_FILE, JSON.stringify({ ...intent, attempt: 2 })],

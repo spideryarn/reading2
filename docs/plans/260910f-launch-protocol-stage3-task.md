@@ -11,6 +11,18 @@ and the code Stages 1–2 built: `tools/overseer/launch-protocol.ts`, `launch-st
 Make the foundation live in the one process that owns it, give Greg the controls, publish what a
 later page will read, and produce the acceptance evidence — without launching any job for real.
 
+## One fact from Stage 2 that bears on the daemon wiring
+
+**A new tmux session takes its environment — PATH included — from the client that creates it, not
+from the tmux server** (tmux 3.4, measured by the Stage 2 builder on a scratch socket, after a test
+of the `tmux-headless` adapter ran the real `claude` instead of its stand-in and spent about $0.12).
+So a `tmux-headless` session the daemon creates inherits the **daemon's whole environment**,
+including any `CLAUDE_CONFIG_DIR` or account variable. When you compose the launchers in
+`daemon.ts`, pass the adapter's `env` option deliberately (the sanitised set the wrappers already
+use, and nothing the daemon happens to hold), and test that a variable present only in the daemon's
+environment does not reach the session. Any test that creates a real session must put its stand-in
+CLI on the creating client's PATH and assert which `claude` resolves before launching anything.
+
 ## Files
 
 - `tools/overseer/daemon.ts` — **small targeted edits; another session is editing this file's

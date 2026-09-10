@@ -57,6 +57,7 @@ import {
   answerIsUsable, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole, runChild,
   sameWriteTarget, sanitisedEnv, type RunResult,
 } from './subagent-cli.js';
+import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
 
 /** An alias rather than a dated id: `claude --help` resolves it to the current Opus. */
 const DEFAULT_MODEL = 'opus';
@@ -197,6 +198,8 @@ interface Args {
   maxPrintChars: number;
   dryRun: boolean;
   account?: string;
+  /** An attempt directory of plan 260910f's launch protocol. See scripts/launch-dir.ts. */
+  launchDir?: string;
 }
 
 function validateRoutedCredentialRequest(
@@ -217,8 +220,13 @@ function validateRoutedCredentialRequest(
   }
 }
 
-function fail(msg: string): never {
+/** Set under `--launch-dir`, so every refusal from then on reaches exit.json. See scripts/launch-dir.ts. */
+let launch: WrapperLaunch | undefined;
+
+/** `cause` is the wrapper's own classification, recorded in exit.json under `--launch-dir`; the console line is unchanged. */
+function fail(msg: string, cause: WrapperFailure['cause'] = 'wrapper'): never {
   console.error(`run-claude: ${msg}`);
+  launch?.noteFailure({ cause, why: msg });
   process.exit(1);
 }
 
@@ -262,10 +270,14 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       case '--max-print-chars': out.maxPrintChars = Number(value(flag)); break;
       case '--pass-env': out.passEnv.push(value(flag)); break;
       case '--dry-run': out.dryRun = true; break;
+      case '--launch-dir': out.launchDir = value(flag); break;
       default: throw new Error(`unknown flag: ${flag}`);
     }
   }
   if (!out.prompt && !out.promptFile) throw new Error('provide --prompt or --prompt-file');
+  // A dry run launches nothing, so under a launch directory it would leave a start.json and an
+  // exit.json claiming a run that never happened.
+  if (out.launchDir !== undefined && out.dryRun) throw new Error('--launch-dir cannot be combined with --dry-run');
   if (!ACCESS.includes(out.access)) throw new Error(`--access must be one of: ${ACCESS.join(', ')}`);
   if (!AUTH_MODES.includes(out.auth)) throw new Error(`--auth must be one of: ${AUTH_MODES.join(', ')}`);
   if (out.account !== undefined && !/^[a-z0-9][a-z0-9-]{0,40}$/.test(out.account)) {
@@ -669,14 +681,30 @@ export function authConflict(
  *
  * Bounded to the last few lines because a CLI-level failure says its piece at the end.
  */
+/** The end of the CLI's own stderr, where a CLI-level failure says its piece. */
+function stderrEnd(stderr: string): string {
+  return stderr.trim().split('\n').slice(-5).join('\n');
+}
+
+const USAGE_LIMIT = /usage limit|rate.?limit|overloaded|too many requests|429/i;
+
+/**
+ * Did the CLI's own stderr say it hit a usage or rate limit? The same test `authHint`'s hint
+ * rests on, over the same tail, kept as a fact for exit.json rather than a sentence for a person.
+ * It is independent of the auth test, which authHint checks first and prefers when both match.
+ */
+export function usageLimitIn(stderr: string): boolean {
+  return USAGE_LIMIT.test(stderrEnd(stderr));
+}
+
 export function authHint(stderr: string): string {
-  const tail = stderr.trim().split('\n').slice(-5).join('\n');
+  const tail = stderrEnd(stderr);
   if (/not logged in|please run \/login|invalid api key|authentication|401|unauthor|oauth/i.test(tail)) {
     return '\n  That looks like an auth failure. Run `claude auth status` in the environment that'
       + ' launches this wrapper (a login is per-machine, and a cron job or a Codex run may not have'
       + ' one), then `claude /login`, or set ANTHROPIC_API_KEY and pass --auth env.';
   }
-  if (/usage limit|rate.?limit|overloaded|too many requests|429/i.test(tail)) {
+  if (USAGE_LIMIT.test(tail)) {
     return '\n  That looks like a usage limit rather than a broken setup. Wait for the reset, or'
       + ' set ANTHROPIC_API_KEY and pass --auth env to bill it separately.';
   }
@@ -696,7 +724,33 @@ async function main(): Promise<void> {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (e) { fail((e as Error).message); }
 
-  const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
+  // `--launch-dir`: the directory checked and start.json written before anything is spawned — the
+  // auth probe included. Loaded only here, so a run without the flag loads nothing new.
+  if (args.launchDir !== undefined) {
+    const { beginWrapperLaunch } = await import('./launch-dir.js');
+    const begun = beginWrapperLaunch(args.launchDir);
+    if (!begun.ok) fail(`--launch-dir: ${begun.why}`);
+    launch = begun.launch;
+    // After everything the wrapper decides, and reached by fail()'s process.exit too (F6).
+    process.on('exit', (code) => {
+      const wrote = launch?.finish(code);
+      if (wrote !== undefined && !wrote.wrote) console.error(`run-claude: WARNING: ${wrote.why}`);
+    });
+  }
+
+  // Read once, as bytes, so a launch's pin is checked against exactly what is decoded and sent —
+  // the bytes in memory are the ones the paid run is handed on argv, so nothing can change between.
+  let promptBytes: Buffer;
+  try {
+    promptBytes = args.promptFile ? readFileSync(resolve(args.promptFile)) : Buffer.from(args.prompt!, 'utf8');
+  } catch (e) {
+    // Without a launch this is exactly the old behaviour: main's catch reports it.
+    if (launch === undefined) throw e;
+    fail(`--launch-dir: the prompt could not be read, so it cannot be checked against the pin: ${(e as Error).message}`, 'prompt-unverified');
+  }
+  const promptMismatch = launch?.promptProblem(promptBytes);
+  if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
+  const prompt = promptBytes.toString('utf8');
   const claudeArgs = buildClaudeArgs({ ...args, prompt });
   let account: RunClaudeAccountResolution = { kind: 'ambient' };
   if (args.account !== undefined || process.env.CLAUDE_CONFIG_DIR !== undefined) {
@@ -707,20 +761,24 @@ async function main(): Promise<void> {
     );
     if (account.kind === 'refused') fail(account.why);
   }
-  const env = claudeEnv(
+  const sanitised = claudeEnv(
     process.env,
     args.auth,
     args.passEnv,
     account.kind === 'value' ? account.account.stateDir : undefined,
   );
+  // The launch id joins the already-sanitised environment, and nothing else about it moves (F6).
+  const env = launch === undefined ? sanitised : launch.childEnv(sanitised);
   const cwd = resolve(args.repoDir);
 
   // Fresh temp dir per run, so nothing here can ever be a previous run's leftover.
   const tmpDir = mkdtempSync(join(tmpdir(), 'run-claude-'));
-  const answerPath = args.output ? resolve(args.output) : join(tmpDir, 'answer.md');
+  // Under `--launch-dir`, an unset --output / --activity-log defaults into the attempt directory,
+  // where the launch protocol will look; a flag that was given still wins.
+  const answerPath = args.output ? resolve(args.output) : (launch ? launch.defaults.answer : join(tmpDir, 'answer.md'));
   const logPath = args.activityLog
     ? resolve(args.activityLog)
-    : (args.output ? `${answerPath}.activity.log` : join(tmpDir, 'activity.log'));
+    : launch ? launch.defaults.transcript : (args.output ? `${answerPath}.activity.log` : join(tmpDir, 'activity.log'));
   // `--output /tmp/x --activity-log /tmp/x` wrote the transcript and then the answer over the top
   // of it, exited 0, and printed both paths — the transcript gone and nothing saying so. GPT Sol
   // demonstrated it, 2026-09-06, and then demonstrated that comparing strings and stat-ing what
@@ -730,6 +788,7 @@ async function main(): Promise<void> {
     fail(`--output and --activity-log are the same file (${answerPath}); the second write would`
       + ' destroy the first');
   }
+  launch?.notePaths({ answer: answerPath, transcript: logPath });
 
   // **One deadline, starting here.** The probe is a second process, and its own 30 seconds used to
   // sit outside `--timeout-minutes` entirely — so a run asked to take at most a second could take
@@ -793,9 +852,13 @@ async function main(): Promise<void> {
        from run-codex.ts does not transfer, because it depends on the CLI offering a stdin path.
        docs/plans/260908g-…-execve.md. */
     stdin: { kind: 'closed' },
+    // Under `--launch-dir`: a hangup's exit.json, written before the signal is re-raised.
+    onHangup: launch?.hangup,
   });
 
   const parsed = parseResultEvent(run.stdout);
+  launch?.noteRun(run);
+  launch?.noteReadings({ usageLimit: usageLimitIn(run.stderr), permissionDenials: parsed ? parsed.denials.length : null });
   // Both files are written before anything is classified, so a failed run leaves its evidence on
   // disk — including a partial answer from a run that hit its turn limit, which the ladder below
   // is about to refuse. Nothing here is proof it succeeded; the exit code and the console are.
@@ -807,11 +870,11 @@ async function main(): Promise<void> {
 
   // Fail closed, most-specific cause first.
   if (run.spawnError) {
-    fail(`could not run claude (${run.spawnError.message}) — is Claude Code installed and on PATH?`);
+    fail(`could not run claude (${run.spawnError.message}) — is Claude Code installed and on PATH?`, 'spawn');
   }
-  if (run.overflowed) fail(`claude exceeded the 64 MiB capture cap and was killed${hint}`);
+  if (run.overflowed) fail(`claude exceeded the 64 MiB capture cap and was killed${hint}`, 'overflow');
   if (run.timedOut) {
-    fail(`claude was killed after ${elapsedSeconds(startedAt)} (--timeout-minutes ${args.timeoutMinutes})${hint}`);
+    fail(`claude was killed after ${elapsedSeconds(startedAt)} (--timeout-minutes ${args.timeoutMinutes})${hint}`, 'timeout');
   }
 
   // The CLI's own diagnosis first, when there is one. `--max-budget-usd` exceeded is exit 1 *and*
@@ -825,19 +888,19 @@ async function main(): Promise<void> {
   if (parsed && (parsed.isError || parsed.subtype !== 'success')) {
     fail(`claude reported an error (${parsed.subtype ?? 'no subtype'}`
       + `${parsed.terminalReason ? `, ${parsed.terminalReason}` : ''}, exit ${run.status ?? 'null'})`
-      + `${hint}${stderrTail(run.stderr)}${authHint(run.stderr)}`);
+      + `${hint}${stderrTail(run.stderr)}${authHint(run.stderr)}`, 'cli-error');
   }
   if (run.status !== 0 || !parsed) {
     // No result event at all is its own failure, and not the same one as an empty answer: this run
     // never reached a verdict, rather than reaching one and having nothing to say.
     const why = parsed ? '' : ' and never wrote a result event';
     fail(`claude exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}${why}`
-      + `${hint}${stderrTail(run.stderr)}${authHint(run.stderr)}`);
+      + `${hint}${stderrTail(run.stderr)}${authHint(run.stderr)}`, parsed ? 'nonzero' : 'no-result');
   }
   // Exit 0 with nothing to show for it. Rare, and worth naming: an empty answer read as agreement
   // is how a review that never happened gets committed as one that found nothing.
   if (!answerIsUsable(answerPath)) {
-    fail(`claude exited 0 but its answer was empty${hint}${stderrTail(run.stderr)}`);
+    fail(`claude exited 0 but its answer was empty${hint}${stderrTail(run.stderr)}`, 'empty-answer');
   }
   const cost = parsed.costUsd !== undefined ? `, $${parsed.costUsd.toFixed(4)}` : '';
   console.log(`Done — claude -p (${args.model}, ${args.effort}, ${args.access}`
