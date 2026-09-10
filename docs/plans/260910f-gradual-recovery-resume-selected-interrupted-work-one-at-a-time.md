@@ -276,6 +276,153 @@ a transcript line and sets the session environment the collector reads. The phas
 Every count is independent of the protocol's own counter: the marker the fake writes on the
 socket. It never uses the default tmux server or `~/.overseer`, and it never reboots the box.
 
+## Review dispositions: Sol, plan round 1 (these override §1–§7 wherever they differ)
+
+[The review](260910f-gradual-recovery-plan-review-sol.md) is read-only, at `e1615d30`. Its verdict
+was *not ready*: eight established P1s (G1–G8) and two P2s (G9, G10). **All ten are accepted.** I
+checked each against the code before accepting it, and G4 turned out to be wider than Sol stated.
+The sandbox refused Sol's findings file, so the answer file is the whole record.
+
+- **G1 (P1): "an occurrence exists, so it is settled" was wrong. Accepted.** §2's step 2 becomes an
+  exhaustive table over the occurrence's state, whether its reservation is held, and whether it is
+  disposed:
+
+  | occurrence | the request |
+  |---|---|
+  | none | continue through the gates and revalidation |
+  | `failed-before-launch`, reservation released, not disposed | **continue into attempt 2**, through the gates and revalidation again |
+  | `failed-before-launch`, reservation still held | `defer` ("the last attempt's slot has not been released yet") |
+  | `planned`, `waiting-admission`, `reserved` | `defer`, with the protocol's reason |
+  | `launching`, `observed-running` | `settled`, meaning `done/`; the page shows the launch |
+  | `outcome-unknown` | `settled`; the page shows it as needing Greg's `dispose` |
+  | `completed` without a verified resume | `settled`, **with its own page state, "ended before it was seen running"**, and the exit code or "rebooted" |
+  | disposed | `settled`, with the disposition |
+
+  A `switch` with a `never` check, not an `if` chain. The tests cover a failed release, a retry
+  after the release, `not-launched` in each folded state, and an exit before verification.
+- **G2 (P1): `resumed` does not verify the transcript. Accepted.** The inventory's
+  `deriveDispositions` matches a verified execution and conversation. It never reads a transcript,
+  and `execution-identity.ts:44-51` says it does not establish which transcript is being written.
+  **The pace rule now waits for "verified", defined as all four of:**
+  - the inventory's `resumed` disposition for the candidate;
+  - the launch protocol showing that occurrence `observed-running`, with its correlation evidence;
+  - the transcript for the conversation having **grown since the launch's `at`** (size and mtime
+    past the values recorded at revalidation);
+  - a bounded tail read (64 KiB) holding at least one line after the launch instant with that
+    `sessionId`.
+
+  A live process whose transcript does not grow stays unverified, and it blocks the queue,
+  visibly.
+- **G3 (P1): version skew between the daemon and the collector. Accepted.** The fleet's `/api/state`
+  payload gains a `capabilities: string[]` field. The collector declares `"argv-resume-uuid"` from
+  the build that reads `--resume <uuid>`. `observation.ts` parses the field as optional, with
+  absent meaning none. **The resume pass defers before launching** ("the dashboard collecting this
+  box cannot yet verify a resumed session; it needs a restart") until an accepted snapshot declares
+  that capability. This is Stage 3, and it is a producer change in `state.ts`/`wire.ts`/`observation.ts`,
+  which I will ask the Overseer to approve with the argv change. Tests: a new daemon with an old
+  producer defers; an old daemon ignores the field.
+- **G4 (P1): the quota gate was stale and about the wrong account. Accepted, and it is wider than
+  Sol said.** The freshness half is fixed by `usageStaleAfterMs` (15 minutes, on `dev` in
+  `ce633d8c`). The account half:
+  - **a resumed conversation must run under the account whose config directory holds its
+    transcript.** `gjd-remote` starts pool sessions with `CLAUDE_CONFIG_DIR=<account stateDir>`
+    (`scripts/gjd-remote-account.ts:186`), and `--resume` only finds a conversation in its own
+    config directory's `projects/` (the spike);
+  - **the account is therefore pinned by where the transcript is found, never `auto`**;
+  - **the quota gate is about that account.**
+
+  The inventory's locator searches only `~/.claude/projects` (`recovery-view.ts:172`), and nothing
+  the collector records names an account. So today a pool session's transcript may simply never be
+  found.
+
+  **Measured 2026-09-10** (read-only research, box state at ~19:40):
+  - **Every account shares one transcript directory.** `~/.claude-gregmindstone/projects` is a
+    symlink to `~/.claude/projects`, made by the account seeding (`scripts/claude-accounts.ts`
+    ~714). There are 14 live `claude` processes: 8 under the `mindstone` config directory, 6 on the
+    default `~/.claude`. All of their transcripts are under `~/.claude/projects`. So the inventory's
+    locator does find them today, but by coincidence of layout, not by design.
+  - **The account a conversation ran under is on disk.** `~/.claude-accounts/reservations.ndjson`
+    maps `sessionUuid` to `accountName`, and every `gjd-remote new-claude` writes a row. Checked
+    against the 13 live conversation ids: all 7 `mindstone` sessions have a row, and the 6
+    default-login ones have none.
+  - **An explicit `--account <name>` checks no quota** (`resolveForLaunch`,
+    `scripts/claude-accounts.ts` ~1320–1350). It reserves and returns. Only `auto` reads live
+    per-account usage (`readUsage`, `tools/overseer/accounts.ts:418`: two token-free HTTPS calls)
+    and drops exhausted accounts. There is no cached per-account reading on disk.
+  - The default login is not a registered account, and **gjd-remote cannot launch on it by name
+    while pool accounts exist.**
+
+  **So:**
+  - **Finding the transcript**: the locator's roots become `~/.claude/projects` plus each registry
+    account's `<stateDir>/projects`, each resolved by `realpath` and deduplicated.
+  - **The account is pinned** from the conversation's last `reservations.ndjson` row, and passed
+    as `--account <name>`, never `auto`, so a resumed session stays on the account it started on.
+  - **No row means the default login.** That is `account: unknown` ("started on the default login,
+    which gjd-remote cannot relaunch by name"), and gets manual instructions (`claude --resume`
+    with no config-dir prefix). **Moving such a session onto a pool account is a product call for
+    Greg**: it would work, because the transcript directory is shared, but it changes whose quota
+    the session spends.
+  - **The quota gate is the pinned account's own live reading.** It comes from `readUsage`,
+    cached 5 minutes per account, and is fetched only when a request is at the head of the queue
+    and every other check has passed.
+    - It is judged by a new `accountQuotaGate(reading, nowMs, onUnknown)`, added to
+      `launch-gate.ts` beside `launchGate`, with the same holding rules: a window at 100% or more
+      holds until its reset; 80% or more holds; unreadable goes to `onUnknown`.
+    - `launchGate` is unchanged, so it stays `scheduled-dispatch`'s contract. Recovery combines
+      the health half of the gate with the account half. The ambient usage report is about the
+      default login, and **is not used for a pinned pool account**.
+    - `scheduled-dispatch` is told about the new export.
+  - **For the Overseer, not built here:** explicit `--account` skipping the quota check is a
+    gjd-remote behaviour every explicit launch inherits.
+- **G5 (P1): revalidation came before an async gap. Accepted.** The pass does all of its async work
+  first: the transcript locate, the tail read and the preview. Then, **in one synchronous
+  stretch**, it recaptures the latest accepted observation and repeats every check: the
+  classification, the resolution, the conversation, "no live row holds it", `seen`, the directory
+  and transcript `statSync`, the gate, the pace and the occurrence table. Only then does it call
+  `launchOccurrence`. The prose claim is narrowed: a synchronous turn freezes the daemon's own state
+  and nothing else, so a person typing `claude --resume` into a shell in that window is not
+  prevented. That window is what gjd-remote's on-box check (§6) and the verification (G2) are for.
+  Test: pause the transcript locate, inject a newer accepted snapshot with a live matching
+  execution, and see zero invocations.
+- **G6 (P1): the seam had no way to read the protocol's state. Accepted.** Asked of
+  `launch-protocol`: a read-only `inspect(origin)` and `inFlight("recovery")` on the composed
+  `LaunchProtocol`, returning immutable summaries `{ occurrenceId, state, attempt,
+  reservationHeld, disposed, endedAt, completion }`, with no journal and no `LaunchParts`.
+  **Agreed by `launch-protocol`, 2026-09-10**, in its Stage 1b fix round, which lands with its
+  Stages 1–2. "In flight" there also includes any record whose reservation is still held, which is
+  the safe direction for the pace rule. The same round gives `failed-before-launch` a
+  `reservation: released | held` result (G1), and makes `usesTmux(kind)` exhaustive (G7). Stage 1's
+  `ResumeLaunchPort` already has exactly this shape (`occurrenceOf` and `inFlight`), plus the two
+  flags.
+- **G7 (P1): reconciliation probes tmux only for `launcherKind === "tmux"`**
+  (`launch-protocol.ts:1405`, on its branch). **Accepted, and it is `launch-protocol`'s code.** I
+  have asked for an exhaustive `usesTmux(kind)` that includes `tmux-resume`, and the crash test (a
+  tmux effect, no `start.json`, and reconciliation reaching `observed-running`) goes in Stage 3
+  either way.
+- **G8 (P1): disposal did not clear the pace predicate. Accepted.** Pace blocks only on
+  **undisposed** occurrences that are not yet verified (G2). **Only the protocol's `dispose` waives
+  it.** Dismissing the candidate does not, because a dismissed candidate's session may still be
+  running and still loading the box. The page names the exact `dispose` command for the blocker.
+  Both controls are tested.
+- **G9 (P2): the second projection was not needed. Accepted.** `parseRecoveryFile`
+  (`store.ts:2783`) and the fleet's `projectPublished` ignore unknown top-level fields, and the
+  existing `view` was added beside the fold without a schema bump. So the resume projection goes
+  in as an **optional `resume` field beside `view` in `recovery.json`**, written by the same
+  checkpoint. An old dashboard ignores it. A new dashboard treats its absence as "resume not
+  available here" and never lets it hide the base list; a test asserts that a malformed `resume`
+  leaves the records readable. **Gone:** the separate file, `recovery-resume-feed.ts`, the GET
+  route and its poll. **The POST route stays**, and so does its `server.ts` branch.
+- **G10 (P2): the file name was only pending-coalescing. Accepted.** Request files are
+  **nonce-named** (`pending/<candidateId>--<nonce>.json`, the inventory inbox's shape). The daemon
+  coalesces them by candidate, and **the launch occurrence is the only duplicate-launch
+  guarantee**. A second tap writes a second file, which the pass settles against the same
+  occurrence. The route still answers "already requested" when the projection or `pending/`
+  already shows the candidate, but as a courtesy, not a guarantee.
+
+**Simpler design, as Sol put it**, and adopted: an explicit inbox, nonce requests with the
+occurrence as the idempotence, the projection inside `recovery.json`, one narrow inspection
+capability, one post-launch transcript verifier, and an exhaustive state table.
+
 ## Deliberately not here
 
 - **Anything automatic.** No policy resumes on its own after a reboot. See the question for Greg.
