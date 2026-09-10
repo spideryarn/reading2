@@ -41,7 +41,9 @@ describe("parseArgs", () => {
     /* The same trap as the codex wrapper's: --pass-env is applied after the denylist sweep, so a
        run that asked for the subscription would spend the key, and every observable thing about it
        — the status line included — would name the wrong account. */
-    expect(() => parseArgs(["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"]))
+    // An explicit, unrouted environment: parseArgs reads CLAUDE_CONFIG_DIR, and under a pool
+    // account the routed refusal would answer instead (plan 260910d, repo-wide A/B).
+    expect(() => parseArgs(["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"], {}))
       .toThrow(/--auth env/);
   });
 

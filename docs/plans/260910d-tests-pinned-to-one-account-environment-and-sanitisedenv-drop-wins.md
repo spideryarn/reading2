@@ -65,8 +65,30 @@ A second defect sat in the same place. `sanitisedEnv(parent, passThrough, drop)`
   normal config, with the guard; it is also the stage gate. R2 uses a copy of the config without
   the guard's delete line, with the two keys pinned.
 
-_Status:_ on the 141 candidates, the list is two files, both the ones already named and both fixed
-in stage 2. That does not establish it repo-wide until the A/B above has run.
+  **R1** (full suite, guard on, pool environment, on ca476c62 merged with `origin/dev`): 988 files
+  and 20,916 tests, with 3 failed and 39 skipped. The three failures are the known environment reds
+  of any fresh worktree: `cold-start-lazy-imports` and `pdf-bundle-trace` have no `api-dist/`, and
+  `fleet-decisions-route` has no built fleet client. So R1 is the stage gate, and it is green.
+
+  **R2** (full suite, guard off, the same pool environment, and `CODEX_API_KEY`/`OPENAI_API_KEY`
+  pinned with `SPIDERYARN_ENV_PINNED`): the same 988 files and 20,916 tests, with 5 failed and the
+  same 39 skipped. Compared with R1, exactly two tests differ:
+
+  - `account-neutral-env.test.ts` § *carries none of the runner's account-routing variables*. This
+    one is expected: it is the guard's own in-worker witness, and the guard was off.
+  - `run-claude.test.ts` § *parseArgs will not let --pass-env hand over the credential --auth owns*.
+    **A third runner-dependent test, and this slice created it.** Sol's F3 made `parseArgs` read
+    `CLAUDE_CONFIG_DIR` from its `env` argument, which defaults to `process.env`. So under a pool
+    account the routed refusal answered first. Fixed by passing `{}`. Red in R2, then green: 55/55
+    under the pool environment with the guard off, and 55/55 with all six unset.
+
+  The 141-file sweep could not have found that test, because it did not exist yet. That is the
+  argument for the guard over any list.
+
+_Status:_ **repo-wide, the list is three tests in two files.** Two are the files the brief named;
+the third is the one this slice created and then fixed. Every other file of 988 gives the same
+answer with the pool environment's six variables visible as without them. The limits are the ones
+Sol named: F3, only two of the 64 presence combinations were run; F4, the separate `$HOME` class.
 
 ### Stage 2 — the tests stop depending on the runner
 
@@ -74,7 +96,8 @@ in stage 2. That does not establish it repo-wide until the A/B above has run.
   `process.env` minus the six named variables, plus whatever the test sets on purpose.
 - [x] Both named files use it. Red first: 12 failed under the pool environment (above). Green:
   67/67 with all six set, and 67/67 with all six unset.
-- [ ] Every other file the sweep names.
+- [x] Every other file the sweep names. There was one, found by the repo-wide R2, and this slice
+  had created it; see stage 1.
 
 ### Stage 3 — `sanitisedEnv`: drop wins, and the caller is told
 
@@ -165,4 +188,7 @@ The temporary copies were deleted afterwards.
 
 ## Which stages Codex implemented
 
-_Filled in as they land._
+None. Every stage was implemented in-session: each is about twenty lines, and the design was
+settled before the code. Codex ran only the two obligatory Sol reviews: the code review of stages
+3–4 (write-capable, which contributed F2–F5) and the read-only sweep review. From 09:35Z on
+2026-09-10 the Overseer restricted Codex to reviews; nothing here needed it after that.
