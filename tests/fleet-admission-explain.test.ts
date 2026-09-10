@@ -83,8 +83,12 @@ describe("the gate forecast", () => {
     expect(gate.kind).toBe("refuse");
 
     const answer = explainAdmission(input);
-    expect(answer.outcome).toEqual({ kind: "would-refuse", why: gate.kind === "refuse" ? gate.message : "" });
-    expect(answer.outcome.kind === "would-refuse" ? answer.outcome.why : "").toContain(
+    expect(answer.outcome).toEqual({
+      kind: "would-refuse",
+      forecastCallMessage: gate.kind === "refuse" ? gate.message : "",
+      messageContext: "dashboard-forecast-call",
+    });
+    expect(answer.outcome.kind === "would-refuse" ? answer.outcome.forecastCallMessage : "").toContain(
       "NO TESTS RAN AND NOTHING WAS VERIFIED",
     );
   });
@@ -97,8 +101,12 @@ describe("the gate forecast", () => {
     expect(gate.kind).toBe("refuse");
 
     const answer = explainAdmission(values({ snapshot, reserveBytes }));
-    expect(answer.outcome).toEqual({ kind: "would-refuse", why: gate.kind === "refuse" ? gate.message : "" });
-    expect(answer.outcome.kind === "would-refuse" ? answer.outcome.why : "").toContain("broken check");
+    expect(answer.outcome).toEqual({
+      kind: "would-refuse",
+      forecastCallMessage: gate.kind === "refuse" ? gate.message : "",
+      messageContext: "dashboard-forecast-call",
+    });
+    expect(answer.outcome.kind === "would-refuse" ? answer.outcome.forecastCallMessage : "").toContain("broken check");
   });
 
   it("reports an absent reserve file as not-applicable", () => {
@@ -200,16 +208,46 @@ describe("the gate forecast", () => {
     expect(gate.kind).toBe("admit");
 
     const answer = explainAdmission(values({ policyVersion: 999 }));
+    expect(answer.label).toBe("forecast");
+    if (answer.label !== "forecast") throw new Error("a test request did not produce a forecast");
     expect(answer.policy).toEqual({
       gateVersion: 999,
       explanation: null,
-      whyWithheld: "this dashboard has no explanation for admission policy v999; the numbers below are live, the wording is withheld",
+      whyWithheld: "this dashboard has no explanation for admission policy v999; policy wording is withheld",
     });
     expect(answer.outcome).toMatchObject(
       gate.kind === "admit"
         ? { workers: gate.workers, capacity: gate.capacity, availableBytes: gate.availableBytes, reserveBytes: gate.reserveBytes }
         : {},
     );
+  });
+
+  it("does not claim there are live numbers when an unfamiliar policy could not be asked", () => {
+    const answer = admissionPayload(
+      routeDeps({
+        policyVersion: 999,
+        resolveParallelWorkers: () => {
+          throw new Error("workers unavailable");
+        },
+      }),
+      request(),
+    );
+
+    expect(answer.label).toBe("forecast");
+    if (answer.label !== "forecast") throw new Error("a test request did not produce a forecast");
+    expect(answer.outcome).toEqual({ kind: "unknown", why: "workers unavailable" });
+    expect(answer.policy.whyWithheld).toBe(
+      "this dashboard has no explanation for admission policy v999; policy wording is withheld",
+    );
+  });
+
+  it("describes the gate without copying its arithmetic or calling its fixed allowance measured", () => {
+    const answer = explainAdmission(values());
+    expect(answer.label).toBe("forecast");
+    if (answer.label !== "forecast") throw new Error("a test request did not produce a forecast");
+    expect(answer.policy.explanation).toContain("its calibrated test-run cost model");
+    expect(answer.policy.explanation).not.toContain("measured fixed run cost");
+    expect(answer.policy.explanation).not.toContain("remaining memory into worker capacity");
   });
 
   it.each(["review", "browser"] as const)("answers %s with not-modelled without calling the gate", (kind) => {
@@ -237,6 +275,46 @@ describe("the gate forecast", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  /**
+   * **The SECOND guard, pinned separately, because the first one hides it.**
+   *
+   * `admissionPayload` short-circuits a non-test kind before it ever calls
+   * `explainAdmission`, and `explainAdmission` refuses one again on its own.
+   * That is defence in depth and it is worth having — but it means the test
+   * above cannot see the inner guard at all: deleting it leaves the whole
+   * admission suite green, which I confirmed by mutation on 2026-09-10 rather
+   * than by reading, after a review had read both guards and called the
+   * property true.
+   *
+   * It is true. It is just not *checked* by anything above, and
+   * `explainAdmission` is exported — so the day something calls it directly
+   * (a cached projection, a batch of hypotheticals, the admission owner the
+   * next roadmap stage builds) a browser job would be scored with the vitest
+   * cost model and no test would object. This one drives the inner function
+   * with the outer one out of the way.
+   */
+  it.each(["review", "browser"] as const)(
+    "refuses %s inside explainAdmission too, not only in the caller that short-circuits first",
+    (kind) => {
+      const gate = vi.fn(() => {
+        throw new Error("the vitest cost model was called");
+      });
+
+      const answer = explainAdmission({
+        snapshot: linux(FIXED_RUN_PEAK_BYTES + 10 * PER_WORKER_PEAK_BYTES),
+        reserveBytes: 1,
+        nominalWorkers: 2,
+        policyVersion: ADMISSION_POLICY_VERSION,
+        request: request(kind),
+        decideAdmission: gate,
+      });
+
+      expect(answer.label).toBe("not-modelled");
+      expect(answer.outcome).toMatchObject({ kind: "not-modelled" });
+      expect(gate).not.toHaveBeenCalled();
+    },
+  );
+
   it("preserves VITEST_MAX_WORKERS while forecasting the machine default", () => {
     const file = tempFile("workers", "3");
     process.env.VITEST_MAX_WORKERS = "7";
@@ -258,6 +336,127 @@ describe("the gate forecast", () => {
 
     expect(first).toEqual(second);
     expect(first.outcome).toMatchObject({ nominalWorkers: 3 });
+  });
+
+  it.each([
+    ["present", "7"],
+    ["absent", undefined],
+  ] as const)("restores a %s VITEST_MAX_WORKERS when the worker reader throws", (_state, before) => {
+    if (before === undefined) delete process.env.VITEST_MAX_WORKERS;
+    else process.env.VITEST_MAX_WORKERS = before;
+
+    const answer = admissionPayload(
+      routeDeps({
+        resolveParallelWorkers: () => {
+          process.env.VITEST_MAX_WORKERS = "reader mutation";
+          throw new Error("workers broke");
+        },
+      }),
+      request(),
+    );
+
+    expect(answer.outcome).toEqual({ kind: "unknown", why: "workers broke" });
+    expect(process.env.VITEST_MAX_WORKERS).toBe(before);
+  });
+
+  it("turns an unexpectedly thrown memory reader into unknown instead of escaping the payload", () => {
+    const answer = admissionPayload(
+      routeDeps({
+        readMemorySnapshot: () => {
+          throw new Error("memory reader exploded");
+        },
+      }),
+      request(),
+    );
+
+    expect(answer.outcome).toEqual({ kind: "unknown", why: "memory reader exploded" });
+  });
+
+  it.each(["workers", "memory", "reserve"] as const)(
+    "gives an unknown outcome a non-blank reason when the %s reader throws a blank Error",
+    (reader) => {
+      const throwing = () => {
+        throw new Error("");
+      };
+      const answer = admissionPayload(
+        routeDeps({
+          ...(reader === "workers" ? { resolveParallelWorkers: throwing } : {}),
+          ...(reader === "memory" ? { readMemorySnapshot: throwing } : {}),
+          ...(reader === "reserve" ? { readReserveBytes: throwing } : {}),
+        }),
+        request(),
+      );
+
+      expect(answer.outcome).toEqual({ kind: "unknown", why: "Error" });
+    },
+  );
+
+  it.each([0, "0"])("gives an unknown outcome a reason when a reader throws %j instead of an Error", (cause) => {
+    const answer = admissionPayload(
+      routeDeps({
+        resolveParallelWorkers: () => {
+          throw cause;
+        },
+      }),
+      request(),
+    );
+
+    expect(answer.outcome).toEqual({ kind: "unknown", why: "unexpected failure (thrown value: 0)" });
+  });
+
+  it("gives an unknown outcome a reason when a blank Error also has a blank name", () => {
+    const answer = admissionPayload(
+      routeDeps({
+        readMemorySnapshot: () => {
+          const error = new Error("");
+          error.name = "   ";
+          throw error;
+        },
+      }),
+      request(),
+    );
+
+    expect(answer.outcome).toEqual({ kind: "unknown", why: "unknown failure" });
+  });
+
+  it("puts the command-line override caveat only on outcomes that report a worker forecast", () => {
+    const numeric = admissionPayload(routeDeps(), request());
+    const refused = admissionPayload(routeDeps({ readMemorySnapshot: () => linux(0) }), request());
+    const notApplicable = admissionPayload(routeDeps({ readReserveBytes: () => undefined }), request());
+    const unknown = admissionPayload(
+      routeDeps({
+        readReserveBytes: () => {
+          throw new Error("reserve broke");
+        },
+      }),
+      request(),
+    );
+    const notModelled = admissionPayload(routeDeps(), request("browser"));
+
+    for (const answer of [numeric, refused, notApplicable, unknown, notModelled]) {
+      expect(answer).not.toHaveProperty("caveat");
+    }
+    expect(numeric.outcome).toMatchObject({
+      caveat: "A reduced worker count is the config default; --maxWorkers on the command line overrides it.",
+    });
+    for (const answer of [refused, notApplicable, unknown, notModelled]) {
+      expect(answer.outcome).not.toHaveProperty("caveat");
+    }
+  });
+
+  it("names a would-refuse message as output from the dashboard's forecast call", () => {
+    const answer = explainAdmission(values({ snapshot: linux(0) }));
+    expect(answer.outcome).toHaveProperty("kind", "would-refuse");
+    expect(answer.outcome).toMatchObject({ messageContext: "dashboard-forecast-call" });
+    expect(answer.outcome).toHaveProperty("forecastCallMessage");
+    expect(answer.outcome).not.toHaveProperty("why");
+  });
+
+  it("does not attach the test gate's policy to work the gate does not model", () => {
+    for (const kind of ["review", "browser"] as const) {
+      const answer = admissionPayload(routeDeps(), request(kind));
+      expect(answer).not.toHaveProperty("policy");
+    }
   });
 
   it("uses only honest labels and carries the command-line override caveat", () => {
@@ -288,9 +487,10 @@ describe("the gate forecast", () => {
     ];
     expect(forecasts.flatMap(allStrings)).not.toContain("enforced");
     expect(forecasts[0]?.label).toBe("forecast");
-    expect(forecasts[0]?.caveat).toBe(
-      "A reduced worker count is the config default; --maxWorkers on the command line overrides it.",
-    );
+    expect(forecasts[0]?.outcome).toMatchObject({
+      caveat:
+        "A reduced worker count is the config default; --maxWorkers on the command line overrides it.",
+    });
     expect(forecasts[0]).toMatchObject({ computedAtMs: 1_789_000_000_000 });
     expect(forecasts[0]?.request.requestedAtClientMs).toBe(123);
     expect(observationOrder).toEqual(["workers", "memory", "reserve", "clock"]);
@@ -301,7 +501,7 @@ describe("parseAdmissionRequest", () => {
   it("defaults a URL with no query string to a test forecast", () => {
     expect(parseAdmissionRequest("/api/admission")).toEqual({
       kind: "test",
-      cost: "heavy",
+      cost: null,
       owner: null,
       /* Null rather than an instant: no caller over HTTP supplies a clock, and
          this function does not have one to lend it. See the function's header
@@ -320,7 +520,7 @@ describe("parseAdmissionRequest", () => {
   });
 
   it("ignores cost even when it is supplied", () => {
-    expect(parseAdmissionRequest("/api/admission?kind=test&cost=light").cost).toBe("heavy");
+    expect(parseAdmissionRequest("/api/admission?kind=test&cost=light").cost).toBeNull();
   });
 
   it("never throws or returns NaN for junk", () => {

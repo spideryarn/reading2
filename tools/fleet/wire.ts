@@ -3724,7 +3724,8 @@ export type AdmissionCostClass = "light" | "moderate" | "heavy";
 
 export type AdmissionRequest = {
   kind: AdmissionKind;
-  cost: AdmissionCostClass;
+  /** Null when this transport had no caller declaration to carry. */
+  cost: AdmissionCostClass | null;
   /**
    * Who would do the work. A full execution identity rather than a bare pid,
    * because a pid can be reused after the process it named exits.
@@ -3752,18 +3753,38 @@ export type AdmissionOutcome =
       capacity: number;
       availableBytes: number;
       reserveBytes: number;
+      /** Qualifies these forecast worker numbers; irrelevant outcomes do not carry it. */
+      caveat: string;
     }
-  | { kind: "would-refuse" | "not-applicable" | "unknown" | "not-modelled"; why: string };
+  | {
+      kind: "would-refuse";
+      /** Verbatim output from the dashboard's call; it uses real-run grammar and names the dashboard pid. */
+      forecastCallMessage: string;
+      messageContext: "dashboard-forecast-call";
+    }
+  | { kind: "not-applicable"; why: string }
+  | { kind: "unknown"; why: string }
+  | { kind: "not-modelled"; why: string };
 
 /** `GET /api/admission`: a fresh forecast. It changes and reserves nothing. */
-export type AdmissionPayload = {
+type AdmissionPayloadBase = {
   schema: 1;
   request: AdmissionRequest;
-  /** When the server completed this fresh observation, by the SERVER's clock. */
+  /** When the server completed building this answer, by the SERVER's clock. */
   computedAtMs: number;
-  label: AdmissionSignalLabel;
-  policy: AdmissionPolicy;
-  outcome: AdmissionOutcome;
-  /** The config default is not necessarily the command line's final worker count. */
-  caveat: string;
 };
+
+/** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */
+export type AdmissionPayload = AdmissionPayloadBase &
+  (
+    | {
+        label: "forecast";
+        policy: AdmissionPolicy;
+        outcome: Exclude<AdmissionOutcome, { kind: "not-modelled" }>;
+      }
+    | {
+        label: "not-modelled";
+        outcome: Extract<AdmissionOutcome, { kind: "not-modelled" }>;
+        policy?: never;
+      }
+  );

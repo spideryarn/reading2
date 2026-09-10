@@ -35,6 +35,7 @@ function deps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
 function get(
   route: ReturnType<typeof admissionRoute>,
   url: string,
+  method = "GET",
 ): { handled: boolean; status: number; headers: Record<string, string>; body: Record<string, unknown> | null } {
   let status = 0;
   let headers: Record<string, string> = {};
@@ -51,7 +52,7 @@ function get(
     },
   };
   const handled = route.handle(
-    { method: "GET", url, headers: {} } as unknown as import("node:http").IncomingMessage,
+    { method, url, headers: {} } as unknown as import("node:http").IncomingMessage,
     res as unknown as import("node:http").ServerResponse,
   );
   return { handled, status, headers, body: raw === "" ? null : (JSON.parse(raw) as Record<string, unknown>) };
@@ -70,7 +71,59 @@ describe("GET /api/admission", () => {
     const answer = get(admissionRoute(deps()), `${ADMISSION_PATH}/x`);
     expect(answer.handled).toBe(true);
     expect(answer.status).toBe(404);
-    expect(answer.body?.why).toContain("no such route");
+    expect(answer.body).toEqual({ error: "route-not-found", why: `no such route: ${ADMISSION_PATH}/x` });
+    expect(answer.body).not.toHaveProperty("schema");
+    expect(answer.body).not.toHaveProperty("kind");
+  });
+
+  it("refuses a write method before asking any admission reader", () => {
+    const read = () => {
+      throw new Error("a read-only route tried to read for POST");
+    };
+    const answer = get(
+      admissionRoute(
+        deps({
+          readMemorySnapshot: read,
+          readReserveBytes: read,
+          resolveParallelWorkers: read,
+        }),
+      ),
+      ADMISSION_PATH,
+      "POST",
+    );
+
+    expect(answer.status).toBe(405);
+    expect(answer.headers.allow).toBe("GET, HEAD");
+    expect(answer.body).toEqual({
+      error: "method-not-allowed",
+      why: "this admission route is read-only; use GET or HEAD",
+    });
+  });
+
+  it("supports HEAD without sending the forecast body", () => {
+    const answer = get(admissionRoute(deps()), ADMISSION_PATH, "HEAD");
+    expect(answer.status).toBe(200);
+    expect(answer.body).toBeNull();
+  });
+
+  it("suppresses HEAD bodies on error responses too", () => {
+    const notFound = get(admissionRoute(deps()), `${ADMISSION_PATH}/x`, "HEAD");
+    const internalError = get(
+      admissionRoute(
+        deps({
+          nowMs: () => {
+            throw new Error("clock exploded");
+          },
+        }),
+      ),
+      ADMISSION_PATH,
+      "HEAD",
+    );
+
+    expect(notFound.status).toBe(404);
+    expect(notFound.body).toBeNull();
+    expect(internalError.status).toBe(500);
+    expect(internalError.body).toBeNull();
   });
 
   it("returns false for a different route", () => {
@@ -94,14 +147,23 @@ describe("GET /api/admission", () => {
     expect(answer.handled).toBe(true);
     expect(answer.status).toBe(500);
     expect(answer.body).toEqual({
-      schema: 1,
-      kind: "unknown",
+      error: "internal-error",
       why: "building the admission answer threw: clock exploded",
     });
   });
 });
 
 describe("the production composition", () => {
+  it("uses the wall clock when production does not inject one", () => {
+    const before = Date.now();
+    const composed = makeAdmission();
+    const composedNow = composed.deps.nowMs();
+    const after = Date.now();
+
+    expect(composedNow).toBeGreaterThanOrEqual(before);
+    expect(composedNow).toBeLessThanOrEqual(after);
+  });
+
   it("drives injected readers through the same makeAdmission function server.ts calls", () => {
     const composed = makeAdmission({
       nowMs: () => 1_789_000_000_000,
@@ -125,7 +187,8 @@ describe("the production composition", () => {
     writeFileSync(reserveFile, "1\n");
     writeFileSync(workersFile, "3\n");
 
-    const composed = makeAdmission({ meminfoPath, reserveFile, workersFile });
+    const computedAtMs = 1_789_123_456_789;
+    const composed = makeAdmission({ nowMs: () => computedAtMs, meminfoPath, reserveFile, workersFile });
     const answer = get(composed.route, ADMISSION_PATH);
 
     expect(answer.status).toBe(200);
@@ -134,6 +197,8 @@ describe("the production composition", () => {
       nominalWorkers: 3,
       nominalWorkersSource: "machine-default",
     });
+    expect(answer.body?.computedAtMs).toBe(computedAtMs);
+    expect(answer.body?.policy).toMatchObject({ gateVersion: ADMISSION_POLICY_VERSION });
   });
 });
 
@@ -177,10 +242,19 @@ describe("the caller's clock", () => {
     const serverClock = 1_789_000_000_000;
     const answer = get(admissionRoute(deps({ nowMs: () => serverClock })), `${ADMISSION_PATH}?kind=test`);
 
-    const request = answer.body?.["request"] as Record<string, unknown>;
-    expect(request["requestedAtClientMs"]).toBeNull();
-    expect(request["requestedAtClientMs"]).not.toBe(serverClock);
+    const request = answer.body?.request as Record<string, unknown>;
+    expect(request.requestedAtClientMs).toBeNull();
+    expect(request.requestedAtClientMs).not.toBe(serverClock);
     /* The server's own stamp still has a home, and it is a different field. */
-    expect(answer.body?.["computedAtMs"]).toBe(serverClock);
+    expect(answer.body?.computedAtMs).toBe(serverClock);
+  });
+
+  it("does not invent a caller-declared cost when the HTTP API accepts none", () => {
+    const answer = get(admissionRoute(deps()), `${ADMISSION_PATH}?kind=browser&cost=light`);
+    const request = answer.body?.request as Record<string, unknown>;
+
+    expect(request.cost).toBeNull();
+    expect(request.cost).not.toBe("heavy");
+    expect(request.cost).not.toBe("light");
   });
 });

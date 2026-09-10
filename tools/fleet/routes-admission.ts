@@ -8,7 +8,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { decideAdmission as gateDecideAdmission, type AdmissionDecision, type MemorySnapshot } from "../../vitest-admission.js";
-import type { AdmissionPayload, AdmissionPolicy, AdmissionRequest } from "./wire.js";
+import type { AdmissionOutcome, AdmissionPayload, AdmissionPolicy, AdmissionRequest } from "./wire.js";
 
 export const ADMISSION_PATH = "/api/admission";
 
@@ -25,18 +25,37 @@ export type AdmissionRouteDeps = {
   }) => AdmissionDecision) | undefined;
 };
 
-type AdmissionExplanation = Omit<AdmissionPayload, "schema" | "request" | "computedAtMs">;
+type AdmissionExplanation =
+  | {
+      label: "forecast";
+      policy: AdmissionPolicy;
+      outcome: Exclude<AdmissionOutcome, { kind: "not-modelled" }>;
+    }
+  | {
+      label: "not-modelled";
+      outcome: Extract<AdmissionOutcome, { kind: "not-modelled" }>;
+    };
 
 const CAVEAT = "A reduced worker count is the config default; --maxWorkers on the command line overrides it.";
 
 const EXPLANATIONS: Readonly<Record<number, string>> = {
   1:
-    "The gate holds back the machine reserve and its measured fixed run cost, then turns the " +
-    "remaining memory into worker capacity using its measured per-worker cost. It refuses when no worker fits.",
+    "The gate uses the machine's current available memory and its calibrated test-run cost model " +
+    "to forecast whether a run fits and, if so, how many workers the config should ask for.",
 };
 
 function message(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  if (cause instanceof Error) {
+    if (cause.message.trim() !== "") return cause.message;
+    return cause.name.trim() === "" ? "unknown failure" : cause.name;
+  }
+  try {
+    const rendered = String(cause);
+    if (rendered.trim() === "") return "unknown failure";
+    return `unexpected failure (thrown value: ${rendered})`;
+  } catch {
+    return "unknown failure";
+  }
 }
 
 function policyFor(version: number): AdmissionPolicy {
@@ -45,9 +64,7 @@ function policyFor(version: number): AdmissionPolicy {
   return {
     gateVersion: version,
     explanation: null,
-    whyWithheld:
-      `this dashboard has no explanation for admission policy v${version}; ` +
-      "the numbers below are live, the wording is withheld",
+    whyWithheld: `this dashboard has no explanation for admission policy v${version}; policy wording is withheld`,
   };
 }
 
@@ -56,29 +73,35 @@ function unknownExplanation(policyVersion: number, why: string): AdmissionExplan
     label: "forecast",
     policy: policyFor(policyVersion),
     outcome: { kind: "unknown", why },
-    caveat: CAVEAT,
   };
 }
 
-function notModelledExplanation(request: AdmissionRequest, policyVersion: number): AdmissionExplanation {
+function notModelledExplanation(request: AdmissionRequest): AdmissionExplanation {
   return {
     label: "not-modelled",
-    policy: policyFor(policyVersion),
     outcome: {
       kind: "not-modelled",
       why: `no measured cost model or launch gate exists for ${request.kind} work`,
     },
-    caveat: CAVEAT,
   };
 }
 
-/** Stamp only after the observation has reached an outcome. */
+/** Stamp only after the answer has reached an outcome. */
 function payload(
   deps: AdmissionRouteDeps,
   request: AdmissionRequest,
   explanation: AdmissionExplanation,
 ): AdmissionPayload {
-  return { schema: 1, request, computedAtMs: deps.nowMs(), ...explanation };
+  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs() };
+  if (explanation.label === "forecast") {
+    return {
+      ...base,
+      label: explanation.label,
+      policy: explanation.policy,
+      outcome: explanation.outcome,
+    };
+  }
+  return { ...base, label: explanation.label, outcome: explanation.outcome };
 }
 
 /**
@@ -95,9 +118,10 @@ function payload(
  * `AdmissionPayload.computedAtMs`. `tests/fleet-admission-route.test.ts` §
  * "the caller's clock" pins both halves.
  *
- * The field stays on the type for the same reason `cost` does: the next stage's
- * admission owner will have a real requester to hear one from, and it will
- * stamp its own arrival time as `receivedAtMs` rather than trusting this.
+ * Both caller-owned fields stay on the type for the next admission owner, which
+ * will have a real requester to hear a cost and a time from. This route fills
+ * neither. That future owner will stamp its own arrival time as `receivedAtMs`
+ * rather than trusting the caller's clock.
  */
 export function parseAdmissionRequest(url: string): AdmissionRequest {
   let kind: AdmissionRequest["kind"] = "test";
@@ -107,7 +131,7 @@ export function parseAdmissionRequest(url: string): AdmissionRequest {
   } catch {
     // A malformed dashboard URL asks the useful default question rather than blanking the card.
   }
-  return { kind, cost: "heavy", owner: null, requestedAtClientMs: null };
+  return { kind, cost: null, owner: null, requestedAtClientMs: null };
 }
 
 /** The entire forecast over values a caller can supply without touching the machine. */
@@ -120,7 +144,7 @@ export function explainAdmission(deps: {
   decideAdmission?: AdmissionRouteDeps["decideAdmission"];
 }): AdmissionExplanation {
   const policy = policyFor(deps.policyVersion);
-  if (deps.request.kind !== "test") return notModelledExplanation(deps.request, deps.policyVersion);
+  if (deps.request.kind !== "test") return notModelledExplanation(deps.request);
 
   const decision = (deps.decideAdmission ?? gateDecideAdmission)({
     nominalWorkers: deps.nominalWorkers,
@@ -128,14 +152,17 @@ export function explainAdmission(deps: {
     reserveBytes: deps.reserveBytes,
   });
   if (decision.kind === "not-applicable") {
-    return { label: "forecast", policy, outcome: decision, caveat: CAVEAT };
+    return { label: "forecast", policy, outcome: decision };
   }
   if (decision.kind === "refuse") {
     return {
       label: "forecast",
       policy,
-      outcome: { kind: "would-refuse", why: decision.message },
-      caveat: CAVEAT,
+      outcome: {
+        kind: "would-refuse",
+        forecastCallMessage: decision.message,
+        messageContext: "dashboard-forecast-call",
+      },
     };
   }
   return {
@@ -149,8 +176,8 @@ export function explainAdmission(deps: {
       capacity: decision.capacity,
       availableBytes: decision.availableBytes,
       reserveBytes: decision.reserveBytes,
+      caveat: CAVEAT,
     },
-    caveat: CAVEAT,
   };
 }
 
@@ -161,7 +188,7 @@ export function explainAdmission(deps: {
  */
 export function admissionPayload(deps: AdmissionRouteDeps, request: AdmissionRequest): AdmissionPayload {
   if (request.kind !== "test") {
-    return payload(deps, request, notModelledExplanation(request, deps.policyVersion));
+    return payload(deps, request, notModelledExplanation(request));
   }
 
   let nominalWorkers: number;
@@ -180,7 +207,12 @@ export function admissionPayload(deps: AdmissionRouteDeps, request: AdmissionReq
     else process.env.VITEST_MAX_WORKERS = override;
   }
 
-  const snapshot = deps.readMemorySnapshot();
+  let snapshot: MemorySnapshot;
+  try {
+    snapshot = deps.readMemorySnapshot();
+  } catch (cause) {
+    return payload(deps, request, unknownExplanation(deps.policyVersion, message(cause)));
+  }
   let reserveBytes: number | undefined;
   try {
     reserveBytes = deps.readReserveBytes();
@@ -213,7 +245,25 @@ export function admissionRoute(deps: AdmissionRouteDeps): {
       const path = url.split("?")[0] ?? "";
       if (path !== ADMISSION_PATH) {
         res.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
-        res.end(JSON.stringify({ schema: 1, kind: "unknown", why: `no such route: ${path}` }));
+        res.end(
+          req.method === "HEAD"
+            ? undefined
+            : JSON.stringify({ error: "route-not-found", why: `no such route: ${path}` }),
+        );
+        return true;
+      }
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        res.writeHead(405, {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+          allow: "GET, HEAD",
+        });
+        res.end(
+          JSON.stringify({
+            error: "method-not-allowed",
+            why: "this admission route is read-only; use GET or HEAD",
+          }),
+        );
         return true;
       }
 
@@ -224,16 +274,17 @@ export function admissionRoute(deps: AdmissionRouteDeps): {
       } catch (cause) {
         res.writeHead(500, { "content-type": "application/json", "cache-control": "no-store" });
         res.end(
-          JSON.stringify({
-            schema: 1,
-            kind: "unknown",
-            why: `building the admission answer threw: ${message(cause)}`,
-          }),
+          req.method === "HEAD"
+            ? undefined
+            : JSON.stringify({
+                error: "internal-error",
+                why: `building the admission answer threw: ${message(cause)}`,
+              }),
         );
         return true;
       }
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-      res.end(body);
+      res.end(req.method === "HEAD" ? undefined : body);
       return true;
     },
   };

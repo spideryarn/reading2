@@ -47,10 +47,14 @@ past ±8.64e15 and, thrown during render, blanks the **whole panel** rather than
 
 The section. What it draws, in order:
 
-1. **The forecast sentence, verbatim from the plan's §1**, including *"this panel admitted or
-   refused nothing"* and the `--maxWorkers` clause. That wording is the output of two review rounds;
-   do not improve it.
-2. The outcome, and the gate's own numbers and message where it gave one.
+1. **The invariant sentence, verbatim from the plan's §1**: *"Gate forecast — this panel admitted or
+   refused nothing."* That wording is the output of two review rounds; do not improve it. For an
+   outcome the gate returned, call `computedAtMs` when the forecast was computed, not when memory
+   was read. Draw the `--maxWorkers` clause only when the outcome carries it (`would-admit` or
+   `would-reduce`).
+2. The outcome, and the gate's own numbers where it gave them. Introduce `forecastCallMessage`
+   explicitly as raw output from the dashboard's forecast call: its imperative wording is not this
+   panel's own claim, and the pid it names is the dashboard's rather than a hypothetical test run's.
 3. The label from §3 — `forecast`, `observed` or `not-modelled`. **The string `enforced` must not
    appear anywhere in this file** except inside a sentence describing where enforcement actually
    happens (in a vitest process refusing itself).

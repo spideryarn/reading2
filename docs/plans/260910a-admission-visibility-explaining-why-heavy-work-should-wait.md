@@ -101,18 +101,29 @@ into four without a lie:
 
 **The names are `would-` prefixed on purpose.** The first version of this plan called them
 `admitted` / `reduced` / `refused`, which are past-tense words for events, and nothing here is an
-event: the panel is answering a hypothetical about a run that does not exist. The panel's sentence
-is fixed by the review and reads:
+event: the panel is answering a hypothetical about a run that does not exist. The panel's invariant
+sentence is fixed by the review and reads:
 
-> **Gate forecast — this panel admitted or refused nothing.** For the memory reading taken at
-> `<time>`, the gate returned `<outcome>`. A test using this repo's vitest config asks again when it
-> starts, and only that run's own in-process refusal stops it. A reduced worker count is the config
-> default; `--maxWorkers` on the command line overrides it.
+> **Gate forecast — this panel admitted or refused nothing.**
 
-That last clause is not a nicety. `vitest.config.ts`'s own comment says the number it logs *"is what
-the CONFIG asked for, and is deliberately not called the resolved one"*, because `--maxWorkers`
-beats it and that escape hatch is preserved on purpose. A dashboard that presented `would-reduce`
-as a settled worker count would contradict the config it is describing.
+When the gate answered, the next sentence says *the forecast was computed at `<time>`* — not that
+the memory was read then, because `computedAtMs` is stamped after the outcome exists. A test using
+this repo's vitest config asks again when it starts, and only that run's own in-process refusal stops
+it. The gate's refusal text is carried as `forecastCallMessage` with
+`messageContext: "dashboard-forecast-call"`, because it uses real-run grammar and names the
+dashboard's pid. A renderer must introduce it as raw output from this forecast call, not as an event
+or as the message a hypothetical test process would have produced.
+
+The worker-count caveat belongs only to `would-admit` and `would-reduce`: *A reduced worker count is
+the config default; `--maxWorkers` on the command line overrides it.* Putting it on
+`not-applicable`, `unknown` or `not-modelled` would turn a qualification of a worker number into a
+non-sequitur under an answer that carries no worker number.
+
+That clause is not a nicety where a worker forecast exists. `vitest.config.ts`'s own comment says
+the number it logs *"is what the CONFIG asked for, and is deliberately not called the resolved
+one"*, because `--maxWorkers` beats it and that escape hatch is preserved on purpose. A dashboard
+that presented `would-reduce` as a settled worker count would contradict the config it is
+describing.
 
 **Where the nominal ask comes from, and the env var this must not eat.** `resolveParallelWorkers()`
 reads `VITEST_MAX_WORKERS` **and deletes it** — deliberately, because vitest reads it later and
@@ -155,10 +166,11 @@ const EXPLANATIONS: Record<number, PolicyExplanation> = { 1: { …how v1 decides
 ```
 
 An unrecognised `ADMISSION_POLICY_VERSION` yields no prose at all and a payload that says *this
-dashboard has no explanation for admission policy vN; the numbers below are live, the wording is
-withheld*. The numbers stay because they come from the gate; the narration goes, because narration
-is the thing that would be wrong. Nobody has to remember to increment anything, and nobody can clear
-the warning by making two numbers equal without reading either.
+dashboard has no explanation for admission policy vN; policy wording is withheld*. Any numbers the
+gate returned stay because they come from the gate; the narration goes, because narration is the
+thing that would be wrong. Saying only "any numbers" matters: if a reader threw before the gate
+could be asked, an `unknown` outcome has none to call live. Nobody has to remember to increment
+anything, and nobody can clear the warning by making two numbers equal without reading either.
 
 ### 3. Forecast, observed, not-modelled — three labels and no fourth
 
@@ -238,7 +250,7 @@ export type AdmissionCostClass = "light" | "moderate" | "heavy";
 
 export type AdmissionRequest = {
   kind: AdmissionKind;
-  cost: AdmissionCostClass;
+  cost: AdmissionCostClass | null;
   /**
    * Who would do the work. `ExecutionToken` and not a bare pid: a pid is
    * reusable, and this repo already has boot id + start ticks for exactly that
@@ -256,9 +268,9 @@ actually governs.
 **`cost` is on the type and is not accepted by the endpoint.** `?cost=light` and `?cost=heavy`
 would produce identical answers — the same fixed vitest model for `kind=test`, the same
 `not-modelled` for everything else — and a query parameter that looks semantically active while
-changing nothing is API surface that teaches the wrong thing. It stays a field on
-`AdmissionRequest`, where the next stage will need it once something can measure it, and the route
-grows it when a consumer exists.
+changing nothing is API surface that teaches the wrong thing. The HTTP route therefore returns
+`cost: null`: the field is the requester's declaration, and this caller supplied none. It stays on
+`AdmissionRequest` for the next admission owner, where a real requester can declare one.
 
 - **`kind=test`** → the gate's forecast, per §1.
 - **`kind=review` / `kind=browser`** → **`not-modelled`**, and nothing else. The first draft ran
@@ -484,13 +496,13 @@ session writes the prompts, runs the gates, reviews, and commits.
 
 ### Stage 1 — the forecast and the wire
 
-- [ ] `wire.ts` types (§1, §2, §5). Types only, appended, file re-read first.
-- [ ] `tools/fleet/routes-admission.ts`: `parseAdmissionRequest`, `explainAdmission` (pure over
+- [x] `wire.ts` types (§1, §2, §5). Types only, appended, file re-read first.
+- [x] `tools/fleet/routes-admission.ts`: `parseAdmissionRequest`, `explainAdmission` (pure over
       values a test hands in), the version-indexed explanation map, and the handler.
-- [ ] `tools/fleet/admission-wiring.ts`: the composition, so a test drives the same function
+- [x] `tools/fleet/admission-wiring.ts`: the composition, so a test drives the same function
       `server.ts` calls — the lesson `health-wiring.ts` exists to record.
-- [ ] `server.ts`: the mount, beside the health retention route.
-- [ ] Tests, red first: low memory → `would-refuse` carrying the gate's own message; unreadable
+- [x] `server.ts`: the mount, beside the health retention route.
+- [x] Tests, red first: low memory → `would-refuse` carrying the gate's own message; unreadable
       `/proc/meminfo` → `would-refuse`, not `unknown`; no reserve file → `not-applicable`; empty or
       garbage reserve file → `unknown` with the thrown message; capacity below nominal →
       `would-reduce`; an unrecognised policy version withholds the prose and keeps the numbers;
@@ -500,7 +512,7 @@ session writes the prompts, runs the gates, reviews, and commits.
       checked red by commenting the mount out; and a wiring test that would go red if the server
       built its own deps instead.
 
-**Status:** not started.
+**Status:** complete. Implemented in `e4a38579`; corrected by the Stage 1 code review on 2026-09-10.
 
 ### Stage 2 — the client section, showing the forecast
 
