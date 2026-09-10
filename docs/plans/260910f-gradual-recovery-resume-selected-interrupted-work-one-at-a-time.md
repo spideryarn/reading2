@@ -107,11 +107,13 @@ that fails decides:
    the page says which. Also `defer` within `RESUME_SPACING_MS` (2 minutes) of the last
    verification, so each session's startup load lands before the next starts.
 4–5. **Health and usage, through one shared gate.** `tools/overseer/launch-gate.ts` exports
-   `launchGate({ usage, health, nowMs, onUnknown }) → { kind: "clear"; notes } | { kind: "held";
-   why; until }`. It is a pure leaf: no I/O, no clock, types-only imports. It is agreed with
+   `launchGate({ usage, health, nowMs, onUnknown, usageStaleAfterMs }) → { kind: "clear"; notes }
+   | { kind: "held"; why; until }`. A usage reading older than `usageStaleAfterMs` counts as
+   unknown. The scheduler passes 30 minutes; recovery passes 15, which is three missed five-minute
+   usage passes. It is a pure leaf: no I/O, no clock, types-only imports. It is agreed with
    `scheduled-dispatch`, which imports it rather than writing a second one, and it is built in
    Stage 1.
-   - **Positive evidence always holds**: usage `limited` holds until `activeLimit.resetsAt`; usage
+   - **Positive evidence always holds**: usage `limited` holds until `activeLimit.resetsAtMs`; usage
      `approaching` holds; health `critical` holds.
    - `strained` is clear, with a note.
    - **Unknown evidence goes to `onUnknown`.** That covers no usage pass yet, an unreadable report,
@@ -375,7 +377,10 @@ Files:
 - `tools/fleet/routes-recovery-resume.ts`, `tools/fleet/recovery-resume-feed.ts`,
   `tools/fleet/web/src/recovery-resume-client.ts` (all new);
 - `tools/fleet/web/src/RecoveryPanel.tsx`;
-- `tools/fleet/server.ts` (one branch, if the Overseer approves);
+- `tools/fleet/server.ts`: one branch. **Approved by the Overseer, 2026-09-10**, as one minimal
+  dispatch branch beside `/api/recovery`'s, pinned by the wiring test, for a route that writes an
+  `O_EXCL` request file and never launches. Merge first: `access-review` may extract `server.ts`'s
+  handler construction this evening, so re-read before the edit;
 - `tests/fleet-attention.test.ts` (one allowlist entry, argued);
 - tests `tests/fleet-recovery-resume-route.test.ts` and `tests/fleet-recovery-resume-panel.test.tsx`.
 
@@ -400,8 +405,19 @@ Files:
 - `scripts/gjd-remote.ts` (`--resume-conversation`, including the check on the box that no tmux
   session's environment already has that `CLAUDE_SESSION_ID`);
 - `tools/fleet/claude-argv.ts` and `tools/fleet/execution-identity.ts`: `--resume <uuid>` read as
-  a verified conversation (see "Spike"). This is outside the brief's file set, so I ask the
-  Overseer before starting the stage;
+  a verified conversation (see "Spike"). **Approved by the Overseer, 2026-09-10, with conditions**,
+  because `claude-argv.ts` feeds `steer.ts`'s `isClaudeForSession`, which is the guard that stops a
+  dashboard Send landing in the wrong conversation:
+  - (a) red first, against a capture of a real resumed process;
+  - (b) tests in `tests/run-claude*` or `tests/fleet-steer*` proving three things: that
+    `claude --resume <OTHER uuid>` is still refused as a competing Claude; that bare
+    `claude --resume` (the picker) stays unreadable; and that a uuid-shaped positional after any
+    other flag is not read as the conversation;
+  - (c) the Sol stage review is told in its prompt that this function is a security matcher, and is
+    asked to attack the new arm specifically;
+  - (d) the commit message carries a one-line note to whoever owns `steer.ts` at the time.
+
+  Also `--resume-conversation` on gjd-remote's creation path, which is additive only;
 - `tools/overseer/daemon.ts` (compose the capability, then hand it to the resume pass);
 - `scripts/overseer-recovery-drill.ts` (`--resume`);
 - tests.
