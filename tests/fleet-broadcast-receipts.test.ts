@@ -34,6 +34,7 @@ const ORIGIN = `http://${HOST}`;
 const TEXT = "hold off on the heavy suites for a while";
 const IDLE: FleetStatus = { kind: "idle" };
 const WORKING: FleetStatus = { kind: "working" };
+const SHELL: FleetStatus = { kind: "shell", busy: false };
 
 function requestId(tag: string): string {
   return `rq-${NOW.toString(36)}-${tag.padEnd(16, "0")}`;
@@ -291,7 +292,57 @@ describe("POST /api/broadcast writes a parent and a child per recipient", () => 
     expect(rowFor(r.json, "$98810")).toMatchObject({ kind: "queued", durable: false });
     expect(rowFor(r.json, "$98820")).toMatchObject({ kind: "queued", durable: true });
     const parent = parentOf(first.receipts);
+    expect(parent.last).toMatchObject({ kind: "outcome", state: "outcome-unknown" });
     expect(parent.last.kind === "outcome" ? parent.last.why : "").toContain("1 not durable");
+  });
+
+  it("does not complete the parent over an outcome-unknown child", async () => {
+    const first = boot(root(), "b3d3b3d3", {
+      transport: (target) => ({
+        ok: false,
+        reason: { code: "send-partial", why: "the text went and Enter did not" },
+        delivery: "partial",
+        sent: [["send-keys", "-t", target.paneId, "-l", "--", "fixture"]],
+      }),
+    });
+    const r = await post(first.broadcast, "/api/broadcast", broadcastBody([recipient(1)]));
+    expect(r.status).toBe(200);
+    const parent = parentOf(first.receipts);
+    expect(childFor(first.receipts, parent, "$98810")?.last).toMatchObject({ state: "outcome-unknown" });
+    expect(parent.last).toMatchObject({ kind: "outcome", state: "outcome-unknown" });
+  });
+
+  it("does not let a later parent write mask a child outcome that failed to reach disk", async () => {
+    const dir = root();
+    const disk = new FrozenDisk();
+    const first = boot(dir, "b3f3b3f3", { disk });
+    disk.arm({ store: "receipts", kind: "outcome", receiptId: "b3f3b3f3-r2", mode: "throw" });
+    const body = broadcastBody([recipient(1)], { requestId: requestId("childoutcomegap") });
+    const once = await post(first.broadcast, "/api/broadcast", body);
+    expect(once.status).toBe(200);
+    expect(parentOf(first.receipts).last).toMatchObject({ state: "outcome-unknown" });
+    first.crash();
+
+    const second = boot(dir, "b3g3b3g3");
+    const parent = parentOf(second.receipts);
+    expect(parent.last).toMatchObject({ state: "outcome-unknown" });
+    expect(childFor(second.receipts, parent, "$98810")?.last).toMatchObject({ state: "outcome-unknown" });
+    const replay = await post(second.broadcast, "/api/broadcast", body);
+    expect(replay.json).toMatchObject({ op: "receipt", replay: true, receipt: { state: "outcome-unknown" } });
+    expect(second.calls).toEqual([]);
+  });
+
+  it("gives a skipped recipient a linked not-sent child", async () => {
+    const first = boot(root(), "b3e3b3e3");
+    const r = await post(first.broadcast, "/api/broadcast", broadcastBody([recipient(1), recipient(2, SHELL)]));
+    expect(r.status).toBe(200);
+    const parent = parentOf(first.receipts);
+    expect(first.receipts.childrenOf(parent.receiptId)).toHaveLength(2);
+    expect(childFor(first.receipts, parent, "$98820")?.last).toMatchObject({
+      kind: "outcome",
+      state: "not-sent",
+      reason: "undeliverable",
+    });
   });
 
   it("a keyed broadcast whose parent cannot be accepted is refused 503, does nothing, and keeps the cooldown free", async () => {
@@ -384,7 +435,7 @@ describe("the ease-off broadcast on /api/actions/box", () => {
       actionId: "resource-broadcast",
       mode: "dry-run",
       speaker: "greg",
-      recipients: [recipient(1), recipient(2)],
+      recipients: [recipient(1), recipient(2, WORKING)],
     });
     expect(shown.status).toBe(200);
     const preview = shown.json.preview as { previewId: string; serverInstanceId: string; actionId: string; material: unknown };
@@ -404,8 +455,9 @@ describe("the ease-off broadcast on /api/actions/box", () => {
     expect(parent.last).toMatchObject({ kind: "outcome", state: "completed", reason: "fan-out-finished" });
     const children = first.receipts.childrenOf(parent.receiptId);
     expect(children).toHaveLength(2);
-    for (const child of children) expect(child.last).toMatchObject({ kind: "outcome", state: "keys-submitted" });
-    expect(first.calls).toEqual(["$98810", "$98820"]);
+    expect(childFor(first.receipts, parent, "$98810")?.last).toMatchObject({ kind: "outcome", state: "keys-submitted" });
+    expect(childFor(first.receipts, parent, "$98820")?.last).toMatchObject({ kind: "outcome", state: "not-sent" });
+    expect(first.calls).toEqual(["$98810"]);
     first.crash();
 
     const second = boot(dir, "bac0bac0");

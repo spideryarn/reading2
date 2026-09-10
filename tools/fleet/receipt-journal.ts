@@ -326,6 +326,8 @@ export type ReceiptJournal = {
   unknownKeystrokeReceipts(): ReceiptState[];
   durable(): boolean;
   acceptedDurably(receiptId: string): boolean;
+  /** Every record in this receipt's current in-memory fold exists on disk. */
+  evidenceDurable?(receiptId: string): boolean;
   reservedQueueItemIds(): string[];
   compact(): boolean;
   recovery(): RecoverySummary;
@@ -450,6 +452,14 @@ export function parseReceiptLine(line: string): ReceiptRecord | null {
     const legacy = !Object.hasOwn(value, "parentReceiptId");
     const parent = legacy ? null : value["parentReceiptId"];
     const op = value["op"] as ReceiptOp;
+    const parentValid = legacy
+      ? op !== "broadcast-recipient"
+      : parent === null
+        ? op !== "broadcast-recipient"
+        : string(parent) && value["origin"] === "broadcast"
+          && (op === "broadcast-recipient"
+            ? value["queue"] === null
+            : (op === "queued-message" || op === "queued-action") && value["queue"] !== null);
     if (!exact(value, legacy ? ACCEPTED_KEYS : [...ACCEPTED_KEYS, "parentReceiptId"])
       || !nullableString(value["requestId"]) || !nullableString(value["fingerprint"])
       || ((value["requestId"] === null) !== (value["fingerprint"] === null))
@@ -459,8 +469,10 @@ export function parseReceiptLine(line: string): ReceiptRecord | null {
       || !(isBoxOp(op) ? value["target"] === null : target(value["target"]))
       || typeof value["what"] !== "string" || value["what"].length > MAX_WHAT_CHARS
       || !string(value["serverInstanceId"]) || !queue(value["queue"])
-      // Only a broadcast's own recipients name a parent.
-      || !(parent === null || (string(parent) && value["origin"] === "broadcast" && !isBoxOp(op)))) return null;
+      // A direct broadcast child always names its parent. A parent link is
+      // otherwise legal only on a queued broadcast recipient. Legacy lines
+      // predate the field and remain readable above as parentless.
+      || !parentValid) return null;
     return { ...base, kind: "accepted", receiptId, requestId: value["requestId"] as string | null,
       fingerprint: value["fingerprint"] as string | null, op, origin: value["origin"] as ReceiptOrigin,
       actor: value["actor"], speaker: value["speaker"] as Speaker | null, target: value["target"],
@@ -577,6 +589,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const reservedReceipts = new Set<string>();
   const reservedQueue = new Set<string>();
   const durableAccepted = new Set<string>();
+  /** Durable accepts followed by a fail-open record which has not reached disk. */
+  const incompleteDurableEvidence = new Set<string>();
   /** Receipts deliberately kept only for this run after an unkeyed write failure. */
   const volatileReceipts = new Set<string>();
   /** Durable attempts whose fail-open `returned` exists only in this fold. */
@@ -709,6 +723,9 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     if (!apply(record)) return { accepted: false, landed };
     if (landed && !forceMemory) domainFailure = null;
     if (record.kind === "accepted" && landed) durableAccepted.add(record.receiptId);
+    if (!landed) {
+      for (const id of ids) if (durableAccepted.has(id)) incompleteDurableEvidence.add(id);
+    }
     if (record.kind === "returned" && durableAccepted.has(record.receiptId)) {
       if (landed) unlandedReturns.delete(record.receiptId);
       else unlandedReturns.add(record.receiptId);
@@ -807,7 +824,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
     }
     if (core !== null && !core.replace(physicalReplacement)) return memoryFallback();
-    if (core !== null) unlandedReturns.clear();
+    if (core !== null) {
+      unlandedReturns.clear();
+      incompleteDurableEvidence.clear();
+    }
     rebuild(kept, replacement);
     for (const id of [...volatileReceipts]) if (!kept.has(id)) volatileReceipts.delete(id);
     if (core !== null) {
@@ -1060,7 +1080,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     progress(receiptId, step, status, verdict) {
       return append(
         { schema: 1, kind: "progress", at: options.now(), receiptId, step, status, verdict: verdict.slice(0, MAX_VERDICT_CHARS) },
-        { failOpen: true },
+        { failOpen: true, forceMemory: incompleteDurableEvidence.has(receiptId) },
       ).accepted;
     },
     returned(receiptId, code) {
@@ -1130,11 +1150,13 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     durable: () => physicalWritable() && core!.status().failure === null
       && domainFailure === null && recoveryFailure === null
       && unlandedReturns.size === 0
+      && incompleteDurableEvidence.size === 0
       && ![...volatileReceipts].some((id) => {
         const state = states.get(id);
         return state !== undefined && isNonTerminal(state);
       }),
     acceptedDurably: (receiptId) => durableAccepted.has(receiptId),
+    evidenceDurable: (receiptId) => durableAccepted.has(receiptId) && !incompleteDurableEvidence.has(receiptId),
     reservedQueueItemIds: () => [...reservedQueue],
     compact,
     recovery: () => ({ ...recovery, interrupted: [...recovery.interrupted], interruptedBeforeAttempt: [...recovery.interruptedBeforeAttempt], lostAtRestart: [...recovery.lostAtRestart], recoveryBlocked: [...recovery.recoveryBlocked], orphanEvidence: [...recovery.orphanEvidence], wouldConclude: [...recovery.wouldConclude] }),
@@ -1262,16 +1284,29 @@ export function beginRecipientReceipt(
  * never attempted, `not-sent`/`not-reached`. False when it could not be recorded.
  */
 export function recordUnreachedRecipient(journal: ReceiptJournal, child: RecipientReceipt): boolean {
-  const accepted = journal.accept({ requestId: null, fingerprint: null, op: "broadcast-recipient", origin: "broadcast", queue: null, ...child });
-  return (
-    accepted.ok &&
-    journal.outcome(accepted.receiptId, {
-      state: "not-sent",
-      reason: "not-reached",
-      code: null,
-      why: "the fan-out passed its deadline before this recipient",
-    })
-  );
+  return recordUnattemptedRecipient(journal, child, {
+    state: "not-sent",
+    reason: "not-reached",
+    code: null,
+    why: "the fan-out passed its deadline before this recipient",
+  });
+}
+
+/** A broadcast recipient proved unsent without entering the transport. */
+export function recordUnattemptedRecipient(
+  journal: ReceiptJournal,
+  child: RecipientReceipt,
+  outcome: NotSentOutcome,
+): boolean {
+  const accepted = journal.accept({
+    requestId: null,
+    fingerprint: null,
+    op: "broadcast-recipient",
+    origin: "broadcast",
+    queue: null,
+    ...child,
+  });
+  return accepted.ok && journal.outcome(accepted.receiptId, outcome);
 }
 
 /**
@@ -1294,6 +1329,35 @@ export function describeChildren(journal: ReceiptJournal, parentReceiptId: strin
     `${children.length} recipient receipt(s): ${parts.length === 0 ? "none" : parts.join(", ")}` +
     (notDurable > 0 ? `; ${notDurable} not durable` : "")
   ).slice(0, MAX_WHY_CHARS);
+}
+
+/**
+ * A broadcast parent is no more certain than its least certain child. Queued
+ * children may remain pending: their durable acceptance is the broadcast's
+ * completed act for that recipient, while delivery keeps its own lifecycle.
+ */
+export function broadcastParentOutcome(
+  journal: ReceiptJournal,
+  parentReceiptId: string,
+  expectedChildren: number,
+): ReceiptOutcome {
+  const children = journal.childrenOf(parentReceiptId);
+  const uncertain = children.length !== expectedChildren || children.some((child) => {
+    if (!(journal.evidenceDurable?.(child.receiptId) ?? journal.acceptedDurably(child.receiptId))) return true;
+    const summary = summarizeReceipt(child);
+    if (summary.state === "outcome-unknown") return true;
+    return child.accepted.queue === null && summary.pending;
+  });
+  const description = describeChildren(journal, parentReceiptId);
+  if (uncertain) {
+    return {
+      state: "outcome-unknown",
+      reason: "unknown",
+      code: null,
+      why: `${description}; expected ${expectedChildren}; at least one recipient lacks durable settled evidence`.slice(0, MAX_WHY_CHARS),
+    };
+  }
+  return { state: "completed", reason: "fan-out-finished", code: null, why: description };
 }
 
 /**

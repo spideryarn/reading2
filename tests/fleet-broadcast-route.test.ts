@@ -623,6 +623,17 @@ describe("a dry run is not a delivery, and cannot be mistaken for one", () => {
 });
 
 describe("what it reports about each recipient", () => {
+  it("does not put broadcast text from a thrown transport into a log or response", async () => {
+    const thrown = harness({
+      sendMessage: (_target, text) => {
+        throw new Error(`transport rejected ${text}`);
+      },
+    });
+    const r = await post(thrown.routes, run({ recipients: [recipient({ id: "$1" })] }));
+    expect(thrown.log.join("\n")).not.toContain(TEXT);
+    expect(JSON.stringify(r.json)).not.toContain(TEXT);
+  });
+
   it("carries the delivery reading out of a refusal, never swallowing it", async () => {
     const partial = harness({
       sendMessage: () => ({

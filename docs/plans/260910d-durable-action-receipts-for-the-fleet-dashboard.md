@@ -435,6 +435,17 @@ Open: the web card still shows a non-durable queued recipient as plain *queued* 
 Stage 4); the coordinator-to-outcome mapping now exists twice (shared, and inline in
 `routes-steer.ts`) — a small debt worth folding.
 
+**Stage review, 2026-09-10 13:21** ([answer](260910d-durable-action-receipts-stage3-review-sol.md), write-capable
+GPT Sol): "land with the fixes above", three P1s, each fixed red-first by the reviewer and kept. The
+run then hit its 30-minute cap, but it had written its full answer four minutes before, as the prompt
+asked, and every file it touched was last written before the cap. **F41**: a broadcast parent was
+settled `completed` even when a child was unknown, missing or not durable — the parent's outcome is now
+derived from its children (`broadcastParentOutcome`), and skipped or queue-refused recipients get
+their own linked `not-sent` child so a smaller child count cannot hide one. **F42**: the parser
+accepted a broadcast child with no parent link, or a parent link on an unrelated op — now refused, with
+pre-Stage-3 lines still read as parentless. **F43**: a thrown transport's error could quote the
+broadcast's text into the server log and the response — both are now generic; the receipt already was.
+
 - [ ] Receipts for `remove-worktree`, `kill-session` and the box kills on `/api/actions/session` and
   `/api/actions/box`: `accepted` before the first `await`, `attempted` before `runPlan`, a `progress`
   record per completed step, `completed` / `plan-stopped` / `outcome-unknown`. A crash mid-plan

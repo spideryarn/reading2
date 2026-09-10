@@ -94,8 +94,9 @@ import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
 import {
   beginRecipientReceipt,
-  describeChildren,
+  broadcastParentOutcome,
   recordUnreachedRecipient,
+  recordUnattemptedRecipient,
   sendAttemptOutcome,
   type RecipientReceipt,
   summarizeReceipt,
@@ -3304,7 +3305,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     for (const rec of recipients) {
       const gate = gates.get(rec.target.paneId);
       if (gate?.kind !== "now") {
-        outcomes.push(skippedOutcome(rec, gate));
+        const skipped = skippedOutcome(rec, gate);
+        outcomes.push(skipped);
+        if (!recordUnattemptedRecipient(deps.queue.receiptJournal(), recipientReceipt(parent, rec, who, childWhat), {
+          state: "not-sent",
+          reason: "undeliverable",
+          code: skipped.code,
+          why: "the delivery gate refused this recipient before the transport",
+        })) {
+          deps.log(`${label}: receipt for skipped session=${rec.target.sessionId} was not recorded`);
+        }
         continue;
       }
       if (deps.now() - at > BROADCAST_DEADLINE_MS) {
@@ -3414,9 +3424,10 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           minutes,
           outcome: "outcome-unknown",
           code: null,
-          why:
-            `the delivery module threw while handling this recipient: ${attempt.error.message}. ` +
-            "Nothing here can tell whether any of it reached the pane.",
+          // An arbitrary transport error can quote its argv, including the
+          // rendered broadcast. The child receipt already records the safe
+          // generic reading from `sendAttemptOutcome`.
+          why: "the delivery module threw while handling this recipient. Nothing here can tell whether any of it reached the pane.",
         });
         continue;
       }
@@ -3467,11 +3478,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         (unsure > 0 ? ` (${unsure} may or may not have landed)` : "") +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
-    settle(
-      parent,
-      { state: "completed", reason: "fan-out-finished", code: null, why: describeChildren(deps.queue.receiptJournal(), parent.receiptId) },
-      label,
-    );
+    settle(parent, broadcastParentOutcome(deps.queue.receiptJournal(), parent.receiptId, recipients.length), label);
     respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes }, ...parent.tag });
   }
 

@@ -162,7 +162,10 @@ describe("receipt record parsing and transitions", () => {
     expect(parseReceiptLine(JSON.stringify({ ...box, op: "enacted-session" }))).toBeNull();
     const child = { ...box, receiptId: "stage3-run-r2", op: "broadcast-recipient", origin: "broadcast", target: TARGET, parentReceiptId: "stage3-run-r1" };
     expect(parseReceiptLine(JSON.stringify(child))).toEqual(child);
+    expect(parseReceiptLine(JSON.stringify({ ...child, parentReceiptId: null }))).toBeNull();
     expect(parseReceiptLine(JSON.stringify({ ...child, origin: "direct-steer" }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...child, op: "steer-message" }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...child, queue: { itemId: "not-direct", enqueuedAt: NOW } }))).toBeNull();
     const progress = { schema: 1, kind: "progress", at: NOW, receiptId: "stage3-run-r1", step: 0, status: "passed", verdict: "it exited 0" };
     expect(parseReceiptLine(JSON.stringify(progress))).toEqual(progress);
     expect(parseReceiptLine(JSON.stringify({ ...progress, step: -1 }))).toBeNull();

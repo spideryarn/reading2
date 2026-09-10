@@ -9,7 +9,9 @@ other worktree or the primary checkout. Do not restart, kill or contact the runn
 **Read first, in order:** the plan `docs/plans/260910d-durable-action-receipts-for-the-fleet-dashboard.md`
 — § The fingerprint, § Stage 4 and the **"Agreed with `session-continuity`"** block under it, which is
 authoritative for the drafts seam — then `docs/postmortems/260910c-a-mutable-text-hook-erased-the-submission-it-produced.md`
-and `tests/fleet-drafts.test.tsx`. Then the server side you are the client of: `tools/fleet/request-key.ts`,
+and `tests/fleet-drafts.test.tsx`. **`tools/fleet/web/src/drafts.ts`, its tests and that postmortem
+changed on 2026-09-10** (session-continuity's F29/F30, merged into this worktree before you started):
+read them as they are now, including the postmortem's latest findings, not as any earlier version. Then the server side you are the client of: `tools/fleet/request-key.ts`,
 the replay arms in `tools/fleet/routes-steer.ts`, `routes-actions.ts` and `routes-broadcast.ts`
 (Stages 2 and 3), and `GET /api/actions/receipts` with `ReceiptSummary` in `tools/fleet/wire.ts`.
 

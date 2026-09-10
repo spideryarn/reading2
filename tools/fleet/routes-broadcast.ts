@@ -121,8 +121,9 @@ import { sharedReceiptJournal } from "./action-stores.js";
 import { deliveryGate, type EnqueueRefusalRule } from "./queue.js";
 import {
   beginRecipientReceipt,
-  describeChildren,
+  broadcastParentOutcome,
   recordUnreachedRecipient,
+  recordUnattemptedRecipient,
   sendAttemptOutcome,
   summarizeReceipt,
   type ReceiptActor,
@@ -738,7 +739,9 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
            have thrown before the first keystroke or out of the middle of the
            sequence, and nothing here can tell. That is the reason the hold above
            was opened — `onThrow: "hold"` — not a reason to assume the first. */
-        const why = `the delivery module threw: ${attempt.error.message}`;
+        // An arbitrary transport error can quote its argv, whose literal-text
+        // argument is the broadcast. Keep both the log and response text-free.
+        const why = "the delivery module threw; nothing here can tell whether any of the message reached the pane";
         deps.log(`broadcast: FAILED session=${rec.target.sessionId} ${oneLine(why)}`);
         into.set(rec.target.paneId, {
           ...where,
@@ -1155,6 +1158,21 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
       return;
     }
 
+    // Rows rejected by the delivery gate are recipients too. Give each one
+    // durable, linked evidence before the queue or direct-send halves begin.
+    for (const rec of request.recipients) {
+      const row = outcomes.get(rec.target.paneId);
+      if (row?.kind !== "skipped") continue;
+      if (!recordUnattemptedRecipient(deps.receipts, childOf(parent, rec), {
+        state: "not-sent",
+        reason: "undeliverable",
+        code: row.code,
+        why: "the delivery gate refused this recipient before the transport",
+      })) {
+        deps.log(`broadcast: receipt for skipped session=${rec.target.sessionId} was not recorded`);
+      }
+    }
+
     deps.log(
       `broadcast: RUN asked=${asked} send=${deliverable.length} queue=${queueable.length} chars=${rendered.text.length} receipt=${parent.receiptId}`,
     );
@@ -1221,6 +1239,14 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
           return;
         }
         deps.log(`broadcast: queue refused session=${rec.target.sessionId} rule=${result.rule}`);
+        if (!recordUnattemptedRecipient(deps.receipts, childOf(parent, rec), {
+          state: "not-sent",
+          reason: "undeliverable",
+          code: `not-queued-${result.rule}`,
+          why: "the queue refused this recipient before anything was queued",
+        })) {
+          deps.log(`broadcast: receipt for queue-refused session=${rec.target.sessionId} was not recorded`);
+        }
         outcomes.set(rec.target.paneId, {
           ...where,
           kind: "skipped",
@@ -1267,15 +1293,10 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         `skipped=${counts.skipped} held=${counts.held} notReached=${counts.notReached}`,
     );
 
-    /* THE PARENT IS COMPLETE: every recipient it began has its own receipt, and
-       its `why` counts them by state — the children, not this, say what
-       happened to each. */
-    settleReceipt(parent.receiptId, {
-      state: "completed",
-      reason: "fan-out-finished",
-      code: null,
-      why: describeChildren(deps.receipts, parent.receiptId),
-    });
+    /* THE PARENT IS ONLY AS CERTAIN AS ITS CHILDREN. Missing, non-durable,
+       pending-direct or unknown evidence makes it unknown too; its `why`
+       carries text-free counts. */
+    settleReceipt(parent.receiptId, broadcastParentOutcome(deps.receipts, parent.receiptId, asked));
     respond(res, 200, { ok: true, op: "broadcast", result: { counts, recipients: rows }, ...tag });
   }
 
