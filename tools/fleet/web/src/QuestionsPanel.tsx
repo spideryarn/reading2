@@ -81,6 +81,8 @@ function GapSentence({ gap }: { gap: QuestionGap }): ReactNode {
       return <>The attention observer could not judge one or more sessions it inspected.</>;
     case "attention-no-sessions-scanned":
       return <>The attention observer's scan did not inspect any sessions.</>;
+    case "attention-judgement-stopped":
+      return <>The Overseer attention pass was stopped from judging every session: {gap.why}, until {gap.until}.</>;
     case "collection-not-observed":
       return <>The fleet collector has not completed a snapshot.</>;
     case "collection-failed":

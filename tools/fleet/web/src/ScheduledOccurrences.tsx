@@ -10,7 +10,8 @@
  *
  * - **The last occurrence is the loud line.** A failure is red and names its
  *   own kind — TIMED OUT, QUOTA REFUSED — never a generic "failed"; UNKNOWN is
- *   the warning tone; SUCCEEDED is never red. Its answer is a link to the
+ *   the warning tone; SUPERSEDED — set aside on purpose before it launched —
+ *   is the quiet tone; SUCCEEDED is never red. Its answer is a link to the
  *   durable answer route, only when there is an answer.
  * - **Cancellation is visible, not a button** (plan D7): a running occurrence
  *   prints its cancel command, an unknown one the command that disposes of it.
@@ -43,6 +44,7 @@ const RESULT_LABEL: Readonly<Record<ScheduledResultKind, string>> = {
   "admission-waiting": "WAITING FOR ADMISSION",
   running: "RUNNING",
   unknown: "UNKNOWN",
+  superseded: "SUPERSEDED",
   "launch-failed": "LAUNCH FAILED",
   "timed-out": "TIMED OUT",
   "quota-refused": "QUOTA REFUSED",
@@ -57,12 +59,15 @@ const RESULT_LABEL: Readonly<Record<ScheduledResultKind, string>> = {
  * Every failure is `alarm`, and names itself through its label. `unknown` is
  * the warning tone: nothing can say what happened, which is not a failure and
  * is not fine. The four that are not endings are quiet or working.
+ * `superseded` is quiet too: the scheduler set it aside on purpose and nothing
+ * ran, which is neither a failure (not `alarm`) nor a success (not `work`).
  */
 const RESULT_TONE: Readonly<Record<ScheduledResultKind, Tone>> = {
   pending: "idle",
   "admission-waiting": "idle",
   running: "work",
   unknown: "unknown",
+  superseded: "idle",
   "launch-failed": "alarm",
   "timed-out": "alarm",
   "quota-refused": "alarm",
@@ -155,6 +160,16 @@ function Occurrence({ occurrence, boxNow }: { occurrence: ScheduledOccurrence; b
         >
           <Mono>{occurrence.state}</Mono>
         </Explain>
+      </p>
+      <p data-slot="occurrence-run" className="tw:break-words tw:text-[12px] tw:text-ink-faint">
+        ran with timeout {occurrence.run.timeoutMinutes} min, access {occurrence.run.access},{" "}
+        {occurrence.run.account === null ? (
+          "no pool account recorded"
+        ) : (
+          <>
+            pool account <Mono>{occurrence.run.account}</Mono>
+          </>
+        )}
       </p>
       <Answer occurrence={occurrence} />
       {occurrence.transcriptPath === null ? null : (

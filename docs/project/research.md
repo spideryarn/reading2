@@ -31,6 +31,9 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 - [plans.md](plans.md) · [postmortems.md](postmortems.md) · [tutorials.md](tutorials.md)
 - [open-questions.md](open-questions.md) — the calls nobody has made yet. A research doc is often
   what turns one of those into an answer.
+- [260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
+  — the reader study Greg can run to answer [Q6](open-questions.md#q6), *how do we know it's
+  working?* Written 2026-09-10, not yet run.
 
 ---
 

@@ -75,7 +75,7 @@ import {
   type SessionIdentity,
   type SessionKey,
 } from "./diff.js";
-import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
+import type { Arming, AuthorisedJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
@@ -521,13 +521,6 @@ export type DaemonOptions = {
     intervalMs?: number;
     definitions: readonly AuthorisedJob[];
     /**
-     * **ABSENT IS THE DETERMINISTIC-ONLY ARMING.** A daemon given no spawner
-     * holds no capability to start a Claude session, so a session job meets a
-     * refusal rather than a dispatch — GPT Sol's SP-4, and `scheduler.ts`
-     * § `TickInput.spawn` says why that is a capability rather than a filter.
-     */
-    spawn?: SpawnJob;
-    /**
      * **LOOKING, and only looking, for a deterministic rule.** Absent means a
      * rule job is refused, the same way and for the same reason a session job
      * is refused with no spawner.
@@ -925,7 +918,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           ? undefined
           : {
               definitions: options.jobs.definitions,
-              held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined },
+              held: { session: false /* Stage C wires this: the launch protocol */, rules: options.jobs.rules !== undefined },
               evidence: evidence ?? resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
             },
       detail: options.schedulerDetail,
@@ -1205,7 +1198,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       const capabilities: HeldCapabilities =
         options.jobs === undefined
           ? (previewOptions?.capabilities ?? { session: false, rules: false })
-          : { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined };
+          : { session: false /* Stage C wires this: the launch protocol */, rules: options.jobs.rules !== undefined };
       const list: Parameters<typeof schedulePreview>[0]["list"] =
         previewOptions === undefined
           ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
@@ -1227,6 +1220,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           list,
           occurrences: store.occurrences,
           history: store.occurrenceHistory,
+          journal: undefined, // Stage C wires this, with `accounts`
+          accounts: { chosen: { kind: "held", why: "Stage C wires account choice", until: null }, standing: () => ({ kind: "held", why: "Stage C wires account choice", until: null }) },
           arming: options.jobs?.arming ?? previewOptions?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
           launchSeparationMs: options.jobs?.launchSeparationMs ?? previewOptions?.launchSeparationMs ?? 0,
           capabilities,
@@ -1526,7 +1521,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           for (const report of schedulerTick({
             definitions: jobOptions.definitions,
             store,
-            spawn: jobOptions.spawn,
+            launch: undefined, // Stage C wires this, with `accounts` and `readDocumentBytes`
+            accounts: { chosen: { kind: "held", why: "Stage C wires account choice", until: null }, standing: () => ({ kind: "held", why: "Stage C wires account choice", until: null }) },
+            readDocumentBytes: undefined,
             rules: jobOptions.rules,
             arming: jobOptions.arming,
             launchSeparationMs: jobOptions.launchSeparationMs,

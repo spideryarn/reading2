@@ -83,6 +83,10 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
 } from "./wire.js";
 
 /** The checkpoint's file name, spelled here rather than imported — see the header. */
@@ -411,8 +415,14 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
     const why = nonBlank(u["why"]);
     return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
   }
-  if (u["kind"] !== "list") {
-    return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
+  /* `limited` (plan 260910f D6) is parsed as strictly as `list` — the same
+     fields, plus `stopped`. It is a KIND rather than a field on `list` because
+     of the branch below: an older copy of this reader rejects an unknown kind
+     into `unknown`, whereas a new field would have been ignored and an empty
+     list from a stopped judge drawn as a calm fleet. */
+  const kind = u["kind"];
+  if (kind !== "list" && kind !== "limited") {
+    return bad(`kind ${JSON.stringify(kind)} is none of "list", "limited" or "unknown"`);
   }
 
   const sessionsScanned = count(u["sessionsScanned"]);
@@ -451,7 +461,20 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
      has waited; two halves that both sort are two halves that disagree about
      what is at the top, and the half with the model calls is the one that can
      see why. */
-  return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  if (kind === "list") return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  const stopped = parseStopped(u["stopped"]);
+  if (stopped === null) return bad("a limited list does not say why the model was stopped, or until when");
+  return { kind: "limited", items, sessionsScanned, sessionsUnreadable, scannedAt, stopped };
+}
+
+/** Every field, `nonBlank` for the `why` because the page draws it as the whole line. */
+function parseStopped(u: unknown): Extract<AttentionList, { kind: "limited" }>["stopped"] | null {
+  if (!isRecord(u)) return null;
+  const kind = u["kind"];
+  if (kind !== "exhausted" && kind !== "cooling-down") return null;
+  const why = nonBlank(u["why"]);
+  const until = iso(u["until"]);
+  return why === null || until === null ? null : { kind, why, until };
 }
 
 const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "technical", "other"];
@@ -482,7 +505,101 @@ function parseItem(u: unknown): AttentionItem | null {
     if (dupId === null || dupName === null || dupSince === null) return null;
     duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: dupSince });
   }
-  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
+  const proposal = parseProposal(u["proposal"]);
+  if (proposal === null) return null;
+  // THE QUOTE IS IN THIS ITEM'S OWN EXCERPT — GPT Sol's F15. The card labels it
+  // "the sentence this proposal is about", so one the excerpt does not hold is
+  // an invented sentence wearing the label. A dialog has no excerpt to hold one.
+  if (proposal.kind === "proposed" && !(evidence.kind === "prose" && quotedIn(proposal.asks, evidence.excerpt))) return null;
+  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates, proposal };
+}
+
+/**
+ * A quote, checked as the producer checks it — RESTATED from
+ * tools/overseer/attention-classify.ts (`normaliseSpace`, `MAX_ASKS_CHARS`,
+ * `MIN_ASKS_CHARS`, `MIN_ASKS_WORDS`, whose comments say why each value), which
+ * this module may not import (see the header). tests/fleet-attention.test.ts
+ * drives the bounds from those constants, so a copy that drifts goes red.
+ */
+function normaliseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+const MAX_ASKS_CHARS = 300;
+const MIN_ASKS_CHARS = 12;
+const MIN_ASKS_WORDS = 2;
+
+function asksInBounds(asks: string): boolean {
+  const s = normaliseSpace(asks);
+  return s.length <= MAX_ASKS_CHARS && s.length >= MIN_ASKS_CHARS && s.split(" ").length >= MIN_ASKS_WORDS;
+}
+
+function quotedIn(asks: string, text: string): boolean {
+  return normaliseSpace(text).includes(normaliseSpace(asks));
+}
+
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/**
+ * An item's proposal, every arm in full (plan 260910f Stage 2).
+ *
+ * **ABSENT IS `not-reported`, NOT A FAILURE**: a checkpoint from an Overseer
+ * that predates the field made no claim, and degrading the whole list over it
+ * would blank a live inbox until the daemon restarts. Present and malformed is
+ * refused like every other field — a half-read proposal would draw a holder
+ * nobody proposed, or an attribution nobody made. `nonBlank` for every text,
+ * because each is drawn as a line of its own.
+ */
+function parseProposal(u: unknown): AttentionProposal | null {
+  if (u === undefined) return { kind: "not-reported" };
+  if (!isRecord(u)) return null;
+  switch (u["kind"]) {
+    case "proposed": {
+      const id = nonBlank(u["id"]);
+      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === u["recipient"]);
+      const reason = nonBlank(u["reason"]);
+      const asks = nonBlank(u["asks"]);
+      const by = parseProposalAuthor(u["by"]);
+      const reach = parseProposalReach(u["reach"]);
+      if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      // Inside the producer's length bounds (F17), or the card could draw a whole tail in the flow.
+      if (!asksInBounds(asks)) return null;
+      return { kind: "proposed", id, recipient, reason, asks, by, reach };
+    }
+    case "unplaced": {
+      const id = nonBlank(u["id"]);
+      const why = nonBlank(u["why"]);
+      const by = parseProposalAuthor(u["by"]);
+      return id === null || why === null || by === null ? null : { kind: "unplaced", id, why, by };
+    }
+    case "off":
+    case "not-reached": {
+      const why = nonBlank(u["why"]);
+      return why === null ? null : { kind: u["kind"], why };
+    }
+    case "not-applicable":
+      return { kind: "not-applicable" };
+    case "not-reported":
+      return { kind: "not-reported" };
+    default:
+      return null;
+  }
+}
+
+/** The wire's one author arm: a model, via the Overseer. A person is never an author (D9). */
+function parseProposalAuthor(u: unknown): ProposalAuthor | null {
+  if (!isRecord(u) || u["kind"] !== "model" || u["via"] !== "overseer") return null;
+  const model = nonBlank(u["model"]);
+  return model === null ? null : { kind: "model", model, via: "overseer" };
+}
+
+function parseProposalReach(u: unknown): ProposalReach | null {
+  if (!isRecord(u)) return null;
+  if (u["kind"] === "available") return { kind: "available" };
+  const why = nonBlank(u["why"]);
+  if (why === null) return null;
+  if (u["kind"] === "unavailable") return { kind: "unavailable", why };
+  if (u["kind"] === "not-checked") return { kind: "not-checked", why };
+  return null;
 }
 
 /**

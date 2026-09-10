@@ -47,11 +47,26 @@
  * doing twice. The model calls are the cost, and they are bounded by `maxCalls`
  * and made once per DISTINCT tail rather than once per session.
  */
-import type { AttentionAnswerability, AttentionList } from "../fleet/wire.js";
+import type {
+  AttentionAnswerability,
+  AttentionJudgementStopped,
+  AttentionList,
+  AttentionProposal,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
+  UsageVerdict,
+} from "../fleet/wire.js";
 import { grantsPermission, parsePane, type PaneQuestion } from "../fleet/pane.js";
 import {
   addSpend,
+  asksOutOfBounds,
+  quotedIn,
+  canonicalVerdict,
+  CLASSIFIER_PROMPT_VERSION,
+  isCacheable,
   NO_SPEND,
+  PROPOSAL_PROMPT_VERSION,
   planClassifications,
   type CachedVerdict,
   type ClassifierSpend,
@@ -60,6 +75,7 @@ import {
 } from "./attention-classify.js";
 import { EMPTY_ATTENTION_MEMORY, type AttentionMemory } from "./attention-memory.js";
 import { buildAttentionList, rememberWaits, type AttentionObservation } from "./attention.js";
+import type { ClassifyOutcome } from "./model-budget.js";
 import { readTurnTail } from "./turn-tail.js";
 
 /** A session to look at. `paneId` is the address; a session without one cannot be read. */
@@ -100,16 +116,46 @@ export type PassBreakdown = {
   overBudget: number;
   /** Distinct tails answered from the memory rather than from the gateway. */
   fromCache: number;
+  /**
+   * Distinct tails whose remembered verdict came from another prompt version
+   * (plan 260910f D3). They place their cards all the same, and are re-read
+   * ahead of fresh tails; not a failure, and not in `sessionsUnreadable` —
+   * unless the pass TRIED the re-read and got no usable answer (refused or
+   * failed), which makes that session unjudged this pass (GPT Sol's F12).
+   */
+  stale: number;
+  /** Distinct tails the day budget or a cooldown did not let us ask about. Each is also unjudged. */
+  budgetRefused: number;
 };
 
 export type AttentionPassOptions = {
   sessions: readonly SessionToScan[];
   /** Injected so the pass can be run against captured panes. Throwing means the pane went away. */
   capture: (paneId: string) => string;
-  classify: (tail: string) => Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }>;
+  /**
+   * One tail, one answer — or `notCalled` when the day budget refused
+   * (model-budget.ts). In production this is `paidClassifier`, and nothing else
+   * reaches the transport.
+   */
+  classify: (tail: string) => Promise<ClassifyOutcome>;
   memory?: AttentionMemory;
   /** The hard ceiling on model calls in one pass. Enforced, not promised. */
   maxCalls: number;
+  /**
+   * The prompt version `classify` asks under, which is half of the cache key
+   * (D3). Absent means today's single prompt. Stage 2's proposal-aware prompt
+   * passes its own version here, and must: a verdict filed under the wrong
+   * version would be answered from memory by the wrong prompt.
+   */
+  promptVersion?: number;
+  /**
+   * The checkpoint's stored usage verdict — `null` when it holds none — which
+   * is all `reach` knows about whether Fable could take a question now (plan
+   * 260910f D14). A PLAIN INPUT, read by the caller, so the pass stays free of
+   * the store; and projected into every card on every pass, never cached, so a
+   * limit that lifts reaches the next card at no cost.
+   */
+  usage?: UsageVerdict | null;
   now: () => Date;
 };
 
@@ -142,7 +188,10 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     verdictsUnreadable: 0,
     overBudget: 0,
     fromCache: 0,
+    stale: 0,
+    budgetRefused: 0,
   };
+  const promptVersion = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
 
   const material: Material[] = [];
   for (const session of options.sessions) {
@@ -193,53 +242,98 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     fingerprint: m.fingerprint,
     tail: m.kind === "dialog" ? m.text : m.tail,
   }));
-  const plan = planClassifications({ tails, cache: memory.verdicts, maxCalls: options.maxCalls });
+  const plan = planClassifications({ tails, cache: memory.verdicts, maxCalls: options.maxCalls, promptVersion });
   breakdown.fromCache = plan.cached.length;
+  breakdown.stale = plan.stale.length;
   breakdown.overBudget = plan.overBudget.length;
 
   const verdicts = new Map<string, CachedVerdict>();
   for (const hit of plan.cached) verdicts.set(hit.fingerprint, hit.verdict);
+  // STALE IS NOT ABSENT — plan 260910f D3. A verdict from another prompt version
+  // is still true about its text, so it places its card exactly as it did before
+  // versions existed. If its re-read below succeeds it is replaced; if the
+  // re-read fails, or the budget refuses it, it stands. Treating it as absent
+  // would make every question vanish into "at least N" on the pass that changed
+  // the prompt.
+  //
+  // BUT A STANDING VERDICT IS NOT A JUDGEMENT MADE THIS PASS — GPT Sol's F12.
+  // A tail we asked about and got no usable answer for is unjudged, stale
+  // verdict or not; otherwise a stale `no-question` whose re-read was refused
+  // publishes "nothing needs you". So "judged" is `judgedNow`, never
+  // `verdicts.has`, for everything in `toCall`. A stale verdict the per-pass
+  // budget did not reach was never tried, and stays uncounted, as above.
+  for (const hit of plan.stale) verdicts.set(hit.fingerprint, hit.verdict);
+  const judgedNow = new Set<string>();
   let spend: ClassifierSpend = NO_SPEND;
   // Every tail we did not get a usable answer about, with the reason. This is
   // what stops a failed pass drawing as a calm one — GPT Sol's finding 1.
   const unclassified: string[] = plan.overBudget.map(
     (t) => `${t.fingerprint}: the budget of ${options.maxCalls} call(s) did not reach it`,
   );
+  // THE DAY BUDGET'S ANSWER (D4–D6). The first datable refusal is what makes
+  // this pass `limited`; any refusal stops the asking, because the next reserve
+  // would say the same and each ask costs a lock round-trip for nothing.
+  let stopped: AttentionJudgementStopped | null = null;
+  let refusedBecause: string | null = null;
+  // Why a tail the pass TRIED to (re-)read got no usable answer this pass. Only
+  // a stale verdict still has a card for this to explain, and it says why that
+  // card's proposal is `not-reached` rather than drawn (plan 260910f D3).
+  const notReread = new Map<string, string>();
   for (const tail of plan.toCall) {
-    const answer = await options.classify(tail.tail);
-    spend = addSpend(spend, answer.spend);
-    if (answer.verdict.kind === "unreadable") {
-      // NOT CACHED, and that is the half that made finding 1 lethal rather than
-      // transient. A 429 filed under the tail's fingerprint would be answered
-      // from memory on every later pass, costing nothing and repeating the same
-      // wrong silence for as long as the agent said nothing new.
-      //
-      // **A failure is a reason to look again, never a fact to remember.** The
-      // general form, which is why this is not tidiness: *a wrong answer that is
-      // cheap to repeat outlives the condition that caused it.* The 429 lasted a
-      // second; the memory of it would have lasted until that agent spoke again,
-      // and the cost of re-asking was the only thing that could have ended it.
-      unclassified.push(`${tail.fingerprint}: ${answer.verdict.why}`);
-      continue;
+    if (refusedBecause === null) {
+      const outcome = await options.classify(tail.tail);
+      if (!("notCalled" in outcome)) {
+        spend = addSpend(spend, outcome.spend);
+        if (isCacheable(outcome.verdict)) {
+          verdicts.set(tail.fingerprint, {
+            fingerprint: tail.fingerprint,
+            classifiedAt: nowIso,
+            promptVersion,
+            // WHICH MODEL ANSWERED, as the call itself reports it — GPT Sol's
+            // F18. A proposal drawn from this verdict later is attributed to
+            // it, whatever the constant says by then.
+            model: outcome.model,
+            // Rebuilt from known fields: whatever else the object carried —
+            // a `by`, say — is not remembered (D9).
+            verdict: canonicalVerdict(outcome.verdict),
+          });
+          judgedNow.add(tail.fingerprint);
+          continue;
+        }
+        // NOT CACHED, and that is the half that made finding 1 lethal rather than
+        // transient. A 429 filed under the tail's fingerprint would be answered
+        // from memory on every later pass, costing nothing and repeating the same
+        // wrong silence for as long as the agent said nothing new.
+        //
+        // **A failure is a reason to look again, never a fact to remember.** The
+        // general form, which is why this is not tidiness: *a wrong answer that is
+        // cheap to repeat outlives the condition that caused it.* The 429 lasted a
+        // second; the memory of it would have lasted until that agent spoke again,
+        // and the cost of re-asking was the only thing that could have ended it.
+        breakdown.verdictsUnreadable += 1;
+        // Unjudged even when a stale verdict still places its card (F12).
+        unclassified.push(`${tail.fingerprint}: ${outcome.verdict.why}`);
+        notReread.set(tail.fingerprint, `its re-read failed: ${outcome.verdict.why}`);
+        continue;
+      }
+      const refusal = outcome.notCalled;
+      refusedBecause = refusal.kind === "stopped" ? refusal.stopped.why : refusal.why;
+      if (refusal.kind === "stopped") stopped = refusal.stopped;
     }
-    verdicts.set(tail.fingerprint, {
-      fingerprint: tail.fingerprint,
-      classifiedAt: nowIso,
-      verdict: answer.verdict,
-    });
+    breakdown.budgetRefused += 1;
+    unclassified.push(`${tail.fingerprint}: not asked — ${refusedBecause}`);
+    notReread.set(tail.fingerprint, `not re-read — ${refusedBecause}`);
   }
-
-  breakdown.verdictsUnreadable = unclassified.length - breakdown.overBudget;
 
   // SESSIONS, NOT FINGERPRINTS — GPT Sol's second round. Two sessions that ended
   // their turns identically share one tail and one call, which is the whole
   // saving; but if that one call fails, TWO sessions went unjudged and the number
-  // Greg reads is about sessions.
-  const unclassifiedFingerprints = new Set(
-    [...plan.overBudget.map((t) => t.fingerprint), ...plan.toCall.map((t) => t.fingerprint)].filter(
-      (f) => !verdicts.has(f),
-    ),
-  );
+  // Greg reads is about sessions. `overBudget` is fresh tails only, so none of
+  // them has a verdict; `toCall` is judged by `judgedNow` (F12, above).
+  const unclassifiedFingerprints = new Set([
+    ...plan.overBudget.map((t) => t.fingerprint),
+    ...plan.toCall.filter((t) => !judgedNow.has(t.fingerprint)).map((t) => t.fingerprint),
+  ]);
   const unclassifiedSessions = material.filter((m) => unclassifiedFingerprints.has(m.fingerprint)).length;
 
   const observations: AttentionObservation[] = [];
@@ -260,19 +354,29 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
         evidence: { kind: "dialog", question: m.question.prompt, options: m.question.options.map((o) => o.label) },
         answerability: verdict?.kind === "question" ? verdict.answerability : unknownAnswerability(verdict),
         topic: verdict?.kind === "question" ? verdict.topic : m.question.prompt,
+        // Observed, not inferred: answered in the detail pane, never routed.
+        proposal: { kind: "not-applicable" },
       });
       continue;
     }
 
-    if (verdict?.kind !== "question") continue;
+    if (cached === undefined || cached.verdict.kind !== "question") continue;
+    const question = cached.verdict;
     breakdown.questionsFound += 1;
     observations.push({
       sessionId: m.session.sessionId,
       sessionName: m.session.sessionName,
-      kind: verdict.attentionKind,
-      evidence: { kind: "prose", excerpt: m.tail, why: verdict.why },
-      answerability: verdict.answerability,
-      topic: verdict.topic,
+      kind: question.attentionKind,
+      evidence: { kind: "prose", excerpt: m.tail, why: question.why },
+      answerability: question.answerability,
+      topic: question.topic,
+      proposal: proposalFor({
+        cached,
+        promptVersion,
+        usage: options.usage ?? null,
+        notReread: notReread.get(m.fingerprint),
+        excerpt: m.tail,
+      }),
     });
   }
 
@@ -285,6 +389,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     unclassified,
     sessionsUnreadable: sessionsWeCouldNotJudge(breakdown, unclassifiedSessions),
     scannedAt: nowIso,
+    stopped,
   });
   return { list, memory: { waits, verdicts, epoch: memory.epoch }, breakdown, spend };
 }
@@ -331,6 +436,135 @@ export function breakdownBalances(b: PassBreakdown): boolean {
       b.unreadable + b.endedTurns ===
     b.scanned
   );
+}
+
+/**
+ * What a prose card says when proposals are off (D7). It names the variable so
+ * anybody reading the payload knows what turns it on, and it is never drawn.
+ */
+export const PROPOSALS_OFF_WHY =
+  "proposals are off: the Overseer asks the plain question unless OVERSEER_PROPOSALS=1 is set in its environment";
+
+/**
+ * Who proposed it — THIS CODE, never the model's own output (plan 260910f D9),
+ * from the model the call reported and the pass recorded beside the verdict
+ * (GPT Sol's F18) — not from the constant, which may have changed since.
+ */
+function proposalAuthor(model: string): ProposalAuthor {
+  return { kind: "model", model, via: "overseer" };
+}
+
+/**
+ * Could the proposed holder take it now? Projected on EVERY pass from the
+ * usage reading the caller hands in, and never remembered (D14), so a limit
+ * that lifts reaches the next card at no cost.
+ *
+ * **Missing capability is shown, never substituted**: a Fable question whose
+ * Fable is limited still names Fable, with `unavailable`. And where nothing is
+ * measured it says `not-checked` rather than hoping — the checkpoint carries
+ * no Codex reading and nothing reads the Overseer's own capacity.
+ */
+export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict | null): ProposalReach {
+  switch (recipient) {
+    case "greg":
+    case "self":
+      return { kind: "available" };
+    case "fable": {
+      if (usage?.level === "limited") {
+        const detail = usage.reasons[0];
+        return {
+          kind: "unavailable",
+          why: `the last usage pass found this account's Claude limit hit${detail === undefined ? "" : ` (${detail})`}`,
+        };
+      }
+      return {
+        kind: "not-checked",
+        why:
+          usage === null
+            ? "the checkpoint holds no usage reading"
+            : "only a hit usage limit is checked; nothing checks that Fable can take a question now",
+      };
+    }
+    case "sol":
+      return { kind: "not-checked", why: "the checkpoint carries no Codex reading" };
+    case "overseer":
+      return { kind: "not-checked", why: "nothing checks the Overseer's own capacity yet" };
+  }
+}
+
+/**
+ * The proposal on a prose card, from the verdict that placed it.
+ *
+ * `off` when this pass is not proposal-aware, whatever the verdict holds — a
+ * version-2 verdict left in memory after proposals are turned off is not
+ * drawn. `not-reached` when the verdict came from another prompt (stale, D3),
+ * or when the model that made it was never recorded (F18): it still places the
+ * card, and says whether its re-read was refused, failed, or not reached by the
+ * per-pass budget.
+ */
+function proposalFor(input: {
+  cached: CachedVerdict;
+  promptVersion: number;
+  usage: UsageVerdict | null;
+  notReread: string | undefined;
+  /** The tail this card publishes as its evidence, which a quote must be in. */
+  excerpt: string;
+}): AttentionProposal {
+  const { cached, promptVersion } = input;
+  if (promptVersion !== PROPOSAL_PROMPT_VERSION) return { kind: "off", why: PROPOSALS_OFF_WHY };
+  if (cached.promptVersion !== promptVersion) {
+    return {
+      kind: "not-reached",
+      why:
+        input.notReread === undefined
+          ? "this card's verdict came from an earlier prompt and the pass's per-pass budget has not yet reached its re-read"
+          : `this card's verdict came from an earlier prompt, and ${input.notReread}`,
+    };
+  }
+  const v = cached.verdict;
+  // `parseVerdict` and the memory parser both refuse a version-2 question with
+  // no proposal, so this is unreachable — but a card with no proposal is not a
+  // card with a default one.
+  if (v.kind !== "question" || v.recipient === undefined) {
+    return { kind: "not-reached", why: "the verdict carries no proposal" };
+  }
+  // WHO MADE IT, from the record — GPT Sol's F18. A verdict remembered before
+  // models were recorded has no author on disk, and today's constant is not
+  // one: it is re-read first (`authorUnknown`), and drawn under nobody's name
+  // until then.
+  if (cached.model === null) {
+    const unknown = "this card's verdict was remembered before the model that made it was recorded";
+    return {
+      kind: "not-reached",
+      why:
+        input.notReread === undefined
+          ? `${unknown}, and the pass's per-pass budget has not yet reached its re-read`
+          : `${unknown}, and ${input.notReread}`,
+    };
+  }
+  // The model is part of the identity: two models' proposals about one tail are
+  // two proposals, and a later mark or veto must say which it was about.
+  const id = `${cached.fingerprint}:v${promptVersion}:${cached.model}`;
+  const by = proposalAuthor(cached.model);
+  if (v.recipient === "unplaced") return { kind: "unplaced", id, why: v.unplacedWhy, by };
+  // THE PRODUCER NEVER PUBLISHES WHAT ITS CONSUMERS REFUSE. Every parser of the
+  // list refuses a quote outside its bounds or absent from the item's own
+  // excerpt (F15, F17), and one refused item degrades the WHOLE list to
+  // `unknown`. `parseVerdict` checked both before caching, against the tail the
+  // model read; this checks them again against the tail this card publishes,
+  // since a fingerprint excludes some of a pane and a verdict can outlive a
+  // bound. The card stays either way — only the proposal is withheld.
+  const problem = asksOutOfBounds(v.asks) ?? (quotedIn(v.asks, input.excerpt) ? null : "its quoted sentence is not in the tail this card shows");
+  if (problem !== null) return { kind: "not-reached", why: `this card's proposal is withheld: ${problem}` };
+  return {
+    kind: "proposed",
+    id,
+    recipient: v.recipient,
+    reason: v.reason,
+    asks: v.asks,
+    by,
+    reach: projectReach(v.recipient, input.usage),
+  };
 }
 
 function unknownAnswerability(verdict: ClassifierVerdict | undefined): AttentionAnswerability {

@@ -43,7 +43,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
-import type { CacheableVerdict, CachedVerdict } from "./attention-classify.js";
+import {
+  PROPOSAL_PROMPT_VERSION,
+  PROPOSAL_RECIPIENTS,
+  asksOutOfBounds,
+  type CacheableVerdict,
+  type CachedVerdict,
+  type VerdictRoute,
+} from "./attention-classify.js";
 import type { AttentionWaits } from "./attention.js";
 import { writeAtomically } from "./jsonl.js";
 
@@ -56,8 +63,31 @@ export const ATTENTION_MEMORY_FILE = "attention.json";
  * Nothing else reads this file — it is the pass talking to its future self — so
  * the version is here to make a shape change an explicit refusal rather than a
  * silent misread of somebody's fields.
+ *
+ * **Bumped to 2 by the proposal-aware prompt (plan 260910f Stage 2), exactly as
+ * the note here said it must be.** Schema 1 added `promptVersion` without a
+ * bump, because every verdict it wrote was version 1 — the older reader's own
+ * prompt. Version 2 verdicts now land here too, and a reader from before prompt
+ * versions would take them for its own; so a schema-1 reader now refuses this
+ * file and rebuilds (a fleet's worth of cheap calls, once), rather than
+ * misfiling. THIS build still reads schema 1 (`READABLE_SCHEMAS`), so the
+ * upgrade costs nothing: every field schema 1 has means the same here.
+ *
+ * **Bumped to 3 by the recorded model (GPT Sol's F18).** Each verdict now
+ * carries the `model` that made it, and a proposal is attributed to that. A
+ * schema-2 reader would ignore the field and stamp its own constant on every
+ * remembered proposal — wrong rather than poorer, once the constant or an
+ * override differs — so it refuses this file and rebuilds instead. This build
+ * reads 1 and 2 with every `model` unknown (`null`).
  */
-export const ATTENTION_MEMORY_SCHEMA = 1;
+export const ATTENTION_MEMORY_SCHEMA = 3;
+
+/**
+ * The schemas this build can read. 1 is a subset of 2 (no verdict carries a
+ * proposal), and 2 of 3 (no verdict records its model: each reads as `null`,
+ * and a remembered proposal among them is re-read before it is drawn).
+ */
+const READABLE_SCHEMAS: readonly unknown[] = [1, 2, ATTENTION_MEMORY_SCHEMA];
 
 export type AttentionMemory = {
   readonly waits: AttentionWaits;
@@ -122,13 +152,43 @@ function parseCachedVerdict(u: unknown): CacheableVerdict | null {
   if (!(ATTENTION_KINDS as readonly string[]).includes(attentionKind)) return null;
   const answerability = parseAnswerability(v["answerability"]);
   if (answerability === null) return null;
-  return {
-    kind: "question",
+  const base = {
+    kind: "question" as const,
     topic,
     why,
     attentionKind: attentionKind as AttentionKind,
     answerability,
   };
+  if (v["recipient"] === undefined) return base;
+  const route = parseRoute(v);
+  return route === null ? null : { ...base, ...route };
+}
+
+function nonBlank(u: unknown): string | null {
+  return typeof u === "string" && u.trim() !== "" ? u : null;
+}
+
+/**
+ * A remembered proposal, every arm in full — the same refusal `parseVerdict`
+ * makes of the model, made again of the disk. An unknown recipient is a
+ * corrupted memory, never a default (plan 260910f D8). The quote cannot be
+ * re-checked against the tail here — the tail is not in the file — but it was
+ * checked before it was ever cached (D13), and a verdict filed under a
+ * fingerprint is about exactly that tail. Its LENGTH can be checked, and is
+ * (F17): `parseVerdict` refuses a quote outside the bounds, so a remembered one
+ * was not written by this build's pass.
+ */
+function parseRoute(v: Record<string, unknown>): VerdictRoute | null {
+  const recipient = v["recipient"];
+  if (recipient === "unplaced") {
+    const unplacedWhy = nonBlank(v["unplacedWhy"]);
+    return unplacedWhy === null ? null : { recipient, unplacedWhy };
+  }
+  const known = PROPOSAL_RECIPIENTS.find((r) => r === recipient);
+  const reason = nonBlank(v["reason"]);
+  const asks = nonBlank(v["asks"]);
+  if (known === undefined || reason === null || asks === null || asksOutOfBounds(asks) !== null) return null;
+  return { recipient: known, reason, asks };
 }
 
 /** Every arm, spelled out, so an unknown one is refused rather than cast. */
@@ -150,8 +210,8 @@ export function parseAttentionMemory(u: unknown): AttentionMemoryRead {
     return { kind: "unusable", why: "the memory is not a JSON object" };
   }
   const o = u as Record<string, unknown>;
-  if (o["schema"] !== ATTENTION_MEMORY_SCHEMA) {
-    return { kind: "unusable", why: `schema ${JSON.stringify(o["schema"])} is not ${ATTENTION_MEMORY_SCHEMA}` };
+  if (!READABLE_SCHEMAS.includes(o["schema"])) {
+    return { kind: "unusable", why: `schema ${JSON.stringify(o["schema"])} is not one of ${READABLE_SCHEMAS.join(", ")}` };
   }
   const epoch = o["epoch"];
   if (typeof epoch !== "string") return { kind: "unusable", why: "`epoch` is not a string" };
@@ -183,7 +243,38 @@ export function parseAttentionMemory(u: unknown): AttentionMemoryRead {
     }
     const verdict = parseCachedVerdict(r["verdict"]);
     if (verdict === null) return { kind: "unusable", why: `the verdict for ${k} is not a verdict this build knows` };
-    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], verdict });
+    // ABSENT IS STALE, NOT CORRUPT — plan 260910f D3. A memory written before
+    // prompt versions existed holds verdicts that are still true about their
+    // text; only which prompt made them is unknown. `null` is never the active
+    // version, so each one goes on placing its card and is re-read first.
+    // Refusing the file instead would cost a fleet's worth of calls and lose
+    // nothing. A version that is PRESENT and not a version is corruption, and is
+    // refused like every other field here: a mangled one might read as current.
+    const rawVersion = r["promptVersion"];
+    let promptVersion: number | null;
+    if (rawVersion === undefined || rawVersion === null) promptVersion = null;
+    else if (typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0) promptVersion = rawVersion;
+    else return { kind: "unusable", why: `the verdict for ${k} names prompt version ${JSON.stringify(rawVersion)}, which is not a version` };
+    // A VERSION-2 QUESTION ALWAYS CARRIES ITS PROPOSAL — `parseVerdict` refuses
+    // one without (D8). One filed under version 2 with none is corruption, and
+    // believing it would draw a proposal-aware card with nothing proposed.
+    if (promptVersion === PROPOSAL_PROMPT_VERSION && verdict.kind === "question" && verdict.recipient === undefined) {
+      return { kind: "unusable", why: `the verdict for ${k} is filed under prompt version ${promptVersion} and carries no proposal` };
+    }
+    // THE MODEL THAT MADE IT — GPT Sol's F18. Absent (schemas 1 and 2) is
+    // UNKNOWN, `null`, and never the current constant: which model wrote a
+    // schema-2 verdict is not on disk, and `ClassifierOptions.model` could
+    // always override the constant, so no build can vouch for it. A proposal
+    // with an unknown author is re-read before it is drawn (`authorUnknown`); a
+    // verdict nothing attributes is used as it is. Present and not a model id
+    // is corruption, refused like the prompt version: it would be drawn as an
+    // author.
+    const rawModel = r["model"];
+    let model: string | null;
+    if (rawModel === undefined || rawModel === null) model = null;
+    else if (typeof rawModel === "string" && rawModel.trim() !== "") model = rawModel;
+    else return { kind: "unusable", why: `the verdict for ${k} names model ${JSON.stringify(rawModel)}, which is not a model id` };
+    verdicts.set(k, { fingerprint: k, classifiedAt: r["classifiedAt"], promptVersion, model, verdict });
   }
   return { kind: "memory", memory: { waits, verdicts, epoch } };
 }

@@ -446,6 +446,60 @@ F1 is also my own finding M1, made independently while the review was running.
   `onUnknown: "clear"` and `usageStaleAfterMs` of 30 minutes, and the planner takes the result as a
   value.
 
+**M11: the account, a runtime choice pinned per occurrence (settled with `launch-protocol`,
+2026-09-10). This replaces M5's single daemon-wide gate.**
+- A scheduled session runs on a registered **Claude pool account** that the scheduler chooses at
+  plan time, never the daemon's own. The reason is the existing policy in `dispatch.ts`:
+  "dispatched work must draw only from pool accounts". run-claude has no `--account auto`, and
+  without the flag it inherits the daemon's `CLAUDE_CONFIG_DIR` through tmux.
+- The protocol's `RunSpec` gains `account`. The account is pinned in `planned` and `intent.json`,
+  and it's part of F5's conflict check. The adapter passes `--account <handle>` and strips the
+  account variables from the session's environment. run-claude refuses a bad handle into exit.json.
+- **Chosen per tick.** The daemon's `AccountChoice` is the first Claude pool account, in registry
+  order, whose `bothGates(healthGate, accountQuotaGate)` is clear. No clear account means
+  `usage-held`.
+- **Not part of the job's authority.** The hashed run spec stays `{ timeoutMinutes, access }`,
+  because which account runs a job is not something Greg authorises per job.
+- **A resume keeps its stored account.** It holds while that account is held, and never re-plans:
+  the same key with a different run is a conflict. The accepted cost: a waiting occurrence stays on
+  its account until that account clears, or until the job's hash moves and `abandon` supersedes it.
+
+**M12: an abandoned occurrence releases its due instant; a lost account forces an abandon
+(settled with `launch-protocol`, 2026-09-10). This overrides the "one interval lost" wording of
+Fable's P4 and P5 above.**
+- **The strand it closes.** An occurrence pinned to an account that has left the registry, or whose
+  credential is gone for good, would never clear its gate. Under M11's "a resume keeps its
+  account", it would wait until the job's hash moved, which may be never. (Found by
+  `launch-protocol`.)
+- **The new `LastRun` arm, `replaced`.** Any `failed-before-launch` with proof `superseded`,
+  whatever the reason for the abandon, reads as `replaced { at: endedAt }`, not `settled`.
+  - `due()` answers `due` with `dueAt = at`, not `at + everyMs`.
+  - The replacement's `scheduledAt`, and so its occurrence id, is the abandonment's `endedAt`: a
+    new id, no F5 conflict, and the abandoned id is never passed to the protocol again.
+  - Supersession, rollback and a lost account therefore all replan at once. P4's crash window and
+    P5's rollback no longer cost an interval. A crash between `abandon` and the new `plan()`
+    replans on the next tick.
+- **Per-account standing.** The daemon's `AccountChoice` carries `standing(handle)`, which answers
+  `clear`, `held` or `gone`.
+  - `gone` means the account is not a registered Claude pool account, or its credential is
+    permanently unusable.
+  - A waiting occurrence's stored account decides what happens: `clear` → resume; `held` →
+    `usage-held`, naming the account; `gone` → `abandon(id, "pinned account … is no longer
+    usable: …")`, and the replacement plans on this same tick, on the chosen account, or it holds.
+  - A waiting occurrence holds no slot, because `planned` and `waiting-admission` have no
+    reservation. So a wait on a busy account only ever delays its own job, never another job or a
+    resume.
+- **Not in v1: a staleness bound**, such as "abandon a scheduled occurrence waiting longer than N
+  intervals rather than launch it late". It is a possible later policy, on the same `abandon`. The
+  protocol does not need to know about it.
+- **The test Sol named for F1, updated:**
+  1. Revision A waits.
+  2. Revision B supersedes it, and B launches once.
+  3. A rollback to A abandons B, and a fresh occurrence (a new id) launches once.
+  4. A's original id is never passed to the protocol again.
+  - Plus: a pinned account going `gone` abandons the waiting occurrence and replans once, on
+    another account.
+
 **Stage A departures, as built and accepted.**
 - A disposition is dated by its own `at`.
 - The commands follow the result, not the bare state.
@@ -539,3 +593,36 @@ roadmap stage's status.
   `timedOut` are gone; and `verdict.cause` adds `wrapper`, `prompt-unverified` and `hangup`. Stage A's
   `ObservedExitRecord` and ladder are reworked to that shape in Stage B's `observedOf` adapter
   commit, before anything feeds them real records.
+
+**2026-09-10: Stage B started, against a local merge.**
+- To take the wait off the critical path, `worktree-launch-protocol` at 0792c1cb (its Stages 1, 1b
+  and 2) is merged into this branch **locally** (11ee6139): typecheck exit 0; 396 tests in the
+  protocol's and Stage A's suites.
+- **Nothing from this branch is pushed until launch-protocol lands those stages, and its 2b round
+  with `view()`, on dev itself.** Merging dev then takes its final versions. Neither side rebases.
+- Two Opus builders run in parallel on disjoint files:
+  - **B1**: the model, planner, scheduler, dispatch deletion, standing jobs, preview and activation;
+  - **B2**: `ObservedExitRecord` reworked to the protocol's final exit.json shape, and the
+    `observedOf` adapter in `tools/overseer/observed-launch.ts`.
+- `view()` is declared locally in `scheduler.ts` until the protocol ships it.
+
+**2026-09-10: Stage B built (B1 2dac033f, B2 ae3e18cd, B3 46f5da98).**
+- Merged with launch-protocol's Stage 2b at a866b2e4. Stage B then moved off its stand-in types
+  onto the protocol's real `view()` and `RunSpec.account`.
+- M13: an occurrence abandoned because a newer revision replaced it, or because its pinned account
+  is gone, now reads as a neutral `superseded`, not as `launch-failed`.
+- Gates rerun by the author at 46f5da98: typecheck exit 0; 25 focused files, 880 tests.
+- GPT Sol's stage review is under way:
+  [260910f-scheduled-dispatch-stageB-review-sol-prompt.md](260910f-scheduled-dispatch-stageB-review-sol-prompt.md).
+
+**2026-09-10, ~21:15Z: stopped here, by Greg's reprioritisation.**
+- Greg, through the Overseer: *Overseer and dashboard work drops to the very bottom of the
+  priorities and Spideryarn product work comes up.* So Stage B is finished and landed, and **Stage C
+  is not started.**
+- Its brief, [260910f-scheduled-dispatch-stageC-task.md](260910f-scheduled-dispatch-stageC-task.md),
+  is ready for whoever picks it up.
+- **Stage C waits on the launch protocol's own Stage 3.** That is the protocol composed in
+  `daemon.ts`, the launch inbox and `overseer-launches.ts`, and the launches projection.
+  `launch-protocol` landed its Stages 1, 1b, 2 and 2b and stopped without building it.
+- Until then, the daemon passes a "not wired" launch capability and `AccountChoice`. So the
+  scheduler holds no session capability, and nothing launches, whatever the arming.

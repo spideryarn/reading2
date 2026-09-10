@@ -83,6 +83,10 @@ reconstruct the argument afterwards? Do they quote the piece?
 experiment and a demo. Explicitly *not* time-in-app or articles-completed
 ([anti-goals](vision.md#anti-goals)).
 
+A study that would answer it, for Greg to run:
+[260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
+— written 2026-09-10, not yet run.
+
 ---
 
 ## Q7 — Which model, and how much does a tree cost? — **answered 2026-09-07** <a id="q7"></a>

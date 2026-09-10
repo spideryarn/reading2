@@ -237,6 +237,12 @@ export function runChild(opts: {
   cwd?: string;
   /** Required, so a new caller cannot inherit fd 0 by leaving an argument off. See {@link ChildStdin}. */
   stdin: ChildStdin;
+  /**
+   * Told how the child ended when THIS process is hung up, synchronously, before the SIGHUP is
+   * re-raised. A process that dies of a signal never reaches 'exit', so this is a caller's last
+   * chance to record the run. See the SIGHUP handler below.
+   */
+  onHangup?: ((result: RunResult) => void) | undefined;
 }): Promise<RunResult> {
   return new Promise((settle) => {
     const fd0 = opts.stdin.kind === 'closed' ? 'ignore' : opts.stdin.fd;
@@ -312,9 +318,47 @@ export function runChild(opts: {
       process.kill(process.pid, sig);
     };
     const onInt = onSignal('SIGINT'), onTerm = onSignal('SIGTERM');
-    const detachSignals = (): void => { process.off('SIGINT', onInt); process.off('SIGTERM', onTerm); };
+    const detachSignals = (): void => {
+      process.off('SIGINT', onInt); process.off('SIGTERM', onTerm); process.off('SIGHUP', onHup);
+    };
     process.on('SIGINT', onInt);
     process.on('SIGTERM', onTerm);
+
+    /**
+     * SIGHUP — a closed tmux pane, a closed terminal — reaches THIS process and not the child,
+     * which `detached` put in a process group and a session of its own. Until 2026-09-10 nothing
+     * listened, so the wrapper died of it at once and left the CLI running as an orphan: measured
+     * with a real pane on a scratch tmux socket (tests/run-claude.test.ts).
+     *
+     * So it is forwarded to the child's group like SIGTERM, and then WAITED FOR within the same
+     * kill grace — SIGKILL at the grace — before it is re-raised, so the child is gone before this
+     * process is. `onHangup` hears how the child ended first, synchronously. SIGINT and SIGTERM are
+     * untouched.
+     */
+    let hungUp = false, hangupRaised = false, childGone = false;
+    let hangupTimer: NodeJS.Timeout | undefined;
+    const raiseHangup = (): void => {
+      if (hangupRaised) return;
+      hangupRaised = true;
+      clearTimeout(hangupTimer);
+      stopTimers();
+      flush();
+      try {
+        opts.onHangup?.({ status: exitStatus, signal: exitSignal, timedOut, overflowed, stdout, stderr });
+      } finally {
+        detachSignals();
+        process.kill(process.pid, 'SIGHUP');
+      }
+    };
+    const onHup = (): void => {
+      if (hungUp) return;
+      hungUp = true;
+      killTree('SIGHUP');
+      if (childGone) { raiseHangup(); return; }
+      // setImmediate for the reason the watchdog gives: an 'exit' landing in this tick still counts.
+      hangupTimer = setTimeout(() => { killTree('SIGKILL'); setImmediate(raiseHangup); }, GRACE_MS);
+    };
+    process.on('SIGHUP', onHup);
 
     const finish = (r: RunResult): void => {
       if (settled) return;
@@ -379,6 +423,9 @@ export function runChild(opts: {
     child.on('exit', (status, signal) => {
       exitStatus = status;
       exitSignal = signal;
+      childGone = true;
+      // Hung up and waiting: the child is gone, so the hangup can be re-raised now.
+      if (hungUp) raiseHangup();
       armForcedSettle();
     });
   });

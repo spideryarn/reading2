@@ -1,0 +1,16 @@
+
+❯ fix the tooltip copy
+
+● Fixed: the tooltip now says the mode opens a panel rather than that it runs anything, on all four surfaces it is
+  drawn on. Typecheck exit 0, the 31 scoped tests green, lint clean on the two files.
+
+  Want me to commit and push it to dev?
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

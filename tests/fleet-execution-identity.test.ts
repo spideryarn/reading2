@@ -247,13 +247,20 @@ describe("a resumed claude, whose command line carries no --session-id", () => {
     });
   }
 
-  it("is a verified conversation with the resumed id, exactly as --session-id is", () => {
-    expect(readingFor(capture.ps.line, CAPTURED_PID, capture.conversationId)).toMatchObject({
-      kind: "verified",
-      harness: "claude-code",
-      token: { boot: BOOT_UUID, pid: CAPTURED_PID },
-      conversation: { kind: "verified", id: capture.conversationId },
+  /**
+   * GPT Sol's G21: a `ps` line cannot say where a `--resume` value ends — a
+   * one-argument picker search prints exactly this line — so the resumed id is
+   * NOT read off it, and the pane is `claimed-only`, as it was before Stage 3a.
+   * Verifying a resumed pane needs a faithful `/proc/<pid>/cmdline` read of the
+   * harness, which is Stage 3b's, not built here.
+   */
+  it("is claimed-only, not a verified conversation: the resumed id cannot be read off `ps`", () => {
+    const reading = readingFor(capture.ps.line, CAPTURED_PID, capture.conversationId);
+    expect(reading).toMatchObject({
+      kind: "claimed-only",
+      conversation: { kind: "unverifiable", claimed: capture.conversationId },
     });
+    expect(reading.kind === "claimed-only" && reading.why).toContain("--resume");
   });
 
   it("under the gjd-remote job shell too, which is where a resume will really run", () => {
@@ -263,16 +270,15 @@ describe("a resumed claude, whose command line carries no --session-id", () => {
       capture.ps.line.replace(`${CAPTURED_PID} 1224599`, `${CAPTURED_PID} ${JOB_SHELL}`),
     ].join("\n");
     expect(readingFor(tree, JOB_SHELL, capture.conversationId)).toMatchObject({
-      kind: "verified",
-      harness: "claude-code",
-      conversation: { kind: "verified", id: capture.conversationId },
+      kind: "claimed-only",
+      conversation: { kind: "unverifiable", claimed: capture.conversationId },
     });
   });
 
-  it("a pane that claims one conversation and resumed another is conflicting, never verified", () => {
+  it("a pane that claims another conversation is not verified either, and names no observed id", () => {
     expect(readingFor(capture.ps.line, CAPTURED_PID, ANOTHER)).toMatchObject({
-      kind: "verified",
-      conversation: { kind: "conflicting", claimed: ANOTHER, observed: capture.conversationId },
+      kind: "claimed-only",
+      conversation: { kind: "unverifiable", claimed: ANOTHER },
     });
   });
 });

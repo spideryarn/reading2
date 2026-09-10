@@ -267,6 +267,19 @@ problems:
   terminal `end`** before anything opens a device. The wait is the part that was missing for a
   round: `abort()` promises disconnection and a later `end`, not synchronous release. Bounded at
   200ms and paid once per page, since the answer is cached.
+
+  **And it is asked only on Chromium, since 2026-09-10.** On WebKit the probe's `start()` can reach
+  the per-site microphone-permission path before the abort lands, and the source contains no path
+  for that abort to cancel permission UI already requested. This is the source-traced explanation
+  for Greg's two-prompt report; the fix has not yet been run on an iPhone. `probeIsSafe()` requires
+  the `Chromium` brand inside `navigator.userAgentData`. Presence alone is not enough: WebKit has
+  implemented the property behind an internal setting and a site-specific quirk. This is an engine
+  check on purpose, because the behaviour cannot be observed without paying the prompt. Greg's
+  report, [260910g](../plans/260910g-dictation-asks-for-the-microphone-twice-on-iphone.md), and
+  the class it belongs to,
+  [a cancelled request still asks the reader](../postmortems/260910e-a-cancelled-request-still-asks-the-reader.md).
+  Whoever writes the next probe: list what the attempt *shows a person* before trusting a cancel to
+  undo it.
 - **Across hooks**, [`mic-lock.ts`](../../src/web/mic-lock.ts). Every box has its own hook, each
   perfectly correct on its own; `/profile` has two on screen at once. A second claim asks the
   first to stop *properly* — keeping its words — and waits for its track actually to go.

@@ -38,15 +38,18 @@ import type {
   SchedulePreviewAttempt,
   SchedulePreviewDocument,
   SchedulePreviewJob,
+  SchedulePreviewLaunchStanding,
+  SchedulePreviewLaunchState,
   SchedulePreviewNext,
   SchedulePreviewParse,
   SchedulePreviewRow,
+  SchedulePreviewRun,
   SchedulePreviewVerdict,
   SchedulePreviewVerdictKind,
 } from "./wire.js";
 
 /** The schema this build writes and reads. The writer stamps it; a file with any other number is `unsupported-schema`. */
-export const SCHEDULE_PREVIEW_SCHEMA = 1;
+export const SCHEDULE_PREVIEW_SCHEMA = 2;
 
 /**
  * The file's name, inside the Overseer store directory — beside `armed.json`,
@@ -86,6 +89,8 @@ const VERDICT_KINDS: { readonly [K in SchedulePreviewVerdictKind]: true } = {
   "not-yet-eligible": true,
   "dry-run": true,
   "spacing-held": true,
+  "usage-held": true,
+  resume: true,
   dispatch: true,
 };
 
@@ -99,6 +104,8 @@ const VERDICT_NEXT_KINDS: Readonly<Record<SchedulePreviewVerdictKind, ReadonlySe
   "not-yet-eligible": new Set(["first-eligible"]),
   "dry-run": new Set(["due-now"]),
   "spacing-held": new Set(["next-due"]),
+  "usage-held": new Set(["next-due", "none"]),
+  resume: new Set(["due-now"]),
   dispatch: new Set(["due-now"]),
 };
 
@@ -124,6 +131,7 @@ export function parseSchedulePreview(json: unknown): SchedulePreviewParse {
       capabilities: parseCapabilities(object(top["capabilities"], "capabilities")),
       arming: parseArming(object(top["arming"], "arming")),
       history: parseHistory(object(top["history"], "history")),
+      sessionHistory: parseSessionHistory(object(top["sessionHistory"], "sessionHistory")),
       headline: parseHeadline(object(top["headline"], "headline")),
       missedRunPolicy: parseMissedRunPolicy(object(top["missedRunPolicy"], "missedRunPolicy")),
       caveat: text(top, "caveat", "the schedule preview"),
@@ -152,10 +160,14 @@ function parseJob(value: unknown): SchedulePreviewJob {
   const resourceClass = text(job, "resourceClass", where);
   if (resourceClass !== "claude-session" && resourceClass !== "in-process-rule") fail(`${where} has a resource class this build does not know (${resourceClass})`);
   const schedule = object(job["schedule"], `${where}'s schedule`);
-  const sessionTimeout = job["sessionTimeout"];
+  const sessionTimeout = parseRun(job["sessionTimeout"], where);
   const sessionNoOverlap = job["sessionNoOverlap"];
-  if (sessionTimeout !== "not built") fail(`${where} says its session timeout is ${JSON.stringify(sessionTimeout)}, which this build does not know how to show`);
-  if (sessionNoOverlap !== "not enforced") fail(`${where} says its session no-overlap is ${JSON.stringify(sessionNoOverlap)}, which this build does not know how to show`);
+  if (sessionNoOverlap !== "enforced") fail(`${where} says its session no-overlap is ${JSON.stringify(sessionNoOverlap)}, which this build does not know how to show`);
+  // A SESSION ROW CARRIES A RUN SPEC AND A RULE ROW DOES NOT: a known word in an
+  // impossible pairing is still an unknown row.
+  if ((resourceClass === "claude-session") !== (sessionTimeout.kind === "run-spec")) {
+    fail(`${where} is a ${resourceClass} whose session timeout is ${sessionTimeout.kind}, a combination this build does not know`);
+  }
   return {
     jobId,
     resourceClass,
@@ -240,6 +252,7 @@ function parseAttempt(value: Obj, where: string): SchedulePreviewAttempt {
   const kind = text(value, "kind", where);
   if (kind === "never") return { kind };
   if (kind === "not-known") return { kind, why: text(value, "why", where) };
+  if (kind === "launch") return parseLaunchAttempt(value, where);
   if (!OCCURRENCE_STATES.has(kind)) fail(`${where} has a last-attempt state this build does not know (${kind})`);
   const occurrenceId = nonBlank(value, "occurrenceId", where);
   const reservedAt = instant(value, "reservedAt", where);
@@ -286,6 +299,54 @@ function parseOutcome(value: Obj, where: string): { kind: "exited"; code: number
   if (kind === "exited") return { kind, code: integer(value, "code", where) };
   if (kind === "failed") return { kind, why: text(value, "why", where) };
   return fail(`${where} has an outcome this build does not know (${kind})`);
+}
+
+/** A session job's run spec, or a rule's lack of one. */
+function parseRun(value: unknown, where: string): SchedulePreviewRun {
+  const run = object(value, `${where}'s session timeout`);
+  const kind = text(run, "kind", where);
+  if (kind === "not-a-session") return { kind };
+  if (kind !== "run-spec") return fail(`${where} has a session timeout of a kind this build does not know (${kind})`);
+  const timeoutMinutes = integer(run, "timeoutMinutes", where);
+  if (timeoutMinutes < 1) fail(`${where}'s session timeout is not a positive number of minutes`);
+  const access = text(run, "access", where);
+  if (access !== "read-only" && access !== "review" && access !== "write") return fail(`${where} has an access profile this build does not know (${access})`);
+  return { kind, timeoutMinutes, access };
+}
+
+/**
+ * The states each launch standing can hold. A state under the wrong standing
+ * — `completed` claiming to be `open`, say — is an unknown row, never drawn as
+ * one of the two.
+ */
+const LAUNCH_STATES: Readonly<Record<SchedulePreviewLaunchStanding, ReadonlySet<string>>> = {
+  resumable: new Set<SchedulePreviewLaunchState>(["planned", "waiting-admission"]),
+  open: new Set<SchedulePreviewLaunchState>(["reserved", "launching", "observed-running", "outcome-unknown", "carried"]),
+  settled: new Set<SchedulePreviewLaunchState>(["completed", "failed-before-launch", "disposed"]),
+  replaced: new Set<SchedulePreviewLaunchState>(["superseded"]),
+};
+
+/** A session job's newest occurrence, as the launch journal holds it. `endedAt` is present exactly when it ended. */
+function parseLaunchAttempt(value: Obj, where: string): SchedulePreviewAttempt {
+  const standing = text(value, "standing", where);
+  if (!Object.hasOwn(LAUNCH_STATES, standing)) fail(`${where} has a launch standing this build does not know (${standing})`);
+  const known = standing as SchedulePreviewLaunchStanding;
+  const state = text(value, "state", where);
+  if (!LAUNCH_STATES[known].has(state)) fail(`${where} has launch state ${state} under standing ${known}, a combination this build does not know`);
+  const ended = known === "settled" || known === "replaced";
+  const endedAt = value["endedAt"] === null ? null : instant(value, "endedAt", where);
+  if (ended !== (endedAt !== null)) fail(`${where} is a ${known} launch ${endedAt === null ? "with no end" : "with an end"}, a combination this build does not know`);
+  return {
+    kind: "launch",
+    occurrenceId: nonBlank(value, "occurrenceId", where),
+    launchId: nonBlank(value, "launchId", where),
+    plannedAt: instant(value, "plannedAt", where),
+    state: state as SchedulePreviewLaunchState,
+    standing: known,
+    endedAt,
+    why: text(value, "why", where),
+    meaning: text(value, "meaning", where),
+  };
 }
 
 function parseNoticed(value: Obj, where: string): { kind: "derived" } | { kind: "recorded"; at: string } {
@@ -369,6 +430,12 @@ function parseHistory(value: Obj): ParsedSchedulePreview["history"] {
   if (kind === "intact") return { kind };
   if (kind === "lost") return { kind, why: text(value, "why", "history") };
   return fail(`the ledger's history is of a kind this build does not know (${kind})`);
+}
+
+function parseSessionHistory(value: Obj): ParsedSchedulePreview["sessionHistory"] {
+  const kind = text(value, "kind", "sessionHistory");
+  if (kind === "unavailable") return { kind, why: text(value, "why", "sessionHistory") };
+  return parseHistory(value);
 }
 
 function parseHeadline(value: Obj): ParsedSchedulePreview["headline"] {

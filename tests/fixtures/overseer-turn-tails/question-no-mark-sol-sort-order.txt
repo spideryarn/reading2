@@ -1,0 +1,22 @@
+
+❯ the library sort is flaky again, can you look
+
+● Found it. The shelf query orders by created_at alone, and two articles imported in the same batch share a timestamp
+  to the millisecond, so Postgres returns them in whatever order the plan gives it. That is why the test goes red
+  about one run in six and never on a quiet database.
+
+  Two ways to fix it. Add id as a tiebreak in the query itself — ORDER BY created_at DESC, id DESC — which is what
+  pg-shelf.ts already does for the public shelf, so it would be one convention rather than two. Or sort in the client
+  after the fetch, which touches nothing server-side but leaves every other caller of the query with the same
+  nondeterminism.
+
+  I have the failing test reproduced and red. Tell me which and I'll do it.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc
