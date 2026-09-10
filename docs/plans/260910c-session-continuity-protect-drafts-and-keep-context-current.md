@@ -10,11 +10,28 @@ dashboard on `536b1b68` at 12:45Z** (its decision log, `1209bc70`), so all of th
 including one tap on Start launching one session — and it chose to restart before Stage 1's second
 Sol round closed, on the grounds that the round re-checks four fixed P1s rather than reopening the
 design. **That premise did not hold**: round 2 found five new P1s (F17–F21) in the code the
-restart put live — all rare or cosmetic, none dangerous — and the Overseer was told so, with a
-recommendation to restart again at its convenience. **On `dev` since, not yet live:** the shared
-single-flight reader (`e942f57c`) and Stage 1's round-2 fixes (`bd528f2c`), at `67d28c58`. Stage 1
-discovery is closed; an independent read-only check of the F17/F18 fixes is running. **In flight:**
-2b, 5c, that check. **Still to build:** 4b, the Sessions-filter decision and the browser check.
+restart put live — all rare or cosmetic, none dangerous — and the Overseer was told so. **It
+restarted again at 14:50Z on `67d28c58`** (decision log `2cf2b4c5`), which put live Stage 1's
+round-2 fixes and the shared single-flight reader, and logged its own lesson: *"restart on closed
+rounds, or say the code is one round short when restarting early."* **Stage 1 is closed** (two Sol
+rounds and an independent check of the round-2 fixes). **On `dev` since, not yet live:** Stage 2b
+(`0e3d92c0`). **Built, being committed:** 5c. **In flight:** 4b. **Still to do:** one combined Sol
+review of Stages 2 and 4, a small follow-up passing the abort signal through `messages-client.ts`,
+the Sessions-filter decision, the browser check, and Stage 5's review.
+
+**Stage 5c — built.** An Opus subagent; eight tests in a new `tests/fleet-detail-reader.test.tsx`,
+the ones that could fail seen red, the rest proved by mutation. *Read again* now uses the shared
+single-flight reader — one per effect run, keyed on the api and the identity, stopped on teardown —
+rather than a third copy of the mechanism. A tap in the frame before the button disables is
+**dropped, not coalesced**: it is a duplicate of the tap that just started the read, and a trailing
+read would be a second multi-megabyte disk read for a sub-second freshness gain. It adds a 30 s
+deadline (`MESSAGES_READ_DEADLINE_MS`) where there was none, so a read that never answers no longer
+leaves "Reading…" on screen for the life of the tab. It found one late-discovery sequence nothing
+covered — every `fleet-web` identity test goes through `App`, where a claim change also remounts
+the reader, so none could see the hook's own logic — and added it. The detail pane's focus target is
+now a named `<section>`, implicitly a `region`, so its label is announced; biome clean on those lines.
+**Its one flag, taken as a follow-up:** `MessagesApi.recent` takes no abort signal, so a read the
+page abandons still finishes on the server — the same class as F5 for the feed.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
