@@ -32,8 +32,20 @@
  * turns anything it does not recognise into a stated unknown rather than a
  * number.
  */
+import type { StoredWorkTurn } from "../../wire.js";
+import { parseStoredWorkTurn } from "./work-client";
 
 export const HISTORY_URL = "api/health/history";
+
+/**
+ * History keeps the health carrier even when only its work decoration is from
+ * a newer or malformed wire shape. Absence still means pre-retention; this arm
+ * is the explicit, client-owned "could not tell" that prevents an unreadable
+ * work envelope from costing us an otherwise valid health reading.
+ */
+export type WorkTurnView =
+  | StoredWorkTurn
+  | { kind: "unreadable"; why: string };
 
 /** One sample, with its timestamp already parsed so no renderer has to. */
 export type HealthSampleView =
@@ -43,15 +55,17 @@ export type HealthSampleView =
       /** What the writer expected the interval to the NEXT sample to be. See history-series.ts. */
       nextDueMs: number;
       report: Record<string, unknown>;
+      /** Absent only on samples written before work retention existed. */
+      workTurn?: WorkTurnView;
     }
-  | { kind: "collector-failed"; atMs: number; nextDueMs: number; why: string }
+  | { kind: "collector-failed"; atMs: number; nextDueMs: number; why: string; workTurn?: WorkTurnView }
   /**
    * A reading was taken and could not be kept — its serialised form was over the
    * store's per-record limit. Drawn like a collector failure, because from the
    * chart's point of view it is the same fact: **we looked, and there is no
    * number.** It exists as its own arm so the reason on screen is the true one.
    */
-  | { kind: "sample-omitted"; atMs: number; nextDueMs: number; why: string };
+  | { kind: "sample-omitted"; atMs: number; nextDueMs: number; why: string; workTurn?: WorkTurnView };
 
 /** What the server says about its own ability to write the history down. */
 export type RetentionView = {
@@ -133,6 +147,19 @@ export function parseSample(raw: unknown): HealthSampleView | null {
   if (atMs === null) return null;
   const nextDueMs = num(raw["nextDueMs"]);
   if (nextDueMs === null || nextDueMs <= 0) return null;
+  const parsedWorkTurn = raw["workTurn"] === undefined ? undefined : parseStoredWorkTurn(raw["workTurn"]);
+  /* THE WORK SUMMARY MUST NEVER COST US THE HEALTH READING. A present envelope
+     that this build cannot read is neither legacy absence nor a reason to turn
+     valid load/memory evidence into a chart hole. Preserve the carrier and put
+     the failure in its own client-owned arm so the work section can say it. */
+  const workTurn = parsedWorkTurn === undefined
+    ? {}
+    : {
+        workTurn: parsedWorkTurn ?? {
+          kind: "unreadable" as const,
+          why: "the work record has a shape this page does not understand",
+        },
+      };
 
   if (raw["kind"] === "collector-failed" || raw["kind"] === "sample-omitted") {
     const why = raw["why"];
@@ -141,10 +168,11 @@ export function parseSample(raw: unknown): HealthSampleView | null {
       atMs,
       nextDueMs,
       why: typeof why === "string" && why !== "" ? why : "the collector failed and gave no reason",
+      ...workTurn,
     };
   }
   if (raw["kind"] === "reading" && isRecord(raw["report"])) {
-    return { kind: "reading", atMs, nextDueMs, report: raw["report"] };
+    return { kind: "reading", atMs, nextDueMs, report: raw["report"], ...workTurn };
   }
   return null;
 }

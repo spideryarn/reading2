@@ -25,11 +25,12 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { HealthTurn } from "../tools/fleet/health-history.js";
+import { WORK_EVERY_MS, openHealthHistory, type HealthTurn } from "../tools/fleet/health-history.js";
 import { makeHealthRetention, type HealthRetention } from "../tools/fleet/health-wiring.js";
 import { refreshOnce, type RefreshDeps } from "../tools/fleet/refresh.js";
 import type { FleetSnapshot } from "../tools/fleet/collect.js";
 import type { HealthReport } from "../tools/fleet/health.js";
+import type { WorkFeed } from "../tools/fleet/wire.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,10 +42,15 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function retention(over: { refreshMs?: number; nowMs?: () => number } = {}): HealthRetention {
+function retention(over: { refreshMs?: number; nowMs?: () => number; readWork?: (checkedAt: string) => WorkFeed } = {}): HealthRetention {
   const dir = mkdtempSync(join(tmpdir(), "fleet-health-wiring-"));
   dirs.push(dir);
-  const made = makeHealthRetention({ dir, refreshMs: over.refreshMs ?? 60_000, nowMs: over.nowMs });
+  const made = makeHealthRetention({
+    dir,
+    refreshMs: over.refreshMs ?? 60_000,
+    nowMs: over.nowMs,
+    readWork: over.readWork,
+  });
   built.push(made);
   return made;
 }
@@ -104,6 +110,60 @@ function get(made: HealthRetention, url: string): { status: number; body: Record
 }
 
 describe("a turn reaches the browser through the composition the server uses", () => {
+  it("writes due, explicit not-due, then due again at the work cadence", async () => {
+    const base = Date.parse("2026-09-08T12:00:00.000Z");
+    let now = base;
+    const checkedAt: string[] = [];
+    const made = retention({
+      nowMs: () => now,
+      readWork: (at) => {
+        checkedAt.push(at);
+        return {
+          kind: "published",
+          coordinatorWrittenAt: at,
+          work: { kind: "scan", scannedAt: at, groups: [], groupsDropped: 0, panes: { work: 0, none: 0, cannotTell: 0 } },
+        };
+      },
+    });
+    const turn = (): RefreshDeps => deps(made, { now: () => new Date(now) });
+
+    await refreshOnce(turn());
+    now = base + 60_000;
+    await refreshOnce(turn());
+    now = base + WORK_EVERY_MS;
+    await refreshOnce(turn());
+
+    const read = made.store?.read({ sinceMs: 0 });
+    if (read?.kind !== "read") throw new Error("expected readable history");
+    expect(read.samples.map((sample) => sample.workTurn?.kind)).toEqual(["due", "not-due", "due"]);
+    expect(checkedAt).toEqual([
+      new Date(base).toISOString(),
+      new Date(base + WORK_EVERY_MS).toISOString(),
+    ]);
+  });
+
+  it("makes the first turn after a restart due without consulting old history", async () => {
+    const now = Date.parse("2026-09-08T12:00:00.000Z");
+    let reads = 0;
+    const made = retention({
+      nowMs: () => now,
+      readWork: (checkedAt) => {
+        reads += 1;
+        return { kind: "checkpoint-unreadable", why: `checkpoint unavailable at ${checkedAt}` };
+      },
+    });
+
+    await refreshOnce(deps(made, { now: () => new Date(now) }));
+
+    const read = made.store?.read({ sinceMs: 0 });
+    if (read?.kind !== "read") throw new Error("expected readable history");
+    expect(reads).toBe(1);
+    expect(read.samples[0]?.workTurn).toMatchObject({
+      kind: "due",
+      result: { kind: "checkpoint-unavailable", checkedAt: new Date(now).toISOString() },
+    });
+  });
+
   it("writes a reading and serves it back, arms intact", () => {
     const made = retention({ nowMs: () => Date.parse("2026-09-08T12:00:31.000Z") });
     return refreshOnce(deps(made)).then(() => {
@@ -150,6 +210,65 @@ describe("a turn reaches the browser through the composition the server uses", (
          of them has reasons somebody actually produced. */
       expect(samples[0]).not.toHaveProperty("report");
     });
+  });
+
+  it("reads work independently when the due health turn is collector-failed", async () => {
+    const now = Date.parse("2026-09-08T12:00:00.000Z");
+    const made = retention({
+      nowMs: () => now,
+      readWork: (checkedAt) => ({
+        kind: "published",
+        coordinatorWrittenAt: checkedAt,
+        work: { kind: "scan", scannedAt: checkedAt, groups: [], groupsDropped: 0, panes: { work: 0, none: 2, cannotTell: 0 } },
+      }),
+    });
+
+    await refreshOnce(deps(made, {
+      now: () => new Date(now),
+      refreshHealth: () => ({ kind: "collector-failed", why: "collectHealth threw" }),
+    }));
+
+    const read = made.store?.read({ sinceMs: 0 });
+    if (read?.kind !== "read") throw new Error("expected readable history");
+    expect(read.samples[0]).toMatchObject({
+      kind: "collector-failed",
+      workTurn: { kind: "due", result: { kind: "scan", groups: [] } },
+    });
+  });
+
+  it("does not advance work cadence when the store refuses the append", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "fleet-health-wiring-locked-"));
+    dirs.push(dir);
+    const owner = openHealthHistory(dir);
+    if (owner.kind !== "open") throw new Error(owner.why);
+    built.push({
+      store: owner.store,
+      opened: owner,
+      lines: { log: [], error: [] },
+      route: { handle: () => false },
+      retainHealth: () => {},
+    });
+
+    let reads = 0;
+    let now = Date.parse("2026-09-08T12:00:00.000Z");
+    const locked = makeHealthRetention({
+      dir,
+      refreshMs: 60_000,
+      nowMs: () => now,
+      readWork: () => {
+        reads += 1;
+        return { kind: "checkpoint-absent" };
+      },
+    });
+    built.push(locked);
+    expect(locked.store?.status().lockedOutBy).not.toBeNull();
+
+    await refreshOnce(deps(locked, { now: () => new Date(now) }));
+    now += 60_000;
+    await refreshOnce(deps(locked, { now: () => new Date(now) }));
+
+    expect(reads).toBe(2);
+    expect(locked.store?.status().lastSuccessAt).toBeNull();
   });
 
   it("says nothing is being retained rather than serving an empty day, when the store will not open", () => {

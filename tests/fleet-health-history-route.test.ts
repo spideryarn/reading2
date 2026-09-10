@@ -10,7 +10,7 @@ import { gunzipSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import type { HealthHistory, HealthSample, HistoryRead, RetentionStatus } from "../tools/fleet/health-history.js";
+import { WORK_EVERY_MS, type HealthHistory, type HealthSample, type HistoryRead, type RetentionStatus } from "../tools/fleet/health-history.js";
 import {
   DEFAULT_WINDOW_HOURS,
   MAX_WINDOW_HOURS,
@@ -34,7 +34,7 @@ const HEALTHY_RETENTION: RetentionStatus = {
 };
 
 function storeReturning(read: HistoryRead, status: RetentionStatus = HEALTHY_RETENTION): HealthHistory {
-  return { dir: "/tmp/fixture", append: () => {}, read: () => read, status: () => status, close: () => {} };
+  return { dir: "/tmp/fixture", append: () => true, read: () => read, status: () => status, close: () => {} };
 }
 
 function ok(samples: HealthSample[], over: Partial<Extract<HistoryRead, { kind: "read" }>> = {}): HealthHistory {
@@ -126,6 +126,13 @@ describe("historyPayload", () => {
     const payload = historyPayload({ store: ok([]), refreshMs: 60_000, nowMs: () => NOW }, 24);
     if (payload.kind !== "history") throw new Error("expected a history");
     expect(payload.refreshMs).toBe(60_000);
+  });
+
+  it("tells the page the work cadence rather than making the browser hardcode it", () => {
+    const payload = historyPayload({ store: ok([]), refreshMs: 60_000, nowMs: () => NOW }, 24);
+    if (payload.kind !== "history") throw new Error("expected a history");
+    expect(WORK_EVERY_MS).toBe(5 * 60_000);
+    expect(payload.workEveryMs).toBe(5 * 60_000);
   });
 
   it("reports unreadable lines rather than swallowing them", () => {

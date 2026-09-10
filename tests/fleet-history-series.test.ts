@@ -35,6 +35,7 @@ type Shape = {
   load?: number;
   memory?: number;
   swap?: number | "none";
+  disk?: number;
   wa?: number | "skipped";
   swapping?: boolean;
   level?: string;
@@ -53,6 +54,7 @@ function reading(atMs: number, shape: Shape = {}, nextDueMs = CADENCE): HealthSa
           : { kind: "unknown", why: shape.blindLoad },
       memory: { kind: "value", availableFraction: shape.memory ?? 0.4 },
       swap: shape.swap === "none" ? { kind: "none" } : { kind: "value", usedFraction: shape.swap ?? 0.4 },
+      disk: { kind: "value", usePercent: shape.disk ?? 50 },
       swapActivity:
         shape.wa === "skipped"
           ? { kind: "skipped" }

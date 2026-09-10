@@ -27,6 +27,7 @@
  */
 import type { ReactNode } from "react";
 
+import { LONG_RUN_MS } from "../../resource-policy.js";
 import { BoxActionsCard } from "./ActionButtons";
 import { AdmissionSection } from "./AdmissionSection";
 import { HealthHistory } from "./HealthHistory";
@@ -38,7 +39,9 @@ import { readHealthStats, type Stat, type StatBar } from "./health-view";
 import type { ClockSkew, FleetRow } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, Pill, SectionHeading, cx, toneClasses } from "./ui";
-import type { Tone } from "./view";
+import { formatDuration, type Tone } from "./view";
+import { CURRENT_WORK_NOT_REPORTED, type CurrentWorkView } from "./work-client";
+import { recogniserLabel } from "./work-series";
 
 /**
  * **The generic renderer moved out** to RawValue.tsx on 2026-09-08, unchanged,
@@ -136,6 +139,8 @@ export function HealthPanel({
      panel a window of history without a server, and the default is the real
      one so no caller has to know. */
   historyApi = httpHistoryApi,
+  currentWork = CURRENT_WORK_NOT_REPORTED,
+  now,
   admissionApi = httpAdmissionApi,
   skew,
 }: {
@@ -143,6 +148,10 @@ export function HealthPanel({
   actions: ActionsUi;
   rows: readonly FleetRow[];
   historyApi?: HistoryApi;
+  /** The live checkpoint projection. It is deliberately not sourced from `historyApi`. */
+  currentWork?: CurrentWorkView;
+  /** Browser clock shared by the whole page, so reading age keeps moving. */
+  now: number;
   admissionApi?: AdmissionApi;
   /**
    * **PASSED STRAIGHT THROUGH TO THE CHART AND FORECAST LABELS.** Required
@@ -172,6 +181,7 @@ export function HealthPanel({
       rows={rows}
     />
   );
+  const running = <CurrentWork currentWork={currentWork} now={now} />;
 
   const hasHealth = health !== null && health !== undefined;
   const stats = hasHealth ? readHealthStats(health) : [];
@@ -203,7 +213,11 @@ export function HealthPanel({
               fetches its own data — the history is about a megabyte and changes
               once a minute, so putting it in the five-second state poll would be
               the wrong shape twice over. */}
-          <HealthHistory api={historyApi} nowMs={Date.now()} skew={skew} />
+          {/* `now` rather than a fresh `Date.now()`: this panel now takes the
+              page's one ticking clock (it needs it for the work reading's age
+              below), and two clocks on one card is how an age freezes while the
+              chart beside it keeps moving. */}
+          <HealthHistory api={historyApi} nowMs={now} skew={skew} />
         </>
       ) : (
         <Card className="tw:border-l-4 tw:border-l-unknown tw:p-4">
@@ -220,6 +234,17 @@ export function HealthPanel({
           </p>
         </Card>
       )}
+
+      {/* **OUTSIDE THE HEALTH CONDITIONAL, and that is the point of it being
+          here rather than in a branch.** What the fleet is running is not a fact
+          about whether the box's health could be collected — and a box whose
+          health cannot be collected is precisely when somebody wants to know
+          what is on it. This section was mounted in BOTH of this panel's two
+          return branches until they were merged into one by `8eb04544`, whose
+          first P1 was the same defect in the forecast below: with `health: null`
+          the panel returned before ever reaching the mount, so the section was
+          absent exactly when it was needed. One mount, no conditional. */}
+      {running}
 
       {/* Independent of the current health reading: the forecast has its own
           endpoint, and losing one source is not evidence about the other. */}
@@ -251,6 +276,87 @@ export function HealthPanel({
           you whether to press anything, and a row of kill buttons above the
           verdict would be an invitation rather than a response. */}
       {acts}
+    </div>
+  );
+}
+
+/**
+ * The live work reading. Its durations and its age are intentionally two
+ * numbers: `ranForMs` was frozen by the process-table scan, while age says how
+ * long ago that scan happened. Recomputing the first from `startedAt` would
+ * make a stale daemon appear to keep observing a job it has not seen.
+ */
+function CurrentWork({ currentWork, now }: { currentWork: CurrentWorkView; now: number }): ReactNode {
+  let content: ReactNode;
+  if (currentWork.kind === "not-reported") {
+    content = "This server did not report current work; that is not a reading of an idle box.";
+  } else if (currentWork.kind === "payload-unreadable") {
+    content = `This page could not read current work: ${currentWork.why}.`;
+  } else if (currentWork.kind === "checkpoint-absent") {
+    content = "The Overseer has not published a current-work checkpoint yet.";
+  } else if (currentWork.kind === "checkpoint-unreadable") {
+    content = `The current-work checkpoint could not be read: ${currentWork.why}.`;
+  } else {
+    const { work } = currentWork;
+    if (work.kind === "not-yet-run") {
+      content = `No work scan has run yet: ${work.why}.`;
+    } else if (work.kind === "probe-failed") {
+      content = `The current-work probe failed: ${work.why}.`;
+    } else if (work.kind === "checkpoint-unavailable") {
+      content = `Current work could not be established: ${work.why}.`;
+    } else {
+      const scanAge = Math.max(0, now - Date.parse(work.scannedAt));
+      content = (
+        <div>
+          {work.groups.length === 0 ? (
+            <p>Nothing recognised was running when this reading was taken.</p>
+          ) : (
+            <ul className="tw:space-y-2">
+              {work.groups.map((group) => {
+                const measured = group.timing.kind === "unknown" ? null : group.timing.longestRanForMs;
+                return (
+                  <li key={`${group.session}:${group.recogniser}`} className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
+                    {/* The name if the scan recorded one, the key only when it
+                        did not — the same rule the history rows follow, and for
+                        the same reason: a session key is `$2890 claims:<uuid>`,
+                        which is an identity and not something to read. */}
+                    <span className="tw:font-medium tw:text-ink">{group.sessionName ?? group.session}</span>
+                    <span className="tw:text-ink-soft">
+                      {recogniserLabel(group.recogniser)} · {group.jobs} job{group.jobs === 1 ? "" : "s"}
+                    </span>
+                    <span className="tw:text-ink-faint">
+                      {measured === null
+                        ? "measured timing unavailable"
+                        : group.timing.kind === "partial"
+                          ? `longest measured run ${formatDuration(measured)} among ${group.timing.knownJobs} of ${group.jobs} jobs; timing was unavailable for ${group.jobs - group.timing.knownJobs}`
+                          : `longest measured run ${formatDuration(measured)}`}
+                    </span>
+                    {measured !== null && measured >= LONG_RUN_MS ? <Pill tone="needs">long-running</Pill> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="tw:mt-2 tw:text-ink-faint">Reading {formatDuration(scanAge)} old.</p>
+          {work.panes.cannotTell > 0 ? (
+            <p className="tw:mt-1 tw:text-unknown-ink">
+              {work.panes.cannotTell} pane{work.panes.cannotTell === 1 ? "" : "s"} could not be read at this sample.
+            </p>
+          ) : null}
+          {work.groupsDropped > 0 ? (
+            <p className="tw:mt-1 tw:text-unknown-ink">
+              {work.groupsDropped} additional group{work.groupsDropped === 1 ? " was" : "s were"} omitted by the checkpoint cap.
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div className="tw:mt-4">
+      <SectionHeading>Current expensive work</SectionHeading>
+      <Card className="tw:p-3 tw:text-[13px] tw:text-ink-soft">{content}</Card>
     </div>
   );
 }

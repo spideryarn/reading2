@@ -136,6 +136,7 @@ function realCheckpoint(root: string, lastGoodSnapshotAt: string | null): void {
  * ------------------------------------------------------------------ */
 
 const WRITTEN_AT = "2026-09-08T12:41:07.000Z";
+const CHECKED_AT = "2026-09-08T12:41:30.000Z";
 
 function checkpointObject(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -284,15 +285,20 @@ describe("against a checkpoint the real store wrote", () => {
 describe("the four ways there is no reading", () => {
   it("is ABSENT when nothing has been published at the path we looked at", () => {
     /* Not "the Overseer is not running", which the evidence does not support. */
-    expect(readCheckpointFeeds(tempRoot()).overseer).toEqual({ kind: "checkpoint-absent" });
+    const feeds = readCheckpointFeeds(tempRoot());
+    expect(feeds.overseer).toEqual({ kind: "checkpoint-absent" });
+    expect(feeds.work).toEqual({ kind: "checkpoint-absent" });
   });
 
   it("is UNREADABLE, not absent, for a torn write", () => {
     const root = tempRoot();
     writeFileSync(join(root, "current.json"), '{"schema":2,"writtenAt":"2026-09-08T12:4', "utf8");
-    const feed = readCheckpointFeeds(root).overseer;
+    const feeds = readCheckpointFeeds(root);
+    const feed = feeds.overseer;
     expect(feed.kind).toBe("checkpoint-unreadable");
     if (feed.kind === "checkpoint-unreadable") expect(feed.why).toContain("not JSON");
+    expect(feeds.work.kind).toBe("checkpoint-unreadable");
+    if (feeds.work.kind === "checkpoint-unreadable") expect(feeds.work.why).toContain("not JSON");
   });
 
   it("is UNREADABLE for an empty file, which is what an interrupted write leaves", () => {
@@ -459,6 +465,38 @@ describe("the parts that degrade on their own", () => {
     ]);
   });
 
+  it("publishes the accepted scan as grouped work", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([{ key: "$215 none", work: recognisedWork() }]),
+    });
+
+    const feed = readCheckpointFeeds(root).work;
+    expect(feed.kind).toBe("published");
+    if (feed.kind !== "published") return;
+    expect(feed.work).toEqual({
+      kind: "scan",
+      scannedAt: "2026-09-08T12:41:01.000Z",
+      groups: [{
+        session: "$215 none",
+        /* Joined from the register in the SAME checkpoint read, so a row is
+           labelled with something a person recognises rather than with a tmux id
+           and a conversation claim. The key stays because it, not the name, is
+           what makes two rows the same row across a day. */
+        sessionName: "worktree-schema-move",
+        recogniser: "codex-review",
+        jobs: 1,
+        timing: {
+          kind: "known",
+          oldestStartedAt: "2026-09-08T12:23:00.000Z",
+          longestRanForMs: 18 * 60_000,
+        },
+      }],
+      groupsDropped: 0,
+      panes: { work: 1, none: 0, cannotTell: 0 },
+    });
+  });
+
   it("refuses a scan for a different inventory while leaving the register readable", () => {
     const root = tempRoot();
     writeCheckpoint(root, {
@@ -477,6 +515,32 @@ describe("the parts that degrade on their own", () => {
       expect(register.work.why).toContain("2026-09-08T12:40:00.000Z");
       expect(register.work.why).toContain("2026-09-08T12:41:00.000Z");
     }
+  });
+
+  it("gives work history the register's exact refusal for a scan from another inventory", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([{ key: "$215 none", work: recognisedWork() }], {
+        sourceCollectedAt: "2026-09-08T12:40:00.000Z",
+      }),
+    });
+
+    const feeds = readCheckpointFeeds(root, CHECKED_AT);
+    expect(feeds.overseer.kind).toBe("published");
+    expect(feeds.work.kind).toBe("published");
+    if (feeds.overseer.kind !== "published" || feeds.work.kind !== "published") return;
+    const register = feeds.overseer.status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read" || register.work.kind !== "unavailable") return;
+    expect(register.work.why).toBe(
+      "the work scan belongs to the 2026-09-08T12:40:00.000Z inventory, " +
+      "not the register's 2026-09-08T12:41:00.000Z inventory",
+    );
+    expect(feeds.work.work).toEqual({
+      kind: "checkpoint-unavailable",
+      checkedAt: CHECKED_AT,
+      why: register.work.why,
+    });
   });
 
   it("refuses a scan taken before the inventory it claims to describe", () => {
@@ -540,6 +604,80 @@ describe("the parts that degrade on their own", () => {
     }
   });
 
+  it("refuses a not-yet-run event whose producer clock is not the checkpoint clock", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: {
+        kind: "not-yet-run",
+        why: "the work pass has not run yet",
+        at: "2026-09-08T12:41:06.000Z",
+      },
+    });
+
+    const feeds = readCheckpointFeeds(root, CHECKED_AT);
+    expect(feeds.overseer.kind).toBe("published");
+    expect(feeds.work.kind).toBe("published");
+    if (feeds.overseer.kind !== "published" || feeds.work.kind !== "published") return;
+    const register = feeds.overseer.status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read" || register.work.kind !== "unavailable") return;
+    expect(register.work.why).toContain("could not be read");
+    expect(feeds.work.work).toEqual({
+      kind: "checkpoint-unavailable",
+      checkedAt: CHECKED_AT,
+      why: register.work.why,
+    });
+  });
+
+  it("bounds a long producer reason once so register and history still agree exactly", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: {
+        kind: "probe-failed",
+        why: "ps denied ".repeat(2_000),
+        attemptedAt: "2026-09-08T12:41:01.000Z",
+        sourceCollectedAt: "2026-09-08T12:41:00.000Z",
+      },
+    });
+
+    const feeds = readCheckpointFeeds(root, CHECKED_AT);
+    expect(feeds.overseer.kind).toBe("published");
+    expect(feeds.work.kind).toBe("published");
+    if (feeds.overseer.kind !== "published" || feeds.work.kind !== "published") return;
+    const register = feeds.overseer.status.register;
+    expect(register.kind).toBe("read");
+    if (
+      register.kind !== "read" ||
+      register.work.kind !== "unavailable" ||
+      feeds.work.work.kind !== "probe-failed"
+    ) return;
+    expect(register.work.why).toMatch(/truncated/);
+    expect(feeds.work.work.why).toBe(register.work.why);
+  });
+
+  it("publishes a failed work probe as unavailable with the daemon's own reason", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: {
+        kind: "probe-failed",
+        why: "ps was denied by the kernel",
+        attemptedAt: "2026-09-08T12:41:01.000Z",
+        sourceCollectedAt: "2026-09-08T12:41:00.000Z",
+      },
+    });
+
+    expect(readCheckpointFeeds(root).work).toEqual({
+      kind: "published",
+      work: {
+        kind: "probe-failed",
+        attemptedAt: "2026-09-08T12:41:01.000Z",
+        sourceCollectedAt: "2026-09-08T12:41:00.000Z",
+        why: "ps was denied by the kernel",
+      },
+      coordinatorWrittenAt: WRITTEN_AT,
+    });
+  });
+
   it("treats an absent work field as an old producer, without failing the register", () => {
     const root = tempRoot();
     const { work: _dropped, ...withoutWork } = checkpointObject();
@@ -550,6 +688,21 @@ describe("the parts that degrade on their own", () => {
     if (register.kind === "read") {
       expect(register.work.kind).toBe("unavailable");
       if (register.work.kind === "unavailable") expect(register.work.why).toContain("before the Overseer recorded work scans");
+    }
+  });
+
+  it("publishes an old checkpoint with no work key as unavailable rather than an empty scan", () => {
+    const root = tempRoot();
+    const { work: _dropped, ...withoutWork } = checkpointObject();
+    writeFileSync(join(root, "current.json"), JSON.stringify(withoutWork), "utf8");
+
+    const feed = readCheckpointFeeds(root).work;
+    expect(feed.kind).toBe("published");
+    if (feed.kind !== "published") return;
+    expect(feed.work.kind).toBe("not-yet-run");
+    if (feed.work.kind === "not-yet-run") {
+      expect(feed.work.asOf).toBe(WRITTEN_AT);
+      expect(feed.work.why).toContain("before the Overseer recorded work scans");
     }
   });
 
@@ -960,9 +1113,16 @@ describe("the guarantees the refresh loop depends on", () => {
     const cyclic: Record<string, unknown> = { writtenAt: WRITTEN_AT };
     cyclic["schema"] = cyclic;
     for (const value of [undefined, null, 0, "", [], { schema: 2 }, cyclic, { schema: 10n }]) {
-      expect(() => projectOverseerStatus(value)).not.toThrow();
-      expect(projectOverseerStatus(value).kind).not.toBe("published");
+      expect(() => projectOverseerStatus(value, CHECKED_AT)).not.toThrow();
+      expect(projectOverseerStatus(value, CHECKED_AT).kind).not.toBe("published");
     }
+  });
+
+  it("refuses a projection without a canonical injected work-check clock", () => {
+    expect(projectOverseerStatus(checkpointObject(), "not a timestamp")).toMatchObject({
+      kind: "checkpoint-unreadable",
+      why: expect.stringContaining("checkedAt"),
+    });
   });
 
   it("refuses a relative store directory rather than resolving it against a cwd nobody controls", () => {

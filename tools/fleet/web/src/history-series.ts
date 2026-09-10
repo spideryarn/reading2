@@ -177,7 +177,7 @@ export type Reading =
   | { kind: "unknown"; why: string }
   | { kind: "absent"; why: string };
 
-export type SeriesKey = "load" | "memory" | "swap" | "io";
+export type SeriesKey = "load" | "memory" | "swap" | "disk" | "io";
 
 export type SeriesSpec = {
   key: SeriesKey;
@@ -203,6 +203,8 @@ export type SeriesSpec = {
   max: number;
   /** Where amber and red sit. Every series is expressed as consumption, so higher is worse. */
   bands: { strained: number; critical: number };
+  /** Whether a value equal to a band boundary is already in that band. */
+  boundary: "at" | "past";
   read(sample: HealthSampleView): Reading;
   /**
    * An optional second, BOOLEAN fact about the same reading, drawn as a bar
@@ -273,7 +275,7 @@ function fraction(reading: Record<string, unknown>, key: string): Reading {
 }
 
 /**
- * The four series, in the order they are worth reading on a phone.
+ * The five series, in the order they are worth reading on a phone.
  *
  * **Every threshold is imported from `health-view.ts`, never restated.** Those
  * are `computeVerdict`'s own cutoffs, and a chart that went amber on a
@@ -291,6 +293,7 @@ export const SERIES: SeriesSpec[] = [
        fitted axis did to this chart on a day containing load 391. */
     max: LOAD_BAR_CEILING,
     bands: { ...THRESHOLDS.loadRatio },
+    boundary: "past",
     read: (sample) =>
       readingFrom(sample, "load", (reading) => {
         const ratio = num(reading, "ratio1");
@@ -322,6 +325,7 @@ export const SERIES: SeriesSpec[] = [
       strained: MEMORY_USED_PERCENT.strained,
       critical: MEMORY_USED_PERCENT.critical,
     },
+    boundary: "past",
     read: (sample) =>
       readingFrom(sample, "memory", (reading) => {
         const available = fraction(reading, "availableFraction");
@@ -340,10 +344,30 @@ export const SERIES: SeriesSpec[] = [
       strained: THRESHOLDS.swapUsed.strained * 100,
       critical: THRESHOLDS.swapUsed.critical * 100,
     },
+    boundary: "at",
     read: (sample) =>
       readingFrom(sample, "swap", (reading) => fraction(reading, "usedFraction"), {
         /* An empty `swapon` is a real answer, and it is not a fault. */
         none: "no swap configured",
+      }),
+  },
+  {
+    key: "disk",
+    label: "Disk used",
+    unit: "%",
+    /* `df -k` already reports a whole-number percentage. This is deliberately
+       not treated as a fraction like swap, and the fixed ceiling keeps a bad
+       over-100 reading visible as a clipped outlier rather than rescaling the
+       whole day. */
+    max: 100,
+    bands: { ...THRESHOLDS.diskUsed },
+    boundary: "at",
+    read: (sample) =>
+      readingFrom(sample, "disk", (reading) => {
+        const usePercent = num(reading, "usePercent");
+        return usePercent === null
+          ? { kind: "unknown", why: "the reading had no numeric usePercent" }
+          : { kind: "value", value: usePercent };
       }),
   },
   {
@@ -369,6 +393,7 @@ export const SERIES: SeriesSpec[] = [
      * has no red of its own" rather than hiding a number that looks chosen.
      */
     bands: { strained: THRESHOLDS.ioWait.thrashing, critical: Number.POSITIVE_INFINITY },
+    boundary: "at",
     read: (sample) =>
       readingFrom(sample, "swapActivity", (reading) => {
         const wa = num(reading, "waPercent");
