@@ -136,11 +136,12 @@ const publicationLedger = new PublicationLedger(serverInstanceId());
 let health: HealthReport | null = null;
 
 /**
- * One owner for the process lifetime. Building this inside `refreshHealth`
- * would forget a stuck child every minute and start it a new sibling, which is
- * the multiplication the owned-child registry exists to prevent.
+ * One owner for every fleet probe over the process lifetime. Building this
+ * inside either health or collection would forget a stuck child every minute
+ * and start it a new sibling, which is the multiplication the owned-child
+ * registry exists to prevent. Health and tmux use disjoint probe-key prefixes.
  */
-const healthProbeOwner = probeOwner();
+const fleetProbeOwner = probeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
@@ -441,7 +442,7 @@ function statePayload(): string {
 async function refreshHealth(): Promise<HealthTurn> {
   try {
     const report = await collectHealthAsync({
-      owner: healthProbeOwner,
+      owner: fleetProbeOwner,
       includeSwapActivity: true,
     });
     health = report;
@@ -482,7 +483,7 @@ async function refreshHealth(): Promise<HealthTurn> {
  * The latch is in refresh.ts, where a test can drive it; this is the wiring.
  */
 const collector = singleFlightCollect({
-  run: collect,
+  run: () => collect(fleetProbeOwner),
   deadlineMs: COLLECT_DEADLINE_MS,
   now: Date.now,
   // BEFORE the child is awaited, and only when one is actually started — see

@@ -45,7 +45,7 @@
 import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
+import { splitJsonl, truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 
 /** Beside `events.jsonl` and `current.json`, in the same store root. */
 export const NOTES_FILE = "daemon.jsonl";
@@ -335,25 +335,32 @@ export function openNoteLog(root: string): NoteLog {
 }
 
 /**
- * Every note in the log, plus a count of the lines that were not notes.
+ * Every complete note in the log, corrupt complete lines, and any unfinished
+ * suffix observed while the writer was appending. A failure to read the file
+ * is its own result rather than an empty history.
  *
  * Lock-free by construction, like `readCheckpoint`: `scripts/overseer.ts` reads
  * this while the daemon is writing it, and must not be able to disturb it.
  * `unreadable` is returned rather than swallowed for the store's own reason —
  * a silent skip is how a log rots without anybody finding out.
  */
-export function readNotes(root: string, limit?: number): { notes: DaemonNote[]; unreadable: number } {
+export type ReadNotes =
+  | { kind: "read"; notes: DaemonNote[]; unreadable: number; tornTail: string | null }
+  | { kind: "unreadable"; cause: string };
+
+export function readNotes(root: string, limit?: number): ReadNotes {
   const path = join(root, NOTES_FILE);
-  if (!existsSync(path)) return { notes: [], unreadable: 0 };
-  let raw: string;
+  if (!existsSync(path)) return { kind: "read", notes: [], unreadable: 0, tornTail: null };
+  let raw: Buffer;
   try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return { notes: [], unreadable: 0 };
+    raw = readFileSync(path);
+  } catch (cause) {
+    return { kind: "unreadable", cause: `could not read ${path}: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
+  const split = splitJsonl(raw);
   const notes: DaemonNote[] = [];
   let unreadable = 0;
-  for (const line of raw.split("\n")) {
+  for (const line of split.completeLines) {
     if (line.trim() === "") continue;
     let parsed: unknown;
     try {
@@ -365,7 +372,12 @@ export function readNotes(root: string, limit?: number): { notes: DaemonNote[]; 
     if (isNote(parsed)) notes.push(parsed);
     else unreadable += 1;
   }
-  return { notes: limit === undefined ? notes : notes.slice(-limit), unreadable };
+  return {
+    kind: "read",
+    notes: limit === undefined ? notes : notes.slice(-limit),
+    unreadable,
+    tornTail: split.tornTail,
+  };
 }
 
 function isNote(u: unknown): u is DaemonNote {

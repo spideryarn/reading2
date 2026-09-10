@@ -26,7 +26,7 @@ import {
   type ProcessTableReading,
   type WorkReading,
 } from "../tools/overseer/work.js";
-import { probeProcessTable, PS_ARGV } from "../tools/overseer/work-probe.js";
+import { probeProcessTable, PS_ARGV, readingFromPs } from "../tools/overseer/work-probe.js";
 
 const TREES = join(import.meta.dirname, "fixtures", "overseer-process-trees");
 
@@ -752,6 +752,22 @@ describe("the probe, against this box's real process table", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("the extracted reader alone refuses a valid table from somewhere else", () => {
+    // This is the authorised extraction's positive control. It deliberately
+    // bypasses `probeProcessTable`, so the async caller cannot accidentally
+    // receive a parser-only helper that accepts a foreign capture while the
+    // old synchronous entry point keeps doing the right thing.
+    const stdout = raw("quiet-claude-pane");
+    const believed = readingFromPs(stdout, NOW_MS, { bin: "captured ps", selfPid: 652780 });
+    expect(believed.read).toBe(true);
+
+    const foreignPid = 2_147_483_646;
+    const foreign = readingFromPs(stdout, NOW_MS, { bin: "captured ps", selfPid: foreignPid });
+    expect(foreign.read).toBe(false);
+    if (foreign.read) return;
+    expect(foreign.why).toMatch(new RegExp(`did not include this process \\(pid ${foreignPid}\\)`));
   });
 
   test("the probe's own per-run control: a table without this process is refused", () => {

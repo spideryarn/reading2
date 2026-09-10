@@ -199,12 +199,30 @@ interface Args {
   account?: string;
 }
 
+function validateRoutedCredentialRequest(
+  args: Pick<Args, 'account' | 'auth'>,
+  parentStateDir: string | undefined,
+  passedCredential: string | undefined,
+): void {
+  // Presence is the existing routing predicate. This validates what may accompany that route; it
+  // does not decide whether to route.
+  if (args.account === undefined && parentStateDir === undefined) return;
+  if (args.auth === 'env') {
+    throw new Error('--auth env cannot be used for a routed run: its account comes from the selected'
+      + ' state directory, and credential variables are withheld; remove --auth env');
+  }
+  if (passedCredential !== undefined) {
+    throw new Error(`--pass-env ${passedCredential} cannot be used for a routed run: its account comes from`
+      + ' the selected state directory, and credential variables are withheld');
+  }
+}
+
 function fail(msg: string): never {
   console.error(`run-claude: ${msg}`);
   process.exit(1);
 }
 
-export function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): Args {
   const out: Args = {
     model: DEFAULT_MODEL, access: DEFAULT_ACCESS, effort: DEFAULT_EFFORT, auth: 'machine',
     allow: [], addDir: [], mcp: false, repoDir: process.cwd(),
@@ -262,6 +280,7 @@ export function parseArgs(argv: string[]): Args {
   // The credential variables are the one thing --auth owns. Letting --pass-env hand one over would
   // make a `machine` run pass a credential while every line about it said otherwise.
   const smuggled = out.passEnv.find((n) => ENV_CREDENTIALS.includes(n));
+  validateRoutedCredentialRequest(out, env.CLAUDE_CONFIG_DIR, smuggled);
   if (smuggled) throw new Error(`--pass-env ${smuggled} would override --auth; use --auth env instead`);
   const routedOverride = out.account === undefined ? undefined : out.passEnv.find(isProviderVar);
   if (routedOverride) {
@@ -271,7 +290,7 @@ export function parseArgs(argv: string[]): Args {
   // its own ladder and may well charge the machine's login, which is the account the caller was
   // deliberately not using. GPT Sol's F4, 2026-09-06. (Whether the variables it *did* find are the
   // ones actually used is a different question, and `probeAuth` is what answers it.)
-  if (out.auth === 'env' && !ENV_CREDENTIALS.some((n) => process.env[n])) {
+  if (out.auth === 'env' && !ENV_CREDENTIALS.some((n) => env[n])) {
     throw new Error(`--auth env needs one of ${ENV_CREDENTIALS.join(', ')} in the environment`
       + ' (.env.local counts — it is loaded before this runs); otherwise the run falls through to'
       + " whatever this machine's own login is, which is what --auth machine says out loud");
@@ -422,19 +441,26 @@ export function parseResultEvent(ndjson: string): ClaudeResult | undefined {
  */
 export function claudeEnv(
   parent: NodeJS.ProcessEnv, auth: Auth, passThrough: string[] = [], stateDir?: string,
+  onOverruled?: (names: string[]) => void,
 ): NodeJS.ProcessEnv {
-  const credentials = auth === 'env' ? ENV_CREDENTIALS : [];
-  const drop = [
+  const asked = [...(auth === 'env' ? ENV_CREDENTIALS : []), ...passThrough];
+  // Restorable: configuration for the caller's context, which an explicit --pass-env (or --auth env,
+  // for the credentials) brings back — so each is left out of `drop` when it is asked for. The
+  // prefix is resolved against what this parent actually has, so the rule needs no list to keep up.
+  const restorable = [
     ...PARENT_SESSION_VARS,
     ...CLAUDE_CONFIG_VARS,
-    // The prefix, resolved against what this parent actually has, so the rule needs no list to
-    // keep up to date. `passThrough` is re-added afterwards and so still wins.
     ...Object.keys(parent).filter((n) => ANTHROPIC_PREFIX.test(n)),
-    ...(stateDir === undefined
-      ? []
-      : Object.keys(parent).filter((n) => n === 'CLAUDECODE' || n.startsWith('CLAUDE_'))),
+  ].filter((n) => !asked.includes(n));
+  // Absolute, and only when routed: the child's account is its state directory and nothing else,
+  // so no credential crosses however it is asked. `drop` beats `passThrough` (plan 260910d).
+  const absolute = stateDir === undefined ? [] : [
+    ...ENV_CREDENTIALS,
+    ...Object.keys(parent).filter((n) => n === 'CLAUDECODE' || n.startsWith('CLAUDE_')),
   ];
-  const env = sanitisedEnv(parent, [...credentials, ...passThrough], drop);
+  // Unrouted output is the same set of names and values as before 260910d; only the order of the
+  // entries can differ, and nothing reads an environment by position.
+  const env = sanitisedEnv(parent, asked, [...restorable, ...absolute], onOverruled);
   if (stateDir !== undefined) env.CLAUDE_CONFIG_DIR = stateDir;
   return env;
 }
