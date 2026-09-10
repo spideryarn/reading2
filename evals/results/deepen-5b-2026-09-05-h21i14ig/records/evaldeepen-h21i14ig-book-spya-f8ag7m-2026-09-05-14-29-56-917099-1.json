@@ -1,0 +1,5198 @@
+{
+  "version": "deepen-records/2",
+  "slug": "evaldeepen-h21i14ig-book-spya-f8ag7m",
+  "writtenAt": "2026-09-05T14:29:56.585Z",
+  "failed": true,
+  "reason": "ExpansionRefused: The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed, and 0 start(s) that marked no split point. One child covers its parent's whole range, so the same question would be asked again one level down and the cascade would run to its depth cap without dividing anything.",
+  "stats": {
+    "targets": 32,
+    "expanded": 0,
+    "added": 0,
+    "withheld": 28,
+    "uncheckpointed": 0,
+    "calls": 13,
+    "resumed": 0,
+    "oversized": 0,
+    "outOfTime": 0,
+    "rateLimited": 0,
+    "gate": {
+      "initialWidth": 8,
+      "finalWidth": 8,
+      "narrowestWidth": 8,
+      "refusals": 0
+    },
+    "verdicts": {
+      "candidates": 224,
+      "rawYes": 4,
+      "rawNo": 174,
+      "unassessed": 46,
+      "effectiveYes": 54,
+      "overrides": {
+        "authored-heading": 3,
+        "depth-cap": 0,
+        "divisibility-floor": 0,
+        "forced-open": 15
+      }
+    },
+    "usage": {
+      "inputTokens": 442108,
+      "outputTokens": 29104,
+      "cacheReadTokens": 14126,
+      "cacheWriteTokens": 14126
+    }
+  },
+  "records": [
+    {
+      "where": "root > child 1 > child 1",
+      "range": [
+        "spya-y22uzv",
+        "spya-zfhdft"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 21,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 1 > child 2",
+      "range": [
+        "spya-mnzuhk",
+        "spya-sa2yuj"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 672,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 1 > child 3",
+      "range": [
+        "spya-qx8560",
+        "spya-nu6t60"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 59,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 1",
+      "range": [
+        "spya-fd9gdt",
+        "spya-wte999"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 2193,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 2",
+      "range": [
+        "spya-bkju4a",
+        "spya-x29qzw"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 1420,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 3",
+      "range": [
+        "spya-knaxw2",
+        "spya-j2jahr"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 75,
+      "bodyWords": 5787,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 4",
+      "range": [
+        "spya-f4e69d",
+        "spya-qvdr5a"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 1644,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 5",
+      "range": [
+        "spya-ugtgb9",
+        "spya-axmuxp"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 20,
+      "bodyWords": 1548,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 6",
+      "range": [
+        "spya-ba3yta",
+        "spya-mgjzjb"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 19,
+      "bodyWords": 1891,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 7",
+      "range": [
+        "spya-c5cevz",
+        "spya-rd0wuj"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 24,
+      "bodyWords": 3557,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": 3,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 8",
+      "range": [
+        "spya-zmu8vu",
+        "spya-fccu0s"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 1549,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 9",
+      "range": [
+        "spya-ptpar6",
+        "spya-gdgdx9"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 1602,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 10",
+      "range": [
+        "spya-q26wqv",
+        "spya-wr2uvm"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 1676,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 11",
+      "range": [
+        "spya-fttbsp",
+        "spya-s0ag08"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 24,
+      "bodyWords": 1940,
+      "authoredHeadings": 3,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1",
+      "range": [
+        "spya-uj0fqk",
+        "spya-a4yrje"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 82,
+      "bodyWords": 5418,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": 7,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 2",
+      "range": [
+        "spya-vm7jhv",
+        "spya-f772we"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 31,
+      "bodyWords": 2255,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": 4,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3",
+      "range": [
+        "spya-t5c35d",
+        "spya-ry6ku6"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 65,
+      "bodyWords": 2551,
+      "authoredHeadings": 3,
+      "retries": 0,
+      "fanOut": 6,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1",
+      "range": [
+        "spya-t48syp",
+        "spya-pktu5u"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 75,
+      "bodyWords": 3964,
+      "authoredHeadings": 3,
+      "retries": 0,
+      "fanOut": 6,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 2",
+      "range": [
+        "spya-fdy9fs",
+        "spya-zw4x5p"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 29,
+      "bodyWords": 1929,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 3",
+      "range": [
+        "spya-cw7aqm",
+        "spya-m602a7"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 17,
+      "bodyWords": 2886,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 4",
+      "range": [
+        "spya-be8xz9",
+        "spya-rfrebv"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 1403,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1",
+      "range": [
+        "spya-rmj2gz",
+        "spya-w5es2u"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 105,
+      "bodyWords": 13122,
+      "authoredHeadings": 6,
+      "retries": 0,
+      "fanOut": 8,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 2",
+      "range": [
+        "spya-fc3t6e",
+        "spya-mbaeg2"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 39,
+      "bodyWords": 1460,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3",
+      "range": [
+        "spya-wd2n2a",
+        "spya-w7uurk"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 107,
+      "bodyWords": 7740,
+      "authoredHeadings": 5,
+      "retries": 1,
+      "fanOut": 8,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 4",
+      "range": [
+        "spya-scwmuk",
+        "spya-b05bnq"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 33,
+      "bodyWords": 3611,
+      "authoredHeadings": 2,
+      "retries": 1,
+      "fanOut": 2,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 1",
+      "range": [
+        "spya-jf8qjk",
+        "spya-hnucap"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 295,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 2",
+      "range": [
+        "spya-ufx069",
+        "spya-snpabf"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 2027,
+      "authoredHeadings": 1,
+      "retries": 1,
+      "fanOut": 4,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 3",
+      "range": [
+        "spya-y7jx4m",
+        "spya-f3vy6g"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 48,
+      "bodyWords": 5450,
+      "authoredHeadings": 3,
+      "retries": 0,
+      "fanOut": 3,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 4",
+      "range": [
+        "spya-j36zfa",
+        "spya-r7e7yj"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 52,
+      "bodyWords": 3912,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": 4,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 5",
+      "range": [
+        "spya-r95wvw",
+        "spya-qp4vnc"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 10,
+      "bodyWords": 834,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6",
+      "range": [
+        "spya-s7z4x2",
+        "spya-f86bdm"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 228,
+      "bodyWords": 20268,
+      "authoredHeadings": 11,
+      "retries": 0,
+      "fanOut": 11,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7",
+      "range": [
+        "spya-tqgywb",
+        "spya-bh05jn"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 111,
+      "bodyWords": 7578,
+      "authoredHeadings": 6,
+      "retries": 0,
+      "fanOut": 6,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8",
+      "range": [
+        "spya-s45vk8",
+        "spya-athu07"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 166,
+      "bodyWords": 13567,
+      "authoredHeadings": 11,
+      "retries": 0,
+      "fanOut": 11,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 9",
+      "range": [
+        "spya-jkdfq0",
+        "spya-jkdfq0"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 27,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1",
+      "range": [
+        "spya-gkc9g7",
+        "spya-ybeeqf"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 338,
+      "bodyWords": 32213,
+      "authoredHeadings": 21,
+      "retries": 0,
+      "fanOut": 21,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 2",
+      "range": [
+        "spya-w9nz8n",
+        "spya-w9nz8n"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 78,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1",
+      "range": [
+        "spya-aprdr6",
+        "spya-u3m5sy"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 333,
+      "bodyWords": 25101,
+      "authoredHeadings": 22,
+      "retries": 0,
+      "fanOut": 21,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2",
+      "range": [
+        "spya-kv07nc",
+        "spya-azkc23"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 70,
+      "bodyWords": 4561,
+      "authoredHeadings": 5,
+      "retries": 0,
+      "fanOut": 5,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 3",
+      "range": [
+        "spya-j2fauf",
+        "spya-hzkpqm"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 22,
+      "bodyWords": 1195,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 4",
+      "range": [
+        "spya-m07gav",
+        "spya-v7wvq0"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "no-verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 30,
+      "bodyWords": 1097,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5",
+      "range": [
+        "spya-srqbyy",
+        "spya-tmnje2"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 77,
+      "bodyWords": 4189,
+      "authoredHeadings": 5,
+      "retries": 0,
+      "fanOut": 5,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 6",
+      "range": [
+        "spya-qspb67",
+        "spya-q5ynqu"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 48,
+      "bodyWords": 3487,
+      "authoredHeadings": 3,
+      "retries": 0,
+      "fanOut": 4,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1",
+      "range": [
+        "spya-nnp03d",
+        "spya-uf004z"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 51,
+      "bodyWords": 3487,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": 9,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2",
+      "range": [
+        "spya-y4tx0a",
+        "spya-ndzzkz"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "unassessed-ceiling"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 48,
+      "bodyWords": 3236,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": 8,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3",
+      "range": [
+        "spya-r0kuh8",
+        "spya-txv80c"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 64,
+      "bodyWords": 4452,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": 10,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 4",
+      "range": [
+        "spya-u7s64c",
+        "spya-nyq2u9"
+      ],
+      "wave": 1,
+      "depth": 2,
+      "rawVerdict": null,
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 275,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 6 > child 1",
+      "range": [
+        "spya-ba3yta",
+        "spya-ae49kq"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 944,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 6 > child 2",
+      "range": [
+        "spya-mdxnua",
+        "spya-mgjzjb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 947,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 7 > child 1",
+      "range": [
+        "spya-c5cevz",
+        "spya-tk40dc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 349,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 7 > child 2",
+      "range": [
+        "spya-jmjz3t",
+        "spya-ccdc6u"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 13,
+      "bodyWords": 2442,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 7 > child 3",
+      "range": [
+        "spya-mb2tb0",
+        "spya-rd0wuj"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 766,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 9 > child 1",
+      "range": [
+        "spya-ptpar6",
+        "spya-d6jw2p"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 724,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 9 > child 2",
+      "range": [
+        "spya-g4wtjd",
+        "spya-gdgdx9"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 878,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 11 > child 1",
+      "range": [
+        "spya-fttbsp",
+        "spya-tcpnyb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 755,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 2 > child 11 > child 2",
+      "range": [
+        "spya-md3zw4",
+        "spya-s0ag08"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": "authored-heading",
+      "structuralBlocks": 18,
+      "bodyWords": 1185,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 1",
+      "range": [
+        "spya-uj0fqk",
+        "spya-xqq4sk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 3,
+      "bodyWords": 466,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 2",
+      "range": [
+        "spya-cn85nj",
+        "spya-zmtk23"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 724,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 3",
+      "range": [
+        "spya-bs9y6q",
+        "spya-pk6y6w"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 33,
+      "bodyWords": 938,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 4",
+      "range": [
+        "spya-wxnvb3",
+        "spya-tp2zjx"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 1125,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 5",
+      "range": [
+        "spya-vgvkuy",
+        "spya-t73dbv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 1228,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 6",
+      "range": [
+        "spya-tj22at",
+        "spya-ebnsaf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 124,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 1 > child 7",
+      "range": [
+        "spya-v9jrkg",
+        "spya-a4yrje"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 813,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 2 > child 1",
+      "range": [
+        "spya-vm7jhv",
+        "spya-pp52fa"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 3,
+      "bodyWords": 211,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 2 > child 2",
+      "range": [
+        "spya-p7x668",
+        "spya-yvpzkc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 729,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 2 > child 3",
+      "range": [
+        "spya-bmqag4",
+        "spya-vgk5c3"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 688,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 2 > child 4",
+      "range": [
+        "spya-w4z9by",
+        "spya-f772we"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 627,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 1",
+      "range": [
+        "spya-t5c35d",
+        "spya-rtkhwm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 532,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 2",
+      "range": [
+        "spya-eywmkf",
+        "spya-g3cm9h"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 317,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 3",
+      "range": [
+        "spya-qz5agm",
+        "spya-v848cv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 499,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 4",
+      "range": [
+        "spya-d5gmcn",
+        "spya-qf7j7r"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 23,
+      "bodyWords": 439,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 5",
+      "range": [
+        "spya-ut5hha",
+        "spya-pbd09w"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 760,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 3 > child 3 > child 6",
+      "range": [
+        "spya-ry6ku6",
+        "spya-ry6ku6"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 4,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 1",
+      "range": [
+        "spya-t48syp",
+        "spya-zzj8n0"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 917,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 2",
+      "range": [
+        "spya-ab84wt",
+        "spya-jaxkjc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 31,
+      "bodyWords": 926,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 3",
+      "range": [
+        "spya-h6ahvs",
+        "spya-up0d0h"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 142,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 4",
+      "range": [
+        "spya-eu6b7p",
+        "spya-csz3h6"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 883,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 5",
+      "range": [
+        "spya-ak789k",
+        "spya-un8bbw"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 10,
+      "bodyWords": 732,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 1 > child 6",
+      "range": [
+        "spya-ans9tf",
+        "spya-pktu5u"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 364,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 2 > child 1",
+      "range": [
+        "spya-fdy9fs",
+        "spya-zp8ucc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 24,
+      "bodyWords": 1649,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 2 > child 2",
+      "range": [
+        "spya-fwv39d",
+        "spya-zw4x5p"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 280,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 3 > child 1",
+      "range": [
+        "spya-cw7aqm",
+        "spya-h2ekdu"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 1221,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 3 > child 2",
+      "range": [
+        "spya-esu7bt",
+        "spya-m602a7"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 10,
+      "bodyWords": 1665,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 4 > child 1",
+      "range": [
+        "spya-be8xz9",
+        "spya-nd3z9f"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 1396,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 4 > child 4 > child 2",
+      "range": [
+        "spya-rfrebv",
+        "spya-rfrebv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 7,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 1",
+      "range": [
+        "spya-rmj2gz",
+        "spya-rmj2gz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 163,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 2",
+      "range": [
+        "spya-bbmzyn",
+        "spya-h52r7r"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 1017,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 3",
+      "range": [
+        "spya-mfgc6b",
+        "spya-dh9czh"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 291,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 4",
+      "range": [
+        "spya-hp5bb8",
+        "spya-z2ynuu"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 846,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 5",
+      "range": [
+        "spya-wyr0dz",
+        "spya-g4528n"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "needs-deeper",
+      "effective": {
+        "decision": "expand",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 48,
+      "bodyWords": 5110,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 6",
+      "range": [
+        "spya-njafk7",
+        "spya-p3367x"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 966,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 7",
+      "range": [
+        "spya-qarmqe",
+        "spya-pdrxx2"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 12,
+      "bodyWords": 2193,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 1 > child 8",
+      "range": [
+        "spya-xggrr9",
+        "spya-w5es2u"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "needs-deeper",
+      "effective": {
+        "decision": "expand",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 2536,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 1",
+      "range": [
+        "spya-wd2n2a",
+        "spya-wd2n2a"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 26,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 2",
+      "range": [
+        "spya-ptuzme",
+        "spya-e6ngmm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 3,
+      "bodyWords": 568,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 3",
+      "range": [
+        "spya-svftxu",
+        "spya-k8ety2"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 719,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 4",
+      "range": [
+        "spya-q68tv4",
+        "spya-a7nde6"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 501,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 5",
+      "range": [
+        "spya-ws4hp3",
+        "spya-qyfmuy"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 391,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 6",
+      "range": [
+        "spya-ea6tpn",
+        "spya-t5kzmw"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 259,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 7",
+      "range": [
+        "spya-cbdxmt",
+        "spya-n4g7ey"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 52,
+      "bodyWords": 1515,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 3 > child 8",
+      "range": [
+        "spya-mpgpt3",
+        "spya-w7uurk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 25,
+      "bodyWords": 3761,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 4 > child 1",
+      "range": [
+        "spya-scwmuk",
+        "spya-jhjszb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 32,
+      "bodyWords": 3608,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 5 > child 4 > child 2",
+      "range": [
+        "spya-b05bnq",
+        "spya-b05bnq"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 3,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 2 > child 1",
+      "range": [
+        "spya-ufx069",
+        "spya-y97juc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 381,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 2 > child 2",
+      "range": [
+        "spya-j2ewqw",
+        "spya-bpn7a5"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 850,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 2 > child 3",
+      "range": [
+        "spya-z7ayap",
+        "spya-p5busr"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 368,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 2 > child 4",
+      "range": [
+        "spya-snpabf",
+        "spya-snpabf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 428,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 3 > child 1",
+      "range": [
+        "spya-y7jx4m",
+        "spya-j7qcu8"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 26,
+      "bodyWords": 3540,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 3 > child 2",
+      "range": [
+        "spya-mqq8fj",
+        "spya-saum74"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 992,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 3 > child 3",
+      "range": [
+        "spya-srwdnq",
+        "spya-f3vy6g"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 918,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 4 > child 1",
+      "range": [
+        "spya-j36zfa",
+        "spya-dqbb4d"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "needs-deeper",
+      "effective": {
+        "decision": "expand",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 21,
+      "bodyWords": 1299,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 4 > child 2",
+      "range": [
+        "spya-h5ygjw",
+        "spya-zaqgst"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 20,
+      "bodyWords": 1731,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 4 > child 3",
+      "range": [
+        "spya-gw3nr9",
+        "spya-hubrvc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 646,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 4 > child 4",
+      "range": [
+        "spya-fmcdwb",
+        "spya-r7e7yj"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 236,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 1",
+      "range": [
+        "spya-s7z4x2",
+        "spya-h7cj06"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 1007,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 2",
+      "range": [
+        "spya-td0rbx",
+        "spya-ywnqkc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 1504,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 3",
+      "range": [
+        "spya-da0kz0",
+        "spya-a9tqn7"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 715,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 4",
+      "range": [
+        "spya-kxhuy2",
+        "spya-ghvcqf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 10,
+      "bodyWords": 1605,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 5",
+      "range": [
+        "spya-n6zse4",
+        "spya-uu22b7"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "needs-deeper",
+      "effective": {
+        "decision": "expand",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 113,
+      "bodyWords": 7918,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 6",
+      "range": [
+        "spya-dny2dc",
+        "spya-whc04y"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 1884,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 7",
+      "range": [
+        "spya-dudxcf",
+        "spya-b805br"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 1306,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 8",
+      "range": [
+        "spya-zun6me",
+        "spya-xqk3vb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 944,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 9",
+      "range": [
+        "spya-c3z6a6",
+        "spya-rm23xt"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 1009,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 10",
+      "range": [
+        "spya-dg0bux",
+        "spya-tzmkte"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 920,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 6 > child 11",
+      "range": [
+        "spya-xdeyh0",
+        "spya-f86bdm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 1456,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 1",
+      "range": [
+        "spya-tqgywb",
+        "spya-dzwmvu"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 25,
+      "bodyWords": 1950,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 2",
+      "range": [
+        "spya-nu858f",
+        "spya-cry08p"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 568,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 3",
+      "range": [
+        "spya-htz2m5",
+        "spya-z8czx0"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 476,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 4",
+      "range": [
+        "spya-gepxkk",
+        "spya-zt5a2a"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 60,
+      "bodyWords": 2967,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 5",
+      "range": [
+        "spya-jca72b",
+        "spya-xrpyja"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 987,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 7 > child 6",
+      "range": [
+        "spya-wmm44m",
+        "spya-bh05jn"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 630,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 1",
+      "range": [
+        "spya-s45vk8",
+        "spya-atbaze"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 731,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 2",
+      "range": [
+        "spya-g02xss",
+        "spya-d9g6s6"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 1195,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 3",
+      "range": [
+        "spya-s307bp",
+        "spya-dn4c3s"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 433,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 4",
+      "range": [
+        "spya-p2j3tr",
+        "spya-x7tm2y"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 867,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 5",
+      "range": [
+        "spya-mjw4fc",
+        "spya-y5tgt0"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 30,
+      "bodyWords": 2236,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 6",
+      "range": [
+        "spya-c3qrj9",
+        "spya-ynj5pj"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 21,
+      "bodyWords": 1621,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 7",
+      "range": [
+        "spya-wja6wd",
+        "spya-nymrg9"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 43,
+      "bodyWords": 2159,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 8",
+      "range": [
+        "spya-e9nqhn",
+        "spya-bd4qur"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 1626,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 9",
+      "range": [
+        "spya-sf7bd2",
+        "spya-bzhxed"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 1223,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 10",
+      "range": [
+        "spya-kpvsyc",
+        "spya-sahsau"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 867,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 6 > child 8 > child 11",
+      "range": [
+        "spya-aexyrs",
+        "spya-athu07"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 609,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 1",
+      "range": [
+        "spya-gkc9g7",
+        "spya-dk8hxy"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 1633,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 2",
+      "range": [
+        "spya-fj4a3g",
+        "spya-httdf4"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 931,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 3",
+      "range": [
+        "spya-w9u70q",
+        "spya-tf889a"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 896,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 4",
+      "range": [
+        "spya-tna9f2",
+        "spya-f5jy88"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 49,
+      "bodyWords": 4281,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 5",
+      "range": [
+        "spya-u880q3",
+        "spya-unxq3u"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 10,
+      "bodyWords": 1150,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 6",
+      "range": [
+        "spya-bgsh9b",
+        "spya-fuy6ck"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 771,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 7",
+      "range": [
+        "spya-dvt6d9",
+        "spya-kdcp4j"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 805,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 8",
+      "range": [
+        "spya-sj9s6c",
+        "spya-zzz7wz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 13,
+      "bodyWords": 2056,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 9",
+      "range": [
+        "spya-teznfx",
+        "spya-mf4jyy"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 1843,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 10",
+      "range": [
+        "spya-rjsgtj",
+        "spya-cnwhyv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 36,
+      "bodyWords": 4725,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 11",
+      "range": [
+        "spya-e2adub",
+        "spya-ku3ze4"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 1185,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 12",
+      "range": [
+        "spya-xbqd6w",
+        "spya-qfeexz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 18,
+      "bodyWords": 1395,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 13",
+      "range": [
+        "spya-wy0032",
+        "spya-u6y492"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 22,
+      "bodyWords": 1046,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 14",
+      "range": [
+        "spya-hnmtsx",
+        "spya-furhaa"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 51,
+      "bodyWords": 2484,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 15",
+      "range": [
+        "spya-km9xnw",
+        "spya-ssxvb3"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 969,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 16",
+      "range": [
+        "spya-e0h3x6",
+        "spya-s8qjtf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 1600,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 17",
+      "range": [
+        "spya-kp6u48",
+        "spya-ph7zu8"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 1262,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 18",
+      "range": [
+        "spya-ven7uf",
+        "spya-vyrfcp"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 498,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 19",
+      "range": [
+        "spya-v9y09m",
+        "spya-vxzcrc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 1811,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 20",
+      "range": [
+        "spya-r68bye",
+        "spya-kb347a"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 242,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 7 > child 1 > child 21",
+      "range": [
+        "spya-cq0cg4",
+        "spya-ybeeqf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 630,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 1",
+      "range": [
+        "spya-aprdr6",
+        "spya-yhn3ux"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 307,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 2",
+      "range": [
+        "spya-yjvukr",
+        "spya-hvaecm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 23,
+      "bodyWords": 2405,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 3",
+      "range": [
+        "spya-z2e9y4",
+        "spya-aqn3zf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": "authored-heading",
+      "structuralBlocks": 44,
+      "bodyWords": 2652,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 4",
+      "range": [
+        "spya-n5p7ja",
+        "spya-rskaxa"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 1751,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 5",
+      "range": [
+        "spya-jk6wen",
+        "spya-wjyv3t"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 1531,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 6",
+      "range": [
+        "spya-rvxz28",
+        "spya-mu5u7p"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 922,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 7",
+      "range": [
+        "spya-bt7njj",
+        "spya-px7auf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 12,
+      "bodyWords": 1416,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 8",
+      "range": [
+        "spya-sv69m8",
+        "spya-nax3nf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 1549,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 9",
+      "range": [
+        "spya-wx2yu5",
+        "spya-k5nmfx"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 922,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 10",
+      "range": [
+        "spya-qe946d",
+        "spya-jjpgsv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 1034,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 11",
+      "range": [
+        "spya-j0jdwf",
+        "spya-qv9etg"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "authored-heading"
+      },
+      "overriddenBy": "authored-heading",
+      "structuralBlocks": 38,
+      "bodyWords": 1549,
+      "authoredHeadings": 2,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 12",
+      "range": [
+        "spya-xnhbcz",
+        "spya-j6tgbf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 21,
+      "bodyWords": 904,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 13",
+      "range": [
+        "spya-mqpmfw",
+        "spya-nvsmxm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 20,
+      "bodyWords": 2231,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 14",
+      "range": [
+        "spya-urhdc6",
+        "spya-m2x7xy"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 419,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 15",
+      "range": [
+        "spya-apxrpc",
+        "spya-sua4ha"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 926,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 16",
+      "range": [
+        "spya-uwc9k3",
+        "spya-ktwfgf"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 29,
+      "bodyWords": 1210,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 17",
+      "range": [
+        "spya-ahsftu",
+        "spya-kwmsvk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 636,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 18",
+      "range": [
+        "spya-xrrwen",
+        "spya-akkqpm"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 15,
+      "bodyWords": 873,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 19",
+      "range": [
+        "spya-whwzpy",
+        "spya-rbbjqk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 512,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 20",
+      "range": [
+        "spya-as7jfx",
+        "spya-k2xae0"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 16,
+      "bodyWords": 467,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 1 > child 21",
+      "range": [
+        "spya-wmdnnq",
+        "spya-u3m5sy"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 885,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2 > child 1",
+      "range": [
+        "spya-kv07nc",
+        "spya-jwr5ez"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "expand",
+        "because": "forced-open"
+      },
+      "overriddenBy": "forced-open",
+      "structuralBlocks": 39,
+      "bodyWords": 2516,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2 > child 2",
+      "range": [
+        "spya-y2zzz5",
+        "spya-u7rtwz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 179,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2 > child 3",
+      "range": [
+        "spya-ufwwxu",
+        "spya-yffpkk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 619,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2 > child 4",
+      "range": [
+        "spya-w9a574",
+        "spya-r4pbbh"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 3,
+      "bodyWords": 50,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 2 > child 5",
+      "range": [
+        "spya-va20pu",
+        "spya-azkc23"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 1197,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5 > child 1",
+      "range": [
+        "spya-srqbyy",
+        "spya-uuf6gk"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 20,
+      "bodyWords": 1353,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5 > child 2",
+      "range": [
+        "spya-uptbbz",
+        "spya-v9zjsn"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 24,
+      "bodyWords": 696,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5 > child 3",
+      "range": [
+        "spya-wass97",
+        "spya-h89ym2"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 20,
+      "bodyWords": 1374,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5 > child 4",
+      "range": [
+        "spya-hyprpg",
+        "spya-m96naw"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 574,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 5 > child 5",
+      "range": [
+        "spya-mt2eeq",
+        "spya-tmnje2"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 192,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 6 > child 1",
+      "range": [
+        "spya-qspb67",
+        "spya-wu6y34"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 14,
+      "bodyWords": 1480,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 6 > child 2",
+      "range": [
+        "spya-qkybay",
+        "spya-eed77e"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 13,
+      "bodyWords": 421,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 6 > child 3",
+      "range": [
+        "spya-fs022h",
+        "spya-vdkhku"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 20,
+      "bodyWords": 1581,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 8 > child 6 > child 4",
+      "range": [
+        "spya-q5ynqu",
+        "spya-q5ynqu"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 5,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 1",
+      "range": [
+        "spya-nnp03d",
+        "spya-s0j9xu"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 450,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 2",
+      "range": [
+        "spya-qcm9c6",
+        "spya-ujeh5r"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 234,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 3",
+      "range": [
+        "spya-hwajvw",
+        "spya-prmtay"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 584,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 4",
+      "range": [
+        "spya-khm0u8",
+        "spya-wqjf4a"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 670,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 5",
+      "range": [
+        "spya-v5jjyc",
+        "spya-tjq2x3"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 499,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 6",
+      "range": [
+        "spya-tbz8p5",
+        "spya-r9rdbb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 246,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 7",
+      "range": [
+        "spya-jp5hpd",
+        "spya-jp5hpd"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 297,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 8",
+      "range": [
+        "spya-a59dhx",
+        "spya-awetvc"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 293,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 1 > child 9",
+      "range": [
+        "spya-tr8jer",
+        "spya-uf004z"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 214,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 1",
+      "range": [
+        "spya-y4tx0a",
+        "spya-d3wajn"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 498,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 2",
+      "range": [
+        "spya-ugebkq",
+        "spya-dt4krz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 9,
+      "bodyWords": 723,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 3",
+      "range": [
+        "spya-pxtsqq",
+        "spya-am6s73"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 377,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 4",
+      "range": [
+        "spya-cx4jrz",
+        "spya-quxy5r"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 646,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 5",
+      "range": [
+        "spya-t5d28k",
+        "spya-yrazr5"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 11,
+      "bodyWords": 276,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 6",
+      "range": [
+        "spya-hbnn2j",
+        "spya-byevq2"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 172,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 7",
+      "range": [
+        "spya-sq39hw",
+        "spya-rdzn9j"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 431,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 2 > child 8",
+      "range": [
+        "spya-w4dp40",
+        "spya-ndzzkz"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 2,
+      "bodyWords": 113,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 1",
+      "range": [
+        "spya-r0kuh8",
+        "spya-q33j38"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 7,
+      "bodyWords": 653,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 2",
+      "range": [
+        "spya-u6gkr4",
+        "spya-en26cb"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 482,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 3",
+      "range": [
+        "spya-r0f662",
+        "spya-y6crfj"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "verdict"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 17,
+      "bodyWords": 612,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 4",
+      "range": [
+        "spya-afymg6",
+        "spya-tv3y3x"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 426,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 5",
+      "range": [
+        "spya-azn999",
+        "spya-eeyaac"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 4,
+      "bodyWords": 431,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 6",
+      "range": [
+        "spya-xhy2ys",
+        "spya-mg59p0"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 8,
+      "bodyWords": 579,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 7",
+      "range": [
+        "spya-umts55",
+        "spya-v6uqcv"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 6,
+      "bodyWords": 277,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 8",
+      "range": [
+        "spya-xrpgzx",
+        "spya-r6u5ut"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 387,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 9",
+      "range": [
+        "spya-n2fwv5",
+        "spya-xdusfj"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 5,
+      "bodyWords": 604,
+      "authoredHeadings": 0,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    },
+    {
+      "where": "root > child 9 > child 3 > child 10",
+      "range": [
+        "spya-txv80c",
+        "spya-txv80c"
+      ],
+      "wave": 2,
+      "depth": 3,
+      "rawVerdict": "finished",
+      "effective": {
+        "decision": "stop",
+        "because": "divisibility-floor"
+      },
+      "overriddenBy": null,
+      "structuralBlocks": 1,
+      "bodyWords": 1,
+      "authoredHeadings": 1,
+      "retries": 0,
+      "fanOut": null,
+      "model": "anthropic/claude-sonnet-5",
+      "effort": "low",
+      "promptVersion": "toc/5+expand/2"
+    }
+  ]
+}
