@@ -115,9 +115,13 @@ vi.mock("../src/web/lib/api.js", () => {
         /* What `lookUpTerm` returns: the entry **as it was before** the model call
            it just spent thirty seconds on, with the answer attached
            (src/term-lookup.ts). The stale name is the point of the fixture. */
-        return new Response(JSON.stringify({ entry: staleLookupEntry }), {
+        /* As the route's `done` frame since it started streaming on 2026-09-10
+           (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md). A
+           JSON body here reads as a stream that ended without finishing, and
+           the lookup then waits on its re-read of the list — held — for ever. */
+        return new Response(`event: done\ndata: ${JSON.stringify({ entry: staleLookupEntry })}\n\n`, {
           status: 200,
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "text/event-stream" },
         });
       }
       const body = JSON.stringify(response(input.split("/").pop() ?? ""));

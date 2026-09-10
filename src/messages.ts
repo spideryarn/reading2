@@ -684,10 +684,11 @@ export function providerHttpFailure(status: number): ReaderFacingFailure {
  * "May", not "is", and that is the correction: this used to say *"Anything above
  * this point is what arrived before it stopped"*, which assumes the reader
  * watched the text arrive. Comments and chat stream, so they do. **The glossary
- * lookup does not** — it drains `explain()` and shows a spinner, so "above this
- * point" was an empty space and the sentence described a screen the reader was
- * not looking at. A message in one file, used by callers with different
- * interfaces, has to survive all of them. Found by review, 2026-08-26.
+ * lookup did not** — it drained `explain()` and showed a spinner, so "above
+ * this point" was an empty space and the sentence described a screen the reader
+ * was not looking at. It streams since 2026-09-10, but the lesson stands: a
+ * message in one file, used by callers with different interfaces, has to
+ * survive all of them. Found by review, 2026-08-26.
  */
 export const PROVIDER_FAILED_MID_ANSWER: ReaderFacingFailure = {
   kind: "retry",

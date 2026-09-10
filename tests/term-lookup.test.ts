@@ -84,7 +84,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { lookUpTerm } from "../src/store/index.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
-import type { Block, GlossaryLookup, GlossaryResponse } from "../src/types.js";
+import type { Block, GlossaryEntry, GlossaryLookup, GlossaryResponse } from "../src/types.js";
+import type { ExplainEnding } from "../src/explain.js";
 import type { LookupsByTerm } from "../src/glossary-lookups.js";
 import type { Article } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -240,6 +241,8 @@ function harness(opts: {
   text: string;
   entry: { id: string; name: string; aliases: string[]; blocks: string[] };
   citations: { url: string; title?: string }[];
+  ending?: ExplainEnding;
+  saveFails?: boolean;
 }) {
   const block: Block = {
     id: "spya-aaaaaa" as Block["id"],
@@ -260,7 +263,7 @@ function harness(opts: {
   const asked: { blockId: string; quote: string }[] = [];
   const saved: { termId: string; lookup: GlossaryLookup }[] = [];
 
-  const lookUp = makeLookUpTerm({
+  const prepare = makeLookUpTerm({
     reader: {
       loadArticle: async () => article,
       loadGlossary: async () =>
@@ -273,13 +276,18 @@ function harness(opts: {
     lookups: {
       load: async (): Promise<LookupsByTerm> => ({}),
       save: async (_slug, termId, lookup): Promise<LookupsByTerm> => {
+        order.push("save");
+        if (opts.saveFails) throw new Error("the store is down");
         saved.push({ termId, lookup });
         return { [termId]: lookup };
       },
     },
-    explain: async (req) => {
+    explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
-      return {
+      yield { type: "delta", text: "An " };
+      yield {
+        type: "done",
+        ending: opts.ending ?? "finished",
         answer: "An answer.",
         citations: opts.citations,
         searches: 2,
@@ -289,7 +297,21 @@ function harness(opts: {
     now: () => "2026-08-26T00:00:00.000Z",
   });
 
-  return { lookUp, asked, saved };
+  /** Every event the stream yields, in order, beside every save. */
+  const order: string[] = [];
+
+  /** Drain to the one `done`, or throw — what the JSON route used to answer. */
+  const lookUp = async (slug: string, termId: string): Promise<{ entry: GlossaryEntry }> => {
+    let entry: GlossaryEntry | undefined;
+    for await (const event of (await prepare(slug, termId)).stream()) {
+      order.push(event.type);
+      if (event.type === "done") entry = event.entry;
+    }
+    if (!entry) throw new Error("the stream ended without a done");
+    return { entry };
+  };
+
+  return { lookUp, asked, saved, order };
 }
 
 describe("what the model is asked, and what is kept from its answer", () => {
@@ -372,5 +394,42 @@ describe("what the model is asked, and what is kept from its answer", () => {
     expect(saved[0]?.termId).toBe("spya-kennedy");
     expect(saved[0]?.lookup.model).toBe("a-model");
     expect(saved[0]?.lookup.searches).toBe(2);
+  });
+});
+
+/**
+ * **`done` means stored**, since the lookup started streaming on 2026-09-10 —
+ * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md. The route test
+ * (tests/glossary-lookup-stream-route.test.ts) drives these through Postgres;
+ * these pin the order inside the stream, which a route cannot see.
+ */
+describe("a lookup that streams", () => {
+  const kennedy = {
+    text: "JFK was assassinated in 1963.",
+    entry: { id: "spya-kennedy", name: "John F. Kennedy", aliases: ["JFK"], blocks: ["spya-aaaaaa"] },
+    citations: [],
+  };
+
+  it("yields `done` only after the save has resolved", async () => {
+    const { lookUp, order } = harness(kennedy);
+    await lookUp("harness", "spya-kennedy");
+    expect(order).toEqual(["delta", "save", "done"]);
+  });
+
+  it("never yields `done` when the save fails after the words arrived", async () => {
+    const { lookUp, order } = harness({ ...kennedy, saveFails: true });
+    await expect(lookUp("harness", "spya-kennedy")).rejects.toThrow(/the store is down/);
+    expect(order).toEqual(["delta", "save"]);
+  });
+
+  it("saves nothing from an answer that stopped part-way", async () => {
+    /* A truncated answer stored here would be served as whole on every later
+       visit. `explainStream` accepts it for a comment; the glossary refuses. */
+    for (const ending of ["truncated", "filtered", "abandoned"] as const) {
+      const { lookUp, saved, order } = harness({ ...kennedy, ending });
+      await expect(lookUp("harness", "spya-kennedy"), ending).rejects.toThrow();
+      expect(saved, ending).toEqual([]);
+      expect(order, ending).toEqual(["delta"]);
+    }
   });
 });

@@ -7,6 +7,7 @@ not authorise implementing every product decision below.
 
 **Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
+E (both glossary lookups streamed) built 2026-09-10/11 — see § E.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -425,6 +426,11 @@ One reviewed departure from the bullets below: a provider refusal is now an `err
   itself prove a provider stopped billing; verify the server cancellation path separately.
 
 ### Stage: stream and save an existing entry lookup
+
+**Status as of 2026-09-11: built, Sol-reviewed, on `dev`** — same stage plan as the stage above.
+One reviewed choice to know about: leaving the article does **not** cancel this lookup, because the
+panel promises the answer is saved either way; the unsaved box does cancel. Not built: any limit on
+how many lookups one reader can run (the reviews note there is none on either route, as before).
 
 - [ ] Add the durable lookup variant after the unsaved path works. Stream deltas but persist only
   the authoritative completed result, including sources/search count and correct term identity.

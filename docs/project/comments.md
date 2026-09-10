@@ -508,10 +508,13 @@ project:
 - [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) — the client's reader loop.
 
 `explain()` did not become a second implementation: `explainStream` is the only one, and `explain`
-drains it. The glossary's per-term lookup still uses the waiting version — not because streaming it
-is impossible, but because the answer has to be persisted through a store contract that was being
-rebuilt for Postgres when the question came up. What it would take is written down in
-[260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
+drains it. No request handler uses the drain since 2026-09-10, when the glossary's two lookups — its
+last callers — started streaming too
+([260910g](../plans/260910g-stream-glossary-answers-as-they-arrive.md)). One thing they read that
+this route does not: **`done` now carries the classified `ending`**, because the glossary refuses
+three endings a comment keeps — the reader leaving, the token ceiling and the provider's filter.
+A comment keeps half an answer because it has a row to put it on; a glossary answer drawn or stored
+as finished would be a claim it cannot back. This route reads the fields it always read.
 
 > [!WARNING]
 > **A stream can end by simply stopping, and that looks exactly like finishing** — and an abort can

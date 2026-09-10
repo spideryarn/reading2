@@ -520,14 +520,29 @@ open entry carries a **"Check the web"** button, and pressing it is what turns a
 into a checked one:
 
 ```
-POST /api/glossary/:slug/:id/lookup   →  { entry }   (~10s, one model call)
+POST /api/glossary/:slug/:id/lookup   →  SSE: delta…, then done { entry } | error   (~10s, one model call)
 ```
 
-**The answer does not stream, and that is not because it cannot.** The lookup drains `explain()` and
-appears whole, behind a spinner that says so. What it would take, and why it is waiting on the
-Postgres store seam rather than on the streaming, is in
-[260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md) — **whoever finishes the glossary
-store should do it then**, which is why this note is here rather than only in the plan.
+**The answer streams, and `done` means stored** — since 2026-09-10
+([plan](../plans/260910g-stream-glossary-answers-as-they-arrive.md)), on the same helper and reader as
+[the box below](#it-streams-and-only-a-finished-answer-is-an-answer). The refusals are still JSON
+before the stream opens; after it, the words arrive drawn as *arriving…*, and only the `done` frame —
+written **after** the save succeeds — puts the lookup on the entry. So:
+
+- **A save that fails after the words arrived is an `error`**, never an answer drawn as kept. The
+  converse is not promised — a save can succeed and its read-back fail, or the socket die between
+  the save and the frame — so **the client reads the list again after any failure**, and if the
+  answer was kept after all, the entry shows it.
+- **A cut-off answer is not saved.** The endings `explainStream` keeps for a comment — the token
+  ceiling (`[gl-cut-off]`), the provider's filter — are refused here, because a truncated answer
+  stored once is served as whole to every later visit.
+- **Leaving does not cancel it.** Unlike the box, which stops the paid call when the reader goes,
+  this finishes and saves: the panel says *"You can carry on reading — the answer is saved against
+  this term either way"*, and that has to stay true. The client only stops reading.
+- **A term removed while its answer streams is accepted, not refused.** Lookups are keyed by entry id
+  with no foreign key to the entry (deliberately — ids survive merges), so the save succeeds and the
+  merge does not put a stale entry back. A glossary rebuild can replace the list while the lookup
+  runs; the panel then says the answer was saved but its term is no longer shown.
 
 **Its answers live apart from the glossary, keyed by entry id** — one row per `(article, entry)` in
 Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)) — never inside `glossary.json`.

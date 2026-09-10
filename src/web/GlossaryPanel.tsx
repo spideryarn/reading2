@@ -99,7 +99,7 @@ import {
   survivesThreshold,
   type ThresholdResult,
 } from "./threshold.js";
-import type { UseGlossary } from "./useGlossary.js";
+import type { LookKept, UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
@@ -137,6 +137,16 @@ import { useRenderCount } from "./perf.js";
  * is the prop.
  */
 export type GlossaryOwner = UseGlossary;
+
+/** A completed lookup whose row a concurrent glossary rewrite removed. */
+function keptWithoutEntry(
+  owner: UseGlossary | null,
+  entries: readonly GlossaryEntry[],
+): LookKept | null {
+  const kept = owner?.lookKept;
+  if (!kept) return null;
+  return entries.some((entry) => entry.id === kept.id) ? null : kept;
+}
 
 /**
  * **Who is reading, and the list they get — one prop, so the two cannot
@@ -232,6 +242,7 @@ export function GlossaryPanel({
   const gate = chosenGate ?? PRIORITY_GATE;
   const order = effectiveSort(all, sort);
   const shown = glossary ? sortEntries(all, order, gate) : [];
+  const orphanedLookup = keptWithoutEntry(owner, all);
 
   /**
    * Whether the next run should use the profile.
@@ -331,6 +342,13 @@ export function GlossaryPanel({
       )}
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}
+
+      {orphanedLookup && (
+        <p className="gloss-quiet">
+          The answer{orphanedLookup.name ? ` for ${orphanedLookup.name}` : ""} was saved, but
+          that term is no longer in the glossary, so it is not shown here.
+        </p>
+      )}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for a glossary…</p>}
 
@@ -492,10 +510,11 @@ export function GlossaryPanel({
                   look={owner?.look ?? null}
                   looking={owner?.looking === entry.id}
                   lookBusy={(owner?.looking ?? null) !== null}
+                  lookDraft={owner?.lookDraft?.id === entry.id ? owner.lookDraft.text : null}
+                  /* The failure belongs to the request's entry, not whichever
+                     row the reader selected while that request was running. */
                   lookFailed={
-                    owner && owner.looking === null && entry.id === termId
-                      ? owner.lookFailed
-                      : null
+                    owner?.lookFailed?.id === entry.id ? owner.lookFailed.message : null
                   }
                   onSelect={() => {
                     // Pressing the selected term again clears it, which is
@@ -1164,6 +1183,7 @@ function Term({
   look,
   looking,
   lookBusy,
+  lookDraft,
   lookFailed,
   onSelect,
   onJump,
@@ -1209,6 +1229,8 @@ function Term({
   looking: boolean;
   /** A lookup is running for some term — one at a time, so every button waits. */
   lookBusy: boolean;
+  /** This term's lookup as it arrives, or what arrived before it broke. */
+  lookDraft: string | null;
   lookFailed: string | null;
   onSelect(): void;
   onJump(id: BlockId): void;
@@ -1365,6 +1387,7 @@ function Term({
             looking={looking}
             busy={lookBusy}
             unquoted={unquoted}
+            draft={lookDraft}
             failed={lookFailed}
           />
 
@@ -1679,12 +1702,20 @@ function Looked({
   looking,
   busy,
   unquoted,
+  draft,
   failed,
 }: {
   entry: GlossaryEntry;
   look: ((id: string) => Promise<void>) | null;
   looking: boolean;
   busy: boolean;
+  /**
+   * The lookup as it arrives, or what arrived before it broke — drawn as
+   * unfinished, **never** as the entry's answer: no *checked* line, no
+   * sources. Only the stream's `done`, sent after the save, puts a lookup on
+   * the entry. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+   */
+  draft: string | null;
   /**
    * The article names this term rather than quoting it — **and the list is in a
    * position to say so.** `Term` computes it; the second half of that sentence
@@ -1764,20 +1795,30 @@ function Looked({
             the wait is expected rather than suspicious; the second says the
             reader can leave, which is the thing that actually makes waiting
             bearable and is true — the answer is stored against the entry, not
-            held in this component. Same promise the search panel makes.
+            held in this component, and the server finishes the lookup even if
+            the reader closes the band (`streamTermLookup` in src/routes.ts).
+            Same promise the search panel makes.
 
-            Unlike chat and explain, no words arrive while this runs: the answer
-            appears whole. Making it stream is worth doing and is written up in
-            docs/plans/260826o-streaming-the-slow-two.md — it needs a storage seam that
-            was being rebuilt on the day this was written. */}
-        {looking && (
+            Shown only until the first words land, since 2026-09-10: after that
+            the words are the progress. */}
+        {looking && !draft && !failed && (
           <p className="gloss-look-wait">
             The whole piece goes to the model, and it may search the web as well, so this can take
             up to a minute. You can carry on reading — the answer is saved against this term either
             way.
           </p>
         )}
+        {/* The failure first, then what arrived under it — the box's order,
+            for the same reason: the sentence says what the text is. */}
         {failed && <p className="gloss-error">{failed}</p>}
+        {draft && (
+          <div className="gloss-look on">
+            <p className="gloss-part-label">
+              {looking && !failed ? "arriving…" : "unfinished"}
+            </p>
+            <p className="gloss-part-text">{draft}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -2005,4 +2046,3 @@ function Progress(props: {
     <JobProgress {...props} step="glossary" icon={<Search size={13} />} runningLabel="Finding…" />
   );
 }
-

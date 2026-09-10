@@ -1,6 +1,6 @@
 # Stream the glossary's two waiting answers
 
-Status as of 2026-09-10: **Stage 1 built and reviewed, on `dev`; stage 2 next.** Cluster E of
+Status as of 2026-09-11: **both stages built, Sol-reviewed and on `dev`.** Cluster E of
 [the prioritised plan](260908f-prioritised-spideryarn-codebase-improvements.md#e-show-glossary-answers-as-they-arrive),
 dispatched by the Overseer (queue item `qi-csycwx9r`) after Greg, 2026-09-10 21:10Z:
 
@@ -45,7 +45,7 @@ per-request middleware is `withSpendAttribution`, which records and does not gat
 ingest, not calls. The route keeps `withSpendAttribution` around the whole stream.
 
 **Client.** `useGlossary.ask` reads the stream with `readEvents` under `STREAM_STALL_MS`, in a
-`readAskedTerm` function shaped like `readMark` in src/web/useQuiz.ts: the answer is returned only on
+`readAskedTerm` function (since stage 2, `readGlossaryStream`) shaped like `readMark` in src/web/useQuiz.ts: the answer is returned only on
 a `done` frame; an `error` frame, a stall, or EOF without a terminal frame throws. The in-flight text
 lives in a new `askDraft` field and **`asked` is set only from `done`**. One `AbortController` per
 request: a keystroke (`clearAsked`), a slug change and unmount all abort it, which cancels the body,
@@ -65,12 +65,29 @@ unmount ending deliberately.
 
 ## Stage 2 — stream and save an existing entry lookup
 
-Only after stage 1 lands. `makeLookUpTerm` takes the same split: refusals before headers, then a
-stream whose `done` is emitted **only after `lookups.save` has succeeded**, carrying the stored
-lookup. A save failure after text has arrived is an `error` frame, never a `done`, so the panel cannot
-show an answer as kept when it was not. Abort before completion saves nothing. The client's `look`
-gains the same reader and merges into the entry through `patchEntry` only on `done`. Detail is
-settled when stage 1 is in; this section is updated then.
+Built after stage 1 landed (`5ab767c6`). `makeLookUpTerm` takes the same split: the 404 and the two
+409s before headers, then a stream whose `done` is emitted **only after `lookups.save` has
+succeeded**, carrying `{ entry }` with the stored lookup — the JSON route's old body. A save failure
+after text has arrived is an `error` frame, never a `done`. `refuseUnfinished` guards the save too,
+so a cut-off answer is never stored. The client's `look` uses the same reader as the box
+(`readGlossaryStream`, one terminal contract for both), keeps the words in `lookDraft`, and merges
+into the entry through `patchEntry` only on `done`.
+
+Three decisions, each tested:
+
+- **Leaving does not cancel the lookup.** The route does not pass `gone` to the model call. The
+  panel promises *"the answer is saved against this term either way"*, and the JSON route kept that
+  only because nothing stopped the server; cancelling would turn a closed band into a paid call
+  thrown away. The client stops reading on another article or unmount; the server finishes and
+  saves. `answer` (comments) makes the same choice. The unsaved box does cancel — nothing it
+  produces outlives the page.
+- **A failure reads the list again** (Sol's plan-review P2: `error` does not prove nothing was
+  kept). If the save landed and the frame did not, the re-read shows the stored answer.
+- **An entry removed mid-stream is accepted, not refused** (Sol's other P2). Lookups are keyed by
+  entry id with no foreign key, deliberately; the save succeeds and `patchEntry` does not put a
+  stale entry back. A glossary rebuild can replace the list while the lookup runs, so `lookKept`
+  survives independently of the rows and the panel says that the answer was saved but its term is
+  no longer shown.
 
 ## What the plan review changed
 
@@ -127,4 +144,45 @@ its fixes, each of which I read:
   admission lock. Not written up in this stage.
 
 The full suite ran while the review was editing these files, so its result is not by itself a gate
-for the final tree; the focused rerun above is.
+for the final tree; the focused rerun above is. It finished 10 files red of 1,075: three were this
+stage's (a doc anchor, the new `[gl-cut-off]` code missing from `CODE_KINDS`, the new route test
+missing its registry entry) and were fixed before the commit; two were the fresh-worktree bundle
+tests (`cold-start-lazy-imports`, `pdf-bundle-trace`, which want `npm run build`); four were
+`tools/fleet` and `tools/overseer` suites, which import nothing this stage touched; and
+`glossary-asked-term-stream.test.tsx` was mid-edit by the review and passed alone.
+
+Stage 2, against `00305a03`:
+
+| check | result |
+|---|---|
+| route test, before the change | **5 failed, 2 passed** — the two that passed are the behaviour to keep: the reader leaving still saves, and a 404 stays unstreamed JSON |
+| route test, after | 7 passed |
+| hook test against stage 1's `useGlossary.ts` | **6 failed, 1 passed** — the malformed-`done` case fails safe on the old JSON parse |
+| focused suites, both stages | 12 files, 174 passed; `npm run typecheck` exit 0 |
+| mutation: pass `gone` to the lookup's model call | 1 failed — *does not stop the paid call, and the answer is still kept* |
+| mutation: yield `done` before the save | 3 failed — the removed-article route case and two unit ordering cases |
+| mutation: drop the client's re-read after a failure | 1 failed — *reads the list again* |
+| real browser, one real model call (Playwright, `fowler-phrenology`, entry *Destructiveness*) | first words at 5.7 s, finished at 10.4 s; 17 samples drawn as *arriving…* under a *Checking…* button with no sources, then the stored answer; a fresh page load at 400 wide shows the same answer |
+| focused suites after the code review's fixes, Postgres ones included | 14 files, 197 passed; typecheck exit 0; lint clean on touched files |
+| full `npm test` on the final tree | 7 files red of 1,079. One was this stage's: `glossary-one-fetch.test.tsx` still mocked the lookup as JSON, which now reads as an unfinished stream whose re-read waits on a held GET — its mock now sends the `done` frame and it passes. The other six are the same environment and `tools/` reds as stage 1: `cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route`, `overseer-diagnose` |
+
+### What the stage 2 code review changed
+
+GPT Sol reviewed the built stage with write access
+([answer](260910g-stream-glossary-answers-stage2-review-sol.md)); no P0. I read each fix.
+
+- **P1** — after a failure the re-read was fire-and-forget and the button came back at once, so a
+  quick retry could start a second paid call and the first lookup's re-read then hid the retry's
+  draft. The re-read is now awaited while the lookup still holds admission.
+- **P1, and it corrects this plan** — the first draft said no client path removes an entry. False:
+  *Find them again* on a stale or outdated list replaces it, and can do so while a lookup streams.
+  `done` then confirmed storage, the merge found no row, and the panel said nothing. `lookKept` now
+  survives the list and the panel says the answer was saved but its term is no longer shown.
+- **P2** — a failure was drawn under whichever term was *selected*, not the one asked about;
+  failures now carry their request id.
+- **P2** — `GlossaryStore` still declared the old `lookUpTerm(): Promise<{ entry }>`; removed.
+- **P2** — the `sse` helper's caller inventory was a stale count; now count-free.
+- **Wider, not done here** — aggregate spend on these routes is unbounded (no rate limit, no per-term
+  dedup, no admission gate; each call is individually bounded by its 120 s deadline, 45 s stall
+  clock and 1,500-token ceiling), and the post-model save has no database statement deadline. Both
+  are house-wide policies rather than glossary ones; the first is Greg's question in the debrief.

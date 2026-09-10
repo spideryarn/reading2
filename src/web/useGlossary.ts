@@ -65,31 +65,53 @@ export interface AskedTermDraft extends Omit<AskedTermAnswer, "lookup"> {
 }
 
 /**
- * **The asked-term stream's terminal contract, in one function** — `readMark`
- * in src/web/useQuiz.ts, for the glossary's box.
- *
- * One `begin`, any number of `delta`, then exactly one `done` or `error`. The
- * answer is returned **only** from a `done` whose shape checks out; an `error`
- * frame throws its sentence, and so does the body simply ending, which is the
- * case the whole design is arranged against — a stream that stops cleanly looks
- * exactly like one that finished. A stall throws `StreamStalled` from
- * `readEvents`, and the caller words it.
+ * **The part of an entry's web lookup that has arrived** — `AskedTermDraft`'s
+ * counterpart for *Check the web*, and never on the entry. `id` says which
+ * entry it belongs to, because the band draws every entry and only one may
+ * show it.
  */
-async function readAskedTerm(
+export interface LookDraft {
+  id: string;
+  text: string;
+}
+
+/** A lookup failure stays attached to the entry whose request produced it. */
+export interface LookFailure {
+  id: string;
+  message: string;
+}
+
+/** A stored lookup, retained long enough to notice its entry disappearing. */
+export interface LookKept {
+  id: string;
+  name: string | null;
+}
+
+/**
+ * **The glossary's two streams' terminal contract, in one function** —
+ * `readMark` in src/web/useQuiz.ts, for the box and for *Check the web*.
+ *
+ * An optional `begin`, any number of `delta`, then exactly one `done` or
+ * `error`. The result is returned **only** from a `done` that `done` accepts —
+ * each caller checks its own shape, because this is the one object that becomes
+ * a finished answer on screen and a malformed one is a failure, not an answer
+ * with holes in it. An `error` frame throws its sentence, and so does the body
+ * simply ending, which is the case the whole design is arranged against — a
+ * stream that stops cleanly looks exactly like one that finished. A stall
+ * throws `StreamStalled` from `readEvents`, and the caller words it.
+ */
+async function readGlossaryStream<T>(
   body: ReadableStream<Uint8Array>,
-  on: { begin(found: Omit<AskedTermAnswer, "lookup">): void; delta(text: string): void },
-): Promise<AskedTermAnswer> {
+  on: {
+    begin?(data: unknown): void;
+    delta(text: string): void;
+    done(data: unknown): T | undefined;
+  },
+): Promise<T> {
   let text = "";
   for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
     if (event.name === "begin") {
-      const found = event.data as Partial<AskedTermAnswer> | null;
-      if (
-        typeof found?.term === "string" &&
-        typeof found.blockId === "string" &&
-        typeof found.quote === "string"
-      ) {
-        on.begin({ term: found.term, blockId: found.blockId, quote: found.quote });
-      }
+      on.begin?.(event.data);
       continue;
     }
     if (event.name === "delta") {
@@ -101,16 +123,14 @@ async function readAskedTerm(
       continue;
     }
     if (event.name === "done") {
-      /* **Checked rather than cast**, because this is the one object that
-         becomes a finished answer on screen. A malformed `done` is a failure,
-         not an answer with holes in it. */
-      if (!isAskedTermAnswer(event.data)) {
+      const result = on.done(event.data);
+      if (result === undefined) {
         throw new Error(
           "The answer arrived in a form this page could not read, so it is not shown as finished. " +
             "Trying again starts a fresh answer.",
         );
       }
-      return event.data;
+      return result;
     }
     if (event.name === "error") {
       const message = (event.data as { error?: unknown } | null)?.error;
@@ -120,13 +140,30 @@ async function readAskedTerm(
   throw new Error(ENDED_UNFINISHED.message);
 }
 
+/** The box's `begin` frame, if it is one: where the server found the term. */
+function asFound(data: unknown): Omit<AskedTermAnswer, "lookup"> | undefined {
+  const found = data as Partial<AskedTermAnswer> | null;
+  return typeof found?.term === "string" &&
+    typeof found.blockId === "string" &&
+    typeof found.quote === "string"
+    ? { term: found.term, blockId: found.blockId, quote: found.quote }
+    : undefined;
+}
+
 function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
   const a = data as Partial<AskedTermAnswer> | null;
-  const l = a?.lookup as Partial<GlossaryLookup> | undefined;
   return (
     typeof a?.term === "string" &&
     typeof a.blockId === "string" &&
     typeof a.quote === "string" &&
+    isGlossaryLookup(a.lookup)
+  );
+}
+
+/** A finished lookup as the wire carries it — both streams' `done` hold one. */
+function isGlossaryLookup(data: unknown): data is GlossaryLookup {
+  const l = data as Partial<GlossaryLookup> | null | undefined;
+  return (
     typeof l?.answer === "string" &&
     l.answer.trim() !== "" &&
     Array.isArray(l.citations) &&
@@ -484,8 +521,15 @@ export interface UseGlossary {
   look(id: string): Promise<void>;
   /** The term a lookup is running for, or null. One at a time, on purpose. */
   looking: string | null;
-  /** Why the last lookup failed, if it did. Cleared when another is started. */
-  lookFailed: string | null;
+  /** Why the last lookup failed, and which entry it belongs to. */
+  lookFailed: LookFailure | null;
+  /**
+   * The lookup as it arrives, or what arrived before it broke — `LookDraft`.
+   * **Never on the entry**: only the stream's `done`, sent after the save, is.
+   */
+  lookDraft: LookDraft | null;
+  /** The last lookup this hook saw stored, even if its entry was replaced. */
+  lookKept: LookKept | null;
   /**
    * Find a term the reader typed **in the article** and explain the passage it
    * is in — the box at the top of the panel.
@@ -530,7 +574,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
   const hasProfile = useHasProfile(slug);
   const [looking, setLooking] = useState<string | null>(null);
-  const [lookFailed, setLookFailed] = useState<string | null>(null);
+  const [lookFailed, setLookFailed] = useState<LookFailure | null>(null);
   const [asking, setAsking] = useState(false);
   const [askDraft, setAskDraft] = useState<AskedTermDraft | null>(null);
   const [asked, setAsked] = useState<AskedTermAnswer | null>(null);
@@ -606,29 +650,120 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * The answer is merged into the entry in place rather than refetching the
    * list, because a refetch would rebuild every row and lose the reader's
    * selection — and the server has just told us the one thing that changed.
+   *
+   * ## It streams, and `done` means stored
+   *
+   * Since 2026-09-10 the words arrive as they are written, into `lookDraft`,
+   * and only the `done` frame — which the server sends after the save — puts a
+   * lookup on the entry (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md).
+   * Two things differ from the box's `ask`:
+   *
+   * - **A failure reads the list again.** `error` does not prove nothing was
+   *   kept: a save can succeed and its read-back fail, or the socket die between
+   *   the save and the frame. If it was kept, the re-read puts it on the entry
+   *   and `Looked` draws the stored answer instead of the failure.
+   * - **Leaving stops the reading, not the lookup.** The server finishes and
+   *   saves either way — the panel promises that — so another article or the
+   *   band closing only disowns the stream.
    */
+  const lookLive = useRef<AbortController | null>(null);
+  const [lookDraft, setLookDraft] = useState<LookDraft | null>(null);
+  const [lookKept, setLookKept] = useState<LookKept | null>(null);
+
   const look = useCallback(
     async (id: string) => {
-      if (looking) return;
+      /* The ref is the admission record, `ask`'s rule: two presses in one tick
+         both see `looking` still null. */
+      if (lookLive.current) return;
+      const controller = new AbortController();
+      lookLive.current = controller;
+      const mine = () => lookLive.current === controller;
       setLooking(id);
       setLookFailed(null);
+      setLookDraft(null);
+      setLookKept(null);
+      let opened = false;
       try {
-        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
-          { method: "POST" },
+        const res = await apiFetch(
+          `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
+          { method: "POST", signal: controller.signal },
         );
-        const { entry } = await readJson<{ entry: GlossaryEntry }>(res);
-        /* The server always attaches one — `lookUpTerm` saves it and then
-           returns the entry with it — so its absence is a broken contract
-           rather than a case to paper over, and the reader is told. */
-        if (!entry.lookup) throw new Error("The lookup came back without an answer.");
-        patchEntry(entry.id, entry.lookup);
+        if (!res.ok || !res.body) {
+          /* The 404 and the two 409s are decided before the stream opens, so
+             they are ordinary JSON and `readJson` throws their sentence. */
+          await readJson(res);
+          throw new Error(`The server replied ${res.status}.`);
+        }
+        opened = true;
+        const done = await readGlossaryStream(res.body, {
+          delta: (text) => {
+            if (mine()) setLookDraft({ id, text });
+          },
+          /* `{ entry }`, and only its lookup is used — `patchEntry` says why the
+             rest of a snapshot taken before a model call must not be merged. */
+          done: (data) => {
+            const got = (data as { entry?: Partial<GlossaryEntry> } | null)?.entry;
+            return got?.id === id && isGlossaryLookup(got.lookup)
+              ? {
+                  lookup: got.lookup,
+                  name: typeof got.name === "string" && got.name ? got.name : null,
+                }
+              : undefined;
+          },
+        });
+        if (mine()) {
+          setLookDraft(null);
+          /* Kept independently of the list. A glossary rewrite can replace the
+             entry while the model is answering; `patchEntry` must not put that
+             stale entry back, but clearing every trace would silently hide an
+             answer the server did store. The panel uses this only when no row
+             with `id` remains. */
+          setLookKept({ id, name: done.name });
+          patchEntry(id, done.lookup);
+        }
       } catch (err) {
-        setLookFailed((err as Error).message);
+        if (controller.signal.aborted || !mine()) return;
+        setLookFailed({
+          id,
+          message:
+            err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+        });
+        /* See the section above: the answer may be stored anyway. Only once the
+           stream had opened — a refusal before it stored nothing.
+
+           **Awaited while this request still owns `lookLive`.** Releasing
+           admission first lets a quick retry start a second paid call while
+           this read is about to discover that the first answer was stored. If
+           that stored answer then lands, `Looked` hides the retry's arriving
+           draft behind it. Reconciliation is part of this lookup's lifetime. */
+        if (opened) await refresh();
       } finally {
-        setLooking(null);
+        if (lookLive.current === controller) {
+          lookLive.current = null;
+          setLooking(null);
+        }
       }
     },
-    [slug, looking, patchEntry],
+    [slug, patchEntry, refresh],
+  );
+
+  /**
+   * **Another article, or the band going, stops reading the lookup** — not the
+   * lookup itself, which the server finishes and stores. Without this the old
+   * stream's `done` would be merged into the next article's list, whose ids are
+   * a different namespace of the same shape.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
+  useEffect(
+    () => () => {
+      lookLive.current?.abort();
+      lookLive.current = null;
+      setLooking(null);
+      setLookDraft(null);
+      setLookKept(null);
+      setLookFailed(null);
+    },
+    [slug],
   );
 
   /**
@@ -718,17 +853,19 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
           await readJson(res);
           throw new Error(`The server replied ${res.status}.`);
         }
-        /* **`asked` is what `readAskedTerm` returns, and it returns only on a
+        /* **`asked` is what `readGlossaryStream` returns, and it returns only on a
            `done` frame.** Every other ending throws, so the draft can never be
            promoted by accident. The generation check after each frame, not
            before the request: the reader can type while the words arrive. */
-        const answer = await readAskedTerm(res.body, {
-          begin: (found) => {
-            if (current()) setAskDraft({ ...found, text: "" });
+        const answer = await readGlossaryStream(res.body, {
+          begin: (data) => {
+            const found = asFound(data);
+            if (found && current()) setAskDraft({ ...found, text: "" });
           },
           delta: (text) => {
             if (current()) setAskDraft((was) => (was ? { ...was, text } : was));
           },
+          done: (data) => (isAskedTermAnswer(data) ? data : undefined),
         });
         if (current()) {
           setAskDraft(null);
@@ -810,6 +947,8 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     more,
     cancel: queue.cancel,
     look,
+    lookDraft,
+    lookKept,
     looking,
     lookFailed,
     ask,
