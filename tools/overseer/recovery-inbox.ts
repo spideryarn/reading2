@@ -219,9 +219,25 @@ async function pendingRequests(
           keep = true;
         }
       } catch (cause) {
-        // A request-named symlink cannot be opened, and is junk. One that
+        // An open that fails says nothing about WHAT the entry is: a symlink
+        // fails with ELOOP, but a real request fails too under a transient
+        // EMFILE or EACCES, and junking that would lose an operator's dismissal
+        // silently (Sol's fix check on F22). So `lstat` decides: a symlink or
+        // anything not a regular file is junk; a regular file is a request we
+        // could not open this time, and stays exactly where it is. One that
         // vanished between the listing and the open has nothing to move.
-        keep = isAbsence(cause);
+        if (isAbsence(cause)) {
+          keep = true;
+        } else {
+          try {
+            keep = (await lstat(file)).isFile();
+            if (keep) log(`recovery request ${match[1] as string} could not be opened (${String(cause)}); left in place for a later pass`);
+          } catch (lstatCause) {
+            // Cannot tell what it is: never move what might be a request.
+            keep = true;
+            if (!isAbsence(lstatCause)) log(`recovery request ${match[1] as string} could not be opened or checked (${String(cause)}); left in place for a later pass`);
+          }
+        }
       } finally {
         if (info !== null) await info.close().catch(() => {});
       }
@@ -364,8 +380,19 @@ export async function drainRecoveryInbox(input: {
       // check's O6). Left in processing/, a symlink swapped in after the claim
       // would be logged on every tick and never go; `refuse` unlinks the link,
       // never what it points at. One that vanished has nothing left to refuse.
+      // A REGULAR file that could not be read is the scan's case above — a
+      // request under a transient failure — so it stays in processing/, where
+      // the next pass finds it first, and is never refused.
       if (isAbsence(cause)) {
         input.log(`recovery request ${requestId} vanished after it was claimed`);
+        continue;
+      }
+      const regular = await lstat(file).then(
+        (entry) => entry.isFile(),
+        () => true,
+      );
+      if (regular) {
+        input.log(`recovery request ${requestId} could not be read (${String(cause)}); left in processing/ for a later pass`);
         continue;
       }
       await refuse(file, requestId, `the request could not be read: ${String(cause)}`, null);

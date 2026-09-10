@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -1258,6 +1259,52 @@ describe("dismissal through the inbox", () => {
     expect(existsSync(stale)).toBe(false);
     expect(readdirSync(join(inbox, "junk"))).toHaveLength(1);
   });
+
+  // Root opens a mode-000 file regardless, so the failure cannot be injected that way.
+  test.skipIf(process.getuid?.() === 0)(
+    "a correctly named request that cannot be opened is left where it is, never junked or refused, and applied once it can be read (F22)",
+    async () => {
+      const { root, ids } = await rebootedStore();
+      const target = ids[0] as string;
+      await recoveryCli(["dismiss", target, "--why", "unreadable for a moment"], { root, out: () => {} });
+      const [file] = pending(root);
+      if (file === undefined) throw new Error("the CLI wrote no request");
+      const path = join(root, RECOVERY_INBOX_DIR, file);
+      const opened = openStore({ root });
+      if (!opened.ok) throw new Error("the store did not open");
+      const drain = (log: (line: string) => void) =>
+        drainRecoveryInbox({
+          root,
+          index: () => opened.store.recovery,
+          append: (events) => opened.store.append(events).ok,
+          now: () => new Date(LATEST),
+          log,
+        });
+
+      // A transient open failure (EACCES here; EMFILE would do the same) on a
+      // real, regular request file.
+      chmodSync(path, 0o000);
+      const lines: string[] = [];
+      let first: Awaited<ReturnType<typeof drainRecoveryInbox>>;
+      try {
+        first = await drain((line) => lines.push(line));
+      } finally {
+        if (existsSync(path)) chmodSync(path, 0o600);
+      }
+      expect(first).toEqual({ applied: 0, refused: 0, halted: false });
+      expect(existsSync(path)).toBe(true);
+      const junk = join(root, RECOVERY_INBOX_DIR, "junk");
+      expect(existsSync(junk) ? readdirSync(junk) : []).toEqual([]);
+      expect(refusals(root)).toEqual([]);
+      expect(lines.filter((line) => line.includes(file.slice(0, 36)))).toHaveLength(1);
+
+      // Readable again: the next pass applies it.
+      const second = await drain(() => {});
+      opened.store.close();
+      expect(second.applied).toBe(1);
+      expect(dispositions(eventsIn(root)).map((d) => d.id)).toEqual([target]);
+    },
+  );
 
   test("dismiss says HELD when the recovery index is incomplete, and names why (O2)", async () => {
     const { root, ids } = await rebootedStore();

@@ -1,7 +1,7 @@
 # Recovery inventory: show interrupted work without resuming it
 
 The roadmap stage is
-[260908f § Stage: Recovery inventory](260908f-overseer-and-fleet-improvement-roadmap.md#stage-recovery-inventory--show-interrupted-work-without-resuming-it);
+[260908f § Stage: Recovery inventory](260908f-overseer-and-fleet-improvement-roadmap.md#stage-recovery-inventory-show-interrupted-work-without-resuming-it);
 its six checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
 Queue item `qi-z4q4rkg3`, dispatched by the Overseer on 2026-09-10. **Zero sessions are started by
 anything in this plan, and there is no execute button.** Resuming is the next roadmap stage
@@ -529,6 +529,17 @@ typecheck exit 0; biome 0 errors. Deviations worth knowing:
 - **F24 left two short windows**, each needing `store.ts`, outside that brief: a record expiring
   between the view pass's clock and the checkpoint's. **Closed by the same subagent at the single
   write point**, on my authorisation for that one change in `store.ts`, again red first.
+
+**Sol's narrow check of the four P1 fixes, 2026-09-10, read-only, 20 minutes**
+([the answer](260910e-recovery-inventory-stage2-fixcheck-sol.md)): **F21/O1, F23 and F24 closed.
+F22 not closed.** The starvation is fixed, but the quarantine is too broad. A correctly named
+request whose `open()` fails for any reason other than absence (a transient `EMFILE` or `EACCES`)
+was moved into `junk/`, losing an operator's dismissal silently. Fix, as Sol proposed: `lstat`
+positively identifies request-named symlinks and non-regular entries, and only those are
+quarantined. A regular request that cannot be opened is logged and left for a later pass. Applied
+red-first by the same subagent. Under the engineering-manager rule (a check after round two that
+comes back still open is settled through Fable or Greg, not waved through) and the Overseer's
+"no further Sol round", **Fable confirms the settle**, recorded as not cross-family.
 
 What landed, beyond the brief: `tools/overseer/recovery-inbox.ts` (new), one leaf that both the CLI
 and the daemon use, so the request format lives in one place. Decisions the implementer made:
