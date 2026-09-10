@@ -91,7 +91,7 @@ import {
   type SessionListReading,
 } from "./feed-client";
 import type { MessageSpeaker } from "./messages-client";
-import { describeError } from "./transport";
+import { singleFlightReader } from "./single-flight-reader";
 import type { ClockSkew } from "./types";
 import { Button, Card, Mono, SectionHeading, cx, toneClasses } from "./ui";
 import { formatDuration, statusLabel } from "./view";
@@ -177,7 +177,9 @@ function tabHidden(): boolean {
  * **THE READS, AS ONE SMALL MACHINE OUTSIDE REACT** — transport.ts's shape, and
  * its manners, for a resource that must not be polled.
  *
- * Its rules, each of which has a test in tests/fleet-feed-freshness.test.tsx:
+ * Its rules, each of which has a test in tests/fleet-feed-freshness.test.tsx.
+ * The first three are single-flight-reader.ts, the core this reader shares
+ * with useActions.ts's `actionsReader`; the rest are this feed's own:
  *
  *  - **One live read slot.** A read asked for during one becomes exactly one
  *    more, after it — neither overlapping nor vanishing, however many times it
@@ -213,9 +215,6 @@ function feedReader(
   evidenceNow: () => FeedEvidence | null,
 ): FeedReader {
   let stopped = false;
-  let generation = 0;
-  let inFlight: { controller: AbortController; deadline: ReturnType<typeof setTimeout> } | null = null;
-  let again = false;
   let lastStartedAt = Number.NEGATIVE_INFINITY;
   /* The digest the last read to start was known to reflect. Null until the
      first evidence arrives, which is then the baseline. */
@@ -231,67 +230,40 @@ function feedReader(
     dueWhileHidden = false;
   };
 
-  /** Drop the read in flight, if any: abort it and make its answer unwelcome. */
-  const discard = (): void => {
-    generation += 1;
-    again = false;
-    if (inFlight === null) return;
-    clearTimeout(inFlight.deadline);
-    inFlight.controller.abort();
-    inFlight = null;
-  };
-
-  const settle = (mine: number, view: FeedView): void => {
-    if (stopped || mine !== generation || inFlight === null) return;
-    clearTimeout(inFlight.deadline);
-    inFlight = null;
-    if (view.kind === "feed") sink.onFeed(view, Date.now());
-    else sink.onFailure(view);
-    if (again) {
-      again = false;
-      read();
-    } else {
-      sink.onBusy(false);
-    }
-  };
-
-  const read = (): void => {
-    if (stopped) return;
-    if (inFlight !== null) {
-      again = true;
-      return;
-    }
-    if (tabHidden()) {
+  /* One read in flight, one pending, the deadline and the generation check —
+     single-flight-reader.ts. What stays here is what starts a read and the
+     hidden-tab rule: `admit` holds EVERY read while hidden (F52) — a person's
+     refresh, the pending read coming due, a new world — and it runs once when
+     the tab is shown. */
+  const core = singleFlightReader<FeedView>({
+    read: (signal) => api.recent(limit, signal),
+    deadlineMs: FEED_READ_DEADLINE_MS,
+    noAnswer: (why) => ({ kind: "no-answer", why }),
+    onSettle: (view) => {
+      if (view.kind === "feed") sink.onFeed(view, Date.now());
+      else sink.onFailure(view);
+    },
+    admit: () => {
+      if (!tabHidden()) return true;
       cancelTrailing();
       dueWhileHidden = true;
       sink.onBusy(false);
-      return;
-    }
-    cancelTrailing();
-    const evidence = evidenceNow();
-    if (evidence !== null) {
-      readDigest = evidence.digest;
-      if (evidence.tmuxServerPid !== null) world = evidence.tmuxServerPid;
-    }
-    lastStartedAt = Date.now();
-    generation += 1;
-    const mine = generation;
-    const controller = new AbortController();
-    const deadline = setTimeout(() => {
-      controller.abort();
-      settle(mine, {
-        kind: "no-answer",
-        why: `the dashboard did not answer within ${Math.round(FEED_READ_DEADLINE_MS / 1000)}s, so this page stopped waiting — the box may be loaded, or the read stuck`,
-      });
-    }, FEED_READ_DEADLINE_MS);
-    inFlight = { controller, deadline };
-    sink.onBusy(true);
-    api.recent(limit, controller.signal).then(
-      (view) => settle(mine, view),
-      (cause: unknown) =>
-        settle(mine, { kind: "no-answer", why: `the read failed before it answered: ${describeError(cause)}` }),
-    );
-  };
+      return false;
+    },
+    /* Every read that starts takes the current digest as its own. */
+    onStart: () => {
+      cancelTrailing();
+      const evidence = evidenceNow();
+      if (evidence !== null) {
+        readDigest = evidence.digest;
+        if (evidence.tmuxServerPid !== null) world = evidence.tmuxServerPid;
+      }
+      lastStartedAt = Date.now();
+      sink.onBusy(true);
+    },
+    onIdle: () => sink.onBusy(false),
+  });
+  const read = (): void => core.request();
 
   const fireTrailing = (): void => {
     trailing = null;
@@ -320,14 +292,9 @@ function feedReader(
     const pid = evidence.tmuxServerPid;
     if (world !== null && pid !== null && pid !== world) {
       world = pid;
-      discard();
-      if (tabHidden()) {
-        cancelTrailing();
-        dueWhileHidden = true;
-        sink.onBusy(false);
-      } else {
-        read();
-      }
+      // Drop the old world's read; a hidden tab holds the new one (`admit`).
+      core.discard();
+      read();
       return;
     }
     if (pid !== null) world = pid;
@@ -346,7 +313,7 @@ function feedReader(
     observe,
     stop: () => {
       if (stopped) return;
-      discard();
+      core.stop();
       cancelTrailing();
       stopped = true;
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
