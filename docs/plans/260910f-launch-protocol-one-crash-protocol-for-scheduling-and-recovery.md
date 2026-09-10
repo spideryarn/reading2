@@ -558,6 +558,16 @@ the pane closed).
   step); gjd-remote reserves a box account before the launch-directory check; the placement of the
   launch lines inside `cmdNewClaude` is checked against its source text, the weakest test here.
 
+**Sol's Stage 2 review, first run: stopped after five minutes by `Selected model is at capacity`**
+(a transient OpenAI error, not the content filter that stopped the Stage 1 run), having written one
+finding: **F20 (P1)** — closing a `run-claude` pane during its **auth probe** still leaves no
+`exit.json`: `probeAuth` calls `runChild` without the launch's `onHangup`, so the SIGHUP is
+re-raised before the finaliser runs. The builder had listed it as a gap; Sol is right that it
+breaks property 6 ("one final `exit.json` on every ending"), so it is a fix, not a named gap. Fix:
+pass the launch's hangup hook into the probe's `runChild`, and a probe-phase real-tmux test (a
+stand-in `claude` whose `auth status` blocks). Queued for the Stage 2 fix round. Re-run of the review
+told F20 is known.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
