@@ -385,19 +385,45 @@ bad moment; a journal that threw would turn "your test run was refused" into "yo
 in the config". So every append is wrapped, failures are swallowed, and the panel says the journal
 is best-effort. It is a record of refusals, not a proof of their absence.
 
-**Concurrency is solved by staying under `PIPE_BUF`.** Many processes append and none coordinates,
-so each line is one `appendFileSync` of at most 1 KiB with `O_APPEND`, which Linux makes atomic
-below 4 KiB. That is the whole locking story, and it is the reason the line is small and fixed:
+**~~Concurrency is solved by staying under `PIPE_BUF`.~~ That was false, and the correction is the
+most important thing in this section.** This plan claimed that an `appendFileSync` of under 4 KiB
+with `O_APPEND` is atomic on Linux and called it "the whole locking story". **`PIPE_BUF` atomicity is
+a guarantee about pipes and FIFOs, not regular files.** `O_APPEND` makes the *offset update* atomic,
+so concurrent appenders do not overwrite each other — but it says nothing about all-or-nothing
+*failure*, and a write that fails partway leaves a fragment.
+
+GPT Sol found it in the Stage 3 review and I reproduced it directly, which is the only reason it is
+stated this firmly: capping a file with `RLIMIT_FSIZE` and appending a 217-byte line gave `EFBIG`,
+**60 bytes of a JSON object left on disk, and one unparseable line** — and the next successful append
+then joined that fragment, so the reader lost *both* records as one bad line. Disk full mid-line is
+the realistic version, and it is a state a journal about resource exhaustion should expect to meet.
+
+So the append-only JSONL shape is abandoned for **one file per record**: serialise, write to a
+temporary name in the same directory, then `rename` into place. A rename within a directory is
+atomic, so a reader sees a whole record or no record and never a fragment; there is no shared file to
+interleave in, so there is no rotation race either (the second defect the review found, where two
+consecutive rotations lost an append that had returned success). Pruning becomes deleting the oldest
+files, which cannot lose a concurrent write.
+
+The line stays small and fixed for the reasons that survive the redesign:
 `at`, `source` (`test-run` | `readiness-precheck`), `policyVersion`, `availableBytes`,
 `reserveBytes`, swap totals, `pid`, and the host. **Not the gate's message** — it is reconstructible
 from those numbers, and an unbounded string is how a bounded file stops being bounded.
 
-**Appenders never rotate; the reader prunes.** The dashboard's timer is a single process and is the
-only thing that renames `refusals.jsonl` to `refusals.prev.jsonl` when the live file passes its cap;
-the reader reads both. A rename cannot lose an append, because an appender opens by path each time —
-it either wrote into the old inode, which is still read as `.prev`, or into the new file. That is
-`health-history.ts`'s two-file trick, borrowed as an idea rather than as code, because that store has
-a single-writer lock and this one deliberately has many writers and none.
+**~~Appenders never rotate; the reader prunes.~~ Also wrong, and found by the same review.** The
+two-file scheme borrowed from `health-history.ts` said a rename cannot lose an append, because the
+appender either wrote into the old inode — still read as `.prev` — or into the new file. That holds
+for *one* rotation. It does not hold for **two**: Sol paused a real writer after it had opened the
+live file and before it wrote, rotated twice, and released it. The writer returned success having
+written into an inode the second rotation had already unlinked, and the reader never saw the entry.
+A record that reports success and then does not exist is worse than no journal.
+
+**One file per record removes both defects rather than patching them**, and it removes the machinery
+too: no shared file, so no interleaving and no rotation; `rename` is atomic, so a reader sees a whole
+record or nothing; pruning is unlinking the oldest files, which cannot race a writer that is creating
+a new one. `health-history.ts`'s scheme is right *for `health-history.ts`*, which has a single-writer
+lock — that was the borrowed idea's unstated premise, and this journal deliberately has many writers
+and none.
 
 **What the journal cannot see, on the panel, in its own words:** refusals from test runs using this
 repo's vitest config on this machine, and from the readiness loop. Not a run on another machine, not

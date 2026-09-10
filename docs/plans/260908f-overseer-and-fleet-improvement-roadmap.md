@@ -1164,6 +1164,22 @@ arguments (pre-existing).
 **Acceptance:** an agent and Greg can find out why work should wait. This stage has value even if the
 next one never ships. Keep the cheap practice: parent runs integrated gates once per finished stage.
 
+**Status (2026-09-10, Overseer): Stages 1–3 on dev (e4206867, b1a2feaa, 4ebd60b5), session
+`admission-visibility`, plan
+[260910a](260910a-admission-visibility-explaining-why-heavy-work-should-wait.md); Stage 4, the
+census of live process roots, dispatched to a fresh session `admission-census` from the task file
+the first session wrote.** `GET /api/admission` answers what the vitest gate would say now, with
+its policy revision, as a forecast in neutral colour (a hypothetical refusal is not a live
+incident); the section lives on Box Health, not a tab (Greg's to move); a refusal writes one file
+per refusal, published by atomic rename. That last design replaced an append scheme whose
+load-bearing claim was false: a sub-`PIPE_BUF` `appendFileSync` is not atomic on a regular file
+(reproduced with `RLIMIT_FSIZE`: sixty bytes of a JSON object left on disk, and the next append
+joins it so the reader loses both records) — it had borrowed `health-history.ts`'s scheme without
+its single-writer lock. Recurring defect across every stage: a true number under a label claiming
+more (twenty-one P1s across four reviews). The would-refuse replay was cut rather than fixed; its
+design survives in the plan's §6. Evidence not in the plan: the box killed the session's
+background processes twice at 17–20 GB available with 13.4 GB swapped, leaving no trace.
+
 ### Stage: Enforced launch admission — bound work we actually launch
 
 - [ ] Decide with evidence whether existing memory admission plus serial parent gates is sufficient.
@@ -1298,6 +1314,24 @@ execution as the current one. Browser-check 390px and desktop, keyboard-only and
 **Acceptance:** a slow subscriber and hostile/incomplete stream have bounded memory/time; a failed
 stream moves to polling; closing the view leaves no active owned requests/listeners. See technical
 sources below for the stream semantics the current comments get wrong.
+
+**Status (2026-09-10, Overseer): landed on dev at def984a3, session `bounded-transport`, plan
+[260910c](260910c-bounded-transport-stalled-consumers-must-not-stall-supervision.md).** Most of
+checkboxes 1–3 were already met by the E-stream work of 2026-09-08; the real work was three narrow
+defects and the evidence in the form asked for. `live.ts`: a subscriber whose socket drains gets the
+newest snapshot it missed (one retained frame, pings dropped, listeners detached on teardown).
+`source.ts`: `readStream`'s `finally` no longer awaits `reader.cancel()`, which ran on every exit
+and could park the generator after `stream-closed` with the poll fallback unreachable; bare-CR line
+endings accepted. `transport.ts`: `stop()` aborts the in-flight fetch and a mid-flight refresh
+yields exactly one fresh attempt. Two new test files: the polling transport's first sixteen, and
+seven streams cut at every position against a whole-stream oracle. Corrections the branch had to
+make to itself: a false `res.write` return means the frame IS buffered (the loss is only snapshots
+published while blocked, a narrow race, and no browser reads `/api/live` today); a "no defect"
+probe that could not fail; a held-back trailing CR that lost the last frame of a CR-only stream.
+Both Sol rounds ran where the sandbox could not bind loopback, so the seventeen HTTP-backed
+`overseer-source` tests were run on the box, not by the reviewer. A third fresh-worktree red exists:
+`fleet-decisions-route` until `npm run build:fleet`. Checkbox 4's "both polling paths" was read as
+the transport's tick and its refresh; `useActions` is Session continuity's.
 
 ### Stage: Source ordering — distinguish a new observation from a new timestamp
 

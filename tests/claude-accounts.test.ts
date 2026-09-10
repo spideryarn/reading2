@@ -9,10 +9,12 @@ import {
   recordLaunchOutcome,
   resolveForLaunch,
   runAuthStatus,
+  runCodexDoctor,
   seedClaudeConfig,
   type ClaudeAccountsDeps,
 } from "../scripts/claude-accounts.js";
 import type { AccountEntry, RegistryReading } from "../tools/overseer/accounts.js";
+import type { CodexAuthReading, CodexIdentity } from "../tools/overseer/codex-auth.js";
 
 const roots: string[] = [];
 
@@ -61,6 +63,67 @@ function entry(name: string, role: "pool" | "orchestrator" = "pool"): AccountEnt
     displayEmail: `${name}@example.com`,
     addedAt: "2026-09-09T20:00:00.000Z",
     familyData: {},
+  };
+}
+
+function codexEntry(name = "codex-pool1", stateDir = `/configs/${name}`): AccountEntry {
+  return {
+    name,
+    family: "codex",
+    role: "pool",
+    stateDir,
+    providerAccountId: `account-${name}`,
+    providerTenantId: `org-${name}`,
+    displayEmail: `${name}@example.com`,
+    addedAt: "2026-09-09T20:00:00.000Z",
+    familyData: {
+      planType: "pro",
+      chatgptUserId: "user-greg",
+      workspaces: [{ id: `org-${name}`, isDefault: true, role: "owner", title: "Personal" }],
+    },
+  };
+}
+
+function codexIdentity(name = "codex-pool1"): CodexIdentity {
+  return {
+    accountId: `account-${name}`,
+    email: `${name}@example.com`,
+    planType: "pro",
+    chatgptUserId: "user-greg",
+    workspaces: [{ id: `org-${name}`, isDefault: true, role: "owner", title: "Personal" }],
+    expiresAt: "2027-01-15T08:00:00.000Z",
+  };
+}
+
+function codexReading(stateDir: string, name = "codex-pool1"): CodexAuthReading {
+  return { kind: "value", stateDir, identity: codexIdentity(name) };
+}
+
+function codexDoctorValue(stateDir: string) {
+  return {
+    kind: "value" as const,
+    codexHome: stateDir,
+    sqliteHome: stateDir,
+    modelProvider: "openai",
+    authFile: path.join(stateDir, "auth.json"),
+    authStorageMode: "File",
+    authOk: true,
+  };
+}
+
+function codexBaseDeps(root: string, output: string[] = []): Partial<ClaudeAccountsDeps> {
+  const ambient = path.join(root, ".codex", "config.toml");
+  mkdirSync(path.dirname(ambient), { recursive: true });
+  writeFileSync(ambient, 'model = "gpt-test"\nmodel_reasoning_effort = "high"\napprovals_reviewer = "auto_review"\n[tui]\nnotifications = true\n');
+  return {
+    homeDir: root,
+    repoRoot: path.join(root, "repo"),
+    registryPath: path.join(root, ".claude-accounts", "registry.json"),
+    codexConfigSource: ambient,
+    codexDoctor: (stateDir) => codexDoctorValue(stateDir),
+    out: (line) => output.push(line),
+    err: (line) => output.push(line),
+    now: () => new Date("2026-09-10T10:00:00.000Z"),
   };
 }
 
@@ -353,6 +416,7 @@ describe("identity assertion and add", () => {
       for (const flag of ["--name", "--email", "--role", "--config-dir", "--yes"]) {
         expect(text).toContain(flag);
       }
+      expect(text).toMatch(/Codex always seeds/i);
     },
   );
 
@@ -535,7 +599,7 @@ describe("identity assertion and add", () => {
     let authCalls = 0;
     try {
       const code = await main(
-        ["add", "--name", "pool", "--config-dir", configDir, "--email", "pool@example.com", "--role", "pool"],
+        ["add", "--family", "claude", "--name", "pool", "--config-dir", configDir, "--email", "pool@example.com", "--role", "pool"],
         {
           homeDir: root,
           registryPath: path.join(root, ".claude-accounts", "registry.json"),
@@ -577,7 +641,7 @@ describe("identity assertion and add", () => {
     wizardSeedFixture(root);
     const configDir = path.join(root, ".claude-named-by-answer");
     const questions: Array<[string, string]> = [];
-    const answers = ["named-by-answer", "answer@example.com", "", ""];
+    const answers = ["", "named-by-answer", "answer@example.com", "", ""];
     const code = await main(["add"], {
       homeDir: root,
       registryPath: path.join(root, ".claude-accounts", "registry.json"),
@@ -593,11 +657,12 @@ describe("identity assertion and add", () => {
     });
 
     expect(code).toBe(0);
-    expect(questions.map(([question]) => question)).toEqual(["Account name", "Email", "Role", "Config directory"]);
-    expect(questions[0]?.[1]).toBe("pool1");
-    expect(questions[1]?.[1]).toBe("");
-    expect(questions[2]?.[1]).toBe("pool");
-    expect(questions[3]?.[1]).toBe(configDir);
+    expect(questions.map(([question]) => question)).toEqual(["Family", "Account name", "Email", "Role", "Config directory"]);
+    expect(questions[0]?.[1]).toBe("claude");
+    expect(questions[1]?.[1]).toBe("pool1");
+    expect(questions[2]?.[1]).toBe("");
+    expect(questions[3]?.[1]).toBe("pool");
+    expect(questions[4]?.[1]).toBe(configDir);
     const saved = JSON.parse(readFileSync(path.join(root, ".claude-accounts", "registry.json"), "utf8"));
     expect(saved.accounts[0]).toMatchObject({
       name: "named-by-answer",
@@ -677,7 +742,7 @@ describe("identity assertion and add", () => {
     let authCalls = 0;
     try {
       expect(await main(
-        ["add", "--name", "pool", "--config-dir", configDir, "--email", email, "--role", "pool"],
+        ["add", "--family", "claude", "--name", "pool", "--config-dir", configDir, "--email", email, "--role", "pool"],
         {
           homeDir: root,
           registryPath: path.join(root, ".claude-accounts", "registry.json"),
@@ -1051,7 +1116,7 @@ describe("identity assertion and add", () => {
         kind: "value",
         accountUuid: account.providerAccountId,
         email: account.displayEmail!,
-        orgId: account.providerTenantId,
+        orgId: account.providerTenantId as string,
         configDir: account.stateDir,
         takenAt: "2026-09-10T00:00:00.000Z",
       }),
@@ -1066,6 +1131,439 @@ describe("identity assertion and add", () => {
     expect(usageCalls).toBe(1);
     expect(code).not.toBe(0);
     expect(output.join("\n")).toMatch(/live usage.*FAILED|FAILED.*usage response was malformed/i);
+  });
+});
+
+describe("Codex account preparation and identity", () => {
+  test("parses codex doctor JSON through an injected subprocess", () => {
+    const stateDir = "/home/test/.codex-pool1";
+    let invoked: { command: string; args: string[]; codexHome: string | undefined } | undefined;
+    const reading = runCodexDoctor(stateDir, {
+      runner: (command, args, options) => {
+        invoked = { command, args, codexHome: options.env.CODEX_HOME };
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            checks: {
+              "config.load": {
+                status: "pass",
+                details: [
+                  `CODEX_HOME: ${stateDir}`,
+                  `sqlite home: ${stateDir}`,
+                  "model provider: openai",
+                ],
+              },
+              "auth.credentials": {
+                status: "ok",
+                details: [
+                  `auth file: ${path.join(stateDir, "auth.json")}`,
+                  "auth storage mode: File",
+                ],
+              },
+            },
+          }),
+        };
+      },
+    });
+
+    expect(reading).toEqual(codexDoctorValue(stateDir));
+    expect(invoked).toEqual({ command: "codex", args: ["doctor", "--json"], codexHome: stateDir });
+  });
+
+  test("prepares and seeds a logged-out Codex home but leaves the registry byte-identical", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const registryPath = deps.registryPath!;
+    mkdirSync(path.dirname(registryPath), { recursive: true });
+    writeFileSync(registryPath, `${JSON.stringify({ schema: 1, accounts: [entry("claude-pool")] }, null, 2)}\n`);
+    const before = readFileSync(registryPath);
+    // Deliberately worded so it shares no phrase with the old string-matching
+    // check: the login offer must follow `reason`, not the prose in `why`.
+    deps.codexAuth = async (stateDir) => ({ kind: "unknown", stateDir, reason: "missing", why: "no credential here yet" });
+
+    const code = await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+
+    expect(code).toBe(1);
+    expect(readFileSync(registryPath).equals(before)).toBe(true);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+    expect(readFileSync(path.join(stateDir, "config.toml"), "utf8")).toContain(`[projects."${path.join(root, "repo")}"]`);
+    expect(readFileSync(path.join(stateDir, "config.toml"), "utf8")).not.toMatch(/\[tui/);
+    expect(output.join("\n")).toContain(`CODEX_HOME='${stateDir}' codex login`);
+    expect(output.join("\n")).toMatch(/prepared.*registry unchanged/i);
+    expect(output.join("\n")).toContain("skipped: seed plugins are per-home and are not copied; this account has none");
+  });
+
+  test("seeding a Codex home keeps a trust entry somebody added by hand", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    // A home that already exists and has been edited: `add` is idempotent so
+    // that it can be re-run, and re-running it must not delete this entry.
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      path.join(stateDir, "config.toml"),
+      '[projects."/home/greg/code/other-checkout"]\ntrust_level = "trusted"\n',
+    );
+    deps.codexAuth = async (dir) => codexReading(dir);
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(0);
+
+    const seeded = readFileSync(path.join(stateDir, "config.toml"), "utf8");
+    expect(seeded).toContain('[projects."/home/greg/code/other-checkout"]');
+    expect(seeded).toContain(`[projects."${path.join(root, "repo")}"]`);
+  });
+
+  test("does not offer login when a Codex credential is present but unreadable", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'model = "home-specific-model"\n');
+    const configBefore = readFileSync(configPath);
+    // The wording says "missing" on purpose. If the offer were still decided by
+    // matching words, this would wrongly offer to log in over a live credential.
+    deps.codexAuth = async (stateDir) => ({ kind: "unknown", stateDir, reason: "malformed", why: `${stateDir}/auth.json is missing a closing brace` });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/credential.*present.*unreadable/i);
+    expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
+    expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
+  });
+
+  test("does not offer login through a redirected Codex config", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'chatgpt_base_url = "https://proxy.example"\n');
+    const configBefore = readFileSync(configPath);
+    deps.codexAuth = async (dir) => ({ kind: "unknown", stateDir: dir, reason: "missing", why: "no credential here yet" });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/chatgpt_base_url.*not allowed|redirect/i);
+    expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
+  });
+
+  test("does not offer file-based login when doctor reports keyring auth storage", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.codexAuth = async (dir) => ({ kind: "unknown", stateDir: dir, reason: "missing", why: "no credential here yet" });
+    deps.codexDoctor = (stateDir) => ({ ...codexDoctorValue(stateDir), authStorageMode: "Keyring", authOk: false });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/auth storage.*File/i);
+    expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
+    expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(existsSync(path.join(root, ".codex-codex-pool1", "config.toml"))).toBe(false);
+  });
+
+  test("registers Codex identity from auth.json without asking for email or calling Claude profile", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    let profileCalls = 0;
+    deps.codexAuth = async (dir) => codexReading(dir);
+    deps.profile = async () => {
+      profileCalls += 1;
+      throw new Error("Claude profile must not be called for Codex");
+    };
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(0);
+
+    expect(profileCalls).toBe(0);
+    const saved = JSON.parse(readFileSync(deps.registryPath!, "utf8"));
+    expect(saved.accounts[0]).toEqual({
+      name: "codex-pool1",
+      family: "codex",
+      role: "pool",
+      stateDir,
+      providerAccountId: "account-codex-pool1",
+      providerTenantId: "org-codex-pool1",
+      displayEmail: "codex-pool1@example.com",
+      addedAt: "2026-09-10T10:00:00.000Z",
+      familyData: {
+        planType: "pro",
+        chatgptUserId: "user-greg",
+        workspaces: [{ id: "org-codex-pool1", isDefault: true, role: "owner", title: "Personal" }],
+      },
+    });
+  });
+
+  test.each([
+    ["no workspaces", [], null],
+    ["one unflagged workspace", [{ id: "org-only", isDefault: false, role: null, title: null }], "org-only"],
+    ["one default among several", [
+      { id: "org-other", isDefault: false, role: "member", title: "Other" },
+      { id: "org-default", isDefault: true, role: "owner", title: "Default" },
+    ], "org-default"],
+  ])("derives the Codex tenant for %s", async (_case, workspaces, expectedTenant) => {
+    const root = tempRoot();
+    const deps = codexBaseDeps(root);
+    deps.codexAuth = async (stateDir) => ({
+      kind: "value",
+      stateDir,
+      identity: { ...codexIdentity(), workspaces },
+    });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(0);
+    const saved = JSON.parse(readFileSync(deps.registryPath!, "utf8"));
+    expect(saved.accounts[0].providerTenantId).toBe(expectedTenant);
+    expect(saved.accounts[0].familyData.workspaces).toEqual(workspaces);
+  });
+
+  test("rejects --email for Codex before changing its home", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+
+    expect(await main([
+      "add", "--family", "codex", "--name", "codex-pool1", "--email", "x@y", "--yes",
+    ], deps)).toBe(2);
+    expect(existsSync(stateDir)).toBe(false);
+    expect(output.join("\n")).toMatch(/FATAL.*email.*credential/i);
+  });
+
+  test("rejects the ambient .codex directory before changing it", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const ambient = path.join(root, ".codex");
+    const before = readFileSync(path.join(ambient, "config.toml"));
+
+    expect(await main([
+      "add", "--family", "codex", "--name", "codex-pool1", "--config-dir", ambient, "--role", "pool", "--yes",
+    ], deps)).toBe(2);
+    expect(readFileSync(path.join(ambient, "config.toml")).equals(before)).toBe(true);
+    expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(output.join("\n")).toMatch(/FATAL.*default \.codex/i);
+  });
+
+  test("an invalid family names both accepted families", async () => {
+    const output: string[] = [];
+    expect(await main(["add", "--family", "other", "--yes"], {
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    })).toBe(2);
+    expect(output.join("\n")).toMatch(/FATAL.*claude.*codex/i);
+  });
+
+  test("a second Codex add is byte-for-byte idempotent", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.codexAuth = async (dir) => codexReading(dir);
+    const args = ["add", "--family", "codex", "--name", "codex-pool1", "--yes"];
+
+    expect(await main(args, deps)).toBe(0);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    const registryBefore = readFileSync(deps.registryPath!);
+    const configBefore = readFileSync(path.join(stateDir, "config.toml"));
+    const treeBefore = snapshotTree(root);
+    output.length = 0;
+    expect(await main(args, deps)).toBe(0);
+
+    expect(readFileSync(deps.registryPath!).equals(registryBefore)).toBe(true);
+    expect(readFileSync(path.join(stateDir, "config.toml")).equals(configBefore)).toBe(true);
+    expect(snapshotTree(root)).toEqual(treeBefore);
+    expect(output.join("\n")).toMatch(/found: seed .*already matches/i);
+  });
+
+  test("refuses a Codex credential that differs from the prior registry pin", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'model = "home-specific-model"\n');
+    const configBefore = readFileSync(configPath);
+    deps.codexAuth = async (dir) => codexReading(dir, "codex-pool2");
+    mkdirSync(path.dirname(deps.registryPath!), { recursive: true });
+    writeFileSync(deps.registryPath!, `${JSON.stringify({ schema: 1, accounts: [codexEntry("codex-pool1", stateDir)] }, null, 2)}\n`);
+    const before = readFileSync(deps.registryPath!);
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(readFileSync(deps.registryPath!).equals(before)).toBe(true);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
+    expect(output.join("\n")).toMatch(/FATAL.*pinned.*different provider account/i);
+  });
+
+  test("refuses to repin an existing Codex entry to a different workspace", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true });
+    deps.codexAuth = async (dir) => ({
+      kind: "value",
+      stateDir: dir,
+      identity: {
+        ...codexIdentity(),
+        workspaces: [{ id: "org-changed", isDefault: true, role: "owner", title: "Changed" }],
+      },
+    });
+    mkdirSync(path.dirname(deps.registryPath!), { recursive: true });
+    writeFileSync(deps.registryPath!, `${JSON.stringify({ schema: 1, accounts: [codexEntry("codex-pool1", stateDir)] }, null, 2)}\n`);
+    const before = readFileSync(deps.registryPath!);
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(readFileSync(deps.registryPath!).equals(before)).toBe(true);
+    expect(output.join("\n")).toMatch(/FATAL.*pinned.*different.*workspace|tenant/i);
+  });
+
+  test("refuses a family change before touching the requested Codex home", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-shared-name");
+    mkdirSync(path.dirname(deps.registryPath!), { recursive: true });
+    writeFileSync(deps.registryPath!, `${JSON.stringify({ schema: 1, accounts: [entry("shared-name")] }, null, 2)}\n`);
+
+    expect(await main([
+      "add", "--family", "codex", "--name", "shared-name", "--config-dir", stateDir, "--yes",
+    ], deps)).toBe(2);
+    expect(existsSync(stateDir)).toBe(false);
+    expect(output.join("\n")).toMatch(/FATAL.*already.*claude/i);
+  });
+
+  test.each([
+    ["CODEX_HOME", (stateDir: string) => codexDoctorValue(`${stateDir}-wrong`)],
+    ["sqlite home", (stateDir: string) => ({ ...codexDoctorValue(stateDir), sqliteHome: path.dirname(stateDir) })],
+    ["model provider", (stateDir: string) => ({ ...codexDoctorValue(stateDir), modelProvider: "proxy" })],
+    ["auth file", (stateDir: string) => ({ ...codexDoctorValue(stateDir), authFile: path.join(path.dirname(stateDir), "auth.json") })],
+    ["auth storage", (stateDir: string) => ({ ...codexDoctorValue(stateDir), authStorageMode: "Keyring" })],
+  ])("check fails when doctor reports the wrong %s", async (_case, doctor) => {
+    const root = tempRoot();
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir);
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.readRegistry = async () => registry(codexEntry("codex-pool1", stateDir));
+    deps.codexAuth = async (dir) => codexReading(dir);
+    deps.codexDoctor = doctor;
+    deps.profile = async () => { throw new Error("Claude profile must not be called"); };
+    deps.usage = async () => { throw new Error("Claude usage must not be called"); };
+
+    expect(await main(["check"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/FAILED.*CODEX_HOME|FAILED.*sqlite home|FAILED.*model provider|FAILED.*auth file|FAILED.*auth storage/i);
+  });
+
+  test("add refuses before registration when doctor resolves a different credential source", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.codexAuth = async (stateDir) => codexReading(stateDir);
+    let doctorCalls = 0;
+    deps.codexDoctor = (stateDir) => {
+      doctorCalls += 1;
+      return doctorCalls === 1
+        ? codexDoctorValue(stateDir)
+        : { ...codexDoctorValue(stateDir), authFile: path.join(root, ".codex", "auth.json") };
+    };
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(output.join("\n")).toMatch(/doctor.*auth file.*registry was not changed/i);
+  });
+
+  test.each([
+    ["chatgpt_base_url", 'chatgpt_base_url = "https://proxy.example"\n'],
+    ["model_providers", '[model_providers.openai]\nbase_url = "https://proxy.example"\n'],
+    ["profile", 'profile = "alternate"\n'],
+    ["forced_login_method", 'forced_login_method = "apikey"\n'],
+  ])("check refuses the identity-routing config override %s", async (key, config) => {
+    const root = tempRoot();
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir);
+    writeFileSync(path.join(stateDir, "config.toml"), config);
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.readRegistry = async () => registry(codexEntry("codex-pool1", stateDir));
+    deps.codexAuth = async (dir) => codexReading(dir);
+
+    expect(await main(["check"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(new RegExp(`FAILED.*${key}`, "i"));
+  });
+
+  test("Codex display email is diagnostic rather than an identity pin", async () => {
+    const account = codexEntry();
+    const output: string[] = [];
+    expect(await main(["list"], {
+      readRegistry: async () => registry(account),
+      codexAuth: async (stateDir) => ({
+        kind: "value",
+        stateDir,
+        identity: { ...codexIdentity(), email: "renamed@example.com" },
+      }),
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    })).toBe(0);
+    expect(output.join("\n")).toContain("local-auth=matches");
+  });
+
+  test("keeps the existing Claude list line unchanged", async () => {
+    const account = entry("pool1");
+    const output: string[] = [];
+    expect(await main(["list"], {
+      readRegistry: async () => registry(account),
+      authStatus: () => ({ kind: "value", loggedIn: true, email: account.displayEmail!, authMethod: "claude.ai", apiProvider: "firstParty" }),
+      profile: async () => ({
+        kind: "value",
+        accountUuid: account.providerAccountId,
+        email: account.displayEmail!,
+        orgId: account.providerTenantId as string,
+        configDir: account.stateDir,
+        takenAt: "2026-09-10T10:00:00.000Z",
+      }),
+      usage: async () => ({ kind: "value", windows: [{ kind: "value", window: "seven_day", utilizationPercent: 42 }] }),
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    })).toBe(0);
+    expect(output).toEqual([
+      "pool1 family=claude role=pool stateDir=/configs/pool1 expected=pool1@example.com live-profile=matches seven-day=42%",
+    ]);
+  });
+
+  test("resolve explains that Codex launching is deferred to Stage 2/new-codex", async () => {
+    const output: string[] = [];
+    expect(await main(["resolve", "--account", "codex-pool1", "--launch-name", "worker"], {
+      readRegistry: async () => registry(codexEntry()),
+      out: (line) => output.push(line),
+      err: (line) => output.push(line),
+    })).toBe(1);
+    expect(output.join("\n")).toMatch(/Stage 2.*new-codex|new-codex.*Stage 2/i);
+  });
+
+  test("refuses ambiguous Codex workspaces with an actionable message", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.codexAuth = async (stateDir) => ({
+      kind: "value",
+      stateDir,
+      identity: {
+        ...codexIdentity(),
+        workspaces: [
+          { id: "org-one", isDefault: false, role: "member", title: "One" },
+          { id: "org-two", isDefault: false, role: "member", title: "Two" },
+        ],
+      },
+    });
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/ambiguous.*default.*rerun|choose.*default.*rerun/i);
+    expect(existsSync(deps.registryPath!)).toBe(false);
   });
 });
 
@@ -1197,7 +1695,7 @@ describe("on-box account resolution", () => {
     const root = tempRoot();
     const codex = { ...entry("codex-pool"), family: "codex" as const };
     const result = await resolveForLaunch("codex-pool", "worker-1", resolutionDeps(root, [codex], {}));
-    expect(result).toMatchObject({ ok: false, why: expect.stringMatching(/codex.*not claude/i) });
+    expect(result).toMatchObject({ ok: false, why: expect.stringMatching(/codex.*new-codex.*Stage 2/i) });
     expect(existsSync(path.join(root, ".claude-accounts", "reservations.ndjson"))).toBe(false);
   });
 

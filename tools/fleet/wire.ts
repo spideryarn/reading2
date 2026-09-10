@@ -3869,12 +3869,31 @@ export type AdmissionOutcome =
   | { kind: "unknown"; why: string }
   | { kind: "not-modelled"; why: string };
 
+export type AdmissionRefusalEntry = {
+  at: string;
+  source: "test-run" | "readiness-precheck";
+  policyVersion: number;
+  availableBytes: number | null;
+  reserveBytes: number | null;
+  swapTotalBytes: number | null;
+  swapFreeBytes: number | null;
+  pid: number;
+  host: string;
+};
+
+/** A readable journal, no directory yet, and a failed read are different facts. */
+export type AdmissionRefusalJournal =
+  | { kind: "read"; entries: AdmissionRefusalEntry[]; unparseableLines: number }
+  | { kind: "directory-absent" }
+  | { kind: "unreadable"; why: string };
+
 /** `GET /api/admission`: a fresh forecast. It changes and reserves nothing. */
 type AdmissionPayloadBase = {
   schema: 1;
   request: AdmissionRequest;
   /** When the server completed building this answer, by the SERVER's clock. */
   computedAtMs: number;
+  journal: AdmissionRefusalJournal;
 };
 
 /** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */

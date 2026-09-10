@@ -1,6 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-import { DATE_LIMIT_MS, type AdmissionApi, type AdmissionView } from "./admission-client";
+import {
+  DATE_LIMIT_MS,
+  type AdmissionApi,
+  type AdmissionJournalView,
+  type AdmissionView,
+} from "./admission-client";
 import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import { Card, Pill, SectionHeading } from "./ui";
 
@@ -88,6 +93,47 @@ function policy(view: Exclude<AdmissionView, { kind: "no-answer" }>): ReactNode 
   );
 }
 
+function Journal({ journal, skew }: { journal: AdmissionJournalView; skew: ClockSkew }): ReactNode {
+  let contents: ReactNode;
+  if (journal.kind === "directory-absent") {
+    contents = <p>The refusal journal directory does not exist, so there is no record to read.</p>;
+  } else if (journal.kind === "unreadable") {
+    contents = <p>The refusal journal could not be read: {journal.why}.</p>;
+  } else if (journal.entries.length === 0 && journal.unparseableLines === 0) {
+    contents = <p>The journal is readable, but nothing was recorded.</p>;
+  } else if (journal.entries.length === 0) {
+    contents = <p>No readable refusal entries were found.</p>;
+  } else {
+    contents = (
+      <ol className="tw:space-y-1 tw:pl-5">
+        {journal.entries.map((entry) => (
+          <li key={JSON.stringify(entry)}>
+            {forecastTime(Date.parse(entry.at), skew) ?? "Recorded at an unreadable time"} — {entry.source.replace("-", " ")} on {entry.host}, pid {entry.pid}, policy v
+            {entry.policyVersion}; available {entry.availableBytes === null ? "unreadable" : gb(entry.availableBytes)},
+            reserve {entry.reserveBytes === null ? "not configured" : gb(entry.reserveBytes)}.
+          </li>
+        ))}
+      </ol>
+    );
+  }
+  return (
+    <div data-admission-journal className="tw:mt-4 tw:border-t tw:border-rule tw:pt-3 tw:text-[12px] tw:text-ink-faint">
+      <p className="tw:mb-2 tw:font-medium tw:text-ink-soft">Recorded admission refusals</p>
+      {contents}
+      {journal.kind === "read" && journal.unparseableLines > 0 ? (
+        <p className="tw:mt-2 tw:text-unknown-ink">
+          {journal.unparseableLines} {journal.unparseableLines === 1 ? "line could" : "lines could"} not be parsed.
+        </p>
+      ) : null}
+      <p className="tw:mt-2">
+        This best-effort journal sees refusals from test runs using this repo's Vitest config on this machine and from
+        the readiness loop, and nothing else. It cannot see another machine, a run that bypassed the config, or an
+        append that failed. Only a bounded number of the newest records are kept; older entries are discarded.
+      </p>
+    </div>
+  );
+}
+
 function SignalLabel({ label }: { label: "forecast" | "not-modelled" }): ReactNode {
   if (label === "not-modelled") {
     return <span data-admission-label><Pill tone="unknown">{label}</Pill></span>;
@@ -137,6 +183,7 @@ function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: Clock
           healthy. A forecast is neutral rather than live green/amber/red; a
           missing model is genuinely unknown rather than the page's idle grey. */}
       <div className="tw:mt-3"><SignalLabel label={view.label} /></div>
+      <Journal journal={view.journal} skew={skew} />
     </div>
   );
 }

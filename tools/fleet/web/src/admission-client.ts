@@ -52,6 +52,23 @@ export type AdmissionForecastOutcomeView =
   | { kind: "not-applicable"; why: string }
   | { kind: "unknown"; why: string };
 
+export type AdmissionRefusalEntryView = {
+  at: string;
+  source: "test-run" | "readiness-precheck";
+  policyVersion: number;
+  availableBytes: number | null;
+  reserveBytes: number | null;
+  swapTotalBytes: number | null;
+  swapFreeBytes: number | null;
+  pid: number;
+  host: string;
+};
+
+export type AdmissionJournalView =
+  | { kind: "read"; entries: AdmissionRefusalEntryView[]; unparseableLines: number }
+  | { kind: "directory-absent" }
+  | { kind: "unreadable"; why: string };
+
 export type AdmissionView =
   | {
       kind: "answer";
@@ -61,6 +78,7 @@ export type AdmissionView =
       requestKind: "test";
       policy: AdmissionPolicyView;
       outcome: AdmissionForecastOutcomeView;
+      journal: AdmissionJournalView;
     }
   | {
       kind: "answer";
@@ -69,6 +87,7 @@ export type AdmissionView =
       computedAtMs: number | null;
       requestKind: "review" | "browser";
       outcome: { kind: "not-modelled"; why: string };
+      journal: AdmissionJournalView;
     }
   | { kind: "no-answer"; source: "browser" | "server"; why: string };
 
@@ -182,12 +201,77 @@ function parseForecastOutcome(raw: unknown): AdmissionForecastOutcomeView | null
   return null;
 }
 
+function nullableBytes(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  const bytes = nonNegativeInteger(value);
+  return bytes === null ? undefined : bytes;
+}
+
+function parseJournalEntry(raw: unknown): AdmissionRefusalEntryView | null {
+  if (!isRecord(raw)) return null;
+  const at = nonEmptyString(raw["at"]);
+  const source = raw["source"];
+  const policyVersion = nonNegativeInteger(raw["policyVersion"]);
+  const availableBytes = nullableBytes(raw["availableBytes"]);
+  const reserveBytes = nullableBytes(raw["reserveBytes"]);
+  const swapTotalBytes = nullableBytes(raw["swapTotalBytes"]);
+  const swapFreeBytes = nullableBytes(raw["swapFreeBytes"]);
+  const pid = positiveInteger(raw["pid"]);
+  const host = nonEmptyString(raw["host"]);
+  if (
+    at === null ||
+    !Number.isFinite(Date.parse(at)) ||
+    (source !== "test-run" && source !== "readiness-precheck") ||
+    policyVersion === null ||
+    availableBytes === undefined ||
+    reserveBytes === undefined ||
+    swapTotalBytes === undefined ||
+    swapFreeBytes === undefined ||
+    pid === null ||
+    host === null
+  ) {
+    return null;
+  }
+  return {
+    at,
+    source,
+    policyVersion,
+    availableBytes,
+    reserveBytes,
+    swapTotalBytes,
+    swapFreeBytes,
+    pid,
+    host,
+  };
+}
+
+function parseJournal(raw: unknown): AdmissionJournalView {
+  if (!isRecord(raw)) return { kind: "unreadable", why: "the response did not contain a readable journal state" };
+  if (raw["kind"] === "directory-absent") return { kind: "directory-absent" };
+  if (raw["kind"] === "unreadable") {
+    const why = nonEmptyString(raw["why"]);
+    return why === null
+      ? { kind: "unreadable", why: "the response's unreadable journal state had no reason" }
+      : { kind: "unreadable", why };
+  }
+  if (raw["kind"] !== "read" || !Array.isArray(raw["entries"])) {
+    return { kind: "unreadable", why: "the response carried a journal state this page does not understand" };
+  }
+  const unparseableLines = nonNegativeInteger(raw["unparseableLines"]);
+  const entries = raw["entries"].map(parseJournalEntry);
+  if (unparseableLines === null || entries.some((entry) => entry === null)) {
+    return { kind: "unreadable", why: "the response's readable journal state contained an unreadable field" };
+  }
+  return { kind: "read", entries: entries as AdmissionRefusalEntryView[], unparseableLines };
+}
+
 /** Parse an unknown response body without throwing or manufacturing values. */
 export function parseAdmission(raw: unknown): AdmissionView {
   if (!isRecord(raw) || raw["schema"] !== 1) {
     return noAnswer("the admission response was not version 1 of this API");
   }
   const computedAtMs = dateInstant(raw["computedAtMs"]);
+  const journal = parseJournal(raw["journal"]);
   const requestKind = parseRequestKind(raw["request"]);
   if (requestKind === null || !isRecord(raw["outcome"])) {
     return noAnswer("the admission response was missing a readable request or outcome");
@@ -209,6 +293,7 @@ export function parseAdmission(raw: unknown): AdmissionView {
       computedAtMs,
       requestKind,
       outcome: { kind: "not-modelled", why },
+      journal,
     };
   }
 
@@ -220,7 +305,7 @@ export function parseAdmission(raw: unknown): AdmissionView {
   if (policy === null || outcome === null) {
     return noAnswer("the admission forecast contained a field this page could not read");
   }
-  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome };
+  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome, journal };
 }
 
 function describe(cause: unknown): string {
