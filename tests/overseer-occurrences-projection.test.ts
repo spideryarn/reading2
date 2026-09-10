@@ -42,7 +42,7 @@ function observed(n: number, over: Partial<ObservedLaunch> = {}): ObservedLaunch
     plannedAt: day(n),
     updatedAt: day(n),
     attempts: 1,
-    run: { timeoutMinutes: 5, access: "read-only" },
+    run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
     tmuxSession: null,
     transcriptPath: null,
     answer: { kind: "absent" },
@@ -95,7 +95,7 @@ describe("the file around the jobs", () => {
 });
 
 describe("the bound and the order", () => {
-  test(`keeps the newest ${OCCURRENCES_PER_JOB} by scheduledAt, and counts the rest as omitted`, () => {
+  test(`keeps the newest ${OCCURRENCES_PER_JOB} by plannedAt, and counts the rest as omitted`, () => {
     const launches = [3, 14, 1, 9, 12, 5, 7, 2, 11, 4, 13, 6, 8, 10].map((n) => observed(n));
     const projected = project([job(launches)]).jobs[0];
     expect(projected?.occurrences.map((o) => o.scheduledAt)).toEqual([14, 13, 12, 11, 10, 9, 8, 7, 6, 5].map(day));
@@ -124,6 +124,13 @@ describe("the bound and the order", () => {
     expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
   });
 
+  test("planning order outranks nominal due order, matching the scheduler's one newest comparator", () => {
+    const plannedFirst = observed(1, { scheduledAt: day(9), plannedAt: day(10) });
+    const plannedLater = observed(2, { scheduledAt: day(8), plannedAt: day(11) });
+    const projected = project([job([plannedFirst, plannedLater])]).jobs[0];
+    expect(projected?.occurrences.map((o) => o.launchOccurrenceId)).toEqual([loId(2), loId(1)]);
+  });
+
   test("an exact time tie puts the later fold entry first, not the lower launch hash", () => {
     const earlierInFold = observed(1, { scheduledAt: day(5), plannedAt: day(5) });
     const laterInFold = observed(2, { scheduledAt: day(5), plannedAt: day(5) });
@@ -135,7 +142,7 @@ describe("the bound and the order", () => {
 describe("each occurrence", () => {
   test("restates the observed fields and takes its result from classifyOccurrence", () => {
     const input = observed(4, {
-      state: { kind: "completed", attempt: 2, evidence: { kind: "rebooted" } },
+      state: { kind: "completed", attempt: 2, evidence: { kind: "rebooted" }, endedAt: "2026-09-04T09:05:00.000Z" },
       attempts: 2,
       transcriptPath: "/scratch/launches/o/x/a2/transcript.ndjson",
       answer: { kind: "present", attempt: 2, bytes: 120, sha256: "0123456789abcdef".repeat(4), usable: true },
@@ -150,7 +157,7 @@ describe("each occurrence", () => {
       updatedAt: "2026-09-04T09:10:00.000Z",
       attempts: 2,
       state: "completed",
-      run: { timeoutMinutes: 5, access: "read-only" },
+      run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
       result: classifyOccurrence(input),
       answer: { kind: "present", attempt: 2, bytes: 120, sha256: "0123456789abcdef".repeat(4), usable: true },
       transcriptPath: "/scratch/launches/o/x/a2/transcript.ndjson",
@@ -172,8 +179,8 @@ describe("the cancel command", () => {
     { kind: "planned" },
     { kind: "waiting-admission", why: "held" },
     { kind: "reserved" },
-    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } },
-    { kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot" },
+    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" }, endedAt: day(1) },
+    { kind: "failed-before-launch", attempt: null, proof: "admission-refused", why: "no slot", endedAt: day(1) },
   ])("is absent when %j, even with a session name", (state) => {
     expect(only(observed(1, { state, tmuxSession: "sched-fixture" })).commands.cancel).toBeNull();
   });
@@ -209,7 +216,7 @@ describe("the dispose command", () => {
   test.each<ObservedState>([
     { kind: "launching", attempt: 1 },
     { kind: "observed-running", attempt: 1 },
-    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } },
+    { kind: "completed", attempt: 1, evidence: { kind: "rebooted" }, endedAt: day(1) },
     { kind: "reserved" },
   ])("is absent when %j", (state) => {
     expect(only(observed(7, { state })).commands.dispose).toBeNull();

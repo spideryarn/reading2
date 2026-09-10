@@ -1,0 +1,20 @@
+
+❯ finish the highlights cleanup
+
+● The code side is done and on dev: nothing reads legacy_highlights any more, the backfill copied every row into
+  comments, and a count on the local database matches row for row.
+
+  What is left is the migration that drops the column on the remote. It is written and it passes locally, but it
+  deletes the only other copy of 412 rows of readers' highlights, and there is no undo once it runs — the backup would
+  have to be restored by hand. I have stopped short of applying it to production.
+
+  Say go and I'll apply it, or I can leave the column in place for a week as a fallback.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

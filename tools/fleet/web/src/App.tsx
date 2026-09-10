@@ -66,7 +66,8 @@ import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
 import { useNow } from "./useNow";
-import { parseOrdering, tally } from "./view";
+import { fleetTitle, useDocumentTitle } from "./page-title";
+import { parseOrdering, resolveSelected, rowLabel, sortRows, tally } from "./view";
 import { CURRENT_WORK_NOT_REPORTED } from "./work-client";
 
 export function App({
@@ -266,7 +267,29 @@ export function App({
      parse-time view here would let a complete empty list remain reassuring
      forever after polling stopped. */
   const questions = feed.state === null ? null : questionsAtTime(feed.state, now);
-  const needsYou = tally(rows).needsYou;
+  const counts = tally(rows);
+  const needsYou = counts.needsYou;
+
+  /* The tab says what the masthead says, left end first — page-title.ts. Its
+     selection goes through the SAME resolution and ordering as the detail pane,
+     so it never names a session the pane has refused to open. A real snapshot
+     has one row per tmux handle, so ordering normally cannot affect `find`;
+     keeping the inputs identical also makes a contradictory duplicate-handle
+     payload fail consistently rather than letting the two choose different rows. */
+  const titled = resolveSelected(
+    sortRows(rows, order),
+    selectedId,
+    selectedPid,
+    feed.state?.tmuxServerPid ?? null,
+  );
+  useDocumentTitle(
+    fleetTitle({
+      mode,
+      counts: feed.state === null ? null : counts,
+      stale: fresh.stale,
+      selected: titled === null ? null : rowLabel(titled),
+    }),
+  );
 
   /* The two things that change how wide the bar's row wants to be: which mode
      is on (the active button keeps its label at every rung) and how many digits

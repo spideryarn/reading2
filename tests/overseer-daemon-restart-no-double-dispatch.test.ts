@@ -24,6 +24,12 @@
  *
  * The source is scripted (sockets are the other file's business); every root is
  * a mkdtemp; no dispatcher here starts a process.
+ *
+ * **The job is a RULE** since plan 260910f (scheduled dispatch): a session job
+ * starts through the launch protocol and writes nothing to `events.jsonl`, so
+ * these three ledger shapes are a rule's. Its `observe` stands where the
+ * spawner stood — called after the reservation is durable and before `started`
+ * — and a never-settling one is what "the dispatcher never resolves" now means.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -33,17 +39,10 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { runOverseer, type DaemonOptions, type DaemonOutcome } from "../tools/overseer/daemon.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import {
-  behaviourHash,
-  occurrenceId,
-  type Arming,
-  type AuthorisedJob,
-  type JobDefinition,
-  type JobOutcome,
-  type JobSpawn,
-  type SpawnJob,
-} from "../tools/overseer/jobs.js";
+import { behaviourHash, type Arming, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
 import { readNotes, type DaemonNote } from "../tools/overseer/notes.js";
+import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
+import type { RuleObservation } from "../tools/overseer/rules.js";
 import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { EVENTS_FILE, LOCK_FILE } from "../tools/overseer/store.js";
@@ -100,7 +99,13 @@ function notesIn(root: string): DaemonNote[] {
 }
 
 const JOB: JobDefinition = {
-  behaviour: { id: "restart-probe", what: "a job for the restart test", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } },
+  behaviour: {
+    id: "restart-probe",
+    what: "a rule for the restart test",
+    documents: [],
+    work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+    dispatch: { kind: "live" },
+  },
   // Due every minute, a two-minute lease: so "past due, inside the lease" is a
   // real window (60–120s after a dispatch), which is where overlap would happen.
   schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
@@ -114,22 +119,35 @@ const T0 = "2026-09-10T10:00:00.000Z";
 const at = (offsetMs: number): string => new Date(Date.parse(T0) + offsetMs).toISOString();
 
 /**
- * THE ONE `jobs` OPTION both runs are given, and the dispatcher's own tally —
+ * THE ONE `jobs` OPTION both runs are given, and the runner's own tally —
  * every occurrence it was asked to start, across both runs.
+ *
+ * `observe` is handed the spec and not the occurrence, so the id is read off
+ * the disk: the reservation is durable before `observe` is called, so the
+ * newest reservation there is this run's.
  */
-function jobsWith(settle: (id: string) => JobSpawn): { jobs: NonNullable<DaemonOptions["jobs"]>; dispatched: string[] } {
+function jobsWith(root: string, look: () => Promise<RuleObservation>): { jobs: NonNullable<DaemonOptions["jobs"]>; dispatched: string[] } {
   const dispatched: string[] = [];
-  const spawn: SpawnJob = (_definition, key) => {
-    const id = occurrenceId(key);
-    dispatched.push(id);
-    return settle(id);
+  const rules: ProposingRuleWork = {
+    selfPid: 7171,
+    observe: () => {
+      const reserved = eventsIn(root).filter((event) => event.kind === "job-occurrence-reserved");
+      const newest = reserved.at(-1);
+      dispatched.push(newest?.kind === "job-occurrence-reserved" ? newest.occurrenceId : "(no reservation on the disk)");
+      return look();
+    },
   };
   return {
     dispatched,
-    jobs: { intervalMs: 5, arming: ARMED, launchSeparationMs: 0, readDocument: NO_DOCUMENTS, definitions: [AUTHORISED], spawn },
+    // A short grace: a run still looking when a daemon stops is written off
+    // after this, rather than holding the shutdown for the default fifteen seconds.
+    jobs: { intervalMs: 5, arming: ARMED, launchSeparationMs: 0, readDocument: NO_DOCUMENTS, definitions: [AUTHORISED], rules, settleGraceMs: 20 },
   };
 }
-const NEVER: JobSpawn = { kind: "spawned", pid: 7171, done: new Promise<JobOutcome>(() => undefined) };
+/** A look that never answers: the run stays `started`, which is the mid-lease shape. */
+const NEVER = (): Promise<RuleObservation> => new Promise(() => undefined);
+/** A look that answers at once with nothing to do: the run settles and finishes. */
+const NOTHING = async (): Promise<RuleObservation> => ({ kind: "wedged", candidates: [], scanned: 1 });
 
 /**
  * One daemon on `root`, over a source that yields nothing and ends when
@@ -171,7 +189,7 @@ async function runDaemon(
 describe("a restarted daemon does not dispatch an occurrence twice", () => {
   test("killed MID-LEASE: run 2 past the due time holds; past the lease it writes the run down and starts only a NEW one", async () => {
     const root = tempRoot();
-    const { jobs, dispatched } = jobsWith(() => NEVER);
+    const { jobs, dispatched } = jobsWith(root, NEVER);
 
     // ── RUN 1: dispatched, started, never finished — then stopped by the signal.
     const first = await runDaemon(root, fakeClock(T0), jobs, async (controller) => {
@@ -238,15 +256,15 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     // A dead holder is what lets run 2 take the lock over, as it would after a kill.
     const deadPid = spawnSync(process.execPath, ["-e", ""]).pid;
     if (deadPid === undefined) throw new Error("could not mint a dead pid");
-    const { jobs, dispatched } = jobsWith(() => {
+    const { jobs, dispatched } = jobsWith(root, () => {
       // THE FIRST DISPATCH ONLY. The same `jobs` object serves run 2, whose own
       // dispatch must not take run 2's lock away.
-      if (dispatched.length > 1) return NEVER;
+      if (dispatched.length > 1) return NEVER();
       writeFileSync(
         join(root, LOCK_FILE),
         `${JSON.stringify({ pid: deadPid, instanceId: "a-daemon-that-was-killed", hostname: hostname(), startedAt: T0 })}\n`,
       );
-      return NEVER;
+      return NEVER();
     });
 
     const first = await runDaemon(root, fakeClock(T0), jobs, async () => {
@@ -288,7 +306,7 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
 
   test("THE CONTROL: a cleanly finished run is not re-dispatched, and a genuinely new occurrence is dispatched exactly once", async () => {
     const root = tempRoot();
-    const { jobs, dispatched } = jobsWith(() => ({ kind: "spawned", pid: 7272, done: Promise.resolve({ kind: "exited", code: 0 }) }));
+    const { jobs, dispatched } = jobsWith(root, NOTHING);
 
     const first = await runDaemon(root, fakeClock(T0), jobs, async (controller) => {
       await waitFor("the first run to finish", () => eventsIn(root).some((event) => event.kind === "job-occurrence-finished"));
@@ -299,7 +317,7 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     expect(dispatched).toHaveLength(1);
     const [original] = dispatched;
     if (original === undefined) throw new Error("no dispatch");
-    expect(kindsFor(root, original)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "job-occurrence-finished"]);
+    expect(kindsFor(root, original)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
 
     // ── RUN 2, ten seconds on, then a full period on.
     const clock = fakeClock(at(10_000));
@@ -319,7 +337,7 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     expect(dispatched[1]).not.toBe(original);
     expect(dispatched[1]).toContain(`@${at(70_000)}#`);
     // The finished run stays finished: nothing unaccounted anywhere.
-    expect(kindsFor(root, original)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "job-occurrence-finished"]);
+    expect(kindsFor(root, original)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     expect(notesIn(root).filter((note) => note.kind === "job-unaccounted")).toEqual([]);
     expect(existsSync(join(root, LOCK_FILE))).toBe(false);
   }, 20_000);

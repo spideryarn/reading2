@@ -681,6 +681,24 @@ verification, and the queue, for ever.
 - **Discovery closed** with the narrow check, so **Fable settles G20** (not cross-family), per the
   engineering-manager rule and the Overseer's terms.
 
+**Fable's settle, 2026-09-10 ~21:20 (not cross-family): "G20: closed."** Fable traced the diff,
+ran the file (67 of 67), and drove the real `transcriptAfter` at the boundaries, with files on disk
+and a count of the bytes requested:
+
+- **the contiguous branch** handles a file with and without a trailing newline, and a torn final
+  line;
+- **the non-contiguous branch** starts its tail strictly after the first window, so no line is
+  read twice;
+- **the bound** is exactly 131,073 bytes at both `2V+1` and `2V+2`.
+
+**One overstatement corrected** in the code's comment. Not every transcript line carries a
+`sessionId`: about 1–1.5% are `file-history-snapshot` lines without one, and 18–31 lines per
+transcript are tool results over 64 KiB.
+
+**The residual, documented rather than closed:** beyond two windows, a pass whose last 64 KiB is
+one oversized tool result, or holds only snapshot lines, sees no session line. The next pass
+re-reads, and a live session soon writes one. So it is transient.
+
 **Stages 1 and 2 are then done:** built, reviewed by Sol (refused on G11–G19), fixed, and
 narrow-checked. G20 was fixed and settled.
 
@@ -698,6 +716,41 @@ started.**
   evidence. **A decision for the Overseer or Greg:** a narrow Sol check of Stage 3a, which is the
   argv arm alone, or a revert. Until one of them happens, it is live code in the fleet's argv
   reader.
+- **The Overseer's decision on 3a** (after the debrief): a narrow, read-only, findings-only Sol check
+  of the argv arm alone. No revert.
+
+  **Sol's answer, 2026-09-10 ~22:20** ([the answer](260910f-gradual-recovery-stage3a-argv-check-sol.md),
+  [the prompt](260910f-gradual-recovery-stage3a-argv-check-sol-prompt.md)): **two established P1s.**
+  - **G21: the ps-flattened branch cannot be trusted.** A picker search whose value is one argument
+    containing spaces, `["claude","--resume","<uuid> --permission-mode auto -- Reply…"]`, flattens
+    to exactly the same `ps` line as the real resumed capture. So no rule over flattened text can
+    tell a resume from a picker, and execution identity could have called a picker a verified
+    conversation.
+    - **The fix: `--resume` on flattened input is unreadable again**, as it was before 3a. That is
+      no regression for anything that exists today. The faithful-argv arm stays; that is steer's
+      path, and there the example is one non-uuid token, so it is refused.
+    - **The cost moves to Stage 3b.** Verifying a resumed pane needs a faithful
+      `/proc/<pid>/cmdline` read of the harness process, not the flattened `ps` line. Until 3b
+      exists, a resumed pane reads unverifiable, as it did before this plan.
+  - **G22: `--resume A --session-id A` read as session A**, and steer said "yes". But `claude`
+    refuses that combination unless `--fork-session` is given, as this plan's own spike measured.
+    - **The fix: both flags together are unreadable**, in either order, whether the ids are equal
+      or not. Tested through both the reader and steer.
+
+  **Both fixed red first, and landed in `3047602e`.** An Opus subagent did the fix:
+
+  - **Red first:** 7 tests went red before the fix. Among them was steer answering `yes` for
+    `--resume A --session-id A`. After the fix, 218 of 218 passed.
+  - **Mutations:** allowing a flattened `--resume` again, and allowing `--resume A --session-id A`,
+    each turned tests red.
+  - **The manager's gates:** typecheck exit 0, and 12 files / 562 tests passing.
+
+  **A consequence the fixer caught.** `argv-resume-uuid` promises that a resumed session reads
+  **verified**, and after G21 that is false of this build. So `PRODUCER_CAPABILITIES` in
+  `tools/fleet/state.ts` is now **empty**, pinned red first by `tests/fleet-producer-stamp.test.ts`.
+  Declaring the capability anyway would let a resume launch that the pace rule then waits behind for
+  ever: the failure G3 exists to prevent. **Stage 3b re-declares it** once it reads
+  `/proc/<pid>/cmdline` faithfully. Nothing is affected today, because the port is unwired.
 - **Stage 3b is briefed, not built.** The brief is [the 3b task](260910f-gradual-recovery-stage3b-task.md):
   - the `tmux-resume` launcher arm;
   - gjd-remote's `--resume-conversation`, with the on-box duplicate check;
@@ -706,8 +759,17 @@ started.**
   - the daemon's composition of all that;
   - the `--resume` drill.
 
-  It needs `launch-protocol`'s Stages 1, 1b and 2 on `dev`. Until 3b exists, **the resume port is
-  `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
+  **`launch-protocol`'s Stages 1, 1b, 2 and 2b reached `dev` at `b44d69a2`** (2026-09-10, reported
+  by that session). That covers `resumeOccurrence`, `inspect` and `inFlight`, `usesTmux`, the
+  reservation result on `failed-before-launch`, and `admissionPolicy("recovery-resume")`.
+  **`launch-protocol` also stopped for the reprioritisation.** Its own Stage 3 is not built. See
+  its plan's section "Stage 3, not built — the handover".
+
+  **Nothing in `daemon.ts` composes the protocol yet.** So Stage 3b would compose it itself (the
+  brief's item 5), not reuse a composition. The `tmux-resume` launcher kind and
+  `--resume-conversation` stay this plan's to add, on top.
+
+  Until 3b exists, **the resume port is `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
   launches. The page says so ("Resume is not available from this dashboard yet"), and gives manual
   instructions.
 - **Still a question for Greg:** the capability-marker default. Stage 3a puts

@@ -1,0 +1,177 @@
+[
+  {
+    "file": "overseer-turn-tails/ended-prose-no-question-status-report.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "A progress debrief whose remaining steps are the agent's own to do; nothing is handed to anybody.",
+    "category": "concluded"
+  },
+  {
+    "file": "overseer-turn-tails/ended-prose-no-question-two-messages.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "A report on other sessions that names decisions already queued elsewhere without asking for one here; borderline, kept as its filename was labelled on capture.",
+    "category": "concluded"
+  },
+  {
+    "file": "overseer-turn-tails/ended-prose-question-recogniser-fixes.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Despite its filename, the turn ends waiting on its own background agent and asks nobody anything.",
+    "category": "background-review"
+  },
+  {
+    "file": "overseer-turn-tails/ended-prose-question-shut-it-down.txt",
+    "case": "question",
+    "recipient": "greg",
+    "why": "Offers to tear down a stack Greg asked to keep running, with data in it, and stops on \"Say the word\" in a full stop.",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/ended-while-a-background-agent-runs-on.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Reports a fix while the full suite and a background agent run on; no decision is pending.",
+    "category": "background-review"
+  },
+  {
+    "file": "overseer-turn-tails/mid-turn-spinner.txt",
+    "case": "not-an-ended-turn",
+    "recipient": null,
+    "why": "The spinner is turning, so nothing has been said yet that could ask.",
+    "category": "mid-turn"
+  },
+  {
+    "file": "overseer-turn-tails/mid-turn-with-queued-message.txt",
+    "case": "not-an-ended-turn",
+    "recipient": null,
+    "why": "A spinner above a queued cross-session message; the turn is still running.",
+    "category": "mid-turn"
+  },
+  {
+    "file": "overseer-turn-tails/no-input-box-codex-tui.txt",
+    "case": "not-an-ended-turn",
+    "recipient": null,
+    "why": "A Codex TUI mid-run, not a Claude Code pane.",
+    "category": "not-claude"
+  },
+  {
+    "file": "overseer-turn-tails/no-input-box-job-shell.txt",
+    "case": "not-an-ended-turn",
+    "recipient": null,
+    "why": "A bare shell running a job; there is no agent turn at all.",
+    "category": "not-claude"
+  },
+  {
+    "file": "overseer-turn-tails/question-no-mark-sol-sort-order.txt",
+    "case": "question",
+    "recipient": "sol",
+    "why": "A choice between two technical fixes whose deciding fact (the existing convention in pg-shelf.ts) is in the tree.",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-no-mark-fable-empty-state-wording.txt",
+    "case": "question",
+    "recipient": "fable",
+    "why": "Two reader-facing wordings that both read fine, one of them the default; an arbitration, not a fact to look up.",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-no-mark-greg-drop-remote-column.txt",
+    "case": "question",
+    "recipient": "greg",
+    "why": "A destructive migration on production data with no undo; only Greg may say go.",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-overseer-merge-dev-first.txt",
+    "case": "question",
+    "recipient": "overseer",
+    "why": "Whether to merge dev before pushing is answerable by checking what moved, which the Overseer can verify.",
+    "category": "question-with-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-overseer-whose-failures.txt",
+    "case": "question",
+    "recipient": "overseer",
+    "why": "Whose failures these are is checkable mechanically against the diff and the other sessions' runs.",
+    "category": "question-with-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-self-reuse-helper.txt",
+    "case": "question",
+    "recipient": "self",
+    "why": "The agent already knows the plan names the existing helper for exactly this, so it stopped to ask what it can decide.",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/question-self-commit-when-green.txt",
+    "case": "question",
+    "recipient": "self",
+    "why": "The working agreement already says commit and push to dev when the gates are green, so the question answers itself.",
+    "category": "question-with-mark"
+  },
+  {
+    "file": "overseer-turn-tails/rhetorical-closing-why-tests-missed-it.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "The question mark is a rhetorical question answered in the next sentence, near the end of a finished turn.",
+    "category": "rhetorical"
+  },
+  {
+    "file": "overseer-turn-tails/rhetorical-mid-explanation-export-manifest.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Opens with a rhetorical question it answers itself, and ends on a green status.",
+    "category": "rhetorical"
+  },
+  {
+    "file": "overseer-turn-tails/concluded-clean-debrief.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Finished, gated, pushed and cleaned up; says in words that nothing is waiting on anyone.",
+    "category": "concluded"
+  },
+  {
+    "file": "overseer-turn-tails/concluded-premature-gates-skipped.txt",
+    "case": "out-of-scope-for-this-detector",
+    "recipient": null,
+    "why": "Declares itself done having skipped the full suite and the review: misdirection wearing a debrief. It asks nothing, so a question detector is blind to it by design (D12).",
+    "category": "wrong-task"
+  },
+  {
+    "file": "overseer-turn-tails/concluded-holds-cleanup-decision.txt",
+    "case": "question",
+    "recipient": "greg",
+    "why": "A clean debrief whose last lines hold an irreversible cleanup decision in a full stop: removing the worktree would delete data nothing else has a copy of, and it waits for the word (D12).",
+    "category": "question-no-mark"
+  },
+  {
+    "file": "overseer-turn-tails/background-review-sol-in-tmux.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Ended while its Sol review runs in tmux, saying it will pick up when the review lands.",
+    "category": "background-review"
+  },
+  {
+    "file": "overseer-turn-tails/background-review-waiting-on-agent.txt",
+    "case": "no-question",
+    "recipient": null,
+    "why": "Ended while a delegated browser subagent runs, and says there is nothing to decide until it reports.",
+    "category": "background-review"
+  },
+  {
+    "file": "overseer-turn-tails/wrong-task-hard-version-in-primary.txt",
+    "case": "out-of-scope-for-this-detector",
+    "recipient": null,
+    "why": "Confidently building the hard version in the shared primary checkout; misdirection, not a question (D11).",
+    "category": "wrong-task"
+  },
+  {
+    "file": "fleet-panes/dialog-bash-permission.txt",
+    "case": "permission-defect",
+    "recipient": null,
+    "why": "A Bash permission prompt in a session auto mode should have covered: a launch defect, counted, never an inbox item.",
+    "category": "permission-defect"
+  }
+]

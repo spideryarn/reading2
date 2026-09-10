@@ -41,7 +41,7 @@ import {
   USAGE_INTERVAL_MS,
   type DaemonOptions,
 } from "../tools/overseer/daemon.js";
-import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overseer/dispatch.js";
+import { jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overseer/dispatch.js";
 import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
 import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
 import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
@@ -585,7 +585,7 @@ const HELP_PROSE_AFTER: readonly string[] = [
   ].join("\n"),
   [
     `${RULES_ENABLED_VAR}=1 is the OTHER arming: the deterministic rules and nothing else. A daemon`,
-    "started that way is handed no session dispatcher at all, so it cannot start a Claude session and",
+    "started that way is handed no launch protocol at all, so it cannot start a Claude session and",
     "cannot spend anything. It is the switch to use to watch a rule fire.",
   ].join("\n"),
 ];
@@ -627,8 +627,8 @@ export function help(): string {
  * under a gate 4 the plan admits is unbuilt.
  *
  * **The separation is a capability, not a filter.** Under `rules-only` the
- * daemon is handed no `SpawnJob` at all, so nothing in that process can create
- * a Claude session however due a job is; and `ruleJobs()` returns
+ * daemon is handed no launch protocol at all, so nothing in that process can
+ * create a Claude session however due a job is; and `ruleJobs()` returns
  * `AuthorisedRuleJob[]`, a type a session job cannot inhabit. A filter that a
  * future job could fall through is what this deliberately is not.
  */
@@ -689,7 +689,13 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
   // WHAT THIS PROCESS WOULD HOLD, matching the `jobs` fragment below exactly. A
   // second reading of the same decision would be the drift GPT Sol's S8-7 is
   // about, one level in, so both come from `arming`.
-  const held = { session: arming === "all", rules: arming !== "off" };
+  //
+  // NO SESSION CAPABILITY UNDER ANY ARMING, until the daemon composes the launch
+  // protocol and hands it over (plan 260910f scheduled dispatch, Stage C). The
+  // old `gjd-remote` dispatcher is deleted, and a headline claiming a session
+  // capability nothing holds would be S8-7 again — so under `all` the session
+  // jobs read ineligible, with the reason, and only the rules can earn ARMED.
+  const held = { session: false, rules: arming !== "off" };
   const eligibility = arming === "off" ? [] : eligibilityOf(arming === "all" ? definitions : rules.jobs, held);
   return {
     armed: arming !== "off",
@@ -701,7 +707,7 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
           // infer from an absent job list that no session can start; it is a
           // property of what this process was handed, so it is said out loud.
           `deterministic rules only (${RULES_ENABLED_VAR}=1): ${ruleDetail}. ` +
-          `NO SESSION DISPATCHER WAS BUILT, so no job in this daemon can start a Claude session — ${sessionDetail}`
+          `NO LAUNCH PROTOCOL WAS HANDED OVER, so no job in this daemon can start a Claude session — ${sessionDetail}`
         : `${sessionDetail}; rules: ${ruleDetail}`,
     problems,
     definitions,
@@ -718,17 +724,20 @@ export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
     },
     jobs:
       arming === "all"
-        ? {
+        ? // NO LAUNCH PROTOCOL YET: the `gjd-remote` spawner that used to sit
+          // here is deleted, and Stage C composes the protocol in the daemon.
+          // Until then a session job here is held, with the reason, and never
+          // started a second way.
+          {
             definitions,
-            spawn: gjdRemoteDispatch({ repoRoot: root }),
             rules: work(),
             arming: armedAt,
             launchSeparationMs: LAUNCH_SEPARATION_MS,
             readDocument,
           }
         : arming === "rules-only"
-          ? // NO `spawn` KEY AT ALL. Not `spawn: undefined`, not a spawner that
-            // refuses: the capability is absent from the process.
+          ? // NO SESSION CAPABILITY AT ALL. Not one that refuses: the capability
+            // is absent from the process.
             //
             // The spacing gate is still passed and is still inert here, because
             // it only ever gates session work and this process can start none.

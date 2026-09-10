@@ -45,18 +45,21 @@
  *
  * A verified execution says a named, live, durably-identified harness process
  * is under this pane. It says nothing about which transcript that process is
- * writing. A bare `claude` with neither `--session-id` nor `--resume <uuid>` is
+ * writing. A bare `claude` with neither `--session-id` nor `--resume` is
  * verified as a process and unverifiable as a conversation, and collapsing the
  * two would either withhold a fact we have or invent one we do not.
  * `ExecutionReading` in wire.ts carries them as separate fields for that reason.
  *
- * A RESUMED claude is read exactly as a `--session-id` one is, since plan
- * 260910f Stage 3a: `claude --resume` refuses a `--session-id` beside it, so the
- * id after `--resume` is the only place its argv names a conversation, and
- * `claude-argv.ts` reads it (a lowercase uuid immediately after the flag, and on
- * a `ps` line only when a dash-led token or nothing follows). Nothing in this
- * file had to change for that beyond the sentence below: the harness walk hands
- * over `claudeSessionId`, and `conversationOf` reconciles it with the claim.
+ * A RESUMED claude's conversation is NOT read here, and cannot be yet.
+ * `claude --resume` refuses a `--session-id` beside it, so the id after
+ * `--resume` is the only place its argv names a conversation — but the harness
+ * walk reads a `ps` line, where flattening has erased the argument boundaries,
+ * and a resume id followed by more words prints exactly like one picker search
+ * term (GPT Sol's G21, 2026-09-10). So `claude-argv.ts` refuses every `--resume`
+ * on a `ps` line, the harness is `ambiguous-harness`, and a resumed pane reads
+ * `claimed-only` — as it did before plan 260910f's Stage 3a. Verifying one needs
+ * a faithful `/proc/<pid>/cmdline` read of the harness process, bracketed like
+ * the start-time read below: a named follow-up for Stage 3b, not built.
  *
  * ## Pure classifier, thin adapter — as in work.ts / work-probe.ts
  *
@@ -251,7 +254,7 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
   const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
   const whyUnobserved =
     harness.kind === "claude-code"
-      ? "the claude under this pane was started with neither --session-id nor --resume <uuid>, so its own command line names no conversation"
+      ? "the claude under this pane was started with neither --session-id nor --resume, so its own command line names no conversation"
       : `this pane holds ${harness.kind}, whose command line carries no conversation id — a Claude may not have started in it yet, or may have finished`;
 
   return {

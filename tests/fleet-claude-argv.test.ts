@@ -524,8 +524,28 @@ describe("`--resume <uuid>` names the conversation, and nothing else about `--re
     );
   });
 
-  it("reads the same process off `ps` too, because what follows the id is dash-led", () => {
-    expect(readFlat(psArgs)).toEqual(resumed(CAPTURE.conversationId));
+  /**
+   * GPT Sol's G21 (2026-09-10): the same process off `ps` is UNREADABLE, because a picker search
+   * that is ONE argument prints exactly the same line. Both halves are asserted — the collision, and
+   * the refusals on each side of it — so the refusal cannot pass by the collision quietly going away.
+   */
+  it("does not read the same process off `ps`: a one-argument picker search prints the same line", () => {
+    const picker = [
+      "claude",
+      "--resume",
+      `${CAPTURE.conversationId} --permission-mode auto --model haiku -- Reply with exactly: OK4`,
+    ];
+    // The collision: two different argvs, one `ps` line.
+    expect(picker.join(" ")).toBe(psArgs);
+    expect(CAPTURE.argv.join(" ")).toBe(psArgs);
+    // Faithful, the picker is one non-uuid value: refused, while the real capture reads (above).
+    const faithfulPicker = read(picker);
+    expect(faithfulPicker.kind).toBe("unreadable");
+    expect(faithfulPicker.kind === "unreadable" && faithfulPicker.why).toContain("not a conversation id");
+    // Flattened, the two cannot be told apart, so neither is read.
+    const flat = readFlat(psArgs);
+    expect(flat.kind).toBe("unreadable");
+    expect(flat.kind === "unreadable" && flat.why).toContain("argument boundaries");
   });
 
   it("a bare `--resume` opens the picker, so it names no conversation", () => {
@@ -565,13 +585,24 @@ describe("`--resume <uuid>` names the conversation, and nothing else about `--re
     expect(read(["claude", "--print", ID_A])).toEqual({ kind: "session", headless: true, sessionIds: [] });
   });
 
-  it("reports the resumed id beside any --session-id, and a fork is refused", () => {
-    // Two conversations named: the caller's duplicate policy decides, as for two --session-ids.
-    expect(read(["claude", "--resume", ID_A, "--session-id", ID_B])).toEqual({
-      kind: "session",
-      headless: false,
-      sessionIds: [ID_A, ID_B],
-    });
+  it("refuses a resume beside any --session-id, in either order, equal ids included; and a fork", () => {
+    // GPT Sol's G22: `claude` refuses the two selectors together unless `--fork-session` ("Error:
+    // --session-id can only be used with --continue or --resume if --fork-session is also
+    // specified"), so the process enters no conversation at all — not A, and not "two conversations".
+    for (const argv of [
+      ["claude", "--resume", ID_A, "--session-id", ID_A],
+      ["claude", "--session-id", ID_A, "--resume", ID_A],
+      ["claude", `--session-id=${ID_A}`, "--resume", ID_A],
+      ["claude", "--resume", ID_A, "--session-id", ID_B],
+      ["claude", "--session-id", ID_B, "--resume", ID_A],
+    ]) {
+      const reading = read(argv);
+      expect(reading.kind, argv.join(" ")).toBe("unreadable");
+      expect(reading.kind === "unreadable" && reading.why, argv.join(" ")).toContain("--fork-session");
+    }
+    // and its pair: each selector alone still names its conversation
+    expect(read(["claude", "--session-id", ID_A])).toEqual(resumed(ID_A));
+    expect(read(["claude", "--resume", ID_A])).toEqual(resumed(ID_A));
     // `--fork-session` mints a new id nothing could match, and it is no flag this repo produces.
     expect(read(["claude", "--resume", ID_A, "--fork-session"]).kind).toBe("unreadable");
     // headless resume is still headless, which is what the spike ran
@@ -587,17 +618,25 @@ describe("`--resume <uuid>` names the conversation, and nothing else about `--re
     expect(readFlat(`claude <prompt> --resume ${ID_A}`).kind).toBe("unreadable");
   });
 
-  it("the fidelity pair: a bare word after the id is the prompt on argv and undecidable off `ps`", () => {
+  it("the fidelity pair: the id is read on argv and `--resume` in any form is refused off `ps`", () => {
     // Faithful: the prompt is its own element, so the id is exactly the element after `--resume`.
     const argv = ["claude", "--resume", ID_A, "carry on please"];
     expect(read(argv)).toEqual(resumed(ID_A));
-    // Flattened: `--resume "<id> carry on please"` (a picker search term) prints identically.
-    const flat = readFlat(argv.join(" "));
-    expect(flat.kind).toBe("unreadable");
-    expect(flat.kind === "unreadable" && flat.why).toContain("--resume");
-    // and its pair, so the flattened rule is not a blanket refusal
-    expect(readFlat(`claude --resume ${ID_A} --permission-mode auto -- carry on please`)).toEqual(resumed(ID_A));
-    expect(readFlat(`claude --resume ${ID_A}`)).toEqual(resumed(ID_A));
+    // Flattened: refused whatever follows the id — a bare word, a dash-led token, or nothing —
+    // because flattening erased the boundaries that say where the value ends (G21). A dash-led token
+    // after the id is no better evidence than a bare word: it can be the inside of a search term.
+    for (const line of [
+      argv.join(" "),
+      `claude --resume ${ID_A} --permission-mode auto -- carry on please`,
+      `claude --resume ${ID_A}`,
+      "claude --resume",
+    ]) {
+      const flat = readFlat(line);
+      expect(flat.kind, line).toBe("unreadable");
+      expect(flat.kind === "unreadable" && flat.why, line).toContain("--resume");
+    }
+    // and its pair, so the flattened refusal is about `--resume` and not a blanket one
+    expect(readFlat(`claude --session-id ${ID_A} --permission-mode auto -- carry on please`)).toEqual(resumed(ID_A));
   });
 });
 

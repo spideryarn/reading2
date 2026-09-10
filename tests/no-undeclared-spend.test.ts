@@ -170,6 +170,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Reads OPENROUTER_API_KEY to decide whether the attention pass can run at all, and to print a sentence a person can act on. Names no endpoint and makes no request: the key is handed to the seam above. It reads the environment rather than .env.local ON PURPOSE — src/env.ts lets the file beat the shell, a daemon's key comes from its unit file, and two precedence rules over one filename is how a process comes to talk to the wrong account and report success.",
   "scripts/overseer.ts":
     "Names OPENROUTER_API_KEY in one line of CLI output: the daemon says `attention: off` when there is no key, because a pass that silently never runs would publish a calm inbox forever. No transport, no value ever read.",
+  "tools/overseer/launchers.ts":
+    "The Overseer's launch adapters. It names ANTHROPIC_API_KEY, OPENAI_API_KEY and their siblings only in SESSION_UNSET_VARIABLES, the list a tmux-headless session unsets before it runs scripts/run-claude.ts or scripts/run-codex.ts, so a scheduled session never inherits the daemon's own credentials or account. It makes no request and imports no client: the spend is the wrappers', and both are registered above and in UNMETERED_SPEND.",
   "src/spend-declarations.ts": "The register. Data, not transport.",
   "tests/public-visibility-pg.test.ts":
     "A positive control for its own fetch spy — `globalThis.fetch` is mocked for the length of the assertion, so no request leaves. Listed by name because a test that really did reach a provider is a thing worth being told about.",

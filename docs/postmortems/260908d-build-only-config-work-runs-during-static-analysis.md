@@ -1,6 +1,13 @@
 # Build-only config work runs during static analysis
 
-Status as of 2026-09-08: **reproduced; not fixed**. Investigated during the plan-only
+Status as of 2026-09-10: **fixed** — the shell read moved from module scope into a build-only
+plugin `config` hook in `vite.api.config.ts`, with both consumers under test in
+`tests/knip-without-build-output.test.ts`; [static-analysis.md § Knip does not need a
+build](../project/static-analysis.md#knip-does-not-need-a-build). One correction to the account below:
+comparing the full finding sets before and after the fix, the load error changed **no** finding
+(359 both ways) — the "incomplete graph" was a risk, not something that happened here.
+
+Originally, 2026-09-08: **reproduced; not fixed**. Investigated during the plan-only
 [product improvement audit](../plans/260908f-prioritised-spideryarn-codebase-improvements.md), with
 independent subagent source/history analysis. This is a developer-tool failure, not evidence of
 a broken deployed reader.
@@ -42,13 +49,13 @@ run client then API, with artifacts present by design. Neither proves that stati
 can run before a build exists. Knip is advisory; its config failure is visible, but does not stop
 the other gates. Treating its subsequent findings as a complete graph would compound the failure.
 
-## Planned fix and what would catch the class
+## The fix and what catches the class
 
-No implementation was attempted. Plan D first inspects the installed Knip plugin/schema for a
-small static-discovery configuration that preserves API entries, aliases, CSS dependencies and
-root scratch discovery. If that cannot work, put shell evaluation behind the actual build
-invocation, verifying how Vite and Knip evaluate that boundary. **No particular configuration or
-callback fix has yet been proved to work.**
+The installed Knip plugin gave no narrow way to keep its Vite graph while avoiding this one config:
+the `--config vite.api.config.ts` argument in `build:api` makes that file an input independently of
+the plugin's config glob. Instead, the shell read now lives in a build-only Vite plugin's `config`
+hook. Knip still imports and inspects the exported config object but does not run the hook; Vite's
+build-mode config resolution does, before any bundle can be emitted.
 
 Ranked defences:
 

@@ -37,7 +37,7 @@
 
 import { fileURLToPath } from "node:url";
 
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 import { resolveBuildStamp } from "./scripts/build-stamp.js";
 import { readClientShell } from "./scripts/client-shell.js";
@@ -85,13 +85,25 @@ const stamp = resolveBuildStamp();
  * needs the real shell: the one with hashed `/assets/….js` in it, not the source
  * `index.html` whose `/src/web/boot.tsx` only Vite's dev server understands.
  *
- * Resolved here, at config evaluation, so that **a stale or missing shell fails
- * the build** rather than being discovered by a reader whose shared link renders
- * a blank page. scripts/client-shell.ts holds the four checks and the reason
- * there is no fallback of any kind; the short version is that the worktree this
- * design came out of had HEAD at one commit and `dist/build.json` at another, so
- * an API build on its own would have compiled a shell from a different version
- * of the client and said nothing.
+ * Resolved when Vite resolves this config for a build, so that **a stale or
+ * missing shell fails the build** rather than being discovered by a reader whose
+ * shared link renders a blank page. scripts/client-shell.ts holds the four
+ * checks and the reason there is no fallback of any kind; the short version is
+ * that the worktree this design came out of had HEAD at one commit and
+ * `dist/build.json` at another, so an API build on its own would have compiled a
+ * shell from a different version of the client and said nothing.
+ *
+ * **A plugin's `config` hook, not a top-level `const`, and that is the point.**
+ * Loading this module is not only something a build does: Knip imports it to
+ * discover the Vite graph, and reads the exported object without running any
+ * plugin hook. At module level, a missing `dist/` (a fresh worktree) or a stale
+ * one (after any pull) made every Knip run fail to load this file and report
+ * findings from a graph it had not finished — while the guard itself was right.
+ * Vite's build-mode config resolution runs this hook, and every invocation of
+ * `vite build --config vite.api.config.ts` goes through that resolution; a throw
+ * from it therefore stops the build. Do not move it back to module scope, and do
+ * not give it a fallback for Knip's sake; tests/knip-without-build-output.test.ts
+ * and docs/postmortems/260908d-build-only-config-work-runs-during-static-analysis.md.
  *
  * `vercel.json` runs `vite build` before this, so `dist/` is fresh by
  * construction on a deployment. Locally the two are two commands and the order
@@ -103,7 +115,28 @@ const stamp = resolveBuildStamp();
  * ordinary default head. Same shape as the build stamp above, and the same
  * `typeof` guard on the reading side.
  */
-const shell = readClientShell(fileURLToPath(new URL("./dist", import.meta.url)), stamp.commit);
+function builtClientShell(): Plugin {
+  return {
+    name: "spideryarn:built-client-shell",
+    apply: "build",
+    config() {
+      const shell = readClientShell(fileURLToPath(new URL("./dist", import.meta.url)), stamp.commit);
+      return {
+        define: {
+          __SPIDERYARN_BUILT_SHELL__: JSON.stringify(shell.html),
+          /* The digest of the shell **as it was read**, before any head was
+             composed into it. Served as `X-Spideryarn-Shell-SHA256`, so the
+             deployed check can compare it against the SHA-256 of
+             `GET /index.html` and prove the function and the CDN are serving the
+             same build. Hashing the composed output instead would make that
+             comparison always fail, and hashing nothing would make it always
+             pass. */
+          __SPIDERYARN_BUILT_SHELL_SHA256__: JSON.stringify(shell.sha256),
+        },
+      };
+    },
+  };
+}
 
 /**
  * The migrations this build needs the database to have already applied.
@@ -128,7 +161,7 @@ export default defineConfig({
      forget. `vercel.json` builds the client first and this second, so a plugin
      living only in vite.config.ts would have run before `api-dist/vercel.js.map`
      existed. Same release string as the client, from the same stamp. */
-  plugins: sentrySourceMaps(stamp.commit, "./api-dist/**/*.map"),
+  plugins: [builtClientShell(), sentrySourceMaps(stamp.commit, "./api-dist/**/*.map")],
   /* Constants, not `process.env` lookups, so the value cannot be changed by the
      running environment after the fact — which is the entire point of a stamp.
      Read in src/vercel-health.ts behind a `typeof` guard, because in dev there
@@ -138,14 +171,8 @@ export default defineConfig({
     __SPIDERYARN_BUILD_TIME__: JSON.stringify(stamp.builtAt),
     __SPIDERYARN_BUILD_SOURCE__: JSON.stringify(stamp.source),
     __SPIDERYARN_BUILD_DEPLOYMENT__: JSON.stringify(stamp.deploymentId),
-    __SPIDERYARN_BUILT_SHELL__: JSON.stringify(shell.html),
-    /* The digest of the shell **as it was read**, before any head was composed
-       into it. Served as `X-Spideryarn-Shell-SHA256`, so the deployed check can
-       compare it against the SHA-256 of `GET /index.html` and prove the function
-       and the CDN are serving the same build. Hashing the composed output
-       instead would make that comparison always fail, and hashing nothing would
-       make it always pass. */
-    __SPIDERYARN_BUILT_SHELL_SHA256__: JSON.stringify(shell.sha256),
+    /* __SPIDERYARN_BUILT_SHELL__ and its digest come from builtClientShell()
+       above, merged into this object when Vite resolves the config. */
     /* The whole list rather than its digest, because the digest cannot say
        WHICH migration is missing, and a health page that says "out of step" and
        nothing else sends whoever reads it to a database they may not be able to

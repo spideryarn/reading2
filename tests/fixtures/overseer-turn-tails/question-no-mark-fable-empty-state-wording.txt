@@ -1,0 +1,21 @@
+
+❯ add an empty state to the quotes mode
+
+● The empty state is in and tested: when the extraction found no quotes, the band now shows a line instead of a blank
+  panel, and the tooltip no longer promises quotes that are not there.
+
+  What I have not settled is the wording. Two versions both read fine to me: "No lines worth keeping were found in
+  this piece." keeps the mode's own phrase from quotes.md, and "Nothing quotable here — try Ideas instead." is shorter
+  and points somewhere useful, but it names a second mode, which the copy doc is wary of. The default in the code is
+  the first one.
+
+  Your call on the wording; I'll swap it in either way.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

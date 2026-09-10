@@ -82,7 +82,7 @@ const OCCURRENCE: ScheduledOccurrence = {
   updatedAt: "2026-09-10T11:03:00.000Z",
   attempts: 2,
   state: "completed",
-  run: { timeoutMinutes: 5, access: "read-only" },
+  run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
   result: { kind: "succeeded", why: "exit 0, a usable answer", at: "2026-09-10T11:03:00.000Z" },
   answer: present(2, ANSWER_TEXT),
   transcriptPath: null,
