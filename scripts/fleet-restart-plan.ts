@@ -415,7 +415,16 @@ export type QueuedSummary = { id: string; sessionId: string; enqueuedAt: number;
  */
 export type HoldSummary = { id: string; sessionId: string; why: string };
 
-export type QueueRead = { ok: true; items: QueuedSummary[]; holds: HoldSummary[] } | { ok: false; why: string };
+/**
+ * `durable` is true only when every queue on the wire said `volatile: false` —
+ * the dashboard's own word that it writes queued items down and restores them
+ * after a restart (plan 260910d, Stage 1). A missing or non-boolean field, which
+ * is what every build before that sends, reads as memory-only: the direction
+ * this check is wrong in on purpose.
+ */
+export type QueueRead =
+  | { ok: true; items: QueuedSummary[]; holds: HoldSummary[]; durable: boolean }
+  | { ok: false; why: string };
 
 /**
  * What is in the steering queue, read defensively.
@@ -438,8 +447,12 @@ export function summariseQueues(body: unknown): QueueRead {
 
   const items: QueuedSummary[] = [];
   const holds: HoldSummary[] = [];
+  // Every queue must say so, literally `false`; one queue that does not makes
+  // the whole read memory-only. See `QueueRead`.
+  let everyQueueDurable = queues.length > 0;
   for (const queue of queues) {
-    const q = queue as { items?: unknown; quarantine?: unknown; sessionId?: unknown };
+    const q = queue as { items?: unknown; quarantine?: unknown; sessionId?: unknown; volatile?: unknown };
+    if (q?.volatile !== false) everyQueueDurable = false;
     if (!Array.isArray(q?.items)) return { ok: false, why: "a queue in GET /api/actions has no `items` array — cannot say what would be discarded" };
     if (!("quarantine" in (q ?? {}))) return { ok: false, why: "a queue in GET /api/actions has no `quarantine` field — this build cannot see steering holds, and a restart erases them" };
     for (const item of q.items) items.push(summariseItem(item));
@@ -453,7 +466,7 @@ export function summariseQueues(body: unknown): QueueRead {
     }
     if (hold !== null) holds.push(summariseHold(hold, q.sessionId));
   }
-  return { ok: true, items, holds };
+  return { ok: true, items, holds, durable: everyQueueDurable };
 }
 
 function summariseItem(item: unknown): QueuedSummary {
@@ -517,10 +530,24 @@ export function judgeQueue(serviceUp: boolean, read: QueueRead, discard: boolean
   // Sol, 2026-09-09.
   if (!read.ok) return { name, verdict: "unknown", detail: `${read.why}. A restart discards the queue and records nothing, and --discard-queue deliberately does not cover a queue nobody has read.` };
 
+  // A DURABLE QUEUE'S ITEMS ARE NOT DISCARDED: the dashboard restores them at
+  // startup. Only a memory-only queue's items count against the restart, and
+  // holds count either way (unchanged here).
+  const discardedItems = read.durable ? 0 : read.items.length;
   const parts: string[] = [];
-  if (read.items.length > 0) parts.push(`${read.items.length} ${read.items.length === 1 ? "item" : "items"}`);
+  if (discardedItems > 0) parts.push(`${discardedItems} ${discardedItems === 1 ? "item" : "items"}`);
   if (read.holds.length > 0) parts.push(`${read.holds.length} steering ${read.holds.length === 1 ? "hold" : "holds"}`);
-  if (parts.length === 0) return { name, verdict: "pass", detail: "empty, and no steering holds — nothing would be discarded" };
+  if (parts.length === 0) {
+    if (read.durable && read.items.length > 0) {
+      const n = read.items.length;
+      return {
+        name,
+        verdict: "pass",
+        detail: `${n} queued ${n === 1 ? "item" : "items"} on a durable queue — the dashboard writes them down, and a restart kept and restores them`,
+      };
+    }
+    return { name, verdict: "pass", detail: "empty, and no steering holds — nothing would be discarded" };
+  }
 
   const what = parts.join(" and ");
   if (discard) return { name, verdict: "overridden", detail: `${what} will be DISCARDED and not recorded anywhere (listed above)` };
