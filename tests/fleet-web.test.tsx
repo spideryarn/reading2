@@ -260,6 +260,7 @@ function state(over: Partial<FleetState> = {}): FleetState {
        quiet line on the Overseer tab, and any other default would have every
        fixture in this file silently claiming a usage pass had run. */
     usage: { kind: "not-asked" },
+    accountUsage: { kind: "not-asked" },
     /* Live work is a required pushed field. The ordinary fixture represents an
        older server which did not report it, never a successful empty scan. */
     currentWork: { kind: "not-reported" },
@@ -1767,6 +1768,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
           usage: { kind: "not-asked" },
+          accountUsage: { kind: "not-asked" },
           work: {
             kind: "published",
             coordinatorWrittenAt: new Date(now - 30_000).toISOString(),
@@ -1840,6 +1842,7 @@ describe("box health, whose shape belongs to somebody else", () => {
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
             usage: { kind: "not-asked" },
+            accountUsage: { kind: "not-asked" },
             work: { kind: "checkpoint-absent" },
           }),
         }),
@@ -2727,6 +2730,7 @@ describe("the box's clock, read with the phone's", () => {
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
           usage: { kind: "not-asked" },
+          accountUsage: { kind: "not-asked" },
           work: { kind: "checkpoint-absent" },
         }),
       }),

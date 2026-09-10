@@ -50,6 +50,7 @@ function state(over: Partial<FleetState> = {}): FleetState {
     questions: { kind: "not-observed", gaps: [{ kind: "attention-not-asked" }] },
     overseer: { kind: "not-asked" },
     usage: { kind: "not-asked" },
+    accountUsage: { kind: "not-asked" },
     /* Required since the work history landed, and stated rather than defaulted
        for the reason the rest of this fixture is: a payload that did not report
        current work is a different fact from one reporting an idle box. */

@@ -1200,6 +1200,24 @@ export type FleetState<Row, Health> = {
    */
   usage: UsageFeed;
   /**
+   * **WHICH SUBSCRIPTION STILL HAS ROOM?** — one live headroom reading per
+   * Claude and Codex account-subscription on the box, or the reason there are
+   * none.
+   *
+   * `usage` above answers the same question for exactly ONE account: the login
+   * the Overseer itself is running as. That was the whole page until 2026-09-10,
+   * and it meant a pool account sitting at 4% while the page showed 96% and
+   * everything looked blocked. This field is the rest of the answer — Greg's
+   * ask, and plan 260910c.
+   *
+   * **Not a replacement for `usage`, and it never will be.** That reading
+   * carries the transcript scan, the 429s and the verdict, none of which can be
+   * made per-account honestly: a rejection in a transcript carries no account
+   * id at all. So the two coexist, one deep reading of the orchestrator's login
+   * and one shallow reading of every login, and each says which it is.
+   */
+  accountUsage: AccountUsageFeed;
+  /**
    * **WHAT EXPENSIVE WORK IS RUNNING NOW.** This is the work projection from
    * the same single checkpoint read as `attention`, `overseer` and `usage`.
    * It is live state, never inferred from the five-minute persistence cadence:
@@ -3873,3 +3891,169 @@ export type AdmissionPayload = AdmissionPayloadBase &
         policy?: never;
       }
   );
+
+/* ================= PER-ACCOUNT SUBSCRIPTION HEADROOM =============== *
+ * A uniquely named banner rather than the bare separator, for the
+ * reason the two blocks above give: sessions appending blocks that
+ * open with the same line collide in git even when the blocks share
+ * no identifier.
+ *
+ * ONE SECTION PER ACCOUNT-SUBSCRIPTION — plan 260910c.
+ * ================================================================== */
+
+/**
+ * What the account is FOR. The registry's own vocabulary, unchanged.
+ *
+ * **`ambient` is deliberately not a third arm here**, and it was one for an
+ * hour on 2026-09-10 until GPT Sol pointed out that it is a category error:
+ * the ambient login's role is `orchestrator` — it is precisely the account the
+ * Overseer's own model calls are spending. Folding provenance into the role
+ * would have made *what is this account for* unanswerable for the one account
+ * the answer matters most about. `AccountUsageOrigin` carries the other half.
+ */
+export type AccountUsageRole = "orchestrator" | "pool";
+
+/**
+ * How the box knows about this account, **and therefore how much its identity
+ * can be trusted.** Not decoration: the two arms are believed on different
+ * evidence.
+ *
+ *  - `registered` — the account is in `~/.claude-accounts/registry.json`, so
+ *    the reading was checked against a recorded provider id before it was
+ *    published. A mismatch never reaches the page as a number.
+ *  - `ambient` — the login a process gets when nothing sets
+ *    `CLAUDE_CONFIG_DIR` / `CODEX_HOME`. It **cannot be registered** (plan
+ *    260909g), so there is nothing to pin it against and its identity is
+ *    whatever the provider said it was. It still needs a section: it is the
+ *    account the Overseer runs on, and a page silent about it is silent about
+ *    every supervisory call the box makes.
+ */
+export type AccountUsageOrigin = "ambient" | "registered";
+
+/**
+ * **ONE ACCOUNT-SUBSCRIPTION'S HEADROOM, AND NOTHING ELSE.**
+ *
+ * Deliberately NOT a small `UsageSummary`. There is no verdict here and there
+ * are no 429s, because neither can honestly be made per-account: a transcript
+ * rejection carries no account id at all (`UsageIncident`'s header, and rule 4
+ * of the eight in docs/project/usage-history.md), so feeding the one global
+ * scan into a per-account verdict would manufacture evidence — the same
+ * rejection counted once against every account on the box. The scan stays where
+ * it is, global and unattributed, and this type carries only what the provider
+ * itself reported for this login.
+ *
+ * **`takenAt` is per section, not per pass**, and that is the field that keeps
+ * the rest of it honest. The readings are independent calls: one account can
+ * answer at 06:00 while its neighbour fails until 06:12. A pass-level timestamp
+ * would put a fresh badge on a stale reading, which is the failure this whole
+ * subsystem exists to refuse.
+ *
+ * **The family is the discriminant**, because the two providers report
+ * genuinely different shapes — Claude a flat list of named windows, Codex a
+ * list of buckets each holding slotted windows — and flattening them into one
+ * would either drop Codex's bucket structure or invent a bucket for Claude.
+ * docs/project/overseer-direction.md's rule about adapters applies to readings
+ * too: *"flattening them into one … produces a UI that lies."*
+ */
+export type AccountUsageSection = {
+  /** The registry name (`mindstone`), or `ambient` for the unregistered login. */
+  name: string;
+  role: AccountUsageRole;
+  origin: AccountUsageOrigin;
+  /** From the registry pin, or from the provider's own answer. Null when neither said. */
+  displayEmail: string | null;
+  /**
+   * The account id the PROVIDER returned, null when it declined to say.
+   *
+   * **A null here means the reading cannot carry numbers**, and that rule is
+   * enforced by the producer rather than left to renderers: a percentage under
+   * a heading naming an account nobody proved it belongs to is the failure this
+   * whole subsystem exists to refuse. For a registered account the id has
+   * already been checked against the registry pin; for an ambient one it is
+   * whatever the provider said, and *nothing* is not an answer.
+   */
+  providerAccountId: string | null;
+  /** ISO. **When THIS account was read**, not when the pass ran. */
+  takenAt: string;
+} & (
+  | {
+      family: "claude";
+      reading:
+        | { kind: "windows"; windows: UsageWindowCard[] }
+        /** No percentage field exists on this arm, by construction. `UsageWindowCard`'s header says why. */
+        | { kind: "unknown"; why: string };
+    }
+  | {
+      family: "codex";
+      reading:
+        | { kind: "buckets"; buckets: CodexUsageBucket[]; resetCredits: number | null }
+        | { kind: "unknown"; why: string };
+    }
+);
+
+/**
+ * What the checkpoint knows about every account-subscription on the box.
+ *
+ * **A sibling of `usage`, not a field inside `UsageReport`**, and the reason is
+ * `chooseUsage` in tools/overseer/usage-carry.ts. That function decides whether
+ * to publish a fresh `UsageReport` or re-publish the stored one, and it decides
+ * it on whether the ~2.9 GB transcript scan completed — which it routinely does
+ * not. Live HTTP readings riding inside that report would be discarded by a
+ * decision that has nothing to do with them: *a publication decision is not an
+ * observation*, which docs/project/usage-history.md already names as a mistake
+ * made once here.
+ *
+ * **`none` rather than an empty `reading`.** A pass that read no account at all
+ * must not be spellable as `{ kind: "reading", accounts: [] }`, because an
+ * empty list renders as *this box has no account-subscriptions* — a claim —
+ * where the truth is *nothing could be read*. Rule 8 of the eight: coverage is
+ * what makes a negative believable, and an empty array carries none.
+ *
+ * **`problems` is what stops a SHORT list telling the same lie as an empty
+ * one.** If the registry file is corrupt, every registered account vanishes and
+ * the sections that remain — the ambient logins, which need no registry — draw
+ * perfectly. The page then says *this box has one Claude subscription* with no
+ * hint that it failed to read the list of the others. So a fault that costs the
+ * pass a whole class of account is carried beside the sections rather than
+ * folded into one of them, because it belongs to no account.
+ */
+export type StoredAccountUsage =
+  | {
+      kind: "reading";
+      collectedAt: string;
+      accounts: readonly AccountUsageSection[];
+      /** Faults belonging to no single account — a registry that would not parse, above all. Usually empty. */
+      problems: readonly string[];
+    }
+  | { kind: "none"; why: string; at: string };
+
+/**
+ * The per-account sections' feed, with the same seven ways of having nothing to
+ * say that `UsageFeed` has.
+ *
+ * Not fewer, and specifically not `no-reading` folded into
+ * `checkpoint-unreadable`: *no pass has run* is ordinary and means nothing is
+ * broken, while *a reading is there and this build cannot read it* is a
+ * producer and a consumer that have come apart. Telling somebody nothing is
+ * wrong in the second case is false and sends them away from the thing that is.
+ * That distinction cost a review round on the singular card already
+ * (GPT Sol's P1(3), 2026-09-09) and is inherited here rather than re-learned.
+ */
+export type AccountUsageFeed =
+  /** The server did not look. NOT *there are no accounts*. */
+  | { kind: "not-asked" }
+  | { kind: "checkpoint-absent" }
+  | { kind: "checkpoint-unreadable"; why: string }
+  | { kind: "unsupported-schema"; saw: string; known: number }
+  /** The checkpoint is readable and holds no per-account reading. `at` is when it was WRITTEN. */
+  | { kind: "no-reading"; why: string; at: string }
+  /** A reading IS there and this reader could not make sense of it. Something is wrong, unlike above. */
+  | { kind: "reading-unreadable"; why: string; at: string }
+  | {
+      kind: "published";
+      collectedAt: string;
+      accounts: readonly AccountUsageSection[];
+      /** Carried through unchanged from `StoredAccountUsage`. A short list without these is a lie. */
+      problems: readonly string[];
+      coordinatorWrittenAt: string;
+    };

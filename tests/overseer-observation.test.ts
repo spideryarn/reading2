@@ -81,7 +81,7 @@ describe("the dashboard's own payload", () => {
     // compiling is the day the contract moved — which is exactly what happened
     // while this stage was being written: `answeringEnabled` was added below,
     // correctly WITHOUT a schema bump, and this line went red within the hour.
-    const placeholder = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const placeholder = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "not-asked" }, { kind: "checkpoint-absent" });
     expect(placeholder.schema).toBe(OBSERVATION_SCHEMA);
     expect(placeholder.collectedAt).toBeNull();
     expect(placeholder.rows).toEqual([]);
@@ -99,7 +99,7 @@ describe("the dashboard's own payload", () => {
   test("a snapshot's schema number is still the one this reader was written against", () => {
     // If the dashboard bumps its schema, this goes red before anything silently
     // reads the new shape with the old rules.
-    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }).schema).toBe(OBSERVATION_SCHEMA);
+    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "not-asked" }, { kind: "checkpoint-absent" }).schema).toBe(OBSERVATION_SCHEMA);
   });
 });
 
@@ -757,7 +757,7 @@ describe("the attempt clock, which is not the collection clock", () => {
     // Its own constructor, not a hand-made object, so the day the wire name
     // changes this line stops compiling rather than going quietly wrong — the
     // same pin the startup placeholder gets above.
-    const state = fleetState(null, null, null, 60_000, false, "2026-09-08T02:47:20.000Z", NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const state = fleetState(null, null, null, 60_000, false, "2026-09-08T02:47:20.000Z", NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "not-asked" }, { kind: "checkpoint-absent" });
     expect(state.attemptedAt).toBe("2026-09-08T02:47:20.000Z");
     const payload = JSON.parse(JSON.stringify(state)) as Record<string, JsonValue>;
     expect(parseAttempt(payload)).toEqual({

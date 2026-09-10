@@ -24,7 +24,14 @@ import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
 import type { CheckpointFeeds } from "./overseer-status.js";
 import { composeQuestions } from "./questions.js";
-import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed, WorkFeed } from "./wire.js";
+import type {
+  AccountUsageFeed,
+  AttentionFeed,
+  FleetState as FleetStateWire,
+  OverseerStatusFeed,
+  UsageFeed,
+  WorkFeed,
+} from "./wire.js";
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -92,6 +99,16 @@ export function fleetState(
    * in as many words, which is true of it — it did not look.
    */
   usage: UsageFeed,
+  /**
+   * **WHICH SUBSCRIPTION STILL HAS ROOM?** — required, for the reason the three
+   * above it are, and one of its own.
+   *
+   * This is the field whose absence is hardest to notice: the per-account
+   * sections simply do not draw, and a page with no sections looks exactly like
+   * a box with one subscription. A caller with nothing to say passes
+   * `{ kind: "not-asked" }` in as many words.
+   */
+  accountUsage: AccountUsageFeed,
   /** Live work from the same checkpoint bytes, never reconstructed from the
    * five-minute health-history cadence. Required so a forgotten composition
    * edge is a type error rather than a quietly empty panel. */
@@ -105,6 +122,7 @@ export function fleetState(
     attention,
     overseer,
     usage,
+    accountUsage,
     currentWork,
     /* The clock read that makes every age on the page comparable. Unlike
        `collectedAt` above, inventing this one here is not a lie with a clock on
@@ -206,6 +224,7 @@ export function statePayload(deps: PayloadDeps): string {
       checkpoint.attention,
       checkpoint.overseer,
       checkpoint.usage,
+      checkpoint.accountUsage,
       checkpoint.work,
       Date.now(),
     ),

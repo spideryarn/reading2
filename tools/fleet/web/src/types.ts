@@ -41,6 +41,10 @@ import {
   SCAN_STALE_MS,
 } from "../../question-freshness.js";
 import { absenceGapReason } from "../../usage-absence.js";
+/* The one Codex bucket parser on this side, shared rather than re-declared —
+   see its header. `usage-history-client.ts` imports nothing, so this costs no
+   cycle. */
+import { parseCodexBucket } from "./usage-history-client";
 import {
   parseCurrentWork,
   type CurrentWorkView,
@@ -70,6 +74,11 @@ import type {
   Pause,
   PauseUnknownCause,
   ScanCoverage,
+  AccountUsageFeed,
+  AccountUsageOrigin,
+  AccountUsageRole,
+  AccountUsageSection,
+  CodexUsageBucket,
   UsageAccount,
   UsageFeed,
   UsageIncident,
@@ -103,6 +112,11 @@ export type {
   Pause,
   PauseUnknownCause,
   ScanCoverage,
+  AccountUsageFeed,
+  AccountUsageOrigin,
+  AccountUsageRole,
+  AccountUsageSection,
+  CodexUsageBucket,
   UsageAccount,
   UsageFeed,
   UsageIncident,
@@ -513,6 +527,11 @@ export type FleetState = Omit<
      shifted onto the browser's clock, because they are rendered as wall-clock
      times in three zones rather than as ages. */
   | "usage"
+  /* Re-typed: the same widening a fourth time, and unshifted for `usage`'s
+     reason — the instants in the per-account sections are reset times drawn on
+     the wall clock, and the one that becomes an age carries its own skew where
+     it is drawn. `parseAccountUsage`. */
+  | "accountUsage"
   /* Re-typed: live work also needs client-only absent/unreadable arms, and its
      three source clocks are shifted here so the panel can state reading age
      without mixing the box's clock with the phone's. */
@@ -593,6 +612,16 @@ export type FleetState = Omit<
    * why, and `UsageCard` is the one component that applies the skew itself.
    */
   usage: UsageView;
+  /**
+   * **WHICH SUBSCRIPTION STILL HAS ROOM?** — one live reading per Claude and
+   * Codex account-subscription, or the reason there are none.
+   *
+   * Widened by the same one arm as the fields above it, and carrying its
+   * timestamps UNSHIFTED for `parseUsage`'s reason: they are reset instants
+   * drawn as wall-clock times, and the one that becomes an age — each section's
+   * own `takenAt` — has its skew applied by the component that draws it.
+   */
+  accountUsage: AccountUsageView;
   /** Live work from this payload's checkpoint read, never from history. */
   currentWork: CurrentWorkView;
   /**
@@ -2467,6 +2496,167 @@ function parseUsageWindowCard(raw: unknown): UsageWindowCard | null {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * WHICH SUBSCRIPTION STILL HAS ROOM? — the per-account sections, off the wire.
+ * ------------------------------------------------------------------ */
+
+/** Widened by the one arm every feed on this page is: a payload this build cannot read. */
+export type AccountUsageView = AccountUsageFeed | { kind: "feed-unreadable"; why: string };
+
+const ACCOUNT_USAGE_ROLES: readonly AccountUsageRole[] = ["orchestrator", "pool"];
+const ACCOUNT_USAGE_ORIGINS: readonly AccountUsageOrigin[] = ["ambient", "registered"];
+
+/**
+ * One account's section, or `null` — which fails the whole feed.
+ *
+ * **A section this page cannot read is never dropped**, and that is the one
+ * decision in here worth defending. A list quietly one shorter than it should
+ * be tells the reader the box has fewer subscriptions than it has, and there is
+ * nothing on the page to contradict it. So an unreadable section is a loud
+ * *this page cannot read the sections* rather than a quiet short list — the
+ * same argument `parseUsageLimits` makes about a rejection going missing from a
+ * list of nine.
+ */
+function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
+  if (!isRecord(raw)) return null;
+  const name = nonBlank(raw["name"]);
+  const takenAt = iso(raw["takenAt"]);
+  const role = ACCOUNT_USAGE_ROLES.find((candidate) => candidate === str(raw["role"]));
+  /* `takenAt` fails the section rather than borrowing the pass's clock. The
+     readings are independent calls minutes apart, and a section aged by the
+     pass is the stale-reading-that-looks-current failure this whole subsystem
+     exists to refuse. wire.ts § `AccountUsageSection`. */
+  const origin = ACCOUNT_USAGE_ORIGINS.find((candidate) => candidate === str(raw["origin"]));
+  if (name === null || takenAt === null || role === undefined || origin === undefined) return null;
+  const displayEmail = raw["displayEmail"] === null ? null : nonBlank(raw["displayEmail"]);
+  const providerAccountId = raw["providerAccountId"] === null ? null : nonBlank(raw["providerAccountId"]);
+  const common = { name, role, origin, displayEmail, providerAccountId, takenAt };
+
+  const reading = raw["reading"];
+  if (!isRecord(reading)) return null;
+  const family = str(raw["family"]);
+
+  if (family === "claude") {
+    if (str(reading["kind"]) === "unknown") {
+      const why = nonBlank(reading["why"]);
+      return why === null ? null : { ...common, family: "claude", reading: { kind: "unknown", why } };
+    }
+    if (str(reading["kind"]) !== "windows" || !Array.isArray(reading["windows"])) return null;
+    const windows: UsageWindowCard[] = [];
+    for (const entry of reading["windows"]) {
+      const window = parseUsageWindowCard(entry);
+      if (window === null) return null;
+      windows.push(window);
+    }
+    return { ...common, family: "claude", reading: { kind: "windows", windows } };
+  }
+
+  if (family === "codex") {
+    if (str(reading["kind"]) === "unknown") {
+      const why = nonBlank(reading["why"]);
+      return why === null ? null : { ...common, family: "codex", reading: { kind: "unknown", why } };
+    }
+    if (str(reading["kind"]) !== "buckets" || !Array.isArray(reading["buckets"])) return null;
+    const rawCredits = reading["resetCredits"];
+    const resetCredits =
+      rawCredits === null || rawCredits === undefined
+        ? null
+        : typeof rawCredits === "number" && Number.isFinite(rawCredits)
+          ? rawCredits
+          : undefined;
+    if (resetCredits === undefined) return null;
+    /* `takenAt` is this reading's own instant, which is what the bucket parser
+       checks each window against — that a reset falls inside the window that
+       produced it. Not `Date.now()`: that would turn an old-but-valid reading
+       into an unreadable one the moment it aged past its own reset. */
+    const readAtMs = Date.parse(takenAt);
+    const buckets: CodexUsageBucket[] = [];
+    for (const entry of reading["buckets"]) {
+      const bucket = parseCodexBucket(entry, readAtMs);
+      if (bucket === null) return null;
+      buckets.push(bucket);
+    }
+    return { ...common, family: "codex", reading: { kind: "buckets", buckets, resetCredits } };
+  }
+
+  return null;
+}
+
+/**
+ * **WHICH SUBSCRIPTION STILL HAS ROOM?, off the wire.**
+ *
+ * The ordinary discipline, and `parseUsage`'s: **absent is `not-asked`;
+ * present-but-wrong is `feed-unreadable`.** The field arrived without a schema
+ * bump, so a server that predates it sends nothing — and drawing that as *this
+ * box has one subscription* would be exactly the reassuring lie the whole area
+ * is built to refuse.
+ *
+ * **An empty account list fails the feed.** The producer cannot emit one and
+ * the server's projection refuses one, and this is the third refusal, because
+ * this is the copy that protects a browser talking to a server it is not the
+ * same age as.
+ */
+export function parseAccountUsage(raw: unknown): AccountUsageView {
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): AccountUsageView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent a per-account usage reading that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "unsupported-schema": {
+      const saw = nonBlank(raw["saw"]);
+      const known = raw["known"];
+      if (saw === null || typeof known !== "number" || !Number.isFinite(known)) {
+        return unreadable("the server refused the checkpoint's schema but did not say which versions were involved");
+      }
+      return { kind: "unsupported-schema", saw, known };
+    }
+    case "no-reading":
+    case "reading-unreadable": {
+      /* Two arms, one parse, and the distinction kept — `parseUsage`'s twin.
+         *No pass has run* is ordinary; *a reading is there and cannot be read*
+         is a producer and a consumer that have come apart. */
+      const why = nonBlank(raw["why"]);
+      const at = iso(raw["at"]);
+      if (why === null || at === null) {
+        return unreadable("the server said there is no usable per-account reading but did not say why, or when it looked");
+      }
+      return str(raw["kind"]) === "no-reading"
+        ? { kind: "no-reading", why, at }
+        : { kind: "reading-unreadable", why, at };
+    }
+    case "published": {
+      const coordinatorWrittenAt = iso(raw["coordinatorWrittenAt"]);
+      const collectedAt = iso(raw["collectedAt"]);
+      if (coordinatorWrittenAt === null || collectedAt === null) {
+        return unreadable("the server published a per-account reading with no readable clock on it");
+      }
+      const rawAccounts = raw["accounts"];
+      if (!Array.isArray(rawAccounts)) return unreadable("the server published a per-account reading with no accounts in it");
+      const accounts: AccountUsageSection[] = [];
+      for (const entry of rawAccounts) {
+        const section = parseAccountUsageSection(entry);
+        if (section === null) return unreadable("the server published an account section this page cannot read");
+        accounts.push(section);
+      }
+      if (accounts.length === 0) return unreadable("the server published a per-account reading with no accounts in it");
+      const rawProblems = raw["problems"];
+      const problems = Array.isArray(rawProblems)
+        ? rawProblems.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        : [];
+      return { kind: "published", collectedAt, accounts, problems, coordinatorWrittenAt };
+    }
+    default:
+      return unreadable(
+        `this page does not know the per-account usage reading ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
 /**
  * The incidents, and the coverage that is the only reason a zero means
  * anything.
@@ -3259,6 +3449,12 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          SHIFTED. Fails the same way as the two above it — never throws, never
          fails the payload. */
       usage: parseUsage(raw["usage"]),
+      /* The fourth projection out of the same read, and unshifted for exactly
+         `parseUsage`'s reason: every instant in it is a reset time drawn on the
+         wall clock in three zones, and only the per-section `takenAt` becomes
+         an age — which `AccountUsageSections` applies the skew to itself, the
+         way `UsageCard` does. */
+      accountUsage: parseAccountUsage(raw["accountUsage"]),
       currentWork: parseCurrentWork(
         raw["currentWork"],
         (value) => shiftToBrowserClock(value, clockSkew) ?? value,
