@@ -14,6 +14,7 @@ import { claimFromSnapshot, describeClaim, type OverseerClaim } from "../fleet/o
 import { groupUsageIncidents } from "../fleet/usage-feed.js";
 import { zonedLine } from "../fleet/zones.js";
 import type { OverseerEvent } from "./diff.js";
+import { splitJsonl } from "./jsonl.js";
 import { describeRuleOutcome } from "./rules.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "./notes.js";
 import {
@@ -22,6 +23,7 @@ import {
   STORE_SCHEMA,
   isProcessAlive,
   readCheckpoint,
+  parseEventLines,
   type CheckpointRead,
   type RegisterEntry,
   type StatusSince,
@@ -92,50 +94,38 @@ export function daemonStanding(input: StandingInput): DaemonStanding {
   };
 }
 
-export type EventTail = { events: OverseerEvent[]; unreadable: number; total: number };
-
-const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
-  "session-seen": true,
-  "session-status": true,
-  "tmux-session-gone": true,
-  "session-replaced": true,
-  "session-wait-restarted": true,
-  "session-row-changed": true,
-  "session-pane-replaced": true,
-  "session-execution-changed": true,
-  "job-occurrence-reserved": true,
-  "job-occurrence-started": true,
-  "job-occurrence-finished": true,
-  "job-occurrence-refused": true,
-  "job-occurrence-unknown": true,
-  "rule-intended": true,
-  "rule-settled": true,
+export type EventTail = {
+  events: OverseerEvent[];
+  unreadable: number;
+  tornTail: string | null;
+  total: number;
+  cause: string | null;
 };
 
 export function readEventTail(root: string, limit: number): EventTail {
   const path = join(root, EVENTS_FILE);
-  if (!existsSync(path)) return { events: [], unreadable: 0, total: 0 };
-  const events: OverseerEvent[] = [];
-  let unreadable = 0;
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    if (line.trim() === "") continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      unreadable += 1;
-      continue;
-    }
-    if (isEvent(parsed)) events.push(parsed);
-    else unreadable += 1;
+  if (!existsSync(path)) return { events: [], unreadable: 0, tornTail: null, total: 0, cause: null };
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(path);
+  } catch (cause) {
+    return {
+      events: [],
+      unreadable: 0,
+      tornTail: null,
+      total: 0,
+      cause: `could not read ${path}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
   }
-  return { events: events.slice(-limit), unreadable, total: events.length };
-}
-
-function isEvent(value: unknown): value is OverseerEvent {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return typeof record["kind"] === "string" && Object.hasOwn(EVENT_KINDS, record["kind"]) && typeof record["at"] === "string";
+  const split = splitJsonl(bytes);
+  const parsed = parseEventLines(split.completeLines);
+  return {
+    events: parsed.events.slice(-limit),
+    unreadable: parsed.unreadable.length,
+    tornTail: split.tornTail,
+    total: parsed.events.length,
+    cause: null,
+  };
 }
 
 export function describeEvent(event: OverseerEvent): string {
@@ -211,8 +201,25 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
   const read = readCheckpoint(root);
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
   const notes = readNotes(root);
-  const lastNote = notes.notes.at(-1) ?? null;
-  const standing = daemonStanding({ read, lastNote, nowMs, alive: isProcessAlive });
+  let lastNote: DaemonNote | null = null;
+  let notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null = null;
+  if (notes.kind === "unreadable") {
+    notesProblem = { label: "UNREADABLE", detail: notes.cause };
+  } else {
+    lastNote = notes.notes.at(-1) ?? null;
+    if (notes.unreadable > 0) {
+      notesProblem = { label: "UNREADABLE", detail: `${notes.unreadable} complete line(s) could not be parsed` };
+    } else if (notes.tornTail !== null) {
+      notesProblem = { label: "INCOMPLETE", detail: "the final note was observed before its newline" };
+    }
+  }
+  const standing: DaemonStanding =
+    notesProblem !== null
+      ? {
+          state: "cannot-tell",
+          detail: `the daemon's notes are not complete (${notesProblem.detail}), so this reader will not infer whether it stopped cleanly`,
+        }
+      : daemonStanding({ read, lastNote, nowMs, alive: isProcessAlive });
   const lines: string[] = [`Overseer store: ${root}`, ""];
   lines.push(`daemon      ${standing.state.toUpperCase().replaceAll("-", " ")} — ${standing.detail}`);
 
@@ -249,10 +256,17 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
       : `overseer    ${describeClaim(claim, escapeName)}`,
   );
 
-  const open = openConditions(notes.notes);
-  if (open.length === 0) lines.push("conditions  all clear");
-  for (const condition of open) {
-    lines.push(`conditions  DEGRADED ${condition.condition} since ${condition.since} (${describeAge(nowMs - Date.parse(condition.since))}) — ${condition.why}`);
+  if (notesProblem !== null) {
+    lines.push(`notes       ${notesProblem.label} — ${notesProblem.detail}`);
+    lines.push(
+      `conditions  unknown — the daemon notes that carry condition edges are ${notesProblem.label === "INCOMPLETE" ? "incomplete" : "unreadable"}`,
+    );
+  } else if (notes.kind === "read") {
+    const open = openConditions(notes.notes);
+    if (open.length === 0) lines.push("conditions  all clear");
+    for (const condition of open) {
+      lines.push(`conditions  DEGRADED ${condition.condition} since ${condition.since} (${describeAge(nowMs - Date.parse(condition.since))}) — ${condition.why}`);
+    }
   }
 
   if (checkpoint !== null) {
@@ -263,10 +277,20 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
   }
 
   const tail = readEventTail(root, 5);
-  const size = existsSync(join(root, EVENTS_FILE)) ? statSync(join(root, EVENTS_FILE)).size : 0;
-  lines.push("", `events      ${tail.total} in the log (${Math.round(size / 1024)} KB)${tail.unreadable > 0 ? `, ${tail.unreadable} unreadable lines` : ""}`);
-  for (const event of tail.events) lines.push(`            ${describeEvent(event)}`);
-  const recent = notes.notes.slice(-4);
+  if (tail.cause !== null) {
+    lines.push("", `events      UNREADABLE — ${tail.cause}`);
+  } else {
+    const size = existsSync(join(root, EVENTS_FILE)) ? statSync(join(root, EVENTS_FILE)).size : 0;
+    lines.push(
+      "",
+      `events      ${tail.total} in the log (${Math.round(size / 1024)} KB)` +
+        `${tail.unreadable > 0 ? `, ${tail.unreadable} unreadable lines` : ""}` +
+        `${tail.tornTail === null ? "" : ", torn final line"}`,
+    );
+    for (const event of tail.events) lines.push(`            ${describeEvent(event)}`);
+    if (tail.tornTail !== null) lines.push(`            torn tail: ${JSON.stringify(tail.tornTail)}`);
+  }
+  const recent = notes.kind === "read" ? notes.notes.slice(-4) : [];
   if (recent.length > 0) {
     lines.push("", "overseer   ");
     for (const note of recent) lines.push(`            ${note.at.slice(11, 19)}  ${describeNote(note)}`);

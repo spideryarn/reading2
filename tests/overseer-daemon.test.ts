@@ -17,7 +17,7 @@
  * is where sockets are tested. Every store root is a temp directory: the real
  * `~/.overseer` is never touched.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -108,7 +108,13 @@ async function run(
     ...(options.schedulerDetail === undefined ? {} : { schedulerDetail: options.schedulerDetail }),
   });
   expect(outcome.kind).toBe(options.outcome ?? "stopped");
-  return { notes: readNotes(root).notes, events: eventsIn(root) };
+  return { notes: notesIn(root), events: eventsIn(root) };
+}
+
+function notesIn(root: string): DaemonNote[] {
+  const read = readNotes(root);
+  if (read.kind === "unreadable") throw new Error(read.cause);
+  return read.notes;
 }
 
 function eventsIn(root: string): OverseerEvent[] {
@@ -688,6 +694,26 @@ describe("a restart does not re-announce the fleet", () => {
 });
 
 describe("refusing to be the second daemon", () => {
+  test("an unreadable note log is a named startup refusal and leaves no store lock", async () => {
+    const root = tempRoot();
+    const path = join(root, NOTES_FILE);
+    mkdirSync(path);
+
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      log: () => undefined,
+      source: () => (async function* () {})(),
+    });
+
+    expect(outcome).toMatchObject({
+      kind: "refused",
+      refusal: { reason: "unusable-log", path },
+    });
+    expect(existsSync(join(root, "overseer.lock"))).toBe(false);
+  });
+
   test("a running daemon's lock stops a second one, and the second says who has it", async () => {
     const root = tempRoot();
     let release = (): void => undefined;
@@ -725,7 +751,7 @@ describe("refusing to be the second daemon", () => {
     // AND THE REFUSED ONE WROTE NOTHING. A second daemon that logged its own
     // start into the same file would be the first line of a history nobody
     // could trust.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.filter((n) => n.kind === "daemon-started").length).toBe(1);
   });
 });
@@ -748,7 +774,7 @@ describe("stopping", () => {
         })(),
     });
     expect(outcome.kind).toBe("stopped");
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.at(-1)?.kind).toBe("daemon-stopped");
     expect(existsSync(join(root, "overseer.lock"))).toBe(false);
     expect(existsSync(join(root, NOTES_FILE))).toBe(true);
@@ -777,7 +803,7 @@ describe("stopping", () => {
     // stopping note, and a lock file naming a pid that is probably still alive
     // because the process that died was a test worker. The two want different
     // things done about them, so they must not look alike.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const last = notes.at(-1);
     if (last?.kind !== "daemon-stopped") throw new Error("expected a stopping note");
     expect(last.why).toContain("the daemon threw");
@@ -857,7 +883,7 @@ describe("the scheduler on the daemon's clock", () => {
     expect(lines.some((line) => line.includes("STUCK"))).toBe(true);
 
     // REPORTED DURABLY, not only on a console somebody was not keeping.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const unaccounted = notes.filter((note) => note.kind === "job-unaccounted");
     expect(unaccounted.length).toBeGreaterThanOrEqual(1);
     expect(unaccounted[0]?.kind === "job-unaccounted" && unaccounted[0].reason).toBe("lease-expired");
