@@ -5010,3 +5010,91 @@ export type StartRevision =
  * and written beside it as `dist/build-stamp.json` (`vite.fleet.config.ts`).
  */
 export type BuildStamp = StartRevision & { builtAt: string };
+
+/** A build stamp read back from `dist/build-stamp.json`, or why there is none. Never defaulted. */
+export type BuildStampReading = { kind: "stamp"; stamp: BuildStamp } | { kind: "unknown"; why: string };
+
+/* ── Diagnostics, GET /api/diagnostics (docs/plans/260910f, Stage 3) ──────── */
+
+/**
+ * What one file in the Overseer's store looks like from the outside
+ * (`tools/fleet/store-probe.ts` says what each arm means and why four answers
+ * must not collapse). `schema: null` is "could not read one", and
+ * `schemaUnread` says why; it is null exactly when `schema` is not.
+ */
+export type StoreFileProbe =
+  | { name: string; state: "absent" }
+  | { name: string; state: "unreadable"; why: string }
+  | {
+      name: string;
+      state: "present";
+      bytes: number;
+      /** Against the clock the caller gave; negative when the file is from the future. */
+      mtimeAgeMs: number;
+      format: "json" | "jsonl" | "other";
+      schema: number | null | "none-declared";
+      /** Why `schema` is null; null whenever it is not. */
+      schemaUnread: string | null;
+      /** JSONL only: the file does not end in a newline. `null` for any other format. */
+      tornTail: boolean | null;
+      /** JSONL only: the last complete record's own timestamp, when it has one. */
+      lastLineAt?: string;
+    };
+
+/** An instant the server holds, or why it holds none. Ages are computed by the reader against `composedAt`. */
+export type DiagnosticsInstant = { kind: "at"; at: string } | { kind: "never"; why: string };
+
+/**
+ * Which store directory the dashboard reads, and how it came to be that one.
+ * `label` is what a person types to get the same answer: `~/.overseer`, or
+ * `OVERSEER_STORE_DIR=<path>`.
+ */
+export type DiagnosticsStorePath =
+  | { kind: "default"; label: string; path: string }
+  | { kind: "override"; label: string; path: string }
+  | { kind: "unknown"; why: string };
+
+/**
+ * The daemon's start stamp: the LAST `daemon-started` note in `daemon.jsonl`
+ * whose `instanceId` is the one the checkpoint's heartbeat names — never
+ * another instance's. `not-stamped` is a note written before revision stamps
+ * existed. Anything missing, malformed, torn or uncorrelated is `unknown`.
+ */
+export type DiagnosticsDaemonStart =
+  | { kind: "stamped"; instanceId: string; at: string; revision: StartRevision }
+  | { kind: "not-stamped"; instanceId: string; at: string }
+  | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/diagnostics` — what the dashboard can say about itself and the
+ * store without the Overseer's code (plan 260910f D5, amended by Sol's F2).
+ * Three bundle facts are kept apart: `bundleAtStart` (read once, before the
+ * listeners opened), `bundleOnDisk` (read per request) and — in the browser —
+ * the tab's own compiled `__FLEET_BUILD__`. Whether the daemon holds this
+ * checkout's job list is NOT here: only `overseer diagnose` can compute it.
+ */
+export type DiagnosticsSummary = {
+  schema: 1;
+  composedAt: string;
+  dashboard: {
+    /** This server run's instance id (`instance.ts`). */
+    instance: string;
+    start: StartRevision;
+    bundleAtStart: BuildStampReading;
+    bundleOnDisk: BuildStampReading;
+  };
+  collector: {
+    /** When the loop last STARTED a collection (state.ts § `attemptedAt`). */
+    attempted: DiagnosticsInstant;
+    /** When the snapshot being served was collected. */
+    collected: DiagnosticsInstant;
+    lastError: { kind: "none" } | { kind: "error"; message: string };
+  };
+  /** When the box-health reading being served was taken. */
+  health: DiagnosticsInstant;
+  store: {
+    path: DiagnosticsStorePath;
+    files: { kind: "probed"; files: StoreFileProbe[] } | { kind: "unknown"; why: string };
+  };
+  daemon: DiagnosticsDaemonStart;
+};

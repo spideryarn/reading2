@@ -28,6 +28,8 @@ import {
   GATE_FIXTURES,
   judgeClientBuild,
   judgeDeployments,
+  stagedTooLong,
+  STAGED_GRACE_MS,
   judgeHealth,
   judgeLogs,
   ledgerDivergence,
@@ -279,6 +281,40 @@ describe("judgeDeployments", () => {
 
   it("calls a promoted deployment live", () => {
     expect(judgeDeployments([deployment()], SHA).kind).toBe("live");
+  });
+});
+
+/**
+ * `STAGED` is the ordinary gap between "the build finished" and "Vercel has
+ * moved the production aliases onto it", and on 2026-09-10 that gap outlived
+ * one poll: the deploy reported `promotion FAIL` for a deploy that was live a
+ * minute later. What made it worse than a wrong line is the remedy it prints
+ * next to it — `vercel rollback`, the one command that turns off production
+ * domain auto-assignment and makes the *following* deploy build and silently
+ * go nowhere. So a first sighting must be waited on, not failed on.
+ */
+describe("stagedTooLong", () => {
+  it("does not call a deployment stuck the moment it is first seen staged", () => {
+    const seen = 1_000_000;
+    expect(stagedTooLong(seen, seen)).toBe(false);
+  });
+
+  it("keeps waiting a minute in", () => {
+    const seen = 1_000_000;
+    expect(stagedTooLong(seen, seen + 60_000)).toBe(false);
+  });
+
+  it("calls it stuck once the grace has passed", () => {
+    const seen = 1_000_000;
+    expect(stagedTooLong(seen, seen + STAGED_GRACE_MS)).toBe(true);
+    expect(stagedTooLong(seen, seen + STAGED_GRACE_MS + 1)).toBe(true);
+  });
+
+  /* The wait has to fit inside waitForDeployment's own 12-minute deadline,
+   * or "gave up waiting" replaces the promotion failure it was meant to spare. */
+  it("leaves room inside the 12-minute deadline for the build itself", () => {
+    expect(STAGED_GRACE_MS).toBeGreaterThan(60_000);
+    expect(STAGED_GRACE_MS).toBeLessThan(6 * 60_000);
   });
 });
 

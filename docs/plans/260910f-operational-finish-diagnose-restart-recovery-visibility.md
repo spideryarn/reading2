@@ -166,7 +166,21 @@ fails safely to unknown. All six accepted; an Opus subagent fixes them.
 
 ### Stage 3 — Web summary
 
-- [ ] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
+**Status, 2026-09-10: built (Opus subagent), with F2, F4 and F8 folded in; `server.ts` wired by hand
+because the agent held off while another was editing it. 70/70 across six fleet suites; `build:fleet`
+0. Browser check and stage review wait on the Overseer's pause (the account's five-hour window).**
+
+**What the plan did not know.** (1) The runtime parser cannot live in the client file: the node
+tsconfig would type-check any browser file `diagnose.ts` imports, so it sits in
+`diagnostics-parse.ts` and the client re-exports it. (2) A fixed allow-list that refuses every other
+name would contradict F42 (a row for every entry), so allow-listed names are read and any other
+plain name is only `lstat`ed. (3) **The old probe hung for ever on a FIFO** — `openSync` blocks; it
+now opens `O_NOFOLLOW | O_NONBLOCK` after an `lstat`. (4) The JSON ceiling is 1 MB, not 4; the
+largest live file is ~110 KB. (5) App-level panel tests now make one failing relative `fetch`,
+because `App` does not pass the section an api — harmless, and threading one through is a small
+follow-up.
+
+- [x] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
   boundary; `DiagnosticsSection.tsx` in Box health: each service's revision and verdict, the bundle
   this tab runs vs the bundle on disk vs the one the server started with, collector clocks, store
   files. Browser check at desktop and phone widths on a fixture-backed server (Sonnet subagent).
@@ -301,7 +315,25 @@ returned. Every finding accepted; where it lands:
 
 ## Status
 
-2026-09-10, ~19:30 UTC. On `dev` (`6e0d42c0`): the plan and its review dispositions, Stage 1
+2026-09-10, ~20:20 UTC. **All of it is on `dev` (`84b8c2a4`).** The full suite on the merged tree
+found one regression of this branch's own: `tests/fleet-work-evidence-e2e.test.tsx` had been red on
+`dev` since Stage 1 (`1c6e1e4e`). `runOverseer`'s first line derived its checkout with
+`fileURLToPath(new URL("../..", import.meta.url))`, which throws under jsdom, so a diagnostic stopped
+a daemon starting — invisible to every daemon test, because all of them run under node. Fixed in
+`3d6e851b`: `readModuleStartRevision` owns the derivation and makes a module with no file `unknown`,
+for the daemon and the dashboard both. Red first; the postmortem waits on the pause. Otherwise the
+suite's only reds were the two environment ones (`cold-start-lazy-imports`, `pdf-bundle-trace`).
+
+~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's
+fixes (`bfc0c3bf`), the plan review's F3/F1 (`52267541`), Stage 4c (`41508b7d`), and Stage 3 with the
+Stage 2 review's six P1 fixes (`b5bdea14` — one commit because they share files). `dev` merged in
+(19 commits, no conflicts), typecheck 0, full suite running on the merged tree. Paused by the
+Overseer at ~19:40 for the account's five-hour window: the narrow Sol check of the ten P1 fixes, the
+Fable pass, the browser check and the debrief wait for its resume. The live daemon was restarted by
+the Overseer meanwhile and now shows a recorded start HEAD; the live dashboard answers 404 on
+`/api/diagnostics` until it is restarted onto this code.
+
+Earlier, ~19:30 UTC. On `dev` (`6e0d42c0`): the plan and its review dispositions, Stage 1
 (`cb4c3ba7`), Stage 2 (`3c69ddcd`), Stage 4a (`349def9c`) and Stage 4b (`e7f39e4e`). In flight: the
 Stage 1 review's fixes (S1-F1–F4), the plan review's F3 standing fix and F1 wording, Stage 3 (the
 web summary, with F2/F4/F8), Stage 4c (killed daemon process, F6; the outage test strengthened,
