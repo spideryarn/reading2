@@ -315,7 +315,16 @@ returned. Every finding accepted; where it lands:
 
 ## Status
 
-2026-09-10, ~19:30 UTC. On `dev` (`6e0d42c0`): the plan and its review dispositions, Stage 1
+2026-09-10, ~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's
+fixes (`bfc0c3bf`), the plan review's F3/F1 (`52267541`), Stage 4c (`41508b7d`), and Stage 3 with the
+Stage 2 review's six P1 fixes (`b5bdea14` — one commit because they share files). `dev` merged in
+(19 commits, no conflicts), typecheck 0, full suite running on the merged tree. Paused by the
+Overseer at ~19:40 for the account's five-hour window: the narrow Sol check of the ten P1 fixes, the
+Fable pass, the browser check and the debrief wait for its resume. The live daemon was restarted by
+the Overseer meanwhile and now shows a recorded start HEAD; the live dashboard answers 404 on
+`/api/diagnostics` until it is restarted onto this code.
+
+Earlier, ~19:30 UTC. On `dev` (`6e0d42c0`): the plan and its review dispositions, Stage 1
 (`cb4c3ba7`), Stage 2 (`3c69ddcd`), Stage 4a (`349def9c`) and Stage 4b (`e7f39e4e`). In flight: the
 Stage 1 review's fixes (S1-F1–F4), the plan review's F3 standing fix and F1 wording, Stage 3 (the
 web summary, with F2/F4/F8), Stage 4c (killed daemon process, F6; the outage test strengthened,
