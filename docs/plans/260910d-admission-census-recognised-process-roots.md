@@ -161,7 +161,7 @@ reviews and commits.
 - [x] The nine tests from the task file, red first, plus the stale parent link, the kernel root,
       the composition, and a census the browser cannot parse leaving the forecast intact.
 - [x] Measure the pass on the box, wall time and event-loop stall.
-- [ ] Sol code review, two rounds.
+- [x] Sol code review, two rounds.
 
 **Status:** implemented by **Codex (GPT Sol, `workspace-write`)** in one run; this session read the
 diff, ran the gates (six focused files, 603 tests, typecheck green) and measured it on the box.
@@ -235,3 +235,25 @@ not allowed to fix.
 | F59 | A read resolving after `stop()` still folded and wrote the cache; unrelated composition tests started real `/proc` reads | **Fixed** |
 | F60 | The cadence was written twice, and a throwing `readCensus` was stamped with the route's copy | **Fixed.** `admission-constants.ts` owns it, and the chosen cadence reaches the route |
 | F61 | `isVitestRunner` matches the vitest path in *any* argument, so `vim /repo/node_modules/.bin/vitest` is a runner. The census over-counts, and **the Kill "test suites" action would kill that editor** | **Fixed** after the Overseer widened the authorisation (Decision 1). Implemented by Codex in its own run so round 2 reviews it as someone else's code: argv0 itself, or the first non-option argument after `node`/`nodejs`, skipping the values of `--require`/`-r`, `--import`, `--conditions`/`-C`, `--loader`/`--experimental-loader`; `node -` is not a runner. Red first: vim, grep, cat and an unrelated node script each returned `true`; the vim row through `killVerdict` returned `kill: true`; the census counted it as a test root. No existing test changed. **The test-suites kill policy now refuses more, never kills more** |
+
+## Review dispositions — code review round 2
+
+Codex, 2026-09-10, on `1652260d`. It spent the review on round 1's fixes and F61, fixed every
+in-scope finding red-first, then gave the final P1 fix a narrow independent recheck. Verdict
+**ACCEPT after fixes**: no established P0 or P1 remains. Discovery closes with this round.
+
+| ID | Severity and evidence | Disposition |
+|---|---|---|
+| F62 | **P1, established.** `node --title /repo/node_modules/.bin/vitest -e setInterval(()=>{},1000)` is a non-Vitest Node program whose title value merely looks like a runner, but F61 still returned `true` and Kill returned `kill: true`. The first attempted fix exposed the inverse arity trap: with `node --abort-on-uncaught-exception <typescript>/tsc.js /repo/node_modules/.bin/vitest`, guessing that an unknown boolean option consumed the next token skipped the real TypeScript script and again killed the process as Vitest. Both shapes were run through real Node as well as the predicate | **Fixed.** Known value-taking options skip their values, known valueless options continue, and an unknown bare Node option refuses classification rather than guessing. Eval, print, package-run, Node-test and stdin modes cannot promote a later argument into the ordinary script position. Tests went red on both unsafe Kill verdicts; required real shapes cover `node`, `nodejs`, `--inspect`, `--`, separate and inline preload options and a U+2423 path. The final narrow recheck passed 16 adversarial shapes. New ⇒ old remains structural, so Kill only ever refuses more |
+| F63 | **P2, established.** `node <repo>/node_modules/vitest/dist/../../typescript/lib/tsc.js --version` ran TypeScript but the lexical `vitest/dist/.*.js` pattern called it Vitest | **Fixed.** A path must match both before and after POSIX normalisation. The test went red on traversal and keeps a real `vitest/dist/cli.js` positive. The conjunctive check cannot add a Kill match |
+| F64 | **P2, established.** `isVitestWorker` searched every argument, so a real CLI runner whose later test path was `vitest/dist/workers/example.test.js` disappeared from the census | **Fixed.** The worker exclusion reuses `isVitestRunner` over prefixes to locate the executable position, then tests that token only. The later-argument fixture went red first; the captured `forks.js` worker remains excluded |
+| F65 | **P2, established.** `stop()` suppressed a late successful census read but a late rejection still replaced the stopped cache with `failed` and logged it | **Fixed.** The catch has the same stopped guard as success. A deferred rejection test went red on both the cache mutation and log |
+| F66 | **P2, established.** A rejected browser request scheduled no successor, while a never-settling request permanently arrested the loop and poisoned later mounts through `pendingForecasts` | **Fixed.** Requests now have a 20-second bound and AbortSignal; success, rejection and timeout all end-chain the next 30-second read. Last-consumer teardown aborts and evicts an abandoned request, while consumer counting preserves StrictMode's one shared GET. Rejection, timeout and remount fixtures went red first; signal forwarding and cleanup assertions pin the finished lifecycle |
+| F67 | **P2, established.** The 30-second timer fetched while `document.visibilityState` was `hidden`, and becoming visible had no catch-up | **Fixed.** Hidden ticks retain the cadence without fetching; `visibilitychange` clears that timer and asks once on return. The hidden fixture went red at two requests instead of one, and the finished test was mutation-checked by disabling the guard |
+
+Round 2 also checked and found no defect in the census carried by `no-answer`, the
+`processesSeen` inequality (every producer bucket is disjoint and unrecognised/helper rows are
+allowed slack), the empty-argv ancestor rule, or importing the pure constants leaf into the browser
+bundle. Final evidence: seven focused files, **778 tests green**; all four typecheck projects green;
+`build:fleet` green. A whole `npm test` attempt could not start its database lanes because this
+sandbox cannot connect to the local Postgres port; it did not report a test failure.

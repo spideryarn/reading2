@@ -51,7 +51,16 @@ function isChromeHelper(row: Extract<CensusProcRow, { kind: "read" }>, censusCla
 }
 
 function isVitestWorker(row: Extract<CensusProcRow, { kind: "read" }>, censusClass: AdmissionCensusClass): boolean {
-  return censusClass === "test" && row.args.split(" ").some((token) => token.includes("/node_modules/vitest/dist/workers/"));
+  if (censusClass !== "test") return false;
+  const parts = row.args.split(" ");
+  for (let i = 0; i < parts.length; i += 1) {
+    // Reuse the runner recogniser to locate its executable position. Looking
+    // through every later argument would hide a real runner whose test path
+    // happened to live below Vitest's workers directory.
+    if (!isVitestRunner({ args: parts.slice(0, i + 1).join(" ") })) continue;
+    return parts[i]?.includes("/node_modules/vitest/dist/workers/") ?? false;
+  }
+  return false;
 }
 
 type AncestryAnswer = "root" | "nested" | "uncertain";
@@ -291,7 +300,7 @@ export function startCensusTask(options: StartCensusTaskOptions): CensusTask {
         cadenceMs: options.cadenceMs,
       };
     } catch (cause) {
-      recordFailure(cause);
+      if (!stopped) recordFailure(cause);
     }
 
     if (stopped) return;

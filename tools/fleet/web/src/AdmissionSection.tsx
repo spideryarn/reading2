@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-import { ADMISSION_CENSUS_CADENCE_MS } from "../../admission-constants";
+import {
+  ADMISSION_CENSUS_CADENCE_MS,
+  ADMISSION_REQUEST_TIMEOUT_MS,
+} from "../../admission-constants";
 import {
   DATE_LIMIT_MS,
   type AdmissionApi,
@@ -325,21 +328,79 @@ function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: Clock
   );
 }
 
-/* One request per API while it is pending. Besides ordinary quick remounts,
-   this covers React StrictMode's setup-cleanup-setup rehearsal: both mounts
-   observe the same harmless GET, while each keeps its own state-write guard. */
-const pendingForecasts = new WeakMap<AdmissionApi, Promise<AdmissionView>>();
+/* One bounded request per API while it is pending. The consumer count lets
+   StrictMode's setup-cleanup-setup rehearsal share its harmless GET, while a
+   real unmount abandons it after that synchronous rehearsal has had a chance
+   to acquire the same request. */
+type PendingForecast = {
+  promise: Promise<AdmissionView>;
+  consumers: number;
+  cancel(): void;
+};
 
-function forecastOnce(api: AdmissionApi): Promise<AdmissionView> {
-  const pending = pendingForecasts.get(api);
-  if (pending !== undefined) return pending;
-  const request = api.forecast();
-  pendingForecasts.set(api, request);
-  const clear = (): void => {
-    if (pendingForecasts.get(api) === request) pendingForecasts.delete(api);
+const pendingForecasts = new WeakMap<AdmissionApi, PendingForecast>();
+
+function newPendingForecast(api: AdmissionApi): PendingForecast {
+  const controller = new AbortController();
+  let rejectInterruption!: (cause: Error) => void;
+  const interruption = new Promise<never>((_resolve, reject) => {
+    rejectInterruption = reject;
+  });
+  const request = Promise.resolve().then(() => api.forecast({ signal: controller.signal }));
+  const pending: PendingForecast = {
+    promise: Promise.race([request, interruption]),
+    consumers: 0,
+    cancel() {
+      controller.abort();
+      rejectInterruption(new Error("the admission request was abandoned"));
+    },
   };
-  void request.then(clear, clear);
-  return request;
+  const timeout = setTimeout(() => {
+    controller.abort();
+    rejectInterruption(new Error(`the admission request gave no answer in ${ADMISSION_REQUEST_TIMEOUT_MS / 1_000}s`));
+  }, ADMISSION_REQUEST_TIMEOUT_MS);
+  const clear = (): void => {
+    clearTimeout(timeout);
+    if (pendingForecasts.get(api) === pending) pendingForecasts.delete(api);
+  };
+  void pending.promise.then(clear, clear);
+  pendingForecasts.set(api, pending);
+  return pending;
+}
+
+function forecastOnce(api: AdmissionApi): { promise: Promise<AdmissionView>; release(): void } {
+  const pending = pendingForecasts.get(api) ?? newPendingForecast(api);
+  pending.consumers += 1;
+  let released = false;
+  return {
+    promise: pending.promise,
+    release() {
+      if (released) return;
+      released = true;
+      pending.consumers -= 1;
+      queueMicrotask(() => {
+        if (pending.consumers !== 0 || pendingForecasts.get(api) !== pending) return;
+        pendingForecasts.delete(api);
+        pending.cancel();
+      });
+    },
+  };
+}
+
+function tabIsHidden(): boolean {
+  return typeof document !== "undefined" && document.visibilityState === "hidden";
+}
+
+function failedRefresh(previous: AdmissionView | null, cause: unknown): AdmissionView {
+  const detail = cause instanceof Error && cause.message.trim() !== ""
+    ? cause.message
+    : "the request failed without a readable reason";
+  return {
+    kind: "no-answer",
+    source: "browser",
+    why: `the admission refresh failed: ${detail}`,
+    census: previous?.census ?? null,
+  };
 }
 
 export function AdmissionSection({ api, skew }: { api: AdmissionApi; skew: ClockSkew }): ReactNode {
@@ -347,17 +408,53 @@ export function AdmissionSection({ api, skew }: { api: AdmissionApi; skew: Clock
 
   useEffect(() => {
     let alive = true;
+    let inFlight = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const refresh = async (): Promise<void> => {
-      const answer = await forecastOnce(api);
+    let releaseInFlight: (() => void) | null = null;
+    const clearTimer = (): void => {
+      if (timer === null) return;
+      clearTimeout(timer);
+      timer = null;
+    };
+    const schedule = (): void => {
       if (!alive) return;
-      setView(answer);
+      clearTimer();
       timer = setTimeout(() => void refresh(), ADMISSION_CENSUS_CADENCE_MS);
     };
+    const refresh = async (): Promise<void> => {
+      if (!alive || inFlight) return;
+      if (tabIsHidden()) {
+        schedule();
+        return;
+      }
+      inFlight = true;
+      const request = forecastOnce(api);
+      releaseInFlight = request.release;
+      try {
+        const answer = await request.promise;
+        if (alive) setView(answer);
+      } catch (cause) {
+        if (alive) setView((previous) => failedRefresh(previous, cause));
+      } finally {
+        request.release();
+        if (releaseInFlight === request.release) releaseInFlight = null;
+        inFlight = false;
+        schedule();
+      }
+    };
+    const onVisible = (): void => {
+      if (document.visibilityState !== "visible" || inFlight) return;
+      clearTimer();
+      void refresh();
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
     void refresh();
     return () => {
       alive = false;
-      if (timer !== null) clearTimeout(timer);
+      clearTimer();
+      releaseInFlight?.();
+      releaseInFlight = null;
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
     };
   }, [api]);
 

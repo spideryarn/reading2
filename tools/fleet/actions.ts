@@ -55,6 +55,8 @@
  *    outside the kernel; it is narrowed by re-reading immediately before, not
  *    eliminated.
  */
+import { posix } from "node:path";
+
 import { descendsFrom } from "./steer.js";
 /* The vocabulary's own shapes live in wire.ts, because the browser renders the
    buttons from what this file describes and cannot import a module that reaches
@@ -1007,10 +1009,14 @@ function tokens(args: string): string[] {
  */
 export function isVitestRunner(proc: Pick<ProcRecord, "args">): boolean {
   const parts = tokens(proc.args);
-  const isVitestExecutable = (part: string): boolean =>
+  const matchesVitestPath = (part: string): boolean =>
     part.endsWith("/node_modules/.bin/vitest") ||
     part.endsWith("/node_modules/vitest/vitest.mjs") ||
     /\/node_modules\/vitest\/dist\/.*\.m?js$/.test(part);
+  // Keep this a subset of the old lexical matcher: normalisation may reject a
+  // traversal out of Vitest, but must never create a new kill match.
+  const isVitestExecutable = (part: string): boolean =>
+    matchesVitestPath(part) && matchesVitestPath(posix.normalize(part));
 
   const argv0 = parts[0];
   if (argv0 === undefined) return false;
@@ -1019,6 +1025,28 @@ export function isVitestRunner(proc: Pick<ProcRecord, "args">): boolean {
   const argv0Basename = argv0.slice(argv0.lastIndexOf("/") + 1);
   if (argv0Basename !== "node" && argv0Basename !== "nodejs") return false;
 
+  // A bare option not listed here refuses classification. Node adds both flags
+  // and value-taking options over time; guessing either arity can skip the real
+  // script and turn a later Vitest-shaped argument into a kill match.
+  const optionsWithoutSeparateValues = new Set([
+    "--",
+    "-c",
+    "--check",
+    "-i",
+    "--interactive",
+    "--abort-on-uncaught-exception",
+    "--inspect",
+    "--inspect-brk",
+    "--inspect-wait",
+    "--experimental-import-meta-resolve",
+    "--experimental-vm-modules",
+    "--enable-source-maps",
+    "--no-warnings",
+    "--trace-warnings",
+    "--trace-deprecation",
+    "--watch",
+    "--watch-preserve-output",
+  ]);
   const optionsWithSeparateValues = new Set([
     "--require",
     "-r",
@@ -1027,13 +1055,33 @@ export function isVitestRunner(proc: Pick<ProcRecord, "args">): boolean {
     "-C",
     "--loader",
     "--experimental-loader",
+    "--title",
+    "--icu-data-dir",
+    "--diagnostic-dir",
+    "--inspect-port",
+    "--debug-port",
+    "--redirect-warnings",
+    "--openssl-config",
   ]);
+  const nodeModesWithoutAnEntryPoint = new Set(["-e", "--eval", "-p", "--print", "--run", "--test"]);
   for (let i = 1; i < parts.length; i += 1) {
     const part = parts[i];
     if (part === undefined) return false;
+    if (
+      nodeModesWithoutAnEntryPoint.has(part) ||
+      part.startsWith("--eval=") ||
+      part.startsWith("--print=") ||
+      part.startsWith("--run=") ||
+      (/^-[ep].+/.test(part) && part !== "--")
+    ) return false;
     if (part !== "-" && part.startsWith("-")) {
-      if (optionsWithSeparateValues.has(part)) i += 1;
-      continue;
+      const hasInlineValue = part.includes("=") || /^-[rC].+/.test(part);
+      if (hasInlineValue || optionsWithoutSeparateValues.has(part)) continue;
+      if (optionsWithSeparateValues.has(part)) {
+        i += 1;
+        continue;
+      }
+      return false;
     }
     return isVitestExecutable(part);
   }

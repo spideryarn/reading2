@@ -65,6 +65,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   window.location.hash = "";
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -539,6 +540,18 @@ describe("the Box health admission section", () => {
 });
 
 describe("the defensive admission client", () => {
+  it("passes the caller's abort signal to the admission fetch", async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | null | undefined;
+    const api = makeAdmissionApi(async (_input, init) => {
+      received = init?.signal;
+      return new Response("{}", { status: 500 });
+    });
+
+    await api.forecast({ signal: controller.signal });
+    expect(received).toBe(controller.signal);
+  });
+
   it("turns an unrecognised body into the browser's stated no-answer arm", async () => {
     const { parseAdmission } = await import("../tools/fleet/web/src/admission-client");
     expect(
@@ -730,6 +743,129 @@ describe("the recognised process census block", () => {
     });
     expect(asks).toBe(2);
     expect(container.textContent).toContain("2 recognised Vitest roots");
+  });
+
+  it("retries after a rejected request instead of stopping the refresh loop", async () => {
+    vi.useFakeTimers();
+    let asks = 0;
+    const api: AdmissionApi = {
+      forecast: async () => {
+        asks += 1;
+        if (asks === 1) throw new Error("connection reset");
+        return forecastWithCensus(CENSUS_VALUE);
+      },
+    };
+
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(asks).toBe(2);
+    expect(container.textContent).toContain("2 recognised Vitest roots");
+  });
+
+  it("times out a hung request and does not let it poison a later refresh", async () => {
+    vi.useFakeTimers();
+    let asks = 0;
+    const signals: AbortSignal[] = [];
+    const api: AdmissionApi = {
+      forecast: async (options) => {
+        asks += 1;
+        if (options?.signal !== undefined) signals.push(options.signal);
+        if (asks === 1) return new Promise<AdmissionView>(() => {});
+        return forecastWithCensus(CENSUS_VALUE);
+      },
+    };
+
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000);
+    });
+    expect(asks).toBe(2);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(container.textContent).toContain("2 recognised Vitest roots");
+  });
+
+  it("does not reuse an abandoned hung request after unmount", async () => {
+    let asks = 0;
+    const signals: AbortSignal[] = [];
+    const api: AdmissionApi = {
+      forecast: async (options) => {
+        asks += 1;
+        if (options?.signal !== undefined) signals.push(options.signal);
+        return new Promise<AdmissionView>(() => {});
+      },
+    };
+
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(1);
+
+    act(() => root.unmount());
+    await act(async () => {});
+    expect(signals[0]?.aborted).toBe(true);
+    root = createRoot(container);
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(2);
+  });
+
+  it("removes the visibility catch-up and cadence timer on unmount", async () => {
+    vi.useFakeTimers();
+    let asks = 0;
+    const api: AdmissionApi = {
+      forecast: async () => {
+        asks += 1;
+        return forecastWithCensus(CENSUS_VALUE);
+      },
+    };
+
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(1);
+
+    act(() => root.unmount());
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(asks).toBe(1);
+    root = createRoot(container);
+  });
+
+  it("skips hidden-tab polls and catches up once when the tab becomes visible", async () => {
+    vi.useFakeTimers();
+    let visibility: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    let asks = 0;
+    const api: AdmissionApi = {
+      forecast: async () => {
+        asks += 1;
+        return forecastWithCensus(CENSUS_VALUE);
+      },
+    };
+
+    act(() => root.render(<AdmissionSection api={api} skew={CLOCK_SKEW_UNMEASURED} />));
+    await act(async () => {});
+    expect(asks).toBe(1);
+
+    visibility = "hidden";
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(asks).toBe(1);
+
+    visibility = "visible";
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {});
+    expect(asks).toBe(2);
   });
 
   it("renders not-yet-computed as its own sentence, never as a zero or an empty reading", async () => {

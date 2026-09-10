@@ -482,14 +482,17 @@ function describe(cause: unknown): string {
 }
 
 /** The injectable operation the section uses. Tests replace this, never `fetch`. */
-export type AdmissionApi = { forecast: () => Promise<AdmissionView> };
+export type AdmissionApi = { forecast: (options?: { signal?: AbortSignal }) => Promise<AdmissionView> };
 
 export function makeAdmissionApi(fetchImpl: typeof fetch = fetch): AdmissionApi {
   return {
-    async forecast(): Promise<AdmissionView> {
+    async forecast(options = {}): Promise<AdmissionView> {
       let response: Response;
       try {
-        response = await fetchImpl(ADMISSION_URL, { cache: "no-store" });
+        const request: RequestInit = options.signal === undefined
+          ? { cache: "no-store" }
+          : { cache: "no-store", signal: options.signal };
+        response = await fetchImpl(ADMISSION_URL, request);
       } catch (cause) {
         return noAnswer(`the dashboard could not be reached: ${describe(cause)}`);
       }
@@ -509,5 +512,5 @@ export function makeAdmissionApi(fetchImpl: typeof fetch = fetch): AdmissionApi 
 
 /** The real operation, with `fetch` deliberately resolved only when called. */
 export const httpAdmissionApi: AdmissionApi = {
-  forecast: () => makeAdmissionApi().forecast(),
+  forecast: (options) => makeAdmissionApi().forecast(options),
 };

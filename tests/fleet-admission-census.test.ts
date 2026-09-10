@@ -113,6 +113,18 @@ describe("the admission census recognisers and fold", () => {
     expect(foldCensus([worker, init]).byClass.test).toEqual({ roots: 0, uncertain: 0 });
   });
 
+  it("does not mistake a runner's later workers-path argument for its executable", () => {
+    const runner = row(
+      20,
+      1,
+      "node /repo/node_modules/vitest/dist/cli.js run /repo/node_modules/vitest/dist/workers/example.test.js",
+    );
+    const init = row(1, 0, "/sbin/init", { comm: "systemd", startTicks: 1 });
+
+    expect(recogniseCensusClass(runner)).toBe("test");
+    expect(foldCensus([runner, init]).byClass.test).toEqual({ roots: 1, uncertain: 0 });
+  });
+
   it("does not count vim with a vitest-path argument as a test root", () => {
     const editor = row(20, 1, "vim /repo/node_modules/.bin/vitest", { comm: "vim" });
     const init = row(1, 0, "/sbin/init", { comm: "systemd", startTicks: 1 });
@@ -483,6 +495,25 @@ describe("startCensusTask", () => {
 
     expect(folds).toBe(0);
     expect(task.read()).toEqual({ kind: "not-yet-computed", label: "observed", startedAtMs: 100 });
+  });
+
+  it("does not publish or report an in-flight read failure after stop", async () => {
+    const pending = deferred<CensusProcRow[]>();
+    const logs: string[] = [];
+    const task = startCensusTask({
+      readRows: () => pending.promise,
+      cadenceMs: 30_000,
+      nowMs: () => 100,
+      setTimer: () => ({ unref() {} }),
+      log: (message) => logs.push(message),
+    });
+
+    task.stop();
+    pending.reject(new Error("late failure"));
+    await turn();
+
+    expect(task.read()).toEqual({ kind: "not-yet-computed", label: "observed", startedAtMs: 100 });
+    expect(logs).toEqual([]);
   });
 
   it("does not throw when its clock or a failure cause cannot be read", async () => {
