@@ -29,7 +29,7 @@ function section(over: Partial<Extract<AccountUsageSection, { family: "claude" }
       windows: [{ kind: "value", window: "five_hour", utilizationPercent: 41, resetsAt: "2026-09-10T09:00:00.000Z" }],
     },
     ...over,
-  };
+  } as AccountUsageSection;
 }
 
 function checkpoint(accountUsage: unknown): unknown {
@@ -123,6 +123,42 @@ describe("projectAccountUsage refuses rather than quietly saying less", () => {
     expect(feed.kind).toBe("reading-unreadable");
   });
 
+  it("refuses numbers whose section does not name a provider account", () => {
+    const feed = projectAccountUsage(
+      checkpoint({
+        kind: "reading",
+        collectedAt: TAKEN_AT,
+        problems: [],
+        accounts: [section({ providerAccountId: null } as never)],
+      }),
+    );
+    expect(feed.kind).toBe("reading-unreadable");
+  });
+
+  it("refuses a malformed problems list rather than silently shortening it", () => {
+    const feed = projectAccountUsage(
+      checkpoint({
+        kind: "reading",
+        collectedAt: TAKEN_AT,
+        problems: ["the registry is broken", 7],
+        accounts: [section()],
+      }),
+    );
+    expect(feed.kind).toBe("reading-unreadable");
+  });
+
+  it("refuses percentages outside the provider's 0–100 contract", () => {
+    const invalid = section();
+    if (invalid.family !== "claude" || invalid.reading.kind !== "windows") throw new Error("expected Claude windows");
+    const window = invalid.reading.windows[0];
+    if (window?.kind !== "value") throw new Error("expected a numeric window");
+    invalid.reading.windows[0] = { ...window, utilizationPercent: -1 };
+    const feed = projectAccountUsage(
+      checkpoint({ kind: "reading", collectedAt: TAKEN_AT, problems: [], accounts: [invalid] }),
+    );
+    expect(feed.kind).toBe("reading-unreadable");
+  });
+
   /** Two rows for one subscription make both untrustworthy, however they arrived. */
   it("refuses a file that lists one account twice", () => {
     const feed = projectAccountUsage(
@@ -131,6 +167,20 @@ describe("projectAccountUsage refuses rather than quietly saying less", () => {
     expect(feed.kind).toBe("reading-unreadable");
     if (feed.kind !== "reading-unreadable") throw new Error("expected reading-unreadable");
     expect(feed.why).toContain("twice");
+  });
+
+  it("refuses two names for the same provider subscription", () => {
+    const feed = projectAccountUsage(
+      checkpoint({
+        kind: "reading",
+        collectedAt: TAKEN_AT,
+        problems: [],
+        accounts: [section(), section({ name: "alias" })],
+      }),
+    );
+    expect(feed.kind).toBe("reading-unreadable");
+    if (feed.kind !== "reading-unreadable") throw new Error("expected reading-unreadable");
+    expect(feed.why).toContain("provider account");
   });
 
   /** An empty list renders as a claim; only *something did not look* is true of one. */

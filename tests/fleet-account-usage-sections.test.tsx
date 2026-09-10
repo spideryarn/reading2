@@ -93,7 +93,7 @@ function claudeSection(over: Partial<Extract<AccountUsageSection, { family: "cla
       ],
     },
     ...over,
-  };
+  } as AccountUsageSection;
 }
 
 function codexSection(over: Partial<Extract<AccountUsageSection, { family: "codex" }>> = {}): AccountUsageSection {
@@ -131,7 +131,7 @@ function codexSection(over: Partial<Extract<AccountUsageSection, { family: "code
       ],
     },
     ...over,
-  };
+  } as AccountUsageSection;
 }
 
 function published(
@@ -224,6 +224,13 @@ it("stops drawing a percentage once the window it describes has reset under us",
   expect(text).toContain("12% used");
 });
 
+it("withholds numbers when the section's own reading instant cannot be compared with this clock", () => {
+  draw(published([claudeSection({ takenAt: ahead(60 * 60_000) })]), BASE);
+  expect(screen()).toContain("reading instant is in the future or cannot be compared");
+  expect(screen()).not.toContain("41% used");
+  expect(screen()).not.toContain("12% used");
+});
+
 it("draws no number at all for an account it could not read", () => {
   draw(
     published([
@@ -235,6 +242,44 @@ it("draws no number at all for an account it could not read", () => {
      The claim is that no percentage of any kind reaches the screen. */
   expect(screen()).not.toMatch(/\d+(\.\d+)?%/);
   expect(screen()).toContain("usage request failed with HTTP 401");
+});
+
+it("refuses a numeric wire section with no provider identity", () => {
+  const raw = {
+    kind: "published",
+    collectedAt: ago(60_000),
+    coordinatorWrittenAt: ago(30_000),
+    problems: [],
+    accounts: [{ ...claudeSection(), providerAccountId: null }],
+  };
+  const parsed = parseAccountUsage(raw);
+  expect(parsed.kind).toBe("feed-unreadable");
+  draw(parsed, BASE);
+  expect(screen()).not.toMatch(/\d+(\.\d+)?%/);
+});
+
+it("refuses malformed problem entries rather than hiding part of the warning", () => {
+  const parsed = parseAccountUsage({
+    kind: "published",
+    collectedAt: ago(60_000),
+    coordinatorWrittenAt: ago(30_000),
+    problems: ["the registry is broken", 7],
+    accounts: [claudeSection()],
+  });
+  expect(parsed.kind).toBe("feed-unreadable");
+});
+
+it("refuses two account names for one provider subscription at the browser boundary", () => {
+  const parsed = parseAccountUsage({
+    kind: "published",
+    collectedAt: ago(60_000),
+    coordinatorWrittenAt: ago(30_000),
+    problems: [],
+    accounts: [claudeSection(), claudeSection({ name: "alias" })],
+  });
+  expect(parsed.kind).toBe("feed-unreadable");
+  draw(parsed, BASE);
+  expect(screen()).not.toMatch(/\d+(\.\d+)?%/);
 });
 
 /**

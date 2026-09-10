@@ -11,7 +11,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { collectAccountUsage, type AccountUsageDeps } from "../tools/overseer/account-usage.js";
+import {
+  collectAccountUsage,
+  parseAccountUsageSections,
+  type AccountUsageDeps,
+} from "../tools/overseer/account-usage.js";
 import type { AccountEntry, AccountUsageReading, RegistryReading } from "../tools/overseer/accounts.js";
 import type { CodexUsageReading } from "../tools/fleet/wire.js";
 
@@ -200,9 +204,14 @@ describe("collectAccountUsage lists every account-subscription on the box", () =
   });
 
   it("does not draw the ambient Codex login twice either", async () => {
+    let registeredCodexReads = 0;
     const stored = await collectAccountUsage(
       deps({
         ambientCodexHome: () => "/home/tester/.codex-one",
+        codexUsage: async () => {
+          registeredCodexReads += 1;
+          return codexValue();
+        },
         registry: async () => ({
           kind: "value",
           schema: 1,
@@ -211,10 +220,11 @@ describe("collectAccountUsage lists every account-subscription on the box", () =
           ],
         }),
       }),
-      AMBIENT_CODEX,
+      codexValue({ accountId: "provider-codexone" }),
     );
     if (stored.kind !== "reading") throw new Error(stored.why);
     expect(stored.accounts.filter((section) => section.family === "codex")).toHaveLength(1);
+    expect(registeredCodexReads, "the handed ambient observation was collected again through the registry path").toBe(0);
   });
 
   /**
@@ -327,6 +337,72 @@ describe("collectAccountUsage keeps one account's failure to itself", () => {
 });
 
 describe("collectAccountUsage never draws a number under an unproved account", () => {
+  it("normalises the provider's real microsecond reset spelling before it reaches strict wire readers", async () => {
+    const stored = await collectAccountUsage(
+      deps({
+        claudeUsage: async (configDir) => claudeValue({
+          configDir,
+          windows: [{
+            kind: "value",
+            window: "five_hour",
+            utilizationPercent: 12,
+            resetsAt: "2026-09-10T09:00:00.549914+00:00",
+            resetsAtMs: Date.parse("2026-09-10T09:00:00.549914+00:00"),
+            msUntilReset: 10_800_000,
+          }],
+        }),
+      }),
+    );
+    if (stored.kind !== "reading") throw new Error(stored.why);
+    const claude = stored.accounts.find((section) => section.family === "claude");
+    if (claude?.family !== "claude" || claude.reading.kind !== "windows") throw new Error("expected Claude windows");
+    expect(claude.reading.windows[0]).toMatchObject({ resetsAt: "2026-09-10T09:00:00.549Z" });
+  });
+
+  it("refuses persisted numeric arms whose provider identity is null", () => {
+    const raw = {
+      name: "ambient",
+      family: "claude",
+      role: "orchestrator",
+      origin: "ambient",
+      displayEmail: null,
+      providerAccountId: null,
+      takenAt: NOW.toISOString(),
+      reading: {
+        kind: "windows",
+        windows: [{
+          kind: "value",
+          window: "five_hour",
+          utilizationPercent: 91,
+          resetsAt: "2026-09-10T09:00:00.000Z",
+        }],
+      },
+    };
+    expect(parseAccountUsageSections([raw])).toBeNull();
+  });
+
+  it("refuses persisted percentages outside the provider's 0–100 contract", () => {
+    const raw = {
+      name: "ambient",
+      family: "claude",
+      role: "orchestrator",
+      origin: "ambient",
+      displayEmail: null,
+      providerAccountId: "provider-ambient",
+      takenAt: NOW.toISOString(),
+      reading: {
+        kind: "windows",
+        windows: [{
+          kind: "value",
+          window: "five_hour",
+          utilizationPercent: 101,
+          resetsAt: "2026-09-10T09:00:00.000Z",
+        }],
+      },
+    };
+    expect(parseAccountUsageSections([raw])).toBeNull();
+  });
+
   /**
    * The app-server may answer without saying whose numbers these are, and the
    * ambient read supplies no id to pin against — so `enforceExpectedAccount`
@@ -378,6 +454,14 @@ describe("collectAccountUsage never draws a number under an unproved account", (
 });
 
 describe("collectAccountUsage refuses to show one subscription as two", () => {
+  it("refuses two persisted names for one provider subscription", async () => {
+    const stored = await collectAccountUsage(deps());
+    if (stored.kind !== "reading") throw new Error(stored.why);
+    const section = stored.accounts.find((candidate) => candidate.family === "claude");
+    if (section === undefined) throw new Error("expected a Claude section");
+    expect(parseAccountUsageSections([section, { ...section, name: "alias" }])).toBeNull();
+  });
+
   /**
    * DIRECTORY EQUALITY IS NOT SUBSCRIPTION EQUALITY. Two distinct state
    * directories can hold the same login — a copied home, a symlink, a second

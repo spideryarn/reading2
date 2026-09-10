@@ -54,7 +54,7 @@ import type { ReactNode } from "react";
 
 import { Explain } from "./Tooltip";
 import type { AccountUsageSection, AccountUsageView, ClockSkew, UsageWindowCard } from "./types";
-import { ago, CodexBucketSection, WindowStatCard } from "./UsagePanel";
+import { ago, CodexBucketSection, CodexResetCreditsCard, WindowStatCard } from "./UsagePanel";
 import { Card, cx, Pill, StatCard } from "./ui";
 
 /**
@@ -224,12 +224,33 @@ function CodexSection({ section, asOf, skew }: { section: Extract<AccountUsageSe
           ))}
         </details>
       )}
-      {section.reading.resetCredits === null || section.reading.resetCredits === 0 ? null : (
-        <p className="tw:mt-2 tw:text-label tw:text-ink-faint">
-          {section.reading.resetCredits} full reset credit{section.reading.resetCredits === 1 ? "" : "s"} available
-        </p>
-      )}
+      <div className="tw:mt-3">
+        <CodexResetCreditsCard resetCredits={section.reading.resetCredits} />
+      </div>
     </div>
+  );
+}
+
+function SectionReading({ section, asOf, skew }: { section: AccountUsageSection; asOf: number; skew: ClockSkew }): ReactNode {
+  if (ago(section.takenAt, asOf, skew).ms === null) {
+    return (
+      <div className="tw:mt-3">
+        <StatCard
+          label="Headroom"
+          value={{
+            kind: "absent",
+            state: "unavailable",
+            why: "the reading instant is in the future or cannot be compared with this page’s clock",
+          }}
+          tone="unknown"
+        />
+      </div>
+    );
+  }
+  return section.family === "claude" ? (
+    <ClaudeSection section={section} asOf={asOf} skew={skew} />
+  ) : (
+    <CodexSection section={section} asOf={asOf} skew={skew} />
   );
 }
 
@@ -259,11 +280,7 @@ function FamilyBlock({
         sections.map((section) => (
           <section key={`${section.family}/${section.name}`} className="tw:mt-4 tw:first:mt-2">
             <SectionHeading section={section} asOf={asOf} skew={skew} />
-            {section.family === "claude" ? (
-              <ClaudeSection section={section} asOf={asOf} skew={skew} />
-            ) : (
-              <CodexSection section={section} asOf={asOf} skew={skew} />
-            )}
+            <SectionReading section={section} asOf={asOf} skew={skew} />
           </section>
         ))
       )}

@@ -78,7 +78,7 @@ function parseWindow(u: unknown): UsageWindowCard | string {
   if (kind === "value") {
     const resetsAt = iso(u["resetsAt"]);
     const percent = u["utilizationPercent"];
-    if (typeof percent !== "number" || !Number.isFinite(percent)) {
+    if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) {
       return `window ${window} has no readable utilisation`;
     }
     if (resetsAt === null) return `window ${window} has no readable reset instant`;
@@ -119,6 +119,8 @@ function parseSection(u: unknown): AccountUsageSection | string {
   }
   const displayEmail = u["displayEmail"] === null ? null : nonBlank(u["displayEmail"]);
   const providerAccountId = u["providerAccountId"] === null ? null : nonBlank(u["providerAccountId"]);
+  if (u["displayEmail"] !== null && displayEmail === null) return `section ${name} has an unreadable display email`;
+  if (u["providerAccountId"] !== null && providerAccountId === null) return `section ${name} has an unreadable provider account id`;
   const common = { name, role, origin, displayEmail, providerAccountId, takenAt };
 
   const reading = u["reading"];
@@ -147,7 +149,9 @@ function parseSection(u: unknown): AccountUsageSection | string {
       if (typeof window === "string") return `section ${name}: ${window}`;
       windows.push(window);
     }
-    return { ...common, family: "claude", reading: { kind: "windows", windows } };
+    return providerAccountId === null
+      ? `section ${name} carries numbers without naming the provider account they belong to`
+      : { ...common, providerAccountId, family: "claude", reading: { kind: "windows", windows } };
   }
 
   if (family === "codex") {
@@ -174,11 +178,14 @@ function parseSection(u: unknown): AccountUsageSection | string {
        re-checked by the browser's own Codex view parser, which already exists
        for the history route. Re-deriving `CodexUsageBucket` here would be a
        fourth hand-written declaration of one type. */
-    return {
-      ...common,
-      family: "codex",
-      reading: { kind: "buckets", buckets: raw as CodexUsageBucket[], resetCredits },
-    };
+    return providerAccountId === null
+      ? `section ${name} carries numbers without naming the provider account they belong to`
+      : {
+          ...common,
+          providerAccountId,
+          family: "codex",
+          reading: { kind: "buckets", buckets: raw as CodexUsageBucket[], resetCredits },
+        };
   }
 
   return `section ${name} has a family this reader does not know: ${describeValue(family)}`;
@@ -235,7 +242,8 @@ export function projectAccountUsage(json: unknown): AccountUsageFeed {
   if (!Array.isArray(rawAccounts)) return unreadable("it carries no list of accounts");
 
   const accounts: AccountUsageSection[] = [];
-  const seen = new Set<string>();
+  const seenNames = new Set<string>();
+  const seenProviders = new Set<string>();
   for (const entry of rawAccounts) {
     const section = parseSection(entry);
     if (typeof section === "string") return unreadable(section);
@@ -243,9 +251,14 @@ export function projectAccountUsage(json: unknown): AccountUsageFeed {
        percent or two, make both untrustworthy. The collector already refuses
        this; so does the file's reader, because a hand-edited checkpoint is a
        thing that happens. */
-    const key = `${section.family}/${section.name}`;
-    if (seen.has(key)) return unreadable(`it lists ${key} twice`);
-    seen.add(key);
+    const nameKey = `${section.family}/${section.name}`;
+    if (seenNames.has(nameKey)) return unreadable(`it lists ${nameKey} twice`);
+    seenNames.add(nameKey);
+    if (section.providerAccountId !== null) {
+      const providerKey = `${section.family}/${section.providerAccountId}`;
+      if (seenProviders.has(providerKey)) return unreadable(`it lists provider account ${providerKey} twice`);
+      seenProviders.add(providerKey);
+    }
     accounts.push(section);
   }
   /* An empty list is not a reading. It renders as "this box has no
@@ -254,9 +267,13 @@ export function projectAccountUsage(json: unknown): AccountUsageFeed {
   if (accounts.length === 0) return unreadable("it carries a reading with no accounts in it");
 
   const rawProblems = raw["problems"];
-  const problems = Array.isArray(rawProblems)
-    ? rawProblems.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    : [];
+  if (!Array.isArray(rawProblems)) return unreadable("it carries no problem list");
+  const problems: string[] = [];
+  for (const problem of rawProblems) {
+    const parsed = nonBlank(problem);
+    if (parsed === null) return unreadable("its problem list contains an unreadable entry");
+    problems.push(parsed);
+  }
 
   return { kind: "published", collectedAt, accounts, problems, coordinatorWrittenAt: writtenAt };
 }

@@ -423,7 +423,16 @@ export function App({
                 and when they reset"*. */}
             <AccountUsageSections
               view={feed.state === null ? { kind: "not-asked" } : feed.state.accountUsage}
-              asOf={now}
+              /* **THE CARD'S ANCHOR, NOT THE BARE TICK.** `now` moves once a
+                 second, so a section read in the gap after the last tick has a
+                 `takenAt` later than `now` and reads as "in the future" — and
+                 the sections withhold a reading whose instant cannot be
+                 compared with this clock. A payload cannot arrive before the
+                 reading inside it was taken, so `receivedAt` is a floor on any
+                 honest `asOf`. `UsageCard` below has anchored this way from the
+                 start; the two must agree, or one section and the card beside it
+                 would age the same instant differently. */
+              asOf={feed.receivedAt === null ? now : Math.max(now, feed.receivedAt)}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
             {/* **The same `UsageCard` the Overseer tab draws, mounted a second
@@ -438,20 +447,11 @@ export function App({
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
-              /* The sections above own every subscription's headroom on this
-                 tab, so the card drops its cached copy and its Codex half
-                 rather than drawing either a second time. The Overseer tab's
-                 mount passes nothing and keeps both.
-
-                 **ONLY WHEN THE SECTIONS ACTUALLY PUBLISHED.** The first
-                 version passed `true` unconditionally, and the full suite
-                 caught what that did: against a server too old to send
-                 `accountUsage`, or before the daemon's first pass, the sections
-                 draw "there is no per-account reading" AND the card hid its
-                 own headroom — so the tab showed no percentage for any account
-                 while looking complete. Suppressing a reading is only honest
-                 when its replacement is on screen. */
-              headroomShownAbove={feed.state?.accountUsage.kind === "published"}
+              /* Hand over the evidence rather than a container-level boolean.
+                 UsageCard suppresses each provider only when a current live
+                 section proves the same account and covers every numeric
+                 fallback window it would otherwise draw. */
+              {...(feed.state === null ? {} : { accountUsageAbove: feed.state.accountUsage })}
             />
             {/* **The history is on its OWN route, not in the snapshot.** That
                 route is active only on Usage and Overseer: the chart needs it

@@ -135,11 +135,19 @@ function windowCard(reading: UsageWindowReading): UsageWindowCard {
       kind: "value",
       window: reading.window,
       utilizationPercent: reading.utilizationPercent,
-      resetsAt: reading.resetsAt,
+      /* The provider uses microseconds and `+00:00`; the checkpoint wire uses
+         the one spelling produced by `toISOString()`, like every other fleet
+         timestamp. Preserve the instant, not the provider's spelling. */
+      resetsAt: new Date(reading.resetsAtMs).toISOString(),
     };
   }
   if (reading.kind === "expired") {
-    return { kind: "expired", window: reading.window, resetsAt: reading.resetsAt, why: reading.why };
+    return {
+      kind: "expired",
+      window: reading.window,
+      resetsAt: new Date(reading.resetsAtMs).toISOString(),
+      why: reading.why,
+    };
   }
   return { kind: "unknown", window: reading.window, why: reading.why };
 }
@@ -332,7 +340,9 @@ function text(value: unknown): string | null {
 }
 
 function instant(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value)) ? value : null;
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value ? null : value;
 }
 
 function parseWindowCard(value: unknown): UsageWindowCard | null {
@@ -342,7 +352,11 @@ function parseWindowCard(value: unknown): UsageWindowCard | null {
   if (window === null) return null;
   if (raw.kind === "value") {
     const resetsAt = instant(raw.resetsAt);
-    return typeof raw.utilizationPercent === "number" && Number.isFinite(raw.utilizationPercent) && resetsAt !== null
+    return typeof raw.utilizationPercent === "number" &&
+      Number.isFinite(raw.utilizationPercent) &&
+      raw.utilizationPercent >= 0 &&
+      raw.utilizationPercent <= 100 &&
+      resetsAt !== null
       ? { kind: "value", window, utilizationPercent: raw.utilizationPercent, resetsAt }
       : null;
   }
@@ -426,12 +440,20 @@ function parseSection(value: unknown): AccountUsageSection | null {
 
   if (raw.family === "claude") {
     const claude = parseClaudeReading(reading);
-    return claude === null ? null : { ...common, family: "claude", reading: claude };
+    if (claude === null) return null;
+    if (claude.kind === "windows") {
+      return common.providerAccountId === null ? null : { ...common, providerAccountId: common.providerAccountId, family: "claude", reading: claude };
+    }
+    return { ...common, family: "claude", reading: claude };
   }
 
   if (raw.family === "codex") {
     const codex = parseCodexReading(reading);
-    return codex === null ? null : { ...common, family: "codex", reading: codex };
+    if (codex === null) return null;
+    if (codex.kind === "buckets") {
+      return common.providerAccountId === null ? null : { ...common, providerAccountId: common.providerAccountId, family: "codex", reading: codex };
+    }
+    return { ...common, family: "codex", reading: codex };
   }
 
   return null;
@@ -441,16 +463,22 @@ function parseSection(value: unknown): AccountUsageSection | null {
 export function parseAccountUsageSections(value: unknown): AccountUsageSection[] | null {
   if (!Array.isArray(value)) return null;
   const sections: AccountUsageSection[] = [];
-  const seen = new Set<string>();
+  const seenNames = new Set<string>();
+  const seenProviders = new Set<string>();
   for (const entry of value) {
     const section = parseSection(entry);
     if (section === null) return null;
     // A duplicate `family/name` would draw one subscription twice with two
     // readings — the same failure the ambient dedup exists to prevent, arriving
     // through the file instead of through the collector.
-    const key = `${section.family}/${section.name}`;
-    if (seen.has(key)) return null;
-    seen.add(key);
+    const nameKey = `${section.family}/${section.name}`;
+    if (seenNames.has(nameKey)) return null;
+    seenNames.add(nameKey);
+    if (section.providerAccountId !== null) {
+      const providerKey = `${section.family}/${section.providerAccountId}`;
+      if (seenProviders.has(providerKey)) return null;
+      seenProviders.add(providerKey);
+    }
     sections.push(section);
   }
   return sections;
@@ -570,11 +598,29 @@ export async function collectAccountUsage(
       origin: "registered" as const,
       email: entry.displayEmail ?? null,
     };
-    work.push(
-      entry.family === "claude"
-        ? claudeSection({ ...identity, stateDir: entry.stateDir, pin: entry }, deps)
-        : codexSection({ ...identity, stateDir: entry.stateDir, expectedAccountId: entry.providerAccountId }, deps),
-    );
+    if (entry.family === "claude") {
+      work.push(claudeSection({ ...identity, stateDir: entry.stateDir, pin: entry }, deps));
+      continue;
+    }
+    /* A hand-written registry can still name the ambient CODEX_HOME even
+       though the supported wizard refuses it. The usage pass has already read
+       that home, so reuse and pin the handed observation instead of spawning a
+       second app-server and discarding the first answer. */
+    if (ambientCodex !== null && path.resolve(entry.stateDir) === ambientCodexHome) {
+      const pinned =
+        ambientCodex.kind === "value" && ambientCodex.accountId !== entry.providerAccountId
+          ? {
+              kind: "unknown" as const,
+              why: ambientCodex.accountId === null
+                ? "the Codex app-server did not name the account required by the registry pin"
+                : "the Codex app-server answered for an account other than the registry pin",
+              retryable: false,
+            }
+          : ambientCodex;
+      work.push(Promise.resolve(codexSectionFrom({ ...identity, expectedAccountId: entry.providerAccountId }, pinned, deps.now)));
+      continue;
+    }
+    work.push(codexSection({ ...identity, stateDir: entry.stateDir, expectedAccountId: entry.providerAccountId }, deps));
   }
 
   if (!claudeDirs.has(ambientClaude)) {

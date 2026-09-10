@@ -98,6 +98,18 @@ async function heldOpen(signal: AbortSignal): Promise<void> {
   });
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function pause(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type Run = {
   root: string;
   outcomes: UsagePassOutcome[];
@@ -388,6 +400,53 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
     expect(read.checkpoint.accountUsage.kind).toBe("none");
     if (read.checkpoint.accountUsage.kind !== "none") return;
     expect(read.checkpoint.accountUsage.why).toContain("every account 401'd");
+  });
+
+  test("keeps the single-flight guard and shutdown wait until the account pass settles", async () => {
+    const root = tempRoot();
+    const controller = new AbortController();
+    const accounts = deferred<StoredAccountUsage>();
+    const accountStarted = deferred<void>();
+    let usageCalls = 0;
+    let accountCalls = 0;
+    const running = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:1",
+      signal: controller.signal,
+      tickMs: 10,
+      log: () => {},
+      source: async function* () {
+        await heldOpen(controller.signal);
+      },
+      usage: {
+        intervalMs: 20,
+        run: async () => {
+          usageCalls += 1;
+          return report();
+        },
+        accounts: async () => {
+          accountCalls += 1;
+          accountStarted.resolve();
+          return accounts.promise;
+        },
+      },
+    });
+
+    await accountStarted.promise;
+    await pause(70);
+    expect(usageCalls).toBe(1);
+    expect(accountCalls).toBe(1);
+
+    let stopped = false;
+    void running.then(() => {
+      stopped = true;
+    });
+    controller.abort();
+    await pause(20);
+    expect(stopped, "shutdown returned while the account pass was still in flight").toBe(false);
+
+    accounts.resolve(reading("2026-09-10T06:00:00.000Z"));
+    await running;
   });
 
   /**

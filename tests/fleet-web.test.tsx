@@ -1021,6 +1021,7 @@ describe("the usage limits tab", () => {
     act(() => feed.push(state()));
     await act(async () => undefined);
     const onTab = container.textContent ?? "";
+    expect(onTab).toContain("There is no per-account reading.");
 
     /* Dispatched and proven. Assigning the hash alone never re-rendered — jsdom
        delivers `hashchange` as a later task — and `claim` is on both tabs, so
@@ -1091,6 +1092,7 @@ describe("the usage limits tab", () => {
     act(() => feed.push(state()));
     await act(async () => undefined);
     expect(container.textContent).toContain("61% used");
+    expect(container.textContent).toContain("There is no per-account reading.");
 
     /* Dispatched and proven, for the reason the test below gives: assigning the
        hash alone never left the Usage tab, and "61% used" is on both, so this
@@ -1160,46 +1162,45 @@ describe("the usage limits tab", () => {
     window.location.hash = "#usage";
     const feed = manualTransport();
     mount(feed.transport, recordingDeploys().api, fakeQueue(), history);
+    const accountUsage: Extract<FleetState["accountUsage"], { kind: "published" }> = {
+      kind: "published",
+      collectedAt: new Date().toISOString(),
+      coordinatorWrittenAt: new Date().toISOString(),
+      problems: [],
+      accounts: [{
+        name: "ambient",
+        family: "codex",
+        role: "orchestrator",
+        origin: "ambient",
+        displayEmail: null,
+        providerAccountId: "same-account",
+        takenAt: new Date().toISOString(),
+        reading: {
+          kind: "buckets",
+          resetCredits: null,
+          buckets: [{
+            limitId: "codex",
+            limitName: null,
+            planType: "pro",
+            credits: null,
+            individualLimit: null,
+            spendControlReached: false,
+            rateLimitReachedType: null,
+            windows: [{
+              kind: "value",
+              slot: "primary",
+              windowMinutes: 10_080,
+              usedPercent: 23,
+              resetsAt: new Date(reset).toISOString(),
+              resetsAtMs: reset,
+            }],
+          }],
+        },
+      }],
+    };
     act(() =>
       feed.push(
-        state({
-          accountUsage: {
-            kind: "published",
-            collectedAt: new Date().toISOString(),
-            coordinatorWrittenAt: new Date().toISOString(),
-            problems: [],
-            accounts: [{
-              name: "ambient",
-              family: "codex",
-              role: "orchestrator",
-              origin: "ambient",
-              displayEmail: null,
-              providerAccountId: "same-account",
-              takenAt: new Date().toISOString(),
-              reading: {
-                kind: "buckets",
-                resetCredits: null,
-                buckets: [{
-                  limitId: "codex",
-                  limitName: null,
-                  planType: "pro",
-                  credits: null,
-                  individualLimit: null,
-                  spendControlReached: false,
-                  rateLimitReachedType: null,
-                  windows: [{
-                    kind: "value",
-                    slot: "primary",
-                    windowMinutes: 10_080,
-                    usedPercent: 23,
-                    resetsAt: new Date(reset).toISOString(),
-                    resetsAtMs: reset,
-                  }],
-                }],
-              },
-            }],
-          },
-        }),
+        state({ accountUsage }),
       ),
     );
     await act(async () => undefined);
@@ -1207,6 +1208,61 @@ describe("the usage limits tab", () => {
        screen: 23 is the live section, 61 is the history card's. */
     expect(container.textContent).toContain("23% used");
     expect(container.textContent).not.toContain("61% used");
+    expect(container.textContent).toContain("Codex subscriptions");
+
+    /* `published` is only the envelope. An unknown section has put no numeric
+       replacement on screen, so it must not spend that bit as permission to
+       hide the history card's still-usable observation. */
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => ({
+          ...section,
+          reading: { kind: "unknown" as const, why: "the live app-server attempt failed" },
+        })),
+      },
+    })));
+    expect(container.textContent).toContain("61% used");
+
+    /* And replacement is per subscription, not per family. A valid live
+       number for another Codex login does not replace this card's account. */
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => ({ ...section, providerAccountId: "different-account" })),
+      },
+    })));
+    expect(container.textContent).toContain("23% used");
+    expect(container.textContent).toContain("61% used");
+
+    /* Expiry is also part of replacement. The section renderer removes 23;
+       the same browser-clock decision must keep the fallback rather than leave
+       the page with no Codex percentage. */
+    const past = Date.now() - 60_000;
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => section.family === "codex" && section.reading.kind === "buckets"
+          ? {
+              ...section,
+              reading: {
+                ...section.reading,
+                buckets: section.reading.buckets.map((bucket) => ({
+                  ...bucket,
+                  windows: bucket.windows.map((window) => window.kind === "value"
+                    ? { ...window, resetsAt: new Date(past).toISOString(), resetsAtMs: past }
+                    : window),
+                })),
+              },
+            }
+          : section) as Extract<FleetState["accountUsage"], { kind: "published" }>["accounts"],
+      },
+    })));
+    expect(container.textContent).not.toContain("23% used");
+    expect(container.textContent).toContain("61% used");
+
+    /* Restore the fully matching live reading before checking the other mount. */
+    act(() => feed.push(state({ accountUsage })));
 
     /* **THE SWITCH HAS TO BE MADE TO LAND, AND PROVEN TO HAVE.** The app
        re-renders on `hashchange`, which jsdom delivers as a later task that

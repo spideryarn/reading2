@@ -47,9 +47,10 @@ import {
   parseFleetState,
   parseUsage,
   shiftToBrowserClock,
+  type AccountUsageView,
   type UsageView,
 } from "../tools/fleet/web/src/types";
-import type { RateLimitHit, ScanCoverage, StoredUsage, UsageReport } from "../tools/fleet/wire.js";
+import type { AccountUsageSection, RateLimitHit, ScanCoverage, StoredUsage, UsageReport } from "../tools/fleet/wire.js";
 import { describeRefusal, openStore, type OverseerStore } from "../tools/overseer/store.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -83,9 +84,23 @@ function screen(): string {
   return (container.textContent ?? "").replace(/\s+/g, " ");
 }
 
-function draw(usage: UsageView | null, now: number, receivedAt: number | null = now): void {
+function draw(
+  usage: UsageView | null,
+  now: number,
+  receivedAt: number | null = now,
+  accountUsageAbove?: AccountUsageView,
+): void {
   act(() =>
-    root.render(<UsageCard usage={usage} codex={null} now={now} receivedAt={receivedAt} skew={CLOCK_SKEW_UNMEASURED} />),
+    root.render(
+      <UsageCard
+        usage={usage}
+        codex={null}
+        now={now}
+        receivedAt={receivedAt}
+        skew={CLOCK_SKEW_UNMEASURED}
+        {...(accountUsageAbove === undefined ? {} : { accountUsageAbove })}
+      />,
+    ),
   );
 }
 
@@ -563,6 +578,73 @@ describe("the card, against its own clock", () => {
        be the headline with the producer's number beneath it. */
     expect(screen()).toContain("41% used");
     expect(screen()).not.toContain("59% left");
+  });
+
+  it("hides Claude's cache only when a current same-account section replaces every live window", () => {
+    const usage = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: null, accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        level: "unknown",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(10 * 60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            { kind: "value", window: "five_hour", utilizationPercent: 61, resetsAt: new Date(BASE + 60 * 60_000).toISOString() },
+            { kind: "value", window: "seven_day", utilizationPercent: 38, resetsAt: new Date(BASE + 24 * 60 * 60_000).toISOString() },
+          ],
+        },
+        limits: { kind: "unknown", why: "not relevant", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    const section = {
+      name: "mindstone",
+      family: "claude" as const,
+      role: "pool" as const,
+      origin: "registered" as const,
+      displayEmail: null,
+      providerAccountId: "acct-1111",
+      takenAt: ago(60_000),
+      reading: {
+        kind: "windows" as const,
+        windows: [
+          { kind: "value" as const, window: "five_hour", utilizationPercent: 23, resetsAt: new Date(BASE + 60 * 60_000).toISOString() },
+        ],
+      },
+    };
+    const published = (accounts: readonly AccountUsageSection[]): AccountUsageView => ({
+      kind: "published",
+      collectedAt: ago(60_000),
+      coordinatorWrittenAt: ago(20_000),
+      problems: [],
+      accounts,
+    });
+
+    draw(usage, BASE, BASE, published([section]));
+    expect(screen()).toContain("61% used");
+    expect(screen()).toContain("38% used");
+
+    const complete = {
+      ...section,
+      reading: {
+        kind: "windows" as const,
+        windows: [
+          ...section.reading.windows,
+          { kind: "value" as const, window: "seven_day", utilizationPercent: 19, resetsAt: new Date(BASE + 24 * 60 * 60_000).toISOString() },
+        ],
+      },
+    };
+    draw(usage, BASE, BASE, published([complete]));
+    expect(screen()).not.toContain("61% used");
+    expect(screen()).not.toContain("38% used");
+
+    draw(usage, BASE, BASE, published([{ ...complete, providerAccountId: "acct-2222" }]));
+    expect(screen()).toContain("61% used");
   });
 
   it("does not invent a severity of its own for a window the verdict calls fine", () => {

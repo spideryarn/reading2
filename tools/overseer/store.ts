@@ -2135,9 +2135,9 @@ function parseStoredUsage(u: unknown, writtenAt: string): StoredUsage {
  * and it fails quietly — a `windows` arm that lost its array reads as an
  * account with no limits rather than as one nobody could read.
  *
- * `problems` degrades to empty rather than refusing the block. It is prose
- * about the pass, not a reading: losing it costs a sentence, where losing the
- * sections costs the page.
+ * `problems` is part of the completeness claim, not optional prose. A malformed
+ * entry refuses the block: silently shortening that list can leave a short
+ * account list looking complete, which is precisely what the field prevents.
  */
 function parseStoredAccountUsage(u: unknown, writtenAt: string): StoredAccountUsage {
   if (u === undefined) {
@@ -2167,9 +2167,12 @@ function parseStoredAccountUsage(u: unknown, writtenAt: string): StoredAccountUs
   // through the file either: it renders as "this box has no subscriptions".
   if (accounts.length === 0) return bad("it carries a reading with no accounts in it");
   const rawProblems = u["problems"];
-  const problems = Array.isArray(rawProblems)
-    ? rawProblems.filter((entry): entry is string => typeof entry === "string")
-    : [];
+  if (!Array.isArray(rawProblems)) return bad("it carries no problem list");
+  const problems: string[] = [];
+  for (const problem of rawProblems) {
+    if (typeof problem !== "string" || problem.length === 0) return bad("its problem list contains an unreadable entry");
+    problems.push(problem);
+  }
   return { kind: "reading", collectedAt: u["collectedAt"], accounts, problems };
 }
 

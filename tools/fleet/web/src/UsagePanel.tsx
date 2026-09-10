@@ -53,7 +53,15 @@ import type { ReactNode } from "react";
 import { zonedLine } from "../../zones.js";
 import { Explain, type Tip } from "./Tooltip";
 import type { CodexBucketView, CodexObservationView, CodexWindowView } from "./usage-history-client";
-import type { ClockSkew, ScanCoverage, UsageIncident, UsageSummary, UsageView, UsageWindowCard } from "./types";
+import type {
+  AccountUsageView,
+  ClockSkew,
+  ScanCoverage,
+  UsageIncident,
+  UsageSummary,
+  UsageView,
+  UsageWindowCard,
+} from "./types";
 import { shiftMsToBrowserClock } from "./types";
 import { Card, cx, Pill, StatCard, toneClasses, type StatValue } from "./ui";
 import { formatDuration, type Tone } from "./view";
@@ -106,6 +114,129 @@ function untilReset(at: string, asOf: number, skew: ClockSkew): { kind: "ahead";
   const ms = browserMs(at, skew);
   if (ms === null) return { kind: "unreadable" };
   return ms > asOf ? { kind: "ahead", ms: ms - asOf } : { kind: "passed", ms: asOf - ms };
+}
+
+type WindowCoverage = { all: Set<string>; numeric: Set<string> };
+
+function claudeWindowCoverage(
+  windows: readonly UsageWindowCard[],
+  asOf: number,
+  skew: ClockSkew,
+): WindowCoverage | null {
+  const all = new Set<string>();
+  const numeric = new Set<string>();
+  for (const window of windows) {
+    if (all.has(window.window)) return null;
+    all.add(window.window);
+    if (window.kind === "value" && untilReset(window.resetsAt, asOf, skew).kind === "ahead") {
+      numeric.add(window.window);
+    }
+  }
+  return { all, numeric };
+}
+
+function codexWindowCoverage(
+  buckets: readonly CodexBucketView[],
+  asOf: number,
+  skew: ClockSkew,
+): WindowCoverage | null {
+  const all = new Set<string>();
+  const numeric = new Set<string>();
+  const bucketIds = new Set<string>();
+  for (const bucket of buckets) {
+    if (bucketIds.has(bucket.limitId)) return null;
+    bucketIds.add(bucket.limitId);
+    all.add(`${bucket.limitId}/bucket`);
+    /* `CodexBucketSection` withholds a general bucket's windows under these
+       controls, so they are not replacements merely because numbers exist in
+       the payload. Model-specific buckets do not apply this general control. */
+    if (
+      bucket.limitId === "codex" &&
+      (bucket.spendControlReached !== false || bucket.individualLimit !== null)
+    ) continue;
+    const bySlot = new Map<CodexWindowView["slot"], CodexWindowView>();
+    for (const window of bucket.windows) {
+      if (bySlot.has(window.slot)) return null;
+      bySlot.set(window.slot, window);
+      const key = `${bucket.limitId}/${window.slot}/${window.windowMinutes ?? "unknown-duration"}`;
+      all.add(key);
+      if (window.kind === "value" && untilReset(window.resetsAt, asOf, skew).kind === "ahead") {
+        numeric.add(key);
+      }
+    }
+  }
+  return { all, numeric };
+}
+
+function coversEvery(fallback: WindowCoverage | null, replacement: WindowCoverage | null): boolean {
+  return fallback !== null &&
+    replacement !== null &&
+    fallback.numeric.size > 0 &&
+    [...fallback.all].every((key) => replacement.all.has(key)) &&
+    [...fallback.numeric].every((key) => replacement.numeric.has(key));
+}
+
+function notOlderThan(candidate: string, fallback: string): boolean {
+  const candidateMs = Date.parse(candidate);
+  const fallbackMs = Date.parse(fallback);
+  return Number.isFinite(candidateMs) && Number.isFinite(fallbackMs) && candidateMs >= fallbackMs;
+}
+
+/**
+ * Which fallback cards have a real replacement above them.
+ *
+ * `published` is only a container result. Suppression is earned separately by
+ * provider, account identity and every numeric window the fallback would draw.
+ * A stale, expired, unknown, partial or differently-attributed section cannot
+ * spend the container's success bit to hide evidence it did not replace.
+ */
+function headroomReplacements(
+  accountUsage: AccountUsageView | undefined,
+  usage: UsageView | null,
+  codex: CodexObservationView | null,
+  asOf: number,
+  skew: ClockSkew,
+): { claude: boolean; codex: boolean } {
+  if (accountUsage?.kind !== "published") return { claude: false, codex: false };
+
+  let claude = false;
+  if (usage?.kind === "published" && usage.summary.cache.kind === "attributed") {
+    const cache = usage.summary.cache;
+    const fallback = claudeWindowCoverage(cache.windows, asOf, skew);
+    claude = accountUsage.accounts.some((section) => {
+      if (
+        section.family !== "claude" ||
+        section.reading.kind !== "windows" ||
+        section.providerAccountId !== cache.accountUuid ||
+        !notOlderThan(section.takenAt, cache.fetchedAt)
+      ) return false;
+      const age = ago(section.takenAt, asOf, skew).ms;
+      return age !== null && age <= READING_STALE_MS && coversEvery(
+        fallback,
+        claudeWindowCoverage(section.reading.windows, asOf, skew),
+      );
+    });
+  }
+
+  let codexReplacement = false;
+  if (codex?.kind === "value" && codex.accountId !== null) {
+    const fallback = codexWindowCoverage(codex.buckets, asOf, skew);
+    codexReplacement = accountUsage.accounts.some((section) => {
+      if (
+        section.family !== "codex" ||
+        section.reading.kind !== "buckets" ||
+        section.providerAccountId !== codex.accountId ||
+        !notOlderThan(section.takenAt, codex.readAt)
+      ) return false;
+      const age = ago(section.takenAt, asOf, skew).ms;
+      return age !== null && age <= READING_STALE_MS && coversEvery(
+        fallback,
+        codexWindowCoverage(section.reading.buckets, asOf, skew),
+      );
+    });
+  }
+
+  return { claude, codex: codexReplacement };
 }
 
 /**
@@ -1310,6 +1441,21 @@ export function CodexBucketSection({
   );
 }
 
+export function CodexResetCreditsCard({ resetCredits }: { resetCredits: number | null }): ReactNode {
+  return (
+    <StatCard
+      label="Full resets available"
+      value={
+        resetCredits === null
+          ? { kind: "absent", state: "unknown", why: "the source did not report reset credits" }
+          : { kind: "value", text: `${resetCredits} reset ${resetCredits === 1 ? "credit" : "credits"}` }
+      }
+      evidence="Shown only; this page never consumes one."
+      tone="idle"
+    />
+  );
+}
+
 function CodexUsageCard({
   codex,
   asOf,
@@ -1352,6 +1498,25 @@ function CodexUsageCard({
       </Card>
     );
   }
+  if (codex.accountId === null) {
+    return (
+      <Card className="tw:mb-3 tw:p-4">
+        <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
+        <p className="tw:mt-1 tw:text-note tw:text-ink-faint">Account not attributed · Reading taken {reading.text}</p>
+        <div className="tw:mt-3">
+          <StatCard
+            label="General headroom"
+            value={{
+              kind: "absent",
+              state: "unavailable",
+              why: "The provider returned usage numbers without an account id, so they cannot be shown without knowing which account they belong to.",
+            }}
+            tone="unknown"
+          />
+        </div>
+      </Card>
+    );
+  }
   const stale = reading.ms > READING_STALE_MS;
   const bucketGroups = new Map<string, CodexBucketView[]>();
   for (const bucket of codex.buckets) {
@@ -1366,7 +1531,7 @@ function CodexUsageCard({
     <Card className="tw:mb-3 tw:p-4">
       <h2 className="tw:text-lead tw:font-semibold">Codex subscription</h2>
       <p className={cx("tw:mt-1 tw:text-note", stale ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-faint")}>
-        {codex.accountId === null ? "Account not attributed" : `Account ${codex.accountId}`} · Reading taken {reading.text}
+        Account {codex.accountId} · Reading taken {reading.text}
       </p>
 
       {general.length === 1 ? (
@@ -1406,16 +1571,7 @@ function CodexUsageCard({
       )}
 
       <div className="tw:mt-3">
-        <StatCard
-          label="Full resets available"
-          value={
-            codex.resetCredits === null
-              ? { kind: "absent", state: "unknown", why: "the source did not report reset credits" }
-              : { kind: "value", text: `${codex.resetCredits} reset ${codex.resetCredits === 1 ? "credit" : "credits"}` }
-          }
-          evidence="Shown only; this page never consumes one."
-          tone="idle"
-        />
+        <CodexResetCreditsCard resetCredits={codex.resetCredits} />
       </div>
     </Card>
   );
@@ -1428,29 +1584,18 @@ export function UsageCard({
   now,
   receivedAt,
   skew,
-  headroomShownAbove = false,
+  accountUsageAbove,
 }: {
   usage: UsageView | null;
   codex: CodexObservationView | null;
   now: number;
   receivedAt: number | null;
   skew: ClockSkew;
-  /**
-   * **The live per-account sections are on this page.**
-   *
-   * True only on the Usage tab, where `AccountUsageSections` draws every
-   * subscription's live headroom above this card. It suppresses the two things
-   * that would then be on screen twice — this account's cached windows, and the
-   * whole Codex card — leaving the card to carry what only it has: the
-   * transcript scan, the 429s, the coverage and the verdict.
-   *
-   * False on the Overseer tab, where this card stands alone and the cache is
-   * the only headroom reading there is. One component, two mounts, one prop —
-   * so the two can never disagree about the same bytes.
-   */
-  headroomShownAbove?: boolean;
+  /** The Usage tab's live sections; omitted on Overseer, where this card stands alone. */
+  accountUsageAbove?: AccountUsageView;
 }): ReactNode {
   const asOf = receivedAt === null ? now : Math.max(now, receivedAt);
+  const replacements = headroomReplacements(accountUsageAbove, usage, codex, asOf, skew);
   return (
     <>
       <ClaudeUsageCard
@@ -1458,9 +1603,9 @@ export function UsageCard({
         now={now}
         receivedAt={receivedAt}
         skew={skew}
-        headroomShownAbove={headroomShownAbove}
+        headroomShownAbove={replacements.claude}
       />
-      {headroomShownAbove ? null : <CodexUsageCard codex={codex} asOf={asOf} skew={skew} />}
+      {replacements.codex ? null : <CodexUsageCard codex={codex} asOf={asOf} skew={skew} />}
     </>
   );
 }

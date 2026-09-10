@@ -2530,6 +2530,8 @@ function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
   if (name === null || takenAt === null || role === undefined || origin === undefined) return null;
   const displayEmail = raw["displayEmail"] === null ? null : nonBlank(raw["displayEmail"]);
   const providerAccountId = raw["providerAccountId"] === null ? null : nonBlank(raw["providerAccountId"]);
+  if (raw["displayEmail"] !== null && displayEmail === null) return null;
+  if (raw["providerAccountId"] !== null && providerAccountId === null) return null;
   const common = { name, role, origin, displayEmail, providerAccountId, takenAt };
 
   const reading = raw["reading"];
@@ -2548,7 +2550,9 @@ function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
       if (window === null) return null;
       windows.push(window);
     }
-    return { ...common, family: "claude", reading: { kind: "windows", windows } };
+    return providerAccountId === null
+      ? null
+      : { ...common, providerAccountId, family: "claude", reading: { kind: "windows", windows } };
   }
 
   if (family === "codex") {
@@ -2576,7 +2580,9 @@ function parseAccountUsageSection(raw: unknown): AccountUsageSection | null {
       if (bucket === null) return null;
       buckets.push(bucket);
     }
-    return { ...common, family: "codex", reading: { kind: "buckets", buckets, resetCredits } };
+    return providerAccountId === null
+      ? null
+      : { ...common, providerAccountId, family: "codex", reading: { kind: "buckets", buckets, resetCredits } };
   }
 
   return null;
@@ -2638,16 +2644,32 @@ export function parseAccountUsage(raw: unknown): AccountUsageView {
       const rawAccounts = raw["accounts"];
       if (!Array.isArray(rawAccounts)) return unreadable("the server published a per-account reading with no accounts in it");
       const accounts: AccountUsageSection[] = [];
+      const seenNames = new Set<string>();
+      const seenProviders = new Set<string>();
       for (const entry of rawAccounts) {
         const section = parseAccountUsageSection(entry);
         if (section === null) return unreadable("the server published an account section this page cannot read");
+        const nameKey = `${section.family}/${section.name}`;
+        if (seenNames.has(nameKey)) return unreadable(`the server published ${nameKey} twice`);
+        seenNames.add(nameKey);
+        if (section.providerAccountId !== null) {
+          const providerKey = `${section.family}/${section.providerAccountId}`;
+          if (seenProviders.has(providerKey)) {
+            return unreadable(`the server published provider account ${providerKey} twice`);
+          }
+          seenProviders.add(providerKey);
+        }
         accounts.push(section);
       }
       if (accounts.length === 0) return unreadable("the server published a per-account reading with no accounts in it");
       const rawProblems = raw["problems"];
-      const problems = Array.isArray(rawProblems)
-        ? rawProblems.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-        : [];
+      if (!Array.isArray(rawProblems)) return unreadable("the server published no problem list");
+      const problems: string[] = [];
+      for (const problem of rawProblems) {
+        const parsed = nonBlank(problem);
+        if (parsed === null) return unreadable("the server published an unreadable problem entry");
+        problems.push(parsed);
+      }
       return { kind: "published", collectedAt, accounts, problems, coordinatorWrittenAt };
     }
     default:

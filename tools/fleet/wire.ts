@@ -3981,32 +3981,34 @@ export type AccountUsageSection = {
   origin: AccountUsageOrigin;
   /** From the registry pin, or from the provider's own answer. Null when neither said. */
   displayEmail: string | null;
-  /**
-   * The account id the PROVIDER returned, null when it declined to say.
-   *
-   * **A null here means the reading cannot carry numbers**, and that rule is
-   * enforced by the producer rather than left to renderers: a percentage under
-   * a heading naming an account nobody proved it belongs to is the failure this
-   * whole subsystem exists to refuse. For a registered account the id has
-   * already been checked against the registry pin; for an ambient one it is
-   * whatever the provider said, and *nothing* is not an answer.
-   */
-  providerAccountId: string | null;
   /** ISO. **When THIS account was read**, not when the pass ran. */
   takenAt: string;
 } & (
   | {
       family: "claude";
-      reading:
-        | { kind: "windows"; windows: UsageWindowCard[] }
-        /** No percentage field exists on this arm, by construction. `UsageWindowCard`'s header says why. */
-        | { kind: "unknown"; why: string };
+      /**
+       * The provider id is non-null on the numeric arm by construction. A
+       * percentage and an unproved identity are not a state callers may spell.
+       */
+      providerAccountId: string;
+      reading: { kind: "windows"; windows: UsageWindowCard[] };
+    }
+  | {
+      family: "claude";
+      /** A failed attempt may still name the pinned account, or may establish no identity. */
+      providerAccountId: string | null;
+      /** No percentage field exists on this arm, by construction. `UsageWindowCard`'s header says why. */
+      reading: { kind: "unknown"; why: string };
     }
   | {
       family: "codex";
-      reading:
-        | { kind: "buckets"; buckets: CodexUsageBucket[]; resetCredits: number | null }
-        | { kind: "unknown"; why: string };
+      providerAccountId: string;
+      reading: { kind: "buckets"; buckets: CodexUsageBucket[]; resetCredits: number | null };
+    }
+  | {
+      family: "codex";
+      providerAccountId: string | null;
+      reading: { kind: "unknown"; why: string };
     }
 );
 
