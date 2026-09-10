@@ -65,6 +65,7 @@ function attentionItem(
     evidence,
     answerability: { kind: "phone" },
     duplicates: [],
+    proposal: evidence.kind === "dialog" ? { kind: "not-applicable" } : { kind: "off", why: "proposals are off" },
     ...over,
   };
 }
@@ -77,6 +78,39 @@ function published(items: readonly AttentionItem[] = [], over: Record<string, un
     ...over,
   } as AttentionFeed;
 }
+
+describe("a `limited` inbox — the model was refused (plan 260910f D6)", () => {
+  it("composes its prose items as for `list`, and names the stop as a gap", () => {
+    const view = composeQuestions({
+      rows: [],
+      attentionFeed: {
+        kind: "published",
+        coordinatorWrittenAt: FRESH,
+        list: {
+          kind: "limited",
+          items: [attentionItem("p1", "$1", { kind: "prose", excerpt: "Say the word.", why: "it stopped on an offer" })],
+          sessionsScanned: 3,
+          sessionsUnreadable: 1,
+          scannedAt: FRESH,
+          stopped: { kind: "exhausted", why: "the day's ceiling would be crossed", until: "2026-09-10T00:00:00.000Z" },
+        },
+      },
+      collectionError: null,
+      collectedAt: FRESH,
+      refreshMs: 60_000,
+      now: NOW,
+    });
+    expect(view.kind).toBe("partial");
+    if (view.kind !== "partial") return;
+    expect(view.items.map((i) => i.kind)).toEqual(["prose-unaddressable"]);
+    expect(view.gaps).toContainEqual({
+      kind: "attention-judgement-stopped",
+      why: "the day's ceiling would be crossed",
+      until: "2026-09-10T00:00:00.000Z",
+    });
+    expect(view.gaps).toContainEqual({ kind: "attention-sessions-unreadable", count: 1 });
+  });
+});
 
 function compose(over: Partial<Parameters<typeof composeQuestions>[0]> = {}) {
   return composeQuestions({

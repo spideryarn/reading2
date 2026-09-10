@@ -56,8 +56,12 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
   ConversationReading,
   ExecutionReading,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
   SessionDescription,
   ExecutionUnknownCause,
   FleetState as FleetStateWire,
@@ -100,6 +104,9 @@ export type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
+  ProposalReach,
+  ProposalRecipient,
   OverseerHeartbeat,
   OverseerRegister,
   OverseerRegisterWork,
@@ -1622,8 +1629,14 @@ function parseAttentionList(raw: unknown, writtenAt: string, skew: ClockSkew): A
     const why = nonBlank(raw["why"]);
     return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
   }
-  if (raw["kind"] !== "list") {
-    return bad(`kind ${JSON.stringify(raw["kind"])} is neither "list" nor "unknown"`);
+  /* `limited` (plan 260910f D6): the same fields as `list`, strictly, plus
+     `stopped`. A KIND, not a field, because of this very branch in the build
+     before it — an unknown kind is refused into `unknown`, where an unknown
+     field would have been dropped and a stopped judge's empty list drawn as
+     calm. */
+  const kind = raw["kind"];
+  if (kind !== "list" && kind !== "limited") {
+    return bad(`kind ${JSON.stringify(kind)} is none of "list", "limited" or "unknown"`);
   }
   const sessionsScanned = count(raw["sessionsScanned"]);
   if (sessionsScanned === null) return bad("sessionsScanned is not a count");
@@ -1669,7 +1682,26 @@ function parseAttentionList(raw: unknown, writtenAt: string, skew: ClockSkew): A
      long it has waited — and nothing on this side may re-sort, or the two halves
      disagree about what is at the top. Agreed with `w2-attention-inbox`;
      AttentionPanel.tsx holds the other end of it. */
-  return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  if (kind === "list") return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+  const stopped = raw["stopped"];
+  if (!isRecord(stopped)) return bad("a limited list does not say why the model was stopped");
+  const stoppedKind = stopped["kind"];
+  const why = nonBlank(stopped["why"]);
+  const until = iso(stopped["until"]);
+  if ((stoppedKind !== "exhausted" && stoppedKind !== "cooling-down") || why === null || until === null) {
+    return bad("a limited list does not say why the model was stopped, or until when");
+  }
+  /* `until` is a server instant like every other here, so it is shifted too:
+     "until 14:00" read off an unshifted clock is a phone's skew printed as a
+     promise. */
+  return {
+    kind: "limited",
+    items,
+    sessionsScanned,
+    sessionsUnreadable,
+    scannedAt,
+    stopped: { kind: stoppedKind, why, until: shiftToBrowserClock(until, skew) ?? until },
+  };
 }
 
 /**
@@ -1705,7 +1737,102 @@ function parseAttentionItem(raw: unknown, skew: ClockSkew): AttentionItem | null
     if (dupId === null || dupName === null || dupSince === null) return null;
     duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: shiftToBrowserClock(dupSince, skew) ?? dupSince });
   }
-  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
+  const proposal = parseAttentionProposal(raw["proposal"]);
+  if (proposal === null) return null;
+  /* THE QUOTE IS IN THIS ITEM'S OWN EXCERPT — GPT Sol's F15. The card labels
+     it "the sentence this proposal is about", so one the excerpt does not hold
+     is an invented sentence wearing the label. A dialog has no excerpt to hold
+     one. */
+  if (proposal.kind === "proposed" && !(evidence.kind === "prose" && quotedIn(proposal.asks, evidence.excerpt))) return null;
+  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates, proposal };
+}
+
+/**
+ * A quote, checked as the producer checks it — RESTATED from
+ * tools/overseer/attention-classify.ts (`normaliseSpace`, `MAX_ASKS_CHARS`,
+ * `MIN_ASKS_CHARS`, `MIN_ASKS_WORDS`, whose comments say why each value), like
+ * every parser in this file. tests/fleet-attention-proposal.test.tsx drives the
+ * bounds from those constants, so a copy that drifts goes red.
+ */
+function normaliseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+const MAX_ASKS_CHARS = 300;
+const MIN_ASKS_CHARS = 12;
+const MIN_ASKS_WORDS = 2;
+
+function asksInBounds(asks: string): boolean {
+  const s = normaliseSpace(asks);
+  return s.length <= MAX_ASKS_CHARS && s.length >= MIN_ASKS_CHARS && s.split(" ").length >= MIN_ASKS_WORDS;
+}
+
+function quotedIn(asks: string, text: string): boolean {
+  return normaliseSpace(text).includes(normaliseSpace(asks));
+}
+
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/**
+ * An item's proposal, every arm in full (plan 260910f Stage 2) — restated
+ * rather than imported, like every parser in this file.
+ *
+ * **ABSENT IS `not-reported`, NOT A FAILURE**: this page may be reading a server
+ * older than itself, and an item from before the field made no claim.
+ * Present and malformed is refused — the list degrades whole, as for any other
+ * field — because the card draws `recipient`, `reason`, `asks` and `by` as
+ * words, and a half-read one would name a holder nobody proposed.
+ */
+function parseAttentionProposal(raw: unknown): AttentionProposal | null {
+  if (raw === undefined) return { kind: "not-reported" };
+  if (!isRecord(raw)) return null;
+  switch (raw["kind"]) {
+    case "proposed": {
+      const id = nonBlank(raw["id"]);
+      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === raw["recipient"]);
+      const reason = nonBlank(raw["reason"]);
+      const asks = nonBlank(raw["asks"]);
+      const by = parseProposalAuthor(raw["by"]);
+      const reach = parseProposalReach(raw["reach"]);
+      if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      // Inside the producer's length bounds (F17), or the card could draw a whole tail in the flow.
+      if (!asksInBounds(asks)) return null;
+      return { kind: "proposed", id, recipient, reason, asks, by, reach };
+    }
+    case "unplaced": {
+      const id = nonBlank(raw["id"]);
+      const why = nonBlank(raw["why"]);
+      const by = parseProposalAuthor(raw["by"]);
+      return id === null || why === null || by === null ? null : { kind: "unplaced", id, why, by };
+    }
+    case "off":
+    case "not-reached": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: raw["kind"], why };
+    }
+    case "not-applicable":
+      return { kind: "not-applicable" };
+    case "not-reported":
+      return { kind: "not-reported" };
+    default:
+      return null;
+  }
+}
+
+/** The wire's one author arm: a model, via the Overseer. A person is never an author (D9). */
+function parseProposalAuthor(raw: unknown): ProposalAuthor | null {
+  if (!isRecord(raw) || raw["kind"] !== "model" || raw["via"] !== "overseer") return null;
+  const model = nonBlank(raw["model"]);
+  return model === null ? null : { kind: "model", model, via: "overseer" };
+}
+
+function parseProposalReach(raw: unknown): ProposalReach | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "available") return { kind: "available" };
+  const why = nonBlank(raw["why"]);
+  if (why === null) return null;
+  if (raw["kind"] === "unavailable") return { kind: "unavailable", why };
+  if (raw["kind"] === "not-checked") return { kind: "not-checked", why };
+  return null;
 }
 
 /**
@@ -3076,6 +3203,13 @@ function parseQuestionGap(raw: unknown, skew: ClockSkew): QuestionGap | null {
       const reason = why();
       return itemId === null || reason === null ? null : { kind, itemId, why: reason };
     }
+    case "attention-judgement-stopped": {
+      const reason = why();
+      const until = iso(raw["until"]);
+      return reason === null || until === null
+        ? null
+        : { kind, why: reason, until: shiftToBrowserClock(until, skew) ?? until };
+    }
     case "eligible-observation-omitted": {
       const observation = raw["observation"];
       if (!isRecord(observation)) return null;
@@ -3107,7 +3241,7 @@ function resolveQuestionReferences(
   if (view.kind !== "not-observed") {
     const rowsById = new Map(rows.map((row) => [row.id, row]));
     const attentionItems =
-      attention.kind === "published" && attention.list.kind === "list"
+      attention.kind === "published" && attention.list.kind !== "unknown"
         ? new Map(attention.list.items.map((item) => [item.id, item]))
         : new Map<string, AttentionItem>();
     for (const item of view.items) {
@@ -3137,7 +3271,7 @@ function resolveQuestionReferences(
       });
     }
   }
-  if (attention.kind === "published" && attention.list.kind === "list") {
+  if (attention.kind === "published" && attention.list.kind !== "unknown") {
     for (const item of attention.list.items) {
       switch (item.evidence.kind) {
         case "dialog":
@@ -3338,6 +3472,12 @@ export function questionsAtTime(state: FleetState, now: number): QuestionsView {
         if (state.attention.list.sessionsScanned === 0) gaps.push({ kind: "attention-no-sessions-scanned" });
         if (state.attention.list.sessionsUnreadable > 0) {
           gaps.push({ kind: "attention-sessions-unreadable", count: state.attention.list.sessionsUnreadable });
+        }
+        /* Re-derived here as well as parsed, like every gap above: a server
+           that composed `complete` over a stopped judge cannot make it so. */
+        if (state.attention.list.kind === "limited") {
+          const { why, until } = state.attention.list.stopped;
+          gaps.push({ kind: "attention-judgement-stopped", why, until });
         }
         /* Inbox dialog items are discarded in silence here too, for the reason
            `composeQuestions` gives at length: a dialog answered between the two

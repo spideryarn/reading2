@@ -736,8 +736,12 @@ export async function transcriptAfter(path: string, offset: number, read: ReadRa
     // dropped its cut-off last line and the tail was skipped, so a session line
     // just past a long unrelated line was never read. Beyond two windows the
     // tail necessarily starts after the first window, and the last
-    // `VERIFY_TAIL_BYTES` suffices: every line of a resumed conversation
-    // carries its sessionId. Either way at most 2 * VERIFY_TAIL_BYTES + 1 bytes.
+    // `VERIFY_TAIL_BYTES` is read. NOT every transcript line carries a
+    // sessionId (`file-history-snapshot` lines do not, ~1-1.5% on this box),
+    // and tool results can exceed 64 KiB, so a pass whose tail is one such line
+    // sees no session line; the next pass re-reads, and a live session soon
+    // writes one. Transient, not a hole (Fable's settle of G20). Either way at
+    // most 2 * VERIFY_TAIL_BYTES + 1 bytes.
     const contiguous = info.size - from <= 2 * VERIFY_TAIL_BYTES + 1;
     const end = contiguous ? info.size : Math.min(info.size, from + VERIFY_TAIL_BYTES + 1);
     const first = (await read(path, from, end - from)).toString("utf8").split("\n");

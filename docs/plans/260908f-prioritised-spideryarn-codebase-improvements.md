@@ -673,6 +673,14 @@ not time-in-app, clicks or articles completed.
 
 ### Stage: prepare a small reader study Greg can run
 
+**Status as of 2026-09-10: protocol prepared and Sol-reviewed; the study itself is not run** — no
+reader contacted. The protocol, consent text, recruiting message and Greg's checklist are
+[260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md).
+It departs from the bullets below in two reviewed ways: whole articles rather than passages (with a
+pilot of length and time), and the result read from article-by-article contrasts, since each reader's
+two conditions are different articles. The first three bullets and the approval half of the fourth
+are done by that document; the rest waits on Greg.
+
 - [ ] Write a short protocol using two comparable article passages and counterbalance which is read
   with Spideryarn versus ordinary prose. Start with a small formative set, for example 3–5 consenting
   readers; this is enough to find friction, not to claim a statistically established learning effect.

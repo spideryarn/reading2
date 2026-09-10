@@ -68,6 +68,8 @@ const VERDICT_LABEL: Readonly<Record<SchedulePreviewVerdictKind, string>> = {
   "not-yet-eligible": "NOT YET ELIGIBLE",
   "dry-run": "DRY RUN",
   "spacing-held": "WAITING FOR SPACING",
+  "usage-held": "HELD FOR A POOL ACCOUNT",
+  resume: "WOULD RESUME",
   dispatch: "WOULD DISPATCH",
 };
 
@@ -175,6 +177,18 @@ function LastAttempt({ attempt, boxNow }: { attempt: SchedulePreviewAttempt; box
       return <>never run</>;
     case "not-known":
       return <span className="tw:text-unknown-ink">NOT KNOWN — {attempt.why}</span>;
+    case "launch":
+      return (
+        <span className={attempt.state === "outcome-unknown" || attempt.state === "carried" ? "tw:text-unknown-ink" : undefined}>
+          <State word={attempt.state} meaning={attempt.meaning} /> — planned <At iso={attempt.plannedAt} what="When it was planned" boxNow={boxNow} />
+          {attempt.endedAt === null ? null : (
+            <>
+              , ended <At iso={attempt.endedAt} what="When the launch journal says it ended" boxNow={boxNow} />
+            </>
+          )}
+          : {attempt.why}
+        </span>
+      );
     case "reserved":
       return (
         <>
@@ -351,7 +365,10 @@ function JobRow({ job, boxNow }: { job: SchedulePreviewJob; boxNow: number }): R
               every {formatDuration(job.schedule.everyMs)}, launcher lease {formatDuration(job.schedule.launcherLeaseMs)}, first run{" "}
               {formatDuration(job.schedule.initialDelayMs)} after arming
             </li>
-            <li>session timeout: {job.sessionTimeout}</li>
+            <li>
+              session timeout:{" "}
+              {job.sessionTimeout.kind === "run-spec" ? `${job.sessionTimeout.timeoutMinutes} min, ${job.sessionTimeout.access} access` : "not a session"}
+            </li>
             <li>session no-overlap: {job.sessionNoOverlap}</li>
           </ul>
           {job.documents.length === 0 ? (
@@ -418,7 +435,7 @@ function Facts({ preview, boxNow }: { preview: ParsedSchedulePreview; boxNow: nu
   return (
     <ul className="tw:mt-1 tw:space-y-0.5 tw:text-[12px] tw:break-words tw:text-ink-soft">
       <li>
-        this daemon holds: session dispatcher {preview.capabilities.session ? "yes" : "no"}, rule runner {preview.capabilities.rules ? "yes" : "no"}
+        this daemon holds: launch protocol {preview.capabilities.session ? "yes" : "no"}, rule runner {preview.capabilities.rules ? "yes" : "no"}
       </li>
       <li>
         arming:{" "}
@@ -431,7 +448,15 @@ function Facts({ preview, boxNow }: { preview: ParsedSchedulePreview; boxNow: nu
         )}
       </li>
       <li className={preview.history.kind === "lost" ? "tw:font-medium tw:text-alarm-ink" : undefined}>
-        history: {preview.history.kind === "intact" ? "the occurrence ledger is whole" : `LOST, so every job is held — ${preview.history.why}`}
+        history: {preview.history.kind === "intact" ? "the rules' ledger is whole" : `the rules' ledger is LOST, so every rule is held — ${preview.history.why}`}
+      </li>
+      <li className={preview.sessionHistory.kind === "lost" ? "tw:font-medium tw:text-alarm-ink" : undefined}>
+        sessions:{" "}
+        {preview.sessionHistory.kind === "intact"
+          ? "the launch journal is whole"
+          : preview.sessionHistory.kind === "lost"
+            ? `the launch journal is LOST, so every session job is held — ${preview.sessionHistory.why}`
+            : `this daemon cannot read a launch journal, so every session job is held — ${preview.sessionHistory.why}`}
       </li>
       {preview.list.kind === "given" ? (
         <li>

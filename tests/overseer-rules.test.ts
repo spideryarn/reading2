@@ -509,14 +509,23 @@ describe("the two-phase protocol, under the scheduler", () => {
     expect(refusal.why).toContain("no actor");
   });
 
-  test("A DAEMON GIVEN NO SPAWNER CANNOT START A SESSION JOB, however due it is", () => {
+  test("A DAEMON GIVEN NO LAUNCH PROTOCOL CANNOT START A SESSION JOB, however due it is", () => {
     // SP-4's structural half. Not a filter over the job list: the capability is
-    // absent from the process, so the refusal is the only thing that can happen.
+    // absent from the process. Since plan 260910f (scheduled dispatch) that
+    // process cannot read the launch journal either, so the session job is held
+    // on its history — an unread history is not an empty one — and nothing is
+    // written anywhere.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const session: JobDefinition = {
-      behaviour: { id: "get-ready-to-deploy", what: "start a session", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } },
+      behaviour: {
+        id: "get-ready-to-deploy",
+        what: "start a session",
+        documents: [],
+        work: { kind: "session", run: { timeoutMinutes: 5, access: "read-only" } },
+        dispatch: { kind: "live" },
+      },
       schedule: { everyMs: 1, leaseMs: 1000, initialDelayMs: 0 },
     };
     const reports = schedulerTick({
@@ -527,9 +536,10 @@ describe("the two-phase protocol, under the scheduler", () => {
       arming: ARMED,
       launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
     });
-    expect(reports.map((r) => r.kind)).toEqual(["refused"]);
-    const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
-    expect(refusal.why).toContain("no session dispatcher");
+    expect(reports.map((r) => r.kind)).toEqual(["history-lost"]);
+    const held = reports[0] as Extract<SchedulerReport, { kind: "history-lost" }>;
+    expect(held.why).toContain("holds no launch protocol");
+    expect(rawKinds(root).filter((kind) => kind.startsWith("job-occurrence"))).toEqual([]);
   });
 });
 
@@ -1195,21 +1205,26 @@ describe("the deterministic-only arming, as the shipped CLI does it", () => {
     expect(rulesEnabled({ [RULES_ENABLED_VAR]: "1" })).toBe(true);
   });
 
-  test("RULES-ONLY HANDS THE DAEMON NO SPAWNER AT ALL, and no standing job either", () => {
+  test("RULES-ONLY HANDS THE DAEMON NO SESSION CAPABILITY AT ALL, and no standing job either", () => {
     // The assertion SP-4 asked for, and the one that catches somebody
     // "simplifying" this back into a filter.
     const wiring = schedulerWiring({ [RULES_ENABLED_VAR]: "1" }, ARMED);
     expect(wiring.arming).toBe("rules-only");
-    expect(wiring.jobs?.spawn).toBeUndefined();
+    expect(Object.keys(wiring.jobs ?? {})).not.toContain("spawn");
+    expect(Object.keys(wiring.jobs ?? {})).not.toContain("launch");
     expect(wiring.jobs?.rules).toBeDefined();
     expect(wiring.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual(["wedged-work", "launch-mode"]);
-    expect(wiring.detail).toContain("NO SESSION DISPATCHER");
+    expect(wiring.detail).toContain("NO LAUNCH PROTOCOL WAS HANDED OVER");
   });
 
-  test("the full arming still supplies both standing jobs AND the rule, with a spawner", () => {
+  test("the full arming still supplies both standing jobs AND the rule — and no session capability until the daemon composes the launch protocol", () => {
+    // Plan 260910f (scheduled dispatch): the `gjd-remote` spawner is deleted, and
+    // Stage C hands the daemon the launch protocol. Until then the preview says
+    // plainly that this process can start no session.
     const wiring = schedulerWiring({ OVERSEER_JOBS_ENABLED: "1" }, ARMED);
     expect(wiring.arming).toBe("all");
-    expect(typeof wiring.jobs?.spawn).toBe("function");
+    expect(Object.keys(wiring.jobs ?? {})).not.toContain("spawn");
+    expect(wiring.preview.capabilities).toEqual({ session: false, rules: true });
     expect(wiring.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual([
       "get-ready-to-deploy",
       "feedback-sweep",

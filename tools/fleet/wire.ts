@@ -747,7 +747,68 @@ export type AttentionItem = {
   answerability: AttentionAnswerability;
   /** Other sessions asking the same thing. Answer once, apply to all. */
   duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+  /**
+   * Who the model thinks holds the answer — a PROPOSAL, never a decision, and
+   * **nothing is sent to anyone because of it** (plan 260910f Stage 2). Every
+   * arm is spelled out so a reader draws exactly one thing for each, and the
+   * three parsers of this type refuse a malformed one whole.
+   *
+   * An item from an older producer has no such field; its parsers read that as
+   * `not-reported` rather than as a failure, and an older parser reading a newer
+   * item drops the field — poorer, not wrong.
+   */
+  proposal: AttentionProposal;
 };
+
+/**
+ * The five holders a question can be routed to — docs/project/overseer-direction.md
+ * § Route by who has the information, not by confidence, plus `overseer` (it answers
+ * only what it can verify) and `self` (the agent already has what it needs).
+ * `unplaced` is NOT one of them; it is its own arm of `AttentionProposal`, and it
+ * is never promoted to `greg` (plan 260910f D8).
+ */
+export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
+
+/**
+ * Whether the proposed holder could take the question NOW. Projected on every
+ * pass and never remembered (D14). `not-checked` is honest rather than
+ * hopeful: nothing reads, for instance, whether Codex has capacity.
+ */
+export type ProposalReach =
+  | { kind: "available" }
+  | { kind: "unavailable"; why: string }
+  | { kind: "not-checked"; why: string };
+
+/**
+ * Who proposed it — stamped by the code that made the call, never read from
+ * the model's own output (D9). There is deliberately no arm for a person: a
+ * proposal is never anybody's voice, least of all Greg's.
+ */
+export type ProposalAuthor = { kind: "model"; model: string; via: "overseer" };
+
+export type AttentionProposal =
+  | {
+      kind: "proposed";
+      /** The tail's fingerprint plus the prompt version, so a later stage's mark can be keyed to it. */
+      id: string;
+      recipient: ProposalRecipient;
+      /** One sentence: why that holder has the information. */
+      reason: string;
+      /** The agent's own sentence that hands over the decision — checked to be in the tail it was read from (D13). */
+      asks: string;
+      by: ProposalAuthor;
+      reach: ProposalReach;
+    }
+  /** The model answered and could not tell who holds it. Drawn as such; never Greg by default. */
+  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor }
+  /** Proposals are not enabled — the default (D7). Draws nothing. */
+  | { kind: "off"; why: string }
+  /** A verdict from an earlier prompt not yet re-read, or a re-read the budget or the gateway refused. Draws nothing. */
+  | { kind: "not-reached"; why: string }
+  /** A drawn dialog: observed rather than inferred, and answered in the detail pane. Draws nothing. */
+  | { kind: "not-applicable" }
+  /** Parsed from an older producer that had no such field. Draws nothing. */
+  | { kind: "not-reported" };
 
 export type AttentionList =
   | {
@@ -782,7 +843,50 @@ export type AttentionList =
       sessionsUnreadable: number;
       scannedAt: string;
     }
-  | { kind: "unknown"; why: string; scannedAt: string };
+  | { kind: "unknown"; why: string; scannedAt: string }
+  /**
+   * **THE MODEL WAS STOPPED, NOT MERELY RATIONED** — the day budget or a quota
+   * cooldown refused at least one paid call this pass (plan 260910f, D4–D6).
+   * The items are still real — dialogs are observed, and cached verdicts,
+   * stale ones included, still place theirs — and `sessionsUnreadable` counts
+   * the tails the refusal left unjudged, exactly as it does on `list`.
+   *
+   * **A NEW ARM RATHER THAN A FIELD ON `list`, and the reason is the older
+   * readers.** All three parsers of this type (store.ts, tools/fleet/attention.ts,
+   * web/src/types.ts) project the fields they know and ignore the rest, so a
+   * `stopped` field on `{kind:"list", items:[]}` would reach an older dashboard
+   * as *nothing is waiting on you* — the one sentence a stopped judge must never
+   * produce. An unknown KIND, by contrast, every older parser already rejects
+   * into its loud `unknown`. GPT Sol's F2 on the plan.
+   *
+   * `list` keeps exactly its old meaning — fully judged within the pass's own
+   * per-pass budget — so a list from an older producer needs no reinterpreting.
+   * The per-pass catch-up after a fleet-wide restart is ordinary operation and
+   * stays a `list` with `sessionsUnreadable`; this arm is only for a refusal.
+   */
+  | {
+      kind: "limited";
+      /** Already sorted, like `list`'s. May be empty, and an empty one is NOT a calm fleet. */
+      items: readonly AttentionItem[];
+      sessionsScanned: number;
+      sessionsUnreadable: number;
+      scannedAt: string;
+      stopped: AttentionJudgementStopped;
+    };
+
+/**
+ * Why the model pass was refused, and when it may be tried again.
+ *
+ * `exhausted` is the day's ceiling (or a ledger that cannot be trusted, which is
+ * refused for the rest of the UTC day rather than reset); `cooling-down` is the
+ * gateway's own 402/429, backed off. `until` is an instant, never a duration,
+ * so every reader converts it once rather than each doing its own arithmetic.
+ */
+export type AttentionJudgementStopped = {
+  kind: "exhausted" | "cooling-down";
+  why: string;
+  until: string;
+};
 
 /* ------------------------------------------------------------------ *
  * Why a session is not doing anything, which is three facts wearing one word.
@@ -3715,7 +3819,9 @@ export type QuestionGap =
   | {
       kind: "eligible-observation-omitted";
       observation: { kind: "dialog"; rowId: string } | { kind: "prose"; itemId: string };
-    };
+    }
+  /** Written by either composer when the attention pass published `limited`: the model was refused, so prose went unjudged until `until`. */
+  | { kind: "attention-judgement-stopped"; why: string; until: string };
 
 /** Only this arm may support the sentence “nothing needs you”. */
 export type QuestionsView =
@@ -4313,7 +4419,7 @@ export type ReceiptSummary = {
  * tick cannot disagree about the gate order.
  */
 export type SchedulePreview = {
-  schema: 1;
+  schema: 2;
   /** When the daemon computed this. Every verdict below is as of this instant — see `caveat`. */
   writtenAt: string;
   /** The daemon instance that wrote it, so a reader can tell a restarted daemon's file from the one before. */
@@ -4323,7 +4429,15 @@ export type SchedulePreview = {
   /** What the daemon holds, not what it would hold armed: a disarmed daemon holds neither. */
   capabilities: { session: boolean; rules: boolean };
   arming: SchedulePreviewArming;
+  /** The rules' ledger, `events.jsonl`. `lost` holds every rule, and their rows say so. */
   history: SchedulePreviewHistory;
+  /**
+   * The launch journal — every session job's history since plan 260910f
+   * (scheduled dispatch). `lost` holds every session job, and their rows say so;
+   * `unavailable` means this process deliberately holds no launch protocol, not
+   * that a journal reader found damage. It says nothing about the rules (F2).
+   */
+  sessionHistory: SchedulePreviewSessionHistory;
   /** The checkpoint's own scheduler headline, recomputed from the same fresh evidence on the same tick. */
   headline: SchedulePreviewHeadline;
   missedRunPolicy: { kind: "one-run"; sentence: string };
@@ -4345,8 +4459,11 @@ export type SchedulePreviewList = { kind: "given"; listRevision: string } | { ki
 /** When the scheduler was armed — what a never-run job's first eligibility is measured from — or why there is no such instant. */
 export type SchedulePreviewArming = { kind: "armed"; at: string } | { kind: "none"; why: string };
 
-/** Whether the occurrence ledger is whole. `lost` holds every job, and the rows say so. */
+/** Whether one ledger is whole. `lost` holds every job whose history lives in it, and the rows say so. */
 export type SchedulePreviewHistory = { kind: "intact" } | { kind: "lost"; why: string };
+
+/** The launch journal may also be unavailable because this process holds no launch protocol. */
+export type SchedulePreviewSessionHistory = SchedulePreviewHistory | { kind: "unavailable"; why: string };
 
 /** `store.ts`'s `StoredScheduler`, restated here because this file imports nothing. */
 export type SchedulePreviewHeadline = { kind: "armed" | "blocked" | "off" | "unknown"; why: string; at: string };
@@ -4354,10 +4471,10 @@ export type SchedulePreviewHeadline = { kind: "armed" | "blocked" | "off" | "unk
 /**
  * One job, as the scheduler would treat it now.
  *
- * `sessionTimeout` and `sessionNoOverlap` are literals on purpose: they are
- * things this build does NOT do, stated on every row so nobody reads the
- * launcher lease as either (plan 260910e § D1). The Scheduled-dispatch stage is
- * what changes them.
+ * `sessionTimeout` and `sessionNoOverlap` were literals saying what the build
+ * did NOT do (plan 260910e § D1). Since plan 260910f (scheduled dispatch) a
+ * session job's timeout is its authorised run spec, and its no-overlap guard is
+ * the launch journal: an open launch holds its job, with no lease.
  */
 export type SchedulePreviewJob = {
   jobId: string;
@@ -4368,8 +4485,9 @@ export type SchedulePreviewJob = {
   lastAttempt: SchedulePreviewAttempt;
   /** Durations in milliseconds. `launcherLeaseMs` is how long the LAUNCHER may stay unsettled — not a session timeout. */
   schedule: { everyMs: number; launcherLeaseMs: number; initialDelayMs: number };
-  sessionTimeout: "not built";
-  sessionNoOverlap: "not enforced";
+  /** The run spec the session job was authorised with — its timeout and its access profile — or that the job is not a session. */
+  sessionTimeout: SchedulePreviewRun;
+  sessionNoOverlap: "enforced";
   /** The authorised instruction — the job's `what`. */
   prompt: string;
   /** What the job fingerprints as against the documents read this checkpoint, or why that could not be computed. */
@@ -4381,6 +4499,9 @@ export type SchedulePreviewJob = {
 
 export type SchedulePreviewHash = { kind: "computed"; hash: string } | { kind: "not-computed"; why: string };
 
+/** A session job's authorised run spec, as `JobRunSpec` in `tools/overseer/jobs.ts` has it; a rule has none. No account: that is chosen per occurrence, not authorised per job. */
+export type SchedulePreviewRun = { kind: "run-spec"; timeoutMinutes: number; access: "read-only" | "review" | "write" } | { kind: "not-a-session" };
+
 /** Every kind the planner can give a job. `JobPlan` in `tools/overseer/schedule-plan.ts`, one for one. */
 export type SchedulePreviewVerdictKind =
   | "history-lost"
@@ -4391,6 +4512,8 @@ export type SchedulePreviewVerdictKind =
   | "not-yet-eligible"
   | "dry-run"
   | "spacing-held"
+  | "usage-held"
+  | "resume"
   | "dispatch";
 
 /** The planner's verdict, with its sentence and when the job could next run. Only `unauthorised` carries more: which documents moved. */
@@ -4419,14 +4542,32 @@ export type SchedulePreviewNext =
  * The newest occurrence the ledger holds for this job, in its own state.
  *
  * `meaning` is on every arm that is an occurrence, and it is the sentence that
- * stops a reader over-trusting the word `finished`: **for a session job the
- * ledger follows the `gjd-remote` launcher, not the session** — `finished` is
- * the launcher exiting, and the Claude session it started runs on, detached.
+ * stops a reader over-trusting a state word. A `launch` is a session job's
+ * occurrence as the launch journal holds it (plan 260910f, scheduled
+ * dispatch): its state is the protocol's, and its result — the wrapper's exit,
+ * the answer — is the occurrences section's to say, never read off the state.
+ * The other occurrence arms are the rules' ledger; a session job's occurrence
+ * there is from before the launch protocol, when the ledger followed the
+ * `gjd-remote` launcher and `finished` meant the launcher exiting.
  * `not-known` is a ledger that is not whole, which must not read as `never`.
  */
 export type SchedulePreviewAttempt =
   | { kind: "never" }
   | { kind: "not-known"; why: string }
+  | {
+      kind: "launch";
+      /** The scheduler's id for the occurrence: `job@instant#hash`. */
+      occurrenceId: string;
+      /** The launch protocol's id, `lo-…`. */
+      launchId: string;
+      plannedAt: string;
+      state: SchedulePreviewLaunchState;
+      standing: SchedulePreviewLaunchStanding;
+      /** When the journal says it ended — never a later release. Non-null exactly when `standing` is `settled` or `replaced`. */
+      endedAt: string | null;
+      why: string;
+      meaning: string;
+    }
   | { kind: "reserved"; occurrenceId: string; reservedAt: string; leaseUntil: string; meaning: string }
   | { kind: "started"; occurrenceId: string; reservedAt: string; startedAt: string; leaseUntil: string; pid: number; meaning: string }
   | {
@@ -4447,6 +4588,26 @@ export type SchedulePreviewAttempt =
       noticed: { kind: "derived" } | { kind: "recorded"; at: string };
       meaning: string;
     };
+
+/**
+ * What a launch occurrence means for its job: waiting to be resumed (not a
+ * run), open (holds its job), settled, or replaced before it ever launched.
+ */
+export type SchedulePreviewLaunchStanding = "resumable" | "open" | "settled" | "replaced";
+
+/** The launch protocol's states, plus `carried` (over a history reset), `disposed` (Greg's decision) and `superseded` (replaced). */
+export type SchedulePreviewLaunchState =
+  | "planned"
+  | "waiting-admission"
+  | "reserved"
+  | "launching"
+  | "observed-running"
+  | "outcome-unknown"
+  | "carried"
+  | "completed"
+  | "failed-before-launch"
+  | "disposed"
+  | "superseded";
 
 /**
  * One document the job's authority comes from: its pinned digest, its digest
@@ -4830,13 +4991,22 @@ export type ScheduledOccurrencesFile = {
 
 export type ScheduledJournalStanding = { kind: "whole" } | { kind: "history-lost"; why: string } | { kind: "not-open"; why: string };
 
-/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour. */
-export type ScheduledRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour, which names no account. */
+export type ScheduledJobRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+
+/**
+ * One occurrence's run spec: the job's, as the launch record pinned it, and
+ * the Claude pool account it ran on — chosen by the scheduler when it planned
+ * the occurrence, so it is per occurrence, not per job. `account` is null only
+ * for a record that pins no run spec (a `tmux` launch, which the scheduler
+ * never plans).
+ */
+export type ScheduledRunSpec = ScheduledJobRunSpec & { account: string | null };
 
 export type ScheduledOccurrencesJob = {
   jobId: string;
   dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
-  run: ScheduledRunSpec;
+  run: ScheduledJobRunSpec;
   /** When it could next run — the preview's own answer, copied. */
   next: SchedulePreviewNext;
   /** Newest first by `scheduledAt`, at most `OCCURRENCES_PER_JOB`. */
@@ -4861,14 +5031,17 @@ export type ScheduledLaunchState =
  *
  * `tools/overseer/occurrence-result.ts` derives it from the launch record and
  * the attempt's `exit.json`; the ladder and its precedence are there. The first
- * four are not endings; `succeeded` is the only good ending; every other kind is
- * a failure that names itself.
+ * four are not endings; `superseded` is an ending that is neither a failure nor
+ * a success — the scheduler abandoned the occurrence on purpose, before it
+ * launched, so nothing ran; `succeeded` is the only good ending; every other
+ * kind is a failure that names itself.
  */
 export type ScheduledResultKind =
   | "pending"
   | "admission-waiting"
   | "running"
   | "unknown"
+  | "superseded"
   | "launch-failed"
   | "timed-out"
   | "quota-refused"
