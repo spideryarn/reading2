@@ -63,7 +63,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { loadQuotes } from "../src/store/index.js";
 import { beginRevision, failRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
-import { PIPELINE_RUN } from "../src/store/revisions.js";
+import { PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { Block, Quotes, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 

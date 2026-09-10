@@ -96,7 +96,7 @@ import { hashBlocks } from "../src/source-hash.js";
 import { STORAGE_BUSY, STORAGE_FAILED } from "../src/messages.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { JobEndTransition, StoreSession } from "../src/store/session.js";
 import type { Arc, Block, Job, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";

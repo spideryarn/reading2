@@ -27,9 +27,7 @@
  * src/store/artifacts-fs.ts, deleted 2026-09-05 along with the
  * `SPIDERYARN_STORE` flag that chose between the two; the Postgres one,
  * src/store/artifacts-pg.ts — which src/store/pg-session.ts imports — is what
- * every claimed job runs on now, the only store there is. See the header of
- * src/store/revisions.ts. (It said "nothing in production imports yet" until
- * 2026-09-02, which stopped being true at commit c42c940.)
+ * every claimed job runs on now, the only store there is.
  *
  * ## The key is `(step, kind)`, not `kind`
  *

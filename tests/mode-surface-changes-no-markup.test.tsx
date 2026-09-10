@@ -1293,6 +1293,7 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     lookFailed: null,
     ask: async () => {},
     asking: false,
+    askDraft: null,
     asked: null,
     askFailed: null,
     clearAsked: () => {},

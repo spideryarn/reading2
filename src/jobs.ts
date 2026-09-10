@@ -63,8 +63,7 @@ import { pgJobStore } from "./store/pg-jobs.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
    article and ends the job with something a person can act on, the other is a
-   500. Imported from the module that defines it rather than through
-   src/store/revisions.js, which does not re-export it. See `walkClaim`. */
+   500. See `walkClaim`. */
 import { PublishRefused } from "./store/pg-revisions.js";
 import {
   DraftGoneError,

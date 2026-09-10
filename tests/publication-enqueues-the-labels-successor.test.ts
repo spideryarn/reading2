@@ -128,7 +128,7 @@ import {
   publishRevisionIn,
   recordStepRun,
 } from "../src/store/pg-revisions.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
 import type { Block, Job, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";

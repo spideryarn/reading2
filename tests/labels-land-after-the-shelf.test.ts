@@ -101,7 +101,7 @@ import { pgArticleReader } from "../src/store/pg.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { workKeyFor } from "../src/store/jobs.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { Block, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
 import { pgReady } from "./helpers/pg-ready.js";

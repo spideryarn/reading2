@@ -50,7 +50,7 @@ import {
   publishRevision,
   recordStepRun,
 } from "../src/store/pg-revisions.js";
-import { PIPELINE_RUN } from "../src/store/revisions.js";
+import { PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { Block, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
