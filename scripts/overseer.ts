@@ -73,7 +73,11 @@ import { observeOwnExecution, type OwnExecution } from "../tools/overseer/report
 import {
   BLOCKED_ON,
   COMPLETED_ENDINGS,
+  QUARANTINE_DIR,
+  REFUSED_DIR,
   REPORT_KINDS,
+  addCounts,
+  countValue,
   drainReports,
   parseSubmission,
   printable,
@@ -82,6 +86,8 @@ import {
   submitReport,
   type ArtefactChecker,
   type BlockedOn,
+  type BoundedCount,
+  type QuarantineSummary,
   type CompletedEnding,
   type ExecutionComparison,
   type ReportActor,
@@ -1433,16 +1439,49 @@ function rowLines(row: ReportRow): string[] {
   return lines;
 }
 
+/** "12", or "AT LEAST 1000" — the spelling `overseer status` uses for a capped inbox count. */
+function countWords(count: BoundedCount): string {
+  return "exact" in count ? String(count.exact) : `AT LEAST ${count.atLeast}`;
+}
+
+/** How long ago, in the coarsest unit still informative; a stamp in the future is a clock disagreement. */
+function agoInWords(ms: number): string {
+  if (ms < 0) return "just now";
+  const unit = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"} ago`;
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 90) return unit(seconds, "second");
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return unit(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return unit(hours, "hour");
+  return unit(Math.round(hours / 24), "day");
+}
+
+/** The quarantine only grows — the daemon never empties it — so its size, its oldest entry and where it is. */
+function quarantineLines(quarantine: QuarantineSummary, nowMs: number): string[] {
+  const { count, oldestMovedAt, path: where } = quarantine;
+  if ("exact" in count && count.exact === 0) return [`  nothing quarantined (${where})`];
+  const capped = "atLeast" in count;
+  const age = oldestMovedAt === null ? "" : `, the oldest${capped ? " seen" : ""} ${agoInWords(nowMs - Date.parse(oldestMovedAt))}`;
+  return [
+    `  ${countWords(count)} ${!capped && countValue(count) === 1 ? "entry" : "entries"} quarantined${age}; nothing empties it automatically`,
+    `  look at them, then delete them: ${where}`,
+  ];
+}
+
 /**
- * Recorded claims, then what is in flight, then what was refused and why.
- * **Every empty case prints a sentence**: "nothing recorded" and "no file" and
- * "nothing matched" are three different facts, and a blank screen is a fourth
- * that looks like all of them.
+ * Recorded claims, then what is in flight, then what was refused and why, then
+ * the quarantine. **Every empty case prints a sentence**: "nothing recorded" and
+ * "no file" and "nothing matched" are three different facts, and a blank screen
+ * is a fourth that looks like all of them. **Every count says whether it was
+ * capped**: the inbox is read only to its first entries, so a flood prints
+ * "AT LEAST", never a partial number that reads as the whole.
  */
 export function runReports(
   root: string,
   parsed: Extract<Parsed, { command: "reports" }>,
   out: (line: string) => void = (line) => console.log(line),
+  now: Date = new Date(),
 ): number {
   const read = readReports(root);
   const inbox = readInbox(root);
@@ -1461,12 +1500,31 @@ export function runReports(
   const byIdOnly = (eventId: string): boolean => !filtered && (parsed.event === null || parsed.event === eventId);
 
   const rows = read.kind === "reports" ? read.view.rows.filter((row) => matches(row.event)) : [];
-  const inFlight = inbox.inFlight.filter((item) => (item.submission === null ? byIdOnly(item.eventId) : matches(item.submission)));
-  const processing = inbox.processing.filter((item) => (item.event === null ? byIdOnly(item.eventId) : matches(item.event)));
-  const refused = inbox.refused.filter((item) => byIdOnly(item.eventId));
+  const inFlight = inbox.inFlight.items.filter((item) => (item.submission === null ? byIdOnly(item.eventId) : matches(item.submission)));
+  const processing = inbox.processing.items.filter((item) => (item.event === null ? byIdOnly(item.eventId) : matches(item.event)));
+  const refused = inbox.refused.items.filter((item) => byIdOnly(item.eventId));
 
   if (parsed.json) {
-    out(JSON.stringify({ recorded: read.kind === "reports" ? { kind: read.kind, rows, problems: read.view.problems } : read, inFlight, processing, refused }, null, 2));
+    out(
+      JSON.stringify(
+        {
+          recorded: read.kind === "reports" ? { kind: read.kind, rows, problems: read.view.problems } : read,
+          inFlight,
+          processing,
+          refused,
+          // Unfiltered, and each says `exact` or `atLeast`: the lists above are the entries read, not all of them.
+          counts: {
+            inFlight: inbox.inFlight.count,
+            processing: inbox.processing.count,
+            refused: inbox.refused.count,
+            notSubmissions: inbox.skippedEntries,
+          },
+          quarantine: inbox.quarantine,
+        },
+        null,
+        2,
+      ),
+    );
     return read.kind === "unreadable" ? 1 : 0;
   }
 
@@ -1489,7 +1547,19 @@ export function runReports(
 
   out("");
   out("In flight — submitted, not yet recorded");
-  if (inFlight.length === 0 && processing.length === 0) out("  nothing in flight");
+  const waiting = addCounts(inbox.inFlight.count, inbox.processing.count);
+  const waitingListed = inbox.inFlight.items.length + inbox.processing.items.length;
+  if ("exact" in waiting && waiting.exact === 0) {
+    out("  nothing in flight");
+  } else {
+    if ("atLeast" in waiting || waiting.exact > waitingListed) {
+      out(`  ${countWords(waiting)} submitted, not yet recorded; the ${waitingListed} read here are listed`);
+    }
+    if (inFlight.length === 0 && processing.length === 0 && describeFilter !== "") out(`  none of those read matches ${describeFilter}`);
+  }
+  if (countValue(inbox.skippedEntries) > 0) {
+    out(`  ${countWords(inbox.skippedEntries)} inbox entries are not submissions; the daemon moves them to ${QUARANTINE_DIR}/`);
+  }
   for (const item of inFlight) {
     out(
       item.submission === null
@@ -1503,9 +1573,30 @@ export function runReports(
 
   out("");
   out("Refused — what the daemon refused to record, and why");
-  if (filtered) out("  (refusals are listed only without --session, --kind or --search: a refused file may not have parsed far enough to have them)");
-  else if (refused.length === 0) out("  nothing refused");
+  const allRefused = inbox.refused.count;
+  if (filtered) {
+    out("  (refusals are listed only without --session, --kind or --search: a refused file may not have parsed far enough to have them)");
+  } else {
+    if ("atLeast" in allRefused || allRefused.exact > inbox.refused.items.length) {
+      out(`  ${countWords(allRefused)} refused; the ${inbox.refused.items.length} read here are listed`);
+    }
+    if (refused.length === 0) {
+      out(
+        parsed.event !== null
+          ? `  no refusal of ${parsed.event} among those read`
+          : "exact" in allRefused && allRefused.exact === 0
+            ? "  nothing refused"
+            : "  none could be listed",
+      );
+    }
+  }
   for (const item of refused) out(`  ${item.refusedAt}  ${item.eventId} — ${printable(item.why)}`);
+  // Like the quarantine, the daemon never prunes refusals, so say where they are.
+  if (countValue(allRefused) > 0) out(`  nothing empties it automatically; look at them, then delete them: ${join(root, REFUSED_DIR)}`);
+
+  out("");
+  out("Quarantined — inbox entries that can never become a report, moved aside unread");
+  for (const line of quarantineLines(inbox.quarantine, now.getTime())) out(line);
 
   return read.kind === "unreadable" || (read.kind === "reports" && read.view.problems.length > 0) ? 1 : 0;
 }

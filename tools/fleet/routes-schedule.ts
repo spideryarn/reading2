@@ -37,8 +37,10 @@ import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
-import { SCHEDULE_PREVIEW_FILE } from "../overseer/schedule-preview.js";
-import { parseSchedulePreview, SCHEDULE_PREVIEW_SCHEMA } from "./schedule-parse.js";
+// THE LEAF, NOT THE WRITER. `tools/overseer/schedule-preview.ts` exports the
+// same name, and importing it from there pulled the planner, the scheduler and
+// the store into the dashboard's reach (tests/fleet-attention.test.ts).
+import { parseSchedulePreview, SCHEDULE_PREVIEW_FILE, SCHEDULE_PREVIEW_SCHEMA } from "./schedule-parse.js";
 
 export const SCHEDULE_PATH = "/api/overseer/schedule";
 

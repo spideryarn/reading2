@@ -325,6 +325,7 @@ describe("runReports", () => {
     const out: string[] = [];
     runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (l) => out.push(l));
     expect(out.join("\n")).toMatch(new RegExp(`refused.*\\n.*${id}`, "s"));
+    expect(out.join("\n")).toContain(`nothing empties it automatically; look at them, then delete them: ${join(root, REFUSED_DIR)}`);
   });
 
   test("a hand-written refusal cannot put control characters in terminal output", () => {
@@ -350,6 +351,69 @@ describe("runReports", () => {
     runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (line) => out.push(line));
     expect(out.join("\n")).not.toContain("FOLLOWED LINK");
     expect(out.join("\n")).toMatch(/refusal record could not be read/);
+  });
+
+  const ALL: Extract<Parsed, { command: "reports" }> = { command: "reports", session: null, kind: null, search: null, event: null, json: false };
+
+  test("a flooded inbox prints AT LEAST, and lists no more than it read", () => {
+    const root = tempRoot();
+    const dir = join(root, INBOX_DIR);
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 1500; i += 1) writeFileSync(join(dir, `${randomUUID()}.json`), "{}");
+    const out: string[] = [];
+    runReports(root, ALL, (line) => out.push(line));
+    const text = out.join("\n");
+    expect(text).toMatch(/AT LEAST 1000 submitted, not yet recorded/);
+    expect(text).not.toMatch(/nothing in flight/);
+    const listed = out.filter((line) => /^ {2}[0-9a-f]{8}-[0-9a-f]{4}-/.test(line));
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.length).toBeLessThanOrEqual(200);
+  });
+
+  test("an unflooded inbox gives an exact count, and never says AT LEAST", () => {
+    const root = tempRoot();
+    const c = deps();
+    runReport(root, report(["report", "progress", "--summary", "one", "--session", "work-reports"]).report, c.deps);
+    runReport(root, report(["report", "progress", "--summary", "two", "--session", "work-reports"]).report, c.deps);
+    const out: string[] = [];
+    runReports(root, ALL, (line) => out.push(line));
+    const text = out.join("\n");
+    expect(text).not.toMatch(/AT LEAST/);
+    expect(text).toContain("one");
+    expect(text).toContain("two");
+  });
+
+  test("the quarantine's size, its oldest entry's age and its path are printed, and nothing empties it", () => {
+    const root = tempRoot();
+    const dir = join(root, "report-quarantine");
+    mkdirSync(dir, { recursive: true });
+    const oldest = Date.parse("2026-09-07T12:00:00.000Z");
+    writeFileSync(join(dir, `${String(oldest)}-0000000-a1b2c3d4-junk.txt`), "");
+    mkdirSync(join(dir, `${String(oldest + 3_600_000)}-0000000-e5f6a7b8`));
+    const out: string[] = [];
+    runReports(root, ALL, (line) => out.push(line), new Date("2026-09-10T12:00:00.000Z"));
+    const text = out.join("\n");
+    expect(text).toContain("2 entries quarantined, the oldest 3 days ago; nothing empties it automatically");
+    expect(text).toContain(dir);
+  });
+
+  test("a capped quarantine says AT LEAST and 'the oldest seen'", () => {
+    const root = tempRoot();
+    const dir = join(root, "report-quarantine");
+    mkdirSync(dir, { recursive: true });
+    const base = Date.parse("2026-09-08T12:00:00.000Z");
+    for (let i = 0; i < 1200; i += 1) writeFileSync(join(dir, `${String(base + i)}-${String(i).padStart(7, "0")}-deadbeef`), "");
+    const out: string[] = [];
+    runReports(root, ALL, (line) => out.push(line), new Date("2026-09-10T12:00:00.000Z"));
+    expect(out.join("\n")).toMatch(/AT LEAST 1000 entries quarantined, the oldest seen 2 days ago; nothing empties it automatically/);
+  });
+
+  test("an empty quarantine says so in a sentence, with its path", () => {
+    const root = tempRoot();
+    const out: string[] = [];
+    runReports(root, ALL, (line) => out.push(line));
+    expect(out.join("\n")).toMatch(/nothing quarantined/);
+    expect(out.join("\n")).toContain(join(root, "report-quarantine"));
   });
 });
 

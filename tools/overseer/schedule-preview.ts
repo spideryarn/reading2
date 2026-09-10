@@ -39,7 +39,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseSchedulePreview, SCHEDULE_PREVIEW_SCHEMA } from "../fleet/schedule-parse.js";
+import { parseSchedulePreview, SCHEDULE_PREVIEW_FILE, SCHEDULE_PREVIEW_SCHEMA } from "../fleet/schedule-parse.js";
 import type {
   ParsedSchedulePreview,
   SchedulePreview,
@@ -59,8 +59,13 @@ import { authorisationUnder, documentEvidenceFor, planJobs, type DocumentEvidenc
 import type { HeldCapabilities } from "./scheduler.js";
 import type { StoredScheduler } from "./store.js";
 
-/** The file, inside the store directory — beside `armed.json`, for the reason `arming.ts` gives: it is a fact about one store's scheduler. */
-export const SCHEDULE_PREVIEW_FILE = "schedule.json";
+/**
+ * The file, inside the store directory. **Defined in the browser-safe leaf
+ * `tools/fleet/schedule-parse.ts`** and re-exported here for this module's
+ * callers — the dashboard's route needs the name, and importing it from this
+ * module pulled the whole planner into the dashboard's reach.
+ */
+export { SCHEDULE_PREVIEW_FILE };
 
 /**
  * **THE MISSED-RUN POLICY, NAMED** — plan 260910e § D1.

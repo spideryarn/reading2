@@ -42,7 +42,7 @@ const BLOCKED: ReportWireClaim = {
 };
 
 const FEED: ReportsFeed = {
-  schema: 1,
+  schema: 2,
   kind: "reports",
   path: "/tmp/fake/reports.jsonl",
   composedAt: "2026-09-10T12:05:00.000Z",
@@ -55,8 +55,9 @@ const FEED: ReportsFeed = {
   },
   recent: [BLOCKED, CLAIM],
   recentWithheld: 0,
-  inFlight: 2,
-  refused: 1,
+  inFlight: { exact: 2 },
+  refused: { exact: 1 },
+  quarantine: { count: { exact: 12 }, oldestMovedAt: "2026-09-07T12:05:00.000Z" },
   problems: [],
 };
 
@@ -80,19 +81,47 @@ describe("strict parsing", () => {
     };
     expect(parseReportsFeed(clone(unavailable))).toEqual(unavailable);
     const arms: ReportsFeed[] = [
-      { schema: 1, kind: "never-written", composedAt: FEED.composedAt, why: "no report yet", inFlight: 3, refused: 0 },
-      { schema: 1, kind: "unreadable", composedAt: FEED.composedAt, why: "reports.jsonl is gone" },
-      { schema: 1, kind: "oversized-file", composedAt: FEED.composedAt, why: "too big", sizeBytes: 9, limitBytes: 8 },
+      {
+        schema: 2,
+        kind: "never-written",
+        composedAt: FEED.composedAt,
+        why: "no report yet",
+        inFlight: { exact: 3 },
+        refused: { exact: 0 },
+        quarantine: { count: { exact: 0 }, oldestMovedAt: null },
+      },
+      { schema: 2, kind: "unreadable", composedAt: FEED.composedAt, why: "reports.jsonl is gone" },
+      { schema: 2, kind: "oversized-file", composedAt: FEED.composedAt, why: "too big", sizeBytes: 9, limitBytes: 8 },
     ];
     for (const arm of arms) expect(parseReportsFeed(clone(arm))).toEqual(arm);
   });
 
-  it("refuses schema 2 with a sentence, rather than drawing a shape it does not know", () => {
-    const answer = parseReportsFeed({ ...clone(FEED), schema: 2 });
+  it("accepts a capped count — at least — on every count, in both arms that carry counts", () => {
+    const capped: ReportsFeed = {
+      ...FEED,
+      inFlight: { atLeast: 1000 },
+      refused: { atLeast: 1000 },
+      quarantine: { count: { atLeast: 1000 }, oldestMovedAt: "2026-09-01T00:00:00.000Z" },
+    };
+    expect(parseReportsFeed(clone(capped))).toEqual(capped);
+    const never: ReportsFeed = {
+      schema: 2,
+      kind: "never-written",
+      composedAt: FEED.composedAt,
+      why: "no report yet",
+      inFlight: { atLeast: 1000 },
+      refused: { exact: 0 },
+      quarantine: { count: { atLeast: 1000 }, oldestMovedAt: null },
+    };
+    expect(parseReportsFeed(clone(never))).toEqual(never);
+  });
+
+  it("refuses schema 1 — the shape with bare counts — with a sentence, rather than drawing it", () => {
+    const answer = parseReportsFeed({ ...clone(FEED), schema: 1, inFlight: 2, refused: 1 });
     expect(answer.kind).toBe("no-answer");
     if (answer.kind !== "no-answer") throw new Error("unreachable");
-    expect(answer.why).toContain("version 1 of the reports API");
-    expect(answer.why).toContain("2");
+    expect(answer.why).toContain("version 2 of the reports API");
+    expect(answer.why).toContain("1");
   });
 
   const malformed: [string, (feed: Record<string, unknown>) => void][] = [
@@ -124,6 +153,30 @@ describe("strict parsing", () => {
     }],
     ["an event id that is not a uuid", (feed) => {
       ((feed["recent"] as Record<string, unknown>[])[1] as Record<string, unknown>)["eventId"] = "not-a-uuid";
+    }],
+    ["a bare in-flight number, which cannot say whether it was capped", (feed) => {
+      feed["inFlight"] = 2;
+    }],
+    ["a bare refused number", (feed) => {
+      feed["refused"] = 1;
+    }],
+    ["a count that claims both arms", (feed) => {
+      feed["inFlight"] = { exact: 2, atLeast: 2 };
+    }],
+    ["a count with an unknown arm", (feed) => {
+      feed["inFlight"] = { about: 2 };
+    }],
+    ["a missing quarantine", (feed) => {
+      delete feed["quarantine"];
+    }],
+    ["a bare quarantine number", (feed) => {
+      feed["quarantine"] = { count: 12, oldestMovedAt: null };
+    }],
+    ["a quarantine age that is not an instant", (feed) => {
+      feed["quarantine"] = { count: { exact: 12 }, oldestMovedAt: "three days ago" };
+    }],
+    ["an oldest entry in an empty quarantine", (feed) => {
+      feed["quarantine"] = { count: { exact: 0 }, oldestMovedAt: "2026-09-07T12:05:00.000Z" };
     }],
   ];
   it.each(malformed)("refuses %s", (_what, mutate) => {
@@ -163,7 +216,7 @@ describe("the injectable seam", () => {
     expect(notJson).toMatchObject({ kind: "no-answer" });
     if (notJson.kind === "no-answer") expect(notJson.why).toContain("not JSON");
 
-    const wrong = await makeReportsApi(async () => response(JSON.stringify({ ...FEED, schema: 2 }))).fetch();
+    const wrong = await makeReportsApi(async () => response(JSON.stringify({ ...FEED, schema: 3 }))).fetch();
     expect(wrong.kind).toBe("no-answer");
 
     const down = await makeReportsApi(async () => {

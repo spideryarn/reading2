@@ -31,18 +31,40 @@
  * hard limit; `routes-decisions.ts` says the same of its own. The 2 MiB
  * response ceiling is exact: the session rows, counts and problems are
  * mandatory, and recent claims are withheld from the oldest end, counted.
+ *
+ * The inbox is not behind the 8 MiB check — it is a directory, not a file — so
+ * its bound is `readInbox`'s own: each directory read lazily to at most 1 000
+ * entries, at most 200 files opened in each, and every count carried as
+ * `{ exact }` or `{ atLeast }` (GPT Sol's WR-S3-5). A flooded inbox costs this
+ * route a bounded read and arrives as "at least", never as a partial number.
  */
 import { statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 
 import { loadCheckpoint, storeRoot, type CheckpointLoad } from "./attention.js";
-import { projectReports, type ProjectedClaim, type ProjectedClaimed, type ProjectedSessions } from "./reports-view.js";
-import type { ReportsFeed, ReportWireActor, ReportWireClaim, ReportWireClaimed, ReportWireSessions } from "./wire.js";
+import {
+  inboxCounts,
+  projectReports,
+  type InboxCounts,
+  type ProjectedClaim,
+  type ProjectedClaimed,
+  type ProjectedSessions,
+} from "./reports-view.js";
+import type {
+  ReportsFeed,
+  ReportWireActor,
+  ReportWireClaim,
+  ReportWireClaimed,
+  ReportWireCount,
+  ReportWireQuarantine,
+  ReportWireSessions,
+} from "./wire.js";
 import {
   readInbox as readReportInbox,
   readReports as readReportLog,
   REPORTS_FILE,
+  type BoundedCount,
   type InboxListing,
   type ReportActor,
   type ReportsRead,
@@ -50,8 +72,13 @@ import {
 
 export const REPORTS_PATH = "/api/reports";
 
-/** The payload's schema, on every arm including the inline refusals. Not the log's schema. */
-export const REPORTS_FEED_SCHEMA = 1;
+/**
+ * The payload's schema, on every arm including the inline refusals. Not the
+ * log's schema. 2 since WR-S3-5 made every count `{ exact } | { atLeast }`: a
+ * browser that reads version 1 refuses the new shape rather than drawing an
+ * object where it expects a number.
+ */
+export const REPORTS_FEED_SCHEMA = 2;
 export const MAX_REPORTS_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const MAX_REPORTS_INPUT_BYTES = 8 * 1024 * 1024;
 
@@ -146,6 +173,18 @@ function claimForWire(claim: ProjectedClaim): ReportWireClaim {
   }
 }
 
+function countForWire(count: BoundedCount): ReportWireCount {
+  return "exact" in count ? { exact: count.exact } : { atLeast: count.atLeast };
+}
+
+function countsForWire(counts: InboxCounts): { inFlight: ReportWireCount; refused: ReportWireCount; quarantine: ReportWireQuarantine } {
+  return {
+    inFlight: countForWire(counts.inFlight),
+    refused: countForWire(counts.refused),
+    quarantine: { count: countForWire(counts.quarantine.count), oldestMovedAt: counts.quarantine.oldestMovedAt },
+  };
+}
+
 function claimedForWire(claimed: ProjectedClaimed): ReportWireClaimed {
   return { kind: "claimed", claims: claimed.claims, latest: claimForWire(claimed.latest) };
 }
@@ -216,8 +255,7 @@ export function reportsPayload(readers: ReportsRouteReaders): ReportsFeed {
       why:
         `no report has been recorded yet: ${read.path} has never been written. That is the ordinary state ` +
         "before the first report, not the same as a log that exists and is empty.",
-      inFlight: inbox.inFlight.length + inbox.processing.length,
-      refused: inbox.refused.length,
+      ...countsForWire(inboxCounts(inbox)),
     };
   }
 
@@ -226,6 +264,7 @@ export function reportsPayload(readers: ReportsRouteReaders): ReportsFeed {
   const problems = projection.problems.map((problem) => ({ ...problem }));
   const recent = projection.recent.map(claimForWire);
   const totalClaims = projection.recent.length + projection.recentWithheld;
+  const counts = countsForWire(projection);
   const answerWith = (count: number): Extract<ReportsFeed, { kind: "reports" }> => ({
     schema: REPORTS_FEED_SCHEMA,
     kind: "reports",
@@ -234,8 +273,7 @@ export function reportsPayload(readers: ReportsRouteReaders): ReportsFeed {
     sessions,
     recent: recent.slice(0, count),
     recentWithheld: totalClaims - count,
-    inFlight: projection.inFlight,
-    refused: projection.refused,
+    ...counts,
     problems,
   });
 
@@ -260,9 +298,15 @@ export function reportsPayload(readers: ReportsRouteReaders): ReportsFeed {
   return answerWith(low);
 }
 
-function sendJson(res: ServerResponse, status: number, body: string, extra: Record<string, string> = {}): void {
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: string,
+  extra: Record<string, string> = {},
+  withoutBody = false,
+): void {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...extra });
-  res.end(body);
+  res.end(withoutBody ? undefined : body);
 }
 
 /** The exact production composition. Tests inject only its leaf readers. */
@@ -273,9 +317,10 @@ export function makeReportsRoute(readers: ReportsRouteReaders = realReaders()): 
     handle(req, res): boolean {
       const url = req.url ?? "/";
       if (!url.startsWith(REPORTS_PATH)) return false;
+      const head = req.method === "HEAD";
       const bare = url.split("?")[0] ?? "";
       if (bare !== REPORTS_PATH) {
-        sendJson(res, 404, JSON.stringify(unreadable(`no such route: ${bare}`, readers.now().toISOString())));
+        sendJson(res, 404, JSON.stringify(unreadable(`no such route: ${bare}`, readers.now().toISOString())), {}, head);
         return true;
       }
       if (req.method !== "GET" && req.method !== "HEAD") {
@@ -307,6 +352,8 @@ export function makeReportsRoute(readers: ReportsRouteReaders = realReaders()): 
               readers.now().toISOString(),
             ),
           ),
+          {},
+          head,
         );
         return true;
       }
