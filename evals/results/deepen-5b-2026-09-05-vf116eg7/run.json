@@ -1,0 +1,617 @@
+{
+  "meta": {
+    "startedAt": "2026-09-05T12:01:30.183Z",
+    "commit": "e3480dcb420f69d714297be141543654aa38a9be",
+    "gitDirty": true,
+    "srcPatchSha256": "a68411e3d8eded816e03cdd76bcbfdf27cb22637ad1d085469a79999a1c799c3",
+    "store": "postgres",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "node": "v26.8.1",
+    "model": "anthropic/claude-sonnet-5",
+    "effort": {
+      "hierarchy": "low",
+      "pipelineEnvOverride": null,
+      "note": "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts (EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. Every CandidateRecord carries the model and effort it was decided under."
+    },
+    "jobConcurrency": 3,
+    "jobConcurrencyRuntime": 3,
+    "stepBudgetMs": 700000,
+    "effectiveDeadlineMs": 740000
+  },
+  "runTag": "vf116eg7",
+  "args": {
+    "book": "output/2701-h.html",
+    "articles": [
+      "output/noema-mythology-of-conscious-ai.html",
+      "output/openai-huggingface.html",
+      "output/constitution.html"
+    ],
+    "repeats": 3,
+    "spend": false,
+    "dryRun": true,
+    "keep": false,
+    "mode": "dry-run"
+  },
+  "fixtures": [
+    {
+      "role": "book",
+      "file": "output/2701-h.html",
+      "sha256": "9ef7866a853cdf783af6281a5cf66b5d9e2caa7085d022c992801d2d3b25321b",
+      "bytes": 1415665
+    },
+    {
+      "role": "article-1",
+      "file": "output/noema-mythology-of-conscious-ai.html",
+      "sha256": "7d110be8d94a9c2c5a38324d2a4965c1968e480f85b93bb4343e9b39591531e6",
+      "bytes": 78787
+    },
+    {
+      "role": "article-2",
+      "file": "output/openai-huggingface.html",
+      "sha256": "a7dc5d73d57cb99f1b237a2522117142d05cc1a3dfaf09023354b5aa8e00200c",
+      "bytes": 31248
+    },
+    {
+      "role": "article-3",
+      "file": "output/constitution.html",
+      "sha256": "39edea1becedccdffb049601e6f5c40ba85eb4badb743ae6594782709a1582bd",
+      "bytes": 33649
+    }
+  ],
+  "notes": [
+    "Stage 1 (fetch) is a fixture read of a file named on the command line, so no network latency is in any elapsed time here, and there is no committed manifest holding those bytes constant — output/ is gitignored. The sha256 of what this run read is in `fixtures`.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`. Every label call carries stepName=hierarchy and job=labels. The SCOPED EXPANSION CALLS also carry job=hierarchy, the same as the whole-document structure call — so on a repeat with the structure checkpoint resumed, the `hierarchy` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that into a check rather than an assumption.",
+    "Money is the ledger's (`costStore.forJob`). Token counts are reported beside it and are never converted into a price here.",
+    "Question 1 pairs candidates on parent-plus-derived-range, never on `where`, which is an ordinal path derived from the answer's own fan-out. Verdict flips, changed fan-out and moved boundaries at equal fan-out are three separate rows and must not be added together.",
+    "A repeat is only a repeat if it bought its wave again. SPIDERYARN_DEEPEN_REASK names the book's slug and nothing else; the structure checkpoint is deliberately still resumed, which is what holds the seed constant.",
+    "Phase D runs three jobs at once, and this box is shared: another agent's dev server holding a claim slot would serialise them. Read the per-step clocks against each other, not only against the budget."
+  ],
+  "seamProof": {
+    "cold": 1,
+    "repeatWithoutReask": 0,
+    "repeatWithReask": 1,
+    "readsWhileReasking": 0,
+    "namespaces": [
+      "hierarchy-deepen"
+    ]
+  },
+  "estimate": {
+    "rows": [
+      {
+        "what": "book, full ingest, deepening on",
+        "jobs": 1,
+        "usdEach": 8.4,
+        "basis": "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound."
+      },
+      {
+        "what": "book, forced hierarchy, structure + labels resumed",
+        "jobs": 3,
+        "usdEach": 7.4,
+        "basis": "$8.4 less the $1.00 structure call the checkpoint resumes (same table). Labels resume too wherever the deepened tree comes out the same, so this is an upper bound twice over."
+      },
+      {
+        "what": "ordinary article, full ingest",
+        "jobs": 3,
+        "usdEach": 3.4,
+        "basis": "evals/cost/run.ts records ~$3.40 for a `long-html` (186-block) ingest, measured 2026-09-03. The plan says an ordinary article's wave is 'a fraction' of a book's; nothing is measured, so nothing is added. **One of these runs with the flag off** — phase C's first pass, which is the byte-identical baseline — and that costs the same, because on an article where nothing is eligible the wave makes no call either way. That equality is the thing phase C is measuring, so it is an assumption here and a result there."
+      },
+      {
+        "what": "ordinary article, forced hierarchy, everything resumed",
+        "jobs": 1,
+        "usdEach": 0.1,
+        "basis": "the inertness pass: structure and labels both resume and no section is eligible, so the expectation is zero. $0.10 is headroom for a label batch the deepened tree re-cut."
+      }
+    ],
+    "totalUsd": 40.9,
+    "worstCaseUsd": 85.30000000000001,
+    "bound": "$40.90 is the NOMINAL ESTIMATE — one purchase of each row — and $85.30 is the THREE-WINDOW REQUEUE EXPOSURE: what the same run would cost if every re-asking pass were re-claimed at its own 740s deadline and bought its wave in each of the three windows `REQUEUE_BUDGET = 2` permits. This run stops a re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § driveToDone), so it does not buy that exposure. **NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP.** No dollar or token limit refuses a call at $N. An ordinary, non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed; a redraw buys a second answer to the same question; and every per-row figure is the plan's arithmetic rather than a limit anything checks against. Watch the bill.",
+    "caveat": "Every per-row figure is an upper bound on ONE purchase of that row, derived from the plan's own arithmetic rather than measured — it is not a bound on how many purchases the run makes, which is the sentence above. The run's own `run.json` carries what it really cost. If the real bill lands far under this, that is question 4 answering itself; if it lands over, stop and read why before repeating."
+  },
+  "jobs": [
+    {
+      "phase": "A",
+      "label": "book ingest, deepening on (repeat 1)",
+      "repeat": 1,
+      "slug": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "jobId": "spya-unemwp",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T12:01:30.720Z",
+      "finishedAt": "2026-09-05T12:01:44.274Z",
+      "elapsedMs": 13554,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "1382 KB (fixture book)",
+          "startedAt": "2026-09-05T12:01:30.814Z",
+          "finishedAt": "2026-09-05T12:01:31.069Z",
+          "ms": 255
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "Moby Dick; or The Whale",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T12:01:31.151Z",
+          "finishedAt": "2026-09-05T12:01:44.208Z",
+          "ms": 13057
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 2)",
+      "repeat": 2,
+      "slug": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "jobId": "spya-vtj6b7",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T12:01:44.320Z",
+      "finishedAt": "2026-09-05T12:01:44.512Z",
+      "elapsedMs": 192,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T12:01:44.375Z",
+          "finishedAt": "2026-09-05T12:01:44.426Z",
+          "ms": 51
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 3)",
+      "repeat": 3,
+      "slug": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "jobId": "spya-c0ewvs",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T12:01:44.565Z",
+      "finishedAt": "2026-09-05T12:01:44.759Z",
+      "elapsedMs": 194,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T12:01:44.657Z",
+          "finishedAt": "2026-09-05T12:01:44.704Z",
+          "ms": 47
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "C",
+      "label": "ordinary article ingest, deepening OFF",
+      "repeat": null,
+      "slug": "evaldeepen-vf116eg7-inert-spya-hhrudw",
+      "jobId": "spya-pumkb6",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T12:01:44.814Z",
+      "finishedAt": "2026-09-05T12:01:46.361Z",
+      "elapsedMs": 1547,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "77 KB (fixture article-1)",
+          "startedAt": "2026-09-05T12:01:44.905Z",
+          "finishedAt": "2026-09-05T12:01:44.976Z",
+          "ms": 71
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "The Mythology Of Conscious AI",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T12:01:45.052Z",
+          "finishedAt": "2026-09-05T12:01:46.276Z",
+          "ms": 1224
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "C",
+      "label": "the same article, hierarchy forced, deepening ON",
+      "repeat": null,
+      "slug": "evaldeepen-vf116eg7-inert-spya-hhrudw",
+      "jobId": "spya-e9xc7m",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T12:01:46.397Z",
+      "finishedAt": "2026-09-05T12:01:46.505Z",
+      "elapsedMs": 108,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T12:01:46.453Z",
+          "finishedAt": "2026-09-05T12:01:46.472Z",
+          "ms": 19
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "D",
+      "label": "ordinary article 1 ingest, under load",
+      "repeat": null,
+      "slug": "evaldeepen-vf116eg7-load1-spya-k4ma7q",
+      "jobId": "spya-x0cah4",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T12:01:46.559Z",
+      "finishedAt": "2026-09-05T12:01:47.948Z",
+      "elapsedMs": 1389,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "31 KB (fixture article-2)",
+          "startedAt": "2026-09-05T12:01:46.624Z",
+          "finishedAt": "2026-09-05T12:01:46.676Z",
+          "ms": 52
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "The Rise and Fall of Agent Civilizations",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T12:01:46.745Z",
+          "finishedAt": "2026-09-05T12:01:47.876Z",
+          "ms": 1131
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "D",
+      "label": "ordinary article 2 ingest, under load",
+      "repeat": null,
+      "slug": "evaldeepen-vf116eg7-load2-spya-sjkyac",
+      "jobId": "spya-utc66w",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T12:01:46.559Z",
+      "finishedAt": "2026-09-05T12:01:48.016Z",
+      "elapsedMs": 1457,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "33 KB (fixture article-3)",
+          "startedAt": "2026-09-05T12:01:46.678Z",
+          "finishedAt": "2026-09-05T12:01:46.736Z",
+          "ms": 58
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "Claude’s Constitution",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T12:01:47.497Z",
+          "finishedAt": "2026-09-05T12:01:47.959Z",
+          "ms": 462
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "D",
+      "label": "book hierarchy forced under load (repeat 4)",
+      "repeat": 4,
+      "slug": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "jobId": "spya-c7s5up",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T12:01:47.513Z",
+      "finishedAt": "2026-09-05T12:01:48.042Z",
+      "elapsedMs": 529,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T12:01:47.978Z",
+          "finishedAt": "2026-09-05T12:01:47.998Z",
+          "ms": 20
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-vf116eg7-book-spya-ktu7t8",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    }
+  ],
+  "findings": [
+    {
+      "kind": "note",
+      "fatal": false,
+      "message": "Phase D's 3 jobs reached a peak of 2 `extract` step(s) in flight at once (3 of 3 left a window at all), so the wall clocks are not clocks under load. This box is shared and the queue's cap is global — another agent's dev server holding a claim slot will serialise them, and so will a job that failed before it began. The whole-JOB windows overlap either way: all three promises stay alive while two of them are being told `busy`."
+    }
+  ]
+}

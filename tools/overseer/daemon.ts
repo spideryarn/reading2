@@ -55,7 +55,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { AttentionList, OverseerWork, StoredUsage, UsageReport } from "../fleet/wire.js";
+import { readModuleStartRevision } from "../fleet/revision.js";
+import type {
+  AttentionList,
+  OverseerWork,
+  StartRevision,
+  StoredAccountUsage,
+  StoredUsage,
+  UsageReport,
+} from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import {
@@ -71,6 +79,19 @@ import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
+import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
+import { drainRecoveryInbox, pendingRecoveryRequestCount } from "./recovery-inbox.js";
+import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust, type RecoveryView } from "./recovery-view.js";
+import {
+  defaultProjectsRoots,
+  newPreviewCache,
+  productionAccountPort,
+  runResumePass,
+  UNWIRED_LAUNCH_PORT,
+  type ReadRange,
+  type ResumeAccountPort,
+  type ResumeLaunchPort,
+} from "./recovery-resume.js";
 import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
 import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
@@ -331,6 +352,14 @@ export type UsagePassOutcome =
 export type DaemonOptions = {
   /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
   root?: string;
+  /**
+   * The revision this daemon started from, written into its `daemon-started`
+   * note. Defaults to reading the checkout this module sits in, once, as the
+   * first thing `runOverseer` does — `tools/fleet/revision.ts` says why a read
+   * taken any later names the checkout's HEAD rather than the running code.
+   * Injected by tests.
+   */
+  revision?: StartRevision;
   /** The dashboard's origin. */
   baseUrl: string;
   signal: AbortSignal;
@@ -364,6 +393,48 @@ export type DaemonOptions = {
    * timer and a second freshness policy.
    */
   probe?: () => ProcessTableReading;
+  /**
+   * THIS HOST'S BOOT ID, or null when it cannot be read. Defaults to
+   * `readHostBootId`; injected so a test can drive one boot into the next.
+   * See the close-out in `take()`.
+   */
+  bootId?: () => string | null;
+  /**
+   * THE RECOVERY VIEW'S WORLD — where transcripts live, how a path is stat'ted,
+   * this host's name, and how often the view is re-checked when nothing
+   * prompts it. Each defaults to the real one (`evidenceDeps`), and is injected
+   * so a test needs no fake home. See the view pass in `runOverseer`.
+   */
+  recovery?: {
+    projectsDir?: string;
+    /** Every projects root, when a test needs more than one. Absent with no `projectsDir`: `defaultProjectsRoots()`. */
+    projectsRoots?: () => Promise<readonly string[]>;
+    stat?: EvidenceDeps["stat"];
+    hostname?: () => string;
+    viewIntervalMs?: number;
+  };
+  /**
+   * GRADUAL RECOVERY'S RESUME PASS (plan 260910f): the launch port, the
+   * account port, and two test seams. `port` defaults to `unwired` until the
+   * launch protocol is on `dev` (Stage 3) — requests then queue and nothing
+   * launches. `accounts` defaults to the production port, which reads the
+   * account ledger and registry and makes the live quota call only for a
+   * request at the head of the queue that passed every cheaper check.
+   */
+  recoveryResume?: {
+    port?: ResumeLaunchPort;
+    accounts?: ResumeAccountPort;
+    /**
+     * The per-account usage reading the gate judges the pinned account by.
+     * Absent: the daemon's own `accountUsage` (the checkpoint's sibling field,
+     * collected on each usage pass — docs/project/usage-per-account.md). Tests
+     * inject one. Null means no pass has read accounts yet, which the gate holds on.
+     */
+    accountUsage?: () => StoredAccountUsage | null;
+    readRange?: ReadRange;
+    /** Test seam: awaited between the pass's async phase and its synchronous stretch. */
+    beforeRecapture?: () => Promise<void>;
+  };
   /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
@@ -405,6 +476,29 @@ export type DaemonOptions = {
      * `safeOnPass` below. A retention failure is not a usage failure.
      */
     onPass?: (outcome: UsagePassOutcome) => void;
+    /**
+     * **EVERY ACCOUNT-SUBSCRIPTION'S LIVE HEADROOM**, read on this same timer
+     * and published without any judgement from `chooseUsage`.
+     *
+     * Called **after `run` has settled, whichever way it settled**, and that
+     * ordering is load-bearing twice over:
+     *
+     *  - **It runs even when the transcript scan threw.** These are cheap
+     *    provider calls with nothing to do with that scan, and letting a 2.9 GB
+     *    walk failing take them down with it is the *a publication decision is
+     *    not an observation* mistake, one level up from where it was made
+     *    before.
+     *  - **It runs strictly after**, so the composition root may stash a value
+     *    during `run` and read it here. That is how the ambient Codex reading
+     *    reaches it: the pass already spawns one app-server, and taking a
+     *    second would put two independently-measured numbers for one
+     *    subscription on one page. `scripts/overseer.ts` owns the stash and
+     *    says so.
+     *
+     * A daemon given no collector publishes nothing here, and the checkpoint's
+     * `accountUsageNotYetRun` says exactly that rather than an empty list.
+     */
+    accounts?: () => Promise<StoredAccountUsage>;
   };
   /**
    * THE SCHEDULED JOBS, and the schedule as data.
@@ -599,6 +693,13 @@ export const REPORTS_INTERVAL_MS = 30_000;
  */
 export const RULE_SETTLE_GRACE_MS = 15_000;
 
+/**
+ * The recovery view's floor: at most once a minute when nothing prompts it.
+ * A fold change and an accepted inventory prompt it at once; this is what
+ * catches a directory or a transcript that changed while nothing else did.
+ */
+export const RECOVERY_VIEW_INTERVAL_MS = 60_000;
+
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
   | { kind: "stopped"; why: string }
@@ -609,11 +710,15 @@ export type DaemonOutcome =
 export const TICK_MS = 30_000;
 
 export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome> {
+  // FIRST, before anything else can take time: the checkout moves under a
+  // running daemon, and this is the closest we get to what it loaded.
+  const revision = options.revision ?? readModuleStartRevision(import.meta.url, "../..");
   const now = options.now ?? (() => new Date());
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
   const probe = options.probe ?? probeProcessTable;
+  const readBootId = options.bootId ?? readHostBootId;
 
   const opened = openStore({ root, now });
   if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
@@ -718,6 +823,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     source: options.baseUrl,
     opening: describeOpening(store.opening),
     baseline: baselineNote,
+    revision,
   });
 
   // READ AND WRITTEN THROUGH FUNCTIONS, which is not ceremony: it is only ever
@@ -790,6 +896,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
   // thing in each case: leave the store's own report alone.
   let usage: StoredUsage | null = null;
+  // Every account-subscription's live headroom, or null when the pass produced
+  // nothing new. Unlike `usage` there is no supersede judgement to make: each
+  // pass reads every account afresh and a section that failed says so, so the
+  // newest reading is always the one to publish.
+  let accountUsage: StoredAccountUsage | null = null;
   // RECOMPUTED ON EVERY CHECKPOINT, from the documents as they are now. `armed`
   // is read off the option rather than off a flag beside it, so "armed" and
   // "there are jobs" cannot come apart.
@@ -841,6 +952,211 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     ...(attention === null ? {} : { attention }),
     ...(work === null ? {} : { work }),
     ...(usage === null ? {} : { usage }),
+    ...(accountUsage === null ? {} : { accountUsage }),
+  });
+
+  // ══ THE RECOVERY VIEW, THE DERIVED DISPOSITIONS AND THE INBOX
+  //
+  // docs/plans/260910e § 2, § 4 and § 5. Three things, one owner, and none of
+  // them on a request path: the route reads `recovery.json` and nothing else.
+  //
+  // THE INVENTORY-TRUST RULE is the first thing the view asks, and it is held
+  // here because only this loop sees the thing it is about: whether the LATEST
+  // payload was accepted. A refused payload, a failed collection or a held one
+  // since the last accept makes every record `unknown`, whatever rows the stale
+  // inventory before it carried — an empty list from a failed collection is not
+  // evidence of interruption. A daemon that has accepted nothing in its own life
+  // trusts nothing: a restored baseline is a cache of the previous process's
+  // bytes, not a current inventory.
+  // `recoveryEvidence`, not `evidence`: the schedule preview below and the
+  // ticker use `evidence` for the job documents' reading, a different thing.
+  const recoveryOverrides = options.recovery ?? {};
+  const recoveryEvidence = evidenceDeps({
+    ...recoveryOverrides,
+    // EVERY ACCOUNT'S PROJECTS DIRECTORY, unless a caller named one (plan 260910f, G4).
+    ...(recoveryOverrides.projectsDir === undefined && recoveryOverrides.projectsRoots === undefined ? { projectsRoots: defaultProjectsRoots() } : {}),
+  });
+  const viewIntervalMs = options.recovery?.viewIntervalMs ?? RECOVERY_VIEW_INTERVAL_MS;
+  let inventory: InventoryTrust = { kind: "untrusted", why: "no inventory has been accepted in this daemon's life yet" };
+  // ONE VIEW PASS AT A TIME, and a request during one is remembered rather than
+  // dropped: `viewWanted` makes the pass run again when it finishes, against the
+  // state as it is then. Awaited on the way out, like the other passes.
+  let viewRunning: Promise<void> | null = null;
+  let viewWanted = false;
+  // A pass snapshots both the inventory and recovery records before its first
+  // filesystem await. If either changes while it is running, publishing that
+  // completed pass would put older evidence back on disk until the queued pass
+  // caught up. The revision makes an obsolete pass disposable.
+  let viewRevision = 0;
+  let lastViewAtMs = Number.NEGATIVE_INFINITY;
+  // The latest completed view, for the resume pass's previews.
+  let latestView: RecoveryView | null = null;
+  const startView = (): void => {
+    viewWanted = false;
+    const revision = viewRevision;
+    const recovery = store.recovery;
+    const viewInventory: InventoryTrust =
+      recovery.replay.kind === "not-run"
+        ? { kind: "untrusted", why: `the recovery index is incomplete: ${recovery.replay.why}` }
+        : inventory;
+    viewRunning = buildRecoveryView(recovery, viewInventory, { ...recoveryEvidence, now })
+      .then((view) => {
+        if (revision !== viewRevision) return;
+        lastViewAtMs = now().getTime();
+        latestView = view;
+        if (halted() !== null) return;
+        // Written when it changed — `setRecoveryView` decides — through the same
+        // checkpoint, so the write order stays events, baseline, current.json,
+        // recovery.json.
+        if (store.setRecoveryView(view)) guard(store.checkpoint({ ...checkpointUpdate(), tick: false }));
+      })
+      .catch((cause: unknown) => {
+        log(`recovery view pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        viewRunning = null;
+        if (viewWanted && halted() === null) startView();
+      });
+  };
+  const requestView = (invalidateRunning = true): void => {
+    if (invalidateRunning) viewRevision += 1;
+    viewWanted = true;
+    if (viewRunning === null) startView();
+  };
+  const trustInventory = (next: InventoryTrust): void => {
+    const before = inventory;
+    inventory = next;
+    // A repeated failure with the same sentence changes nothing the view says.
+    if (before.kind === "untrusted" && next.kind === "untrusted" && before.why === next.why) return;
+    // ONLY WITHDRAWING TRUST MAKES THE RUNNING PASS OBSOLETE (the Opus check's
+    // O5). A pass that classified against a trusted inventory and finishes after
+    // a newer trusted one is still a true account of an accepted inventory; it is
+    // published and the queued pass follows it. Invalidating on every accept
+    // would let a steady stream of collections, each faster than one slow pass,
+    // discard every pass before it lands, so no view would ever be written.
+    requestView(!(before.kind === "trusted" && next.kind === "trusted"));
+  };
+  // `resumed` and `superseded`, appended by the daemon and by nothing else.
+  // Idempotent by construction (recovery.ts § `deriveDispositions`), so running
+  // it every tick costs a map walk and writes nothing twice.
+  //
+  // NOTHING IS DERIVED WHILE THE REPLAY IS `not-run` (the Opus check's O1, Sol's
+  // F21). The fold is then deliberately stale, and "unresolved" in it may be a
+  // record whose disposition is in the unread tail, so a derivation from it
+  // could append a second one. The gate is here, at the one place derived
+  // events are written, rather than at each caller: the recovery tick had it,
+  // and the accepted-payload path in `take()` did not.
+  const appendDerived = (): boolean => {
+    if (store.recovery.replay.kind === "not-run") return true;
+    const derived = deriveDispositions(store.recovery, inventory.kind === "trusted" ? inventory.rows : null, now().toISOString());
+    if (derived.length === 0) return true;
+    if (!guard(store.append(derived))) return false;
+    log(`${now().toISOString()} ${derived.length} recovery dispositions derived (${derived.map((e) => `${e.id} ${e.disposition}`).join(", ")})`);
+    requestView();
+    return true;
+  };
+  let recoveryRunning: Promise<void> | null = null;
+  // Whether this start has said that requests are held (O2). Once per start:
+  // the hold lasts as long as the process, so a line per tick would be noise.
+  let heldAnnounced = false;
+  const runRecoveryTick = async (): Promise<void> => {
+    // A refused all-or-nothing replay leaves the fold deliberately stale. It
+    // cannot authorize a dismissal, suppress a replayed request id, or prove a
+    // derived disposition until a later start reads the missing tail. Leave
+    // requests exactly where they are and publish only an unknown view.
+    if (store.recovery.replay.kind === "not-run") {
+      // SAY SO, once, when somebody is waiting (the Opus check's O2). The hold
+      // outlives every restart until the log is repaired, and without this line
+      // a `dismiss` would simply never happen.
+      if (!heldAnnounced) {
+        const waiting = await pendingRecoveryRequestCount({ root, now, log });
+        if (waiting > 0) {
+          heldAnnounced = true;
+          log(
+            `${now().toISOString()} RECOVERY REQUESTS HELD: ${waiting} request(s) in recovery-inbox/ stay pending, because the recovery index is incomplete (${store.recovery.replay.why}); nothing is applied until a daemon start can read the whole log`,
+          );
+        }
+      }
+      if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+      return;
+    }
+    const drained = await drainRecoveryInbox({ root, index: () => store.recovery, append: (events) => guard(store.append(events)), now, log });
+    if (drained.halted || halted() !== null) return;
+    if (drained.applied > 0) requestView();
+    if (!appendDerived()) return;
+    // A clock refresh asks for another pass but does not make the facts in the
+    // one already running obsolete. Invalidating every minute could starve a
+    // slow evidence pass indefinitely.
+    if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+  };
+  const recoveryTick = (): void => {
+    if (recoveryRunning !== null) return;
+    recoveryRunning = runRecoveryTick()
+      .catch((cause: unknown) => {
+        log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        recoveryRunning = null;
+      });
+  };
+  // ══ THE RESUME PASS — plan 260910f, tools/overseer/recovery-resume.ts
+  //
+  // One pass at a time, the guard every pass here uses, and none while the
+  // recovery replay is `not-run`: the fold is then deliberately stale, and a
+  // record it calls unresolved may be resolved in the unread tail. The pass
+  // recaptures through `observe()` in its synchronous stretch (Sol's G5), and
+  // the copy of the records map is what makes a capture taken before an await
+  // stay the capture it was. The gate's inputs are the latest ACCEPTED
+  // snapshot's `health` and the pinned account's section of the per-account
+  // usage reading; the ambient usage report is about the default login and is
+  // not used here (G4).
+  const resumeOptions = options.recoveryResume;
+  const resumePort: ResumeLaunchPort = resumeOptions?.port ?? UNWIRED_LAUNCH_PORT;
+  const resumeAccounts: ResumeAccountPort = resumeOptions?.accounts ?? productionAccountPort();
+  const previewCache = newPreviewCache();
+  let resumeRunning: Promise<void> | null = null;
+  const recoveryResumeTick = (): void => {
+    if (resumeRunning !== null || halted() !== null) return;
+    if (store.recovery.replay.kind === "not-run") return;
+    resumeRunning = runResumePass({
+      root,
+      now,
+      log,
+      port: resumePort,
+      accounts: resumeAccounts,
+      evidence: recoveryEvidence,
+      observe: () => {
+        const index = store.recovery;
+        return { inventory, health: accepted?.snapshot.health ?? null, index: { ...index, records: new Map(index.records) } };
+      },
+      view: () => latestView,
+      accountUsage: resumeOptions?.accountUsage ?? (() => accountUsage),
+      previewCache,
+      ...(resumeOptions?.readRange === undefined ? {} : { readRange: resumeOptions.readRange }),
+      ...(resumeOptions?.beforeRecapture === undefined ? {} : { beforeRecapture: resumeOptions.beforeRecapture }),
+    })
+      .then((result) => {
+        const head = result.head;
+        if (head !== null && head.decision !== "defer") {
+          log(`${now().toISOString()} recovery resume: ${head.candidateId} ${head.decision}${head.outcome === null ? "" : ` (${head.outcome})`}: ${head.why}`);
+        }
+        if (halted() !== null) return;
+        // Through the same checkpoint that writes `view` (Sol's G9).
+        if (store.setRecoveryResume(result.projection)) guard(store.checkpoint({ ...checkpointUpdate(), tick: false }));
+      })
+      .catch((cause: unknown) => {
+        log(`recovery resume pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        resumeRunning = null;
+      });
+  };
+
+  // AT START, before the source: a request left while the daemon was down is
+  // applied now, and the first view is drawn — against no inventory, so every
+  // record is `unknown` until a collection is accepted, which says so.
+  await runRecoveryTick().catch((cause: unknown) => {
+    log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
   });
 
   /*
@@ -920,6 +1236,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
+    recoveryTick();
+    recoveryResumeTick();
+    if (halted() !== null) return;
     // ONE DOCUMENT READING, THEN ONE HEADLINE FOR BOTH FILES written this tick.
     // Re-reading between them lets a file edit in that tiny window produce an
     // ARMED headline over an unauthorised row (or the reverse).
@@ -1091,6 +1410,31 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
                 at: passAt,
               });
             })
+            /* **UNCONDITIONALLY, AND AFTER.** Not inside the `.then`: the
+               per-account readings are independent of the transcript scan, and
+               a scan that threw must not take them down with it. Not in
+               parallel either: the composition root stashes this pass's Codex
+               observation during `run`, and reading it here is what stops the
+               box spawning a second app-server for the same subscription. */
+            .then(async () => {
+              const collect = usageOptions.accounts;
+              if (collect === undefined) return;
+              try {
+                accountUsage = await collect();
+              } catch (cause) {
+                /* A THROWN PASS BECOMES `none` WITH A REASON, never a held
+                   reading passed off as current — `usage`'s rule above, and it
+                   matters more here: a section is a percentage under an
+                   account's name, and republishing an old one after the reader
+                   broke is the failure this subsystem exists to refuse. */
+                accountUsage = {
+                  kind: "none",
+                  why: `the per-account usage pass failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                  at: now().toISOString(),
+                };
+                log(`per-account usage pass failed: ${String(cause)}`);
+              }
+            })
             .finally(() => {
               usageRunning = null;
             });
@@ -1256,6 +1600,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
     }
+    // THE VIEW PASS, in a loop: one that finishes with a request pending starts
+    // the next, and that one writes through the store too.
+    while (viewRunning !== null || recoveryRunning !== null || resumeRunning !== null) {
+      if (recoveryRunning !== null) await recoveryRunning;
+      if (resumeRunning !== null) await resumeRunning;
+      if (viewRunning !== null) await viewRunning;
+    }
     await settleRuleRuns();
   }
 
@@ -1296,6 +1647,27 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 
   const makeSource = options.source ?? fleetSource;
 
+  // EVERY TIMER, stopped in one place (Sol's F23). The exceptional path awaits
+  // `settleInFlight()` before its `finally` runs, and with the timers still live
+  // each tick asked for another view, every finishing view pass started the
+  // next, and the wait never ended: no `daemon-stopped`, a lock never released,
+  // and systemd unable to replace the process. So the timers stop BEFORE any
+  // settlement, and again in `finally`, where clearing twice is harmless.
+  const stopTimers = (): void => {
+    clearInterval(ticker);
+    if (attentionTicker !== null) clearInterval(attentionTicker);
+    if (usageTicker !== null) clearInterval(usageTicker);
+    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
+    // leaves behind is two different things wearing one word. A dispatched
+    // SESSION is a separate process with a durable reservation behind it, so a
+    // shutdown mid-run leaves a record rather than a second writer; it may not
+    // get its `finished`, which is the lease's case and the next daemon reports
+    // it. A dispatched RULE runs in here, and this comment used to cover it too
+    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
+    if (jobsTicker !== null) clearInterval(jobsTicker);
+    if (reportsTicker !== null) clearInterval(reportsTicker);
+  };
+
   try {
     // Spread rather than assigned, because `exactOptionalPropertyTypes` makes
     // "absent" and "present and undefined" different things — and here they
@@ -1318,11 +1690,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           break;
         case "poll-failed":
           write(conditions.degrade("poll", at, message.why));
+          trustInventory({ kind: "untrusted", why: `the latest collection failed: ${message.why}` });
           break;
         case "unreadable":
           // Bytes arrived and were not a payload. Same condition as a payload
           // the gate refuses: the Overseer is receiving and not learning.
           write(conditions.degrade("snapshots", at, `the ${message.via} delivered something that was not JSON: ${message.why}`));
+          trustInventory({ kind: "untrusted", why: `the latest payload was not JSON: ${message.why}` });
           break;
         case "payload":
           write(conditions.restore("poll", at, transportRestored(message.via)));
@@ -1351,22 +1725,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // store's lock with a paid call still in flight and a runner about to write
     // `attention.json`. The exceptional path is exactly when a second daemon is
     // most likely to be started, so it is the wrong one to leave open.
+    stopTimers();
     await settleInFlight();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
-    clearInterval(ticker);
-    if (attentionTicker !== null) clearInterval(attentionTicker);
-    if (usageTicker !== null) clearInterval(usageTicker);
-    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
-    // leaves behind is two different things wearing one word. A dispatched
-    // SESSION is a separate process with a durable reservation behind it, so a
-    // shutdown mid-run leaves a record rather than a second writer; it may not
-    // get its `finished`, which is the lease's case and the next daemon reports
-    // it. A dispatched RULE runs in here, and this comment used to cover it too
-    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
-    if (jobsTicker !== null) clearInterval(jobsTicker);
-    if (reportsTicker !== null) clearInterval(reportsTicker);
+    stopTimers();
   }
 
   /**
@@ -1445,6 +1809,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
+        trustInventory({ kind: "untrusted", why: `the latest payload was refused: ${verdict.reason}` });
         return true;
       case "duplicate":
         // THE ORDINARY CASE, and deliberately not a restoration of anything: a
@@ -1490,20 +1855,73 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const [key, entry] of store.register) {
       if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
     }
-    const outcome = diff(baseline, verdict.snapshot, known);
+    // THE HOST'S BOOT ID, BEFORE `diff()` — GPT Sol's F5. `tmuxServerPid` is
+    // only a pid, and a fresh boot can hand tmux the same number, so the pid
+    // rule alone can compare a new world with the old one and see nothing. The
+    // daemon runs on the box, so it asks the kernel rather than waiting for a
+    // wire field. On the first accepted collection under a different boot id,
+    // every register entry is closed out of the old world, each with its
+    // candidate, and this collection is diffed against NO baseline, so every
+    // row is new. An unreadable boot id concludes nothing: never equal, never
+    // changed, and the pid rule applies as it always has. The new id is
+    // recorded only once this collection's events are on disk, below.
+    const hostBootId = readBootId();
+    const recordedBootId = store.recovery.bootId;
+    const bootChanged = hostBootId !== null && recordedBootId !== null && hostBootId !== recordedBootId;
+    const outcome = diff(bootChanged ? null : baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
-      // NOT A SILENCE. The baseline stays where it is, so the comparison
-      // happens the moment a readable generation arrives; without this note the
-      // only trace would be a history that quietly skipped a few minutes.
+      if (bootChanged) {
+        // THE BOOT ID ALREADY PROVES THE OLD WORLD ENDED. The new populated
+        // snapshot still cannot become a baseline without a readable tmux
+        // generation, but that uncertainty is about the NEW world and must not
+        // hide the old one. Remove the durable old baseline before the append:
+        // if the process dies in between, the stored old boot id makes the next
+        // daemon repeat this close-out; if it dies after the append, the
+        // candidates carry the new boot id and recovery replay catches up.
+        forgetBaseline(root);
+        const closures = withRecoveryCandidates(closeOutOldBoot(store.register, at), store.register, {
+          observation: observationOf(observed.ordering, observed.clock.at),
+          tmuxServerPid: observed.tmuxServerPid,
+          baseline:
+            baseline === null
+              ? null
+              : {
+                  rows: baseline.snapshot.rows,
+                  collectedAt: baseline.snapshot.clock.at,
+                  observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+                },
+          producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+          bootChanged: true,
+          hostBootId,
+        });
+        if (closures.length > 0) {
+          const appended = store.append(closures);
+          if (!guard(appended)) return false;
+          log(`${at} ${closures.length} events closing the previous host boot (via ${via})`);
+        }
+        store.recordBootId(hostBootId);
+        baseline = null;
+        if (!guard(store.checkpoint(checkpointUpdate()))) return false;
+      }
+      // NOT A SILENCE. Ordinarily the baseline stays where it is, so the
+      // comparison happens the moment a readable generation arrives. A proven
+      // boot change above clears it because that old world is already closed.
+      // Without this note the only trace would be a history that quietly
+      // skipped a few minutes.
       write(conditions.degrade("baseline", at, outcome.reason));
+      // An admissible collection the differ could not place is not an
+      // inventory the view may classify against, whatever rows it carries.
+      trustInventory({ kind: "untrusted", why: `the latest collection was held: ${outcome.reason}` });
+      if (bootChanged) requestView();
       return true;
     }
     write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
 
-    // BELOW THE `held` RETURN, deliberately. `admissible()` can accept a
+    // BELOW THE ordinary `held` RETURN, deliberately. `admissible()` can accept a
     // populated inventory whose tmux generation `diff()` cannot place; probing
     // on the accept arm would spend a process-table read and throw its answer
-    // away because that path writes no checkpoint.
+    // away because that path writes no checkpoint. The proven-boot-change arm
+    // above is the exception: it checkpoints the old world's close-out only.
     let reading: ProcessTableReading;
     try {
       reading = probe();
@@ -1543,14 +1961,44 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // snapshot after a start with no baseline reconciles the register against
     // it, and the invariant is worth stating plainly: AFTER THE FIRST ACCEPTED
     // SNAPSHOT, THE REGISTER IS THE SNAPSHOT — whatever the daemon started from.
-    const events =
-      baseline === null ? [...goneWhileAway(store.register, verdict.snapshot, at), ...outcome.events] : outcome.events;
+    // A boot change closes out the whole register instead, which covers this.
+    const closures = bootChanged
+      ? closeOutOldBoot(store.register, at)
+      : baseline === null
+        ? goneWhileAway(store.register, verdict.snapshot, at)
+        : [];
+
+    // THE RECOVERY CANDIDATES, IMMEDIATELY BEFORE THE APPEND — over the
+    // differ's gones and the daemon's own closures alike. `store.register` has
+    // not folded this batch yet, so it still holds each removed session's final
+    // entry, and the candidate goes into the same single write as the gone it
+    // explains. recovery.ts says why this is the daemon's job and not `diff()`'s.
+    const events = withRecoveryCandidates([...closures, ...outcome.events], store.register, {
+      observation: observationOf(observed.ordering, observed.clock.at),
+      tmuxServerPid: observed.tmuxServerPid,
+      baseline:
+        baseline === null
+          ? null
+          : {
+              rows: baseline.snapshot.rows,
+              collectedAt: baseline.snapshot.clock.at,
+              observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+            },
+      producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+      bootChanged,
+      hostBootId,
+    });
 
     if (events.length > 0) {
       const appended = store.append(events);
       if (!guard(appended)) return false;
       log(`${at} ${events.length} events from the collection at ${observed.clock.at} (via ${via})`);
     }
+    // AFTER THE APPEND, so a crash before it leaves the old boot id and the
+    // close-out happens again rather than not at all. The candidates carry the
+    // same id, which is how the recovery fold gets it back if the process dies
+    // before `recovery.json` is written.
+    if (hostBootId !== null) store.recordBootId(hostBootId);
 
     baseline = outcome.baseline;
     lastGoodSnapshotAt = observed.clock.at;
@@ -1561,6 +2009,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //   1. `store.append(events)`   — the events, fsync'd, O_APPEND
     //   2. `saveBaseline(json)`     — the payload those events were derived FROM
     //   3. `store.checkpoint(...)`  — the register, and the cursor into (1)
+    //      — then, inside it, `recovery.json`: the recovery index and its own
+    //      cursor, which `openStore` replays from independently (store.ts §
+    //      `RECOVERY_FILE`)
     //
     // The invariant the order buys: **the event log is always at or ahead of
     // the baseline file, and the baseline file is always at or ahead of the
@@ -1594,7 +2045,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     saveBaseline(root, json);
     if (!guard(store.checkpoint(checkpointUpdate()))) return false;
     checkFreshness();
-    return true;
+    // THE INVENTORY THE VIEW MAY TRUST, and only now: after the append, the
+    // baseline and the checkpoint, so nothing classifies against a collection
+    // whose events are not on the disk. Then the derived dispositions against
+    // it — `resumed` needs a live row in exactly this kind of inventory — after
+    // the durable writes above, so a crash before them re-derives them rather
+    // than losing them.
+    trustInventory({
+      kind: "trusted",
+      rows: observed.rows,
+      collectedAt: observed.clock.at,
+      observation: observationOf(observed.ordering, observed.clock.at),
+    });
+    return appendDerived();
   }
 
   // AWAIT THE PASS IN FLIGHT BEFORE RELEASING ANYTHING — GPT Sol's finding 5.
@@ -1639,8 +2102,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 /**
  * The sessions the restored register holds and this snapshot does not.
  *
- * **THE ONE PLACE THE DAEMON MINTS AN EVENT OUTSIDE `diff()`, and it mints
- * CLOSURES ONLY — never a `session-status`, never a `session-replaced`.** That
+ * **ONE OF TWO PLACES THE DAEMON MINTS AN EVENT OUTSIDE `diff()` — the other is
+ * `closeOutOldBoot` below — and both mint CLOSURES ONLY — never a
+ * `session-status`, never a `session-replaced`.** That
  * restriction is the point rather than an omission, and the next person will
  * want to relax it: comparing a register entry's `lastStatusKey` against a
  * row's status looks like the same job. It is not. A status transition needs
@@ -1698,6 +2162,43 @@ function goneWhileAway(register: SessionRegister, snapshot: AdmissibleSnapshot, 
     });
   }
   return gone;
+}
+
+/**
+ * Every register entry, closed out of the old boot's world — GPT Sol's F5.
+ *
+ * `tmux-server-changed` rather than `absent-from-snapshot`, and whether or not
+ * the new collection lists a row with the same handle and claim: under a new
+ * boot that row is a fresh allocation wearing an old number, which is the whole
+ * reason the boot id is asked. Closures only, for `goneWhileAway`'s reason; the
+ * new collection's rows arrive as `session-seen` from `diff(null, …)`.
+ */
+function closeOutOldBoot(register: SessionRegister, at: string): OverseerEvent[] {
+  return [...register.values()].map((entry) => {
+    const identity: SessionIdentity = { tmuxId: entry.tmuxId, claimedConversationId: entry.claimedConversationId };
+    return {
+      kind: "tmux-session-gone",
+      at,
+      tmuxServerPid: entry.tmuxServerPid,
+      key: sessionKey(identity),
+      identity,
+      name: entry.name,
+      why: "tmux-server-changed",
+    };
+  });
+}
+
+/**
+ * The kernel's id for this boot, or null when it cannot be read — which is any
+ * host that is not Linux, and concludes nothing.
+ */
+export function readHostBootId(): string | null {
+  try {
+    const text = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+    return text === "" ? null : text;
+  } catch {
+    return null;
+  }
 }
 
 function transportRestored(via: Transport): string {

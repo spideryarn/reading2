@@ -112,6 +112,12 @@ reference, and is authoritative wherever the two disagree.
   (`readiness-run.ts`, because a plain `npm test` records nothing), the five clauses a green answer
   needs, why `unknown` is the common and correct answer, and why "on dev" is never a claim about
   what is on GitHub now.
+- **[usage-per-account.md](usage-per-account.md)** — the Usage limits tab's top half: one section per
+  Claude and Codex account-subscription, each with its five-hour and weekly *X% used* and when they
+  reset. Why the per-account reading is a sibling of the deep single-account card rather than part of
+  it, why `role` and `origin` are two fields, why directory equality is not subscription equality,
+  and why the page re-derives a window's expiry against the browser's clock rather than inheriting
+  the collector's answer.
 - **[usage-history.md](usage-history.md)** — the Usage limits tab's second half: the last 24 hours of
   Claude's limits, which exists only because nothing else writes them down. Why the daemon writes the
   store and the dashboard only reads it, why this one has no writer lock when `~/.fleet-health/`

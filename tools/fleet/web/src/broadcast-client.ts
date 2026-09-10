@@ -26,6 +26,15 @@
  * at one session. Three delivery vocabularies have had to be removed from this
  * dashboard; this is not a fourth.
  */
+import {
+  makeEnvelope,
+  postEnvelope,
+  readKeyedArms,
+  unreadableAnswer,
+  type KeyedOutcome,
+  type MintClock,
+  type RequestEnvelope,
+} from "./request-envelope";
 import { parseDelivery, parseVerified, type SteerOutcome } from "./steer-client";
 import type { FleetRow } from "./types";
 
@@ -75,6 +84,21 @@ export function broadcastBody(rows: readonly FleetRow[], text: string, dryRun: b
     confirm: !dryRun,
     recipients: rows.map(recipientBody),
   };
+}
+
+/**
+ * **A REAL BROADCAST AS AN ENVELOPE** — request-envelope.ts. Only the run is
+ * keyed: a dry run sends nothing, so there is nothing for a retry to repeat.
+ * The recipients are the rows as they were at the press, built once; a Check
+ * resends exactly them, never the fleet as it is by then.
+ */
+export function broadcastEnvelope<T>(
+  rows: readonly FleetRow[],
+  text: string,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<BroadcastBody, T> {
+  return makeEnvelope(BROADCAST_URL, broadcastBody(rows, text, false), ticket, clock);
 }
 
 /**
@@ -267,9 +291,32 @@ function parseResult(v: unknown): BroadcastResult {
   };
 }
 
+export type KeyedBroadcastApi = {
+  run: (envelope: RequestEnvelope<BroadcastBody, unknown>) => Promise<KeyedOutcome<BroadcastOutcome>>;
+};
+
+/**
+ * `send` stays unkeyed — a preview and the old path. `keyed` is optional only
+ * so existing test fakes still satisfy the type; every instance this file
+ * makes has it (steer-client.ts § `SteerApi` says why, at more length).
+ */
 export type BroadcastApi = {
   send: (rows: readonly FleetRow[], text: string, dryRun: boolean) => Promise<BroadcastOutcome>;
+  keyed?: KeyedBroadcastApi;
 };
+
+/**
+ * Run a broadcast envelope through whatever seam the card was given. A fake
+ * with no keyed half is sent the old way, and its answer is `answered`.
+ */
+export async function sendBroadcastEnvelope(
+  api: BroadcastApi,
+  rows: readonly FleetRow[],
+  envelope: RequestEnvelope<BroadcastBody, unknown>,
+): Promise<KeyedOutcome<BroadcastOutcome>> {
+  if (api.keyed !== undefined) return api.keyed.run(envelope);
+  return { kind: "answered", outcome: await api.send(rows, envelope.body.text, false) };
+}
 
 function describe(cause: unknown): string {
   if (cause instanceof Error) return cause.message === "" ? cause.name : cause.message;
@@ -277,8 +324,60 @@ function describe(cause: unknown): string {
   return "the request failed, and gave no reason";
 }
 
-export function makeBroadcastApi(fetchImpl: typeof fetch = fetch): BroadcastApi {
+/**
+ * A keyed run, and every way it can end. The route's answer is read only when
+ * it IS the route's answer — `op: "broadcast"`, or a refusal with a code and a
+ * sentence. **An answer naming another op is `not-confirmed`** here, where the
+ * unkeyed `send` calls it `unknown`: both mean *the fleet may already have it*,
+ * and the keyed arm is the one that offers a Check that cannot send twice.
+ */
+async function runKeyed(
+  envelope: RequestEnvelope<BroadcastBody, unknown>,
+  fetchImpl: typeof fetch,
+): Promise<KeyedOutcome<BroadcastOutcome>> {
+  const heard = await postEnvelope(envelope, fetchImpl);
+  if (heard.kind === "not-confirmed") return heard;
+  const shared = readKeyedArms(heard.status, heard.parsed);
+  if (shared !== null) {
+    if (
+      shared.kind === "replay" &&
+      (shared.receipt.op !== "broadcast" ||
+        shared.receipt.origin !== "broadcast" ||
+        shared.receipt.target !== null ||
+        (shared.children !== null &&
+          shared.children.some(
+            (child) =>
+              child.op !== "broadcast-recipient" ||
+              child.origin !== "broadcast" ||
+              child.parentReceiptId !== shared.receipt.receiptId,
+          )))
+    ) {
+      return unreadableAnswer(heard.status);
+    }
+    return shared;
+  }
+  const p = heard.parsed;
+  if (heard.status === 200 && isRecord(p) && p["ok"] === true && p["op"] === "broadcast") {
+    return { kind: "answered", outcome: { kind: "ran", op: "broadcast", result: parseResult(p["result"]) } };
+  }
+  if (isRecord(p) && p["ok"] === false && typeof p["code"] === "string" && typeof p["why"] === "string") {
+    return {
+      kind: "answered",
+      outcome: {
+        kind: "refused",
+        code: p["code"],
+        why: p["why"],
+        status: heard.status,
+        result: p["result"] !== undefined ? parseResult(p["result"]) : null,
+      },
+    };
+  }
+  return unreadableAnswer(heard.status);
+}
+
+export function makeBroadcastApi(fetchImpl: typeof fetch = fetch): BroadcastApi & { keyed: KeyedBroadcastApi } {
   return {
+    keyed: { run: (envelope) => runKeyed(envelope, fetchImpl) },
     async send(rows, text, dryRun) {
       let response: Response;
       try {
@@ -353,6 +452,7 @@ export function makeBroadcastApi(fetchImpl: typeof fetch = fetch): BroadcastApi 
 }
 
 /** The default instance. A getter, for the reason in the header. */
-export const httpBroadcastApi: BroadcastApi = {
+export const httpBroadcastApi: BroadcastApi & { keyed: KeyedBroadcastApi } = {
   send: (rows, text, dryRun) => makeBroadcastApi().send(rows, text, dryRun),
+  keyed: { run: (envelope) => makeBroadcastApi().keyed.run(envelope) },
 };

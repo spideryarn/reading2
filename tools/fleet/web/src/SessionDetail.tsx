@@ -121,21 +121,52 @@ import { PauseLine } from "./PauseLine";
 import { Conversation, useRecentMessages } from "./RecentMessages";
 import { Handles, Handoff, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
-import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
+import {
+  hasDeliverable,
+  queueFor,
+  queueMessageEnvelope,
+  sendQueueEnvelope,
+  type ActionOutcome,
+  type SessionMessageBody,
+} from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import {
   checkLanding,
   listFields,
+  messageEnvelope,
+  sendMessageEnvelope,
   sentTarget,
   type SentTarget,
   type SteerApi,
+  type SteerMessageBody,
   type SteerOutcome,
   type VerifiedReading,
 } from "./steer-client";
+import { EnvelopeNoticeCard } from "./ReceiptList";
+import { replayConsumesDraft, type EnvelopeNotice, type RequestEnvelope } from "./request-envelope";
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
+
+/**
+ * **A KEYED WRITE FROM THE COMPOSER THAT HAS NOT HEARD A DEFINITE ANSWER** —
+ * request-envelope.ts. Held only after `not-confirmed`, for Check, which
+ * resends this envelope with the ticket it was built with.
+ *
+ * Each arm names its route, so a Check can only ever resend to the route the
+ * envelope was built for. Send and Queue are two gestures and neither falls
+ * back to the other; one that did would be a new intention with a new id.
+ *
+ * **Memory-only.** This composer is remounted whenever the pane's execution
+ * identity changes (continuity.ts), and a reload forgets the page: either way
+ * the draft's words survive (drafts.ts) and the envelope does not, so the next
+ * Send is a new request. 260910c's F31 is the same limit for a pane unmounted
+ * while a request is open.
+ */
+type PendingEnvelope =
+  | { path: "send"; envelope: RequestEnvelope<SteerMessageBody, DraftSubmission>; row: FleetRow; target: SentTarget }
+  | { path: "queue"; envelope: RequestEnvelope<SessionMessageBody, DraftSubmission>; row: FleetRow };
 import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
 import { useExecutionEpoch } from "./continuity";
@@ -889,6 +920,10 @@ export function SessionDetail({
   const refused = useRef(stance.kind === "refused");
   refused.current = stance.kind === "refused";
   const [busy, setBusy] = useState(false);
+  /* React applies `busy` on the next render. This ref closes the interval in
+     which two taps can otherwise mint and send two envelopes. It is shared by
+     Send, Queue and Check because only one intention may be in flight. */
+  const envelopeInFlight = useRef(false);
   /** The composer, so the dictation knows where the caret is. */
   const box = useRef<HTMLTextAreaElement>(null);
   /* **Named, so the vocabulary leads with this session's own words.** Somebody
@@ -1006,16 +1041,13 @@ export function SessionDetail({
         ? "this row has no Claude session id, so there is no way to tell this conversation from whatever is in that pane now"
         : null;
 
-  const send = useCallback(
-    async (
-      run: () => Promise<SteerOutcome>,
-      target: SentTarget,
-      submission: DraftSubmission | null,
-    ): Promise<void> => {
-      setBusy(true);
-      /* SNAPSHOTTED BY THE CALLER, BEFORE THE AWAIT. Reading `row` here would
-         read the render that resolved the promise, which is the bug. */
-      const result = await run();
+  /**
+   * **What the route's own answer does to the composer** — shared by the dialog
+   * buttons (unkeyed) and a keyed Send's `answered` arm, so sending an envelope
+   * changes nothing about how an ordinary answer is drawn or what it latches.
+   */
+  const afterSteer = useCallback(
+    (result: SteerOutcome, target: SentTarget, submission: DraftSubmission | null): void => {
       setOutcome({ result, target });
       /* **BOTH ARE STICKY AND THEY STICK TO DIFFERENT THINGS**, which is why
          they are no longer one piece of state. Neither will come right by
@@ -1032,9 +1064,79 @@ export function SessionDetail({
       /* Only a send the server accepted takes the draft with it, stored copy
          and all. A refusal leaves both, so the words are there to try again. */
       if (result.ok && submission !== null) drafted.current.accept(submission);
-      setBusy(false);
     },
     [dialogKey, onAnsweringRefused],
+  );
+
+  const send = useCallback(
+    async (run: () => Promise<SteerOutcome>, target: SentTarget, submission: DraftSubmission | null): Promise<void> => {
+      setBusy(true);
+      /* SNAPSHOTTED BY THE CALLER, BEFORE THE AWAIT. Reading `row` here would
+         read the render that resolved the promise, which is the bug. */
+      afterSteer(await run(), target, submission);
+      setBusy(false);
+    },
+    [afterSteer],
+  );
+
+  /** The envelope waiting for a Check, and what the composer shows instead of an ordinary answer. */
+  const [pending, setPending] = useState<PendingEnvelope | null>(null);
+  const [notice, setNotice] = useState<EnvelopeNotice | null>(null);
+  /* Read at the press, like `blocked`: the guard asks "is one pending NOW". */
+  const pendingNow = useRef(pending);
+  pendingNow.current = pending;
+
+  /**
+   * **A KEYED ANSWER THAT IS NOT THE ROUTE'S OWN**, for both paths — the seam
+   * agreed with `session-continuity` (plan 260910d § Stage 4):
+   *
+   *  - a replay is a definitive success, accepted with the ORIGINAL ticket, so
+   *    anything typed since the Send stays (docs/postmortems/260910c);
+   *  - `not-confirmed` never accepts — the words stay in the box and in
+   *    storage — and keeps the envelope for Check;
+   *  - 409 and 503 are definitive refusals: the draft stays and the envelope
+   *    goes. Nothing is resent without an id.
+   */
+  const hear = useCallback((sent: PendingEnvelope, result: EnvelopeNotice): void => {
+    setNotice(result);
+    switch (result.kind) {
+      case "replay":
+        setPending(null);
+        if (replayConsumesDraft(result.receipt, sent.path === "queue")) drafted.current.accept(sent.envelope.ticket);
+        return;
+      case "not-confirmed":
+        setPending(sent);
+        return;
+      case "request-id-conflict":
+      case "request-id-expired":
+      case "receipt-unavailable":
+        setPending(null);
+        return;
+      default: {
+        const never: never = result;
+        void never;
+      }
+    }
+  }, []);
+
+  const deliverSend = useCallback(
+    async (sent: Extract<PendingEnvelope, { path: "send" }>): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
+      setBusy(true);
+      const result = await sendMessageEnvelope(steer, sent.row, sent.envelope);
+      if (result.kind === "answered") {
+        setNotice(null);
+        setPending(null);
+        afterSteer(result.outcome, sent.target, sent.envelope.ticket);
+      } else {
+        setOutcome(null);
+        hear(sent, result);
+      }
+      envelopeInFlight.current = false;
+      setBusy(false);
+    },
+    [afterSteer, hear, steer],
   );
 
   const onAnswer = useCallback(
@@ -1054,11 +1156,12 @@ export function SessionDetail({
   const onSend = useCallback(() => {
     /* The same boundary holds the execution rule: under a reading that shows
        this pane is not what the row addresses, nothing leaves from here. */
-    if (blocked.current || refused.current || !drafted.current.canSubmit) return;
+    if (blocked.current || refused.current || !drafted.current.canSubmit || pendingNow.current !== null) return;
     const submission = drafted.current.submission();
     if (submission === null || submission.text.trim() === "") return;
-    void send(() => steer.message(row, submission.text), sentTarget(row), submission);
-  }, [row, send, steer]);
+    /* The ticket is taken here, at Send, and travels in the envelope. */
+    void deliverSend({ path: "send", envelope: messageEnvelope(row, submission.text, submission), row, target: sentTarget(row) });
+  }, [deliverSend, row]);
 
   /**
    * **Two buttons, because they are two different things.**
@@ -1119,18 +1222,42 @@ export function SessionDetail({
   const waiting = queueFor(actions.feed, row.id);
   const offerQueue = row.status.kind !== "idle" || hasDeliverable(waiting);
 
+  const deliverQueue = useCallback(
+    async (sent: Extract<PendingEnvelope, { path: "queue" }>): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
+      setBusy(true);
+      const result = await sendQueueEnvelope(actions.api, sent.row, sent.envelope);
+      if (result.kind === "answered") {
+        setQueueOutcome(result.outcome);
+        setNotice(null);
+        setPending(null);
+        if (result.outcome.ok) drafted.current.accept(sent.envelope.ticket);
+      } else {
+        setQueueOutcome(null);
+        hear(sent, result);
+      }
+      envelopeInFlight.current = false;
+      setBusy(false);
+      actions.refresh();
+    },
+    [actions, hear],
+  );
+
   const onQueue = useCallback(async (): Promise<void> => {
     /* Same guard, same reason. See `onSend`. */
-    if (blocked.current || refused.current || !drafted.current.canSubmit) return;
+    if (blocked.current || refused.current || !drafted.current.canSubmit || pendingNow.current !== null) return;
     const submission = drafted.current.submission();
     if (submission === null || submission.text.trim() === "") return;
-    setBusy(true);
-    const result = await actions.api.queueMessage(row, submission.text);
-    setQueueOutcome(result);
-    if (result.ok) drafted.current.accept(submission);
-    setBusy(false);
-    actions.refresh();
-  }, [actions, row]);
+    await deliverQueue({ path: "queue", envelope: queueMessageEnvelope(row, submission.text, submission), row });
+  }, [deliverQueue, row]);
+
+  /** Resend the pending envelope — the same id, the same bytes, the original ticket, the same route. */
+  const onCheck = useCallback((): void => {
+    const sent = pendingNow.current;
+    if (sent === null) return;
+    void (sent.path === "send" ? deliverSend(sent) : deliverQueue(sent));
+  }, [deliverQueue, deliverSend]);
 
   return (
     <Card
@@ -1296,7 +1423,8 @@ export function SessionDetail({
                   unaddressable !== null ||
                   dictate.sendBlocked ||
                   stance.kind === "refused" ||
-                  !draft.canSubmit
+                  !draft.canSubmit ||
+                  pending !== null
                 }
               >
                 {busy ? "Sending…" : "Send now"}
@@ -1321,7 +1449,8 @@ export function SessionDetail({
                       unaddressable !== null ||
                       dictate.sendBlocked ||
                       stance.kind === "refused" ||
-                      !draft.canSubmit
+                      !draft.canSubmit ||
+                      pending !== null
                     }
                   >
                     Queue (~73s)
@@ -1357,6 +1486,11 @@ export function SessionDetail({
                 Send and Queue are off: {DRAFT_RECIPIENT_CHANGED_SENTENCE}
               </p>
             )}
+            {pending === null ? null : (
+              <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+                Send and Queue are off until you Check the last one — it may already have arrived.
+              </p>
+            )}
             {draft.notice === null ? null : (
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
             )}
@@ -1386,6 +1520,7 @@ export function SessionDetail({
             />
           )}
           {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
+          {notice === null ? null : <EnvelopeNoticeCard notice={notice} busy={busy} onCheck={onCheck} />}
 
           {/* --------------------------------------------- 3. actions -- */}
           {/* "ASK IT TO…", not "Do something to it". The verb says these are

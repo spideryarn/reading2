@@ -213,9 +213,23 @@ export type PlanStoppedOutcome = {
 };
 export type ReceiptOutcome = KeysSubmittedOutcome | NotSentOutcome | UnknownOutcome | CompletedOutcome | PlanStoppedOutcome;
 export type OutcomeReceiptRecord = RecordBase<"outcome"> & { receiptId: string } & ReceiptOutcome;
+/**
+ * **A PERSON'S STATEMENT BESIDE AN UNKNOWN, NEVER A NEW OUTCOME.**
+ *
+ * - `lease-abandoned`: the abandon route cleared a leased queued item (Stage 1).
+ * - `operator-confirmed` / `abandoned-unknown`: somebody looked at an enacted
+ *   plan whose outcome is unknown and said so (Stage 4, `POST
+ *   /api/actions/receipts/reconcile`). Legal only on `enacted-session` and
+ *   `enacted-box`. Neither changes the receipt's state: an unknown stays
+ *   unknown, and this record says who looked and when.
+ */
+export type ReconcileDisposition = "lease-abandoned" | "operator-confirmed" | "abandoned-unknown";
+/** The two a person may record against an enacted plan. */
+export type OperatorDisposition = Exclude<ReconcileDisposition, "lease-abandoned">;
+export const OPERATOR_DISPOSITIONS: readonly OperatorDisposition[] = ["operator-confirmed", "abandoned-unknown"];
 export type ReconciledReceiptRecord = RecordBase<"reconciled"> & {
   receiptId: string;
-  disposition: "lease-abandoned";
+  disposition: ReconcileDisposition;
   actor: ReceiptActor;
 };
 export type WithdrawnReceiptRecord = RecordBase<"withdrawn"> & {
@@ -312,7 +326,13 @@ export type ReceiptJournal = {
   returned(receiptId: string, code: string): boolean;
   outcome(receiptId: string, arm: ReceiptOutcome): boolean;
   withdrawn(receiptIds: string[], reason: "cancelled" | "cleared", actor: ReceiptActor): boolean;
-  reconcile(receiptId: string, disposition: "lease-abandoned", actor: ReceiptActor): boolean;
+  /**
+   * One statement beside an `outcome-unknown` receipt. The journal refuses a
+   * second one (the first becomes the receipt's `last`, so it is no longer an
+   * unknown outcome awaiting a statement) and an operator disposition on
+   * anything but an enacted plan.
+   */
+  reconcile(receiptId: string, disposition: ReconcileDisposition, actor: ReceiptActor): boolean;
   noteGeneration(pid: number): void;
   lastGeneration(): number | null;
   get(receiptId: string): ReceiptState | null;
@@ -366,6 +386,7 @@ const NOT_SENT_REASONS: readonly NotSentOutcome["reason"][] = [
 const UNKNOWN_REASONS: readonly UnknownOutcome["reason"][] = [
   "partial", "unknown", "none-contradicted", "threw", "interrupted", "lease-abandoned", "recovery-blocked",
 ];
+const RECONCILE_DISPOSITIONS: readonly ReconcileDisposition[] = ["lease-abandoned", ...OPERATOR_DISPOSITIONS];
 const STEP_STATUSES: readonly PlanStepStatus[] = ["passed", "failed", "failed-ignored"];
 const ACTION_KINDS = new Set(["accepted", "attempted", "returned", "outcome", "reconciled", "withdrawn", "progress"]);
 const ACCEPTED_KEYS = [
@@ -497,8 +518,8 @@ export function parseReceiptLine(line: string): ReceiptRecord | null {
   }
   if (value["kind"] === "reconciled") {
     return exact(value, ["schema", "kind", "at", "receiptId", "disposition", "actor"])
-      && value["disposition"] === "lease-abandoned" && actor(value["actor"])
-      ? { ...base, kind: "reconciled", receiptId, disposition: "lease-abandoned", actor: value["actor"] } : null;
+      && RECONCILE_DISPOSITIONS.includes(value["disposition"] as ReconcileDisposition) && actor(value["actor"])
+      ? { ...base, kind: "reconciled", receiptId, disposition: value["disposition"] as ReconcileDisposition, actor: value["actor"] } : null;
   }
   if (value["kind"] !== "outcome" || !exact(value, ["schema", "kind", "at", "receiptId", "state", "reason", "code", "why"])
     || !nullableString(value["code"]) || typeof value["why"] !== "string" || value["why"].length > MAX_WHY_CHARS) return null;
@@ -648,7 +669,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
       return false;
     }
-    return record.kind === "reconciled" && isUnknown(state);
+    /* A person's statement about an enacted plan is legal only on one; the
+       abandon route's `lease-abandoned` is about a leased queued item. */
+    return record.kind === "reconciled" && isUnknown(state)
+      && (record.disposition === "lease-abandoned" || isEnactedOp(state.accepted.op));
   };
 
   const apply = (record: ReceiptRecord, fromDisk = false): boolean => {
@@ -1369,6 +1393,7 @@ export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
   let attemptedAt: number | null = null;
   let outcomeAt: number | null = null;
   let reconciled = false;
+  let reconciliation: ReceiptSummary["reconciliation"] = null;
   let state: ReceiptSummary["state"] = "accepted";
   let reason: string | null = null;
   let steps = 0;
@@ -1380,7 +1405,13 @@ export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
       state = record.state;
       reason = record.reason;
     }
-    if (record.kind === "reconciled") reconciled = true;
+    if (record.kind === "reconciled") {
+      reconciled = true;
+      /* WHO SAID WHAT, AND WHEN — beside the outcome, never instead of it.
+         `state` above is read only off outcome records, so a statement cannot
+         turn an unknown into anything else. */
+      reconciliation = { disposition: record.disposition, actor: { ...record.actor }, at: record.at };
+    }
   }
   if (outcomeAt === null) {
     if (receipt.last.kind === "attempted") state = "attempted";
@@ -1411,6 +1442,7 @@ export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
     attemptedAt,
     outcomeAt,
     reconciled,
+    reconciliation,
     queueItemId: receipt.accepted.queue?.itemId ?? null,
     materialDeletionPending: receipt.materialDeletionPending,
   };

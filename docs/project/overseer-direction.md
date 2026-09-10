@@ -744,6 +744,28 @@ sessions"** (A26) — a stampede recreates the incident, so revival produces a q
 admission. And **a shell pane is not a resumable agent**: it has no conversation, so it gets a manual
 path and an honest label rather than a pretence.
 
+**The first half now exists: seeing what was interrupted, with nothing started.** The register
+deletes a session when it goes, so the first empty collection after a reboot used to erase exactly
+the entries revival needs. Since
+[plan 260910e](../plans/260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md),
+the daemon writes a `recovery-candidate` event, carrying the final register entry, before each
+removal that is not an ordinary watched close, in the same append. It also reads the host's boot id
+itself, so a reboot that reuses tmux's pid is still seen. It keeps the records in
+`~/.overseer/recovery.json`, and classifies each one against the collection it last accepted:
+`interrupted`, `ended-before-reboot`, `already-live`, `present-but-unmatched`, or `unknown`. After a
+failed or refused collection every record is `unknown`, because an empty list is not evidence.
+
+- **Where to see it:** the *Interrupted work* section on the dashboard's Overseer tab
+  (`GET /api/recovery`), and `npx tsx scripts/overseer-recovery.ts list`.
+- **What each record shows:** its directory and whether it exists, whether its transcript was found,
+  and whether its harness could resume it.
+- **What it does not do:** it prints no command and has no button.
+
+**One correction to the join key above:** a record matches on the conversation a verified execution
+was running, not on `claudeSessionId`. That value is a claim written at launch that outlives its
+conversation, so a transcript found only under the claim is labelled unverified. The verb itself,
+relaunching a selected session under admission, is the roadmap's next stage, Gradual recovery.
+
 ## The four capabilities, and what each really needs
 
 **Seeing the fleet.** The cheapest thing here and the first slice. Note the data problem in

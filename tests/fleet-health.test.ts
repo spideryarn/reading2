@@ -416,6 +416,9 @@ describe("health gathering and assembly", () => {
         attention: { kind: "checkpoint-absent" },
         overseer: { kind: "checkpoint-absent" },
         usage: { kind: "checkpoint-absent" },
+        /* Required since plan 260910c: a composition that forgets the
+           per-account feed is a compile error, not a page with no sections. */
+        accountUsage: { kind: "checkpoint-absent" },
         work: { kind: "checkpoint-absent" },
       }),
     })) as { health: HealthReport | null };

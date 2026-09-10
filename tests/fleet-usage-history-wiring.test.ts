@@ -329,6 +329,32 @@ describe("a usage pass becomes a line on disk", () => {
     expect(first.line.codex).toMatchObject({ kind: "unknown", retryable: true });
   });
 
+  test("hands the same Codex observation to the account collector once, including after a Claude failure", async () => {
+    const root = tempRoot();
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const handed: Array<CodexUsageReading | null> = [];
+    const options = usageHistoryDaemonOptions(retention, {
+      claude: async () => {
+        throw new Error("the transcript scan failed");
+      },
+      codex: async () => CODEX,
+      accounts: async (ambientCodex) => {
+        handed.push(ambientCodex);
+        return { kind: "none", why: "test collector", at: "2026-09-09T00:50:36.000Z" };
+      },
+    });
+
+    await expect(options.run()).rejects.toThrow("the transcript scan failed");
+    const collectAccounts = options.accounts;
+    if (collectAccounts === undefined) throw new Error("the composition root omitted its account collector");
+    await collectAccounts();
+    await collectAccounts();
+
+    expect(handed[0]).toBe(CODEX);
+    expect(handed[1], "a consumed observation remained available to a later account pass").toBeNull();
+    retention.close();
+  });
+
   test("a synchronous Codex throw still awaits the Claude collector", async () => {
     const root = tempRoot();
     const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
