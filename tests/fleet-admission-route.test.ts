@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 function trackedAdmission(options?: Parameters<typeof makeAdmission>[0]): Admission {
-  const admission = makeAdmission(options);
+  const admission = makeAdmission({ autostart: false, ...options });
   admissions.push(admission);
   return admission;
 }
@@ -58,6 +58,7 @@ function deps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     policyVersion: ADMISSION_POLICY_VERSION,
     readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
     readCensus: () => censusValue,
+    censusCadenceMs: 30_000,
     ...over,
   };
 }
@@ -125,6 +126,7 @@ describe("GET /api/admission", () => {
     const answer = get(
       admissionRoute(
         deps({
+          censusCadenceMs: 77,
           readCensus: () => {
             throw new Error("census cache exploded");
           },
@@ -140,7 +142,7 @@ describe("GET /api/admission", () => {
       label: "observed",
       why: "reading the admission census threw: census cache exploded",
       failedAtMs: 1_789_000_000_000,
-      cadenceMs: 30_000,
+      cadenceMs: 77,
       lastGood: null,
     });
   });

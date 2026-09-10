@@ -200,3 +200,28 @@ code before being taken.
 Sol also confirmed: the later-parent test holds on Linux with strict `>`; with F43 fixed the fold stops
 both workers and helpers being roots; Decision 1's narrowing is sound; Decisions 2–4 have no
 established P0/P1; and all three existing composition tests must stop the task they start.
+
+## Review dispositions — code review round 1
+
+Sol, 2026-09-10, `--sandbox workspace-write`, on `08920a5b`. It fixed what it found, red-first; this
+session read its diff as a proposal, reran the gates (six focused files, 615 tests; typecheck;
+`build:fleet`) and remeasured on the box. Verdict **REFUSE** on one established P1, F61, which it was
+not allowed to fix.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F47 | An empty `cmdline` counted as unreadable: 387 of 876 rows on the box were kernel threads and zombies | **Fixed.** A readable row with empty argv, and no recogniser matches empty argv, so a zombie Chrome is not a live browser. **Remeasured on the box: `unreadable` 5 of 913** (09:18 UTC, load 15; 3 vitest, 3 Codex batch and 4 browser roots, no uncertain; 649 ms median wall, 18.5 ms worst stall) |
+| F48 | A stale last-good kept only its end instant | **Fixed.** It carries both bounds, and the block says the stale pass "ran from … to …" |
+| F49 | Treating ppid 1 as terminal made a recognised pid 1 and its same-class child two roots, and a hidden pid 1 a certain root | **Fixed.** Only ppid 0 ends the walk. This narrows the code back to F43 as written |
+| F50 | An empty argv element (`["codex", "", "exec"]`) joined to `codex  exec` and moved `exec` into the subcommand position | **Fixed.** Empty elements encode as `␀` (U+2400) |
+| F51 | `comm` changing between the two `stat` reads (an `exec`) left a stable-looking row that never existed | **Fixed.** A changed `comm` is changed-under-read |
+| F52 | An orphaned vitest worker (reparented to pid 1) was a test root | **Fixed** by excluding known worker entry points before ancestry, as Chrome helpers are. **Noted:** that exclusion is a new argv test (`/node_modules/vitest/dist/workers/`). It only removes candidates, so it can under-count, never over-count, and it is accepted on that basis |
+| F53 | A child read while nested, plus a zombie parent read afterwards, could certify a root that never was one | **Fixed.** An empty-argv ancestor makes ancestry uncertain |
+| F54 | The section fetched once, so a first `not-yet-computed` stayed on screen for good | **Fixed.** It re-reads end-chained every 30 s, after the previous request completes |
+| F55 | Under unknown skew, a fresh value could be called "older than twice its cadence" | **Fixed.** Oldness is said only when skew is known |
+| F56 | An unreadable forecast discarded a valid census | **Fixed.** The census survives the forecast's `no-answer` arm |
+| F57 | The parser accepted counts that cannot fit in `processesSeen` | **Fixed** |
+| F58 | A backwards clock produced a pass that ended before it began | **Fixed**, in the producer (a failed pass) and in the client |
+| F59 | A read resolving after `stop()` still folded and wrote the cache; unrelated composition tests started real `/proc` reads | **Fixed** |
+| F60 | The cadence was written twice, and a throwing `readCensus` was stamped with the route's copy | **Fixed.** `admission-constants.ts` owns it, and the chosen cadence reaches the route |
+| F61 | `isVitestRunner` matches the vitest path in *any* argument, so `vim /repo/node_modules/.bin/vitest` is a runner. The census over-counts, and **the Kill "test suites" action would kill that editor** | **Open**, because it is outside the authorised `actions.ts` edit. Asked of the Overseer: fix it in `actions.ts` by matching the executable position only, which can only make Kill refuse more |

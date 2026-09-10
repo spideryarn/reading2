@@ -3900,7 +3900,7 @@ export type AdmissionCensusClass = "test" | "codex-batch" | "browser";
 /** Counts from one completed pass over the process table. */
 export type AdmissionCensusCounts = {
   byClass: Record<AdmissionCensusClass, { roots: number; uncertain: number }>;
-  /** Rows whose identity or parent changed between the bracketing reads. */
+  /** Rows whose identity, parent, or recogniser-bearing command name changed between the bracketing reads. */
   changedUnderRead: number;
   /** Pid entries that existed at enumeration but could not yield one complete row. */
   unreadable: number;
@@ -3934,5 +3934,10 @@ export type AdmissionCensusState =
       why: string;
       failedAtMs: number;
       cadenceMs: number;
-      lastGood: { census: AdmissionCensusCounts; completedAtMs: number } | null;
+      lastGood: {
+        census: AdmissionCensusCounts;
+        /** The bounds of the successful pass whose counts remain available. */
+        startedAtMs: number;
+        completedAtMs: number;
+      } | null;
     };

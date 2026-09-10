@@ -27,6 +27,7 @@ export type AdmissionRouteDeps = {
   policyVersion: number;
   readRefusals(): AdmissionRefusalJournal;
   readCensus(): AdmissionCensusState;
+  censusCadenceMs: number;
   decideAdmission?: ((args: {
     nominalWorkers: number;
     snapshot: MemorySnapshot;
@@ -46,7 +47,6 @@ type AdmissionExplanation =
     };
 
 const CAVEAT = "A reduced worker count is the config default; --maxWorkers on the command line overrides it.";
-const CENSUS_CADENCE_MS = 30_000;
 
 const EXPLANATIONS: Readonly<Record<number, string>> = {
   1:
@@ -117,7 +117,7 @@ function payload(
       label: "observed",
       why: `reading the admission census threw: ${message(cause)}`,
       failedAtMs: deps.nowMs(),
-      cadenceMs: CENSUS_CADENCE_MS,
+      cadenceMs: deps.censusCadenceMs,
       lastGood: null,
     };
   }

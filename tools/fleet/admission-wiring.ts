@@ -14,11 +14,10 @@ import {
   readReserveBytes,
   resolveParallelWorkers,
 } from "../../vitest-admission.js";
+import { ADMISSION_CENSUS_CADENCE_MS } from "./admission-constants.js";
 import { readProcRows, startCensusTask } from "./admission-census.js";
 import { admissionRoute, type AdmissionRouteDeps } from "./routes-admission.js";
 import type { AdmissionCensusState } from "./wire.js";
-
-const CENSUS_CADENCE_MS = 30_000;
 
 type AdmissionCensus = {
   read(): AdmissionCensusState;
@@ -48,13 +47,14 @@ export function makeAdmission(options: {
   autostart?: boolean | undefined;
 } = {}): Admission {
   const nowMs = options.nowMs ?? (() => Date.now());
+  const censusCadenceMs = options.cadenceMs ?? ADMISSION_CENSUS_CADENCE_MS;
   const census =
     options.census ??
     (options.autostart === false
       ? unstartedCensus(nowMs())
       : startCensusTask({
           readRows: options.readRows ?? (() => readProcRows()),
-          cadenceMs: options.cadenceMs ?? CENSUS_CADENCE_MS,
+          cadenceMs: censusCadenceMs,
           nowMs,
         }));
   const deps: AdmissionRouteDeps = {
@@ -65,6 +65,7 @@ export function makeAdmission(options: {
     policyVersion: ADMISSION_POLICY_VERSION,
     readRefusals: () => readRefusals({ dir: options.journalDir }),
     readCensus: () => census.read(),
+    censusCadenceMs,
     decideAdmission,
   };
   return { deps, route: admissionRoute(deps), stop: () => census.stop() };

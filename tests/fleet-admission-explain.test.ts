@@ -72,6 +72,7 @@ function routeDeps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     policyVersion: ADMISSION_POLICY_VERSION,
     readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
     readCensus: () => census,
+    censusCadenceMs: 30_000,
     ...over,
   };
 }

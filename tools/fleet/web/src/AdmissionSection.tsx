@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ADMISSION_CENSUS_CADENCE_MS } from "../../admission-constants";
 import {
   DATE_LIMIT_MS,
   type AdmissionApi,
@@ -230,12 +231,15 @@ function CensusState({ census, skew }: { census: AdmissionCensusView; skew: Cloc
         </p>
       );
     }
-    const staleAt = forecastTime(census.lastGood.completedAtMs, skew);
+    const staleStartedAt = forecastTime(census.lastGood.startedAtMs, skew);
+    const staleCompletedAt = forecastTime(census.lastGood.completedAtMs, skew);
     return (
       <div className="tw:space-y-2">
         <p>The latest process census failed{failedAt === null ? " at an unreadable time" : ` at ${failedAt}`}: {census.why}.</p>
         <p>
-          The counts below are stale; their pass completed {staleAt === null ? "at an unreadable time" : `at ${staleAt}`}.
+          {staleStartedAt === null || staleCompletedAt === null
+            ? "The counts below are stale; their pass boundary could not be displayed on this page's clock."
+            : `The counts below are stale; their pass ran from ${staleStartedAt} to ${staleCompletedAt}.`}
         </p>
         <CensusCounts census={census.lastGood.census} />
       </div>
@@ -245,7 +249,10 @@ function CensusState({ census, skew }: { census: AdmissionCensusView; skew: Cloc
   const startedAt = forecastTime(census.startedAtMs, skew);
   const completedAt = forecastTime(census.completedAtMs, skew);
   const correctedCompletedAt = shiftMsToBrowserClock(census.completedAtMs, skew);
-  const isOld = Number.isFinite(correctedCompletedAt) && Date.now() - correctedCompletedAt > census.cadenceMs * 2;
+  const isOld =
+    skew.kind === "known" &&
+    Number.isFinite(correctedCompletedAt) &&
+    Date.now() - correctedCompletedAt > census.cadenceMs * 2;
   return (
     <div className="tw:space-y-2">
       <p>
@@ -267,9 +274,9 @@ function Census({ census, skew }: { census: AdmissionCensusView; skew: ClockSkew
         <ObservedLabel />
       </div>
       <p className="tw:mb-2">
-        This recognises three things by their executable: Vitest runners, Codex batch jobs (<code>codex exec</code>),
-        and Chrome or Chromium browsers. Anything else is not counted at all, however much it is doing. A root here
-        may be idle; this says only that the process existed when it was read during the pass.
+        This uses three existing process recognisers: Vitest runners, Codex batch jobs (<code>codex exec</code>), and
+        Chrome or Chromium browsers. Anything else is not counted at all, however much it is doing. A root here may
+        be idle; this says only that the process existed when it was read during the pass.
       </p>
       <CensusState census={census} skew={skew} />
     </div>
@@ -289,6 +296,7 @@ function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: Clock
             : `The server did not produce an admission forecast this page could use: ${view.why}.`}
         </p>
         <div className="tw:mt-3"><Pill tone="unknown">forecast</Pill></div>
+        {view.census === null ? null : <Census census={view.census} skew={skew} />}
       </div>
     );
   }
@@ -339,11 +347,17 @@ export function AdmissionSection({ api, skew }: { api: AdmissionApi; skew: Clock
 
   useEffect(() => {
     let alive = true;
-    void forecastOnce(api).then((answer) => {
-      if (alive) setView(answer);
-    });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = async (): Promise<void> => {
+      const answer = await forecastOnce(api);
+      if (!alive) return;
+      setView(answer);
+      timer = setTimeout(() => void refresh(), ADMISSION_CENSUS_CADENCE_MS);
+    };
+    void refresh();
     return () => {
       alive = false;
+      if (timer !== null) clearTimeout(timer);
     };
   }, [api]);
 

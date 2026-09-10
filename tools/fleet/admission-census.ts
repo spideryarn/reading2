@@ -13,7 +13,7 @@ export type CensusProcRow =
       pid: number;
       ppid: number;
       comm: string;
-      /** Whitespace inside an argv element is U+2423, preserving boundaries in this ps-shaped string. */
+      /** Whitespace is U+2423 and an empty element is U+2400, preserving argv boundaries in this ps-shaped string. */
       args: string;
       startTicks: number;
       changedUnderRead: boolean;
@@ -34,6 +34,9 @@ const DEFAULT_PROC_IO: CensusProcIo = {
 
 /** Classify one stable row using only the recognisers owned elsewhere. */
 export function recogniseCensusClass(row: Extract<CensusProcRow, { kind: "read" }>): AdmissionCensusClass | null {
+  // An empty argv is a readable procfs fact for kernel threads and zombies.
+  // In particular, comm alone must not turn a dead Chrome zombie into a live browser root.
+  if (row.args === "") return null;
   if (isBrowserProgram(row)) return "browser";
 
   const harness = recogniseHarnessCommand(row.args);
@@ -45,6 +48,10 @@ export function recogniseCensusClass(row: Extract<CensusProcRow, { kind: "read" 
 
 function isChromeHelper(row: Extract<CensusProcRow, { kind: "read" }>, censusClass: AdmissionCensusClass): boolean {
   return censusClass === "browser" && row.args.split(" ").some((token) => token.startsWith("--type="));
+}
+
+function isVitestWorker(row: Extract<CensusProcRow, { kind: "read" }>, censusClass: AdmissionCensusClass): boolean {
+  return censusClass === "test" && row.args.split(" ").some((token) => token.includes("/node_modules/vitest/dist/workers/"));
 }
 
 type AncestryAnswer = "root" | "nested" | "uncertain";
@@ -59,16 +66,19 @@ function ancestryAnswer(
 
   for (let hop = 0; hop < MAX_ANCESTOR_HOPS; hop += 1) {
     const parentPid = child.ppid;
-    // PID 1 and the kernel boundary are both terminal. Requiring a `/proc/1`
-    // row would make every ordinary container namespace depend on whether it
-    // exposes init to this reader.
-    if (parentPid === 0 || parentPid === 1) return "root";
+    // Only the kernel boundary is terminal. PID 1 is still a process and is
+    // walked when readable; if a namespace hides it, that positive parent is
+    // uncertain by the same rule as any other missing ancestor.
+    if (parentPid === 0) return "root";
     if (visited.has(parentPid)) return "uncertain";
 
     const parent = byPid.get(parentPid);
     if (parent === undefined || parent.kind === "unreadable" || parent.changedUnderRead) return "uncertain";
     // A real parent must have started no later than its child. Equal ticks are valid.
     if (parent.startTicks > child.startTicks) return "uncertain";
+    // Empty argv is readable, but as an ancestor it describes a kernel thread
+    // or zombie. It cannot settle a cross-row ancestry assembled over time.
+    if (parent.args === "") return "uncertain";
 
     visited.add(parentPid);
     if (recogniseCensusClass(parent) === censusClass) return "nested";
@@ -101,7 +111,11 @@ export function foldCensus(rows: readonly CensusProcRow[]): AdmissionCensusCount
       continue;
     }
     const censusClass = recogniseCensusClass(candidate);
-    if (censusClass === null || isChromeHelper(candidate, censusClass)) continue;
+    if (
+      censusClass === null ||
+      isChromeHelper(candidate, censusClass) ||
+      isVitestWorker(candidate, censusClass)
+    ) continue;
 
     const answer = ancestryAnswer(candidate, censusClass, byPid);
     if (answer === "root") census.byClass[censusClass].roots += 1;
@@ -139,12 +153,11 @@ function parseStatRow(raw: string):
   return { ok: true, ppid: parsed.ppid, startTicks: parsed.startTicks, comm: raw.slice(open + 1, close) };
 }
 
-function encodeCmdline(raw: string): string | null {
-  if (raw.length === 0) return null;
+function encodeCmdline(raw: string): string {
+  if (raw.length === 0) return "";
   const argv = raw.split("\0");
   if (argv.at(-1) === "") argv.pop();
-  if (argv.length === 0) return null;
-  return argv.map((argument) => argument.replace(/\s/g, "␣")).join(" ");
+  return argv.map((argument) => argument === "" ? "␀" : argument.replace(/\s/g, "␣")).join(" ");
 }
 
 async function readOneProcRow(pid: number, io: CensusProcIo): Promise<CensusProcRow> {
@@ -157,14 +170,12 @@ async function readOneProcRow(pid: number, io: CensusProcIo): Promise<CensusProc
   const before = parseStatRow(beforeRaw);
   if (!before.ok) return unreadable(pid, "stat", before.why);
 
-  let args: string | null;
+  let args: string;
   try {
     args = encodeCmdline(text(await io.readFile(`${PROC}/${pid}/cmdline`)));
   } catch (cause) {
     return unreadable(pid, "cmdline", said(cause));
   }
-  if (args === null) return unreadable(pid, "cmdline", "the file was empty");
-
   let afterRaw: string;
   try {
     afterRaw = text(await io.readFile(`${PROC}/${pid}/stat`));
@@ -181,7 +192,10 @@ async function readOneProcRow(pid: number, io: CensusProcIo): Promise<CensusProc
     comm: before.comm,
     args,
     startTicks: before.startTicks,
-    changedUnderRead: before.ppid !== after.ppid || before.startTicks !== after.startTicks,
+    changedUnderRead:
+      before.ppid !== after.ppid ||
+      before.startTicks !== after.startTicks ||
+      before.comm !== after.comm,
   };
 }
 
@@ -233,7 +247,11 @@ export function startCensusTask(options: StartCensusTaskOptions): CensusTask {
     const previous = state;
     const lastGood =
       previous.kind === "value"
-        ? { census: previous.census, completedAtMs: previous.completedAtMs }
+        ? {
+            census: previous.census,
+            startedAtMs: previous.startedAtMs,
+            completedAtMs: previous.completedAtMs,
+          }
         : previous.kind === "failed"
           ? previous.lastGood
           : null;
@@ -257,8 +275,12 @@ export function startCensusTask(options: StartCensusTaskOptions): CensusTask {
     try {
       const startedAtMs = options.nowMs();
       const rows = await options.readRows();
+      if (stopped) return;
       const census = fold(rows);
       const completedAtMs = options.nowMs();
+      if (completedAtMs < startedAtMs) {
+        throw new Error(`the census clock moved backwards during the pass (${startedAtMs} to ${completedAtMs})`);
+      }
       state = {
         kind: "value",
         label: "observed",

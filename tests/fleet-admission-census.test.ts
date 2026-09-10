@@ -101,6 +101,18 @@ describe("the admission census recognisers and fold", () => {
     expect(foldCensus([runner, worker, init]).byClass.test).toEqual({ roots: 1, uncertain: 0 });
   });
 
+  it("does not promote an orphaned Vitest worker to a runner root", () => {
+    const worker = row(
+      21,
+      1,
+      "/usr/bin/node --require /repo/node_modules/vitest/suppress-warnings.cjs /repo/node_modules/vitest/dist/workers/forks.js",
+    );
+    const init = row(1, 0, "/sbin/init", { comm: "systemd", startTicks: 1 });
+
+    expect(recogniseCensusClass(worker)).toBe("test");
+    expect(foldCensus([worker, init]).byClass.test).toEqual({ roots: 0, uncertain: 0 });
+  });
+
   it("reuses executable recognisers without matching prose, fake tools, MCP arguments or crashpad", () => {
     expect(recogniseCensusClass(row(30, 1, "vim vitest.config.ts", { comm: "vim" }))).toBeNull();
     expect(recogniseCensusClass(row(31, 1, "grep -r vitest", { comm: "grep" }))).toBeNull();
@@ -165,10 +177,28 @@ describe("the admission census recognisers and fold", () => {
     expect(foldCensus([init, parent, child]).byClass["codex-batch"]).toEqual({ roots: 1, uncertain: 0 });
   });
 
-  it("treats pid 1 as a terminal ancestor without requiring a proc row for it", () => {
+  it("treats a missing pid 1 like every other missing positive parent", () => {
     const candidate = row(90, 1, "codex exec work", { comm: "codex" });
 
-    expect(foldCensus([candidate]).byClass["codex-batch"]).toEqual({ roots: 1, uncertain: 0 });
+    expect(foldCensus([candidate]).byClass["codex-batch"]).toEqual({ roots: 0, uncertain: 1 });
+  });
+
+  it("walks through a readable pid 1 rather than hiding a same-class ancestor", () => {
+    const init = row(1, 0, "codex exec init-work", { comm: "codex", startTicks: 1 });
+    const child = row(90, 1, "codex exec child-work", { comm: "codex" });
+
+    expect(foldCensus([init, child]).byClass["codex-batch"]).toEqual({ roots: 1, uncertain: 0 });
+  });
+
+  it("keeps ancestry through an empty-argv parent uncertain", () => {
+    const init = row(1, 0, "/sbin/init", { comm: "systemd", startTicks: 1 });
+    const zombieParent = row(80, 1, "", { comm: "codex", startTicks: 800 });
+    const childObservedEarlier = row(81, 80, "codex exec work", { comm: "codex", startTicks: 810 });
+
+    expect(foldCensus([init, zombieParent, childObservedEarlier]).byClass["codex-batch"]).toEqual({
+      roots: 0,
+      uncertain: 1,
+    });
   });
 });
 
@@ -183,8 +213,9 @@ describe("readProcRows", () => {
     add(102, "codex", ["codex", "exec", "--model", "x", "do the thing"]);
     add(103, "node", ["node", "/repo/node_modules/vitest/dist/workers/forks.js"]);
     add(104, "chrome", ["/opt/chrome", "--type=renderer", "two words"]);
+    add(105, "codex", ["codex", "", "exec"]);
 
-    const rows = await readProcRows(procIo(files, ["self", "101", "net", "102", "103", "104", "1x"]));
+    const rows = await readProcRows(procIo(files, ["self", "101", "net", "102", "103", "104", "105", "1x"]));
     const readable = rows.filter((candidate): candidate is Extract<CensusProcRow, { kind: "read" }> => candidate.kind === "read");
 
     expect(readable.map((candidate) => candidate.args)).toEqual([
@@ -192,8 +223,9 @@ describe("readProcRows", () => {
       "codex exec --model x do␣the␣thing",
       "node /repo/node_modules/vitest/dist/workers/forks.js",
       "/opt/chrome --type=renderer two␣words",
+      "codex ␀ exec",
     ]);
-    expect(readable.map(recogniseCensusClass)).toEqual([null, "codex-batch", "test", "browser"]);
+    expect(readable.map(recogniseCensusClass)).toEqual([null, "codex-batch", "test", "browser", null]);
     expect(foldCensus(readable).byClass.browser).toEqual({ roots: 0, uncertain: 0 });
   });
 
@@ -213,8 +245,41 @@ describe("readProcRows", () => {
   });
 
   it.each([
+    ["kernel thread", 2, "kworker/0:0", "S"],
+    ["zombie Chrome", 1, "chrome", "Z"],
+  ])("keeps an empty-argv %s readable and unrecognised", async (_name, ppid, comm, state) => {
+    const before = stat(101, ppid, 900, comm).replace(") S ", `) ${state} `);
+    const rows = await readProcRows(
+      procIo({
+        "/proc/101/stat": [before, before],
+        "/proc/101/cmdline": [Buffer.alloc(0)],
+      }),
+    );
+
+    expect(rows).toEqual([
+      {
+        kind: "read",
+        pid: 101,
+        ppid,
+        comm,
+        args: "",
+        startTicks: 900,
+        changedUnderRead: false,
+      },
+    ]);
+    expect(recogniseCensusClass(rows[0] as Extract<CensusProcRow, { kind: "read" }>)).toBeNull();
+    expect(foldCensus(rows)).toMatchObject({
+      unreadable: 0,
+      byClass: {
+        test: { roots: 0, uncertain: 0 },
+        "codex-batch": { roots: 0, uncertain: 0 },
+        browser: { roots: 0, uncertain: 0 },
+      },
+    });
+  });
+
+  it.each([
     ["first stat", [""], []],
-    ["cmdline", [stat(101, 1, 1)], [""]],
     ["second stat", [stat(101, 1, 1), ""], ["node\0script.js\0"]],
   ] as const)("keeps an empty %s read as unreadable", async (_name, stats, cmdline) => {
     const rows = await readProcRows(
@@ -250,6 +315,21 @@ describe("readProcRows", () => {
 
     expect(rows[0]).toMatchObject({ kind: "read", pid: 101, changedUnderRead: true });
     expect(foldCensus(rows)).toMatchObject({ changedUnderRead: 1, byClass: { "codex-batch": { roots: 0, uncertain: 0 } } });
+  });
+
+  it("marks a comm change as changed-under-read before comm and cmdline can form a false browser", async () => {
+    const rows = await readProcRows(
+      procIo({
+        "/proc/101/stat": [stat(101, 1, 900, "chrome"), stat(101, 1, 900, "node")],
+        "/proc/101/cmdline": ["node\0script.js\0"],
+      }),
+    );
+
+    expect(rows[0]).toMatchObject({ kind: "read", pid: 101, changedUnderRead: true });
+    expect(foldCensus(rows)).toMatchObject({
+      changedUnderRead: 1,
+      byClass: { browser: { roots: 0, uncertain: 0 } },
+    });
   });
 
   it("throws when /proc itself cannot be enumerated", async () => {
@@ -331,6 +411,7 @@ describe("startCensusTask", () => {
         cadenceMs: 50,
         lastGood: {
           census: good.kind === "value" ? good.census : null,
+          startedAtMs: 1_001,
           completedAtMs: 1_002,
         },
       });
@@ -375,6 +456,28 @@ describe("startCensusTask", () => {
     expect(calls).toBe(1);
   });
 
+  it("does not fold or publish an in-flight read after stop", async () => {
+    const pending = deferred<CensusProcRow[]>();
+    let folds = 0;
+    const task = startCensusTask({
+      readRows: () => pending.promise,
+      fold: () => {
+        folds += 1;
+        return foldCensus([]);
+      },
+      cadenceMs: 30_000,
+      nowMs: () => 100,
+      setTimer: () => ({ unref() {} }),
+    });
+
+    task.stop();
+    pending.resolve([]);
+    await turn();
+
+    expect(folds).toBe(0);
+    expect(task.read()).toEqual({ kind: "not-yet-computed", label: "observed", startedAtMs: 100 });
+  });
+
   it("does not throw when its clock or a failure cause cannot be read", async () => {
     const hostileCause = {
       toString() {
@@ -409,5 +512,25 @@ describe("startCensusTask", () => {
       process.off("unhandledRejection", onUnhandled);
       task.stop();
     }
+  });
+
+  it("does not publish counts under a pass whose wall clock moved backwards", async () => {
+    const times = [100, 200, 150, 160];
+    const task = startCensusTask({
+      readRows: async () => [],
+      cadenceMs: 30_000,
+      nowMs: () => times.shift() ?? 160,
+      setTimer: () => ({ unref() {} }),
+    });
+
+    await turn();
+
+    expect(task.read()).toMatchObject({
+      kind: "failed",
+      why: "the census clock moved backwards during the pass (200 to 150)",
+      failedAtMs: 160,
+      lastGood: null,
+    });
+    task.stop();
   });
 });
