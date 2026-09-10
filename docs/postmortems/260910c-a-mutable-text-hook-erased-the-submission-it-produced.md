@@ -84,12 +84,29 @@ caller snapshots a `DraftSubmission`, sends its text, and returns that ticket on
 success. Acceptance clears only an unchanged generation, removes its exact stored or
 page-only copy, and tells any replacement mount showing that generation to clear.
 
-One limit, found by a scratch probe during verification: the generation is counted per box
-slot (the row, or the one Overseer card), not per conversation. If the pane has moved to a
-different conversation B and somebody types there before A's successful answer arrives, the
-acceptance is declined as stale, so A's sent draft stays in storage and is restored if A
-returns. The baseline's unconditional clear on the unmounted pane removed nothing in that case
-either, so this is a gap the fix leaves rather than one it introduced.
+One limit, found by a scratch probe during verification, **is now closed** (F29 in the plan).
+The generation was counted per box slot (the row, or the one Overseer card), not per
+conversation: if the pane had moved to a different conversation B and somebody typed there
+before A's successful answer arrived, the acceptance was declined as stale, so A's sent draft
+stayed in storage and was restored if A returned. The baseline's unconditional clear removed
+nothing in that case either, so it was a gap the fix left rather than one it introduced. It is
+closed by a second counter per stored key, moved whenever any box decides to write or remove
+that key. Acceptance now asks two questions before either counter moves: may the stored copy
+go (nothing has written its key since the ticket), and may the box be cleared (the box has not
+changed since). So A's answer removes A's stored copy after the pane moved to B and was typed
+into, never touches B's key, and still leaves an edit made to A's own box while the request was
+open, on screen and in storage. The broadcast's box counter is its stored key's counter, so its
+rule is unchanged. The tests are in `tests/fleet-web.test.tsx` (Send and Queue) and
+`tests/fleet-drafts.test.tsx`.
+
+A second limit, found while closing the first, **is closed too** (F30). Typing done before any
+conversation verified is sent with no stored key on its ticket; if the conversation then
+verified while the request was open, the hook filed the words under A, and the success cleared
+the box but left A's copy, so a reload restored words already sent. The box is only told of a
+success when its own generation is unchanged since the ticket, so the words under any key it was
+filed under after the send are the sent words: it now removes that key as it clears. The ticket's
+own key is still decided only by the stored-key check, and an edit made after the send moves the
+box's generation, so it survives in the box and in A's key.
 
 Conversation-less typing uses a page-only key made from the box purpose and stable UI
 slot. Its target scope travels with it across a remount: the same scope may later file

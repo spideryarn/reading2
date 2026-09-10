@@ -129,9 +129,16 @@ const unplaced = new Map<string, { text: string; scope: string | null }>();
  * Edit generations live outside a mount because a request may finish after the
  * mount that began it has gone. A generation, not text equality, catches an
  * edit that changes A to B and back to A while the request is in flight.
+ *
+ * Two kinds of counter share the map. `page:<box>` is the box's: it moves on
+ * every change the person makes to that box, and decides whether an answer may
+ * clear what is on screen. `stored:<key>` is the stored key's: it moves
+ * whenever any box decides to write or remove that key, and decides whether an
+ * answer may take its words out of storage. The broadcast has no page key, so
+ * its box counter *is* its stored key's, and the two rules are one rule there.
  */
 const versions = new Map<string, number>();
-const acceptedSubmissions = new Set<(versionKey: string) => void>();
+const acceptedSubmissions = new Set<(submission: DraftSubmission) => void>();
 
 function versionOf(key: string): number {
   return versions.get(key) ?? 0;
@@ -139,6 +146,10 @@ function versionOf(key: string): number {
 
 function advanceVersion(key: string): void {
   versions.set(key, versionOf(key) + 1);
+}
+
+function storedVersionKey(key: string): string {
+  return `stored:${key}`;
 }
 
 function storage(): Storage | null {
@@ -335,7 +346,7 @@ export type Draft = {
   clear(): void;
   /** Snapshot the exact draft generation a request is about to submit. */
   submission(): DraftSubmission | null;
-  /** Accept a successful request, clearing that generation and no later one. */
+  /** Accept a successful request: its words leave storage and the box, and nothing typed since does. */
   accept(submission: DraftSubmission): void;
   /** False when the words on screen pre-date a resolved recipient change. */
   canSubmit: boolean;
@@ -348,7 +359,8 @@ export type DraftSubmission = {
   readonly text: string;
   readonly versionKey: string;
   readonly version: number;
-  readonly filedUnder: string | null;
+  /** The key the submitted words were stored under, and that key's write generation when they were submitted. */
+  readonly filed: { readonly key: string; readonly version: number } | null;
   readonly pageKey: string | null;
 };
 
@@ -594,15 +606,42 @@ function versionKeyOf(h: Held, pageKey: string | null): string | null {
      later filed under a conversation, and across the keyed remount made by a
      process replacement. An in-flight submission must follow that transition. */
   if (pageKey !== null) return `page:${pageKey}`;
-  return h.filedUnder === null ? null : `stored:${h.filedUnder}`;
+  return h.filedUnder === null ? null : storedVersionKey(h.filedUnder);
 }
 
+/** Moves the write generation of every key a change has just decided to write or remove. */
+function advanceWritten(before: Held, after: Held): void {
+  for (const op of after.pending.slice(before.pending.length)) {
+    if (op.kind === "put" || op.kind === "remove") advanceVersion(storedVersionKey(op.key));
+  }
+}
+
+/**
+ * **TWO QUESTIONS, BOTH ASKED BEFORE EITHER COUNTER MOVES** — for the broadcast
+ * they read the same counter.
+ *
+ * May the stored copy go? Only if nothing has written its key since the words
+ * were submitted. That is per conversation, not per box, so a pane that has
+ * moved on to conversation B and been typed into there still lets A's answer
+ * take A's sent words out of storage, where they would otherwise wait to be
+ * restored and sent again (F29, docs/plans/260910c). It never touches B's key.
+ *
+ * May the box be cleared? Only if the box has not changed since. That is per
+ * box, so an edit made while the request was open survives on screen — and,
+ * because that edit also wrote the key, in storage too.
+ */
 function acceptSubmission(submission: DraftSubmission): void {
-  if (versionOf(submission.versionKey) !== submission.version) return;
+  const { filed } = submission;
+  const storedKey = filed !== null && versionOf(storedVersionKey(filed.key)) === filed.version ? filed.key : null;
+  const boxCurrent = versionOf(submission.versionKey) === submission.version;
+  if (storedKey !== null) {
+    advanceVersion(storedVersionKey(storedKey));
+    remove(storedKey);
+  }
+  if (!boxCurrent) return;
   advanceVersion(submission.versionKey);
-  if (submission.filedUnder !== null) remove(submission.filedUnder);
   if (submission.pageKey !== null) unplaced.delete(submission.pageKey);
-  for (const notify of acceptedSubmissions) notify(submission.versionKey);
+  for (const notify of acceptedSubmissions) notify(submission);
 }
 
 const PURPOSE_ADDRESS: Address = { kind: "purpose" };
@@ -637,12 +676,20 @@ export function useDraft(args: UseDraftArgs): Draft {
   latest.current = now;
 
   /* Installed before an async completion can run after a replacement mount's
-     commit. The accepted generation is removed from storage above; this is
-     the half that removes the copy already restored into the new textarea. */
+     commit. The ticket's own stored copy is removed above; this is the half
+     that removes the copy already restored into the new textarea.
+
+     It also removes a key the box's words were filed under *after* the send
+     (F30): typing sent before any conversation verified has no key on its
+     ticket, and the first verification then files it. The box is only told
+     when its generation is unchanged since the ticket, so the words under that
+     key are the words that were sent. The ticket's own key is left to the
+     generation check above, never removed from here. */
   useLayoutEffect(() => {
-    const onAccepted = (versionKey: string): void => {
+    const onAccepted = (submission: DraftSubmission): void => {
       setHeld((h) => {
-        if (versionKeyOf(h, pageKey) !== versionKey) return h;
+        if (versionKeyOf(h, pageKey) !== submission.versionKey) return h;
+        const filedLater = h.filedUnder !== null && h.filedUnder !== submission.filed?.key ? h.filedUnder : null;
         return {
           ...h,
           text: "",
@@ -650,7 +697,7 @@ export function useDraft(args: UseDraftArgs): Draft {
           touched: true,
           filedUnder: null,
           unplacedUnder: null,
-          pending: [],
+          pending: filedLater === null ? [] : [{ kind: "remove", key: filedLater }],
         };
       });
     };
@@ -686,6 +733,7 @@ export function useDraft(args: UseDraftArgs): Draft {
       const after = edit(before, address, next, keyOf, pageKey);
       const changed = versionKeyOf(after, pageKey) ?? versionKeyOf(before, pageKey);
       if (changed !== null) advanceVersion(changed);
+      advanceWritten(before, after);
       latest.current = after;
       setHeld(after);
     },
@@ -694,6 +742,7 @@ export function useDraft(args: UseDraftArgs): Draft {
       const changed = versionKeyOf(before, pageKey);
       if (changed !== null) advanceVersion(changed);
       const after = cleared(before, pageKey);
+      advanceWritten(before, after);
       latest.current = after;
       setHeld(after);
     },
@@ -706,7 +755,10 @@ export function useDraft(args: UseDraftArgs): Draft {
         text: current.text,
         versionKey,
         version: versionOf(versionKey),
-        filedUnder: current.filedUnder,
+        filed:
+          current.filedUnder === null
+            ? null
+            : { key: current.filedUnder, version: versionOf(storedVersionKey(current.filedUnder)) },
         pageKey,
       };
     },
