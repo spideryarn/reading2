@@ -17,7 +17,7 @@ import type { OverseerEvent } from "./diff.js";
 import { splitJsonl } from "./jsonl.js";
 import { describeAge } from "./format-age.js";
 import { describeRuleOutcome } from "./rules.js";
-import { describeNote, openConditions, readNotes, type DaemonNote } from "./notes.js";
+import { describeNote, openConditions, readNotes, type DaemonNote, type ReadNotes } from "./notes.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
@@ -201,11 +201,23 @@ export async function readOverseerClaim(
   }
 }
 
-export function statusLines(root: string, nowMs: number = Date.now(), claim?: OverseerClaim): string[] {
-  requireAbsoluteRoot(root);
-  const read = readCheckpoint(root);
-  const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
-  const notes = readNotes(root);
+/**
+ * The daemon's standing from the two reads a lock-free reader has — and the
+ * rule that notes which are not complete (unreadable, or a final line caught
+ * mid-append) make it `cannot-tell` rather than a guess about whether it
+ * stopped cleanly. `statusLines` and `overseer diagnose` both come through here,
+ * so the two pages cannot disagree about what the same store means.
+ */
+export function standingFromReads(read: CheckpointRead, notes: ReadNotes, nowMs: number, alive: (pid: number) => boolean): DaemonStanding {
+  return standingAndLastNote(read, notes, nowMs, alive).standing;
+}
+
+function standingAndLastNote(
+  read: CheckpointRead,
+  notes: ReadNotes,
+  nowMs: number,
+  alive: (pid: number) => boolean,
+): { standing: DaemonStanding; lastNote: DaemonNote | null; notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null } {
   let lastNote: DaemonNote | null = null;
   let notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null = null;
   if (notes.kind === "unreadable") {
@@ -224,7 +236,16 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
           state: "cannot-tell",
           detail: `the daemon's notes are not complete (${notesProblem.detail}), so this reader will not infer whether it stopped cleanly`,
         }
-      : daemonStanding({ read, lastNote, nowMs, alive: isProcessAlive });
+      : daemonStanding({ read, lastNote, nowMs, alive });
+  return { standing, lastNote, notesProblem };
+}
+
+export function statusLines(root: string, nowMs: number = Date.now(), claim?: OverseerClaim): string[] {
+  requireAbsoluteRoot(root);
+  const read = readCheckpoint(root);
+  const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
+  const notes = readNotes(root);
+  const { standing, notesProblem } = standingAndLastNote(read, notes, nowMs, isProcessAlive);
   const lines: string[] = [`Overseer store: ${root}`, ""];
   lines.push(`daemon      ${standing.state.toUpperCase().replaceAll("-", " ")} — ${standing.detail}`);
 
