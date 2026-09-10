@@ -547,6 +547,23 @@ operations behind a per-family interface. Nothing Codex-specific is built now.
 **Why the registry first:** it is the one new concept everything else reads, and Stage 0 has already
 established what goes in it.
 
+#### The orchestrator account cannot be registered, and that is accepted for now
+
+**Discovered by registering a real account, 2026-09-10.** `add` requires `--config-dir`, but the
+orchestrator/ambient account is precisely *"no `CLAUDE_CONFIG_DIR`"* — and pointing one at
+`/home/greg/.claude` is **actively wrong**, not merely redundant: the CLI then looks for
+`.claude.json` *inside* the directory, where the default account's does not live, and the session
+gets no identity, no user-level MCP servers, no trust flags and no first-run state.
+
+The launcher already handles ambient correctly — `stateDir: null` emits no `env` prefix at all, just
+plain `claude` — so the gap is only that `add` cannot express it.
+
+**Accepted as is** (the Overseer, 2026-09-10): the registry holds pool accounts only, an unflagged
+launch stays ambient, and `auto` picks from the pool. That is the wanted behaviour anyway, so
+**`add --ambient` is not to be built unless the wizard turns out to need it.** Recorded here so the
+next reader does not mistake the gap for an oversight, or "fix" it by registering `main` with a
+`--config-dir` — which would be the one thing that actively breaks.
+
 **Where it lives.** Outside the repo — credentials never go in git:
 
 ```
@@ -785,6 +802,27 @@ attributed to an account*.
 **The file set is therefore bigger than the earlier plan said**: history schema, wire types,
 checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
 JSON, the UI, and their tests.
+
+#### The attribution proof, measured 2026-09-10 on live sessions
+
+**This is the evidence the Usage Limits tab rests on**, and until it existed the per-account claim was
+an inference from how the endpoint *ought* to behave.
+
+| `greg@mindstone.com` | five-hour | seven-day |
+|---|---|---|
+| 00:11:58Z, before any pool session | **0%** | 3% |
+| 00:33:02Z, two pool sessions running on it | **2%** | 3% |
+
+Work dispatched onto a pool account moves **that account's own reading**, and nothing was done to
+mindstone in between except run sessions on it. So `/api/oauth/usage` genuinely reports per account,
+and the tab can show one section per account rather than one number for the box.
+
+**The five-hour window is the sensitive instrument, and the seven-day is not.** The seven-day sat at
+3% throughout — as expected, since it is an integer percentage over a far larger denominator. Anyone
+checking attribution, or debugging a tab that looks stuck, should watch the five-hour: **a flat
+seven-day over twenty minutes is not evidence of anything**, and reading it as such would have
+produced a confident wrong conclusion here. The first check was very nearly reported that way, off a
+reminder set an hour too early.
 
 #### When the endpoint moves, we must find out — containment is not detection
 

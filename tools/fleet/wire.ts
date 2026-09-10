@@ -1352,30 +1352,40 @@ export type OverseerScheduler =
   | { kind: "not-said"; why: string; at: string }
   | { kind: "unreadable"; why: string };
 
+/** Whether the Overseer's last work scan can be drawn beside these entries, and if not, why. */
+export type OverseerRegisterWork =
+  /** A scan taken FOR this checkpoint's inventory. `scannedAt` is when the kernel was read. */
+  | { kind: "scanned"; scannedAt: string }
+  /** No scan is being drawn: none has run, the probe failed, it belongs to an older inventory, or
+   *  this page could not read it. One sentence, said once above the list rather than N times in it. */
+  | { kind: "unavailable"; why: string };
+
 /**
- * **THE OVERSEER'S OWN RECORD OF WHAT HAS BEEN RUNNING, AND IT IS NOT A JOIN.**
+ * **THE OVERSEER'S OWN RECORD OF WHAT HAS BEEN RUNNING, AND NOT A LIVE-FLEET JOIN.**
  *
  * The register is the Overseer's past tense: it knows when a session entered
  * the state it is in, which the dashboard cannot know because it has no
- * yesterday. This carries a BOUNDED, RANKED PROJECTION of it — the longest
- * waiting first — and nothing on the page matches these entries to the fleet
- * rows beside them.
+ * yesterday. This carries a BOUNDED, RANKED PROJECTION of the oldest status
+ * records worth showing: non-idle sessions, idle sessions with recognised
+ * child work, and idle sessions without a usable pane reading, ordered by
+ * pane-status age. Nothing on the page matches these entries to the fleet rows
+ * beside them.
  *
  * **That refusal is the design.** A register entry and a fleet row can agree
  * about a pane and still be about different children: the generation tuple
  * (`tmuxServerPid`, `paneId`, `panePid`) can stay fixed while the process
  * inside it is replaced, so *"blocked for at least 20 minutes"* said against a
- * row needs continuity evidence this build does not have. The plan's Execution
- * identity stage is what earns that join; until then these are history, drawn
- * as history, under their own heading. **Whatever is wrong here, the fleet rows
- * are unaffected** — they come from a different field of the same payload and
- * nothing about them is derived from this one.
+ * row needs continuity evidence. Execution identity now provides a key that
+ * could earn that join, but this slice deliberately does not make it: these are
+ * history, drawn as history, under their own heading. **Whatever is wrong here,
+ * the fleet rows are unaffected** — they come from a different field of the
+ * same payload and nothing about them is derived from this one.
  *
  * `total` is the whole register and `sessions` is the cap, so a card that shows
  * eight of thirty-six says so rather than looking like the whole fleet.
  */
 export type OverseerRegister =
-  | { kind: "read"; total: number; sessions: OverseerSessionHistory[] }
+  | { kind: "read"; total: number; sessions: OverseerSessionHistory[]; work: OverseerRegisterWork }
   | { kind: "unreadable"; why: string };
 
 /** One recognised piece of long-running work found under a pane. */
@@ -1415,8 +1425,13 @@ export type PaneWork =
    *  measured arms because without it the delayed scan cannot apply even its limited pid-reuse
    *  backstop; an unavailable start is `cannot-tell`, never `none`. */
   | { kind: "none"; inspected: number; paneCommand: string; paneStartedAt: string }
-  /** Found some. `jobs` is non-empty by construction on the producing side. */
-  | { kind: "work"; jobs: readonly PaneJob[]; inspected: number; paneCommand: string; paneStartedAt: string };
+  /**
+   * Found some. **A NON-EMPTY TUPLE RATHER THAN AN ARRAY**, so that "a positive reading with no
+   * job" is a state the compiler refuses rather than one three parsers each have to reject and a
+   * renderer has to carry a sentence for. It was an ordinary array until a review pointed at the
+   * unreachable branch that shape had grown in `OverseerPanel`.
+   */
+  | { kind: "work"; jobs: readonly [PaneJob, ...PaneJob[]]; inspected: number; paneCommand: string; paneStartedAt: string };
 
 /** One pane's reading, tagged with the Overseer's own session key so it can be joined to a register
  *  entry — the same key, written by the same daemon into the same file at the same instant. */
@@ -1458,6 +1473,12 @@ export type OverseerSessionHistory = {
    * refused a key it had not heard of would drop the row that had changed.
    */
   status: string;
+  /**
+   * The pane's reading from the scan taken for this register's inventory.
+   * `null` is its own fact: the scan ran but carried no reading for this
+   * session. It is neither an unavailable scan nor a per-pane `cannot-tell`.
+   */
+  work: PaneWork | null;
   /**
    * **WHEN IT ENTERED THAT STATE, AND WHETHER THAT IS A READING OR A FLOOR.**
    *

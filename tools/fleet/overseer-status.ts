@@ -73,9 +73,12 @@ import type {
   AttentionFeed,
   OverseerHeartbeat,
   OverseerRegister,
+  OverseerRegisterWork,
   OverseerScheduler,
   OverseerSessionHistory,
   OverseerStatusFeed,
+  PaneJob,
+  PaneWork,
   UsageFeed,
 } from "./wire.js";
 
@@ -84,9 +87,10 @@ import type {
  *
  * The register can hold every session on the box — thirty-six on 2026-09-08 —
  * and this is a card that answers *is supervision working*, not a second
- * session list. Eight is the longest-waiting eight, which is where anything
- * worth acting on will be, and `OverseerRegister.total` carries the whole count
- * beside them so eight of thirty-six never reads as thirty-six.
+ * session list. Eight is the oldest eight status records worth showing, which
+ * is where anything worth acting on will be, and `OverseerRegister.total`
+ * carries the whole count beside them so eight of thirty-six never reads as
+ * thirty-six.
  *
  * The daemon's own `overseer status` prints six, for the same reason and
  * against the same register. Two is not worth trying to share across the seam.
@@ -203,6 +207,7 @@ function project(json: unknown): OverseerStatusFeed {
      `sourceDeadline`. */
   const deadline = sourceDeadline(json["snapshotStaleAfterMs"]);
   if (deadline.kind === "bad") return { kind: "checkpoint-unreadable", why: deadline.why };
+  const work = resolveWork(json["work"], lastGoodSnapshotAt, writtenAt);
 
   return {
     kind: "published",
@@ -213,7 +218,7 @@ function project(json: unknown): OverseerStatusFeed {
       sourceStaleAfterMs: deadline.kind === "said" ? deadline.ms : null,
       heartbeat: projectHeartbeat(json["heartbeat"], writtenAt),
       scheduler: projectScheduler(json["scheduler"]),
-      register: projectRegister(json["register"], writtenAt),
+      register: projectRegister(json["register"], writtenAt, work),
     },
   };
 }
@@ -414,46 +419,260 @@ function projectScheduler(u: unknown): OverseerScheduler {
   }
 }
 
+type ResolvedWork =
+  | { kind: "scanned"; scannedAt: string; panes: ReadonlyMap<string, PaneWork> }
+  | { kind: "unavailable"; why: string };
+
+/** `ps etimes` gives whole seconds, so its derived start and duration may differ by one second. */
+const PROCESS_START_TOLERANCE_MS = 1_000;
+
 /**
- * The register, ranked and capped — **the Overseer's history, and not a join.**
+ * The work reading that belongs to this exact inventory, or one sentence saying
+ * why no join may be drawn. A bad enrichment never takes the register down.
+ */
+function resolveWork(u: unknown, lastGoodSnapshotAt: string | null, writtenAt: string): ResolvedWork {
+  const malformed = (): ResolvedWork => ({
+    kind: "unavailable",
+    why: "the checkpoint's work scan could not be read",
+  });
+  if (u === undefined) {
+    return {
+      kind: "unavailable",
+      why: "this checkpoint was written before the Overseer recorded work scans",
+    };
+  }
+  if (!isRecord(u)) return malformed();
+
+  switch (u["kind"]) {
+    case "not-yet-run": {
+      const why = nonBlank(u["why"]);
+      const at = iso(u["at"]);
+      return why === null || at === null ? malformed() : { kind: "unavailable", why };
+    }
+    case "probe-failed": {
+      const why = nonBlank(u["why"]);
+      const attemptedAt = iso(u["attemptedAt"]);
+      const sourceCollectedAt = iso(u["sourceCollectedAt"]);
+      if (why === null || attemptedAt === null || sourceCollectedAt === null) return malformed();
+      if (lastGoodSnapshotAt === null) {
+        return {
+          kind: "unavailable",
+          why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
+        };
+      }
+      if (sourceCollectedAt !== lastGoodSnapshotAt) {
+        return {
+          kind: "unavailable",
+          why: `the failed work probe belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
+        };
+      }
+      if (Date.parse(attemptedAt) < Date.parse(sourceCollectedAt) || Date.parse(attemptedAt) > Date.parse(writtenAt)) {
+        return malformed();
+      }
+      return { kind: "unavailable", why };
+    }
+    case "scan": {
+      const scannedAt = iso(u["scannedAt"]);
+      const sourceCollectedAt = iso(u["sourceCollectedAt"]);
+      if (scannedAt === null || sourceCollectedAt === null || !Array.isArray(u["panes"])) return malformed();
+
+      if (lastGoodSnapshotAt === null) {
+        return {
+          kind: "unavailable",
+          why: `the work scan belongs to the ${sourceCollectedAt} inventory, but the register has no accepted inventory to match it to`,
+        };
+      }
+      if (sourceCollectedAt !== lastGoodSnapshotAt) {
+        return {
+          kind: "unavailable",
+          why: `the work scan belongs to the ${sourceCollectedAt} inventory, not the register's ${lastGoodSnapshotAt} inventory`,
+        };
+      }
+      if (Date.parse(scannedAt) < Date.parse(sourceCollectedAt)) {
+        return {
+          kind: "unavailable",
+          why: `the work scan says it read the process table at ${scannedAt}, before the ${sourceCollectedAt} inventory it claims to describe was collected`,
+        };
+      }
+      if (Date.parse(scannedAt) > Date.parse(writtenAt)) {
+        return {
+          kind: "unavailable",
+          why: `the work scan says it read the process table at ${scannedAt}, after the ${writtenAt} checkpoint that reports it`,
+        };
+      }
+
+      const panes = new Map<string, PaneWork>();
+      for (const rawPane of u["panes"]) {
+        if (!isRecord(rawPane)) return malformed();
+        const key = nonBlank(rawPane["key"]);
+        const paneWork = parsePaneWork(rawPane["work"]);
+        if (
+          key === null ||
+          paneWork === null ||
+          !paneWorkFitsScan(paneWork, Date.parse(scannedAt)) ||
+          panes.has(key)
+        ) return malformed();
+        panes.set(key, paneWork);
+      }
+
+      return { kind: "scanned", scannedAt, panes };
+    }
+    default:
+      return malformed();
+  }
+}
+
+/** Producer invariants which the wire type cannot express. */
+function paneWorkFitsScan(work: PaneWork, scannedAtMs: number): boolean {
+  if (work.kind === "cannot-tell") return true;
+  const paneStartedAtMs = Date.parse(work.paneStartedAt);
+  if (paneStartedAtMs > scannedAtMs) return false;
+  if (work.kind === "none") return true;
+  if (work.inspected < work.jobs.length) return false;
+  const pids = new Set<number>();
+  return work.jobs.every((job) => {
+    if (job.depth === 0 || job.depth > work.inspected || pids.has(job.pid)) return false;
+    pids.add(job.pid);
+    if (job.startedAt === null) return job.ranForMs === null;
+    const startedAtMs = Date.parse(job.startedAt);
+    return startedAtMs >= paneStartedAtMs &&
+      startedAtMs <= scannedAtMs &&
+      job.ranForMs !== null &&
+      Math.abs(scannedAtMs - startedAtMs - job.ranForMs) <= PROCESS_START_TOLERANCE_MS;
+  });
+}
+
+function parsePaneWork(u: unknown): PaneWork | null {
+  if (!isRecord(u)) return null;
+  switch (u["kind"]) {
+    case "cannot-tell": {
+      const cause = nonBlank(u["cause"]);
+      const why = nonBlank(u["why"]);
+      return cause === null || why === null ? null : { kind: "cannot-tell", cause, why };
+    }
+    case "none": {
+      const inspected = count(u["inspected"]);
+      const paneCommand = nonBlank(u["paneCommand"]);
+      const paneStartedAt = iso(u["paneStartedAt"]);
+      return inspected === null || paneCommand === null || paneStartedAt === null
+        ? null
+        : { kind: "none", inspected, paneCommand, paneStartedAt };
+    }
+    case "work": {
+      const inspected = count(u["inspected"]);
+      const paneCommand = nonBlank(u["paneCommand"]);
+      const paneStartedAt = iso(u["paneStartedAt"]);
+      if (
+        inspected === null ||
+        paneCommand === null ||
+        paneStartedAt === null ||
+        !Array.isArray(u["jobs"]) ||
+        u["jobs"].length === 0
+      ) {
+        return null;
+      }
+      const jobs: PaneJob[] = [];
+      for (const rawJob of u["jobs"]) {
+        const job = parsePaneJob(rawJob);
+        if (job === null) return null;
+        jobs.push(job);
+      }
+      const [first, ...rest] = jobs;
+      if (first === undefined) return null;
+      return { kind: "work", jobs: [first, ...rest], inspected, paneCommand, paneStartedAt };
+    }
+    default:
+      return null;
+  }
+}
+
+function parsePaneJob(u: unknown): PaneJob | null {
+  if (!isRecord(u)) return null;
+  const recogniser = nonBlank(u["recogniser"]);
+  const label = nonBlank(u["label"]);
+  const pid = count(u["pid"]);
+  const depth = count(u["depth"]);
+  const command = nonBlank(u["command"]);
+  if (recogniser === null || label === null || pid === null || pid === 0 || depth === null || command === null) {
+    return null;
+  }
+
+  let startedAt: string | null;
+  if (u["startedAt"] === null) {
+    startedAt = null;
+  } else {
+    const parsed = iso(u["startedAt"]);
+    if (parsed === null) return null;
+    startedAt = parsed;
+  }
+
+  let ranForMs: number | null;
+  if (u["ranForMs"] === null) {
+    ranForMs = null;
+  } else {
+    const parsed = count(u["ranForMs"]);
+    if (parsed === null) return null;
+    ranForMs = parsed;
+  }
+
+  return { recogniser, label, startedAt, ranForMs, pid, depth, command };
+}
+
+function registerWork(work: ResolvedWork): OverseerRegisterWork {
+  return work.kind === "scanned"
+    ? { kind: "scanned", scannedAt: work.scannedAt }
+    : { kind: "unavailable", why: work.why };
+}
+
+/**
+ * The register, ranked and capped — **the Overseer's history, and not a join
+ * to the live fleet rows.**
  *
- * The rank is the daemon's own: idle left out, oldest `statusSince` first. An
- * idle session that has been idle for six hours wants nothing, and a floor is
- * still the best estimate available, so the sort ignores the arm — it can only
- * rank a session too LOW, which under-reports rather than inventing urgency.
- * `scripts/overseer.ts` § `attentionLines` argues both, against this same
- * register.
+ * These are the oldest status records worth showing: non-idle sessions, idle
+ * sessions with recognised child work, and idle sessions for which a scan
+ * could not supply a usable pane reading. The last group is load-bearing: if
+ * it were filtered out, an unreadable or missing measurement would be rendered
+ * as idle. Rows remain ordered by pane-status age; the sort deliberately does
+ * not claim that child work has waited for the whole status age.
  *
  * **One bad entry degrades the whole register**, the way one bad item degrades
  * the inbox and unlike the way a bad row is dropped from `rows`. The claim this
- * makes is *these are the ones that have waited longest*, which is a negative
- * claim about every entry not shown; a list that quietly dropped the entry it
- * could not read would be wrong about exactly the session worth looking at.
- * Nothing about the fleet rows depends on this, so the cost of refusing is one
- * card saying it cannot read the register while the sessions below it carry on.
+ * makes is *these are the oldest status records worth showing*, which is a
+ * negative claim about every entry not shown; a list that quietly dropped the
+ * entry it could not read would be wrong about exactly the session worth
+ * looking at. Nothing about the fleet rows depends on this, so the cost of
+ * refusing is one card saying it cannot read the register while the sessions
+ * below it carry on.
  */
-function projectRegister(u: unknown, writtenAt: string): OverseerRegister {
+function projectRegister(u: unknown, writtenAt: string, work: ResolvedWork): OverseerRegister {
   const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
   if (u === undefined) return bad("this checkpoint carries no register");
   if (!Array.isArray(u)) return bad("the register is not an array");
   const entries: OverseerSessionHistory[] = [];
+  const keys = new Set<string>();
   for (const raw of u) {
-    const entry = projectEntry(raw, writtenAt);
+    if (!isRecord(raw)) return bad("an entry in the register is not one this page can read");
+    const key = nonBlank(raw["key"]);
+    if (key === null) return bad("an entry in the register is not one this page can read");
+    if (keys.has(key)) return bad(`the register carries the session key ${key} twice`);
+    keys.add(key);
+    const paneWork = work.kind === "scanned" ? (work.panes.get(key) ?? null) : null;
+    const entry = projectEntry(raw, writtenAt, paneWork);
     if (entry === null) return bad("an entry in the register is not one this page can read");
     entries.push(entry);
   }
   const waiting = entries
-    .filter((entry) => entry.status !== "idle")
+    .filter((entry) => entry.status !== "idle" || (work.kind === "scanned" && entry.work?.kind !== "none"))
     .sort((a, b) => Date.parse(a.since.at) - Date.parse(b.since.at))
     .slice(0, MAX_HISTORY);
   /* `total` IS THE WHOLE REGISTER, idle included, because it answers "how many
      sessions is the Overseer holding history for" — which is what makes eight
      rows legible as eight of thirty-six rather than as the fleet. */
-  return { kind: "read", total: entries.length, sessions: waiting };
+  return { kind: "read", total: entries.length, sessions: waiting, work: registerWork(work) };
 }
 
 /** One entry, every field. `null` on the first mismatch — the register then degrades whole. */
-function projectEntry(u: unknown, writtenAt: string): OverseerSessionHistory | null {
+function projectEntry(u: unknown, writtenAt: string, work: PaneWork | null): OverseerSessionHistory | null {
   if (!isRecord(u)) return null;
   const name = nonBlank(u["name"]);
   const tmuxId = nonBlank(u["tmuxId"]);
@@ -469,5 +688,5 @@ function projectEntry(u: unknown, writtenAt: string): OverseerSessionHistory | n
      here even if a future schema check ever let one through. */
   if (Date.parse(at) > Date.parse(writtenAt)) return null;
   if (since["kind"] !== "observed" && since["kind"] !== "lower-bound") return null;
-  return { name, tmuxId, status, since: { kind: since["kind"], at } };
+  return { name, tmuxId, status, work, since: { kind: since["kind"], at } };
 }

@@ -55,7 +55,7 @@ export type AccountProfileReading =
       email: string;
       orgId: string;
     }
-  | { kind: "unknown"; configDir: string; takenAt: string; why: string };
+  | { kind: "unknown"; configDir: string; takenAt: string; why: string; status?: number };
 
 export type AccountUsageReading =
   | {
@@ -65,7 +65,7 @@ export type AccountUsageReading =
       identity: LiveUsageIdentity;
       windows: UsageWindowReading[];
     }
-  | { kind: "unknown"; configDir: string; takenAt: string; why: string };
+  | { kind: "unknown"; configDir: string; takenAt: string; why: string; status?: number };
 
 export type LiveUsageIdentity = Pick<
   AccountEntry,
@@ -81,11 +81,15 @@ export type AccountHttpDeps = {
   fetch: typeof fetch;
   /** A pinned observation time for tests; production callers normally omit it. */
   now?: () => number;
+  /** Bounds an undocumented endpoint so account selection cannot hang forever. */
+  timeoutMs?: number;
 };
 
 const PROFILE_URL = "https://api.anthropic.com/api/oauth/profile";
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const USER_AGENT = "spideryarn-claude-accounts/1";
+const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -112,6 +116,13 @@ function parseRegistryEntry(value: unknown, index: number): AccountEntry | { why
   ] as const;
   for (const field of required) {
     if (nonBlankString(entry[field]) === null) return { why: `accounts[${index}].${field} is required and must be a non-empty string` };
+  }
+
+  if (!ACCOUNT_NAME.test(entry.name as string)) {
+    return { why: `accounts[${index}].name must contain only lower-case letters, digits and hyphens (max 41)` };
+  }
+  if (entry.name === "auto" || entry.name === "ambient") {
+    return { why: `accounts[${index}].name ${JSON.stringify(entry.name)} is reserved by the launcher` };
   }
 
   const family = entry.family;
@@ -305,12 +316,12 @@ function redactCredentialFromWindow(window: UsageWindowReading, token: string): 
   return { ...window, window: redact(window.window), why: redact(window.why) };
 }
 
-function unknownProfile(configDir: string, takenAt: string, why: string): AccountProfileReading {
-  return { kind: "unknown", configDir, takenAt, why };
+function unknownProfile(configDir: string, takenAt: string, why: string, status?: number): AccountProfileReading {
+  return { kind: "unknown", configDir, takenAt, why, ...(status === undefined ? {} : { status }) };
 }
 
-function unknownUsage(configDir: string, takenAt: string, why: string): AccountUsageReading {
-  return { kind: "unknown", configDir, takenAt, why };
+function unknownUsage(configDir: string, takenAt: string, why: string, status?: number): AccountUsageReading {
+  return { kind: "unknown", configDir, takenAt, why, ...(status === undefined ? {} : { status }) };
 }
 
 function observationTime(deps: AccountHttpDeps): { nowMs: number; takenAt: string } {
@@ -327,10 +338,11 @@ async function accessToken(configDir: string): Promise<string | null> {
   }
 }
 
-function requestInit(token: string): RequestInit {
+function requestInit(token: string, timeoutMs: number): RequestInit {
   return {
     method: "GET",
     redirect: "error",
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -360,20 +372,33 @@ export async function readAccountRegistry(registryPath = defaultAccountRegistryP
 
 export async function readProfile(configDir: string, deps: AccountHttpDeps): Promise<AccountProfileReading> {
   const { takenAt } = observationTime(deps);
-  const token = await accessToken(configDir);
+  let token = await accessToken(configDir);
   if (token === null) return unknownProfile(configDir, takenAt, "access token is unavailable");
 
   try {
-    const response = await deps.fetch(PROFILE_URL, requestInit(token));
-    // Access tokens expire within hours. A 401 (and every other failure) is
-    // unknown. Never use claudeAiOauth.refreshToken and never rewrite the
-    // credentials file: rotation racing a live session could invalidate the
-    // login for the whole fleet.
-    if (!response.ok) return unknownProfile(configDir, takenAt, `profile request failed with HTTP ${response.status}`);
-    const profile = profileFromJson(await response.json());
-    return profile === null || Object.values(profile).some((field) => field.includes(token))
-      ? unknownProfile(configDir, takenAt, "profile response was malformed")
-      : { kind: "value", configDir, takenAt, ...profile };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const requestToken: string = token;
+      const response = await deps.fetch(PROFILE_URL, requestInit(requestToken, deps.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS));
+      // Another Claude process may have refreshed and atomically replaced the
+      // credential while this request was in flight. Re-read only after a 401,
+      // and retry only when the access token changed. The refresh token is
+      // never read or used here.
+      if (response.status === 401 && attempt === 0) {
+        const rotated = await accessToken(configDir);
+        if (rotated !== null && rotated !== requestToken) {
+          token = rotated;
+          continue;
+        }
+      }
+      if (!response.ok) {
+        return unknownProfile(configDir, takenAt, `profile request failed with HTTP ${response.status}`, response.status);
+      }
+      const profile = profileFromJson(await response.json());
+      return profile === null || Object.values(profile).some((field) => field.includes(requestToken))
+        ? unknownProfile(configDir, takenAt, "profile response was malformed")
+        : { kind: "value", configDir, takenAt, ...profile };
+    }
+    return unknownProfile(configDir, takenAt, "profile request failed");
   } catch {
     // Do not surface transport errors: an injected/client error can contain the
     // Authorization header, and no credential value may enter output or logs.
@@ -383,7 +408,7 @@ export async function readProfile(configDir: string, deps: AccountHttpDeps): Pro
 
 export async function readUsage(configDir: string, deps: AccountHttpDeps): Promise<AccountUsageReading> {
   const { takenAt } = observationTime(deps);
-  const token = await accessToken(configDir);
+  let token = await accessToken(configDir);
   if (token === null) return unknownUsage(configDir, takenAt, "access token is unavailable");
 
   try {
@@ -391,33 +416,51 @@ export async function readUsage(configDir: string, deps: AccountHttpDeps): Promi
     // between them can join a rotated token's usage to the previous token's
     // identity, which is precisely the ambiguity this live read exists to
     // remove.
-    const profileResponse = await deps.fetch(PROFILE_URL, requestInit(token));
-    if (!profileResponse.ok) {
-      return unknownUsage(configDir, takenAt, `profile request failed with HTTP ${profileResponse.status}`);
-    }
-    const profile = profileFromJson(await profileResponse.json());
-    if (profile === null || Object.values(profile).some((field) => field.includes(token))) {
-      return unknownUsage(configDir, takenAt, "profile response was malformed");
-    }
-    const response = await deps.fetch(USAGE_URL, requestInit(token));
-    // See readProfile: refreshing here could invalidate a credential used by
-    // live sessions, so an expired token remains an honest unknown reading.
-    if (!response.ok) return unknownUsage(configDir, takenAt, `usage request failed with HTTP ${response.status}`);
-    const parsed = parseLiveUsageResponse(await response.json(), {
-      takenAt,
-      identity: {
-        providerAccountId: profile.accountUuid,
-        providerTenantId: profile.orgId,
-        displayEmail: profile.email,
-      },
-    });
-    return parsed.kind === "value"
-      ? {
-          ...parsed,
-          configDir,
-          windows: parsed.windows.map((window) => redactCredentialFromWindow(window, token)),
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const requestToken: string = token;
+      const profileResponse = await deps.fetch(PROFILE_URL, requestInit(requestToken, deps.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS));
+      if (profileResponse.status === 401 && attempt === 0) {
+        const rotated = await accessToken(configDir);
+        if (rotated !== null && rotated !== requestToken) {
+          token = rotated;
+          continue;
         }
-      : unknownUsage(configDir, takenAt, parsed.why);
+      }
+      if (!profileResponse.ok) {
+        return unknownUsage(configDir, takenAt, `profile request failed with HTTP ${profileResponse.status}`, profileResponse.status);
+      }
+      const profile = profileFromJson(await profileResponse.json());
+      if (profile === null || Object.values(profile).some((field) => field.includes(requestToken))) {
+        return unknownUsage(configDir, takenAt, "profile response was malformed");
+      }
+      const response = await deps.fetch(USAGE_URL, requestInit(requestToken, deps.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS));
+      if (response.status === 401 && attempt === 0) {
+        const rotated = await accessToken(configDir);
+        if (rotated !== null && rotated !== requestToken) {
+          token = rotated;
+          continue;
+        }
+      }
+      if (!response.ok) {
+        return unknownUsage(configDir, takenAt, `usage request failed with HTTP ${response.status}`, response.status);
+      }
+      const parsed = parseLiveUsageResponse(await response.json(), {
+        takenAt,
+        identity: {
+          providerAccountId: profile.accountUuid,
+          providerTenantId: profile.orgId,
+          displayEmail: profile.email,
+        },
+      });
+      return parsed.kind === "value"
+        ? {
+            ...parsed,
+            configDir,
+            windows: parsed.windows.map((window) => redactCredentialFromWindow(window, requestToken)),
+          }
+        : unknownUsage(configDir, takenAt, parsed.why);
+    }
+    return unknownUsage(configDir, takenAt, "usage request failed");
   } catch {
     return unknownUsage(configDir, takenAt, "usage request failed");
   }

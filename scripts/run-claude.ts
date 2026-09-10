@@ -40,15 +40,17 @@
  * inside `codex exec`).
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { isMain } from '../src/is-main.js';
 import {
   defaultAccountRegistryPath,
   readAccountRegistry,
+  readProfile,
   resolveAccount,
   type AccountEntry,
+  type AccountProfileReading,
   type RegistryReading,
 } from '../tools/overseer/accounts.js';
 import {
@@ -428,6 +430,9 @@ export function claudeEnv(
     // The prefix, resolved against what this parent actually has, so the rule needs no list to
     // keep up to date. `passThrough` is re-added afterwards and so still wins.
     ...Object.keys(parent).filter((n) => ANTHROPIC_PREFIX.test(n)),
+    ...(stateDir === undefined
+      ? []
+      : Object.keys(parent).filter((n) => n === 'CLAUDECODE' || n.startsWith('CLAUDE_'))),
   ];
   const env = sanitisedEnv(parent, [...credentials, ...passThrough], drop);
   if (stateDir !== undefined) env.CLAUDE_CONFIG_DIR = stateDir;
@@ -439,16 +444,30 @@ export type RunClaudeAccountResolution =
   | { kind: 'value'; account: AccountEntry }
   | { kind: 'refused'; why: string };
 
+function sameDirectory(left: string, right: string): boolean {
+  if (resolve(left) === resolve(right)) return true;
+  if (!existsSync(left) || !existsSync(right)) return false;
+  try { return realpathSync(left) === realpathSync(right); }
+  catch { return false; }
+}
+
 export function resolveRunClaudeAccount(
   registry: RegistryReading,
   requested: string | undefined,
   parentStateDir: string | undefined,
 ): RunClaudeAccountResolution {
+  const defaultStateDir = resolve(homedir(), '.claude');
   if (requested !== undefined) {
     const resolved = resolveAccount(registry, requested);
     if (resolved.kind === 'refused') return resolved;
     if (resolved.account.family !== 'claude') {
       return { kind: 'refused', why: `account ${JSON.stringify(requested)} belongs to ${resolved.account.family}, not claude` };
+    }
+    if (resolved.account.role === 'orchestrator') {
+      return { kind: 'refused', why: 'the ambient Claude orchestrator cannot be routed by setting CLAUDE_CONFIG_DIR' };
+    }
+    if (sameDirectory(resolved.account.stateDir, defaultStateDir)) {
+      return { kind: 'refused', why: 'the default .claude directory cannot be routed explicitly' };
     }
     return { kind: 'value', account: resolved.account };
   }
@@ -464,7 +483,41 @@ export function resolveRunClaudeAccount(
   if (matches.length !== 1) {
     return { kind: 'refused', why: `this parent is routed by CLAUDE_CONFIG_DIR=${parentStateDir}, but no unique Claude account resolves it` };
   }
+  if (matches[0]!.role === 'orchestrator') {
+    return { kind: 'refused', why: 'the parent names the ambient Claude orchestrator as a routed config directory' };
+  }
+  if (sameDirectory(matches[0]!.stateDir, defaultStateDir)) {
+    return { kind: 'refused', why: 'the default .claude directory cannot be a routed parent account' };
+  }
   return { kind: 'value', account: matches[0]! };
+}
+
+/** A routed run names an account, so unlike ambient `--auth machine` it must
+ * prove both the saved credential's identity and the CLI's effective provider. */
+export function routedAccountConflict(
+  account: AccountEntry,
+  profile: AccountProfileReading,
+  probe: AuthStatus | undefined,
+): string {
+  if (!probe) return 'the effective auth probe gave no answer, so this run cannot say which account it would bill';
+  if (!probe.loggedIn) return 'the effective auth probe reports loggedIn: false';
+  if (probe.method !== 'claude.ai' || probe.provider !== 'firstParty') {
+    return `the effective auth probe reports ${probe.method ?? 'an unknown method'} via ${probe.provider ?? 'an unknown provider'}, not claude.ai via firstParty`;
+  }
+  if (profile.kind === 'unknown') {
+    // Claude access tokens routinely expire between idle sessions. The CLI's
+    // own first-party login may refresh it on startup; every other fault is an
+    // absence of the identity proof and therefore refuses.
+    return profile.status === 401 ? '' : `the live account profile is unknown: ${profile.why}`;
+  }
+  if (
+    profile.accountUuid !== account.providerAccountId ||
+    profile.orgId !== account.providerTenantId ||
+    (account.displayEmail !== undefined && profile.email !== account.displayEmail)
+  ) {
+    return `the live account profile does not match registry pin ${account.providerAccountId}`;
+  }
+  return '';
 }
 
 /** What `--auth` handed over, by name — never a value. Not a claim about what will be charged. */
@@ -659,10 +712,25 @@ async function main(): Promise<void> {
   const budgetMs = args.timeoutMinutes * 60_000;
   const remaining = (): number => budgetMs - (Date.now() - startedAt);
 
+  const profile = account.kind === 'value'
+    ? await readProfile(account.account.stateDir, {
+        fetch,
+        timeoutMs: Math.min(10_000, Math.max(1, remaining())),
+      })
+    : undefined;
+
   // Cheap — `claude auth status` makes no model call — and the only thing that knows about an
   // inherited endpoint override, a settings-file credential, or a key this machine has never
   // approved.
   const probe = await probeAuth(env, cwd, Math.min(PROBE_TIMEOUT_MS, Math.max(1, remaining())));
+  if (account.kind === 'value' && profile !== undefined) {
+    const routedConflict = routedAccountConflict(account.account, profile, probe);
+    if (routedConflict) fail(`--account ${account.account.name}: ${routedConflict}`);
+    if (profile.kind === 'unknown' && profile.status === 401) {
+      console.error(`WARNING: --account ${account.account.name}: the saved access token is expired; `
+        + 'the first-party CLI login will refresh it on startup, and no refresh token was used by this wrapper');
+    }
+  }
   const conflict = authConflict(args.auth, probe, args.passEnv.filter(isProviderVar));
   if (conflict) fail(`--auth ${args.auth}: ${conflict}`);
   const credential = `${credentialsPassed(args.auth, env)}, auth probe: ${credentialLine(probe)}`;

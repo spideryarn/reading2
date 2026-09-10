@@ -7599,7 +7599,12 @@ describe("the Overseer tab, which no longer says it is empty", () => {
                 ticks: 28,
               },
               scheduler: { kind: "armed", why: "started with the scheduler on", at: wroteAt },
-              register: { kind: "read", total: 0, sessions: [] },
+              register: {
+                kind: "read",
+                total: 0,
+                sessions: [],
+                work: { kind: "unavailable", why: "this fixture carries no work scan" },
+              },
             },
           },
         }),

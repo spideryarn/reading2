@@ -95,6 +95,13 @@ function checkpoint(
       },
       scheduler: { kind: "unknown", why: "not configured", at: writtenAt },
       register: register.map((item, index) => ({
+        /* `key` IS NOT DECORATION HERE. A real `RegisterEntry` has always carried
+           one — checked against the live `~/.overseer/current.json` on 2026-09-10,
+           where all 19 entries had it — and since work evidence landed it is the
+           join the projection uses to hang a pane's work reading on an entry. An
+           entry without one cannot be joined, so the projection refuses it, and
+           these fixtures omitted it until that refusal made them fail. */
+        key: `$${index + 1} claims:conversation-${index + 1}`,
         name: item.name,
         tmuxId: `$${index + 1}`,
         lastStatusKey: "working",

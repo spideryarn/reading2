@@ -105,11 +105,17 @@ export function parseResolvedLaunchAccount(raw: string): ParsedLaunchAccount {
  * Run in ssh, not locally. The hidden CLI owns the on-box choose-and-reserve
  * lock; stdout is reserved for its one machine-readable result.
  */
-export function accountResolveCommand(requested: string, launchName: string, sessionUuid = launchName): string {
+export function accountResolveCommand(
+  requested: string,
+  launchName: string,
+  sessionUuid = launchName,
+  waitSeconds = 0,
+): string {
   return (
     `cd ${shq(BOX_SPIDERYARN)} && ` +
     `${shq("node_modules/.bin/tsx")} scripts/claude-accounts.ts resolve ` +
-    `--account ${shq(requested)} --launch-name ${shq(launchName)} --session-uuid ${shq(sessionUuid)}`
+    `--account ${shq(requested)} --launch-name ${shq(launchName)} --session-uuid ${shq(sessionUuid)} ` +
+    `--wait-seconds ${shq(String(waitSeconds))}`
   );
 }
 
@@ -157,26 +163,27 @@ export function accountJobLines(
   account: ResolvedLaunchAccount | undefined,
   failures: { missingConfig: string; wrongIdentity: string },
   verifyCommand?: string,
+  cwd?: string,
 ): string {
   if (account === undefined) return "";
   if (account.stateDir === null) return "";
   return [
     `[ -d ${shq(account.stateDir)} ] || ${failures.missingConfig}`,
     `${verifyCommand ?? (`(cd ${shq(BOX_SPIDERYARN)} && ${shq("node_modules/.bin/tsx")} scripts/claude-accounts.ts verify ` +
-      `--account ${shq(account.name)} >/dev/null)`)} || ${failures.wrongIdentity}`,
+      `--account ${shq(account.name)}${cwd === undefined ? "" : ` --cwd ${shq(cwd)}`} >/dev/null)`)} || ${failures.wrongIdentity}`,
   ].join("\n");
 }
 
 /** Route only the paid Claude process; the login shell after it inherits none
- * of this state. The four removals are credential precedence, not cleanup. */
+ * of this state. The namespace removals are credential precedence, not cleanup. */
 export function accountClaudeCommand(
   account: ResolvedLaunchAccount | undefined,
   command: string,
 ): string {
   if (account?.stateDir == null) return command;
   return (
-    "env -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL " +
-    `-u CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR=${shq(account.stateDir)} ${command}`
+    `( unset "\${!ANTHROPIC_@}" "\${!CLAUDE_@}" CLAUDECODE; ` +
+    `CLAUDE_CONFIG_DIR=${shq(account.stateDir)} ${command} )`
   );
 }
 
