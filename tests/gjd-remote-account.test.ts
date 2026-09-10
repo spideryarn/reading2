@@ -13,6 +13,7 @@ import {
   parseResolvedLaunchAccount,
   requestedClaudeAccount,
 } from "../scripts/gjd-remote-account.js";
+import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
 
 const resolved = {
   name: "pool-two",
@@ -76,8 +77,9 @@ describe("the account-specific Claude job preflight", () => {
       chmodSync(path.join(bin, "claude"), 0o755);
       const run = spawnSync("bash", ["-c", `${accountClaudeCommand(resolved, "claude")}\nprintf 'after=%s\\n' \"\${CLAUDE_CONFIG_DIR-unset}\"`], {
         encoding: "utf8",
-        env: {
-          ...process.env,
+        // The shell's starting state is the precondition of "after=unset", so the test fixes it
+        // rather than inheriting whatever account the runner is on.
+        env: accountNeutralEnv({
           PATH: `${bin}:${process.env.PATH ?? ""}`,
           ANTHROPIC_AUTH_TOKEN: "secret-a",
           ANTHROPIC_API_KEY: "secret-b",
@@ -86,7 +88,7 @@ describe("the account-specific Claude job preflight", () => {
           CLAUDE_CODE_OAUTH_TOKEN: "secret-c",
           CLAUDE_CODE_USE_BEDROCK: "1",
           CLAUDE_FUTURE_PROVIDER: "some-new-precedence-rung",
-        },
+        }),
       });
       expect(run.status).toBe(0);
       expect(run.stdout).toContain("/tmp/claude-pool-two|unset|unset|unset|unset|unset|unset|unset");
@@ -155,7 +157,7 @@ describe("the account-specific Claude job preflight", () => {
       );
       const run = spawnSync("bash", ["-c", `${lines}\nprintf 'STARTED\\n'`], {
         encoding: "utf8",
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+        env: accountNeutralEnv({ PATH: `${bin}:${process.env.PATH ?? ""}` }),
       });
       expect(run.status).toBe(expectedStatus);
       expect(run.stdout.includes("STARTED")).toBe(expectedStatus === 0);

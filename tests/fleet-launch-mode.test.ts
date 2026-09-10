@@ -372,7 +372,7 @@ describe("the row carries the mode", () => {
    * and it said nothing" produce the same field and only one of them is what
    * the cost argument in collect.ts claims.
    */
-  it("reads the mode off the pane for the interactive rows, and asks nothing of a shell", () => {
+  it("reads the mode off the pane for the interactive rows, and asks nothing of a shell", async () => {
     const asked: string[] = [];
     const rows = toRows(
       [session({ id: "$1" }), session({ id: "$2" }), session({ id: "$3" })],
@@ -387,7 +387,7 @@ describe("the row carries the mode", () => {
         ["$3", { paneId: "%33", panePid: 3 }],
       ]),
     );
-    readPanes(rows, (paneId) => {
+    await readPanes(rows, async (paneId) => {
       asked.push(paneId);
       return fixture(paneId === "%11" ? "none-typed-numbered-message-in-input-box.txt" : "none-working-empty-prompt.txt");
     });
@@ -404,14 +404,14 @@ describe("the row carries the mode", () => {
    * between them, which is worse than it is expensive — the two facts on the
    * card would then be about two different frames.
    */
-  it("takes one capture per pane, and the blocked row still gets its question", () => {
+  it("takes one capture per pane, and the blocked row still gets its question", async () => {
     const asked: string[] = [];
     const rows = toRows(
       [session({ id: "$1" })],
       new Map<string, FleetStatus>([["$1", { kind: "needs-you" }]]),
       new Map([["$1", { paneId: "%11", panePid: 1 }]]),
     );
-    readPanes(rows, (paneId) => {
+    await readPanes(rows, async (paneId) => {
       asked.push(paneId);
       return fixture("dialog-bash-permission.txt");
     });
@@ -422,23 +422,31 @@ describe("the row carries the mode", () => {
   });
 
   /** A capture that throws leaves both facts unread rather than inventing either. */
-  it("leaves the mode unread when the pane cannot be captured", () => {
+  it("leaves the mode unread when the pane cannot be captured", async () => {
+    let captures = 0;
     const rows = toRows(
       [session({ id: "$1" })],
-      new Map<string, FleetStatus>([["$1", { kind: "working" }]]),
+      // `needs-you` is the only status for which a successful capture would
+      // populate `question`, so null below is evidence about both fields.
+      new Map<string, FleetStatus>([["$1", { kind: "needs-you" }]]),
       new Map([["$1", { paneId: "%11", panePid: 1 }]]),
     );
-    readPanes(rows, () => {
+    await readPanes(rows, async () => {
+      captures += 1;
       throw new Error("no such pane");
     });
-    expect(rows[0]?.permissionMode.kind).toBe("cannot-tell");
+    expect(captures).toBe(1);
+    expect(rows[0]?.permissionMode).toEqual({
+      kind: "cannot-tell",
+      why: "this session's pane could not be captured: no such pane",
+    });
     expect(rows[0]?.question).toBeNull();
   });
 
   /** A row tmux gave no pane cannot be read either, and says so. */
-  it("says it cannot tell about a row with no pane handle", () => {
+  it("says it cannot tell about a row with no pane handle", async () => {
     const rows = toRows([session({ id: "$1" })], new Map<string, FleetStatus>([["$1", { kind: "working" }]]));
-    readPanes(rows, () => {
+    await readPanes(rows, async () => {
       throw new Error("should not be called");
     });
     expect(rows[0]?.permissionMode.kind).toBe("cannot-tell");

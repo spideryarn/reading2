@@ -49,6 +49,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  capturePaneAsync,
   capturePane,
   classifyConsequence,
   classifyGate,
@@ -62,6 +63,7 @@ import {
   type PaneMaterial,
   type PaneOption,
 } from "../tools/fleet/pane.js";
+import type { ProbeOwner, ProbeSpec } from "../tools/fleet/child.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-panes");
 
@@ -923,6 +925,115 @@ describe("addressing a pane", () => {
 
   it("refuses to shell out for anything that is not a pane id", () => {
     expect(() => capturePane("fleet-v01")).toThrow(/not a tmux pane id/);
+  });
+
+  it("refuses an invalid pane before asking the owned child registry", async () => {
+    let runs = 0;
+    const owner: ProbeOwner = {
+      run: async () => {
+        runs += 1;
+        return { kind: "ok", stdout: "", stderr: "", tookMs: 1 };
+      },
+      live: () => [],
+    };
+
+    await expect(capturePaneAsync(owner, "fleet-v01")).rejects.toThrow(/not a tmux pane id/);
+    expect(runs).toBe(0);
+  });
+
+  it("owns one key per pane and keeps the synchronous capture's exact tmux address", async () => {
+    const specs: ProbeSpec[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        specs.push(spec);
+        return { kind: "ok", stdout: "the pane", stderr: "", tookMs: 2 };
+      },
+      live: () => [],
+    };
+
+    await expect(capturePaneAsync(owner, "%123")).resolves.toBe("the pane");
+    expect(specs).toEqual([{
+      key: "capture-pane:%123",
+      cmd: "tmux",
+      args: ["capture-pane", "-p", "-t", "%123"],
+      timeoutMs: 2_000,
+      maxBytes: 4 * 1024 * 1024,
+    }]);
+  });
+
+  it("refuses a fifth distinct capture child", async () => {
+    let runs = 0;
+    const startedAtMs = Date.now() - 8_000;
+    const owner: ProbeOwner = {
+      run: async () => {
+        runs += 1;
+        return { kind: "ok", stdout: "a pane that must not have been read", stderr: "", tookMs: 1 };
+      },
+      live: () => [
+        ...Array.from({ length: 4 }, (_, index) => ({
+          key: `capture-pane:%${index + 1}`,
+          pid: 7_100 + index,
+          startedAtMs,
+          signalled: [] as const,
+          exitObserved: false as const,
+        })),
+        {
+          key: "health:vmstat",
+          pid: 8_100,
+          startedAtMs,
+          signalled: [] as const,
+          exitObserved: false as const,
+        },
+      ],
+    };
+
+    await expect(capturePaneAsync(owner, "%5")).rejects.toThrow(/capture refused.*4 capture children.*pid 7100.*alive for \d+ms/);
+    expect(runs).toBe(0);
+  });
+
+  it("does not count health children toward the capture cap", async () => {
+    let runs = 0;
+    const owner: ProbeOwner = {
+      run: async () => {
+        runs += 1;
+        return { kind: "ok", stdout: "the pane", stderr: "", tookMs: 1 };
+      },
+      live: () => Array.from({ length: 4 }, (_, index) => ({
+        key: `health:probe-${index}`,
+        pid: 8_100 + index,
+        startedAtMs: Date.now() - 8_000,
+        signalled: [] as const,
+        exitObserved: false as const,
+      })),
+    };
+
+    await expect(capturePaneAsync(owner, "%5")).resolves.toBe("the pane");
+    expect(runs).toBe(1);
+  });
+
+  it("lets the owner re-check a live capture's own key at the cap", async () => {
+    let runs = 0;
+    const owner: ProbeOwner = {
+      run: async () => {
+        runs += 1;
+        return {
+          kind: "refused",
+          why: 'probe "capture-pane:%4" still has child pid 7104 unaccounted for',
+          pid: 7_104,
+          liveForMs: 8_000,
+        };
+      },
+      live: () => Array.from({ length: 4 }, (_, index) => ({
+        key: `capture-pane:%${index + 1}`,
+        pid: 7_101 + index,
+        startedAtMs: Date.now() - 8_000,
+        signalled: [] as const,
+        exitObserved: false as const,
+      })),
+    };
+
+    await expect(capturePaneAsync(owner, "%4")).rejects.toThrow(/capture refused.*7104.*8000ms/);
+    expect(runs).toBe(1);
   });
 });
 
