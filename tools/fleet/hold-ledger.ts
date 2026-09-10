@@ -77,11 +77,15 @@
  *
  * docs/plans/260908j § Stage 4b.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
-import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "../overseer/jsonl.js";
-import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../overseer/lock.js";
+import type { JsonlRepair } from "../overseer/jsonl.js";
+import {
+  openJournalFile,
+  type JournalFile,
+  type SharedJournalLock,
+} from "./journal-file.js";
 import type { UncertainSendOrigin, UncertainSendReading } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
@@ -433,109 +437,37 @@ export type OpenLedgerOptions = {
    * docs/reusable/silent-success.md is about.
    */
   onTrouble?: ((why: string) => void) | undefined;
+  /**
+   * A writer claim already taken by the fleet action-store composition. When
+   * handed in, closing this ledger does not release the shared claim.
+   */
+  lock?: SharedJournalLock | undefined;
 };
 
 export function openHoldLedger(dir: string, options: OpenLedgerOptions = {}): OpenedHoldLedger {
-  if (!isAbsolute(dir)) {
-    return { kind: "refused", why: `the hold ledger directory must be an absolute path, and this is ${JSON.stringify(dir)}` };
-  }
-  try {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-  } catch (err) {
-    return { kind: "refused", why: `could not create ${dir}: ${err instanceof Error ? err.message : String(err)}` };
-  }
-
-  /* THE LOCK BEFORE THE REPAIR, health-history.ts's ordering and its reason:
-     `truncateToLastLine` is a WRITE, and a process that will go on to be
-     correctly refused must not first cut back the file belonging to the writer
-     that owns it. */
-  const path = join(dir, LEDGER_FILE);
-  const lockPath = join(dir, LOCK_FILE);
-  const taken = takeLock(lockPath, () => new Date());
-  const lock = taken.ok ? taken.lock : null;
-  const lockedOutBy = taken.ok
-    ? null
-    : `${describeLockRefusal(taken.refusal, lockPath)} This dashboard is reading the hold ledger but not adding to it.`;
-
-  let repaired: JsonlRepair = { torn: false };
-  if (lock !== null) {
-    const giveUp = (why: string): OpenedHoldLedger => {
-      releaseLock(lock, lockPath);
-      return { kind: "refused", why };
-    };
-    if (!stillOurs(lock, lockPath)) return giveUp(`another writer took ${lockPath} between claiming it and repairing ${path}`);
-    try {
-      repaired = truncateToLastLine(path);
-    } catch (err) {
-      return giveUp(`could not repair ${path}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    if (!stillOurs(lock, lockPath)) return giveUp(`another writer took ${lockPath} while ${path} was being repaired`);
-  }
-
-  let unreadableLines = 0;
-  const records: HoldLedgerRecord[] = [];
-  if (existsSync(path)) {
-    let text: string;
-    try {
-      text = readFileSync(path, "utf8");
-    } catch (err) {
-      if (lock !== null) releaseLock(lock, lockPath);
-      return { kind: "refused", why: `could not read ${path}: ${err instanceof Error ? err.message : String(err)}` };
-    }
-    for (const line of text.split("\n")) {
-      if (line.trim() === "") continue;
-      const record = parseLedgerLine(line);
-      if (record === null) unreadableLines += 1;
-      else records.push(record);
-    }
-  }
-
-  return {
-    kind: "open",
-    ledger: makeLedger(dir, lock, lockedOutBy, foldLedger(records), { repaired, unreadableLines }, options),
-  };
+  const opened = openJournalFile(dir, {
+    file: LEDGER_FILE,
+    lockFile: LOCK_FILE,
+    parse: parseLedgerLine,
+    serialise: ledgerLine,
+    lock: options.lock,
+    writeLine: options.writeLine,
+    onTrouble: options.onTrouble,
+    directoryLabel: "hold ledger directory",
+    lockRefusalSuffix: "This dashboard is reading the hold ledger but not adding to it.",
+    unavailableSuffix: "Holds opened here will not survive a restart.",
+    closedBy: "this ledger has been closed and has given up the writer lock",
+  });
+  if (opened.kind === "refused") return opened;
+  return { kind: "open", ledger: makeLedger(dir, opened.journal, foldLedger(opened.journal.records())) };
 }
 
 function makeLedger(
   dir: string,
-  lock: HeldLock | null,
-  refusal: string | null,
+  file: JournalFile<HoldLedgerRecord>,
   live: Map<string, LedgerState>,
-  read: { repaired: JsonlRepair; unreadableLines: number },
-  options: OpenLedgerOptions,
 ): HoldLedger {
   const path = join(dir, LEDGER_FILE);
-  const lockPath = join(dir, LOCK_FILE);
-  const write = options.writeLine ?? writeAll;
-  let held: HeldLock | null = lock;
-  let lockedOutBy = refusal;
-  let failure: string | null = null;
-  let compactions = 0;
-
-  const trouble = (why: string): void => {
-    if (failure === why) return;
-    failure = why;
-    options.onTrouble?.(why);
-  };
-
-  /**
-   * **STILL OURS?** — asked of the filesystem before every write, for
-   * `health-history.ts`'s reason: `takeLock` at startup is not a claim that
-   * survives the process, and the stale-lock race `lock.ts` names can leave one
-   * claimant appending beside the winner for ever. Sends are rare, so this is a
-   * `stat` per keystroke-attempt rather than per second.
-   */
-  const mayWrite = (): boolean => {
-    if (held !== null && !stillOurs(held, lockPath)) {
-      held = null;
-      lockedOutBy = `the writer lock at ${lockPath} is no longer this process's — another writer took it`;
-    }
-    if (lockedOutBy !== null) {
-      trouble(`${lockedOutBy}. Holds opened here will not survive a restart.`);
-      return false;
-    }
-    return true;
-  };
 
   /**
    * Append one record, then keep the file bounded.
@@ -547,24 +479,7 @@ function makeLedger(
    * assumption.
    */
   const append = (record: HoldLedgerRecord): void => {
-    if (!mayWrite()) return;
-    const line = ledgerLine(record);
-    let fd: number;
-    try {
-      fd = openSync(path, "a", 0o600);
-    } catch (err) {
-      trouble(`could not open ${path}: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
-    try {
-      write(fd, line);
-    } catch (err) {
-      trouble(`could not write to ${path}: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    } finally {
-      closeSync(fd);
-    }
-    failure = null;
+    if (!file.append(record)) return;
     if (record.kind === "resolved") live.delete(record.sessionId);
     else live.set(record.sessionId, record);
     compact();
@@ -586,13 +501,7 @@ function makeLedger(
       return;
     }
     if (size <= MAX_LEDGER_BYTES) return;
-    const text = [...live.values()].map((record) => ledgerLine(record)).join("");
-    try {
-      writeAtomically(path, dir, text);
-      compactions += 1;
-    } catch (err) {
-      trouble(`could not compact ${path}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    file.replace(live.values());
   };
 
   return {
@@ -601,22 +510,17 @@ function makeLedger(
     noteAttempt: (record) => append({ schema: 1, kind: "attempt", ...record }),
     noteHold: (record) => append({ schema: 1, kind: "held", ...record }),
     noteResolved: (record) => append({ schema: 1, kind: "resolved", ...record }),
-    status: () => ({
-      dir,
-      lockedOutBy,
-      failure,
-      unreadableLines: read.unreadableLines,
-      repaired: read.repaired,
-      compactions,
-    }),
-    close(): void {
-      /* IDEMPOTENT, health-history.ts's reason: `releaseLock` closes the fd and
-         closing it twice is `EBADF` — a throw out of a cleanup path. */
-      if (held === null) return;
-      const mine = held;
-      held = null;
-      releaseLock(mine, lockPath);
-      lockedOutBy = "this ledger has been closed and has given up the writer lock";
+    status: () => {
+      const status = file.status();
+      return {
+        dir,
+        lockedOutBy: status.lockedOutBy,
+        failure: status.failure,
+        unreadableLines: status.unreadableLines,
+        repaired: status.repaired,
+        compactions: status.compactions,
+      };
     },
+    close: () => file.close(),
   };
 }

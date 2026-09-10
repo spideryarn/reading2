@@ -160,7 +160,10 @@ is taken once at startup and both stores are opened under it: `holds.jsonl` and 
 Two locks could let two starting dashboards each win one. The composition is an explicit
 `openFleetActionStores()` returning the book and the journal, called from `server.ts` above
 `createServer` in place of `openSharedQuarantine()`. **The Overseer authorised that one line on
-2026-09-10**, with conditions: that line only; `tests/fleet-hold-wiring.test.ts`'s source guard must
+2026-09-10**, with conditions: that line only; the source guard — which is the test *"server.ts opens
+the quarantine above the listener"* in `tests/fleet-hold-restart.test.ts:402`; three comments in
+`quarantine.ts` and one in `server.ts` call it `tests/fleet-hold-wiring.test.ts`, a file that does
+not exist, and Stage 1b corrects them — must
 pin that **both** stores open above the listener, so the receipt journal cannot later be moved below
 it; merge `origin/dev` and re-read `server.ts` before editing (another session may touch its wiring);
 name the file in the commit message.
@@ -311,9 +314,21 @@ write-capable, at the end of each stage.
 
 Two Codex runs, committed separately.
 
-- [ ] **1a** `journal-file.ts` extracted; the hold ledger over it with its tests unchanged;
+- [x] **1a** `journal-file.ts` extracted; the hold ledger over it with its tests unchanged;
   `receipt-journal.ts` with records, strict parse, the transition rule, material files, retention,
   recovery and status; `openFleetActionStores()` under one lock. No wiring.
+
+  **Status, 2026-09-10 09:35: built, gates green, Sol stage review next.** Implemented by GPT Sol
+  (`run-codex.ts`, workspace-write) from [the 1a brief](260910d-durable-action-receipts-stage1a-task.md).
+  The run hit its 45-minute limit while waiting on a nested self-review it had started, so it left no
+  answer file; the implementation was complete and its own gates had passed. Re-run here: seven
+  fleet test files, 138 tests green, including the hold ledger's three files **unedited**;
+  `npm run typecheck` exit 0. Found in reading the diff, for the stage review to settle: (1) my brief
+  contradicted itself — "memory changes only when bytes land" against the plan's fail-open unkeyed
+  enqueue — and the code follows the first, so a disk-write failure refuses an unkeyed accept;
+  (2) the composition lives in `quarantine.ts` with `action-stores.ts` re-exporting it, to avoid a
+  cycle with the legacy `openSharedQuarantine()` — which Stage 1b can delete once `server.ts` and
+  the guard move, and the composition can then move where the plan put it.
 - [ ] **1b** The queue takes the journal as a required option and writes its own receipts at every
   item transition — enqueue, cancel and clear write-ahead; `beginDelivery` (the drain's `attempted`,
   fail-closed); settle, `release` (`returned`), `quarantineLeased`, the drain's throw, abandon — so no
