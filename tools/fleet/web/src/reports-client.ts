@@ -18,7 +18,9 @@ import type {
   ReportWireActor,
   ReportWireClaim,
   ReportWireClaimed,
+  ReportWireCount,
   ReportWireProblem,
+  ReportWireQuarantine,
   ReportWireSession,
 } from "../../wire";
 import { parseCheckedArtefacts } from "../../artefact-ref";
@@ -174,6 +176,32 @@ function problem(value: unknown): value is ReportWireProblem {
   );
 }
 
+/** Exactly one arm, holding a whole number. A bare number is refused: it cannot say whether it was capped. */
+function count(value: unknown): value is ReportWireCount {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.length !== 1) return false;
+  return keys[0] === "exact" ? whole(value["exact"]) : keys[0] === "atLeast" && whole(value["atLeast"]);
+}
+
+function quarantine(value: unknown): value is ReportWireQuarantine {
+  if (!isRecord(value) || !count(value["count"])) return false;
+  const oldest = value["oldestMovedAt"];
+  if (oldest === null) return true;
+  // An empty quarantine has no oldest entry.
+  return iso(oldest) && !("exact" in value["count"] && value["count"].exact === 0);
+}
+
+/** The number either arm holds. */
+export function countValue(value: ReportWireCount): number {
+  return "exact" in value ? value.exact : value.atLeast;
+}
+
+/** "12", or "at least 1000" — the capped arm always says so. */
+export function countText(value: ReportWireCount): string {
+  return "exact" in value ? String(value.exact) : `at least ${value.atLeast}`;
+}
+
 function noAnswer(why: string): Extract<ReportsView, { kind: "no-answer" }> {
   return { kind: "no-answer", why };
 }
@@ -181,13 +209,13 @@ function noAnswer(why: string): Extract<ReportsView, { kind: "no-answer" }> {
 /** A recursively checked server payload, or this browser's refusal to guess. */
 export function parseReportsFeed(input: unknown): ReportsView {
   if (!isRecord(input)) return noAnswer("this browser received something that is not the reports API");
-  if (input["schema"] !== 1) {
-    return noAnswer(`this browser can read version 1 of the reports API; the server sent ${JSON.stringify(input["schema"])}`);
+  if (input["schema"] !== 2) {
+    return noAnswer(`this browser can read version 2 of the reports API; the server sent ${JSON.stringify(input["schema"])}`);
   }
   if (!iso(input["composedAt"])) return noAnswer("this browser received a reports answer without a valid composition time");
   switch (input["kind"]) {
     case "never-written":
-      return nonBlank(input["why"]) && whole(input["inFlight"]) && whole(input["refused"])
+      return nonBlank(input["why"]) && count(input["inFlight"]) && count(input["refused"]) && quarantine(input["quarantine"])
         ? (input as ReportsFeed)
         : noAnswer("this browser received a malformed never-written answer");
     case "unreadable":
@@ -201,7 +229,13 @@ export function parseReportsFeed(input: unknown): ReportsView {
     default:
       return noAnswer("this browser received a reports answer with an unknown kind");
   }
-  if (!nonBlank(input["path"]) || !whole(input["inFlight"]) || !whole(input["refused"]) || !whole(input["recentWithheld"])) {
+  if (
+    !nonBlank(input["path"]) ||
+    !count(input["inFlight"]) ||
+    !count(input["refused"]) ||
+    !quarantine(input["quarantine"]) ||
+    !whole(input["recentWithheld"])
+  ) {
     return noAnswer("this browser received a malformed reports envelope");
   }
   if (!sessions(input["sessions"])) return noAnswer("this browser received malformed session rows");

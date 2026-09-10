@@ -22,16 +22,18 @@
  * than an empty register: otherwise "nobody has reported" and "we could not
  * tell who exists" would render alike.
  */
-import type {
-  ExecutionComparison,
-  InboxListing,
-  ReportActor,
-  ReportClaim,
-  ReportCorrection,
-  ReportJob,
-  ReportProblem,
-  ReportRow,
-  ReportsView,
+import {
+  addCounts,
+  type BoundedCount,
+  type ExecutionComparison,
+  type InboxListing,
+  type ReportActor,
+  type ReportClaim,
+  type ReportCorrection,
+  type ReportJob,
+  type ReportProblem,
+  type ReportRow,
+  type ReportsView,
 } from "../overseer/reports.js";
 import type { CheckedArtefact } from "./artefact-ref.js";
 import { projectDecisionCheckpoint, type DecisionCheckpointInput } from "./decisions-view.js";
@@ -74,15 +76,33 @@ export type ProjectedSessions =
       readonly reported: readonly { readonly name: string; readonly latest: ProjectedClaimed }[];
     };
 
-export type ReportsProjection = {
+/**
+ * What the inbox reader counted, as the page gets it. Each count is the
+ * reader's own, `atLeast` when a directory was read only to its cap — never the
+ * length of the list it parsed, which is shorter by design.
+ */
+export type InboxCounts = {
+  /** Submitted and not yet recorded: inbox files plus prepared reports mid-flight. */
+  readonly inFlight: BoundedCount;
+  readonly refused: BoundedCount;
+  /** How big the never-emptied quarantine has grown. Its path stays on the server. */
+  readonly quarantine: { readonly count: BoundedCount; readonly oldestMovedAt: string | null };
+};
+
+export function inboxCounts(inbox: InboxListing): InboxCounts {
+  return {
+    inFlight: addCounts(inbox.inFlight.count, inbox.processing.count),
+    refused: inbox.refused.count,
+    quarantine: { count: inbox.quarantine.count, oldestMovedAt: inbox.quarantine.oldestMovedAt },
+  };
+}
+
+export type ReportsProjection = InboxCounts & {
   readonly composedAt: string;
   readonly sessions: ProjectedSessions;
   /** Newest first, at most `RECENT_CLAIMS_LIMIT`. */
   readonly recent: readonly ProjectedClaim[];
   readonly recentWithheld: number;
-  /** Submitted and not yet recorded: inbox files plus prepared reports mid-flight. */
-  readonly inFlight: number;
-  readonly refused: number;
   readonly problems: readonly ReportProblem[];
 };
 
@@ -190,8 +210,7 @@ export function projectReports(
     sessions,
     recent,
     recentWithheld: newestFirst.length - recent.length,
-    inFlight: inbox.inFlight.length + inbox.processing.length,
-    refused: inbox.refused.length,
+    ...inboxCounts(inbox),
     problems: view.problems,
   };
 }

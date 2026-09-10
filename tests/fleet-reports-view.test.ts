@@ -63,7 +63,14 @@ function event(over: Record<string, unknown> = {}): ReportEvent {
   } as ReportEvent;
 }
 
-const EMPTY_INBOX: InboxListing = { inFlight: [], processing: [], refused: [], skippedEntries: 0 };
+const NO_QUARANTINE: InboxListing["quarantine"] = { path: "/tmp/fake/report-quarantine", count: { exact: 0 }, oldestMovedAt: null };
+const EMPTY_INBOX: InboxListing = {
+  inFlight: { items: [], count: { exact: 0 } },
+  processing: { items: [], count: { exact: 0 } },
+  refused: { items: [], count: { exact: 0 } },
+  skippedEntries: { exact: 0 },
+  quarantine: NO_QUARANTINE,
+};
 
 function view(events: readonly ReportEvent[]): ReportsView {
   return foldReports(events);
@@ -173,19 +180,38 @@ describe("recent, counts and problems", () => {
 
   test("in-flight counts both the inbox and the half-recorded, refused counts refusals, problems come from the fold", () => {
     const inbox: InboxListing = {
-      inFlight: [{ eventId: randomUUID(), submission: null, why: "unreadable" }],
-      processing: [{ eventId: randomUUID(), event: null, why: "being recorded" }],
-      refused: [
-        { eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "a" },
-        { eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "b" },
-      ],
-      skippedEntries: 0,
+      inFlight: { items: [{ eventId: randomUUID(), submission: null, why: "unreadable" }], count: { exact: 1 } },
+      processing: { items: [{ eventId: randomUUID(), event: null, why: "being recorded" }], count: { exact: 1 } },
+      refused: {
+        items: [
+          { eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "a" },
+          { eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "b" },
+        ],
+        count: { exact: 2 },
+      },
+      skippedEntries: { exact: 0 },
+      quarantine: NO_QUARANTINE,
     };
     const lonely = event({ corrects: randomUUID() });
     const projection = projectReports(foldReports([lonely]), inbox, checkpoint([]), NOW);
-    expect(projection.inFlight).toBe(2);
-    expect(projection.refused).toBe(2);
+    expect(projection.inFlight).toEqual({ exact: 2 });
+    expect(projection.refused).toEqual({ exact: 2 });
     expect(projection.problems.map((problem) => problem.kind)).toEqual(["invalid-correction"]);
     expect(projection.composedAt).toBe(NOW.toISOString());
+  });
+
+  test("the counts come from the reader's counts, not the lengths of the lists it parsed, and a capped one stays capped", () => {
+    const inbox: InboxListing = {
+      ...EMPTY_INBOX,
+      // 200 parsed of at least 1000 seen: the list is not the count.
+      inFlight: { items: [{ eventId: randomUUID(), submission: null, why: "unreadable" }], count: { atLeast: 1000 } },
+      processing: { items: [], count: { exact: 1 } },
+      refused: { items: [], count: { exact: 3 } },
+      quarantine: { path: "/tmp/fake/report-quarantine", count: { atLeast: 1000 }, oldestMovedAt: "2026-09-07T12:00:00.000Z" },
+    };
+    const projection = projectReports(foldReports([]), inbox, checkpoint([]), NOW);
+    expect(projection.inFlight).toEqual({ atLeast: 1001 });
+    expect(projection.refused).toEqual({ exact: 3 });
+    expect(projection.quarantine).toEqual({ count: { atLeast: 1000 }, oldestMovedAt: "2026-09-07T12:00:00.000Z" });
   });
 });

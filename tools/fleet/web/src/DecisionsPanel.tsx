@@ -49,7 +49,8 @@ import {
   type DecisionsApi,
   type DecisionsView,
 } from "./decisions-client";
-import { claimMatchesSearch, httpReportsApi, type ReportsApi, type ReportsView } from "./reports-client";
+import { ago } from "./deploys-client";
+import { claimMatchesSearch, countText, countValue, httpReportsApi, type ReportsApi, type ReportsView } from "./reports-client";
 import { Card, Mono, Pill, cx, toneClasses } from "./ui";
 import { formatDuration, type Tone } from "./view";
 import type {
@@ -64,7 +65,9 @@ import type {
   ReportWireActor,
   ReportWireClaim,
   ReportWireClaimed,
+  ReportWireCount,
   ReportWireExecution,
+  ReportWireQuarantine,
   ReportWireSession,
 } from "../../wire";
 
@@ -696,7 +699,7 @@ function ClaimCard({ claim }: { claim: ReportWireClaim }): ReactNode {
 function LatestClaim({ claimed }: { claimed: ReportWireClaimed }): ReactNode {
   return (
     <span className="tw:min-w-0 tw:break-words tw:text-ink-soft">
-      {`${claimKindText(claimed.latest)} · ${claimed.latest.summary} `}
+      {`latest: claimed by ${actorText(claimed.latest.claimedBy)} · ${claimKindText(claimed.latest)} · ${claimed.latest.summary} `}
       <span className="tw:text-ink-faint">
         {`(${claimed.claims} ${claimed.claims === 1 ? "claim" : "claims"}, latest received `}
         <time dateTime={claimed.latest.receivedAt}>{claimed.latest.receivedAt}</time>)
@@ -720,10 +723,32 @@ function SessionRow({ row }: { row: ReportWireSession }): ReactNode {
   );
 }
 
-function InboxCounts({ inFlight, refused }: { inFlight: number; refused: number }): ReactNode {
+/** A capped count says "at least": the server read the inbox only to its cap. */
+function InboxCounts({ inFlight, refused }: { inFlight: ReportWireCount; refused: ReportWireCount }): ReactNode {
   return (
     <p className="tw:text-[12px] tw:tabular-nums tw:text-ink-soft">
-      {inFlight} submitted, not yet recorded · {refused} refused (<Mono>overseer reports</Mono> says why)
+      {countText(inFlight)} submitted, not yet recorded · {countText(refused)} refused (<Mono>overseer reports</Mono> says
+      why)
+    </p>
+  );
+}
+
+/**
+ * The quarantine in one sentence, because it only grows: the daemon never
+ * empties it. An empty one says nothing at all.
+ */
+function QuarantineLine({ quarantine, composedAt }: { quarantine: ReportWireQuarantine; composedAt: string }): ReactNode {
+  const capped = "atLeast" in quarantine.count;
+  const n = countValue(quarantine.count);
+  if (!capped && n === 0) return null;
+  const age = quarantine.oldestMovedAt === null ? null : ago(quarantine.oldestMovedAt, Date.parse(composedAt));
+  return (
+    <p data-testid="claims-quarantine" className="tw:mt-1 tw:text-[12px] tw:tabular-nums tw:text-ink-soft">
+      {`${countText(quarantine.count)} ${!capped && n === 1 ? "entry" : "entries"} quarantined`}
+      {age === null ? "" : `, the oldest${capped ? " seen" : ""} ${age}`}
+      {"; nothing empties it automatically ("}
+      <Mono>overseer reports</Mono>
+      {" says where)"}
     </p>
   );
 }
@@ -747,8 +772,9 @@ function ClaimsBody({ view, query, searchBox }: { view: ClaimsView; query: strin
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">{view.why}</p>
         <div className="tw:mt-2">
           <InboxCounts inFlight={view.inFlight} refused={view.refused} />
+          <QuarantineLine quarantine={view.quarantine} composedAt={view.composedAt} />
         </div>
-        {view.inFlight > 0 ? (
+        {countValue(view.inFlight) > 0 || "atLeast" in view.inFlight ? (
           <p className="tw:mt-1 tw:text-[12px] tw:text-unknown-ink">
             If these stay unrecorded, the daemon may not be running a build that includes the report drain.
           </p>
@@ -796,6 +822,7 @@ function ClaimsList({
 
       <Card className="tw:mb-3 tw:p-3">
         <InboxCounts inFlight={view.inFlight} refused={view.refused} />
+        <QuarantineLine quarantine={view.quarantine} composedAt={view.composedAt} />
         <ComposedAt instant={view.composedAt} />
       </Card>
 

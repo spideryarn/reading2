@@ -17,7 +17,7 @@ the spec; the Stage 3 status paragraph says what the builders decided) and the b
 - **3a** — `c5242a04`: `tools/fleet/reports-view.ts`, `routes-reports.ts`, `web/src/reports-client.ts`,
   the Claims section in `web/src/DecisionsPanel.tsx`, two lines in `server.ts`, one block appended to
   `wire.ts`, `docs/project/work-reports.md`, and the `tests/fleet-reports-*` tests.
-- **3b** — STAGE_3B_SHA: in `tools/overseer/reports.ts`, the bounded inbox enumeration (the Stage 1
+- **3b** — `b1c6d669`: in `tools/overseer/reports.ts`, the bounded inbox enumeration (the Stage 1
   review's condition for landing — `docs/plans/260910e-work-reports-stage1-review-r2-sol.md` § Directory
   listing bound) and step [2], a session's decision into `decisions.jsonl`; `scripts/overseer.ts report
   decision`; the reports tests.

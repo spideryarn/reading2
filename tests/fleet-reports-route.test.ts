@@ -3,7 +3,7 @@
  * readers, and the real mount in `server.ts`. Plan 260910e, Stage 3a.
  */
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -20,7 +20,9 @@ import {
 } from "../tools/fleet/routes-reports.js";
 import { RECENT_CLAIMS_LIMIT } from "../tools/fleet/reports-view.js";
 import {
+  INBOX_DIR,
   foldReports,
+  readInbox,
   type InboxListing,
   type ReportEvent,
   type ReportProblem,
@@ -53,14 +55,23 @@ function reportsRead(events: readonly ReportEvent[], problems: readonly ReportPr
   return { kind: "reports", path: "/tmp/fake/reports.jsonl", view: foldReports(events, problems) };
 }
 
-function inbox(inFlight = 0, refused = 0): InboxListing {
+function inbox(inFlight = 0, refused = 0, quarantine: InboxListing["quarantine"] = QUIET_QUARANTINE): InboxListing {
   return {
-    inFlight: Array.from({ length: inFlight }, () => ({ eventId: randomUUID(), submission: null, why: "not parsed in this test" })),
-    processing: [],
-    refused: Array.from({ length: refused }, () => ({ eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "a test refusal" })),
-    skippedEntries: 0,
+    inFlight: {
+      items: Array.from({ length: inFlight }, () => ({ eventId: randomUUID(), submission: null, why: "not parsed in this test" })),
+      count: { exact: inFlight },
+    },
+    processing: { items: [], count: { exact: 0 } },
+    refused: {
+      items: Array.from({ length: refused }, () => ({ eventId: randomUUID(), refusedAt: NOW.toISOString(), why: "a test refusal" })),
+      count: { exact: refused },
+    },
+    skippedEntries: { exact: 0 },
+    quarantine,
   };
 }
+
+const QUIET_QUARANTINE: InboxListing["quarantine"] = { path: "/tmp/fake/report-quarantine", count: { exact: 0 }, oldestMovedAt: null };
 
 function readers(read: ReportsRead, over: Partial<ReportsRouteReaders> = {}): ReportsRouteReaders {
   return {
@@ -97,14 +108,32 @@ describe("the arms", () => {
     const answer = call(
       readers({ kind: "never-written", path: "/tmp/fake/reports.jsonl" }, { readInbox: () => inbox(2, 1) }),
     ).body;
-    expect(answer).toMatchObject({ schema: 1, kind: "never-written", composedAt: NOW.toISOString(), inFlight: 2, refused: 1 });
+    expect(answer).toMatchObject({
+      schema: 2,
+      kind: "never-written",
+      composedAt: NOW.toISOString(),
+      inFlight: { exact: 2 },
+      refused: { exact: 1 },
+      quarantine: { count: { exact: 0 }, oldestMovedAt: null },
+    });
     expect(answer === null || "recent" in answer).toBe(false);
+  });
+
+  it("carries the quarantine's size and its oldest entry's age on both arms that count the inbox, but not its path", () => {
+    const oldest = "2026-09-07T12:00:00.000Z";
+    const quarantine: InboxListing["quarantine"] = { path: "/tmp/fake/report-quarantine", count: { exact: 12 }, oldestMovedAt: oldest };
+    const never = call(readers({ kind: "never-written", path: "/tmp/fake/reports.jsonl" }, { readInbox: () => inbox(0, 0, quarantine) }));
+    const recorded = call(readers(reportsRead([event(1)]), { readInbox: () => inbox(0, 0, quarantine) }));
+    for (const answer of [never, recorded]) {
+      expect(answer.body).toMatchObject({ quarantine: { count: { exact: 12 }, oldestMovedAt: oldest } });
+      expect(answer.raw).not.toContain("/tmp/fake/report-quarantine");
+    }
   });
 
   it("carries unreadable as the reader's refusal, never as an empty log", () => {
     const answer = call(readers({ kind: "unreadable", why: "reports.jsonl is gone but reports.created is not", path: "/x" })).body;
     expect(answer).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "unreadable",
       composedAt: NOW.toISOString(),
       why: "reports.jsonl is gone but reports.created is not",
@@ -120,7 +149,7 @@ describe("the arms", () => {
       }),
     ).body;
     expect(MAX_REPORTS_INPUT_BYTES).toBe(8 * 1024 * 1024);
-    expect(answer).toMatchObject({ schema: 1, kind: "oversized-file", sizeBytes: MAX_REPORTS_INPUT_BYTES + 1, limitBytes: MAX_REPORTS_INPUT_BYTES });
+    expect(answer).toMatchObject({ schema: 2, kind: "oversized-file", sizeBytes: MAX_REPORTS_INPUT_BYTES + 1, limitBytes: MAX_REPORTS_INPUT_BYTES });
     expect(readReports).not.toHaveBeenCalled();
   });
 
@@ -131,11 +160,11 @@ describe("the arms", () => {
     const answer = call(readers(reportsRead([first, second], [problem]), { readInbox: () => inbox(1, 4) })).body;
     expect(answer?.kind).toBe("reports");
     if (answer?.kind !== "reports") throw new Error("unreachable");
-    expect(answer.schema).toBe(1);
+    expect(answer.schema).toBe(2);
     expect(answer.recent.map((row) => row.eventId)).toEqual([second.eventId, first.eventId]);
     expect(answer.recent[0]?.claimedBy).toEqual({ kind: "overseer" });
-    expect(answer.inFlight).toBe(1);
-    expect(answer.refused).toBe(4);
+    expect(answer.inFlight).toEqual({ exact: 1 });
+    expect(answer.refused).toEqual({ exact: 4 });
     expect(answer.problems).toEqual([problem]);
     expect(answer.sessions).toMatchObject({ kind: "register-unavailable", why: "the Overseer checkpoint is absent" });
   });
@@ -185,29 +214,65 @@ describe("the mount", () => {
     expect(call(given, "/api/decisions").handled).toBe(false);
   });
 
-  it("is read-only on purpose, and every inline refusal says schema 1", () => {
+  it("is read-only on purpose, and every inline refusal says schema 2", () => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
       const answer = call(readers(reportsRead([])), REPORTS_PATH, method);
       expect(answer.status).toBe(405);
       expect(answer.headers["allow"]).toBe("GET, HEAD");
       expect(answer.raw).toContain("read-only on purpose");
       expect(answer.raw).toContain("scripts/overseer.ts report");
-      expect(JSON.parse(answer.raw)).toMatchObject({ schema: 1, kind: "unreadable" });
+      expect(JSON.parse(answer.raw)).toMatchObject({ schema: 2, kind: "unreadable" });
     }
-    expect(JSON.parse(call(readers(reportsRead([])), `${REPORTS_PATH}/x`).raw)).toMatchObject({ schema: 1 });
+    expect(JSON.parse(call(readers(reportsRead([])), `${REPORTS_PATH}/x`).raw)).toMatchObject({ schema: 2 });
   });
 
   it("sends no body for HEAD", () => {
     const answer = call(readers(reportsRead([])), REPORTS_PATH, "HEAD");
     expect(answer.status).toBe(200);
     expect(answer.raw).toBe("");
+
+    const failed = call(
+      readers(reportsRead([]), {
+        readInbox: () => {
+          throw new Error("EACCES on report-inbox");
+        },
+      }),
+      REPORTS_PATH,
+      "HEAD",
+    );
+    expect(failed.status).toBe(500);
+    expect(failed.raw).toBe("");
+
+    const missing = call(readers(reportsRead([])), `${REPORTS_PATH}/missing`, "HEAD");
+    expect(missing.status).toBe(404);
+    expect(missing.raw).toBe("");
   });
 
   it("turns a reader that throws into a loud answer, not an empty one", () => {
     const answer = call(readers(reportsRead([]), { readInbox: () => { throw new Error("EACCES on report-inbox"); } }));
     expect(answer.status).toBe(500);
-    expect(answer.body).toMatchObject({ schema: 1, kind: "unreadable" });
+    expect(answer.body).toMatchObject({ schema: 2, kind: "unreadable" });
     expect(answer.raw).toContain("EACCES on report-inbox");
+  });
+});
+
+describe("a flooded inbox, read by the real reader", () => {
+  it("answers with the capped arm — at least, never a partial count that reads as exact", () => {
+    const root = mkdtempSync(join(tmpdir(), "spideryarn-reports-flood-"));
+    try {
+      const inboxDir = join(root, INBOX_DIR);
+      mkdirSync(inboxDir, { recursive: true });
+      for (let i = 0; i < 5000; i += 1) writeFileSync(join(inboxDir, `${randomUUID()}.json`), "{}");
+      const read = (): InboxListing => readInbox(root);
+      const never = call(readers({ kind: "never-written", path: join(root, "reports.jsonl") }, { readInbox: read })).body;
+      expect(never).toMatchObject({ kind: "never-written", inFlight: { atLeast: 1000 } });
+      const recorded = call(readers(reportsRead([event(1)]), { readInbox: read })).body;
+      if (recorded?.kind !== "reports") throw new Error("unreachable");
+      expect(recorded.inFlight).toEqual({ atLeast: 1000 });
+      expect(recorded.refused).toEqual({ exact: 0 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
