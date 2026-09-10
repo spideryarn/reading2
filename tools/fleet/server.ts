@@ -706,7 +706,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
   if (url.startsWith("/api/live")) {
-    subscribe(req, res, initialFramePayload(publicationLedger.stamp(), statePayload()));
+    subscribe(req, res, initialFramePayload(publicationLedger.stamp(), statePayload));
     return;
   }
 

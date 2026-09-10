@@ -1,21 +1,10 @@
 import { describe, expect, test } from "vitest";
 
 import type { FleetSnapshot } from "../tools/fleet/collect.js";
-import { statePayload, type PayloadDeps } from "../tools/fleet/state.js";
+import { PublicationLedger } from "../tools/fleet/instance.js";
+import { initialFramePayload, statePayload, type PayloadDeps } from "../tools/fleet/state.js";
 import type { ProducerStamp } from "../tools/fleet/wire.js";
 import { parseObservation, type JsonValue } from "../tools/overseer/observation.js";
-
-type Ledger = {
-  record(outcome: "success" | "failure"): void;
-  stamp(): ProducerStamp;
-};
-
-async function ledger(instance: string): Promise<Ledger> {
-  const module = await import("../tools/fleet/instance.js") as typeof import("../tools/fleet/instance.js") & {
-    PublicationLedger: new (instance: string) => Ledger;
-  };
-  return new module.PublicationLedger(instance);
-}
 
 const snapshot: FleetSnapshot = {
   rows: [],
@@ -54,8 +43,8 @@ function payload(producer: ProducerStamp, over: Partial<{
 }
 
 describe("the producer publication ledger", () => {
-  test("starts before any turn, then advances both counters on success and only publication on failure", async () => {
-    const publications = await ledger("1a2b3c4d");
+  test("starts before any turn, then advances both counters on success and only publication on failure", () => {
+    const publications = new PublicationLedger("1a2b3c4d");
     expect(publications.stamp()).toEqual({ instance: "1a2b3c4d", publication: 0, inventory: null });
 
     publications.record("success");
@@ -65,18 +54,18 @@ describe("the producer publication ledger", () => {
     expect(publications.stamp()).toEqual({ instance: "1a2b3c4d", publication: 2, inventory: 1 });
   });
 
-  test("keeps separate instance identities in one process and refuses a malformed id", async () => {
-    const first = await ledger("1a2b3c4d");
-    const second = await ledger("5e6f7890");
+  test("keeps separate instance identities in one process and refuses a malformed id", () => {
+    const first = new PublicationLedger("1a2b3c4d");
+    const second = new PublicationLedger("5e6f7890");
     expect(first.stamp().instance).toBe("1a2b3c4d");
     expect(second.stamp().instance).toBe("5e6f7890");
-    await expect(ledger("not-an-instance")).rejects.toThrow(/instance/i);
+    expect(() => new PublicationLedger("not-an-instance")).toThrow(/instance/i);
   });
 });
 
 describe("the stamp on the fleet payload", () => {
-  test("carries the ledger's values through the production composition", async () => {
-    const publications = await ledger("1a2b3c4d");
+  test("carries the ledger's values through the production composition", () => {
+    const publications = new PublicationLedger("1a2b3c4d");
     publications.record("success");
     publications.record("failure");
     expect(JSON.parse(payload(publications.stamp())).producer).toEqual({
@@ -86,8 +75,8 @@ describe("the stamp on the fleet payload", () => {
     });
   });
 
-  test("gives a poll and broadcast composed from the same dependencies the same stamp", async () => {
-    const publications = await ledger("1a2b3c4d");
+  test("gives a poll and broadcast composed from the same dependencies the same stamp", () => {
+    const publications = new PublicationLedger("1a2b3c4d");
     publications.record("success");
     const deps = payloadDeps(publications.stamp());
     const poll = JSON.parse(statePayload(deps)) as { producer: ProducerStamp };
@@ -96,16 +85,35 @@ describe("the stamp on the fleet payload", () => {
     expect(poll.producer).toEqual(publications.stamp());
   });
 
-  test("gives a new subscriber the same failed-first-turn payload a poll gets", async () => {
-    const publications = await ledger("1a2b3c4d");
-    publications.record("failure");
-    const poll = payload(publications.stamp(), { snapshot: null, error: "tmux was unavailable" });
-    const module = await import("../tools/fleet/state.js") as typeof import("../tools/fleet/state.js") & {
-      initialFramePayload(producer: ProducerStamp, payload: string): string | null;
+  test("gives a new subscriber the same failed-first-turn payload a poll gets without composing before a turn", () => {
+    const publications = new PublicationLedger("1a2b3c4d");
+    let compositions = 0;
+    let checkpointReads = 0;
+    const compose = () => {
+      compositions += 1;
+      return statePayload({
+        ...payloadDeps(publications.stamp(), { snapshot: null, error: "tmux was unavailable" }),
+        readCheckpoint: () => {
+          checkpointReads += 1;
+          return {
+            attention: { kind: "not-asked" },
+            overseer: { kind: "not-asked" },
+            usage: { kind: "not-asked" },
+            work: { kind: "checkpoint-absent" },
+          };
+        },
+      });
     };
-    const initial = module.initialFramePayload(publications.stamp(), poll);
 
-    expect(initial).toBe(poll);
+    expect(initialFramePayload(publications.stamp(), compose)).toBeNull();
+    expect(compositions).toBe(0);
+    expect(checkpointReads).toBe(0);
+
+    publications.record("failure");
+    const initial = initialFramePayload(publications.stamp(), compose);
+
+    expect(compositions).toBe(1);
+    expect(checkpointReads).toBe(1);
     expect(JSON.parse(initial ?? "null")).toMatchObject({
       producer: { instance: "1a2b3c4d", publication: 1, inventory: null },
       error: "tmux was unavailable",
@@ -113,16 +121,36 @@ describe("the stamp on the fleet payload", () => {
     });
   });
 
-  test("refuses a producer inventory whose nullness disagrees with the snapshot", () => {
-    expect(() => payload({ instance: "1a2b3c4d", publication: 1, inventory: null })).toThrow(/inventory.*snapshot/i);
-    expect(() => payload(
-      { instance: "1a2b3c4d", publication: 1, inventory: 1 },
-      { snapshot: null },
-    )).toThrow(/inventory.*snapshot/i);
+  test("reports a producer/snapshot disagreement without taking the payload down", () => {
+    const errors: unknown[][] = [];
+    const original = console.error;
+    let withSnapshot = "";
+    let withoutSnapshot = "";
+    try {
+      console.error = (...args: unknown[]) => errors.push(args);
+      withSnapshot = payload({ instance: "1a2b3c4d", publication: 1, inventory: null });
+      withoutSnapshot = payload(
+        { instance: "1a2b3c4d", publication: 1, inventory: 1 },
+        { snapshot: null },
+      );
+    } finally {
+      console.error = original;
+    }
+
+    expect(errors).toHaveLength(2);
+    expect(errors[0]?.join(" ")).toMatch(/producer.*inventory.*snapshot/i);
+    expect(JSON.parse(withSnapshot)).toMatchObject({
+      collectedAt: snapshot.collectedAt,
+      producer: { instance: "invalid", publication: 1, inventory: 0 },
+    });
+    expect(JSON.parse(withoutSnapshot)).toMatchObject({
+      collectedAt: null,
+      producer: { instance: "invalid", publication: 1, inventory: null },
+    });
   });
 
-  test("is additive to today's observation parser", async () => {
-    const publications = await ledger("1a2b3c4d");
+  test("is additive to today's observation parser", () => {
+    const publications = new PublicationLedger("1a2b3c4d");
     publications.record("success");
     const stamped = JSON.parse(payload(publications.stamp())) as Record<string, JsonValue>;
     const unstamped = structuredClone(stamped);

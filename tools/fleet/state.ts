@@ -102,13 +102,11 @@ export function fleetState(
   producer: ProducerStamp,
   now: number = Date.now(),
 ): FleetState {
-  if ((producer.inventory === null) !== (snapshot === null)) {
-    throw new Error("producer inventory nullness disagrees with the snapshot");
-  }
+  const publishedProducer = producerForSnapshot(producer, snapshot);
   const rows = snapshot?.rows ?? [];
   return {
     schema: 1,
-    producer,
+    producer: publishedProducer,
     attemptedAt,
     attention,
     overseer,
@@ -141,6 +139,25 @@ export function fleetState(
       refreshMs,
       now,
     }),
+  };
+}
+
+/**
+ * Keep a composition defect visible without making the dashboard disappear.
+ *
+ * The invalid instance makes Stage 2 refuse the stamp rather than believe a
+ * repaired-looking ordinal. Normalising only its nullness keeps the payload's
+ * safety contract intact for older consumers which do not inspect the stamp.
+ */
+function producerForSnapshot(producer: ProducerStamp, snapshot: FleetSnapshot | null): ProducerStamp {
+  if ((producer.inventory === null) === (snapshot === null)) return producer;
+  console.error(
+    "fleet payload producer defect: inventory nullness disagrees with the snapshot; publishing an unreadable stamp",
+  );
+  return {
+    instance: "invalid",
+    publication: producer.publication,
+    inventory: snapshot === null ? null : 0,
   };
 }
 
@@ -224,9 +241,9 @@ export function statePayload(deps: PayloadDeps): string {
   );
 }
 
-/** The initial SSE frame after a kept turn; before that, there is no outcome to publish. */
-export function initialFramePayload(producer: ProducerStamp, payload: string): string | null {
-  return producer.publication > 0 ? payload : null;
+/** The initial SSE frame after a kept turn; before that, do not even compose one. */
+export function initialFramePayload(producer: ProducerStamp, compose: () => string): string | null {
+  return producer.publication > 0 ? compose() : null;
 }
 
 /* ------------------------------------------------------------------ *

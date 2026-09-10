@@ -189,13 +189,12 @@ rather than asserted).
 - [x] Stamp on the wire, ledger, composition, server wiring, client `Omit`. **Implemented by Codex
   (gpt-5.6-sol).** The ledger's API is `record("success" | "failure")`; the initial-frame decision
   is `initialFramePayload()` in `state.ts`, pure so a test drives the function production calls.
-- [ ] Focused tests, typecheck, `build:fleet` (all green on the manager's own run: typecheck exit 0,
-  13 files / 792 tests); Sol review; commit.
+- [x] Focused tests, typecheck, `build:fleet` (all green on the manager's own runs, before and after
+  the review's fixes: typecheck exit 0, 13 files / 792 tests, `build:fleet` exit 0); Sol review;
+  commit.
 
-Status, 2026-09-10: implemented and committed; Sol stage review running. Four points raised for it
-by the manager: the production throw on a stamp/snapshot disagreement, the test's dynamic-import
-casts, `ProducerStamp` displacing `FleetState`'s doc comment, and `/api/live` composing a payload
-it may discard.
+Status, 2026-09-10: **done.** Sol's stage review passed it with fixes, all four of the manager's
+points confirmed and fixed in the stage; see Findings.
 
 ### Stage 2 — the consumer orders by run and collection
 
@@ -260,7 +259,12 @@ their tests.
   `observation.ts` lets `paneId` be null beside a real `panePid`, so refusing that on disk would
   refuse events the differ legitimately writes — and `replay()` is all-or-nothing, so one refused line
   starts the store cold. For the same reason, **before this lands the new parser is run read-only
-  over the live `~/.overseer/events.jsonl` (1,811 lines on 2026-09-10) and must refuse none of it.**
+  over the live `~/.overseer/events.jsonl` and must refuse none of it.** The log is frozen for the
+  purpose: a copy taken 2026-09-10 ~09:55 UTC, 1,918 lines, sha256 `6c549b2e…`, read through
+  `openStore({ root })` in a scratch root and `store.readEvents(0)`, never the live store. The
+  script fails outright if it parses fewer than 1,900 lines, because "0 refused" over a file it did
+  not read would be a pass about nothing. **Baseline on today's parser: 1,918 events, 0
+  unreadable.** The same script on the same bytes after Stage 3 must say the same.
 - **The CLI's own event parse.** `readEventTail` accepts anything with a known `kind` and an `at`,
   and `describeEvent` then dereferences `event.row.name`, so one malformed known-kind line crashes
   `overseer events`. It uses the store's parser instead. *Red today.*
@@ -332,6 +336,29 @@ Each finding was checked against the code before being accepted.
    not on client and server builds matching; `readNotes`/`readEventTail` are described as
    lock-free, not bounded.
 
+### Stage 1 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+The manager raised four points before the review; Sol confirmed all four and fixed them in the
+stage, red first where a behaviour changed.
+
+1. **P1, a composition defect could take the dashboard down.** `fleetState` threw when the stamp's
+   inventory nullness disagreed with the snapshot, and it runs inside `/api/state`, `/api/live`,
+   `tellOverseer` and `broadcast`. **Fixed, and the disposition is a decision worth knowing:** the
+   defect is logged and the payload is served with a deliberately unreadable stamp,
+   `instance: "invalid"`, its inventory nullness normalised to agree with `collectedAt`. The
+   invalid instance fails `INSTANCE_TOKEN`, so Stage 2 parses it as `unreadable`: ordering falls
+   back to the clock and the `ordering` condition opens. That is a named alarm rather than a dead
+   dashboard or a fabricated ordinal a consumer would believe. A test-only assertion was weighed
+   and declined, because it hides the defect in production.
+2. **P2, `/api/live` composed payloads it then discarded.** `initialFramePayload` now takes a
+   composition thunk and calls it only when `publication > 0`; the test proves zero compositions
+   before a kept turn and exactly one after.
+3. **P3, the new test reached the ledger through dynamic-import casts**, a leftover from writing
+   it red before the class existed. Now plain static imports.
+4. **P3, `ProducerStamp` had displaced `FleetState`'s doc comment.** Moved above it.
+
 ## Status
 
-2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 next.
+2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
+stamp committed, Sol stage review passed with four fixes. Stage 2 waits on another session's
+`daemon.ts` push; Stage 3 is independent of it.
