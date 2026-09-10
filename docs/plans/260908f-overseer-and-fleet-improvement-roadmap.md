@@ -1625,6 +1625,21 @@ The page then shows:
 
 There are no buttons, no links and no command text, and nothing was started. It was checked at
 1280 px and 400 px.
+
+**Status (2026-09-10, Overseer): landed on dev at 3dc65697, session `recovery-inventory`, plan
+[260910e](260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md); the stage is
+complete (the drill above is the acceptance).** The candidate record goes into the same write as, and
+immediately before, its tmux-session-gone, keyed by previous execution plus removing collection; the
+daemon reads the host boot id itself because tmux can reuse a pid after a reboot; records are
+classified against the trusted inventory and are all unknown after any refused, failed or held
+collection; resumed and superseded come only from a verified conversation; dismissal is a CLI through
+`~/.overseer/recovery-inbox/`. Found on the way: a daemon stopping on an exception could loop forever
+settling in-flight views while timers kept requesting them, holding the store lock so systemd could
+not replace it — fixed on both exit paths, now also clearing work-reports' drain timer. Two first
+review rounds timed out mid-fix; read-only findings-only rounds plus a separate fixer converged; one
+same-user file-system race was overruled through Fable with a narrowed, tested guarantee. Follow-ups
+queued as qi-59skznz8; live since the 16:49Z restarts.
+
 ### Stage: Gradual recovery — resume selected valuable work
 
 - [ ] Offer user-selected resume from Recovery inventory through existing launcher/resume support.
