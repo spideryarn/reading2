@@ -486,6 +486,19 @@ verified-resume rule paces the rest. `outcome-unknown` holds in both. The invari
 release a reservation without evidence that its class's hold condition has ended, or an attributed
 disposition.*
 
+**Two more for Stage 2, from `scheduled-dispatch`'s plan review (2026-09-10).** (F9) The
+`tmux-headless` adapter writes the verified bytes to an attempt-private `<artefactDir>/prompt.md`
+(exclusive, 0600, fsynced) rather than passing the shared `material.txt`, and the wrapper re-hashes
+it against `intent.json`'s pin immediately before spawning — a mismatch spawns nothing and writes a
+`supervisor-failed` exit. (F8) **Cancellation is `tmux kill-session`**, which today orphans the CLI:
+`runChild` spawns it in its own process group and does not catch SIGHUP, so closing the pane kills
+only the wrapper and no `exit.json` is written. **The Overseer approved one edit outside the file
+set**: `scripts/subagent-cli.ts`'s `runChild` catches SIGHUP exactly as SIGTERM (forward to the
+child's group, wait within the grace), and under `--launch-dir` the finaliser writes `ending:
+signalled` before re-raising; nothing else in that file changes. Named in its commit as an orphan
+fix outside the stage. The alternative passed over: a protocol `cancel` request through the inbox —
+more machinery, and it would leave the orphan bug in every other wrapper run.
+
 ### Stage 2: the launchers
 
 Files: `scripts/gjd-remote.ts` (flags, `-e`, job-script lines — session-creation path only),
