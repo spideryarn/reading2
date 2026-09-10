@@ -254,6 +254,43 @@ This was agreed with `launch-protocol`, 2026-09-10:
   `CLAUDE_SESSION_ID=<uuid>` in `-e` at creation. It keeps Stage 2's `start.json` first line and its
   `exit.json` line after `claude`. The job runs `claude --resume <uuid> --permission-mode auto --
   "$(cat prompt)"`, or whatever the spike shows is correct.
+- **What `launch-protocol`'s Stage 2 settled** (`3858a4a9` on its branch, 2026-09-10; it reaches
+  `dev` after its Stage 1b fixes):
+  - `PlanRequest` is a union keyed on `launcherKind`. `run` is required for `headless` and
+    `tmux-headless`, and forbidden for `tmux`. The `tmux-resume` arm adds `resume: {
+    conversationId, dir }` the same way.
+  - gjd-remote's launch pieces are pure functions in `scripts/gjd-remote-launch.ts`:
+    `parseLaunchFlags`, `launchBoxCheck`, `launchStartLines`, `launchExitLines` and
+    `launchTmuxFlags`. `gjd-remote.ts` has four small insertions behind `--launch-id`.
+    `--resume-conversation` goes beside them, with `start.json`'s line kept ahead of the directory
+    guard, and `exit.json`'s right after `_gjd_claude_status=$?`.
+  - gjd-remote's stdin is a complete regular file (the material plus a newline), not a pipe. The
+    adapter refuses anything over gjd-remote's 96 KB prompt cap; the nudge is far below it.
+  - The tmux adapter answers `started` once gjd-remote has a pid. A later gjd-remote failure
+    surfaces as `outcome-unknown`, through reconciliation.
+  - **A new tmux session takes its environment from the client that creates it, not from the
+    server.** The daemon, through gjd-remote, therefore passes its own environment into a resumed
+    session, and Stage 3 composes the launchers with a deliberate `env`. For a pinned account, the
+    config directory comes from `--account`'s `CLAUDE_CONFIG_DIR` prefix, never from whatever the
+    daemon happens to have.
+- **What `launch-protocol`'s Stage 1b settled** (`9662df2f` on its branch, on top of Stage 2; not on
+  `dev` until its checks finish):
+  - `OccurrenceSummary` is `{ occurrenceId, state, attempt, reservationHeld, disposed, endedAt,
+    completion }`. It is a frozen copy: mutating one throws. `attempt` is the latest attempt made,
+    null before any.
+  - `LaunchProtocol` gains `inspect(origin)` and `inFlight(originKind)`. "In flight" is `planned`,
+    `waiting-admission`, `reserved`, `launching`, `observed-running` or `outcome-unknown`, **plus
+    any record whose reservation is still held**.
+  - `failed-before-launch` carries `reservation: released | held`, the actual release result.
+  - `usesTmux(kind)` is an exhaustive switch; `tmux-resume` adds its arm there.
+  - `admissionPolicy("recovery-resume")` is `{ capacity: 1, holdUntil: "observed-running" }`. The
+    release happens when reconciliation records `observed-running`, even after a crash between the
+    record and the release.
+  - `AttemptRef` no longer carries `artefactDir`.
+  - **`inspect` answers `null` for an occurrence carried over a history reset**, and `inFlight`
+    omits it, yet `launchOccurrence` still refuses it as `not-launchable`. So Stage 3's port adapter
+    must read **a `null` inspect followed by a refusal as "held by a history reset"**, which is a
+    `refused` request that names the reset and never counts as free to launch. A test says so.
 - **An admission class `recovery-resume`**, capacity 1, **released on `observed-running`**. From
   there it is an ordinary interactive session, and its hours of life must not block the scheduler's
   `claude-session` class. `launch-protocol` is building this in its next fix round. My pace rule
@@ -275,6 +312,164 @@ a transcript line and sets the session environment the collector reads. The phas
 
 Every count is independent of the protocol's own counter: the marker the fake writes on the
 socket. It never uses the default tmux server or `~/.overseer`, and it never reboots the box.
+
+## Review dispositions: Sol, plan round 1 (these override §1–§7 wherever they differ)
+
+[The review](260910f-gradual-recovery-plan-review-sol.md) is read-only, at `e1615d30`. Its verdict
+was *not ready*: eight established P1s (G1–G8) and two P2s (G9, G10). **All ten are accepted.** I
+checked each against the code before accepting it, and G4 turned out to be wider than Sol stated.
+The sandbox refused Sol's findings file, so the answer file is the whole record.
+
+- **G1 (P1): "an occurrence exists, so it is settled" was wrong. Accepted.** §2's step 2 becomes an
+  exhaustive table over the occurrence's state, whether its reservation is held, and whether it is
+  disposed:
+
+  | occurrence | the request |
+  |---|---|
+  | none | continue through the gates and revalidation |
+  | `failed-before-launch`, reservation released, not disposed | **continue into attempt 2**, through the gates and revalidation again |
+  | `failed-before-launch`, reservation still held | `defer` ("the last attempt's slot has not been released yet") |
+  | `planned`, `waiting-admission`, `reserved` | `defer`, with the protocol's reason |
+  | `launching`, `observed-running` | `settled`, meaning `done/`; the page shows the launch |
+  | `outcome-unknown` | `settled`; the page shows it as needing Greg's `dispose` |
+  | `completed` without a verified resume | `settled`, **with its own page state, "ended before it was seen running"**, and the exit code or "rebooted" |
+  | disposed | `settled`, with the disposition |
+
+  A `switch` with a `never` check, not an `if` chain. The tests cover a failed release, a retry
+  after the release, `not-launched` in each folded state, and an exit before verification.
+- **G2 (P1): `resumed` does not verify the transcript. Accepted.** The inventory's
+  `deriveDispositions` matches a verified execution and conversation. It never reads a transcript,
+  and `execution-identity.ts:44-51` says it does not establish which transcript is being written.
+  **The pace rule now waits for "verified", defined as all four of:**
+  - the inventory's `resumed` disposition for the candidate;
+  - the launch protocol showing that occurrence `observed-running`, with its correlation evidence;
+  - the transcript for the conversation having **grown since the launch's `at`** (size and mtime
+    past the values recorded at revalidation);
+  - a bounded tail read (64 KiB) holding at least one line after the launch instant with that
+    `sessionId`.
+
+  A live process whose transcript does not grow stays unverified, and it blocks the queue,
+  visibly.
+- **G3 (P1): version skew between the daemon and the collector. Accepted.** The fleet's `/api/state`
+  payload gains a `capabilities: string[]` field. The collector declares `"argv-resume-uuid"` from
+  the build that reads `--resume <uuid>`. `observation.ts` parses the field as optional, with
+  absent meaning none. **The resume pass defers before launching** ("the dashboard collecting this
+  box cannot yet verify a resumed session; it needs a restart") until an accepted snapshot declares
+  that capability. This is Stage 3, and it is a producer change in `state.ts`/`wire.ts`/`observation.ts`,
+  which I will ask the Overseer to approve with the argv change. Tests: a new daemon with an old
+  producer defers; an old daemon ignores the field.
+- **G4 (P1): the quota gate was stale and about the wrong account. Accepted, and it is wider than
+  Sol said.** The freshness half is fixed by `usageStaleAfterMs` (15 minutes, on `dev` in
+  `ce633d8c`). The account half:
+  - **a resumed conversation must run under the account whose config directory holds its
+    transcript.** `gjd-remote` starts pool sessions with `CLAUDE_CONFIG_DIR=<account stateDir>`
+    (`scripts/gjd-remote-account.ts:186`), and `--resume` only finds a conversation in its own
+    config directory's `projects/` (the spike);
+  - **the account is therefore pinned by where the transcript is found, never `auto`**;
+  - **the quota gate is about that account.**
+
+  The inventory's locator searches only `~/.claude/projects` (`recovery-view.ts:172`), and nothing
+  the collector records names an account. So today a pool session's transcript may simply never be
+  found.
+
+  **Measured 2026-09-10** (read-only research, box state at ~19:40):
+  - **Every account shares one transcript directory.** `~/.claude-gregmindstone/projects` is a
+    symlink to `~/.claude/projects`, made by the account seeding (`scripts/claude-accounts.ts`
+    ~714). There are 14 live `claude` processes: 8 under the `mindstone` config directory, 6 on the
+    default `~/.claude`. All of their transcripts are under `~/.claude/projects`. So the inventory's
+    locator does find them today, but by coincidence of layout, not by design.
+  - **The account a conversation ran under is on disk.** `~/.claude-accounts/reservations.ndjson`
+    maps `sessionUuid` to `accountName`, and every `gjd-remote new-claude` writes a row. Checked
+    against the 13 live conversation ids: all 7 `mindstone` sessions have a row, and the 6
+    default-login ones have none.
+  - **An explicit `--account <name>` checks no quota** (`resolveForLaunch`,
+    `scripts/claude-accounts.ts` ~1320–1350). It reserves and returns. Only `auto` reads live
+    per-account usage (`readUsage`, `tools/overseer/accounts.ts:418`: two token-free HTTPS calls)
+    and drops exhausted accounts. There is no cached per-account reading on disk.
+  - The default login is not a registered account, and **gjd-remote cannot launch on it by name
+    while pool accounts exist.**
+
+  **So:**
+  - **Finding the transcript**: the locator's roots become `~/.claude/projects` plus each registry
+    account's `<stateDir>/projects`, each resolved by `realpath` and deduplicated.
+  - **The account is pinned** from the conversation's last `reservations.ndjson` row, and passed
+    as `--account <name>`, never `auto`, so a resumed session stays on the account it started on.
+  - **No row means the default login.** That is `account: unknown` ("started on the default login,
+    which gjd-remote cannot relaunch by name"), and gets manual instructions (`claude --resume`
+    with no config-dir prefix). **Moving such a session onto a pool account is a product call for
+    Greg**: it would work, because the transcript directory is shared, but it changes whose quota
+    the session spends.
+  - **The quota gate is the pinned account's own reading, taken from the daemon's `accountUsage`
+    checkpoint field.** That is `StoredAccountUsage`, on `dev` since `74634fd3`, from
+    [usage-per-account.md](../project/usage-per-account.md): one live reading per account,
+    collected on each usage pass. Recovery makes **no network calls of its own**: a second reading
+    of one subscription would disagree with the page's by a point or two, which that doc names as
+    worse than either reading alone. The first draft of this entry had recovery call `readUsage`
+    behind a 5-minute cache; that was superseded the same evening, before any of it was built.
+    - The section used must be for the pinned registry name, in the `claude` family, **with a
+      non-null provider account id**.
+    - Its freshness is judged by that section's own `takenAt`, not by the pass's, with the same 15
+      minutes.
+    - `StoredAccountUsage` `none`, a missing section, an unproved identity, a stale `takenAt`, or
+      a non-empty `problems` list naming the registry all count as unknown, and recovery holds on
+      unknown.
+    - It is judged by a new `accountQuotaGate(reading, nowMs, onUnknown)`, added to
+      `launch-gate.ts` beside `launchGate`, with the same holding rules: a window at 100% or more
+      holds until its reset; 80% or more holds; unreadable goes to `onUnknown`.
+    - `launchGate` is unchanged, so it stays `scheduled-dispatch`'s contract. Recovery combines
+      the health half of the gate with the account half. The ambient usage report is about the
+      default login, and **is not used for a pinned pool account**.
+    - `scheduled-dispatch` is told about the new export.
+  - **For the Overseer, not built here:** explicit `--account` skipping the quota check is a
+    gjd-remote behaviour every explicit launch inherits.
+- **G5 (P1): revalidation came before an async gap. Accepted.** The pass does all of its async work
+  first: the transcript locate, the tail read and the preview. Then, **in one synchronous
+  stretch**, it recaptures the latest accepted observation and repeats every check: the
+  classification, the resolution, the conversation, "no live row holds it", `seen`, the directory
+  and transcript `statSync`, the gate, the pace and the occurrence table. Only then does it call
+  `launchOccurrence`. The prose claim is narrowed: a synchronous turn freezes the daemon's own state
+  and nothing else, so a person typing `claude --resume` into a shell in that window is not
+  prevented. That window is what gjd-remote's on-box check (§6) and the verification (G2) are for.
+  Test: pause the transcript locate, inject a newer accepted snapshot with a live matching
+  execution, and see zero invocations.
+- **G6 (P1): the seam had no way to read the protocol's state. Accepted.** Asked of
+  `launch-protocol`: a read-only `inspect(origin)` and `inFlight("recovery")` on the composed
+  `LaunchProtocol`, returning immutable summaries `{ occurrenceId, state, attempt,
+  reservationHeld, disposed, endedAt, completion }`, with no journal and no `LaunchParts`.
+  **Agreed by `launch-protocol`, 2026-09-10**, in its Stage 1b fix round, which lands with its
+  Stages 1–2. "In flight" there also includes any record whose reservation is still held, which is
+  the safe direction for the pace rule. The same round gives `failed-before-launch` a
+  `reservation: released | held` result (G1), and makes `usesTmux(kind)` exhaustive (G7). Stage 1's
+  `ResumeLaunchPort` already has exactly this shape (`occurrenceOf` and `inFlight`), plus the two
+  flags.
+- **G7 (P1): reconciliation probes tmux only for `launcherKind === "tmux"`**
+  (`launch-protocol.ts:1405`, on its branch). **Accepted, and it is `launch-protocol`'s code.** I
+  have asked for an exhaustive `usesTmux(kind)` that includes `tmux-resume`, and the crash test (a
+  tmux effect, no `start.json`, and reconciliation reaching `observed-running`) goes in Stage 3
+  either way.
+- **G8 (P1): disposal did not clear the pace predicate. Accepted.** Pace blocks only on
+  **undisposed** occurrences that are not yet verified (G2). **Only the protocol's `dispose` waives
+  it.** Dismissing the candidate does not, because a dismissed candidate's session may still be
+  running and still loading the box. The page names the exact `dispose` command for the blocker.
+  Both controls are tested.
+- **G9 (P2): the second projection was not needed. Accepted.** `parseRecoveryFile`
+  (`store.ts:2783`) and the fleet's `projectPublished` ignore unknown top-level fields, and the
+  existing `view` was added beside the fold without a schema bump. So the resume projection goes
+  in as an **optional `resume` field beside `view` in `recovery.json`**, written by the same
+  checkpoint. An old dashboard ignores it. A new dashboard treats its absence as "resume not
+  available here" and never lets it hide the base list; a test asserts that a malformed `resume`
+  leaves the records readable. **Gone:** the separate file, `recovery-resume-feed.ts`, the GET
+  route and its poll. **The POST route stays**, and so does its `server.ts` branch.
+- **G10 (P2): the file name was only pending-coalescing. Accepted.** Request files are
+  **nonce-named** (`pending/<candidateId>--<nonce>.json`, the inventory inbox's shape). The daemon
+  coalesces them by candidate, and **the launch occurrence is the only duplicate-launch
+  guarantee**. A second tap writes a second file, which the pass settles against the same
+  occurrence. The route still answers "already requested" when the projection or `pending/`
+  already shows the candidate, but as a courtesy, not a guarantee.
+
+**Simpler design, as Sol put it**, and adopted: an explicit inbox, nonce requests with the
+occurrence as the idempotence, the projection inside `recovery.json`, one narrow inspection
+capability, one post-launch transcript verifier, and an exhaustive state table.
 
 ## Deliberately not here
 
@@ -316,6 +511,18 @@ you actually pick.
 A smaller question sits beside it. **Should an unknown usage reading hold resumes?** This plan
 says yes, failing closed (§2.5). The cost is that resumes wait whenever the usage pass has not run,
 for example for five minutes after a daemon restart.
+
+A third comes from G4. **Should a session that started on the default login be resumable onto a
+pool account?** It would work, because the transcript directory is shared, but it changes whose
+quota the session spends.
+
+**The Overseer's defaults pending Greg, 2026-09-10, and built to:**
+- (1) nothing resumes without a tap;
+- (2) an unknown usage reading holds resumes, failing closed;
+- (3) default-login sessions are manual-only in v1.
+
+gjd-remote's explicit `--account` skipping the quota check is queued separately as
+`qi-pbmemdfh`, for the launcher.
 
 ## Stages
 
@@ -395,6 +602,86 @@ Red first:
 - the footer says what the control does;
 - a browser check at 1280 px and 400 px by an Opus subagent, on its own fixture server and never on
   8787.
+
+**Stage 1 status, 2026-09-10 ~20:05: built by an Opus subagent. Uncommitted in the worktree, and
+not yet reviewed** (paused by the Overseer for the `mindstone` five-hour window).
+
+- **What landed:**
+  - `recovery-resume-request.ts` (the leaf);
+  - `recovery-resume.ts`;
+  - small edits to `launch-gate.ts`: `healthGate`, `accountQuotaGate`, `bothGates`, and local
+    copies of `dev`'s account-usage types, replaced at the merge;
+  - `recovery-inbox.ts`, `recovery-view.ts` (the multi-root locator), `store.ts` (the optional
+    `resume` field), `daemon.ts` (`recoveryResumeTick`) and `scripts/overseer-recovery.ts`;
+  - two suites, plus shared fakes.
+- **Tests:** 60 tests. They were written after the code, so red was shown by five mutations, each
+  turning its tests red.
+- **The manager's own changes after the build:**
+  - **codename windows**. The builder found that the live endpoint's 0%-with-no-reset codename
+    windows would have held every resume for ever. `five_hour` and `seven_day` are now required,
+    and a codename window counts only with a number. It went red first:
+    `tests/overseer-account-quota-gate.test.ts`, 3 red and then 7 green;
+  - the shared fake gained a `seven_day` window.
+- **The combined tree, the manager's run:**
+  - 8 files / 224 tests pass;
+  - typecheck exit 0;
+  - Stage 2's own gates as above.
+- **Still to do at the merge:** wire `dev`'s real `accountUsage` into the pass. Until then, the
+  daemon's default is "no reading", so the gate holds.
+
+**Stage 2 status, 2026-09-10 ~20:00: built by an Opus subagent. Not yet committed** (it commits
+with Stage 1, because the route imports Stage 1's request leaf) **and not yet reviewed.**
+
+- **What landed:**
+  - `routes-recovery-resume.ts` (POST only);
+  - `recovery-feed.ts` parsing the `resume` section;
+  - `recovery-client.ts` and `RecoveryPanel.tsx` (the control, the seven state lines, the pace
+    line, manual instructions, and the §5 footer);
+  - `server.ts`: one import, one construction, one dispatch line, **placed before
+    `/api/recovery`'s**, because that route claims every path under it. The wiring test fails if
+    the order is swapped;
+  - one argued `fleet-attention` allowlist entry.
+- **Red then green:**
+  - feed: 7 failed, then 35 passed;
+  - route: 35 failed against a stub, then 38 passed;
+  - panel: 19 failed, then 37 passed;
+  - wiring: 3 failed, then 15 passed.
+
+  The browser parser was written before its tests. Mutation 5 is the proof they can fail.
+- **Five mutations**, each turning its test red and each reverted:
+  - a POST without `Origin`;
+  - Resume… offered for an unknown account;
+  - manual instructions built from a non-uuid;
+  - an unreadable section blanking the records, server-side and browser-side.
+- **Gates**:
+  - focused suites 218 of 218, exit 0;
+  - `build:fleet` exit 0;
+  - typecheck exit 0;
+  - lint shows no errors;
+  - the manager's own re-run of `fixture-ids` and the route test is 43 of 43.
+
+  The builder's first gate run failed `fixture-ids`, on a uuid it had copied between two test
+  files. It fixed that itself.
+- **The browser check**, on its own server (8795; 8787 untouched), at 1280 px and 400 px:
+  - exactly one card offered Resume…, and a refused card offered it again;
+  - one tap wrote exactly one `pending/` file, and a second tap said "Already requested…" and
+    wrote nothing;
+  - there was no overflow and no console errors.
+
+  The manager looked at the confirmation screenshot.
+- **Decisions the plan did not settle**, recorded for the review:
+  - A wrong content type gets 415 (from `checkRequest`), not 400.
+  - "Already launched" covers launched, resumed, needs-greg, ended-unverified and disposed.
+  - `pendingFor`'s `cannot-tell` goes ahead and writes: the check is a courtesy, and the occurrence
+    is the guarantee.
+  - A server with no `resume` field reads "not available", not broken.
+  - The confirmation has a Cancel button.
+  - **The parser is stricter than the wire types, so Stage 1 must write exactly this:**
+    - positions start at 1;
+    - each request's `name` and the pace's `name` match the record's;
+    - a preview's conversation matches the conversation its record's evidence supports.
+
+    Any mismatch marks the section unreadable, and the records stay visible.
 
 ### Stage 3: the launch, for real (after `launch-protocol` Stages 1–2 are on `dev`)
 

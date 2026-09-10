@@ -512,6 +512,17 @@ const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
      import-free leaves), `decisions.ts`, and `jsonl.ts`, all already here. */
   "reports.ts":
     "the work-report log's own file discipline — parse, fold, read the inbox and the log — for the Claims section. Closure: `node:` builtins, two import-free `fleet/` leaves, `decisions.ts` and `jsonl.ts`, which are already here. No store.",
+  /* Added 2026-09-10 by `gradual-recovery` (plan 260910f, Stage 2), the session
+     that introduced the import: `routes-recovery-resume.ts` writes a resume
+     request through it. It is a leaf ON PURPOSE (the plan's "Measured before
+     designing": `recovery-inbox.ts` imports `diff.ts` and `recovery.ts`, so the
+     route could not reuse it), so the request format has one definition that
+     both the route and the CLI use. Closure read, not assumed: `node:crypto`,
+     `node:fs`, `node:fs/promises`, `node:path`, and nothing else. It never
+     reaches the store, and it never launches: the daemon reads the files it
+     writes. */
+  "recovery-resume-request.ts":
+    "the resume request's own file discipline — write one atomically under a nonce, say whether one is pending — for the recovery panel's one control. Closure: `node:` builtins only. No store, and nothing that launches.",
 };
 
 const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);

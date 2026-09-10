@@ -30,6 +30,7 @@ import { join } from "node:path";
 import type { OverseerEvent } from "./diff.js";
 import { writeAtomically } from "./jsonl.js";
 import type { RecoveryCandidateId, RecoveryIndex } from "./recovery.js";
+import { CANDIDATE_ID_PATTERN } from "./recovery-resume-request.js";
 
 export const RECOVERY_INBOX_DIR = "recovery-inbox";
 export const REFUSED_DIR = "refused";
@@ -51,7 +52,8 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set([PROCESSING_DIR, REFUSED_DIR
 const TEMP_GRACE_MS = 60_000;
 
 const REQUEST_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/;
-const CANDIDATE_ID = /^r[cl]-[0-9a-f]{20}$/;
+/** The one copy of the pattern lives in the resume-request leaf, so the two request kinds agree on what an id is. */
+const CANDIDATE_ID = CANDIDATE_ID_PATTERN;
 
 export type DismissRequest = {
   schema: 1;

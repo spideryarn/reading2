@@ -81,6 +81,9 @@ function feed(records: RecoveryWireRecord[], over: Partial<Extract<RecoveryFeed,
     unresolved: records.filter((r) => r.state.kind !== "resolved").length,
     olderCount: 0,
     records,
+    // The daemon that wrote these fixtures predates resume (plan 260910f): the
+    // page offers no Resume, and draws everything else exactly as before.
+    resume: { kind: "absent", why: "the recovery index carries no resume data" },
     ...over,
   };
 }
