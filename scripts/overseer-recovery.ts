@@ -80,52 +80,104 @@ function dismiss(root: string, args: readonly string[], out: (line: string) => v
   out(
     `the daemon applies or refuses it on its next tick; a refusal lands in ${join(root, RECOVERY_INBOX_DIR, REFUSED_DIR)} with its reason`,
   );
+  // THE HOLD, SAID TO THE PERSON WHO JUST ASKED (the Opus check's O2). While the
+  // index is `not-run` the daemon applies nothing, and that lasts across every
+  // restart until the log can be read whole — so "on its next tick" above would
+  // be a promise the daemon cannot keep. The same arm and sentence `list` reads.
+  const read = readRecoveryIndexFile(root);
+  if (read.kind === "file" && read.index.replay.kind === "not-run") {
+    out(`HELD: the recovery index is incomplete (${read.index.replay.why}); this request stays pending until a daemon start can read the whole log`);
+  }
   return 0;
 }
 
-/** A view item as the CLI reads it: loosely, for display only. The fleet boundary has its own strict validator. */
-type LooseItem = { classification?: { kind?: unknown; why?: unknown } | null; evidence?: Record<string, unknown> | null };
+/**
+ * A view item as the CLI draws it: its state line and its evidence lines,
+ * each already checked.
+ *
+ * `readRecoveryIndexFile` hands the view over UNVALIDATED — it is derived, and
+ * the index must stay readable when it is wrong — so everything here is checked
+ * at runtime, field by field, and never dereferenced through a cast (Sol's
+ * F25). A malformed item costs its own lines, never the listing. The fleet
+ * boundary has its own strict validator; this is display only.
+ */
+type ViewItemLines = { state: string | null; evidence: string[] };
 
-function viewItems(view: unknown): { items: Map<string, LooseItem>; header: string } {
-  const items = new Map<string, LooseItem>();
-  if (typeof view !== "object" || view === null) return { items, header: "view        none yet: the daemon has not run a view pass since it started" };
-  const v = view as Record<string, unknown>;
-  const page = Array.isArray(v["page"]) ? (v["page"] as unknown[]) : [];
-  for (const raw of page) {
-    if (typeof raw === "object" && raw !== null && typeof (raw as { id?: unknown }).id === "string") {
-      items.set((raw as { id: string }).id, raw as LooseItem);
-    }
-  }
-  const inventory = v["inventory"] as { kind?: unknown; why?: unknown; collectedAt?: unknown } | undefined;
-  const against =
-    inventory?.kind === "trusted"
-      ? `the inventory collected at ${String(inventory.collectedAt)}`
-      : `NO TRUSTED INVENTORY — every record is unknown: ${String(inventory?.why)}`;
-  return { items, header: `view        checked at ${String(v["checkedAt"])} against ${against}` };
+const EVIDENCE_UNREADABLE = "    view evidence unreadable";
+
+function isObject(u: unknown): u is Record<string, unknown> {
+  return typeof u === "object" && u !== null && !Array.isArray(u);
 }
 
-function describeEvidence(evidence: Record<string, unknown> | null | undefined): string[] {
+function textOf(u: unknown): string | undefined {
+  return typeof u === "string" ? u : undefined;
+}
+
+function viewItems(view: unknown): { items: Map<string, ViewItemLines>; header: string } {
+  const items = new Map<string, ViewItemLines>();
+  if (!isObject(view)) return { items, header: "view        none yet: the daemon has not run a view pass since it started" };
+  const page = Array.isArray(view["page"]) ? (view["page"] as unknown[]) : [];
+  for (const raw of page) {
+    if (!isObject(raw)) continue;
+    const id = textOf(raw["id"]);
+    if (id === undefined) continue;
+    items.set(id, { state: stateOfItem(raw["classification"]), evidence: describeEvidence(raw["evidence"]) });
+  }
+  const inventory = isObject(view["inventory"]) ? view["inventory"] : {};
+  const against =
+    inventory["kind"] === "trusted"
+      ? `the inventory collected at ${String(inventory["collectedAt"])}`
+      : `NO TRUSTED INVENTORY — every record is unknown: ${String(inventory["why"])}`;
+  return { items, header: `view        checked at ${String(view["checkedAt"])} against ${against}` };
+}
+
+function stateOfItem(classification: unknown): string | null {
+  if (classification === null || classification === undefined) return null;
+  if (!isObject(classification)) return "view classification unreadable";
+  const kind = textOf(classification["kind"]);
+  if (kind === undefined) return "view classification unreadable";
+  return `${kind}: ${textOf(classification["why"]) ?? "(no reason recorded)"}`;
+}
+
+function describeEvidence(evidence: unknown): string[] {
   if (evidence === null || evidence === undefined) return [];
-  if (evidence["kind"] !== "checked") return [`    evidence   ${String(evidence["why"])}`];
-  const dir = evidence["dir"] as { kind: string; path?: string; why?: string };
-  const transcript = evidence["transcript"] as { kind: string; path?: string; why?: string };
-  const resume = evidence["resume"] as { kind: string; host?: string; dir?: string | null; why?: string };
-  const activity = evidence["lastActivity"] as { at: string; source: string };
+  if (!isObject(evidence)) return [EVIDENCE_UNREADABLE];
+  if (evidence["kind"] === "unavailable") {
+    const why = textOf(evidence["why"]);
+    return why === undefined ? [EVIDENCE_UNREADABLE] : [`    evidence   ${why}`];
+  }
+  if (evidence["kind"] !== "checked") return [EVIDENCE_UNREADABLE];
+  const { dir, transcript, resume, lastActivity: activity } = evidence;
+  if (!isObject(dir) || !isObject(transcript) || !isObject(resume) || !isObject(activity)) return [EVIDENCE_UNREADABLE];
+  const dirKind = textOf(dir["kind"]);
+  const transcriptKind = textOf(transcript["kind"]);
+  const resumeKind = textOf(resume["kind"]);
+  const at = textOf(activity["at"]);
+  if (dirKind === undefined || transcriptKind === undefined || resumeKind === undefined || at === undefined) return [EVIDENCE_UNREADABLE];
+  const suffix = (facts: Record<string, unknown>): string => {
+    const path = textOf(facts["path"]);
+    const why = textOf(facts["why"]);
+    return `${path === undefined ? "" : ` ${path}`}${why === undefined ? "" : ` (${why})`}`;
+  };
   const lines = [
-    `    dir        ${dir.kind}${dir.path === undefined ? "" : ` ${dir.path}`}${dir.why === undefined ? "" : ` (${dir.why})`}`,
-    `    transcript ${transcript.kind}${transcript.path === undefined ? "" : ` ${transcript.path}`}${transcript.why === undefined ? "" : ` (${transcript.why})`}`,
-    `    activity   ${activity.source === "register-floor" ? `at least as recent as ${activity.at} (the register's floor)` : `${activity.at} (the transcript)`}`,
+    `    dir        ${dirKind}${suffix(dir)}`,
+    `    transcript ${transcriptKind}${suffix(transcript)}`,
+    `    activity   ${activity["source"] === "register-floor" ? `at least as recent as ${at} (the register's floor)` : `${at} (the transcript)`}`,
   ];
-  if (resume.kind === "manual") lines.push(`    manual     on ${String(resume.host)}, in ${resume.dir ?? "an unrecorded directory"}`);
-  else lines.push(`    resume     ${resume.kind}${resume.why === undefined ? "" : ` (${resume.why})`}`);
+  if (resumeKind === "manual") {
+    lines.push(`    manual     on ${textOf(resume["host"]) ?? "an unrecorded host"}, in ${textOf(resume["dir"]) ?? "an unrecorded directory"}`);
+  } else {
+    const why = textOf(resume["why"]);
+    lines.push(`    resume     ${resumeKind}${why === undefined ? "" : ` (${why})`}`);
+  }
   return lines;
 }
 
-function stateOf(record: RecoveryRecord, item: LooseItem | undefined): string {
+function stateOf(record: RecoveryRecord, item: ViewItemLines | undefined): string {
   if (record.resolution.disposition !== "unresolved") return `${record.resolution.disposition.toUpperCase()} at ${record.resolution.at}`;
-  const classification = item?.classification;
-  if (classification === null || classification === undefined) return "unresolved, not on the view's first page";
-  return `${String(classification.kind)}: ${String(classification.why)}`;
+  const state = item?.state;
+  if (state === null || state === undefined) return "unresolved, not on the view's first page";
+  return state;
 }
 
 function list(root: string, out: (line: string) => void): number {

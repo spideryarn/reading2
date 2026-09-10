@@ -11,10 +11,12 @@
  * after a reboot looks like before tmux is back. The run ids, boot ids and the
  * second tmux generation are minted for this file.
  */
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -22,6 +24,7 @@ import {
   statSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -597,6 +600,61 @@ function rebootedEmptyG2(instance: string, inventory: number, collectedAt: strin
 const TOKEN_ONE = { boot: "ri-daemon-exec-boot", pid: 6100, startTicks: 31 };
 const TOKEN_TWO = { boot: "ri-daemon-exec-boot", pid: 6200, startTicks: 47 };
 
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `run` without its parse of the log: for a store with a planted line nothing
+ * can parse, which `eventsIn` would throw on.
+ */
+async function runRaw(
+  root: string,
+  script: () => AsyncGenerator<SourceMessage>,
+  options: { log?: (line: string) => void; now?: () => Date; recovery?: DaemonOptions["recovery"] } = {},
+): Promise<void> {
+  const outcome = await runOverseer({
+    root,
+    baseUrl: "http://127.0.0.1:0",
+    signal: new AbortController().signal,
+    now: options.now ?? fakeClock("2026-09-08T02:48:40.000Z").now,
+    tickMs: 5,
+    log: options.log ?? (() => {}),
+    source: () => script(),
+    bootId: () => BOOT_ONE,
+    recovery: options.recovery ?? evidenceWorld(),
+  });
+  expect(outcome.kind).toBe("stopped");
+}
+
+/** Every line of the log that parses, skipping a planted unparseable one. */
+function parseableEvents(root: string): OverseerEvent[] {
+  return readFileSync(join(root, EVENTS_FILE), "utf8")
+    .split("\n")
+    .flatMap((line) => {
+      try {
+        return line === "" ? [] : [JSON.parse(line) as OverseerEvent];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** A complete line nothing can parse: the recovery-tail replay refuses its whole range, so the index is `not-run`. */
+function plantUnparseableLine(root: string): void {
+  appendFileSync(join(root, EVENTS_FILE), "{not an event}\n");
+}
+
+function replayKindOf(root: string): string {
+  const opened = openStore({ root });
+  if (!opened.ok) throw new Error("the store did not open");
+  try {
+    return opened.store.recovery.replay.kind;
+  } finally {
+    opened.store.close();
+  }
+}
+
 describe("the view after a reboot", () => {
   test("an empty rebooted fleet with a readable new generation: every candidate interrupted, or ended-before-reboot where its Claude had exited", async () => {
     const root = tempRoot();
@@ -770,6 +828,165 @@ describe("the inventory-trust rule: a refused, failed or held collection after t
     expect(observed.whileFinalPassBlocked?.inventory.kind).toBe("untrusted");
     expect(observed.whileFinalPassBlocked?.page[0]?.classification?.kind).toBe("unknown");
   });
+
+  test("a slow view pass across two trusted accepts still publishes: only withdrawing trust invalidates it (O5)", async () => {
+    const root = tempRoot();
+    const [first] = rowsOf(editableFixture("session-new-before"));
+    if (first === undefined) throw new Error("the fixture has a row");
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { rows: [first] }));
+      yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+    });
+    expect(index(root)).toHaveLength(1);
+
+    // Two stats per pass for this one record: the startup pass is 1–2, the
+    // pass the first accept starts is 3–4, and the pass after it begins at 5.
+    const startupStat = deferred();
+    const passStarted = deferred();
+    const releasePass = deferred();
+    const nextPass = deferred();
+    const releaseNext = deferred();
+    let statCalls = 0;
+    const observed: { whileNextPassBlocked: RecoveryView | null } = { whileNextPassBlocked: null };
+    const source = async function* (): AsyncGenerator<SourceMessage> {
+      await startupStat.promise;
+      await nextTurn();
+      await nextTurn();
+      yield payload(rebootedEmptyG2(RUN_B, 2, LATER_STILL));
+      await passStarted.promise;
+      // A second trusted accept while that pass is still checking evidence.
+      yield payload(rebootedEmptyG2(RUN_B, 3, LATEST));
+      releasePass.resolve();
+      await nextPass.promise;
+      // The next pass is blocked, so what is on disk now is what the slow pass
+      // did: published, or thrown away as obsolete.
+      observed.whileNextPassBlocked = viewIn(root);
+      releaseNext.resolve();
+    };
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: fakeClock("2026-09-08T02:48:40.000Z").now,
+      tickMs: 60_000,
+      log: () => {},
+      source: () => source(),
+      bootId: () => BOOT_ONE,
+      recovery: {
+        projectsDir: tempRoot(),
+        hostname: () => "ri-daemon-host",
+        stat: async () => {
+          statCalls += 1;
+          if (statCalls === 2) startupStat.resolve();
+          if (statCalls === 3) {
+            passStarted.resolve();
+            await releasePass.promise;
+          }
+          if (statCalls === 5) {
+            nextPass.resolve();
+            await releaseNext.promise;
+          }
+          const error = new Error("ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          throw error;
+        },
+      },
+    });
+    expect(outcome.kind).toBe("stopped");
+    expect(observed.whileNextPassBlocked?.inventory).toMatchObject({ kind: "trusted", collectedAt: LATER_STILL });
+  });
+});
+
+describe("a recovery replay that could not run, and a daemon on its way out", () => {
+  test("an accepted collection derives no disposition from the stale fold while the replay is not-run (O1, F21)", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(verifiedFirstRow({ instance: RUN_A, publication: 1, inventory: 1 }, TOKEN_ONE));
+      yield payload(rebootedEmpty(RUN_B, 1, LATER));
+    });
+    const target = index(root).find((r) => r.name === "adversarial-fixtures-four-postmortems");
+    if (target === undefined) throw new Error("no record for the verified run");
+
+    // A dismissal the fold never saw — fsynced, then a complete line nothing
+    // can parse, so the recovery-tail replay refuses the whole range and the
+    // fold still says unresolved.
+    const opened = openStore({ root });
+    if (!opened.ok) throw new Error("the store did not open");
+    opened.store.append([
+      {
+        kind: "recovery-disposition",
+        at: LATER_STILL,
+        id: target.id,
+        disposition: "dismissed",
+        evidence: { requestId: randomUUID(), why: "dismissed before the log went bad" },
+      },
+    ]);
+    opened.store.close();
+    plantUnparseableLine(root);
+    expect(replayKindOf(root)).toBe("not-run");
+
+    // The same conversation, live under a new token: from the stale fold this
+    // looks exactly like a resumption.
+    await runRaw(root, async function* () {
+      yield payload(verifiedFirstRow({ instance: RUN_B, publication: 2, inventory: 2 }, TOKEN_TWO, { tmuxServerPid: G2, collectedAt: LATEST }));
+    });
+    const mine = dispositions(parseableEvents(root)).filter((d) => d.id === target.id);
+    expect(mine.map((d) => d.disposition)).toEqual(["dismissed"]);
+  });
+
+  test("a daemon whose source throws stops and releases its lock, although every tick asks for another view (F23)", async () => {
+    const root = tempRoot();
+    const [first] = rowsOf(editableFixture("session-new-before"));
+    if (first === undefined) throw new Error("the fixture has a row");
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { rows: [first] }));
+      yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+    });
+    expect(index(root)).toHaveLength(1);
+
+    // A stat slower than the tick, and a view wanted on every tick: while the
+    // exceptional path waits for the view pass, the ticks must not keep
+    // starting new ones.
+    let slow = true;
+    const daemon = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: fakeClock("2026-09-08T02:48:40.000Z").now,
+      tickMs: 5,
+      log: () => {},
+      source: () =>
+        (async function* (): AsyncGenerator<SourceMessage> {
+          await sleep(40);
+          yield* []; // A source that sends nothing, and then breaks.
+          throw new Error("ri2f the source broke");
+        })(),
+      bootId: () => BOOT_ONE,
+      recovery: {
+        projectsDir: tempRoot(),
+        hostname: () => "ri-daemon-host",
+        viewIntervalMs: 0,
+        stat: async () => {
+          if (slow) await sleep(20);
+          const error = new Error("ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          throw error;
+        },
+      },
+    });
+    const settled = await Promise.race([
+      daemon.then(
+        () => "returned",
+        (cause: unknown) => `threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+      ),
+      sleep(3000).then(() => "still running after 3 s"),
+    ]);
+    // Let a daemon stuck in the loop quiesce, so a red run does not leak it.
+    slow = false;
+    await daemon.catch(() => {});
+    expect(settled).toBe("threw: ri2f the source broke");
+    expect(existsSync(join(root, "overseer.lock"))).toBe(false);
+  });
 });
 
 describe("already-live", () => {
@@ -941,16 +1158,19 @@ describe("dismissal through the inbox", () => {
     if (!opened.ok) throw new Error("the store did not open");
     const append = (events: OverseerEvent[]): boolean => opened.store.append(events).ok;
 
+    const scanLines: string[] = [];
     const skipped = await drainRecoveryInbox({
       root,
       index: () => opened.store.recovery,
       append,
       now: () => new Date(LATEST),
-      log: () => {},
+      log: (line) => scanLines.push(line),
       scanLimit: 0,
     });
     expect(skipped).toEqual({ applied: 0, refused: 0, halted: false });
     expect(pending(root)).toHaveLength(1);
+    // O4: a scan that stops at its limit says so, once.
+    expect(scanLines.filter((line) => line.includes("scan stopped"))).toHaveLength(1);
 
     const [file] = pending(root);
     if (file === undefined) throw new Error("the request disappeared");
@@ -972,7 +1192,138 @@ describe("dismissal through the inbox", () => {
     expect(swapped.applied).toBe(0);
     expect(dispositions(eventsIn(root))).toEqual([]);
     expect(lines.some((line) => line.includes("could not be read"))).toBe(true);
+    // O6: refused with its cause, not left to be logged on every tick. The
+    // link is removed; what it pointed at is not touched.
+    expect(swapped.refused).toBe(1);
+    expect(refusals(root)[0]?.why).toContain("could not be read");
+    const processing = join(root, RECOVERY_INBOX_DIR, "processing");
+    expect(existsSync(processing) ? readdirSync(processing) : []).toEqual([]);
+    expect(existsSync(replacement)).toBe(true);
+    const again: string[] = [];
+    await drainRecoveryInbox({ root, index: () => opened.store.recovery, append, now: () => new Date(LATEST), log: (line) => again.push(line) });
+    expect(again).toEqual([]);
     opened.store.close();
+  });
+
+  test("junk cannot starve the inbox: 200 junk entries in processing/ are quarantined, and a later bounded pass reaches the request (F22, O4)", async () => {
+    const { root, ids } = await rebootedStore();
+    await recoveryCli(["dismiss", ids[0] as string, "--why", "behind the junk"], { root, out: () => {} });
+    const processing = join(root, RECOVERY_INBOX_DIR, "processing");
+    mkdirSync(processing);
+    for (let i = 0; i < 200; i += 1) writeFileSync(join(processing, `junk-${i.toString().padStart(3, "0")}`), "x");
+    const opened = openStore({ root });
+    if (!opened.ok) throw new Error("the store did not open");
+    const lines: string[] = [];
+    const results = [];
+    for (let pass = 0; pass < 3; pass += 1) {
+      results.push(
+        await drainRecoveryInbox({
+          root,
+          index: () => opened.store.recovery,
+          append: (events) => opened.store.append(events).ok,
+          now: () => new Date(LATEST),
+          log: (line) => lines.push(line),
+        }),
+      );
+    }
+    opened.store.close();
+    expect(results.reduce((sum, r) => sum + r.applied, 0)).toBe(1);
+    expect(dispositions(eventsIn(root))).toHaveLength(1);
+    expect(readdirSync(join(root, RECOVERY_INBOX_DIR, "junk"))).toHaveLength(200);
+    expect(lines.filter((line) => line.includes("scan stopped"))).toHaveLength(1);
+  });
+
+  test("a young temp file is left for its writer; a stale one is quarantined like any other junk (F22)", async () => {
+    const { root } = await rebootedStore();
+    const inbox = join(root, RECOVERY_INBOX_DIR);
+    mkdirSync(inbox, { recursive: true });
+    const young = join(inbox, `${randomUUID()}.json.tmp-1-young`);
+    const stale = join(inbox, `${randomUUID()}.json.tmp-1-stale`);
+    writeFileSync(young, "{}");
+    writeFileSync(stale, "{}");
+    const nowMs = Date.parse(LATEST);
+    utimesSync(young, new Date(nowMs - 5_000), new Date(nowMs - 5_000));
+    utimesSync(stale, new Date(nowMs - 10 * 60_000), new Date(nowMs - 10 * 60_000));
+    const opened = openStore({ root });
+    if (!opened.ok) throw new Error("the store did not open");
+    await drainRecoveryInbox({
+      root,
+      index: () => opened.store.recovery,
+      append: (events) => opened.store.append(events).ok,
+      now: () => new Date(LATEST),
+      log: () => {},
+    });
+    opened.store.close();
+    expect(existsSync(young)).toBe(true);
+    expect(existsSync(stale)).toBe(false);
+    expect(readdirSync(join(inbox, "junk"))).toHaveLength(1);
+  });
+
+  test("dismiss says HELD when the recovery index is incomplete, and names why (O2)", async () => {
+    const { root, ids } = await rebootedStore();
+    plantUnparseableLine(root);
+    // One start records the refused replay in recovery.json.
+    await runRaw(root, async function* () {});
+    const lines: string[] = [];
+    expect(await recoveryCli(["dismiss", ids[0] as string, "--why", "held behind a bad line"], { root, out: (line) => lines.push(line) })).toBe(0);
+    const held = lines.filter((line) => line.startsWith("HELD: the recovery index is incomplete ("));
+    expect(held).toHaveLength(1);
+    expect(held[0]).toContain("this request stays pending until a daemon start can read the whole log");
+  });
+
+  test("the daemon logs once per start that a pending request is held by an incomplete index (O2)", async () => {
+    const { root, ids } = await rebootedStore();
+    await recoveryCli(["dismiss", ids[0] as string, "--why", "held at start"], { root, out: () => {} });
+    plantUnparseableLine(root);
+    const lines: string[] = [];
+    // A dozen ticks or so, each of which finds the replay not-run.
+    await runRaw(
+      root,
+      async function* () {
+        await sleep(60);
+        yield* []; // A source that sends nothing while the ticks run.
+      },
+      { log: (line) => lines.push(line) },
+    );
+    // Its own phrase: the start line already says SCHEDULED JOBS ARE HELD.
+    const held = lines.filter((line) => line.includes("RECOVERY REQUESTS HELD"));
+    expect(held).toHaveLength(1);
+    expect(held[0]).toContain("incomplete");
+    expect(pending(root)).toHaveLength(1);
+    expect(dispositions(parseableEvents(root))).toEqual([]);
+  });
+
+  test("a resolved record past retention leaves the view in the same write that drops it from the index (F24)", async () => {
+    const { root, ids } = await rebootedStore();
+    const target = ids[0] as string;
+    await recoveryCli(["dismiss", target, "--why", "resolved long ago"], { root, out: () => {} });
+    await run(root, async function* () {});
+    expect(index(root).find((r) => r.id === target)?.resolution.disposition).toBe("dismissed");
+
+    // Thirty-one days after the dismissal, a new daemon starts.
+    await runRaw(root, async function* () {}, { now: fakeClock("2026-10-09T03:00:00.000Z").now });
+    const file = JSON.parse(readFileSync(join(root, RECOVERY_FILE), "utf8")) as { records: { id: string }[]; view: RecoveryView | null };
+    const recordIds = file.records.map((r) => r.id);
+    expect(recordIds).not.toContain(target);
+    expect(file.view).not.toBeNull();
+    const pageIds = (file.view?.page ?? []).map((item) => item.id);
+    expect(pageIds).not.toContain(target);
+    expect(pageIds.filter((id) => !recordIds.includes(id))).toEqual([]);
+  });
+
+  test("list survives a malformed view item: it says the evidence is unreadable and lists every record (F25)", async () => {
+    const { root, ids } = await rebootedStore();
+    const path = join(root, RECOVERY_FILE);
+    const file = JSON.parse(readFileSync(path, "utf8")) as { view: { page: { evidence: unknown }[] } };
+    const item = file.view.page[0];
+    if (item === undefined) throw new Error("the view has no first item");
+    item.evidence = { kind: "checked" };
+    writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+    const lines: string[] = [];
+    expect(await recoveryCli(["list"], { root, out: (line) => lines.push(line) })).toBe(0);
+    const text = lines.join("\n");
+    expect(text).toContain("view evidence unreadable");
+    for (const id of ids) expect(text).toContain(id);
   });
 
   test("list prints every record the index retains", async () => {

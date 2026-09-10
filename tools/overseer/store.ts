@@ -2941,6 +2941,11 @@ function recoveryFileText(
   writtenAt: string,
   view: RecoveryView | null,
 ): string {
+  // THE PAGE HOLDS ONLY RECORDS THIS FILE HOLDS (Sol's F24). The view was built
+  // on an earlier clock than the retention prune in `checkpoint()`, so a record
+  // can expire in between; this single write point drops it from both at once.
+  const page = view === null ? null : view.page.filter((item) => fold.records.has(item.id));
+  const published = view === null || page === null ? null : { ...view, page, olderCount: Math.max(0, fold.records.size - page.length) };
   return `${JSON.stringify(
     {
       schema: RECOVERY_SCHEMA,
@@ -2953,7 +2958,7 @@ function recoveryFileText(
       overflowIds: [...fold.overflowIds],
       pending: [...fold.pending].map(([key, pending]) => ({ key, ...pending })),
       appliedRequests: [...fold.appliedRequests],
-      view,
+      view: published,
     },
     null,
     2,

@@ -11,8 +11,8 @@
  * `events.jsonl` or `recovery.json`.
  *
  * **The shape is the one `work-reports` describes for `report-inbox/`** —
- * `<uuid>.json` files, oldest first, symlinks and `.tmp-` files skipped, and a
- * `refused/` directory — so "somebody asks the single writer to write" has one
+ * `<uuid>.json` files, oldest first, and a `refused/` directory — so
+ * "somebody asks the single writer to write" has one
  * shape and not two. That session had not landed a generic helper when this was
  * written (2026-09-10), so this is a small one of its own; if a shared one
  * lands, this file is what it replaces.
@@ -24,7 +24,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { constants, mkdirSync } from "node:fs";
-import { mkdir, open, opendir, rename, rmdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, opendir, rename, rmdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { OverseerEvent } from "./diff.js";
@@ -43,6 +43,12 @@ const DRAIN_LIMIT = 50;
 /** Directory entries examined per pass, including junk names: the scan itself is bounded too. */
 export const RECOVERY_INBOX_SCAN_LIMIT = 200;
 const PROCESSING_DIR = "processing";
+/** Where examined non-requests go, out of every scanned directory (Sol's F22). Never scanned itself. */
+export const JUNK_DIR = "junk";
+/** The inbox's own directories: never a request, never junk. */
+const RESERVED_NAMES: ReadonlySet<string> = new Set([PROCESSING_DIR, REFUSED_DIR, JUNK_DIR]);
+/** A `.tmp-` sibling younger than this may be a `dismiss` still writing; older, its writer is gone. */
+const TEMP_GRACE_MS = 60_000;
 
 const REQUEST_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/;
 const CANDIDATE_ID = /^r[cl]-[0-9a-f]{20}$/;
@@ -127,14 +133,52 @@ function parseRequest(text: string, fileRequestId: string): { ok: true; value: D
 
 type PendingRequest = { file: string; requestId: string; mtimeMs: number; claimed: boolean };
 
+function isAbsence(cause: unknown): boolean {
+  const code = (cause as NodeJS.ErrnoException | null)?.code;
+  return code === "ENOENT" || code === "ENOTDIR";
+}
+
 /**
  * The oldest requests among a bounded scan. `processing/` comes first so a
- * crash after a request was claimed cannot strand it. The entry bound counts
- * junk too: hostile names may delay work, but cannot monopolise a daemon tick.
+ * crash after a request was claimed cannot strand it.
+ *
+ * **The bound counts junk, and junk is moved out of the way as it is counted**
+ * (Sol's F22). A bound alone is not progress: directory iteration starts at the
+ * same entries on every pass, so 200 junk names ahead of a request would spend
+ * the whole budget on the same junk every tick, forever, and the request would
+ * never be read. Every examined entry that is not a request — a stray name, a
+ * symlink, a directory, a FIFO, a stale temp file — is renamed into `junk/`,
+ * which is never scanned, so each pass examines entries no earlier pass has.
+ * Kept rather than deleted: it was somebody's file. Left where they are: the
+ * three reserved directories, and a `.tmp-` sibling younger than
+ * `TEMP_GRACE_MS`, which is a `dismiss` still writing.
  */
-async function pendingRequests(inbox: string, scanLimit: number): Promise<PendingRequest[]> {
+async function pendingRequests(
+  inbox: string,
+  scanLimit: number,
+  nowMs: number,
+  log: (line: string) => void,
+): Promise<PendingRequest[]> {
   const found: PendingRequest[] = [];
   let examined = 0;
+  let stopped = false;
+  const quarantine = async (directory: string, name: string): Promise<void> => {
+    try {
+      const junk = join(inbox, JUNK_DIR);
+      await mkdir(junk, { recursive: true, mode: 0o700 });
+      // A fresh prefix, so two entries of one name never collide in junk/.
+      await rename(join(directory, name), join(junk, `${randomUUID()}-${name.slice(0, 180)}`));
+    } catch (cause) {
+      if (!isAbsence(cause)) log(`recovery inbox: ${JSON.stringify(name.slice(0, 180))} could not be moved to ${JUNK_DIR}/: ${String(cause)}`);
+    }
+  };
+  const isYoung = async (path: string): Promise<boolean> => {
+    try {
+      return nowMs - (await lstat(path)).mtimeMs < TEMP_GRACE_MS;
+    } catch {
+      return true; // Gone already, or unreadable: nothing to move this pass.
+    }
+  };
   for (const [directory, claimed] of [
     [join(inbox, PROCESSING_DIR), true],
     [inbox, false],
@@ -146,31 +190,69 @@ async function pendingRequests(inbox: string, scanLimit: number): Promise<Pendin
       continue;
     }
     for await (const item of handle) {
-      if (examined >= scanLimit) break;
+      if (examined >= scanLimit) {
+        stopped = true;
+        break;
+      }
       examined += 1;
-      const match = REQUEST_FILE.exec(item.name);
-      if (match === null || item.name.includes(".tmp-")) continue;
-      const file = join(directory, item.name);
+      const name = item.name;
+      if (!claimed && RESERVED_NAMES.has(name)) continue;
+      if (name.includes(".tmp-")) {
+        // Nothing writes a temp file into processing/, so there it is junk at once.
+        if (!claimed && (await isYoung(join(directory, name)))) continue;
+        await quarantine(directory, name);
+        continue;
+      }
+      const match = REQUEST_FILE.exec(name);
+      if (match === null) {
+        await quarantine(directory, name);
+        continue;
+      }
+      const file = join(directory, name);
       let info: Awaited<ReturnType<typeof open>> | null = null;
+      let keep = false;
       try {
         info = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         const stat = await info.stat();
-        if (!stat.isFile()) continue;
-        found.push({ file, requestId: match[1] as string, mtimeMs: stat.mtimeMs, claimed });
-      } catch {
-        // A symlink, a disappearing entry, or something that cannot be opened
-        // is not a request and costs only one bounded slot.
+        if (stat.isFile()) {
+          found.push({ file, requestId: match[1] as string, mtimeMs: stat.mtimeMs, claimed });
+          keep = true;
+        }
+      } catch (cause) {
+        // A request-named symlink cannot be opened, and is junk. One that
+        // vanished between the listing and the open has nothing to move.
+        keep = isAbsence(cause);
       } finally {
         if (info !== null) await info.close().catch(() => {});
       }
+      if (!keep) await quarantine(directory, name);
     }
-    if (examined >= scanLimit) break;
+    if (stopped) break;
   }
+  // O4: a scan that stops at its bound says so. The junk it examined has moved,
+  // so the next pass starts further in; this line is how a flood shows up.
+  if (stopped) log(`recovery inbox scan stopped at its limit of ${scanLimit} entries; the rest waits for a later pass`);
   // A crash-left claim wins over a duplicate still in the public inbox. POSIX
   // rename replaces its destination, so letting the inbox copy go first could
   // overwrite the very request the processing directory exists to preserve.
   found.sort((a, b) => Number(b.claimed) - Number(a.claimed) || a.mtimeMs - b.mtimeMs || (a.file < b.file ? -1 : 1));
   return found.slice(0, DRAIN_LIMIT);
+}
+
+/**
+ * How many requests one bounded scan finds waiting — for the daemon to say
+ * that they are held while the index is `not-run` (the Opus check's O2). The
+ * drain's own scan, so it moves junk aside exactly as a drain would, and it
+ * never touches a request.
+ */
+export async function pendingRecoveryRequestCount(input: { root: string; now: () => Date; log: (line: string) => void }): Promise<number> {
+  try {
+    const found = await pendingRequests(join(input.root, RECOVERY_INBOX_DIR), RECOVERY_INBOX_SCAN_LIMIT, input.now().getTime(), input.log);
+    return found.length;
+  } catch (cause) {
+    input.log(`recovery inbox could not be listed: ${String(cause)}`);
+    return 0;
+  }
 }
 
 export type DrainResult = { applied: number; refused: number; halted: boolean };
@@ -202,7 +284,7 @@ export async function drainRecoveryInbox(input: {
   if (input.index().replay.kind === "not-run") return result;
   let requests: PendingRequest[];
   try {
-    requests = await pendingRequests(inbox, input.scanLimit ?? RECOVERY_INBOX_SCAN_LIMIT);
+    requests = await pendingRequests(inbox, input.scanLimit ?? RECOVERY_INBOX_SCAN_LIMIT, input.now().getTime(), input.log);
   } catch (cause) {
     input.log(`recovery inbox could not be listed: ${String(cause)}`);
     return result;
@@ -278,7 +360,15 @@ export async function drainRecoveryInbox(input: {
       }
       text = bytes.subarray(0, read).toString("utf8");
     } catch (cause) {
-      input.log(`recovery request ${requestId} could not be read: ${String(cause)}`);
+      // A CLAIMED FILE THAT CANNOT BE READ IS REFUSED, with its cause (the Opus
+      // check's O6). Left in processing/, a symlink swapped in after the claim
+      // would be logged on every tick and never go; `refuse` unlinks the link,
+      // never what it points at. One that vanished has nothing left to refuse.
+      if (isAbsence(cause)) {
+        input.log(`recovery request ${requestId} vanished after it was claimed`);
+        continue;
+      }
+      await refuse(file, requestId, `the request could not be read: ${String(cause)}`, null);
       continue;
     } finally {
       if (requestFile !== null) await requestFile.close().catch(() => {});

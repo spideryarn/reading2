@@ -18,6 +18,12 @@ list:
   sentence. Show that sentence once, as a banner, not on every row.
 - **`resume: manual` carries the host and the directory as two separate facts.** Render them as
   "on <host>, in <dir>". Do not assemble a `cd` or `ssh` command string.
+- **The transcript evidence has more arms than "found / not found"**: `found`, `found-under-claim`
+  (labelled unverified), `not-found` (under a verified conversation or under a claim, with its
+  reason), `no-conversation`, and **`cannot-tell`**. That last one is Sol's F20: the search stopped at
+  its project-directory bound, so it cannot say. Draw `cannot-tell` as its own state, with its
+  sentence, and never as "not found". Read the `TranscriptEvidence` type in `recovery-view.ts` for
+  the exact set; the arms may have grown again by the time you start.
 
 ## Files — yours
 

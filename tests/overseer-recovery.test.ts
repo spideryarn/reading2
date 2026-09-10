@@ -18,10 +18,12 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { identityOf, sessionKey, type GoneReason, type OverseerEvent, type SessionKey } from "../tools/overseer/diff.js";
 import type { ObservedRow } from "../tools/overseer/observation.js";
+import { buildRecoveryView, evidenceDeps, type RecoveryView } from "../tools/overseer/recovery-view.js";
 import {
   emptyRecoveryFold,
   foldRecovery,
   needsCandidate,
+  RECOVERY_RESOLVED_RETENTION_MS,
   RECOVERY_UNRESOLVED_CAPACITY,
   withRecoveryCandidates,
   type CandidateContext,
@@ -396,6 +398,63 @@ describe("the recovery parser accepts every shape this stage has written", () =>
     const reopened = mustOpen(root);
     expect(reopened.opening.recovery.kind).toBe("restored");
     expect(reopened.recovery.records.size).toBe(1);
+  });
+});
+
+describe("the view recovery.json publishes holds only records the file holds (Sol's F24, the store's half)", () => {
+  test("a record inside retention on the view's clock and outside it on the checkpoint's is in neither page nor records", async () => {
+    const root = tempRoot();
+    const dismissedAt = "2026-09-10T10:00:00.000Z";
+    const dismissedMs = Date.parse(dismissedAt);
+    let clockMs = Date.parse("2026-09-10T09:00:00.000Z");
+    const result = openStore({ root, now: () => new Date(clockMs) });
+    if (!result.ok) throw new Error(`the store would not open: ${JSON.stringify(result.refusal)}`);
+    const store = result.store;
+    opened.push(store);
+
+    store.append([seen(ROW_A, "2026-09-10T08:30:00.000Z", G1), seen(ROW_B, "2026-09-10T08:30:00.000Z", G1)]);
+    const batch = withRecoveryCandidates(
+      [gone(ROW_A, "2026-09-10T09:05:00.000Z", G1, "absent-from-snapshot"), gone(ROW_B, "2026-09-10T09:05:00.000Z", G1, "absent-from-snapshot")],
+      store.register,
+      context(),
+    );
+    store.append(batch);
+    const [target, other] = candidatesIn(batch);
+    if (target === undefined || other === undefined) throw new Error("expected two candidates");
+    store.append([
+      { kind: "recovery-disposition", at: dismissedAt, id: target.id, disposition: "dismissed", evidence: { requestId: "ri2f-store-req", why: "checked by hand" } },
+    ]);
+
+    // The view pass runs one second inside retention; its checkpoint lands one
+    // second outside it.
+    const view = await buildRecoveryView(
+      store.recovery,
+      { kind: "untrusted", why: "no inventory in this test" },
+      {
+        ...evidenceDeps({
+          projectsDir: tempRoot(),
+          hostname: () => "ri2f-store-host",
+          stat: async (path: string) => {
+            const error = new Error(`ENOENT: no such file or directory, stat '${path}'`) as NodeJS.ErrnoException;
+            error.code = "ENOENT";
+            throw error;
+          },
+        }),
+        now: () => new Date(dismissedMs + RECOVERY_RESOLVED_RETENTION_MS - 1_000),
+      },
+    );
+    expect(view.page.map((item) => item.id)).toContain(target.id);
+    clockMs = dismissedMs + RECOVERY_RESOLVED_RETENTION_MS + 1_000;
+    expect(store.setRecoveryView(view)).toBe(true);
+    expect(store.checkpoint({ lastGoodSnapshotAt: null, tick: false }).ok).toBe(true);
+
+    const file = JSON.parse(readFileSync(join(root, RECOVERY_FILE), "utf8")) as { records: { id: string }[]; view: RecoveryView | null };
+    const recordIds = file.records.map((r) => r.id);
+    const pageIds = (file.view?.page ?? []).map((item) => item.id);
+    expect(recordIds).toEqual([other.id]);
+    expect(pageIds).not.toContain(target.id);
+    expect(pageIds).toEqual([other.id]);
+    expect(file.view?.olderCount).toBe(0);
   });
 });
 

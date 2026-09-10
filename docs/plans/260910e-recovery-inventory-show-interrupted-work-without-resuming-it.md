@@ -469,6 +469,67 @@ round: 30 minutes, not 45 ("length has never been what saved one"), plus the Opu
 which caught a latent P1 in another session's salvage the same day. If Sol times out again, the
 fallback is Fable, recorded as not cross-family.
 
+**The Opus salvage check, 2026-09-10.** It reverted each hunk alone in a scratch copy, and every one
+of F15–F20's tests went red without its fix. F15, F16, F18, F19 and F20 are sound, three of them
+with a caveat. **F17 was only half done:**
+
+- **O1, P1, established by a reproduction.** While the replay is `not-run`, the drain was blocked,
+  but `take()` still appended *derived* dispositions from the stale fold. One accepted collection
+  gave two `resumed` events for one record. Fix: `appendDerived` does nothing while `not-run`.
+- **O2, P2:** the `not-run` hold is silent to whoever ran `dismiss`, and it can outlive every restart.
+- **O3, P2:** F20's bound of 100 project directories is too low for this box (63 today). F20 also
+  reimplemented `findTranscript` rather than reusing it. That departs from §4, and is recorded here
+  once the fix settles it.
+- **O4, P2:** the inbox scan stops silently at its limit.
+- **O5, P3:** the view can be starved by trusted-to-trusted invalidations.
+- **O6, P3:** a claimed request file that cannot be read is logged every tick, never refused.
+
+All six go to an Opus subagent in one pass with Sol's round-2 findings
+([the brief](260910e-recovery-inventory-stage2-fixes-task.md)).
+
+**Sol's round 2, read-only, 2026-09-10: *refuse*, on four established P1s**
+([the review](260910e-recovery-inventory-stage2-review-r2-sol.md)):
+
+- **F21, P1:** the same defect as O1, found independently. Two reviewers from two model families
+  reached it by different routes.
+- **F22, P1, reproduced:** the bounded inbox scan spent its whole budget on junk in `processing/` and
+  restarted on the same junk every tick, so a valid request was never reached. O4 had tried this and
+  not reproduced it. Fix: quarantine the junk it has examined, so every pass makes progress.
+- **F23, P1:** a daemon stopping on an exception could loop forever in `settleInFlight`, because the
+  ticks kept requesting views. That would hold the lock and block systemd from replacing it. Fix:
+  stop the timers first.
+- **F24, P1:** retention pruned the fold in `checkpoint()` after the view had been built, so
+  `view.page` could show a record that `records` no longer held. Fix: the same predicate, shared,
+  in the view.
+- **F25, P2:** a malformed `view` crashed `list`. Fix: runtime checks.
+- **F26, P2:** the duplicated transcript locator. **Kept, and not extracted:** the extraction needs
+  `tools/fleet/transcript.ts`, which is outside this plan's file set. The local copy says why in its
+  header, and **a shared bounded locator is a named follow-up**.
+- Sol also judged F15, F16, F19 and F20 sound; F17 not sound (F21); and F18 not sound overall
+  (F22). It found no route from the F11 boot-change held path to trusted classification.
+
+**Discovery closes here, after two rounds.** F21–F24's fixes were not in the snapshot round 2 read,
+so the engineering-manager rule applies: a narrowly scoped check of those four fixes, and nothing
+wider. **The Overseer's call:** Sol, read-only, 20 minutes, one prompt scoped to F21–F24, with the
+reproductions handed over as raw output
+([the prompt](260910e-recovery-inventory-stage2-fixcheck-prompt.md)). If that times out, Fable,
+recorded as not cross-family, and no further round.
+
+**The fix pass (an Opus subagent), 2026-09-10.** O1–O6 and F21–F25 were each fixed red-first; F26
+was kept, as decided above. Red before any fix: 12 failed and 58 passed. Green: the three recovery
+files pass 106 of 106 (the manager's own run agrees); 28 focused files / 835 tests `EXIT=0`;
+typecheck exit 0; biome 0 errors. Deviations worth knowing:
+
+- F22's quarantine is a new `recovery-inbox/junk/` directory, never scanned and **never cleaned**.
+  It grows only through hostile or accidental writes.
+- O6: a claimed file that vanished (`ENOENT`) is logged, not refused, because there is nothing left
+  to refuse.
+- O2's daemon line is `RECOVERY REQUESTS HELD`, kept apart from the existing
+  `SCHEDULED JOBS ARE HELD`.
+- **F24 left two short windows**, each needing `store.ts`, outside that brief: a record expiring
+  between the view pass's clock and the checkpoint's. **Closed by the same subagent at the single
+  write point**, on my authorisation for that one change in `store.ts`, again red first.
+
 What landed, beyond the brief: `tools/overseer/recovery-inbox.ts` (new), one leaf that both the CLI
 and the daemon use, so the request format lives in one place. Decisions the implementer made:
 

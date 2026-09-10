@@ -28,6 +28,7 @@ import { isClaudeSessionId, slugifyDir, type NotFoundReason } from "../fleet/tra
 import { statusKey } from "./diff.js";
 import type { ObservedRow } from "./observation.js";
 import {
+  isRetained,
   liveExecutionOf,
   verifiedConversationOf,
   type RecoveryCandidateId,
@@ -145,8 +146,16 @@ export type RecoveryView = {
 };
 
 export const RECOVERY_PAGE_SIZE = 100;
-/** A hostile or accidental projects tree cannot turn one view pass into an unbounded directory walk. */
-export const RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT = 100;
+/**
+ * A hostile or accidental projects tree cannot turn one view pass into an
+ * unbounded directory walk — and the bound must sit far above an ordinary box.
+ * `~/.claude/projects` on the Hetzner box held 63 directories on 2026-09-10,
+ * and every worktree adds one that is never removed, so the first bound (100)
+ * would have reported `cannot-tell` within weeks. 2000 is thirty times today's
+ * count, and the listing reads names only: nothing is opened, so a full
+ * listing costs a few milliseconds.
+ */
+export const RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT = 2000;
 
 export type StatLike = { isDirectory(): boolean; isFile(): boolean; mtimeMs: number };
 
@@ -329,7 +338,23 @@ type LocatedTranscript =
   | { kind: "not-found"; reason: NotFoundReason; why: string }
   | { kind: "cannot-tell"; why: string };
 
-/** One bounded project-directory listing, shared by every record in a view pass. */
+/**
+ * One bounded project-directory listing, shared by every record in a view pass.
+ *
+ * **A departure from the plan's § 4, which says to reuse `findTranscript`**
+ * (tools/fleet/transcript.ts). That function lists the whole projects
+ * directory with no bound, and this runs inside the daemon's view pass, so
+ * reusing it as it stands would let one hostile or overgrown tree stall the
+ * process everything else relies on (Sol's F20). The uuid check and
+ * `slugifyDir` are imported from it rather than copied; the slug guess, the
+ * newest-copy scan and the wording are repeated here, with the bound added.
+ * The right end state is one BOUNDED locator in tools/fleet/transcript.ts that
+ * both callers use, the dashboard with no cap and this with
+ * `RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT` (Sol's F26). That is a named
+ * follow-up, because tools/fleet/ is outside this stage. Until it lands, a fix
+ * to slugging, relocation or duplicate selection in `findTranscript` must be
+ * made here too.
+ */
 function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: string | null) => Promise<LocatedTranscript> {
   let projects:
     | Promise<{ kind: "listed"; names: string[]; complete: boolean } | { kind: "unavailable"; why: string }>
@@ -383,13 +408,18 @@ function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: str
       const info = await fileInfo(path);
       if (info !== null && (best === null || info.mtimeMs > best.mtimeMs)) best = { path, mtimeMs: info.mtimeMs };
     }
+    // A transcript the bounded listing already found EXISTS, and that is all
+    // `found` and `resume: supported` claim. An unlisted directory could hold a
+    // newer copy, but a uuid was under exactly one slug for all 244 transcripts
+    // on this box (transcript.ts § `findTranscript`), so reporting `cannot-tell`
+    // over a real file would hide the common case to guard the rare one.
+    if (best !== null) return { kind: "found", path: best.path, via: "scan" };
     if (!listed.complete) {
       return {
         kind: "cannot-tell",
-        why: `the transcript search stopped after ${RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT} project directories, so it cannot say whether this conversation has a newer or omitted transcript`,
+        why: `the transcript search stopped after ${RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT} project directories without finding it, so it cannot say whether one of the rest holds it`,
       };
     }
-    if (best !== null) return { kind: "found", path: best.path, via: "scan" };
     return {
       kind: "not-found",
       reason: "no-transcript-file",
@@ -515,14 +545,22 @@ export function recoveryOrder(a: RecoveryRecord, b: RecoveryRecord): number {
  * Sequential rather than `Promise.all`: a hundred records is a few hundred
  * stats, and the daemon is the process you want responsive when everything
  * else is busy.
+ *
+ * **Retention is applied here too, with the same predicate** (recovery.ts §
+ * `isRetained`). The store prunes the fold inside the `checkpoint()` that
+ * publishes this view, after the view was built, so a record past its 30 days
+ * would otherwise be on the page of a file whose `records` no longer hold it
+ * (Sol's F24). One narrow window remains: a record that crosses the line
+ * between `checkedAt` and that checkpoint's clock, which the next pass removes.
  */
 export async function buildRecoveryView(
   index: RecoveryIndex,
   inventory: InventoryTrust,
   deps: EvidenceDeps & { now: () => Date },
 ): Promise<RecoveryView> {
-  const checkedAt = deps.now().toISOString();
-  const records = [...index.records.values()].sort(recoveryOrder);
+  const checkedAtMs = deps.now().getTime();
+  const checkedAt = new Date(checkedAtMs).toISOString();
+  const records = [...index.records.values()].filter((record) => isRetained(record, checkedAtMs)).sort(recoveryOrder);
   const first = records.slice(0, RECOVERY_PAGE_SIZE);
   const page: RecoveryViewItem[] = [];
   const locate = transcriptLookup(deps);

@@ -71,7 +71,7 @@ import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
-import { drainRecoveryInbox } from "./recovery-inbox.js";
+import { drainRecoveryInbox, pendingRecoveryRequestCount } from "./recovery-inbox.js";
 import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust } from "./recovery-view.js";
 import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
@@ -880,12 +880,26 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     inventory = next;
     // A repeated failure with the same sentence changes nothing the view says.
     if (before.kind === "untrusted" && next.kind === "untrusted" && before.why === next.why) return;
-    requestView();
+    // ONLY WITHDRAWING TRUST MAKES THE RUNNING PASS OBSOLETE (the Opus check's
+    // O5). A pass that classified against a trusted inventory and finishes after
+    // a newer trusted one is still a true account of an accepted inventory; it is
+    // published and the queued pass follows it. Invalidating on every accept
+    // would let a steady stream of collections, each faster than one slow pass,
+    // discard every pass before it lands, so no view would ever be written.
+    requestView(!(before.kind === "trusted" && next.kind === "trusted"));
   };
   // `resumed` and `superseded`, appended by the daemon and by nothing else.
   // Idempotent by construction (recovery.ts § `deriveDispositions`), so running
   // it every tick costs a map walk and writes nothing twice.
+  //
+  // NOTHING IS DERIVED WHILE THE REPLAY IS `not-run` (the Opus check's O1, Sol's
+  // F21). The fold is then deliberately stale, and "unresolved" in it may be a
+  // record whose disposition is in the unread tail, so a derivation from it
+  // could append a second one. The gate is here, at the one place derived
+  // events are written, rather than at each caller: the recovery tick had it,
+  // and the accepted-payload path in `take()` did not.
   const appendDerived = (): boolean => {
+    if (store.recovery.replay.kind === "not-run") return true;
     const derived = deriveDispositions(store.recovery, inventory.kind === "trusted" ? inventory.rows : null, now().toISOString());
     if (derived.length === 0) return true;
     if (!guard(store.append(derived))) return false;
@@ -894,12 +908,27 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     return true;
   };
   let recoveryRunning: Promise<void> | null = null;
+  // Whether this start has said that requests are held (O2). Once per start:
+  // the hold lasts as long as the process, so a line per tick would be noise.
+  let heldAnnounced = false;
   const runRecoveryTick = async (): Promise<void> => {
     // A refused all-or-nothing replay leaves the fold deliberately stale. It
     // cannot authorize a dismissal, suppress a replayed request id, or prove a
     // derived disposition until a later start reads the missing tail. Leave
     // requests exactly where they are and publish only an unknown view.
     if (store.recovery.replay.kind === "not-run") {
+      // SAY SO, once, when somebody is waiting (the Opus check's O2). The hold
+      // outlives every restart until the log is repaired, and without this line
+      // a `dismiss` would simply never happen.
+      if (!heldAnnounced) {
+        const waiting = await pendingRecoveryRequestCount({ root, now, log });
+        if (waiting > 0) {
+          heldAnnounced = true;
+          log(
+            `${now().toISOString()} RECOVERY REQUESTS HELD: ${waiting} request(s) in recovery-inbox/ stay pending, because the recovery index is incomplete (${store.recovery.replay.why}); nothing is applied until a daemon start can read the whole log`,
+          );
+        }
+      }
       if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
       return;
     }
@@ -1256,6 +1285,26 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 
   const makeSource = options.source ?? fleetSource;
 
+  // EVERY TIMER, stopped in one place (Sol's F23). The exceptional path awaits
+  // `settleInFlight()` before its `finally` runs, and with the timers still live
+  // each tick asked for another view, every finishing view pass started the
+  // next, and the wait never ended: no `daemon-stopped`, a lock never released,
+  // and systemd unable to replace the process. So the timers stop BEFORE any
+  // settlement, and again in `finally`, where clearing twice is harmless.
+  const stopTimers = (): void => {
+    clearInterval(ticker);
+    if (attentionTicker !== null) clearInterval(attentionTicker);
+    if (usageTicker !== null) clearInterval(usageTicker);
+    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
+    // leaves behind is two different things wearing one word. A dispatched
+    // SESSION is a separate process with a durable reservation behind it, so a
+    // shutdown mid-run leaves a record rather than a second writer; it may not
+    // get its `finished`, which is the lease's case and the next daemon reports
+    // it. A dispatched RULE runs in here, and this comment used to cover it too
+    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
+    if (jobsTicker !== null) clearInterval(jobsTicker);
+  };
+
   try {
     // Spread rather than assigned, because `exactOptionalPropertyTypes` makes
     // "absent" and "present and undefined" different things — and here they
@@ -1313,21 +1362,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // store's lock with a paid call still in flight and a runner about to write
     // `attention.json`. The exceptional path is exactly when a second daemon is
     // most likely to be started, so it is the wrong one to leave open.
+    stopTimers();
     await settleInFlight();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
-    clearInterval(ticker);
-    if (attentionTicker !== null) clearInterval(attentionTicker);
-    if (usageTicker !== null) clearInterval(usageTicker);
-    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
-    // leaves behind is two different things wearing one word. A dispatched
-    // SESSION is a separate process with a durable reservation behind it, so a
-    // shutdown mid-run leaves a record rather than a second writer; it may not
-    // get its `finished`, which is the lease's case and the next daemon reports
-    // it. A dispatched RULE runs in here, and this comment used to cover it too
-    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
-    if (jobsTicker !== null) clearInterval(jobsTicker);
+    stopTimers();
   }
 
   /**

@@ -849,11 +849,22 @@ export const RECOVERY_RESOLVED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export function pruneResolved(fold: RecoveryFold, nowMs: number): boolean {
   let changed = false;
   for (const [id, record] of fold.records) {
-    if (record.resolution.disposition === "unresolved") continue;
-    if (nowMs - Date.parse(record.resolution.at) > RECOVERY_RESOLVED_RETENTION_MS) {
+    if (!isRetained(record, nowMs)) {
       fold.records.delete(id);
       changed = true;
     }
   }
   return changed;
+}
+
+/**
+ * The retention predicate, ONE copy of it: `pruneResolved` drops what this
+ * refuses, and the view pass (recovery-view.ts § `buildRecoveryView`) leaves out
+ * the same records before it sorts. Two copies could disagree, and then
+ * `recovery.json` would show a record on the page that its own `records` no
+ * longer holds (Sol's F24).
+ */
+export function isRetained(record: RecoveryRecord, nowMs: number): boolean {
+  if (record.resolution.disposition === "unresolved") return true;
+  return nowMs - Date.parse(record.resolution.at) <= RECOVERY_RESOLVED_RETENTION_MS;
 }

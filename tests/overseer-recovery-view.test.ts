@@ -329,6 +329,29 @@ describe("evidence", () => {
     expect(evidence.resume.kind).toBe("not-supported");
   });
 
+  test("a box with a few hundred project directories gets a full answer, not cannot-tell (O3)", async () => {
+    const projects = tempRoot();
+    for (let i = 0; i < 300; i += 1) mkdirSync(join(projects, `project-${i.toString().padStart(4, "0")}`));
+    const evidence = await recoveryEvidence(record(), deps(projects, [DIR]));
+    if (evidence.kind !== "checked") throw new Error("expected evidence");
+    expect(evidence.transcript).toMatchObject({ kind: "not-found", reason: "no-transcript-file" });
+  });
+
+  test("a scan that stops at its bound still reports a transcript it had already found (O3)", async () => {
+    const projects = tempRoot();
+    // The transcript is under every project directory, so whichever the bound
+    // leaves unlisted, the listed ones hold a copy.
+    for (let i = 0; i <= RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT; i += 1) {
+      const slug = join(projects, `project-${i.toString().padStart(4, "0")}`);
+      mkdirSync(slug);
+      writeFileSync(join(slug, `${CONV_A}.jsonl`), "{}\n");
+    }
+    const evidence = await recoveryEvidence(record(), deps(projects, [DIR]));
+    if (evidence.kind !== "checked") throw new Error("expected evidence");
+    expect(evidence.transcript).toMatchObject({ kind: "found", via: "scan", conversationId: CONV_A });
+    expect(evidence.resume.kind).toBe("supported");
+  });
+
   test("only a claim survives: a transcript under it is shown as unverified, and resume stays not-supported", async () => {
     const projects = tempRoot();
     writeTranscript(projects, DIR, CONV_A, "2026-09-10T09:30:00.000Z");
