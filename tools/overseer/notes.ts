@@ -45,6 +45,8 @@
 import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { parseStartRevision } from "../fleet/revision.js";
+import type { StartRevision } from "../fleet/wire.js";
 import { splitJsonl, truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 
 /** Beside `events.jsonl` and `current.json`, in the same store root. */
@@ -129,6 +131,20 @@ export type DaemonNote =
       opening: string;
       /** What happened to the diff baseline: restored from a stored snapshot, or not, and why. */
       baseline: string;
+      /**
+       * The git revision this instance's checkout was at when it started, read
+       * once (`tools/fleet/revision.ts`). ABSENT on a note written before
+       * revision stamps existed (docs/plans/260910f D2) — which reads as "not
+       * stamped", never as "same as HEAD".
+       *
+       * No schema bump, by this file's own rule: a reader that ignores the
+       * field draws no wrong conclusion from the rest of the note, it just
+       * does not learn the revision. And the reader here is tolerant: a
+       * present but malformed field becomes `unknown` (see `withReadableRevision`)
+       * rather than costing the start note, which is what clears a dead
+       * instance's open conditions.
+       */
+      revision?: StartRevision;
     }
   | { kind: "daemon-stopped"; at: string; instanceId: string; why: string }
   | { kind: "condition-degraded"; at: string; instanceId: string; condition: OverseerCondition; why: string }
@@ -288,7 +304,7 @@ export function openConditions(notes: readonly DaemonNote[]): readonly OpenCondi
 export function describeNote(note: DaemonNote): string {
   switch (note.kind) {
     case "daemon-started":
-      return `started (pid ${note.pid}, instance ${note.instanceId}) watching ${note.source} — ${note.opening} Baseline: ${note.baseline}`;
+      return `started (pid ${note.pid}, instance ${note.instanceId}) watching ${note.source} — ${note.opening} Baseline: ${note.baseline}${revisionPhrase(note.revision)}`;
     case "daemon-stopped":
       return `stopped (instance ${note.instanceId}): ${note.why}`;
     case "condition-degraded":
@@ -304,6 +320,13 @@ export function describeNote(note: DaemonNote): string {
       throw new Error(String(never));
     }
   }
+}
+
+/** Nothing for an unstamped note: absence is said by whoever compares revisions, not guessed at here. */
+function revisionPhrase(revision: StartRevision | undefined): string {
+  if (revision === undefined) return "";
+  if (revision.kind === "unknown") return ` — revision unknown: ${revision.why}`;
+  return ` — revision ${revision.sha.slice(0, 8)}${revision.dirty ? "+dirty" : ""}`;
 }
 
 export type NoteLog = {
@@ -389,7 +412,7 @@ export function readNotes(root: string, limit?: number): ReadNotes {
       unreadable += 1;
       continue;
     }
-    if (isNote(parsed)) notes.push(parsed);
+    if (isNote(parsed)) notes.push(withReadableRevision(parsed));
     else unreadable += 1;
   }
   return {
@@ -430,6 +453,22 @@ function isNote(u: unknown): u is DaemonNote {
     default:
       return false;
   }
+}
+
+/**
+ * A start note's `revision`, made trustworthy. `isNote` does not look at the
+ * field, so that a damaged one cannot cost the note; here a present field that
+ * is not a `StartRevision` is replaced by an `unknown` one saying so, dated to
+ * the note. An absent field stays absent: "not stamped" and "stamp unreadable"
+ * are different facts.
+ */
+function withReadableRevision(note: DaemonNote): DaemonNote {
+  if (note.kind !== "daemon-started" || !Object.hasOwn(note, "revision")) return note;
+  const revision = parseStartRevision(note.revision);
+  return {
+    ...note,
+    revision: revision ?? { kind: "unknown", why: "the note's revision field could not be read", readAt: note.at },
+  };
 }
 
 function isCondition(u: unknown): u is OverseerCondition {

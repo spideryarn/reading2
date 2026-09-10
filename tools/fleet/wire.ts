@@ -4569,3 +4569,22 @@ export type RecoveryFeed =
   | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
   | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
   | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };
+
+/* ── Revision stamps (docs/plans/260910f, Stage 1) ─────────────────────────── */
+
+/**
+ * The git revision a process's checkout was at WHEN THE PROCESS STARTED —
+ * read once, by `tools/fleet/revision.ts`, which says what it can and cannot
+ * claim. `dirty: true` means the sha does not name the running code. `unknown`
+ * is its own arm so that absence can never be read as "same as HEAD".
+ */
+export type StartRevision =
+  | { kind: "known"; sha: string; dirty: boolean; readAt: string }
+  | { kind: "unknown"; why: string; readAt: string };
+
+/**
+ * What the fleet client bundle was built from: the checkout's revision at
+ * `vite build` time, plus when. Compiled into the bundle as `__FLEET_BUILD__`
+ * and written beside it as `dist/build-stamp.json` (`vite.fleet.config.ts`).
+ */
+export type BuildStamp = StartRevision & { builtAt: string };
