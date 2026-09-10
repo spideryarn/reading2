@@ -38,12 +38,16 @@ import type {
 /**
  * What this build declares on every payload — wire.ts § `ProducerCapability`.
  *
- * `argv-resume-uuid` IS TRUE OF THIS BUILD BECAUSE `claude-argv.ts` reads `--resume <uuid>`, and the
- * test in `tests/fleet-claude-argv.test.ts` that reads the 2026-09-10 capture of a resumed process is
- * what keeps it true. Remove that reading and this entry goes with it: a declaration nothing backs is
- * exactly how the Overseer would launch a resumed session it can never verify (plan 260910f, G3).
+ * EMPTY, ON PURPOSE. `argv-resume-uuid` promises that a resumed session's execution reading can be
+ * VERIFIED (wire.ts). After Sol's G21 (plan 260910f) that is false of this build: a `--resume` on a
+ * ps-flattened line is unreadable, because flattening erases argument boundaries and a resume id
+ * followed by more words prints exactly like one picker-search term, so a resumed pane reads
+ * `claimed-only`. A declaration nothing backs is exactly how the Overseer would launch a resumed
+ * session it can never verify, and then wait behind it for ever (G3). Stage 3b re-declares it once
+ * the harness reads `/proc/<pid>/cmdline` faithfully; `tests/fleet-producer-stamp.test.ts` pins the
+ * empty list until then.
  */
-export const PRODUCER_CAPABILITIES: readonly ProducerCapability[] = ["argv-resume-uuid"];
+export const PRODUCER_CAPABILITIES: readonly ProducerCapability[] = [];
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by

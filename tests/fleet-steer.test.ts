@@ -1503,9 +1503,16 @@ describe("reading the box", () => {
     expect(
       isClaudeForSession(faithful("claude", "--resume", UUID, "--permission-mode", "auto", "--", "go on"), UUID),
     ).toEqual({ match: "yes" });
-    // ...and a resume beside a --session-id is two conversations, in either order.
-    expect(armOf(faithful("claude", "--resume", OTHER_UUID, "--session-id", UUID), UUID)).toBe("other-claude");
-    expect(armOf(faithful("claude", "--session-id", UUID, "--resume", OTHER_UUID), UUID)).toBe("other-claude");
+    // ...and a resume beside a --session-id is NO conversation, in either order, equal ids included
+    // (GPT Sol's G22): `claude` refuses the pair unless `--fork-session`, so `A A` must never be "yes".
+    for (const argv of [
+      ["claude", "--resume", UUID, "--session-id", UUID],
+      ["claude", "--session-id", UUID, "--resume", UUID],
+      ["claude", "--resume", OTHER_UUID, "--session-id", UUID],
+      ["claude", "--session-id", UUID, "--resume", OTHER_UUID],
+    ]) {
+      expect(armOf(faithful(...argv), UUID), argv.join(" ")).toBe("unreadable");
+    }
 
     // (2) The picker stays unreadable, and so does anything that is not exactly a uuid.
     for (const argv of [
