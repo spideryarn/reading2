@@ -190,10 +190,16 @@ describe("the day — UTC, never reset, never trusted backwards", () => {
   });
 
   it("settles into its own day when nobody has rolled the ledger over, and the next reservation starts the new day", () => {
+    // One instance whose clock crosses midnight: only the instance that minted a
+    // reservation may settle it (F11), so the crossing is the clock's, not a
+    // second budget's.
     const root = tempRoot();
-    const reserved = budgetAt(root, "2026-09-09T23:59:00.000Z").reserve();
+    let clock = "2026-09-09T23:59:00.000Z";
+    const budget = modelBudget({ root, now: () => new Date(clock) });
+    const reserved = budget.reserve();
     if (!reserved.ok) throw new Error("expected a reservation");
-    budgetAt(root, "2026-09-10T00:01:00.000Z").settle(reserved.reservation, SPEND, true);
+    clock = "2026-09-10T00:01:00.000Z";
+    expect(budget.settle(reserved.reservation, SPEND, true)).toBe(true);
     expect(onDisk(root)).toMatchObject({ day: "2026-09-09", spent: { calls: 1 }, reservations: [] });
     expect(budgetAt(root, "2026-09-10T00:02:00.000Z").reserve().ok).toBe(true);
     expect(onDisk(root)).toMatchObject({ day: DAY, spent: { calls: 0 } });
@@ -315,6 +321,28 @@ describe("two callers, one ledger — only one gets the last call", () => {
     const outcomes = await Promise.all([classify("a"), classify("b")]);
     expect(made).toBe(1);
     expect(outcomes.filter((o) => "notCalled" in o)).toHaveLength(1);
+  });
+
+  it("a second budget cannot settle — and so free — a reservation the first one holds (F11)", () => {
+    // Settling replaces the worst case with the real figure, so settling
+    // somebody else's reservation frees its headroom while their call is still
+    // in flight and may still spend it. A takes the last worst-case slot; B
+    // must be able neither to release it nor to take it again.
+    const root = tempRoot();
+    initialisedWith(root, ledger(DAY, { costUsd: DAY_CEILING.costUsd - WORST_CASE_CALL_USD }));
+    const a = budgetAt(root, T0);
+    const b = budgetAt(root, T0);
+    const held = a.reserve();
+    if (!held.ok) throw new Error("expected a reservation");
+    const zero: ClassifierSpend = { ...NO_SPEND, calls: 1 };
+    expect(b.settle(held.reservation, zero, false)).toBe(false);
+    // The handle's public shape is two strings; a copy of them is no key either.
+    expect(b.settle({ id: held.reservation.id, day: held.reservation.day }, zero, false)).toBe(false);
+    expect(onDisk(root)["reservations"]).toHaveLength(1);
+    expect(refusal(b.reserve())).toMatchObject({ kind: "stopped", stopped: { kind: "exhausted" } });
+    // The owner still settles it, once.
+    expect(a.settle(held.reservation, SPEND, true)).toBe(true);
+    expect(a.settle(held.reservation, SPEND, true)).toBe(false);
   });
 
   it("does not wedge on a lock left by a process that has died", () => {

@@ -106,7 +106,9 @@ export type PassBreakdown = {
   /**
    * Distinct tails whose remembered verdict came from another prompt version
    * (plan 260910f D3). They place their cards all the same, and are re-read
-   * ahead of fresh tails; not a failure, and not in `sessionsUnreadable`.
+   * ahead of fresh tails; not a failure, and not in `sessionsUnreadable` —
+   * unless the pass TRIED the re-read and got no usable answer (refused or
+   * failed), which makes that session unjudged this pass (GPT Sol's F12).
    */
   stale: number;
   /** Distinct tails the day budget or a cooldown did not let us ask about. Each is also unjudged. */
@@ -232,7 +234,15 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
   // re-read fails, or the budget refuses it, it stands. Treating it as absent
   // would make every question vanish into "at least N" on the pass that changed
   // the prompt.
+  //
+  // BUT A STANDING VERDICT IS NOT A JUDGEMENT MADE THIS PASS — GPT Sol's F12.
+  // A tail we asked about and got no usable answer for is unjudged, stale
+  // verdict or not; otherwise a stale `no-question` whose re-read was refused
+  // publishes "nothing needs you". So "judged" is `judgedNow`, never
+  // `verdicts.has`, for everything in `toCall`. A stale verdict the per-pass
+  // budget did not reach was never tried, and stays uncounted, as above.
   for (const hit of plan.stale) verdicts.set(hit.fingerprint, hit.verdict);
+  const judgedNow = new Set<string>();
   let spend: ClassifierSpend = NO_SPEND;
   // Every tail we did not get a usable answer about, with the reason. This is
   // what stops a failed pass drawing as a calm one — GPT Sol's finding 1.
@@ -256,6 +266,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
             promptVersion,
             verdict: outcome.verdict,
           });
+          judgedNow.add(tail.fingerprint);
           continue;
         }
         // NOT CACHED, and that is the half that made finding 1 lethal rather than
@@ -269,8 +280,8 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
         // second; the memory of it would have lasted until that agent spoke again,
         // and the cost of re-asking was the only thing that could have ended it.
         breakdown.verdictsUnreadable += 1;
-        // A stale verdict still answers for this tail, so it is not unjudged.
-        if (!verdicts.has(tail.fingerprint)) unclassified.push(`${tail.fingerprint}: ${outcome.verdict.why}`);
+        // Unjudged even when a stale verdict still places its card (F12).
+        unclassified.push(`${tail.fingerprint}: ${outcome.verdict.why}`);
         continue;
       }
       const refusal = outcome.notCalled;
@@ -278,18 +289,18 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
       if (refusal.kind === "stopped") stopped = refusal.stopped;
     }
     breakdown.budgetRefused += 1;
-    if (!verdicts.has(tail.fingerprint)) unclassified.push(`${tail.fingerprint}: not asked — ${refusedBecause}`);
+    unclassified.push(`${tail.fingerprint}: not asked — ${refusedBecause}`);
   }
 
   // SESSIONS, NOT FINGERPRINTS — GPT Sol's second round. Two sessions that ended
   // their turns identically share one tail and one call, which is the whole
   // saving; but if that one call fails, TWO sessions went unjudged and the number
-  // Greg reads is about sessions.
-  const unclassifiedFingerprints = new Set(
-    [...plan.overBudget.map((t) => t.fingerprint), ...plan.toCall.map((t) => t.fingerprint)].filter(
-      (f) => !verdicts.has(f),
-    ),
-  );
+  // Greg reads is about sessions. `overBudget` is fresh tails only, so none of
+  // them has a verdict; `toCall` is judged by `judgedNow` (F12, above).
+  const unclassifiedFingerprints = new Set([
+    ...plan.overBudget.map((t) => t.fingerprint),
+    ...plan.toCall.filter((t) => !judgedNow.has(t.fingerprint)).map((t) => t.fingerprint),
+  ]);
   const unclassifiedSessions = material.filter((m) => unclassifiedFingerprints.has(m.fingerprint)).length;
 
   const observations: AttentionObservation[] = [];

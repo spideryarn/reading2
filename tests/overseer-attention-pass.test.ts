@@ -763,31 +763,85 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([CLASSIFIER_PROMPT_VERSION]);
   });
 
-  it("keeps a stale verdict's card when its re-read fails, and does not count it unjudged", async () => {
-    // D3: stale is not absent. Treating a failed re-read as absent would make a
-    // question vanish on the very pass that tried to refresh it.
+  // A STALE VERDICT PLACES ITS CARD; IT DOES NOT MAKE THE PASS COMPLETE (F12).
+  // When the pass tried to re-read a tail and got no usable answer, that session
+  // went unjudged THIS pass, and a stale `no-question` must not be what turns
+  // the page into "nothing needs you".
+  const unavailable = async (): Promise<ClassifyOutcome> => ({
+    notCalled: { kind: "unavailable", why: "the budget lock is held" },
+  });
+  const unreadableAnswer = async (): Promise<ClassifyOutcome> => ({
+    verdict: { kind: "unreadable", why: "not JSON" },
+    spend: { ...NO_SPEND, calls: 1 },
+  });
+
+  async function staleQuiet() {
+    const fleet = fleetOf([["quiet", pane("ended-prose-no-question-status-report.txt")]]);
+    const first = await runAttentionPass({
+      ...fleet,
+      classify: async () => ({ verdict: askedNothing, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    return { ...fleet, memory: staleOf(first.memory) };
+  }
+
+  it("keeps a stale verdict's card when its re-read fails, and counts the session unjudged", async () => {
+    // D3: stale is not absent, so the question does not vanish on the very pass
+    // that tried to refresh it; but the re-read failed, so the list is a floor.
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({ sessions, capture, classify: unreadableAnswer, memory, maxCalls: 10, now: NOW });
+    expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 1 });
+    if (result.list.kind !== "list") return;
+    expect(result.list.items).toHaveLength(1);
+    expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([null]);
+  });
+
+  it("never draws a calm fleet from a stale `no-question` whose re-read failed", async () => {
+    const { sessions, capture, memory } = await staleQuiet();
+    const result = await runAttentionPass({ sessions, capture, classify: unreadableAnswer, memory, maxCalls: 10, now: NOW });
+    expect(result.list.kind).toBe("unknown");
+  });
+
+  it("keeps a stale verdict's card when the budget refuses its re-read, and counts the session unjudged", async () => {
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({ sessions, capture, classify: refuse, memory, maxCalls: 10, now: NOW });
+    expect(result.list).toMatchObject({ kind: "limited", sessionsUnreadable: 1 });
+    if (result.list.kind !== "limited") return;
+    expect(result.list.items).toHaveLength(1);
+  });
+
+  it("never draws a calm fleet from a stale `no-question` when the budget could not be consulted", async () => {
+    const { sessions, capture, memory } = await staleQuiet();
+    const result = await runAttentionPass({ sessions, capture, classify: unavailable, memory, maxCalls: 10, now: NOW });
+    expect(result.breakdown.budgetRefused).toBe(1);
+    expect(result.list.kind).toBe("unknown");
+  });
+
+  it("keeps a stale question's card when the budget could not be consulted, and counts the session unjudged", async () => {
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({ sessions, capture, classify: unavailable, memory, maxCalls: 10, now: NOW });
+    expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 1 });
+    if (result.list.kind !== "list") return;
+    expect(result.list.items).toHaveLength(1);
+  });
+
+  it("counts nothing unjudged when a stale verdict's re-read succeeds", async () => {
     const memory = staleOf(await remembered());
     const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: { kind: "unreadable", why: "not JSON" }, spend: { ...NO_SPEND, calls: 1 } }),
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
       memory,
       maxCalls: 10,
       now: NOW,
     });
     expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 0 });
     if (result.list.kind !== "list") return;
-    expect(result.list.items).toHaveLength(1);
-    expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([null]);
-  });
-
-  it("keeps a stale verdict's card when the budget refuses its re-read", async () => {
-    const memory = staleOf(await remembered());
-    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
-    const result = await runAttentionPass({ sessions, capture, classify: refuse, memory, maxCalls: 10, now: NOW });
-    expect(result.list).toMatchObject({ kind: "limited", sessionsUnreadable: 0 });
-    if (result.list.kind !== "limited") return;
     expect(result.list.items).toHaveLength(1);
   });
 });

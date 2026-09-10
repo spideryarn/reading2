@@ -155,7 +155,10 @@ export type BudgetLedger = {
   closed: { why: string; at: string } | null;
 };
 
-/** What a caller holds between reserve and settle. Losing it is a crash, and costs the worst case. */
+/**
+ * What a caller holds between reserve and settle. Losing it is a crash, and costs the worst case.
+ * Only the `modelBudget` instance that minted it can settle it — see `minted` there.
+ */
 export type Reservation = { id: string; day: string };
 
 /**
@@ -526,6 +529,13 @@ export function modelBudget(options: ModelBudgetOptions): ModelBudget {
   const clock = options.now ?? (() => new Date());
   const waitMs = options.lockWaitMs ?? DEFAULT_LOCK_WAIT_MS;
   const initialised = (): boolean => existsSync(join(root, MODEL_BUDGET_INIT_FILE));
+  // THE RESERVATIONS THIS INSTANCE MINTED, AND NO OTHERS — GPT Sol's F11. The
+  // ledger's `{id, day}` is readable by anyone on the directory, and settling
+  // frees a reservation's worst case while its call may still be in flight and
+  // spending it; so a second process settling it would re-grant money the first
+  // can still use. Held in memory on purpose: a crashed owner's reservation
+  // stays charged at the worst case, which is the crash rule above.
+  const minted = new Set<string>();
 
   return {
     reserve(): ReserveResult {
@@ -548,6 +558,7 @@ export function modelBudget(options: ModelBudgetOptions): ModelBudget {
               refusal: { kind: "unavailable", why: "the model budget's lock was taken from under this reservation, so no call is made" },
             };
           }
+          minted.add(reservation.id);
           return { ok: true, reservation: { id: reservation.id, day: reservation.day } };
         });
         return done.ok ? done.value : { ok: false, refusal: { kind: "unavailable", why: done.why } };
@@ -559,6 +570,8 @@ export function modelBudget(options: ModelBudgetOptions): ModelBudget {
     },
 
     settle(reservation, spend, judged): boolean {
+      // Not ours: refused, and the worst case stays counted — the safe direction.
+      if (!minted.has(reservation.id)) return false;
       const now = clock();
       try {
         const done = withLock(root, clock, waitMs, (held, lockPath) => {
@@ -586,7 +599,11 @@ export function modelBudget(options: ModelBudgetOptions): ModelBudget {
             now,
           );
         });
-        return done.ok && done.value;
+        const settled = done.ok && done.value;
+        // Forgotten only once the settle is on disk, so a settle that could not
+        // take the lock can be retried by its owner.
+        if (settled) minted.delete(reservation.id);
+        return settled;
       } catch {
         // Unsettled means the worst case stays counted — the safe direction.
         return false;

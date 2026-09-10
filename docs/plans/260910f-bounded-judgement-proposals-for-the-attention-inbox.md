@@ -68,7 +68,9 @@ call; what the key must cover is **everything the model is shown**, and that is 
 prompt. Sol agreed this is sufficient for a pure model judgement (its note on D3). A verdict from
 another prompt version is **stale, not absent**: it still places the item in the inbox — which is
 today's behaviour — and is re-read first when the budget allows, with its proposal shown as
-`not-reached` until then. Treating it as absent would make every question vanish into *at least N*
+`not-reached` until then. **If that re-read is attempted and fails or is refused, the card stays
+but its sessions count as not judged** (Sol's F12 and the sweep behind it), so the list is a floor
+rather than calm; a stale verdict the pass never reached, past `maxCalls`, is not counted. Treating it as absent would make every question vanish into *at least N*
 on the pass that enables proposals. **Failures are never cached** (Sol's F3), which the existing
 `CacheableVerdict` already enforces by type: a 429, an unreadable answer, and a proposal whose `asks`
 is not in the tail are all `unreadable`, and `unreadable` cannot be stored.
@@ -241,7 +243,8 @@ went green). Where it departed from the brief, each accepted:
   the 3M-token ceiling is prompt plus completion.
 - `ATTENTION_MEMORY_SCHEMA` not bumped (a pre-version memory reads with every verdict stale; the
   comment says why). An empty `limited` list publishes as `limited`, not `unknown` — it is already
-  loud. A stale verdict whose re-read fails keeps its card.
+  loud. A stale verdict whose re-read fails keeps its card — **and, after F12, counts its sessions
+not judged**.
 - **Two files outside the brief**, both forced by exhaustive switches over `AttentionList.kind`:
   `tools/overseer/status-cli.ts` (`inboxLines`) and `tools/fleet/web/src/QuestionsPanel.tsx`.
 - **Not covered by a test**: `runAttentionCommand` end to end (it needs tmux). That a `--no-write`
@@ -255,8 +258,11 @@ stopped, both confirmed by reading the code:
 
 | ID | Finding | Disposition |
 |---|---|---|
-| F11 | a second budget instance can `settle` a reservation it did not mint, freeing its worst case and granting past the ceiling | fixing, red first — instance-private ownership of reservation ids |
-| F12 | an `unavailable` refusal while re-reading a STALE `no-question` publishes a calm empty list, because a stale verdict counts as judged | fixing, red first — a refused re-read counts its sessions unjudged, and the stale card stays |
+| F11 | a second budget instance can `settle` a reservation it did not mint, freeing its worst case and granting past the ceiling | **fixed**, reproduced red first — each `modelBudget(...)` keeps a private set of the ids it minted; `settle` refuses any other, and an id leaves the set only after a persisted settle. The midnight test now crosses midnight on one instance, since settling through a second is what F11 forbids |
+| F12 | an `unavailable` refusal while re-reading a STALE `no-question` publishes a calm empty list, because a stale verdict counts as judged | **fixed**, reproduced red first — a tail the pass tried to re-read counts as judged only if it got a usable answer THIS pass; the stale card stays either way |
+| F12b | (the fixer's sweep, same class) a stale re-read that was made but came back unusable — unparseable, a 429 — kept its card and did not count the session | **fixed** by the same change, seen red; this **reverses a test expectation** recorded in 1b–1e, and D3 now says so |
+
+Opus subagent. Scoped suites 266/266, typecheck clean.
 
 **Not reviewed by Sol, because of the stop:** attack items 4 (a cooldown that never starts or never
 ends) and 5 (a stale verdict never re-read, or a failure cached). The narrow P1 check covers the two
