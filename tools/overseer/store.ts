@@ -108,8 +108,13 @@ import { isAbsolute, join } from "node:path";
 import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
 import type {
   AttentionItem,
+  AttentionJudgementStopped,
   AttentionList,
+  AttentionProposal,
   ConversationReading,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
   HarnessKind,
   OverseerWork,
   PaneJob,
@@ -118,6 +123,7 @@ import type {
   StoredUsage,
 } from "../fleet/wire.js";
 import { parseAccountUsageSections } from "./account-usage.js";
+import { asksOutOfBounds, quotedIn } from "./attention-classify.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -2606,7 +2612,13 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
       ? { kind: "unknown", why: u["why"], scannedAt }
       : bad("an unknown list with no reason");
   }
-  if (u["kind"] !== "list") return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
+  // `limited` is read as strictly as `list`, and it is its own KIND for the
+  // reason in wire.ts: an older reader rejects an unknown kind here, loudly,
+  // where a field it did not know would have been dropped. Plan 260910f D6.
+  const kind = u["kind"];
+  if (kind !== "list" && kind !== "limited") {
+    return bad(`kind ${JSON.stringify(kind)} is none of "list", "limited" or "unknown"`);
+  }
   if (!isNonNegativeInteger(u["sessionsScanned"])) return bad("sessionsScanned is not a count");
   // ABSENT IS NOT ZERO, and reading it as zero was the bug a cross-family review
   // of the dashboard's half found here. The first version reasoned correctly that
@@ -2635,13 +2647,27 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
     if (item === null) return bad("an item is not one this build can read");
     items.push(item);
   }
-  return {
-    kind: "list",
-    items,
-    sessionsScanned: u["sessionsScanned"],
-    sessionsUnreadable: unreadable,
-    scannedAt,
-  };
+  if (kind === "list") {
+    return {
+      kind: "list",
+      items,
+      sessionsScanned: u["sessionsScanned"],
+      sessionsUnreadable: unreadable,
+      scannedAt,
+    };
+  }
+  const stopped = parseJudgementStopped(u["stopped"]);
+  if (stopped === null) return bad("a limited list does not say why the model was stopped, or until when");
+  return { kind: "limited", items, sessionsScanned: u["sessionsScanned"], sessionsUnreadable: unreadable, scannedAt, stopped };
+}
+
+/** Every field of `AttentionJudgementStopped`, or `null`. A blank `why` is refused: it IS the line a reader sees. */
+function parseJudgementStopped(u: unknown): AttentionJudgementStopped | null {
+  if (!isRecord(u)) return null;
+  const { kind, why, until } = u;
+  if (kind !== "exhausted" && kind !== "cooling-down") return null;
+  if (typeof why !== "string" || why.trim() === "" || !isIsoTimestamp(until)) return null;
+  return { kind, why, until };
 }
 
 /**
@@ -2786,6 +2812,13 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
     if (!isIsoTimestamp(d["waitingSince"])) return null;
     duplicates.push({ sessionId: d["sessionId"], sessionName: d["sessionName"], waitingSince: d["waitingSince"] });
   }
+  const proposal = parseAttentionProposal(u["proposal"]);
+  if (proposal === null) return null;
+  // THE QUOTE IS IN THIS ITEM'S OWN EXCERPT — GPT Sol's F15. The card labels it
+  // "the sentence this proposal is about", so one the excerpt does not hold is
+  // an invented sentence wearing the label. The producer's check (D13), made
+  // again here with its own normalisation; a dialog has no excerpt to hold one.
+  if (proposal.kind === "proposed" && !(evidence.kind === "prose" && quotedIn(proposal.asks, evidence.excerpt))) return null;
   return {
     id,
     sessionId,
@@ -2795,7 +2828,78 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
     evidence,
     answerability,
     duplicates,
+    proposal,
   };
+}
+
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/** A string with something in it. Every text field of a proposal is drawn on its own line, so a blank one is refused. */
+function filledText(u: unknown): string | null {
+  return typeof u === "string" && u.trim() !== "" ? u : null;
+}
+
+/**
+ * An item's proposal, every arm in full (plan 260910f Stage 2).
+ *
+ * **ABSENT IS `not-reported`, NOT A FAILURE** — an item from a producer that
+ * predates the field made no claim, and failing the list over it would blank a
+ * live inbox between a dashboard restart and a daemon restart. Present and
+ * malformed IS a failure, like every other field here: a half-read proposal
+ * would draw a holder nobody proposed, or an attribution nobody made.
+ */
+function parseAttentionProposal(u: unknown): AttentionProposal | null {
+  if (u === undefined) return { kind: "not-reported" };
+  if (!isRecord(u)) return null;
+  switch (u["kind"]) {
+    case "proposed": {
+      const id = filledText(u["id"]);
+      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === u["recipient"]);
+      const reason = filledText(u["reason"]);
+      const asks = filledText(u["asks"]);
+      const by = parseProposalAuthor(u["by"]);
+      const reach = parseProposalReach(u["reach"]);
+      if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      // Inside the length bounds the producer holds it to (F17), or the card
+      // could draw a whole tail in the flow.
+      if (asksOutOfBounds(asks) !== null) return null;
+      return { kind: "proposed", id, recipient, reason, asks, by, reach };
+    }
+    case "unplaced": {
+      const id = filledText(u["id"]);
+      const why = filledText(u["why"]);
+      const by = parseProposalAuthor(u["by"]);
+      return id === null || why === null || by === null ? null : { kind: "unplaced", id, why, by };
+    }
+    case "off":
+    case "not-reached": {
+      const why = filledText(u["why"]);
+      return why === null ? null : { kind: u["kind"], why };
+    }
+    case "not-applicable":
+      return { kind: "not-applicable" };
+    case "not-reported":
+      return { kind: "not-reported" };
+    default:
+      return null;
+  }
+}
+
+/** Only the one arm the wire has: a model, via the Overseer. A person is never an author (D9). */
+function parseProposalAuthor(u: unknown): ProposalAuthor | null {
+  if (!isRecord(u) || u["kind"] !== "model" || u["via"] !== "overseer") return null;
+  const model = filledText(u["model"]);
+  return model === null ? null : { kind: "model", model, via: "overseer" };
+}
+
+function parseProposalReach(u: unknown): ProposalReach | null {
+  if (!isRecord(u)) return null;
+  if (u["kind"] === "available") return { kind: "available" };
+  const why = filledText(u["why"]);
+  if (why === null) return null;
+  if (u["kind"] === "unavailable") return { kind: "unavailable", why };
+  if (u["kind"] === "not-checked") return { kind: "not-checked", why };
+  return null;
 }
 
 /**
@@ -3067,11 +3171,24 @@ function resumeForFile(
   const nameOf = (id: string): string | null => fold.records.get(id as RecoveryCandidateId)?.name ?? null;
   let position = 0;
   const requested = new Set<string>();
+  // G18: A REQUEST THIS FILE CANNOT SHOW AGAINST A RECORD IS AN ORPHAN, NEVER
+  // DROPPED. The page lists it apart from the records, so a stale tab's
+  // "queued" does not simply vanish.
+  const orphans: RecoveryResumeProjection["orphans"] = [...resume.orphans];
   const requests = resume.requests.flatMap((request) => {
     const name = nameOf(request.candidateId);
-    if (name === null || requested.has(request.candidateId)) return [];
+    if (name === null) {
+      orphans.push({
+        candidateId: request.candidateId,
+        state: request.state,
+        why: "the recovery index no longer holds this record (resolved over 30 days ago, past its capacity, or never held by this index), so the request cannot be shown against it; the Overseer refuses it when it reaches the head of the queue",
+      });
+      return [];
+    }
+    if (requested.has(request.candidateId)) return [];
     requested.add(request.candidateId);
-    const state = request.state.kind === "pending" ? { ...request.state, position: (position += 1) } : request.state;
+    if (request.state.kind === "pending") position += 1;
+    const state = request.state.kind === "pending" ? { ...request.state, position } : request.state;
     return [{ ...request, name, state }];
   });
   const items = new Map((page ?? []).map((item) => [item.id as string, item]));
@@ -3083,10 +3200,17 @@ function resumeForFile(
     previewed.add(preview.candidateId);
     return true;
   });
-  const paceName = resume.pace.kind === "waiting-for-verification" ? nameOf(resume.pace.candidateId) : null;
-  const pace: RecoveryResumeProjection["pace"] =
-    resume.pace.kind !== "waiting-for-verification" ? resume.pace : paceName === null ? { kind: "free" } : { ...resume.pace, name: paceName };
-  return { ...resume, requests, previews, pace };
+  let pace: RecoveryResumeProjection["pace"] = resume.pace;
+  if (resume.pace.kind === "waiting-for-verification") {
+    const paceName = nameOf(resume.pace.candidateId);
+    pace = paceName === null ? { kind: "free" } : { ...resume.pace, name: paceName };
+  } else if (resume.pace.kind === "stuck") {
+    // A STUCK BLOCKER IS NEVER DROPPED (G19): its dispose command is the only
+    // way the queue moves again. A record that has left the file lends it no
+    // name, so it is named by its candidate id.
+    pace = { ...resume.pace, name: nameOf(resume.pace.candidateId) ?? resume.pace.candidateId };
+  }
+  return { ...resume, requests, previews, pace, orphans };
 }
 
 /**

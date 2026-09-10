@@ -513,6 +513,7 @@ function resumeProjection(over: Json = {}): Json {
     pace: { kind: "free" },
     requests: [],
     previews: [],
+    orphans: [],
     pendingOverflow: 0,
     ...over,
   };
@@ -602,6 +603,40 @@ describe("the resume section (260910f): its arms, and never a hand on the record
       expect(feed.resume, name).toMatchObject({ kind: "unreadable", why: expect.stringMatching(why) });
       expect(rest(feed), name).toEqual(rest(project(base())));
     }
+  });
+
+  it("G18: orphans — requests for candidates the file does not hold — pass through as themselves; an older daemon's missing list is empty", () => {
+    const orphan = { candidateId: "rc-ghost", state: requestStates()[0], why: "the recovery index no longer holds this record" };
+    const feed = published(project(withResume(resumeProjection({ orphans: [orphan] }))));
+    expect(feed.resume.kind).toBe("published");
+    if (feed.resume.kind !== "published") return;
+    expect(feed.resume.projection.orphans).toEqual([orphan]);
+    expect(rest(feed)).toEqual(rest(project(base())));
+    const { orphans: _none, ...olderDaemon } = resumeProjection();
+    const older = published(project(withResume(olderDaemon)));
+    expect(older.resume.kind === "published" && older.resume.projection.orphans).toEqual([]);
+  });
+
+  it("G18: an orphan the file does hold, or a malformed one, is unreadable, and the records are untouched", () => {
+    const mutants: [string, Json, RegExp][] = [
+      ["an orphan the file holds", resumeProjection({ orphans: [{ candidateId: "rc-r0", state: requestStates()[0], why: "gone" }] }), /orphan/],
+      ["orphans not a list", resumeProjection({ orphans: {} }), /orphans/],
+      ["an orphan with a state this reader does not know", resumeProjection({ orphans: [{ candidateId: "rc-ghost", state: { kind: "vanished" }, why: "gone" }] }), /orphans/],
+      ["an orphan with no why", resumeProjection({ orphans: [{ candidateId: "rc-ghost", state: requestStates()[0], why: " " }] }), /orphans/],
+    ];
+    for (const [name, resume, why] of mutants) {
+      const feed = published(project(withResume(resume)));
+      expect(feed.resume, name).toMatchObject({ kind: "unreadable", why: expect.stringMatching(why) });
+      expect(rest(feed), name).toEqual(rest(project(base())));
+    }
+  });
+
+  it("G19: a stuck pace names a launch, so its candidate may be one the file no longer holds; a malformed one is unreadable", () => {
+    const stuck = { kind: "stuck", candidateId: "rc-ghost", name: "rc-ghost", state: "completed", why: "its launch slot has not been released", disposeCommand: "dispose lo-1" };
+    const feed = published(project(withResume(resumeProjection({ pace: stuck }))));
+    expect(feed.resume.kind === "published" && feed.resume.projection.pace).toEqual(stuck);
+    const bad = published(project(withResume(resumeProjection({ pace: { ...stuck, disposeCommand: "" } }))));
+    expect(bad.resume).toMatchObject({ kind: "unreadable", why: expect.stringMatching(/pace/) });
   });
 
   it("one candidate's state, preview or name never lands on another's", () => {

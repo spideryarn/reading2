@@ -1,0 +1,20 @@
+
+❯ finish up and push
+
+● Done. The empty-state wording fix is on dev as one commit, with the failing test ahead of the fix in it.
+
+  Gates: typecheck exit 0, the full suite green on the merged tree (run in tmux, 2,318 passed), lint clean on the
+  two files I touched. The GPT Sol review came back with no findings.
+
+  One thing I have not done, because it cannot be undone: worktree:check says data/ holds a scratch corpus that
+  nothing else has a copy of, so removing the worktree would delete it. Say the word and I'll remove the
+  worktree.
+
+✻ Cooked for 7m 2s · done 2:40 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

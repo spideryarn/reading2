@@ -1,5 +1,13 @@
 # Make the Overseer and fleet dashboard useful, dependable, and cheaper to run
 
+**On hold from 2026-09-10 21:10 UTC.** Greg: *"I think we're going to deprioritise further
+Overseer/web dashboard stuff to the very bottom priority, and now push up the priority of all the
+Spideryarn product stuff."* The four stages then in flight (Launch protocol, Bounded judgement,
+Scheduled dispatch, Gradual recovery) land the stage each had in hand and stop; nothing further from
+this roadmap is dispatched until Greg says otherwise. Each stage's status paragraph says where it
+stopped and what the next stage would have done. The product work is
+[260908f-prioritised-spideryarn-codebase-improvements.md](260908f-prioritised-spideryarn-codebase-improvements.md).
+
 Status as of 2026-09-09 01:00 UTC: **implementation in progress, run by the Overseer** — landed on `dev`: Baseline (2aed1a48, census table below), Overseer status (5cf9a7ee), Failure containment (857ca301), **Usage visibility (af1ec002: `usage-feed.ts`, `zones.ts` UTC/London/Athens, `UsagePanel.tsx`, session closed; the new-job deferral half of its checkbox 3 deliberately not built — the signal is `unknown` on this box most of the time; live on 8787 after the next dashboard restart)**; **Execution identity (8ed9ae59: `execution-identity.ts`, `FleetRow.execution`, `session-execution-changed`, `RegisterEntry.verifiedExecution`; no schema bump; live only after the dashboard and daemon restart; session closed)**; next for dispatch when usage allows: Work evidence (its probe machinery now has a production caller), Responsive collection (the identity pass costs 236 ms over 26 sessions); Delivery uncertainty is with the `claude-agents-dashboard` session (its Stages 1–3: 0b2fee1e, 082d91aa, 854fac4b); dispatched 2026-09-08 22:50 UTC: Execution identity (session `260908f-roadmap-exec-identity`) and Usage visibility (`260908f-roadmap-usage`, which also carries Greg's London/Athens clock). Attention inbox and Attention completeness are **already met** per the census (attention-pass.ts, model-driven detector, AttentionPanel) and will not be dispatched; Work evidence waits for Execution identity because both use the same probe machinery. The log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status
 **landed** (5cf9a7ee, session closed); **Baseline landed** (session `260908f-roadmap-baseline`);
 Failure containment is with `260908f-roadmap-failure-containment`; the log is
@@ -1528,6 +1536,30 @@ ambiguous, one reconciled reservation, and discoverable evidence even if its chi
 collection. Both Scheduled dispatch and Gradual recovery consume this foundation; neither invents
 its own volatile launch-record map.
 
+**Status (2026-09-10, Overseer): important work left, Stages 1–2b on dev at b44d69a2; session
+`launch-protocol`, plan
+[260910f-launch-protocol-one-crash-protocol-for-scheduling-and-recovery.md](260910f-launch-protocol-one-crash-protocol-for-scheduling-and-recovery.md).**
+Built and Sol-reviewed (plan review plus one review and one narrow check per stage; five and three
+P1s closed): the durable core in `tools/overseer/launch-protocol.ts`, `launch-store.ts`,
+`launch-admission.ts` and `launch-artefacts.ts` (journal at `~/.overseer/launches/`, the eight
+states with a durable write at every boundary, reconciliation by evidence precedence, refusal of new
+launches until a `resolve-history` when the journal cannot be replayed whole, a one-slot admission
+owner with per-class holds, `resumeOccurrence`/`abandon`/`inspect`/`inFlight`/`view`); the three
+launchers in `tools/overseer/launchers.ts` (tmux via gjd-remote, headless, tmux-headless running
+run-claude), each carrying its correlation id in `new-session -e`, writing `start.json` before Claude
+starts and `exit.json` on every ending, reading the prompt from a private re-hashed `prompt.md`, with
+`RunSpec` pinning timeout, access and a named pool account. A test asserts nothing in production
+calls it yet. **Stage 3 is not built** and stops here at Greg's reprioritisation of 2026-09-10
+21:10Z: the daemon composition, `launch-inbox.ts`, `scripts/overseer-launches.ts`, a bounded
+`launches.json`, the `wire.ts` block and the acceptance drill; the handover is the plan's "Stage 3,
+not built" section and `260910f-launch-protocol-stage3-task.md`. Until then acceptance rests on the
+fault-injection unit tests. No restart is needed. Learned: a new tmux session takes its environment
+from the client that creates it, so a daemon-created session inherits the daemon's credentials and
+account (that is the secrets incident of 20:20Z and postmortem 260910d). Not done, named: the
+run-codex test redaction, testing.md's stale ".env.local is loaded into tests" paragraph.
+Pending Greg: key rotation (postmortem 260910d), and whether unattended scheduled jobs may run with
+`access: "write"`. Worktree `launch-protocol` standing.
+
 ### Stage: Schedule preview — make periodic work inspectable before launch
 
 - [ ] Define a small versioned job list: id, approved document path and pinned content/revision hash,
@@ -1676,6 +1708,22 @@ queued as qi-59skznz8; live since the 16:49Z restarts.
 **Acceptance:** two taps cannot launch two copies of the same selected recovery; resources limit the
 pace; unchanged unknowns remain visible. Recovery restores valuable work, not the previous load spike.
 
+**Status (2026-09-10, Overseer): done enough to stop, on dev at b089714b; session
+`gradual-recovery`, plan
+[260910f-gradual-recovery-resume-selected-interrupted-work-one-at-a-time.md](260910f-gradual-recovery-resume-selected-interrupted-work-one-at-a-time.md).**
+Stages 1–2 landed (cfc963eb, then Sol's G11–G20 fixes through bd57a96b): request files and a
+one-per-tick daemon queue; an exhaustive occurrence table; one launch in flight until four facts
+verify it; shared `launch-gate.ts` (health and account quota, also used by Scheduled dispatch); the
+account pinned from the reservations ledger; a `resume` projection in `recovery.json`, a
+`POST /api/recovery/resume` route and the panel's Resume… control with its inline confirmation.
+Stage 3a (the `--resume <uuid>` argv arm and the producer `capabilities` marker) is on dev with a
+narrow Sol check ordered by the Overseer. **Stage 3b is not built** and stops here at Greg's
+reprioritisation of 2026-09-10 21:10Z: the port is `unwired`, so a tap queues a request, the page
+shows it pending with manual instructions, and nothing launches; its brief is
+`260910f-gradual-recovery-stage3b-task.md` and it needs Launch protocol's Stages 1, 1b and 2 on dev.
+Pending Greg: the capability marker is an observation, never held; no automatic resume; unknown
+usage holds; default-login sessions are manual-only. Worktree `recovery-resume` standing.
+
 ### Stage: Work reports and decisions — a small event vocabulary
 
 - [ ] Add a CLI/report endpoint for `progress`, `blocked`, `decision`, `completed` with event id,
@@ -1734,6 +1782,31 @@ processing records could fill every window; not seen in a real browser.
 **Acceptance:** a prose question can be surfaced with its evidence and model attribution, under a
 hard budget; 36 sessions do not imply 36 model calls each minute. No proposal becomes Greg's voice.
 
+**Status (2026-09-10, Overseer): important work left, on dev at a66cf919; session
+`bounded-judgement`, plan
+[260910f-bounded-judgement-proposals-for-the-attention-inbox.md](260910f-bounded-judgement-proposals-for-the-attention-inbox.md).**
+Stage 1 landed: the hard day budget in `tools/overseer/model-budget.ts` (every paid attention call
+reserves its worst case under a lock before the request; a 402 or 429 starts a cooldown; a refusal
+publishes the `limited` inbox state, which older readers render as their loud `unknown`); Sol's two
+P1s (a second budget freeing a reservation it did not make; a refused re-read publishing a calm
+empty list) fixed test-first and closed by a narrow check, the two properties the content filter
+stopped Sol from reaching (cooldown, cache) read by Fable. Stage 2 landed, OFF unless
+`OVERSEER_PROPOSALS=1`: the one classifier call also names the holder (Sol, Fable, Greg, the
+Overseer, the agent, or unplaced) with a reason and a verbatim quote; the card says nothing has
+been sent; Sol's four P2s fixed at c82caed4. Stage 3 partly done: a 25-item labelled set over the
+roadmap's six cases, the runner `scripts/attention-eval.ts`, the corrected store table in
+overseer-direction.md, gate 4's status block in overseer.md. The one number so far: without a model
+the inbox catches 3 of 8 labelled questions, none of them for Sol, Fable or Greg. **The paid
+evaluation is not run** and stops here at Greg's reprioritisation of 2026-09-10 21:10Z: the
+handover is the plan's Status section (two runs of the eval at prompt versions 1 and 2, a few cents
+each, from a shell with `OPENROUTER_API_KEY`; then detection, routing and cost read in that order;
+only then Greg's call on enabling proposals, with the day ceiling put to him as a number first).
+Departure from the brief, D11: the detector does not read work reports before spending. Live
+"vetoable" marks are deferred to whichever stage first sends a proposal, which needs Greg's autonomy
+change anyway. Owed by the Overseer: one daemon and dashboard restart before the budget and
+`limited` are live. Not verified: the card at 390px in a real browser. Worktree `bounded-judgement`
+standing.
+
 ### Stage: Access review — the bounded hardening Greg requested
 
 - [ ] Recheck actual bind addresses and SSH fallback against the updated access section/A5 closure.
@@ -1755,6 +1828,26 @@ hard budget; 36 sessions do not imply 36 model calls each minute. No proposal be
 **Acceptance:** the intended devices can reach the page, other reachability is understood, SSH still
 works, and existing guards are tested at the HTTP/browser boundary. This is not a top-priority
 security rewrite and does not override Greg's explicit deferrals.
+
+**Status (2026-09-10, Overseer): finished, on dev at 8089052c and served by the dashboard since
+20:46Z; session `access-review`, plan 260910f-fleet-access-review-composed-server, worktree
+`fleet-access-review` standing and clean.** Boxes 2–4 done on the real composed server: a Host
+guard before routing (421 with the security headers unless Host is one field holding one IP
+literal, `localhost`, a `*.ts.net` name or a single label; the read routes had checked no Host, so
+a DNS-rebinding page could have read state, messages and the live stream), exact path and method
+on the four inline read routes (405 otherwise), and `tests/fleet-composed-access.test.ts` (76
+tests) starting the real `server.ts` as an isolated child on a private loopback port, every guard
+mutated and seen red; hostile framing refused in Chrome's own words. Box 3's "prove production
+composition shares the queue with the refresh drainer" was scoped out by the Overseer at plan
+review and is queued as qi-3mgbkjrn with the receipt actor. Box 1 stands as it was: loopback plus
+the tailnet bind Greg already has, the Serve-plus-owner-check widening still his to authorise
+(A5 corrected in overseer-direction.md). Smoke after the restart: evil Host 421, plain 200,
+localhost 200, tailnet IP 200, MagicDNS 200. Reusable child-server harness in
+`tests/helpers/fleet-child-server.ts`, pointed to from security-map.md. Sol: plan 10 findings, 8
+taken; stage 6 taken (two P1s: a killed vitest orphaning the child, a lax Host parser); narrow
+check clean. Learned: Sol's fixer sandbox cannot bind loopback, so its two composed tests were
+never run before they failed; tsx runs the script in a grandchild, so killing the started pid
+leaves the real process.
 
 ### Stage: Operational finish — prove failure, restart, and recovery visibility
 
@@ -1784,6 +1877,25 @@ security rewrite and does not override Greg's explicit deferrals.
 **Acceptance:** failure becomes visible through a channel that survives it; restart preserves
 honesty and avoids duplicate side effects. The SSH/manual path remains complete. A green test suite
 without an observed stopped-clock/failed-source control is insufficient evidence.
+
+**Status (2026-09-10, Overseer): done enough to stop, on dev at 33f99bbe; session
+`operational-finish`, plan 260910f, worktree `ops-diagnose` left standing.** Boxes 1 and 3 are
+built and reviewed: `npx tsx scripts/overseer.ts diagnose [--json]`, `GET /api/diagnostics` and a
+Diagnostics section in Box health report each service's recorded start HEAD, checkpoint schema,
+clocks, boot ids and job-list agreement, never inferred from HEAD; crash, bad-build, failed-bind,
+SIGKILL-takeover and restart-without-double-dispatch all proven on scratch instances. Box 2 is
+measured, not changed (the unit's rebuild-on-start stays). Box 4 is a proposal, not a build: the
+destination is **Greg's** (Healthchecks.io recommended over Better Stack and Cronitor). Boxes 5–7
+wait on that choice and on the two restarts the Overseer owes (dashboard, then daemon) for the
+stamps and the route to show; until then unstamped services read `unknown`, which is honest. Sol:
+plan review 9 findings (5 P1), stage reviews 3 P1 + 1 P2 then 6 P1, all taken; the narrow check
+closed eight of ten, and Fable ruled the other two documented limits (store listing stops at 200
+entries; a pid reused within 2 s of the lock still reads RUNNING, needing an identity token, queued).
+One regression of its own, `fleet-work-evidence-e2e` red on dev for 84 minutes, root-caused in
+`docs/postmortems/260910d-a-literal-new-url-…` (vitest's normalize-url plugin rewrites a `new URL("../..",
+import.meta.url)` literal under jsdom; three more such literals are queued). Contracts that outlive
+the branch: an optional `revision` on the daemon-started note, `dist/build-stamp.json`, and the
+`/api/diagnostics` payload.
 
 ## Parallel commitments and optional convenience
 

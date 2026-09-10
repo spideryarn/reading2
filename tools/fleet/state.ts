@@ -29,10 +29,21 @@ import type {
   AttentionFeed,
   FleetState as FleetStateWire,
   OverseerStatusFeed,
+  ProducerCapability,
   ProducerStamp,
   UsageFeed,
   WorkFeed,
 } from "./wire.js";
+
+/**
+ * What this build declares on every payload — wire.ts § `ProducerCapability`.
+ *
+ * `argv-resume-uuid` IS TRUE OF THIS BUILD BECAUSE `claude-argv.ts` reads `--resume <uuid>`, and the
+ * test in `tests/fleet-claude-argv.test.ts` that reads the 2026-09-10 capture of a resumed process is
+ * what keeps it true. Remove that reading and this entry goes with it: a declaration nothing backs is
+ * exactly how the Overseer would launch a resumed session it can never verify (plan 260910f, G3).
+ */
+export const PRODUCER_CAPABILITIES: readonly ProducerCapability[] = ["argv-resume-uuid"];
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -125,6 +136,8 @@ export function fleetState(
   return {
     schema: 1,
     producer: publishedProducer,
+    // A fact about the build, so it is declared on every payload, collected or not.
+    capabilities: PRODUCER_CAPABILITIES,
     attemptedAt,
     attention,
     overseer,

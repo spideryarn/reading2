@@ -861,6 +861,77 @@ describe("staleness", () => {
   });
 });
 
+/**
+ * The tab title, through the real page: the snapshot, the hash and the
+ * selection all reach `document.title`. The composition rules themselves are
+ * tests/fleet-page-title.test.ts; this is the wiring they cannot see.
+ */
+describe("the tab title", () => {
+  const blocked = (): FleetRow => row({ id: "$a", title: "fix the thing", status: { kind: "needs-you" } });
+
+  it("says only the app's name before anything has arrived", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    expect(document.title).toBe("Fleet");
+  });
+
+  it("leads with the count that needs you, and follows the mode", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked(), row({ id: "$b" })] })));
+    expect(document.title).toBe("(1) Fleet");
+    const health = [...container.querySelectorAll("button")].find((b) => b.textContent === "Box health");
+    act(() => health?.click());
+    expect(document.title).toBe("(1) Box health · Fleet");
+  });
+
+  it("names the selected session", () => {
+    window.location.hash = "#sessions?sel=%24a";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked()] })));
+    expect(document.title).toBe("(1) fix the thing · Fleet");
+  });
+
+  it("does not name a session the detail pane refused as another tmux server's", () => {
+    window.location.hash = "#sessions?sel=%24a&selpid=999";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked()], tmuxServerPid: 111 })));
+    expect(document.title).toBe("(1) Fleet");
+  });
+
+  it("resolves the title against the same ordering as the detail pane", () => {
+    /* Tmux handles are unique in a real snapshot. A contradictory payload is
+       useful here because it is the only fixture that can expose one caller
+       searching raw rows while the other searches the sorted list. */
+    window.location.hash = "#sessions?sel=%24same&order=name";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$same", title: "Zulu" }),
+            row({ id: "$same", title: "Alpha" }),
+          ],
+        }),
+      ),
+    );
+    expect(document.title).toBe("Alpha · Fleet");
+    expect(container.querySelector('section[aria-label="The selected session"] h2')?.textContent).toBe("Alpha");
+  });
+
+  it("says STALE first when the masthead does", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    const old = new Date(Date.now() - 10 * 60_000).toISOString();
+    act(() => feed.push(state({ rows: [blocked()], collectedAt: old })));
+    expect(container.textContent).toContain("STALE");
+    expect(document.title).toBe("STALE (1) Fleet");
+  });
+});
+
 describe("the modes", () => {
   it("starts on Sessions, and an unknown hash falls back to it rather than rendering nothing", () => {
     window.location.hash = "#nonsense-from-an-old-bookmark";
@@ -9320,6 +9391,7 @@ function attentionItem(over: Partial<AttentionItem> & { id: string }): Attention
     evidence: { kind: "prose", excerpt: "Say the word and I'll drop it.", why: "it named an action and stopped" },
     answerability: { kind: "phone" },
     duplicates: [],
+    proposal: { kind: "off", why: "proposals are off" },
     ...over,
   };
 }
@@ -9388,6 +9460,47 @@ describe("the attention inbox, off the wire", () => {
     expect(feed.kind).toBe("published");
     if (feed.kind !== "published" || feed.list.kind !== "list") throw new Error("expected a published list");
     expect(feed.list.items.map((i) => i.sessionName)).toEqual(["second-oldest", "oldest"]);
+  });
+
+  it("reads a `limited` list whole, `stopped` and all (plan 260910f D6)", () => {
+    const list: AttentionList = {
+      kind: "limited",
+      items: [attentionItem({ id: "found-anyway" })],
+      sessionsScanned: 32,
+      sessionsUnreadable: 3,
+      scannedAt: agoIso(90_000),
+      stopped: { kind: "exhausted", why: "the day's ceiling of $1.50 would be crossed", until: agoIso(-3 * 60 * 60_000) },
+    };
+    expect(parseAttention(published(list), CLOCK_SKEW_UNMEASURED)).toMatchObject({ kind: "published", list });
+    /* Strict like `list`: a `limited` without a readable `stopped` is not one. */
+    for (const stopped of [undefined, { kind: "exhausted", why: "x" }, { kind: "bored", why: "x", until: agoIso(0) }]) {
+      const wire = JSON.parse(JSON.stringify(published(list))) as { list: Record<string, unknown> };
+      wire.list["stopped"] = stopped;
+      expect(parseAttention(wire, CLOCK_SKEW_UNMEASURED), JSON.stringify(stopped)).toMatchObject({
+        kind: "published",
+        list: { kind: "unknown" },
+      });
+    }
+  });
+
+  it("rejects a list kind it does not know into `unknown` — which is how an OLDER page meets `limited`", () => {
+    /* The compatibility half of D6. The old page cannot be run here, but its
+       rule is this rule, so this pins it: a new KIND is refused loudly. A new
+       FIELD on `list` would have been dropped and an empty list drawn as calm,
+       which is why the stopped state is a kind. */
+    const wire = {
+      kind: "published",
+      coordinatorWrittenAt: new Date().toISOString(),
+      list: {
+        kind: "limited-v2",
+        items: [],
+        sessionsScanned: 32,
+        sessionsUnreadable: 0,
+        scannedAt: agoIso(90_000),
+        stopped: { kind: "exhausted", why: "x", until: agoIso(-60_000) },
+      },
+    };
+    expect(parseAttention(wire, CLOCK_SKEW_UNMEASURED)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
   });
 
   it("refuses a published feed with no readable clock rather than inventing one", () => {
@@ -9583,6 +9696,39 @@ describe("the attention inbox, on the page", () => {
       }),
     );
     expect(itFailed).toContain("the gateway returned 429 before anything was judged");
+  });
+
+  it("draws a `limited` list's items under ONE line saying the judge was stopped, and until when", () => {
+    const text = showing(
+      published({
+        kind: "limited",
+        items: [attentionItem({ id: "found-anyway" })],
+        sessionsScanned: 32,
+        sessionsUnreadable: 3,
+        scannedAt: agoIso(90_000),
+        stopped: { kind: "exhausted", why: "the day's ceiling of $1.50 would be crossed", until: agoIso(-3 * 60 * 60_000) },
+      }),
+    );
+    expect(text).toContain("Not every session is being judged — the day's ceiling of $1.50 would be crossed, until ");
+    expect(text).toContain("found-anyway");
+  });
+
+  it("never draws an EMPTY `limited` list as a calm fleet", () => {
+    /* The reason the arm exists. Zero items from a judge that was stopped is
+       not "nothing is waiting on you" — it is nothing found among the few we
+       were allowed to judge. */
+    const text = showing(
+      published({
+        kind: "limited",
+        items: [],
+        sessionsScanned: 32,
+        sessionsUnreadable: 9,
+        scannedAt: agoIso(90_000),
+        stopped: { kind: "cooling-down", why: "the gateway returned 429", until: agoIso(-15 * 60_000) },
+      }),
+    );
+    expect(text).toContain("Not every session is being judged — the gateway returned 429, until ");
+    expect(text).not.toContain("nothing is waiting on you");
   });
 
   it("says nothing is waiting only with both counts and both clocks behind it", () => {

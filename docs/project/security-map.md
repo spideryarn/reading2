@@ -379,6 +379,38 @@ does not repair it. In the one file where a mis-named field means "this silently
 the compiler was blind to exactly that mistake. `opt<T, K extends keyof T>` makes the name a checked
 literal. Do not reintroduce the spread form.
 
+## The fleet dashboard, which is a different product on the same box
+
+`tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:
+it has **no authentication**, it renders text written by agents that read hostile input, and it
+can type into those agents. Reachability is the access control — the bind, and the reasoning for
+deferring anything stronger, are in
+[overseer-direction.md § Access](overseer-direction.md#access) and its A5 paragraph.
+
+**What is proven at the HTTP boundary** — by
+[`tests/fleet-composed-access.test.ts`](../../tests/fleet-composed-access.test.ts), which starts the
+real `tools/fleet/server.ts` on a private loopback port and sends it real requests, each assertion
+seen to fail when its guard is removed
+([260910f](../plans/260910f-fleet-access-review-composed-server.md)). **The next test of the
+composed server starts it with
+[`tests/helpers/fleet-child-server.ts`](../../tests/helpers/fleet-child-server.ts)**, which keeps
+the child off the live stores, the live tmux server and every paid call:
+
+- it listens only where `FLEET_BIND` says, and refuses to start on a wildcard;
+- every response class carries the CSP and anti-framing headers of
+  [`headers.ts`](../../tools/fleet/headers.ts) — static files, 404s, refusals, the SSE stream;
+- **a request whose `Host` is not a name this box is reached by is refused before routing**
+  ([`origin.ts`](../../tools/fleet/origin.ts)) — the DNS-rebinding defence, which until 2026-09-10
+  covered the routes that type and not the ones that read transcripts;
+- every write route refuses a cross-origin, missing or `null` `Origin`;
+- the read routes answer their exact path and `GET`/`HEAD` only.
+
+**Still source-level:** that the action stores are open before the listener
+(`tests/fleet-hold-restart.test.ts` reads the file), and that the page's queue is the one the
+drainer delivers from. **Not a defence at all, and labelled so in the code:** the `speaker` a
+receipt records is what the request *claims* (`parseSpeaker` in `routes-steer.ts`); anything that
+can reach the port can claim to be Greg.
+
 ---
 
 Up: [AGENTS.md](../../AGENTS.md)

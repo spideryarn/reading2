@@ -46,7 +46,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { CANDIDATE_ID_PATTERN, pendingFor, writeResumeRequest } from "../overseer/recovery-resume-request.js";
 import { isRecord, storeRoot } from "./attention.js";
-import { loadRecoveryFile, projectRecovery } from "./recovery-feed.js";
+import { heldCandidateIds, loadRecoveryFile, projectRecovery } from "./recovery-feed.js";
 import { checkRequest, readBody } from "./routes-new.js";
 import type { RecoveryResumePostAnswer, RecoveryResumePostBody, RecoveryResumeRequestState } from "./wire.js";
 
@@ -105,8 +105,8 @@ export function parseResumePostBody(text: string): { ok: true; value: RecoveryRe
 }
 
 /** The projection's state for this candidate, or undefined when there is none or it cannot be read. */
-async function projectedState(root: string, candidateId: string, now: Date): Promise<RecoveryResumeRequestState | undefined> {
-  const feed = projectRecovery(await loadRecoveryFile(root), now.toISOString());
+function projectedState(load: Awaited<ReturnType<typeof loadRecoveryFile>>, candidateId: string, now: Date): RecoveryResumeRequestState | undefined {
+  const feed = projectRecovery(load, now.toISOString());
   if (feed.kind !== "published" || feed.resume.kind !== "published") return undefined;
   return feed.resume.projection.requests.find((r) => r.candidateId === candidateId)?.state;
 }
@@ -122,7 +122,16 @@ async function respond(deps: RecoveryResumeRouteDeps, req: IncomingMessage, res:
 
   const root = deps.root();
   const now = deps.now();
-  const known = await projectedState(root, candidateId, now);
+  const load = await loadRecoveryFile(root);
+  // G18: WHERE THE INDEX CAN BE READ, IT DECIDES MEMBERSHIP. A candidate it
+  // does not hold (a stale tab, a hand-made request) is refused before
+  // anything is written, rather than answered "queued" and then lost. An index
+  // that cannot be read stops nothing: the daemon revalidates anyway.
+  const held = heldCandidateIds(load);
+  if (held !== null && !held.has(candidateId)) {
+    return send(res, 409, { ok: false, why: `no such interrupted record: the recovery index holds no ${candidateId}, so there is nothing to resume; this page may be out of date` });
+  }
+  const known = projectedState(load, candidateId, now);
   if (known !== undefined && OCCURRENCE_EXISTS.has(known.kind)) return send(res, 200, { ok: true, outcome: "already-launched", candidateId });
   // `cannot-tell` from the leaf is not "pending": the courtesy is skipped, and
   // the occurrence still stops a second launch.

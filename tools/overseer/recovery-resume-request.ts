@@ -459,15 +459,21 @@ export async function listPendingResumeRequests(
  * pending file unlinked after, so a crash between them leaves the request
  * pending (and it is refused again, under the same name, which replaces).
  */
-export function moveToRefused(root: string, pendingPath: string, name: string, body: RefusedResume): boolean {
+export function moveToRefused(root: string, pendingPath: string, name: string, body: RefusedResume): MoveResult {
   try {
     replaceAtomically(join(root, RECOVERY_RESUME_DIR, RESUME_REFUSED_DIR), name, `${JSON.stringify(body, null, 2)}\n`);
     unlinkSync(pendingPath);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, why: errText(cause) };
   }
 }
+
+/**
+ * Whether a pending file left pending/ (Sol's G16). A failure is an answer the
+ * caller must act on: the file is still pending, and the page must say so.
+ */
+export type MoveResult = { ok: true } | { ok: false; why: string };
 
 /** What the launch protocol answered, written into done/ beside the request. */
 export type DoneResume = {
@@ -482,13 +488,13 @@ export type DoneResume = {
 };
 
 /** Move one pending file to done/, with the protocol's answer. Synchronous, like `moveToRefused`. */
-export function moveToDone(root: string, pendingPath: string, name: string, body: DoneResume): boolean {
+export function moveToDone(root: string, pendingPath: string, name: string, body: DoneResume): MoveResult {
   try {
     replaceAtomically(join(root, RECOVERY_RESUME_DIR, RESUME_DONE_DIR), name, `${JSON.stringify(body, null, 2)}\n`);
     unlinkSync(pendingPath);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, why: errText(cause) };
   }
 }
 

@@ -73,7 +73,15 @@
 import type { ReactNode } from "react";
 
 import { Explain } from "./Tooltip";
-import type { AttentionItem, AttentionKind, AttentionList, AttentionView } from "./types";
+import type {
+  AttentionItem,
+  AttentionKind,
+  AttentionList,
+  AttentionProposal,
+  AttentionView,
+  ProposalReach,
+  ProposalRecipient,
+} from "./types";
 import { Card, SectionHeading, cx } from "./ui";
 import { formatDuration } from "./view";
 
@@ -165,6 +173,30 @@ function ageMs(at: string, asOf: number): number | null {
   if (!Number.isFinite(parsed)) return null;
   const age = asOf - parsed;
   return age < 0 ? null : age;
+}
+
+/**
+ * THE ONE LINE A `limited` LIST GETS — the model was refused by the day budget
+ * or a quota cooldown (plan 260910f D6), so some sessions were not judged.
+ *
+ * It passes Fable's ten-second test, which is why it is on screen rather than a
+ * tap away: until `until`, a session that is waiting on you may simply not be
+ * here, so it changes whether you go and look at the sessions below yourself.
+ * The WHY is the producer's own sentence, like `unknown`'s, because "the day's
+ * ceiling is spent" and "the gateway said 429" are different things to do
+ * about. `until` is already on this browser's clock (types.ts shifts it).
+ */
+function stoppedSentence(stopped: Extract<AttentionList, { kind: "limited" }>["stopped"], asOf: number): string {
+  const at = Date.parse(stopped.until);
+  const when = !Number.isFinite(at)
+    ? "a time this page could not read"
+    : new Date(at).toLocaleString([], {
+        // The weekday only when it is not today's, so the usual case stays short.
+        ...(new Date(at).toDateString() === new Date(asOf).toDateString() ? {} : { weekday: "short" as const }),
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+  return `Not every session is being judged — ${stopped.why}, until ${when}.`;
 }
 
 /**
@@ -422,6 +454,21 @@ function Published({
 
        Both parsers refuse a list whose unreadable count exceeds its scanned
        count, so the subtraction cannot print a negative. */
+    /* **A STOPPED JUDGE'S EMPTY LIST IS THE CASE THE `limited` ARM EXISTS FOR.**
+       Nothing found among the few the budget let us judge is not "nothing is
+       waiting on you", so the stop line replaces the reassurance, for the same
+       reason as the two branches above. Plan 260910f D6. */
+    if (list.kind === "limited") {
+      return (
+        <Note
+          head="Not every session is being judged"
+          what={`The model that judges prose questions was refused — ${list.stopped.why}.`}
+          how={`The pass looked at ${list.sessionsScanned} sessions and could not judge ${list.sessionsUnreadable} of them. Drawn dialogs are still watched, and answers the model had already given still count, but a session that ended its turn with a question in prose may not be here until the model is allowed to look again.`}
+        >
+          {stoppedSentence(list.stopped, asOf)}
+        </Note>
+      );
+    }
     if (list.sessionsUnreadable > 0) {
       const judged = list.sessionsScanned - list.sessionsUnreadable;
       return (
@@ -454,7 +501,7 @@ function Published({
      inside the headline. `sessionsUnreadable` counts sessions we TRIED to judge
      and could not — never one we correctly skipped — so this is off on almost
      every pass, which is what keeps it from becoming wallpaper. */
-  const floor = list.sessionsUnreadable > 0;
+  const floor = list.sessionsUnreadable > 0 || list.kind === "limited";
 
   return (
     <section>
@@ -474,7 +521,12 @@ function Published({
         </Note>
       ) : null}
 
-      {floor ? (
+      {/* ONE caveat line, never two: on a `limited` list the stop line says
+          everything the floor line would and why, so it takes that line's
+          place rather than stacking under it. */}
+      {list.kind === "limited" ? (
+        <p className="tw:px-1 tw:pb-2 tw:text-[12px] tw:text-ink-faint">{stoppedSentence(list.stopped, asOf)}</p>
+      ) : floor ? (
         <p className="tw:px-1 tw:pb-2 tw:text-[12px] tw:text-ink-faint">
           {list.sessionsUnreadable} of {list.sessionsScanned} could not be judged, so there may be more.
         </p>
@@ -576,6 +628,139 @@ function AttentionCard({
 }
 
 /**
+ * Each holder, in the reader's words. A `Record` for the reason `KINDS` is one:
+ * a sixth holder is a type error here, not a quiet fall-through.
+ *
+ * **`greg` is "yours", never "Greg"**: this page is read by Greg, and a line
+ * that named him would read as somebody reporting what he decided. Nothing on
+ * the card uses a person as a speaker (plan 260910f D9).
+ */
+const HOLDERS: Record<ProposalRecipient, { line: string; name: string; what: string }> = {
+  sol: {
+    line: "ask Sol",
+    name: "Sol",
+    what: "A technical question whose evidence is in the code — Sol reads the tree and can find the answer.",
+  },
+  fable: {
+    line: "ask Fable",
+    name: "Fable",
+    what: "A question of wording, a default, or whether a case can be dropped — what Fable is for.",
+  },
+  greg: {
+    line: "this one is yours",
+    name: "you",
+    what: "Irreversible or visible outside the project, a change to a rule doc, a product tweak that would remove engineering, or a recommendation worth contesting — the questions that stay with you.",
+  },
+  overseer: {
+    line: "the Overseer could check it",
+    name: "the Overseer",
+    what: "Something that can be checked rather than judged — pulling latest, whose tests are red, how loaded the box is.",
+  },
+  self: {
+    line: "the agent can answer it itself",
+    name: "the agent",
+    what: "The agent already has what it needs and stopped out of habit.",
+  },
+};
+
+/** Whether the holder could take it now, as the tip's second paragraph. Never a reason to name somebody else. */
+function reachSentence(reach: ProposalReach, name: string): string {
+  const sent = "Nothing has been sent to anyone: this only says who the model thinks holds the answer.";
+  if (reach.kind === "available") return sent;
+  if (reach.kind === "unavailable") {
+    return `Not available now — ${reach.why}. It still names ${name}: a missing capability is shown, never swapped for another. ${sent}`;
+  }
+  return `Whether ${name === "you" ? "you are" : `${name} is`} free to take it was not checked — ${reach.why}. ${sent}`;
+}
+
+/**
+ * THE PROPOSAL, under the `why` — plan 260910f Stage 2.
+ *
+ * **It is text, and there is no control here.** The card still only SELECTS
+ * the session (agreement (a)); a proposal is the model's guess at who holds the
+ * answer, attributed to the model on its own line, and "nothing has been sent"
+ * is on screen because the one thing a reader must not infer from a named
+ * holder is that the holder has been asked.
+ *
+ * `off`, `not-applicable`, `not-reported` and `not-reached` draw NOTHING — the
+ * house rule: a caveat stays on screen only if it changes what you do in the
+ * next ten seconds, and "no proposal was made" changes nothing (the list-level
+ * line already covers a budget stop). `unplaced` draws one plain line, because
+ * *the model could not tell* is a reading, and the one D8 says must be visible.
+ */
+function Proposal({ proposal }: { proposal: AttentionProposal }): ReactNode {
+  switch (proposal.kind) {
+    case "off":
+    case "not-reached":
+    case "not-applicable":
+    case "not-reported":
+      return null;
+    case "unplaced":
+      return (
+        <Explain
+          tip={{
+            head: "No proposal",
+            what: `The model could not tell who holds the answer: ${proposal.why}.`,
+            // THE WORD "model" COMES FIRST, so the identifier can never stand
+            // where a speaker's name would (GPT Sol's F16): any non-blank
+            // string crosses the parsers, including one that reads "Greg".
+            how: `That is a model's reading via the Overseer (model: ${proposal.by.model}), not a default — it is never turned into "ask you". Nothing has been sent.`,
+          }}
+          placement="bottom"
+          className="tw:mt-2 tw:block tw:text-[12px] tw:text-ink-faint"
+        >
+          No proposal — the model could not tell who holds the answer
+        </Explain>
+      );
+    case "proposed": {
+      const holder = HOLDERS[proposal.recipient];
+      return (
+        <div className="tw:mt-2">
+          {/* THE SENTENCE, quoted. Found by the model and checked by the
+              producer to be in the tail it read (D13) — so unlike the tail
+              below, it is chosen by what it says rather than by where it sits.
+
+              Its box is bounded by its length (F17): every parser holds it to
+              MAX_ASKS_CHARS, it is prose rather than terminal output, so NO
+              preserved newlines (a quote of one word per line would otherwise
+              be as tall as it has words); and `wrap-anywhere` rather than
+              `break-words`, because only `overflow-wrap: anywhere` lets an
+              unbroken run shrink the box, so even a 298-character token wraps
+              inside a 390px card instead of pushing the page sideways. */}
+          <figure className="tw:m-0">
+            <figcaption className="tw:text-[11px] tw:text-ink-faint">the sentence this proposal is about</figcaption>
+            <blockquote className="tw:mt-0.5 tw:border-l-2 tw:border-rule tw:pl-2 tw:text-[13px] tw:wrap-anywhere tw:text-ink-soft">
+              {proposal.asks}
+            </blockquote>
+          </figure>
+          <p className="tw:mt-1.5 tw:text-[13px] tw:break-words">
+            <Explain
+              tip={{ head: `Proposed: ${holder.line}`, what: holder.what, how: reachSentence(proposal.reach, holder.name) }}
+              placement="bottom"
+              className="tw:font-medium tw:text-ink"
+            >
+              Proposed: {holder.line}
+            </Explain>
+            <span className="tw:text-ink-soft"> — {proposal.reason}</span>
+            {/* On screen, not only in the tip: it changes what you do now —
+                you may answer it yourself rather than wait on a holder who
+                cannot take it. */}
+            {proposal.reach.kind === "unavailable" ? <span className="tw:text-ink-faint"> · not available now</span> : null}
+          </p>
+          {/* FIXED WORDS CARRY THE TYPE — GPT Sol's F16. The identifier is only
+              ever drawn after "model:", never after "by": any non-blank string
+              crosses the parsers, and "Proposal by Greg" must not be a
+              sentence this card can produce. */}
+          <p className="tw:mt-0.5 tw:text-[11px] tw:break-words tw:text-ink-faint">
+            Model proposal via the Overseer · model: {proposal.by.model} · nothing has been sent
+          </p>
+        </div>
+      );
+    }
+  }
+}
+
+/**
  * WHY WE BELIEVE THIS NEEDS GREG, and the two arms are answered by different
  * mechanisms — which is why they do not look the same.
  *
@@ -598,6 +783,11 @@ function AttentionCard({
  * whether it should shut down."* The excerpt is what they check the inference
  * AGAINST — it changes what you would believe rather than what you would do in
  * the next ten seconds, which is Fable's rule for putting something a tap away.
+ *
+ * **When a proposal quotes the sentence that asks, the quote is the evidence in
+ * the flow** (`Proposal`, above) — found by what it says rather than by where it
+ * sits, which is what the tail below cannot promise. The tail stays one tap
+ * away, caveat and all, as the context the quote came from.
  *
  * It is terminal output, so it opens into a `<pre>` with its whitespace intact
  * and its own scrollbars — `max-h-72 overflow-auto`, the same treatment
@@ -631,6 +821,7 @@ function Evidence({ item }: { item: AttentionItem }): ReactNode {
       {/* The headline: one sentence, the producer's own, and the thing a person
           acts on. Never truncated — it is a sentence, not a transcript. */}
       <p className="tw:text-[13px] tw:break-words tw:text-ink">{item.evidence.why}</p>
+      <Proposal proposal={item.proposal} />
       {/* A `<details>` rather than a tooltip: the card holds terminal output
           measured at up to 1,736 characters, and a floating panel is the wrong
           container for something you scroll. The idiom is the one

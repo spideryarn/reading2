@@ -31,6 +31,12 @@ Four things a reader can see, spread over six places a writer must edit:
   page is left open on a phone for hours and reloaded whenever iOS reclaims the tab; `mode.ts`'s
   header has the argument, and an unknown name falls back to Sessions rather than rendering nothing.
 
+One more thing it gets for free: **the browser tab's title**, `(2) Box health · Fleet`, which takes
+the mode's `MODE_LABELS` word — so choose that word knowing it is also what a tab strip shows. The
+rule (stale first, then who needs you, then the tab, `Fleet` last) is in
+[`page-title.ts`](../../tools/fleet/web/src/page-title.ts); it follows the reading view's
+[page-titles.md](page-titles.md), in a different application.
+
 ## The registrations
 
 | Register | Where | Checked by |

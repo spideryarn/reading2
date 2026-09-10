@@ -50,6 +50,7 @@ function observation(over: Partial<AttentionObservation> & Pick<AttentionObserva
     evidence: prose("tests are red"),
     answerability: PHONE,
     topic: "tests are red",
+    proposal: { kind: "off", why: "proposals are off" },
     ...over,
   };
 }
@@ -398,6 +399,7 @@ const _item: AttentionItem = {
   kind: "irreversible",
   evidence: { kind: "prose", excerpt: "…", why: "…" },
   answerability: { kind: "phone" },
+  proposal: { kind: "off", why: "proposals are off" },
   duplicates: [],
 };
 

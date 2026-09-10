@@ -32,6 +32,7 @@
  */
 import type {
   RecoveryFeed,
+  RecoveryResumeAccountUnknown,
   RecoveryResumePostAnswer,
   RecoveryResumePostBody,
   RecoveryResumeProjection,
@@ -330,6 +331,17 @@ function sameLiveRow(a: RecoveryWireLiveRow, b: RecoveryWireLiveRow): boolean {
 
 const LAUNCH_STATES = ["planned", "waiting-admission", "reserved", "launching", "observed-running", "completed", "failed-before-launch", "outcome-unknown"] as const;
 
+/** wire.ts § `RecoveryResumeAccountUnknown` (G17): a code this browser does not know is not guessed at. */
+const ACCOUNT_UNKNOWN_REASONS = [
+  "default-login",
+  "ledger-unreadable",
+  "ledger-ambiguous",
+  "account-unusable",
+  "transcript-elsewhere",
+  "no-transcript",
+  "not-resolved",
+] as const satisfies readonly RecoveryResumeAccountUnknown[];
+
 function launch(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const c = value["completion"];
@@ -394,7 +406,9 @@ function preview(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const account = value["account"];
   const accountOk =
-    isRecord(account) && ((account["kind"] === "pinned" && nonBlank(account["name"]) && nonBlank(account["configDir"])) || (account["kind"] === "unknown" && nonBlank(account["why"])));
+    isRecord(account) &&
+    ((account["kind"] === "pinned" && nonBlank(account["name"]) && nonBlank(account["configDir"])) ||
+      (account["kind"] === "unknown" && oneOf(account["reason"], ACCOUNT_UNKNOWN_REASONS) && nonBlank(account["why"])));
   const uncertainty = value["uncertainty"];
   return (
     nonBlank(value["candidateId"]) &&
@@ -425,6 +439,12 @@ function projection(value: unknown): string | null {
       isRecord(p) &&
       (p["kind"] === "free" ||
         (p["kind"] === "waiting-for-verification" && nonBlank(p["candidateId"]) && text(p["name"]) && iso(p["since"])) ||
+        (p["kind"] === "stuck" &&
+          nonBlank(p["candidateId"]) &&
+          text(p["name"]) &&
+          oneOf(p["state"], LAUNCH_STATES) &&
+          nonBlank(p["why"]) &&
+          nonBlank(p["disposeCommand"])) ||
         (p["kind"] === "spacing" && iso(p["until"])))
     )
   ) {
@@ -438,6 +458,11 @@ function projection(value: unknown): string | null {
   if (!Array.isArray(previews)) return "the previews are not a list";
   const badPreview = previews.findIndex((p) => !preview(p));
   if (badPreview !== -1) return `preview ${badPreview + 1} is malformed`;
+  // G18: absent from an older server is none; present, every one is whole.
+  const orphans = value["orphans"];
+  if (orphans !== undefined && !(Array.isArray(orphans) && orphans.every((o) => isRecord(o) && nonBlank(o["candidateId"]) && requestState(o["state"]) && nonBlank(o["why"])))) {
+    return "the orphaned requests are malformed";
+  }
   if (!whole(value["pendingOverflow"])) return "the pending overflow is not a count";
   return null;
 }
@@ -457,6 +482,7 @@ function resumeContradiction(p: RecoveryResumeProjection, records: readonly Reco
     const record = shown.get(r.candidateId);
     if (record !== undefined && record.name !== r.name) return `the request for ${r.candidateId} carries another name from its record's`;
   }
+  for (const o of p.orphans) if (shown.has(o.candidateId)) return `the orphaned request for ${o.candidateId} names a record this page shows`;
   const previewed = new Set<string>();
   for (const pv of p.previews) {
     if (previewed.has(pv.candidateId)) return `${pv.candidateId} has two previews`;
@@ -466,7 +492,7 @@ function resumeContradiction(p: RecoveryResumeProjection, records: readonly Reco
       return `the preview for ${pv.candidateId} names a different conversation from its record's evidence`;
     }
   }
-  if (p.pace.kind === "waiting-for-verification") {
+  if (p.pace.kind === "waiting-for-verification" || p.pace.kind === "stuck") {
     const record = shown.get(p.pace.candidateId);
     if (record !== undefined && record.name !== p.pace.name) return `the pace names ${p.pace.candidateId} under another name from its record's`;
   }
@@ -492,7 +518,9 @@ export function parseResumeSection(value: unknown, records: readonly RecoveryWir
     case "published": {
       const why = projection(value["projection"]);
       if (why !== null) return unreadable(why);
-      const section = value as Extract<RecoveryResumeSection, { kind: "published" }>;
+      const raw = value as Extract<RecoveryResumeSection, { kind: "published" }>;
+      // An older server sends no orphans: none, so the page never reads past the end of a list.
+      const section: Extract<RecoveryResumeSection, { kind: "published" }> = { ...raw, projection: { ...raw.projection, orphans: raw.projection.orphans ?? [] } };
       const contradiction = resumeContradiction(section.projection, records);
       return contradiction === null ? section : unreadable(`it contradicts itself: ${contradiction}`);
     }

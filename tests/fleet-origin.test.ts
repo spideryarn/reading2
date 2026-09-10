@@ -54,6 +54,34 @@ describe("addressableHost", () => {
     }
   });
 
+  it("accepts the MagicDNS short name, and only a real single label", () => {
+    // What a phone on the tailnet may have bookmarked. A rebinding attacker
+    // needs a name they control in public DNS, and every one has a dot.
+    expect(addressableHost("spideryarn-box")).toBe(true);
+    expect(addressableHost("SPIDERYARN-BOX")).toBe(true);
+    // The rule is "one DNS label", not "no dot": each of these is refused.
+    for (const h of ["", "evil.", ".", "-box", "box-", "spideryarn_box", "box!", "b ox", "evil.example", "localhost.evil.example"]) {
+      expect(addressableHost(h), JSON.stringify(h)).toBe(false);
+    }
+    expect(addressableHost("a".repeat(63))).toBe(true);
+    expect(addressableHost("a".repeat(64))).toBe(false);
+  });
+
+  it("requires real DNS labels before the Tailscale suffix", () => {
+    expect(addressableHost("box.tailnet.ts.net")).toBe(true);
+    expect(addressableHost(`${"a".repeat(63)}.tailnet.ts.net`)).toBe(true);
+    for (const h of [
+      ".ts.net",
+      "box..tailnet.ts.net",
+      "-box.tailnet.ts.net",
+      "box-.tailnet.ts.net",
+      "box._tailnet.ts.net",
+      `${"a".repeat(64)}.tailnet.ts.net`,
+    ]) {
+      expect(addressableHost(h), JSON.stringify(h)).toBe(false);
+    }
+  });
+
   it("is not fooled by case or by IPv6 brackets", () => {
     expect(addressableHost("LOCALHOST")).toBe(true);
     expect(addressableHost("[::1]")).toBe(true);

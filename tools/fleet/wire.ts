@@ -747,7 +747,68 @@ export type AttentionItem = {
   answerability: AttentionAnswerability;
   /** Other sessions asking the same thing. Answer once, apply to all. */
   duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+  /**
+   * Who the model thinks holds the answer — a PROPOSAL, never a decision, and
+   * **nothing is sent to anyone because of it** (plan 260910f Stage 2). Every
+   * arm is spelled out so a reader draws exactly one thing for each, and the
+   * three parsers of this type refuse a malformed one whole.
+   *
+   * An item from an older producer has no such field; its parsers read that as
+   * `not-reported` rather than as a failure, and an older parser reading a newer
+   * item drops the field — poorer, not wrong.
+   */
+  proposal: AttentionProposal;
 };
+
+/**
+ * The five holders a question can be routed to — docs/project/overseer-direction.md
+ * § Route by who has the information, not by confidence, plus `overseer` (it answers
+ * only what it can verify) and `self` (the agent already has what it needs).
+ * `unplaced` is NOT one of them; it is its own arm of `AttentionProposal`, and it
+ * is never promoted to `greg` (plan 260910f D8).
+ */
+export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
+
+/**
+ * Whether the proposed holder could take the question NOW. Projected on every
+ * pass and never remembered (D14). `not-checked` is honest rather than
+ * hopeful: nothing reads, for instance, whether Codex has capacity.
+ */
+export type ProposalReach =
+  | { kind: "available" }
+  | { kind: "unavailable"; why: string }
+  | { kind: "not-checked"; why: string };
+
+/**
+ * Who proposed it — stamped by the code that made the call, never read from
+ * the model's own output (D9). There is deliberately no arm for a person: a
+ * proposal is never anybody's voice, least of all Greg's.
+ */
+export type ProposalAuthor = { kind: "model"; model: string; via: "overseer" };
+
+export type AttentionProposal =
+  | {
+      kind: "proposed";
+      /** The tail's fingerprint plus the prompt version, so a later stage's mark can be keyed to it. */
+      id: string;
+      recipient: ProposalRecipient;
+      /** One sentence: why that holder has the information. */
+      reason: string;
+      /** The agent's own sentence that hands over the decision — checked to be in the tail it was read from (D13). */
+      asks: string;
+      by: ProposalAuthor;
+      reach: ProposalReach;
+    }
+  /** The model answered and could not tell who holds it. Drawn as such; never Greg by default. */
+  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor }
+  /** Proposals are not enabled — the default (D7). Draws nothing. */
+  | { kind: "off"; why: string }
+  /** A verdict from an earlier prompt not yet re-read, or a re-read the budget or the gateway refused. Draws nothing. */
+  | { kind: "not-reached"; why: string }
+  /** A drawn dialog: observed rather than inferred, and answered in the detail pane. Draws nothing. */
+  | { kind: "not-applicable" }
+  /** Parsed from an older producer that had no such field. Draws nothing. */
+  | { kind: "not-reported" };
 
 export type AttentionList =
   | {
@@ -782,7 +843,50 @@ export type AttentionList =
       sessionsUnreadable: number;
       scannedAt: string;
     }
-  | { kind: "unknown"; why: string; scannedAt: string };
+  | { kind: "unknown"; why: string; scannedAt: string }
+  /**
+   * **THE MODEL WAS STOPPED, NOT MERELY RATIONED** — the day budget or a quota
+   * cooldown refused at least one paid call this pass (plan 260910f, D4–D6).
+   * The items are still real — dialogs are observed, and cached verdicts,
+   * stale ones included, still place theirs — and `sessionsUnreadable` counts
+   * the tails the refusal left unjudged, exactly as it does on `list`.
+   *
+   * **A NEW ARM RATHER THAN A FIELD ON `list`, and the reason is the older
+   * readers.** All three parsers of this type (store.ts, tools/fleet/attention.ts,
+   * web/src/types.ts) project the fields they know and ignore the rest, so a
+   * `stopped` field on `{kind:"list", items:[]}` would reach an older dashboard
+   * as *nothing is waiting on you* — the one sentence a stopped judge must never
+   * produce. An unknown KIND, by contrast, every older parser already rejects
+   * into its loud `unknown`. GPT Sol's F2 on the plan.
+   *
+   * `list` keeps exactly its old meaning — fully judged within the pass's own
+   * per-pass budget — so a list from an older producer needs no reinterpreting.
+   * The per-pass catch-up after a fleet-wide restart is ordinary operation and
+   * stays a `list` with `sessionsUnreadable`; this arm is only for a refusal.
+   */
+  | {
+      kind: "limited";
+      /** Already sorted, like `list`'s. May be empty, and an empty one is NOT a calm fleet. */
+      items: readonly AttentionItem[];
+      sessionsScanned: number;
+      sessionsUnreadable: number;
+      scannedAt: string;
+      stopped: AttentionJudgementStopped;
+    };
+
+/**
+ * Why the model pass was refused, and when it may be tried again.
+ *
+ * `exhausted` is the day's ceiling (or a ledger that cannot be trusted, which is
+ * refused for the rest of the UTC day rather than reset); `cooling-down` is the
+ * gateway's own 402/429, backed off. `until` is an instant, never a duration,
+ * so every reader converts it once rather than each doing its own arithmetic.
+ */
+export type AttentionJudgementStopped = {
+  kind: "exhausted" | "cooling-down";
+  why: string;
+  until: string;
+};
 
 /* ------------------------------------------------------------------ *
  * Why a session is not doing anything, which is three facts wearing one word.
@@ -1034,6 +1138,21 @@ export type ProducerStamp = {
 };
 
 /**
+ * Something THIS BUILD of the dashboard can do that an older one could not, declared on every
+ * payload so a consumer can refuse to depend on it until the collector says so. Plan 260910f,
+ * Sol's G3: the Overseer's resume pass must not launch a `claude --resume` that the dashboard
+ * collecting the box would read as unverifiable.
+ *
+ *  - `argv-resume-uuid`: `claude-argv.ts` reads `--resume <uuid>` as the conversation, so a resumed
+ *    session's execution reading can be `verified` rather than `claimed-only`.
+ *
+ * A union of literals rather than `string`, so the producer cannot declare a misspelling. The
+ * Overseer's parser keeps names it does not know as strings (tools/overseer/observation.ts), because a
+ * newer dashboard is not a broken one.
+ */
+export type ProducerCapability = "argv-resume-uuid";
+
+/**
  * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
  * three consumers cannot disagree about it.
  *
@@ -1115,6 +1234,13 @@ export type FleetState<Row, Health> = {
    */
   schema: 1;
   producer: ProducerStamp;
+  /**
+   * What this build can do that an older one could not — see `ProducerCapability`. Beside
+   * `producer` because both answer "who composed this payload". Additive, so not a bump: a consumer
+   * that ignores it is poorer rather than wrong, and a payload from an older dashboard, which lacks
+   * it, is read by the Overseer as declaring none.
+   */
+  capabilities: readonly ProducerCapability[];
   /**
    * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
    * claim about the box when `collectedAt` is non-null, and a freshly restarted
@@ -3693,7 +3819,9 @@ export type QuestionGap =
   | {
       kind: "eligible-observation-omitted";
       observation: { kind: "dialog"; rowId: string } | { kind: "prose"; itemId: string };
-    };
+    }
+  /** Written by either composer when the attention pass published `limited`: the model was refused, so prose went unjudged until `until`. */
+  | { kind: "attention-judgement-stopped"; why: string; until: string };
 
 /** Only this arm may support the sentence “nothing needs you”. */
 export type QuestionsView =
@@ -5036,7 +5164,25 @@ export type RecoveryResumeRequestState =
  * the transcript (Sol's G4 — `--resume` only finds its own config dir's
  * conversations). Never `auto`.
  */
-export type RecoveryResumeAccount = { kind: "pinned"; name: string; configDir: string } | { kind: "unknown"; why: string };
+export type RecoveryResumeAccount = { kind: "pinned"; name: string; configDir: string } | { kind: "unknown"; reason: RecoveryResumeAccountUnknown; why: string };
+
+/**
+ * WHY THE ACCOUNT IS NOT ESTABLISHED (Sol's G17), as a code, so the page never
+ * reads prose to decide what to tell Greg. Only `default-login` is PROVEN — a
+ * whole, readable ledger with no row for the conversation — and only it gets
+ * the plain `claude --resume` with no account warning. Every other code means
+ * nobody knows which config directory holds the transcript, and the manual
+ * instructions say `CLAUDE_CONFIG_DIR` must name it.
+ */
+export type RecoveryResumeAccountUnknown =
+  | "default-login"
+  | "ledger-unreadable"
+  /** A malformed or cut newest line, or a ledger longer than the window with no row in it. */
+  | "ledger-ambiguous"
+  | "account-unusable"
+  | "transcript-elsewhere"
+  | "no-transcript"
+  | "not-resolved";
 
 /**
  * The previous objective and the uncertainty, for a record whose resume is
@@ -5070,9 +5216,22 @@ export type RecoveryResumeProjection = {
   pace:
     | { kind: "free" }
     | { kind: "waiting-for-verification"; candidateId: string; name: string; since: string }
+    /**
+     * Sol's G19: the queue is blocked by a launch only Greg's `dispose` moves —
+     * `outcome-unknown`, or a terminal launch still holding its slot.
+     * `disposeCommand` is display text, never run.
+     */
+    | { kind: "stuck"; candidateId: string; name: string; state: RecoveryResumeLaunchState; why: string; disposeCommand: string }
     | { kind: "spacing"; until: string };
   requests: { candidateId: string; name: string; state: RecoveryResumeRequestState }[];
   previews: RecoveryResumePreview[];
+  /**
+   * Sol's G18: requests whose candidate this file's records do not hold — the
+   * record aged out of the index, or a stale tab asked for one it never held.
+   * The store's single write point puts them here rather than dropping them,
+   * and the page lists them apart from the records, which they never touch.
+   */
+  orphans: { candidateId: string; state: RecoveryResumeRequestState; why: string }[];
   /** Pending request files past the scan limit: present on disk, not listed. */
   pendingOverflow: number;
 };

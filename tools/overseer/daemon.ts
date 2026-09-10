@@ -1120,7 +1120,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       evidence: recoveryEvidence,
       observe: () => {
         const index = store.recovery;
-        return { inventory, health: accepted?.snapshot.health ?? null, index: { ...index, records: new Map(index.records) } };
+        return {
+          inventory,
+          health: accepted?.snapshot.health ?? null,
+          // G3: from the latest ACCEPTED observation, never held (the Overseer's ruling).
+          capabilities: accepted?.snapshot.capabilities ?? [],
+          index: { ...index, records: new Map(index.records) },
+        };
       },
       view: () => latestView,
       accountUsage: resumeOptions?.accountUsage ?? (() => accountUsage),

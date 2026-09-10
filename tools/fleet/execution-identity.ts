@@ -45,10 +45,18 @@
  *
  * A verified execution says a named, live, durably-identified harness process
  * is under this pane. It says nothing about which transcript that process is
- * writing. A bare `claude` with no `--session-id` is verified as a process and
- * unverifiable as a conversation, and collapsing the two would either withhold
- * a fact we have or invent one we do not. `ExecutionReading` in wire.ts carries
- * them as separate fields for that reason.
+ * writing. A bare `claude` with neither `--session-id` nor `--resume <uuid>` is
+ * verified as a process and unverifiable as a conversation, and collapsing the
+ * two would either withhold a fact we have or invent one we do not.
+ * `ExecutionReading` in wire.ts carries them as separate fields for that reason.
+ *
+ * A RESUMED claude is read exactly as a `--session-id` one is, since plan
+ * 260910f Stage 3a: `claude --resume` refuses a `--session-id` beside it, so the
+ * id after `--resume` is the only place its argv names a conversation, and
+ * `claude-argv.ts` reads it (a lowercase uuid immediately after the flag, and on
+ * a `ps` line only when a dash-led token or nothing follows). Nothing in this
+ * file had to change for that beyond the sentence below: the harness walk hands
+ * over `claudeSessionId`, and `conversationOf` reconciles it with the claim.
  *
  * ## Pure classifier, thin adapter — as in work.ts / work-probe.ts
  *
@@ -243,7 +251,7 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
   const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
   const whyUnobserved =
     harness.kind === "claude-code"
-      ? "the claude under this pane was started without --session-id, so its own command line names no conversation"
+      ? "the claude under this pane was started with neither --session-id nor --resume <uuid>, so its own command line names no conversation"
       : `this pane holds ${harness.kind}, whose command line carries no conversation id — a Claude may not have started in it yet, or may have finished`;
 
   return {

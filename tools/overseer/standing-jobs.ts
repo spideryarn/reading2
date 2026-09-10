@@ -237,7 +237,14 @@ export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
   // what a session may do. Same documents (digests below, unchanged), same
   // `work: session`, same schedule. Was `d37ae432708c` and `eb76b675c2ce`.
   "get-ready-to-deploy": "c5c7f9f93886",
-  "feedback-sweep": "c921a5c4b732",
+  // RE-PINNED 2026-09-10 (evening) for a change to feedback-reports.md ONLY:
+  // its new "Into the Overseer's queue" section (Greg, 2026-09-10) makes the
+  // sweep's first output queue entries — bug reports above suggestions, an
+  // admin's above a reader's, batched or split as the agent sees fit — and has
+  // the sweep authorise them against that doc. Same prompt, same `work:
+  // session`, same schedule; what changed is what the sweep does first. Read
+  // by the Overseer before copying. Was `c921a5c4b732`.
+  "feedback-sweep": "6bf1036fbc9c",
   // PINNED 2026-09-10, new (plan 260910e § D5): the fixture, `dry-run`, on
   // `tools/overseer/schedule-fixture.md`. It can start nothing as pinned.
   //
@@ -266,7 +273,7 @@ export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
  */
 export const AUTHORISED_DOCUMENTS: Readonly<Record<StandingJobId, readonly JobDocument[]>> = {
   "get-ready-to-deploy": [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "97564b2f4077ed18484738227cbad0d4ad7551589bed3d554e4bcf2aa2ed4a85" }],
-  "feedback-sweep": [{ path: "docs/project/feedback-reports.md", sha256: "70d4201860cb3e35981482c071ff93f3f93354418c87c09ba9d6f083ba1b94da" }],
+  "feedback-sweep": [{ path: "docs/project/feedback-reports.md", sha256: "d1f915d1de6bb0f799cd7bea848c9581bc9d0c6338c870e36b776b135ecffa90" }],
   "schedule-fixture": [{ path: "tools/overseer/schedule-fixture.md", sha256: "e8909b6f5002c060cca16a158d710a77a8881d5b3ad1b79c8e3cc46bab94928b" }],
 };
 
