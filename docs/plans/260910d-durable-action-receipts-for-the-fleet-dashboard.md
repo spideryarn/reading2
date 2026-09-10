@@ -1,7 +1,8 @@
 # Durable action receipts for the fleet dashboard
 
-**Status, 2026-09-10: planned; plan review round 1 came back "rework" with fourteen findings and no
-P0, all taken but one half of one (§ Plan review). Round 2 pending. Nothing built.** Queue item
+**Status, 2026-09-10: plan settled after two rounds of GPT Sol review (both "rework", no P0) and a
+Fable arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
+Discovery is closed. Stage 1a next. Nothing built.** Queue item
 `qi-zabqe99q`, dispatched by the Overseer. This is the roadmap stage
 [260908f § Durable action receipts — restart without guessing or repeating a write](260908f-overseer-and-fleet-improvement-roadmap.md#stage-durable-action-receipts--restart-without-guessing-or-repeating-a-write),
 and it absorbs [260908j § Stage 5 — request ids and receipts](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md#stage-5--request-ids-and-receipts),
@@ -46,8 +47,8 @@ for keeping things working in prod."*
     kills (`killRoute`). Async, with external effects outside any conversation. Behind
     `FLEET_ACT_ENABLED`, which stays off; built and tested with fake `ActionIo`.
 - **Five command gestures mutate an existing action rather than being one**: cancel, clear, revive,
-  abandon, hold release. They get no receipts of their own; they write to the receipt of the action
-  they change.
+  abandon, hold release. They get no receipts of their own; cancel, clear and abandon write to the
+  receipt of the action they change, revive and hold release do not (§ Restoring says why).
 - **Outside callers exist.** The Overseer posts to `/api/actions/box` (dry run only,
   `tools/overseer/rule-work.ts:172`) and its CLI posts to `/api/steer/message`
   (`tools/overseer/cli-state.ts`). `scripts/fleet-restart-plan.ts` reads the queues from
@@ -66,8 +67,10 @@ for keeping things working in prod."*
 ### Two ids, and neither is the other
 
 - **`receiptId`** — the durable action instance id, minted by the server at acceptance:
-  `<serverInstanceId>-r<n>`, the existing run-qualified convention (`instance.ts`), so unique across
-  restarts. Distinct from the action vocabulary id (`compact`) and from the queue item id.
+  `<serverInstanceId>-r<n>`, the existing run-qualified convention (`instance.ts`) — collision-
+  resistant rather than intrinsically unique, and made safe against a repeated run token by the
+  reservation rule in § Restoring. Distinct from the action vocabulary id (`compact`) and from the
+  queue item id.
 - **`requestId`** — the idempotency key, **minted by the client once per intention** and reused for
   every retry of that intention (see Stage 4 for the envelope that makes "reuse" real). Optional on
   the write routes that create an action, so existing callers keep working; an action without one
@@ -78,27 +81,39 @@ for keeping things working in prod."*
 
 ### The fingerprint (260908j's R5)
 
-**A sha256 over the canonical JSON (keys sorted) of the validated request with `requestId` removed —
-every field, not a chosen list.** That includes `declaredStatus`, `panePid`, the full question
-material, the ordered broadcast recipients, and the complete preview claim and submitted material.
-Anything the server observes that was not in the request (the tmux generation, this run's instance
-id) is evidence on the receipt, not fingerprint input; hashing the current instance would make
-replay across a restart impossible.
+**A sha256 over the canonical JSON (keys sorted) of a `WireIntent` — the client-supplied fields
+exactly as sent and shape-validated, with `requestId` removed — every field, not a chosen list.**
+That includes `declaredStatus`, `panePid`, the full question material, the ordered broadcast
+recipients, and the complete preview claim and submitted material. **Nothing the server derives goes
+in**: not the catalogue `Action` a parse resolves an id to, not a preview entry, not the tmux
+generation or this run's instance id. Those are evidence on the receipt; hashing any of them would
+make an identical retry conflict with itself after a deploy or a restart.
 
 A genuine retry resubmits the original envelope byte for byte. A request rebuilt from refreshed
 observations is a new intention and gets a new `requestId`.
 
-Same `requestId` and fingerprint → the stored receipt comes back and **nothing happens**. Same
-`requestId`, different fingerprint → `409 request-id-conflict`. **Both are decided after the body is
-parsed and before the rate limiter and before any effect.**
+**The order in a route (Sol F16):** check the origin, read the body, validate its JSON shape and the
+`requestId` — a present but malformed id is refused, never downgraded to an unkeyed request — compute
+the fingerprint, and **look the id up before catalogue resolution, preview freshness, rate limiting
+or any other check about executing now.** Same `requestId` and fingerprint → the stored receipt comes
+back and **nothing happens**, even if the action has since been removed from the catalogue or its
+preview has expired. Same `requestId`, different fingerprint → `409 request-id-conflict`. Only an
+unknown id goes on to the current validation.
 
 ### The actor (roadmap: "actor")
 
-Every `accepted` and `reconciled` record carries `actor: {kind, id}`, separate from `speaker` (which
-is the message's authorship, rendered to the agent). The dashboard has no authentication — the CSRF
-origin check is not identity — so an HTTP caller is `{kind: "client-claimed", id: <the speaker the
-body claimed>}`, and a record written by the drain or by recovery is `{kind: "system", id: null}`.
-Nothing is ever promoted to an authenticated actor.
+Every `accepted`, `withdrawn` and `reconciled` record carries `actor: {kind, id}`, separate from
+`speaker` (which is the message's authorship, rendered to the agent). The dashboard has no
+authentication — the CSRF origin check is not identity — so:
+
+- where the body claims a speaker: `{kind: "client-claimed", id: <that speaker>}`, and `speaker` is
+  kept separately;
+- where it claims nobody — `/api/steer/answer` and a box `run` have no speaker field (Sol F18):
+  `{kind: "unattributed-http", id: null}`;
+- a record written by the drain or by recovery: `{kind: "system", id: null}`.
+
+`speaker` is nullable and operation-specific, never invented. Nothing is ever promoted to an
+authenticated actor.
 
 ### The receipt's states
 
@@ -116,15 +131,16 @@ Nothing is ever promoted to an authenticated actor.
      └─► not-sent    (undeliverable, lost-at-restart, tmux-generation-unproven or -changed,
                       recovery-blocked)
 
-  outcome-unknown ──► reconciled { lease-abandoned | operator-confirmed | abandoned-unknown }
+  outcome-unknown ──► reconciled { lease-abandoned }        (Stage 4 adds its own gesture's arms)
 ```
 
 - **Every arm names its producer.** `keys-submitted`: the coordinator's `ok`. `not-sent`:
   `nothingWasSent`, the coordinator's `held`, a queued item that can never be delivered, and the
   recovery conclusions. `withdrawn`: cancel/clear. `outcome-unknown`: the coordinator's ambiguous
-  readings, a throw, recovery. `reconciled`: the abandon route (`lease-abandoned`) and the two
-  existing hold-release gestures, whose names are kept exactly — `operator-confirmed` is a person
-  saying they looked at the terminal, **not** what they found (`quarantine.ts:286`).
+  readings, a throw, recovery. `reconciled`: the abandon route (`lease-abandoned`), which is about
+  one leased item. **The hold-release gestures do not write receipts** — a receipt never ends a hold
+  and a hold never rewrites a receipt (§ Restoring, the barrier bullet); Stage 4's reconciliation
+  gesture for an enacted plan adds its own arms, labelled as a person's statement.
 - **A reconciliation never turns unknown into proven.** It records who looked and when.
 - **Terminal is terminal.** The journal refuses (and counts) a transition the machine does not
   allow, rather than writing it.
@@ -178,9 +194,10 @@ say the work is not durable, and `status()` and the log say why.
    `attempted` is proof it was not attempted.**
 3. **`enqueue`**: `accepted` and its material land before the item enters queue memory or a 200 is
    returned — or the enqueue is unkeyed-and-fail-open, and its response says `durable: false`.
-4. **`withdrawn`, before cancel or clear change queue memory.** If it does not land: `503
-   receipt-unavailable` and the queue is unchanged. Otherwise the person is told it is cancelled, the
-   restart restores it, and it is delivered (Sol F2).
+4. **`withdrawn`, before cancel or clear change queue memory.** If it cannot land for a durably
+   accepted item: `503 receipt-unavailable`, and that item is unchanged. Once it lands, the item is
+   removed and the answer is success; recovery sees `withdrawn` and does not restore it. Without the
+   ordering, a person told *cancelled* would see it restored and delivered after a restart (Sol F2).
 
 Settles after an attempt stay fail-open: the durable `attempted` already prevents restoration, so a
 lost outcome line recovers as `outcome-unknown`, which is conservative and true.
@@ -193,11 +210,19 @@ and its speaker; a spoken catalogue action as its full `SpokenAction` snapshot. 
 re-resolves an action id.
 
 The material lives **outside the journal**: one file per receipt, `~/.fleet-holds/material/
-<receiptId>.json`, 0600, written atomically before `accepted` is appended and **unlinked when the
-receipt becomes terminal** — so the bytes are physically gone, not just filtered from a read (Sol F4),
-and the journal itself never holds a word of any message. `what` is a description (`message (42
-characters)`), the fingerprint is a hash, and nothing stores `SteerResult.sent` (the argv, i.e. the
-text). Recovery deletes material with no live receipt behind it.
+<receiptId>.json`, 0600, written atomically before `accepted` is appended, so the journal itself never
+holds a word of any message. `what` is a description (`message (42 characters)`), the fingerprint is
+a hash, and nothing stores `SteerResult.sent` (the argv, i.e. the text).
+
+**Material liveness is separate from receipt liveness (Sol F17).** Material is needed only while the
+item may still be sent — at `accepted`, `attempted` (because a proven-unsent attempt `returned`s the
+item to the queue) and `returned`. **Every outcome and every `withdrawn` ends that**, including
+`outcome-unknown`: a reconciliation never needs the text. When such a record lands, the material file
+and any temporary sibling `writeAtomically` may have left are deleted. Startup deletes every material
+file, final or temporary, that does not belong to a receipt at `accepted`, `attempted` or `returned`.
+A deletion that fails is reported by `status()`, retried at startup and compaction, and the receipt
+says *material deletion pending* rather than claiming the bytes are gone. So the bytes are physically
+gone, not just filtered from a read (Sol F4).
 
 ### Restoring the queue
 
@@ -209,29 +234,44 @@ receipt is concluded or restored:
 - **Queued work at `accepted` or `returned`** → back in the queue **under its original item id**,
   with its `enqueuedAt`, speaker, conversation and pinned payload. The routes refuse a foreign-run
   id only when no current item has that exact id — the hold-release route's rule — so a page from
-  before the restart can still cancel what it was showing (Sol F13). New items use this run's prefix,
-  so no id is reused.
+  before the restart can still cancel what it was showing (Sol F13). New items use this run's prefix
+  and skip every reserved id (below), so no id visible in the retention window is reused.
 - **The tmux generation guards restored items.** `accepted` records the queue's known generation,
   or — before this run's first drain pass — the last generation the journal recorded. The first
   `noteGeneration` after a restore concludes as `not-sent` every restored item whose generation
   differs (`tmux-generation-changed`) or is unknown (`tmux-generation-unproven`), and removes it from
   the queue. Neither stays non-terminal holding material (Sol F14).
 - **Material missing** → `not-sent` (`lost-at-restart`).
-- **The hold barrier is rebuilt from receipts too** (Sol F10). Every `outcome-unknown` receipt for a
-  keystroke action that nobody has reconciled installs a hold on its session unless the book already
-  holds one — so a hold-ledger write that failed while the receipt's succeeded cannot leave a
-  half-typed input box unguarded. A hold release writes `reconciled` on that session's unknown
-  receipts; a hold rebuilt this way carries the receipt's tmux generation, so the book's own
-  first-observation rule ends it if tmux restarted. Nothing in `send-coordinator.ts` changes.
-- **An unreadable line fails recovery closed** (Sol F6). A complete line that is JSON with a
-  `receiptId` but does not parse makes that receipt `outcome-unknown` (`recovery-blocked`), never
-  restored. A line with no attributable id concludes **every** restorable queued receipt as
-  `outcome-unknown` (`recovery-blocked`) — the journal cannot prove which of them were attempted —
-  and says so on the status. Unreadable lines are appended to `receipts.unreadable.jsonl` before any
-  compaction, so the evidence is never erased.
+- **The hold barrier is the hold ledger's alone. A receipt never installs, extends or ends a hold.**
+  If the receipt's `attempted` landed and the hold ledger's did not, a crash leaves an unknown receipt
+  and no hold — the hold ledger's documented fail-open (Stage 4b, `hold-ledger.ts` § IT NEVER STOPS A
+  SEND), which this job neither widens nor closes. For durable actions the fail-closed `attempted`
+  narrows it, because a disk that cannot write stops the send before either file is touched.
+  `GET /api/actions/receipts` names the condition `unknown-without-hold` per session so a person can
+  see it. Closing it is a hold-ledger decision for Greg (§ Needs Greg). **Why not a second barrier**:
+  two barrier sources with independent resolution writes resurrect an acknowledged release or a
+  proven supersession on a crash between them (Sol F15) — a new bug, worse than the narrowed old one.
+  With one barrier, writes between the two files go one way and no crash ordering can change what is
+  held.
+- **An unreadable line fails recovery closed, as far as it could hide an attempt** (Sol F6, F20).
+  The envelope (`schema`, `kind`, `receiptId`) is parsed separately from the domain fields. An invalid
+  record whose envelope is trustworthily `generation` blocks only the generation inference, so every
+  restored item is concluded `tmux-generation-unproven`. An invalid action record with a trustworthy
+  `receiptId` makes that one receipt `outcome-unknown` (`recovery-blocked`), never restored; if no
+  valid `accepted` precedes it, it is reported as orphan evidence rather than given an invented
+  target. **Only malformed bytes, or an action envelope that cannot be attributed, conclude every
+  restorable queued receipt** as `outcome-unknown` (`recovery-blocked`), because any one of them may
+  hide an attempt; the status says so. Unreadable lines are appended to `receipts.unreadable.jsonl`
+  before any compaction, so the evidence is never erased.
+- **Ids are collision-resistant, not intrinsically unique** (Sol F19): a run token is 32 random
+  bits. At startup every queue item id and receipt id in the retained records is reserved; this run's
+  sequences start above any retained suffix carrying its own token and skip any occupied id; two
+  retained records claiming one id for different receipts fail recovery closed. So a repeated run
+  token still cannot reuse an id visible in the retention window.
 
-A re-arm (`revive`) is not journaled, so it reverts after a restart — the safe direction, and said
-so. `volatile` on `QueueView` widens from `true` to `boolean`, and the warning says what is true:
+**Cancel, clear and abandon durably change the receipts they affect. Hold release changes only the
+hold ledger**, for the one-barrier rule above. **Revive is deliberately memory-only**: it resets the
+live queue's clock, writes no receipt transition, and reverts after a restart — the safe direction. `volatile` on `QueueView` widens from `true` to `boolean`, and the warning says what is true:
 durable when the journal is writing, the old sentence when it is not.
 
 ### Retention (260908j's R7)
@@ -240,8 +280,10 @@ durable when the journal is writing, the old sentence when it is not.
   **The 5,000 limit on retained keyed receipts is an admission cap, never an eviction rule**: at
   capacity a new keyed action is refused until one expires (Sol F3). Unkeyed terminal receipts may be
   dropped oldest-first past that count; nothing depends on them.
-- **Non-terminal receipts are never evicted**, and there are at most 1,000; past that, a new action is
-  refused with a sentence rather than accepted unrecorded.
+- **Non-terminal receipts — `accepted`, `attempted`, `returned` — are never evicted**, and there are
+  at most 1,000; past that, a new action is refused with a sentence rather than accepted unrecorded.
+  **`outcome-unknown` is an outcome, and so terminal for retention**: it is kept for 7 days like any
+  other, and a later `reconciled` is an annotation on it, not a reason to keep it longer (Sol F17).
 - **A retained id is looked up before any freshness check**, so it replays for its whole retention.
   **An id not found is accepted only if its mint time is within ±1 hour of the server clock.** Since
   a receipt is only dropped 7 days after acceptance, and was accepted within an hour of its mint
@@ -276,13 +318,14 @@ Two Codex runs, committed separately.
   item transition — enqueue, cancel and clear write-ahead; `beginDelivery` (the drain's `attempted`,
   fail-closed); settle, `release` (`returned`), `quarantineLeased`, the drain's throw, abandon — so no
   enqueue path, HTTP or broadcast, can skip it. Restore under original ids; the generation guard;
-  the hold barrier; the foreign-id rule; `volatile` and warning; `GET /api/actions/receipts`.
+  the foreign-id rule; `volatile` and warning; `GET /api/actions/receipts` with the
+  `unknown-without-hold` flag; `openFleetActionStores()` in `server.ts` and its source guard.
 - [ ] Crash tests for queued work (below), including an unreadable mid-file `attempted` line, and an
   old page cancelling a restored item before the next drain.
 
 **Done:** a queued message accepted before a restart is delivered once after it; one that was being
-delivered when the process died comes back `outcome-unknown`, holds its session, and is not delivered
-again; a cancel that was answered 200 stays cancelled across a restart; the hold ledger's suite is
+delivered when the process died comes back `outcome-unknown`, is not delivered again, and its session
+is held by the hold ledger (or flagged `unknown-without-hold` if that write failed); a cancel that was answered 200 stays cancelled across a restart; the hold ledger's suite is
 unchanged and green.
 
 ### Stage 2 — request ids and replay, on the steer and enqueue routes
@@ -345,7 +388,7 @@ it and write things a dead process could not.
 | before `accepted` lands | no receipt; keyed: nothing happened and the request got a 503 or nothing; the retry is accepted as new, correctly |
 | after `accepted`, before `attempted` | queued work: restored and delivered once. Durably-accepted direct send or plan: proven not attempted, `not-sent` (`interrupted-before-attempt`) |
 | after `attempted`, before the coordinator | `outcome-unknown` (`interrupted`) — nothing was typed, and the receipt says it cannot tell |
-| between the text and the Enter | `outcome-unknown`; a hold, from the hold ledger or from the receipt |
+| between the text and the Enter | `outcome-unknown`; a hold from the hold ledger, or none if its write failed — then flagged `unknown-without-hold` |
 | after the send, before the outcome line | `outcome-unknown` — indistinguishable from the row above, and says so |
 | during the outcome line (torn) | repaired at open; the last whole record decides, so `outcome-unknown` |
 | an unreadable complete `attempted` line mid-file | that receipt `outcome-unknown` (`recovery-blocked`), not restored |
@@ -360,7 +403,8 @@ it and write things a dead process could not.
   where `observed-reception` goes the day something observes it.
 - **Exactly-once with tmux.** Impossible, and not claimed in code or on the page.
 - **Receipts for command gestures** (cancel, clear, revive, abandon, release). They mutate the
-  receipt of the action they change.
+  receipt of the action they change, or nothing.
+- **A second barrier.** The hold ledger stays the only thing that holds a session (§ Restoring).
 - **A second writer of `~/.overseer/`**, or any product-database table.
 - **Unifying the hold ledger into the receipt journal.** They share a lock and a core; merging the
   records rewrites the proven file's fold for no behaviour anybody needs today.
@@ -390,11 +434,30 @@ it and write things a dead process could not.
 | F7 | Queued catalogue actions re-resolved by id after a deploy change their words | Taken: pin the full `SpokenAction` |
 | F8 | `released-as-sent`/`-not-sent` have no producer | Taken: the existing gesture names only |
 | F9 | No actor | Taken: `actor {kind, id}`, `client-claimed` or `system` |
-| F10 | A receipt can survive where the hold-ledger write failed, leaving no barrier | Taken, without touching `send-coordinator.ts`: unknown unreconciled receipts rebuild holds |
+| F10 | A receipt can survive where the hold-ledger write failed, leaving no barrier | **Declined** — taken in round 1, withdrawn on F15 after Fable's arbitration: it asks receipts to be a second barrier, which changes Stage 4b's decision rather than this job's contract. Named in § Restoring, flagged `unknown-without-hold`, and sent to Greg |
 | F11 | "Per press" re-mints the id on the retry it exists for | Taken: a retained envelope and an explicit retry |
 | F12 | Stage 1's conclusions are invisible until Stage 4 | Taken: minimal read endpoint in Stage 1 |
 | F13 | New ids for restored items break the old page's cancel | Taken: original ids, hold-route foreign-id rule |
 | F14 | Generation-null restored items stay non-terminal for ever | Taken: journal generation metadata; conclude as `not-sent` |
+| — | Composition inside `openSharedQuarantine()`; one writer claim; memory-only default | See the last row of this table |
+
+### Round 2 — GPT Sol, 2026-09-10, verdict "rework"
+
+[The review](260910d-durable-action-receipts-plan-review2-sol.md); [the prompt](260910d-durable-action-receipts-plan-review2-prompt.md).
+Discovery closes here, per the house rule; what follows is decided, not reviewed again at plan stage.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F15 | The two journals cannot durably agree on releasing a hold; a crash between their writes resurrects it | **Taken, by removing the second barrier.** Fable, asked to arbitrate between declining F10, one unified journal, and Sol's `receiptId`-threading: *"Take (A): one barrier, receipts as evidence only, the declined hole named in the plan and flagged on the endpoint."* The unified journal contradicts § What this does not build and reopens the proven file; threading makes the two-source fold permanent, so every future write to either file is a new F15 candidate |
+| F16 | Replay depends on the current catalogue and preview | Taken: `WireIntent` fingerprint; lookup before catalogue, preview and limiter |
+| F17 | Material liveness undefined for `outcome-unknown`; temporary siblings; failed unlinks | Taken, corrected: material lives through `attempted` too (a `returned` item needs it) — Sol's wording deleted it there |
+| F18 | Answer and box-run routes have no speaker | Taken: `unattributed-http`; `speaker` nullable |
+| F19 | 32-bit run tokens can collide | Taken: reserve retained ids; sequences above them |
+| F20 | The unattributable-line rule is broader than its proof | Taken: envelope-first parse |
+| F21 | Two sentences contradicted the design | Taken |
+
+### The composition row, carried from round 1
+
 | — | Composition inside `openSharedQuarantine()`; one writer claim; memory-only default | One claim and `openFleetActionStores()` taken (server.ts pending the Overseer). **Memory-only as a default is kept**, because it is exactly the book's existing pattern (`sharedQuarantineBook()` without a ledger), a source guard keeps `server.ts` calling the opener, and the status reports `never opened` rather than staying silent. |
 
 ## The simpler options passed over, and why
@@ -423,3 +486,9 @@ it and write things a dead process could not.
 - **Receipts are kept for 7 days** in `~/.fleet-holds/receipts.jsonl`, and **the exact text of a
   queued message is kept on disk, in its own 0600 file, until it is delivered, withdrawn or
   concluded**, then deleted.
+- **Not decided, and Greg's to decide: whether the hold ledger should stop failing open for durable
+  sends.** Today a hold-ledger write that fails lets the send go ahead (Stage 4b's judgement: a full
+  disk must not stop the tool you reach for when things are broken). The narrow case that leaves
+  behind — a partial send, then a crash, with no hold afterwards — is unchanged by this job and is
+  now visible as `unknown-without-hold`. Closing it means `noteAttempt` refusing the send when its
+  write fails, for actions whose receipt is durable.
