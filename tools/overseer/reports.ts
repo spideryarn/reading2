@@ -24,7 +24,8 @@
  *
  *     [1] prepare once: parse, check artefacts, compare the token, stamp
  *         receivedAt  ⇒  report-processing/<id>.json, written atomically
- *     [2] (stage 3) a session's decision into decisions.jsonl
+ *     [2] a session's decision: the prepared `decided` event into
+ *         decisions.jsonl, under its own lock, command id report:<eventId>
  *     [3] append the prepared line to reports.jsonl, fsync
  *     [4] unlink the processing file, then the inbox file
  *
@@ -48,8 +49,14 @@
  * same Unix user; it could write `reports.jsonl` directly. `actor` is a
  * self-declaration, as `by` is in the decision record. What the drain does
  * defend is the daemon: an inbox entry is never followed through a symlink,
- * never read past 16 KiB, and never opened if it is not a regular file.
+ * never read past 16 KiB, and never opened if it is not a regular file. And a
+ * pass never lists the whole inbox: it reads at most `scanEntries` directory
+ * entries, and moves anything that can never become a report into
+ * `report-quarantine/`, so a flood of junk is cleared a bounded slice at a time
+ * instead of stalling the daemon's loop — heartbeat included — or starving the
+ * submissions behind it.
  */
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   constants,
@@ -58,12 +65,15 @@ import {
   fsyncSync,
   lstatSync,
   mkdirSync,
+  opendirSync,
   openSync,
   readdirSync,
   readFileSync,
   readSync,
   renameSync,
+  rmSync,
   unlinkSync,
+  type Stats,
 } from "node:fs";
 import path from "node:path";
 
@@ -80,8 +90,36 @@ import {
   type CheckedArtefact,
 } from "../fleet/artefact-ref.js";
 import { isExecutionTokenText } from "../fleet/execution-token.js";
+import {
+  ASSESSMENT_FIELDS,
+  DECISIONS_SCHEMA,
+  NOT_RECORDED,
+  appendEvents,
+  envelope,
+  mintId,
+  parseEventDetailed,
+  readDecisions,
+  type DecidedV2Event,
+  type DecisionAuthor,
+  type DecisionEvent,
+  type DecisionRecord,
+  type ExecutionRef,
+  type SessionRef,
+} from "./decisions.js";
 import { splitJsonl, truncateToLastLine, writeAll, writeAtomically } from "./jsonl.js";
-import type { SessionRegister } from "./store.js";
+/**
+ * **The two fields of the daemon's register this module reads**, as a structural type rather than
+ * `store.ts`'s `SessionRegister`. `tools/fleet/` imports this module (the Claims view and its route),
+ * and even a type-only import of `store.ts` would put the whole store's closure on the dashboard's side
+ * of the seam that `tests/fleet-attention.test.ts` guards. The daemon's live register satisfies this as
+ * it stands.
+ */
+export type ReportRegister = {
+  values(): Iterable<{
+    readonly name: string;
+    readonly verifiedExecution: { readonly token: string; readonly since: string } | null;
+  }>;
+};
 
 export const REPORTS_SCHEMA = 1;
 export const REPORTS_FILE = "reports.jsonl";
@@ -92,16 +130,30 @@ export const REPORTS_FILE = "reports.jsonl";
  * cannot re-send, not a disposable derivation like `events.jsonl`.
  */
 export const REPORTS_INIT_FILE = "reports.created";
-/* Three sibling directories rather than three under one, because the inbox is
-   the only one a client writes and the drain skips-and-counts anything in it
-   that is not `<uuid>.json` — a subdirectory there would be counted every pass. */
+/* Sibling directories rather than subdirectories of the inbox, because the
+   inbox is the only one a client writes and the drain moves anything in it that
+   is not a submission out of the way — a subdirectory there would be moved. */
 export const INBOX_DIR = "report-inbox";
 export const PROCESSING_DIR = "report-processing";
 export const REFUSED_DIR = "report-refused";
+/**
+ * Where an inbox entry goes when it can never become a report: a name that is
+ * not `<uuid>.json` or `.tmp-<uuid>`, a directory, a symlink, a file with more
+ * than one hard link. Moved by `rename`, which moves a symlink itself and never
+ * its target; never read. The newest `QUARANTINE_KEPT` are kept for a person to
+ * look at and the rest deleted.
+ */
+export const QUARANTINE_DIR = "report-quarantine";
+export const QUARANTINE_KEPT = 200;
 
 export const MAX_SUBMISSION_BYTES = 16 * 1024;
-/** A prepared event adds daemon checks to a bounded submission; it is still never an unbounded read. */
-export const MAX_PREPARED_BYTES = 64 * 1024;
+/**
+ * A prepared record adds daemon checks to a bounded submission, and for a
+ * decision holds two JSON lines as strings, whose quotes are escaped again — so
+ * well above twice the submission limit. Checked before it is written, because
+ * a record its own replay would refuse to read would be pending for ever.
+ */
+export const MAX_PREPARED_BYTES = 256 * 1024;
 /** Includes a JSON-escaped copy of at most 16 KiB of rejected input. */
 export const MAX_REFUSAL_BYTES = 128 * 1024;
 export const MAX_SUMMARY_CHARS = 1000;
@@ -111,11 +163,14 @@ export const MAX_WHY_CHARS = 300;
 export const REFUSED_KEPT = 200;
 /** A `.tmp-*` older than this was left by a submitter that died between open and rename. */
 export const TMP_DEBRIS_AGE_MS = 60 * 60 * 1000;
-export const DECISION_NOT_WIRED = "decision reports are wired in stage 3";
 
 /** Lower-case only: one spelling per id, because ids are compared as strings. */
 const UUID_RULE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INBOX_NAME_RULE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/;
+/** The only other name `submitReport` ever puts in the inbox. */
+const TMP_NAME_RULE = /^\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** A quarantined entry keeps its old name after a sortable prefix, when that name is plain enough to put in a path. */
+const PLAIN_NAME_RULE = /^[A-Za-z0-9._-]{1,100}$/;
 const SESSION_NAME_RULE = /^[A-Za-z0-9._-]{1,64}$/;
 const JOB_ID_RULE = /^[a-z0-9-]{1,41}$/;
 const SHA_RULE = /^[0-9a-f]{7,40}$/;
@@ -147,11 +202,48 @@ export type ReportJob = {
 };
 
 /**
- * The schema-2 decision fields, minus author — **opaque in this stage**. Stage 2
- * defines them and Stage 3 validates them here; until then a decision
- * submission is parsed only far enough to be refused with `DECISION_NOT_WIRED`.
+ * A session's decision as it submits it: the schema-2 decision's content and
+ * assessment, **minus `author`**, which the daemon stamps from the reporting
+ * session and the register at receipt, **and minus `evidence`**: the report's own
+ * `artefacts` ARE the evidence — one list, probed once, so a decision and the
+ * report that points at it can never disagree about a reference. The CLI moves
+ * a template's `evidence` list into `artefacts`. `bearsOn.sessions` are names,
+ * as in `overseer-decisions template`; the daemon resolves each at receipt.
  */
-export type DecisionDraft = { readonly [field: string]: unknown };
+export type DecisionDraft = Pick<
+  DecidedV2Event,
+  | "class"
+  | "question"
+  | "options"
+  | "chose"
+  | "why"
+  | "advisers"
+  | "supersedes"
+  | "consequence"
+  | "reversibility"
+  | "domain"
+  | "recommendation"
+  | "gregAsked"
+  | "confidence"
+> & { readonly bearsOn: { readonly sessions: readonly string[]; readonly plan: string | null } };
+
+/** A draft's keys: V1's content, then schema 2's assessment without author and evidence. */
+const DRAFT_FIELDS: readonly string[] = [
+  "class",
+  "question",
+  "options",
+  "chose",
+  "why",
+  "advisers",
+  "bearsOn",
+  "supersedes",
+  ...ASSESSMENT_FIELDS.filter((field) => field !== "author" && field !== "evidence"),
+];
+
+/** The command id that joins a session's decision to its report, and makes step [2] replay-safe. */
+export function reportCommandId(eventId: string): string {
+  return `report:${eventId}`;
+}
 
 type ReportCommon = {
   readonly schema: typeof REPORTS_SCHEMA;
@@ -402,6 +494,152 @@ function parseClaim(json: Record<string, unknown>, kind: Exclude<ReportKind, "de
 }
 
 /**
+ * The `decided` event the daemon writes for a session's decision — and, with
+ * stand-ins for what only the daemon knows, the one a draft is checked as.
+ * One builder for both, so the check and the write cannot drift apart.
+ */
+function decidedEventFields(parts: {
+  eventId: string;
+  at: string;
+  decisionId: string;
+  content: { readonly [field: string]: unknown };
+  plan: unknown;
+  sessions: readonly SessionRef[];
+  author: DecisionAuthor;
+  evidence: readonly CheckedArtefact[];
+}): Record<string, unknown> {
+  const { content } = parts;
+  return {
+    ...envelope("daemon", { at: parts.at, commandId: reportCommandId(parts.eventId) }),
+    kind: "decided",
+    id: parts.decisionId,
+    decidedAt: parts.at,
+    class: content["class"],
+    question: content["question"],
+    options: content["options"],
+    chose: content["chose"],
+    why: content["why"],
+    advisers: content["advisers"],
+    bearsOn: { sessions: parts.sessions, plan: parts.plan },
+    supersedes: content["supersedes"],
+    author: parts.author,
+    consequence: content["consequence"],
+    reversibility: content["reversibility"],
+    domain: content["domain"],
+    recommendation: content["recommendation"],
+    evidence: parts.evidence,
+    gregAsked: content["gregAsked"],
+    confidence: content["confidence"],
+  };
+}
+
+/** A decision id that only ever appears in a draft's check, never in a record. */
+const PROVISIONAL_DECISION_ID = "dec-22222222";
+
+/**
+ * A decision draft, strictly: formed into the real `decided` event — `by:
+ * daemon`, the session as author, `report:<eventId>` as command id — and passed
+ * through the decision record's own parser, so a refusal names the field and
+ * nothing is accepted here that step [2]'s `appendEvents` would refuse for its
+ * shape. Only a session's decision comes through a report (WR-P1): the parser's
+ * matrix admits `daemon` only with a session author (WR-S2-1).
+ */
+function parseDraft(value: unknown, actor: ReportActor, eventId: string, submittedAt: string, artefacts: readonly ArtefactRef[]): DecisionDraft {
+  if (actor.kind !== "session") {
+    refuse(
+      "actor",
+      `is ${actor.kind === "overseer" ? "the Overseer" : "Greg"}, and only a session's decision comes through a report — ` +
+        "the Overseer and Greg record decisions with `overseer-decisions add`",
+    );
+  }
+  const draft = record(value, "draft");
+  if (Object.hasOwn(draft, "author")) refuse("draft.author", "is stamped by the daemon from the reporting session and the register; leave it out");
+  if (Object.hasOwn(draft, "evidence")) {
+    refuse("draft.evidence", "is the report's own artefacts; name each with --artefact (the CLI moves a template's evidence list there)");
+  }
+  exactKeys(draft, DRAFT_FIELDS, "draft.");
+  const bearsOn = record(draft["bearsOn"], "draft.bearsOn");
+  exactKeys(bearsOn, ["sessions", "plan"], "draft.bearsOn.");
+  const names: unknown = bearsOn["sessions"];
+  if (!Array.isArray(names)) refuse("draft.bearsOn.sessions", "is not a list of session names");
+  const sessions = names.map((name: unknown, index): string => {
+    if (typeof name !== "string" || !SESSION_NAME_RULE.test(name)) {
+      refuse(`draft.bearsOn.sessions[${index}]`, "is not a session name: 1 to 64 letters, digits and . _ -");
+    }
+    return name;
+  });
+  const atReceipt: ExecutionRef = { kind: "unavailable", why: "resolved by the daemon at receipt" };
+  const checked = parseEventDetailed(
+    JSON.stringify(
+      decidedEventFields({
+        eventId,
+        at: submittedAt,
+        decisionId: PROVISIONAL_DECISION_ID,
+        content: draft,
+        plan: bearsOn["plan"],
+        sessions: sessions.map((name) => ({ name, execution: atReceipt })),
+        author: { kind: "session", name: actor.name, execution: atReceipt },
+        evidence: artefacts.map((ref) => ({ ref, check: { state: "unchecked", why: "checked by the daemon at receipt" } })),
+      }),
+    ),
+  );
+  if (!checked.ok) refuse("draft", checked.why);
+  const event = checked.event;
+  if (event.kind !== "decided" || event.schema !== DECISIONS_SCHEMA) refuse("draft", "did not form a schema-2 decision");
+  return {
+    class: event.class,
+    question: event.question,
+    options: event.options,
+    chose: event.chose,
+    why: event.why,
+    advisers: event.advisers,
+    bearsOn: { sessions, plan: event.bearsOn.plan },
+    supersedes: event.supersedes,
+    consequence: event.consequence,
+    reversibility: event.reversibility,
+    domain: event.domain,
+    recommendation: event.recommendation,
+    gregAsked: event.gregAsked,
+    confidence: event.confidence,
+  };
+}
+
+/**
+ * The draft a recorded decision was made from, rebuilt from the record — or
+ * null when the record cannot say (a schema-1 line, which no report wrote).
+ * How a re-dropped decision submission is told from a different claim.
+ */
+function draftOf(decision: DecisionRecord): DecisionDraft | null {
+  const { consequence, reversibility, domain, recommendation, gregAsked, confidence } = decision;
+  if (
+    consequence === NOT_RECORDED ||
+    reversibility === NOT_RECORDED ||
+    domain === NOT_RECORDED ||
+    recommendation.kind !== "recorded" ||
+    gregAsked === NOT_RECORDED ||
+    confidence === NOT_RECORDED
+  ) {
+    return null;
+  }
+  return {
+    class: decision.class,
+    question: decision.question,
+    options: decision.options,
+    chose: decision.chose,
+    why: decision.why,
+    advisers: decision.advisers,
+    bearsOn: { sessions: decision.bearsOn.sessions.map((session) => session.name), plan: decision.bearsOn.plan },
+    supersedes: decision.supersedes,
+    consequence,
+    reversibility,
+    domain,
+    recommendation: recommendation.value,
+    gregAsked,
+    confidence,
+  };
+}
+
+/**
  * A submission, strictly — the ONE parser, used by the CLI before it writes and
  * by the drain before it records. Every text field is bounded and clean.
  *
@@ -415,8 +653,8 @@ export function parseSubmission(line: string): ParsedSubmission {
     const { kind: _kind, ...rest } = common;
     const head = { ...rest, artefacts: parseSubmittedRefs(json["artefacts"]) };
     if (common.kind === "decision") {
-      // Opaque until Stage 3 — see `DecisionDraft`. Bounded by the file size.
-      return { ok: true, submission: { ...head, kind: "decision", draft: record(json["draft"], "draft") } };
+      const draft = parseDraft(json["draft"], common.actor, common.eventId, common.submittedAt, head.artefacts);
+      return { ok: true, submission: { ...head, kind: "decision", draft } };
     }
     return { ok: true, submission: { ...head, ...parseClaim(json, common.kind) } };
   } catch (cause) {
@@ -440,6 +678,7 @@ export function parseReportEvent(line: string): ParsedEvent {
       artefacts,
     };
     if (common.kind === "decision") {
+      if (common.actor.kind !== "session") refuse("actor", "is not a session, and only a session's decision is recorded through reports");
       const decisionId = json["decisionId"];
       if (typeof decisionId !== "string" || !DECISION_ID_RULE.test(decisionId)) refuse("decisionId", "is not a decision id");
       return { ok: true, event: { ...head, kind: "decision", decisionId } };
@@ -459,14 +698,25 @@ export function serializeSubmission(submission: ReportSubmission): string {
 }
 
 /**
- * The submission a recorded event was made from, as canonical text — or null for
- * a decision, whose draft the event does not carry. Used to tell a re-dropped
- * submission (the same claim, one row) from a different claim under a reused id.
+ * The submission a recorded event was made from, as canonical text. Used to tell
+ * a re-dropped submission (the same claim, one row) from a different claim under
+ * a reused id. A decision report does not carry its draft, so the draft is
+ * rebuilt from the decision it names — and null when that cannot be read.
  */
-function submissionTextOf(event: ReportEvent): string | null {
-  if (event.kind === "decision") return null;
+function submissionTextOf(event: ReportEvent, decisionsDir: string): string | null {
   const { receivedAt: _r, execution: _e, artefacts, ...rest } = event;
-  return serializeSubmission({ ...rest, artefacts: artefacts.map((item) => item.ref) } as ReportSubmission);
+  const refs = artefacts.map((item) => item.ref);
+  if (rest.kind !== "decision") return serializeSubmission({ ...rest, artefacts: refs } as ReportSubmission);
+  const { decisionId, ...common } = rest;
+  const read = readDecisions(decisionsDir);
+  const decision = read.kind === "decisions" ? read.view.records.find((one) => one.id === decisionId) : undefined;
+  const draft = decision === undefined ? null : draftOf(decision);
+  if (draft === null) return null;
+  try {
+    return serializeSubmission({ ...common, artefacts: refs, draft } as ReportSubmission);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -576,7 +826,8 @@ function uuidJsonNames(directory: string): string[] {
   return readdirSync(directory).filter((name) => INBOX_NAME_RULE.test(name));
 }
 
-function unlinkQuietly(file: string): void {
+/** A Buffer path too: the inbox scan names entries by their bytes. */
+function unlinkQuietly(file: string | Buffer): void {
   try {
     unlinkSync(file);
   } catch (cause) {
@@ -591,25 +842,59 @@ function unlinkQuietly(file: string): void {
 export type ArtefactChecker = (ref: ArtefactRef) => ArtefactCheck;
 
 /**
- * What step [2] will say, once Stage 3 fills it. In the signature now so that
- * stage only has to supply it; this stage never calls it, because every decision
- * submission is refused before step [1] finishes.
+ * The frozen result of step [1]. For a decision, `decisionLine` is the whole
+ * prepared `decided` event — its decision id, `decidedAt` (the report's
+ * `receivedAt`), the session author with the execution the register gave at
+ * receipt, the evidence checks, `by: daemon`, command id `report:<eventId>` —
+ * as the exact bytes step [2] appends. A replay after a crash appends the same
+ * line, which `appendEvents` recognises as already written (GPT Sol's WR-S2-2)
+ * rather than calling it a conflict.
  */
-export type DecisionAppendOutcome =
-  | { readonly kind: "appended" }
-  | { readonly kind: "pending"; readonly why: string }
-  | { readonly kind: "refused"; readonly why: string };
-export type DecisionAppender = (prepared: PreparedReport) => DecisionAppendOutcome;
+export type PreparedReport = {
+  readonly schema: typeof REPORTS_SCHEMA;
+  readonly eventId: string;
+  readonly reportLine: string;
+  readonly decisionLine?: string;
+};
 
-/** The frozen result of step [1]. Stage 3 adds the prepared decision line beside `reportLine`. */
-export type PreparedReport = { readonly schema: typeof REPORTS_SCHEMA; readonly eventId: string; readonly reportLine: string };
+/**
+ * A prepared record, checked the same way on its first use and on a replay:
+ * the report reads, it is this event's, and a decision report carries the
+ * daemon's copy of exactly its own decision. Throws, which leaves it pending.
+ */
+function readPrepared(text: string, eventId: string): { prepared: PreparedReport; decision: DecisionEvent | null } {
+  const prepared = JSON.parse(text) as PreparedReport;
+  const reparsed = typeof prepared.reportLine === "string" ? parseReportEvent(prepared.reportLine) : null;
+  if (prepared.eventId !== eventId || reparsed === null || !reparsed.ok || reparsed.event.eventId !== eventId) {
+    throw new Error(`the prepared report ${eventId}.json does not hold a report for ${eventId}`);
+  }
+  const report = reparsed.event;
+  if (report.kind !== "decision") {
+    if (prepared.decisionLine !== undefined) throw new Error(`the prepared report ${eventId}.json holds a decision for a report that is not one`);
+    return { prepared, decision: null };
+  }
+  if (typeof prepared.decisionLine !== "string") throw new Error(`the prepared decision report ${eventId}.json holds no decision`);
+  const decision = parseEventDetailed(prepared.decisionLine);
+  if (!decision.ok) throw new Error(`the prepared decision for ${eventId} does not read: ${decision.why}`);
+  const event = decision.event;
+  if (event.kind !== "decided" || event.by !== "daemon" || event.commandId !== reportCommandId(eventId) || event.id !== report.decisionId) {
+    throw new Error(`the prepared decision for ${eventId} is not the daemon's copy of this report's decision`);
+  }
+  return { prepared, decision: event };
+}
 
-export type DrainLimits = { files: number; bytes: number; probes: number; wallMs: number };
-/** Per pass; the rest waits. Sol's WR-P5: the file count alone bounded nothing else. */
-export const DEFAULT_DRAIN_LIMITS: DrainLimits = { files: 50, bytes: 1024 * 1024, probes: 200, wallMs: 5_000 };
+/**
+ * Per pass; the rest waits. Sol's WR-P5: the file count alone bounded nothing
+ * else. `scanEntries` bounds the directory listing itself — Sol's Stage 1
+ * second review: a `readdirSync` of the whole inbox, a `stat` per entry and a
+ * sort, all synchronous inside the daemon, is unbounded work however few files
+ * are then read, and slicing the array afterwards bounds none of it.
+ */
+export type DrainLimits = { files: number; bytes: number; probes: number; wallMs: number; scanEntries: number };
+export const DEFAULT_DRAIN_LIMITS: DrainLimits = { files: 50, bytes: 1024 * 1024, probes: 200, wallMs: 5_000, scanEntries: 1_000 };
 
 /** The step boundaries a test can crash at. Nothing in production passes `crashAt`. */
-export type DrainBoundary = "processing-written" | "reports-appended" | "processing-unlinked";
+export type DrainBoundary = "processing-written" | "decision-appended" | "reports-appended" | "processing-unlinked";
 export class SimulatedCrash extends Error {}
 
 /** Only this failure requires the pass to stop so its next open can repair a torn tail. */
@@ -623,11 +908,16 @@ class AppendMayHaveTornTail extends Error {
 export type DrainOptions = {
   root: string;
   /** The daemon's live register, for the execution comparison. */
-  register: SessionRegister;
+  register: ReportRegister;
   /** Stamps `receivedAt` and dates refusals. The wall-clock bound uses the real clock. */
   now: () => Date;
   checkArtefact: ArtefactChecker;
-  appendDecision: DecisionAppender;
+  /**
+   * Where step [2] appends a session's decision — `decisionsRoot(env)`, so
+   * `OVERSEER_DECISIONS_DIR` is honoured. Required rather than defaulted: the
+   * default would be the real record, and a test that forgot it would write there.
+   */
+  decisionsRoot: string;
   /** TEST SEAM for a torn/failed append. Production omits it and gets append + fsync. */
   appendReportLine?: (file: string, line: string) => void;
   limits?: Partial<DrainLimits>;
@@ -644,14 +934,23 @@ export type ReportDrainOutcome = {
   pending: number;
   /** Not reached this pass because a bound was hit. */
   deferred: number;
-  /** Inbox entries that are not `<uuid>.json` regular files: counted, never read, never deleted. */
+  /**
+   * Entries left where they are: one that could not be moved to quarantine, or
+   * one swapped for a non-regular file between the scan and the open. Never read.
+   */
   skippedEntries: number;
+  /** Inbox entries that can never become a report, moved to `report-quarantine/` this pass. */
+  quarantined: number;
+  /** Directory entries this pass read from the inbox — never more than `scanEntries`. */
+  scanned: number;
+  /** The scan stopped at `scanEntries`, so "oldest first" held only among the entries it read. */
+  scanCapped: boolean;
   replayed: number;
   debrisRemoved: number;
   probes: number;
   bytesRead: number;
   stoppedBy: "files" | "bytes" | "probes" | "time" | null;
-  /** One sentence per refused, pending or skipped item. */
+  /** One sentence per refused, pending or skipped item; one for all the quarantined. */
   notes: string[];
 };
 
@@ -663,6 +962,9 @@ function emptyOutcome(): ReportDrainOutcome {
     pending: 0,
     deferred: 0,
     skippedEntries: 0,
+    quarantined: 0,
+    scanned: 0,
+    scanCapped: false,
     replayed: 0,
     debrisRemoved: 0,
     probes: 0,
@@ -672,8 +974,137 @@ function emptyOutcome(): ReportDrainOutcome {
   };
 }
 
+type InboxCandidate = { readonly name: string; readonly eventId: string; readonly mtimeMs: number };
+
+/** How many quarantined names a pass's note quotes; the count covers the rest. */
+const QUARANTINE_EXAMPLES = 5;
+
+/**
+ * **ONE BOUNDED LOOK AT THE INBOX.** Lazily, through `opendirSync`, stopping
+ * after `cap` directory entries and closing the handle whatever happens. Among
+ * what it read it returns the submissions to try; it removes abandoned temp
+ * files, and it MOVES everything that can never become a report into
+ * `report-quarantine/` — which is what stops a hostile or runaway prefix of junk
+ * from filling every pass's window for ever: each pass clears the slice it read.
+ *
+ * Names are read as bytes: a name that is not UTF-8 decodes to a string that
+ * names no file, and an entry no path can reach is one no pass could ever move.
+ */
+function scanInbox(inboxDir: string, quarantineDir: string, cap: number, nowMs: number, outcome: ReportDrainOutcome): InboxCandidate[] {
+  const candidates: InboxCandidate[] = [];
+  const examples: string[] = [];
+  const prefix = Buffer.from(`${inboxDir}${path.sep}`);
+  const stamp = String(Date.now()).padStart(13, "0");
+  let moved = 0;
+  // The types only admit string encodings; Node honours "buffer" and hands back Buffer names.
+  const dir = opendirSync(inboxDir, { encoding: "buffer" as BufferEncoding });
+  try {
+    while (outcome.scanned < cap) {
+      const entry = dir.readSync();
+      if (entry === null) break;
+      outcome.scanned += 1;
+      const raw = entry.name as unknown as Buffer;
+      const name = raw.toString("utf8");
+      const full = Buffer.concat([prefix, raw]);
+      let stat: Stats;
+      try {
+        stat = lstatSync(full);
+      } catch {
+        continue; // Renamed or removed under us.
+      }
+      const utf8 = Buffer.from(name, "utf8").equals(raw);
+      const submissionName = utf8 ? INBOX_NAME_RULE.exec(name) : null;
+      const tempName = utf8 && TMP_NAME_RULE.test(name);
+      const why = !utf8
+        ? "its name is not UTF-8"
+        : submissionName === null && !tempName
+          ? "not named <uuid>.json"
+          : stat.isSymbolicLink()
+            ? "a symbolic link"
+            : stat.isDirectory()
+              ? "a directory"
+              : !stat.isFile()
+                ? "not a regular file"
+                : stat.nlink !== 1
+                  ? `a file with ${stat.nlink} hard links`
+                  : null;
+      if (why !== null) {
+        const label = PLAIN_NAME_RULE.test(name) ? `-${name}` : "";
+        const target = path.join(quarantineDir, `${stamp}-${String(moved).padStart(7, "0")}-${randomUUID().slice(0, 8)}${label}`);
+        try {
+          renameSync(full, target);
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code === "ENOENT") continue;
+          outcome.skippedEntries += 1;
+          outcome.notes.push(`skipped ${printable(name).slice(0, 80)}: ${why}, and it could not be moved to ${QUARANTINE_DIR}/: ${String(cause)}`);
+          continue;
+        }
+        moved += 1;
+        outcome.quarantined += 1;
+        if (examples.length < QUARANTINE_EXAMPLES) examples.push(`${printable(name).slice(0, 80)} (${why})`);
+        continue;
+      }
+      if (tempName) {
+        // A submitter's temp file. Young ones are mid-write and are left for their
+        // writer; one an hour old was abandoned, and removing it is the only
+        // deletion in the inbox of something that was never a submission.
+        if (nowMs - stat.mtimeMs > TMP_DEBRIS_AGE_MS) {
+          unlinkQuietly(full);
+          outcome.debrisRemoved += 1;
+        }
+        continue;
+      }
+      candidates.push({ name, eventId: submissionName?.[1] ?? "", mtimeMs: stat.mtimeMs });
+    }
+    outcome.scanCapped = outcome.scanned >= cap;
+  } finally {
+    dir.closeSync();
+  }
+  if (moved > 0) {
+    outcome.notes.push(
+      `moved ${moved} inbox ${moved === 1 ? "entry" : "entries"} that can never become a report into ${QUARANTINE_DIR}/: ` +
+        `${examples.join("; ")}${moved > examples.length ? "; …" : ""}`,
+    );
+    pruneQuarantine(quarantineDir);
+  }
+  if (outcome.scanCapped) {
+    outcome.notes.push(`the inbox scan stopped at its cap of ${cap} entries; order is approximate beyond the first ${cap} entries`);
+  }
+  return candidates;
+}
+
+/**
+ * The newest `QUARANTINE_KEPT` stay. Names begin with a zero-padded time and
+ * sequence, so name order is arrival order. This directory is written only by
+ * the drain and pruned every time it grows, so listing it is bounded by us.
+ */
+function pruneQuarantine(quarantineDir: string): void {
+  const names = readdirSync(quarantineDir).sort();
+  for (const old of names.slice(0, Math.max(0, names.length - QUARANTINE_KEPT))) {
+    rmSync(path.join(quarantineDir, old), { recursive: true, force: true });
+  }
+}
+
+/** Submissions among the first `cap` inbox entries — for the lost-log answer, which must not list a flood either. */
+function countSubmissions(inboxDir: string, cap: number): { count: number; capped: boolean } {
+  let seen = 0;
+  let count = 0;
+  const dir = opendirSync(inboxDir);
+  try {
+    while (seen < cap) {
+      const entry = dir.readSync();
+      if (entry === null) break;
+      seen += 1;
+      if (INBOX_NAME_RULE.test(entry.name)) count += 1;
+    }
+  } finally {
+    dir.closeSync();
+  }
+  return { count, capped: seen >= cap };
+}
+
 /** The register's run for a session name, compared with the token the submitter observed. */
-export function compareExecution(actor: ReportActor, observed: string | null, register: SessionRegister): ExecutionComparison {
+export function compareExecution(actor: ReportActor, observed: string | null, register: ReportRegister): ExecutionComparison {
   if (actor.kind !== "session") return null;
   const entries = [...register.values()].filter((entry) => entry.name === actor.name);
   if (entries.length === 0) {
@@ -690,12 +1121,27 @@ export function compareExecution(actor: ReportActor, observed: string | null, re
   return observed === verified.token ? "same-verified-run" : "different-verified-run";
 }
 
+/**
+ * The register's run for a session name, as the decision record stores it —
+ * the same four answers `executionRefFor` gives the dashboard, from the
+ * daemon's live register rather than a checkpoint.
+ */
+function executionRefIn(register: ReportRegister, name: string): ExecutionRef {
+  const entries = [...register.values()].filter((entry) => entry.name === name);
+  if (entries.length === 0) return { kind: "not-found" };
+  if (entries.length > 1) return { kind: "unavailable", why: `session ${name} is ambiguous in the register (${entries.length} entries)` };
+  const verified = entries[0]?.verifiedExecution ?? null;
+  if (verified === null) return { kind: "unavailable", why: `the register has no verified execution for session ${name}` };
+  return { kind: "verified", token: verified.token, since: verified.since };
+}
+
 /** The event's fields; `parseReportEvent` then gives it the one key order every recorded line uses. */
 function buildEvent(
-  submission: ReportSubmission & ReportClaim,
+  submission: ReportSubmission,
   receivedAt: string,
   execution: ExecutionComparison,
   artefacts: readonly CheckedArtefact[],
+  decisionId: string | null,
 ): Record<string, unknown> {
   const head = {
     schema: submission.schema,
@@ -718,6 +1164,9 @@ function buildEvent(
       return { ...head, on: submission.on, needs: submission.needs };
     case "completed":
       return { ...head, ending: submission.ending, revisions: submission.revisions };
+    case "decision":
+      // The id only: the content is the decision record's, and one place holds it.
+      return { ...head, decisionId };
   }
 }
 
@@ -775,7 +1224,8 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
   const inboxDir = path.join(root, INBOX_DIR);
   const processingDir = path.join(root, PROCESSING_DIR);
   const refusedDir = path.join(root, REFUSED_DIR);
-  for (const dir of [inboxDir, processingDir, refusedDir]) mkdirSync(dir, { recursive: true });
+  const quarantineDir = path.join(root, QUARANTINE_DIR);
+  for (const dir of [inboxDir, processingDir, refusedDir, quarantineDir]) mkdirSync(dir, { recursive: true });
 
   const crash = (at: DrainBoundary): void => {
     if (options.crashAt === at) throw new SimulatedCrash(`simulated crash after ${at}`);
@@ -783,8 +1233,9 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
 
   const log = openLog(root);
   if (log.kind === "lost") {
-    outcome.pending = uuidJsonNames(processingDir).length + uuidJsonNames(inboxDir).length;
-    outcome.notes.push(log.why);
+    const waiting = countSubmissions(inboxDir, limits.scanEntries);
+    outcome.pending = uuidJsonNames(processingDir).length + waiting.count;
+    outcome.notes.push(waiting.capped ? `${log.why} (at least ${outcome.pending} waiting; the inbox was counted only to ${limits.scanEntries} entries)` : log.why);
     return outcome;
   }
   const recorded = log.recorded;
@@ -817,11 +1268,23 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     }
   };
 
-  /** Steps [3] and [4] for one prepared report — the same code for a first attempt and a replay. */
-  const commit = (prepared: PreparedReport, inboxFile: string, original: string): "recorded" | "refused" => {
+  /** Steps [2], [3] and [4] for one prepared report — the same code for a first attempt and a replay. */
+  const commit = (prepared: PreparedReport, decision: DecisionEvent | null, inboxFile: string, original: string): "recorded" | "refused" => {
     const processingFile = path.join(processingDir, `${prepared.eventId}.json`);
     const existing = recorded.get(prepared.eventId);
     if (existing === undefined) {
+      if (decision !== null) {
+        /* ---- [2] The frozen decided event into decisions.jsonl, under its own lock. ---- */
+        const appended = appendEvents([decision], { root: options.decisionsRoot });
+        if (!appended.ok) {
+          // A held lock says nothing about the input: it waits. Every other
+          // answer is the decision record refusing THIS decision, and says why.
+          if (appended.code === "locked") throw new Error(`the decision record is busy, so this waits for the next pass: ${appended.why}`);
+          refuseItem(prepared.eventId, `the decision record refused it (${appended.code}): ${appended.why}`, original, [processingFile, inboxFile]);
+          return "refused";
+        }
+        crash("decision-appended");
+      }
       writeInitMarker(root);
       try {
         appendReportLine(logFile, prepared.reportLine);
@@ -851,12 +1314,8 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       if (read.kind === "gone") continue;
       if (read.kind === "not-regular") throw new Error(read.why);
       if (read.kind === "oversize") throw new Error(`is ${read.size} bytes, over the ${MAX_PREPARED_BYTES}-byte prepared-report limit`);
-      const prepared = JSON.parse(read.text) as PreparedReport;
-      const reparsed = parseReportEvent(prepared.reportLine);
-      if (prepared.eventId !== eventId || !reparsed.ok || reparsed.event.eventId !== eventId) {
-        throw new Error(`the prepared report ${name} does not hold a report for ${eventId}`);
-      }
-      const result = commit(prepared, inboxFile, prepared.reportLine);
+      const { prepared, decision } = readPrepared(read.text, eventId);
+      const result = commit(prepared, decision, inboxFile, prepared.reportLine);
       if (result === "recorded") outcome.replayed += 1;
     } catch (cause) {
       if (cause instanceof SimulatedCrash) throw cause;
@@ -871,42 +1330,13 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     }
   }
 
-  /* ---- The inbox, oldest first. ---- */
-  const nowMs = now().getTime();
-  const candidates: { name: string; eventId: string; mtimeMs: number }[] = [];
-  for (const name of readdirSync(inboxDir)) {
-    const file = path.join(inboxDir, name);
-    if (name.startsWith(".tmp-")) {
-      // A submitter's temp file. Young ones are mid-write and are left for their
-      // writer; one an hour old was abandoned, and removing it is the only
-      // deletion in this directory of something that was never a submission.
-      try {
-        const stat = lstatSync(file);
-        if (stat.isFile() && nowMs - stat.mtimeMs > TMP_DEBRIS_AGE_MS) {
-          unlinkQuietly(file);
-          outcome.debrisRemoved += 1;
-        }
-      } catch {
-        /* Renamed or removed under us: its writer finished. */
-      }
-      continue;
-    }
-    const match = INBOX_NAME_RULE.exec(name);
-    let stat: ReturnType<typeof lstatSync> | undefined;
-    try {
-      stat = lstatSync(file);
-    } catch {
-      continue;
-    }
-    if (match === null || !stat.isFile()) {
-      outcome.skippedEntries += 1;
-      outcome.notes.push(`skipped ${printable(name)}: ${match === null ? "not named <uuid>.json" : "not a regular file"}; left where it is`);
-      continue;
-    }
-    candidates.push({ name, eventId: match[1] ?? "", mtimeMs: stat.mtimeMs });
-    inFlight.add(match[1] ?? "");
-  }
+  /* ---- The inbox: a bounded slice of it, oldest first among what was read. ---- */
+  const candidates = scanInbox(inboxDir, quarantineDir, limits.scanEntries, now().getTime(), outcome);
+  for (const candidate of candidates) inFlight.add(candidate.eventId);
   candidates.sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+  /** Still waiting to be recorded — asked of the file, because the scan saw only part of the inbox. */
+  const waiting = (eventId: string): boolean =>
+    inFlight.has(eventId) || existsSync(path.join(inboxDir, `${eventId}.json`)) || existsSync(path.join(processingDir, `${eventId}.json`));
 
   let files = 0;
   for (let index = 0; index < candidates.length; index += 1) {
@@ -974,23 +1404,27 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
         refuseItem(eventId, `the file is named ${eventId}.json but its eventId is ${submission.eventId}`, read.text, [inboxFile]);
         continue;
       }
-      if (submission.kind === "decision") {
-        refuseItem(eventId, DECISION_NOT_WIRED, read.text, [inboxFile]);
-        continue;
-      }
       const existing = recorded.get(eventId);
       if (existing !== undefined) {
         const earlier = parseReportEvent(existing);
-        if (earlier.ok && submissionTextOf(earlier.event) === JSON.stringify(submission)) {
+        const earlierText = earlier.ok ? submissionTextOf(earlier.event, options.decisionsRoot) : null;
+        if (earlierText === JSON.stringify(submission)) {
           unlinkQuietly(inboxFile);
           outcome.duplicates += 1;
           continue;
         }
-        refuseItem(eventId, `event id ${eventId} is already recorded with different content`, read.text, [inboxFile]);
+        refuseItem(
+          eventId,
+          earlierText === null
+            ? `event id ${eventId} is already recorded, and what it recorded could not be read back to compare with this`
+            : `event id ${eventId} is already recorded with different content`,
+          read.text,
+          [inboxFile],
+        );
         continue;
       }
       if (submission.corrects !== null && !recorded.has(submission.corrects)) {
-        if (inFlight.has(submission.corrects)) {
+        if (waiting(submission.corrects)) {
           outcome.pending += 1;
           outcome.notes.push(`pending ${eventId}: it corrects ${submission.corrects}, which is not recorded yet`);
           continue;
@@ -1019,7 +1453,10 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
         outcome.probes += 1;
         artefacts.push({ ref, check: options.checkArtefact(ref) });
       }
-      const built = buildEvent(submission, now().toISOString(), compareExecution(submission.actor, submission.observedExecution, options.register), artefacts);
+      const receivedAt = now().toISOString();
+      const decisionId = submission.kind === "decision" ? mintId() : null;
+      const execution = compareExecution(submission.actor, submission.observedExecution, options.register);
+      const built = buildEvent(submission, receivedAt, execution, artefacts, decisionId);
       const check = parseReportEvent(JSON.stringify(built));
       if (!check.ok) {
         // Our bytes, so this is a checker or builder bug — not the submitter's fault, not a refusal.
@@ -1027,12 +1464,40 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       }
       // THE PARSER'S OUTPUT IS THE CANONICAL FORM, so these are the bytes every retry and every reader agrees on.
       const line = JSON.stringify(check.event);
-      const prepared: PreparedReport = { schema: REPORTS_SCHEMA, eventId, reportLine: line };
-      writeAtomically(path.join(processingDir, `${eventId}.json`), processingDir, `${JSON.stringify(prepared)}\n`);
+      let prepared: PreparedReport = { schema: REPORTS_SCHEMA, eventId, reportLine: line };
+      if (submission.kind === "decision" && decisionId !== null) {
+        const { actor, draft } = submission;
+        if (actor.kind !== "session") throw new Error("a decision report whose actor is not a session passed the parser");
+        // Frozen here, once: the author's and each session's execution as the
+        // register gives them NOW, and the evidence checks this pass just made.
+        const decided = parseEventDetailed(
+          JSON.stringify(
+            decidedEventFields({
+              eventId,
+              at: receivedAt,
+              decisionId,
+              content: draft,
+              plan: draft.bearsOn.plan,
+              sessions: draft.bearsOn.sessions.map((name) => ({ name, execution: executionRefIn(options.register, name) })),
+              author: { kind: "session", name: actor.name, execution: executionRefIn(options.register, actor.name) },
+              evidence: artefacts,
+            }),
+          ),
+        );
+        if (!decided.ok) throw new Error(`the prepared decision does not read back: ${decided.why}`);
+        prepared = { ...prepared, decisionLine: JSON.stringify(decided.event) };
+      }
+      const preparedText = `${JSON.stringify(prepared)}\n`;
+      if (Buffer.byteLength(preparedText, "utf8") > MAX_PREPARED_BYTES) {
+        refuseItem(eventId, `its prepared record would be over the ${MAX_PREPARED_BYTES}-byte limit a replay reads`, read.text, [inboxFile]);
+        continue;
+      }
+      writeAtomically(path.join(processingDir, `${eventId}.json`), processingDir, preparedText);
       crash("processing-written");
 
-      /* ---- [2] is Stage 3's; [3] and [4]. ---- */
-      if (commit(prepared, inboxFile, read.text) === "recorded") outcome.recorded += 1;
+      /* ---- [2], [3] and [4], through the same checks a replay makes. ---- */
+      const frozen = readPrepared(preparedText, eventId);
+      if (commit(frozen.prepared, frozen.decision, inboxFile, read.text) === "recorded") outcome.recorded += 1;
       if (wallLimitReached) {
         outcome.stoppedBy = "time";
         outcome.deferred = candidates.length - index - 1;

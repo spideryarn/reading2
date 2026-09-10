@@ -72,7 +72,6 @@ import { observeOwnExecution, type OwnExecution } from "../tools/overseer/report
 import {
   BLOCKED_ON,
   COMPLETED_ENDINGS,
-  DECISION_NOT_WIRED,
   REPORT_KINDS,
   drainReports,
   parseSubmission,
@@ -80,10 +79,12 @@ import {
   readInbox,
   readReports,
   submitReport,
+  type ArtefactChecker,
   type BlockedOn,
   type CompletedEnding,
   type ExecutionComparison,
   type ReportActor,
+  type ReportDrainOutcome,
   type ReportEvent,
   type ReportKind,
   type ReportRow,
@@ -94,6 +95,7 @@ import {
   RECONCILE_FILE,
   describeRefusal,
   storeRoot,
+  type SessionRegister,
 } from "../tools/overseer/store.js";
 import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
 import { collectCodexUsage } from "../tools/overseer/codex-usage.js";
@@ -940,7 +942,7 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
         report: { kind: "completed", ending: opts.ending, reviewed: opts.reviewed, tested: opts.tested, merged: opts.merged, ...common(opts) },
       }),
     );
-  withCommon(reportGroup.command("decision").description("a decision; parsed, and refused until stage 3 wires it"))
+  withCommon(reportGroup.command("decision").description("a decision you took, in overseer-decisions template's shape; the daemon adds it to the decision record"))
     .requiredOption("--file <json|->", "the decision draft as a JSON file, or - for stdin")
     .action((opts: CommonReportOpts & { file: string }) => sink({ command: "report", report: { kind: "decision", file: opts.file, ...common(opts) } }));
 
@@ -1221,6 +1223,30 @@ export function tmuxSessionName(): { ok: true; name: string } | { ok: false; why
   }
 }
 
+/** `overseer-decisions template` writes full-line `//` comments; they are the only extension its output needs. */
+function withoutCommentLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+}
+
+/**
+ * The daemon's report drain as `run` composes it — exported so a test can see
+ * where a session's decision lands. The decision record's directory comes from
+ * `decisionsRoot(env)`, so `OVERSEER_DECISIONS_DIR` is honoured here exactly as
+ * `overseer-decisions` honours it. The default checker looks at THIS checkout,
+ * from this file's own location, for the reason `repoRoot` gives.
+ */
+export function makeReportDrain(
+  root: string,
+  env: NodeJS.ProcessEnv,
+  checkArtefact: ArtefactChecker = makeArtefactChecker({ repoDir: repoRoot(), decisionsRoot: decisionsRoot(env), queueRoot: queueRoot(env) }),
+): (register: SessionRegister) => ReportDrainOutcome {
+  const decisions = decisionsRoot(env);
+  return (register) => drainReports({ root, register, now: () => new Date(), checkArtefact, decisionsRoot: decisions });
+}
+
 function defaultReportDeps(): ReportDeps {
   return {
     env: process.env,
@@ -1266,6 +1292,7 @@ export function runReport(root: string, report: ReportCommand, deps: ReportDeps 
     actor = { kind: "session", name: tmux.name };
   }
 
+  const artefacts: ArtefactRef[] = [...report.artefacts];
   let body: Record<string, unknown>;
   switch (report.kind) {
     case "progress":
@@ -1280,10 +1307,30 @@ export function runReport(root: string, report: ReportCommand, deps: ReportDeps 
     case "decision": {
       let draft: unknown;
       try {
-        draft = JSON.parse(deps.readFile(report.file));
+        draft = JSON.parse(withoutCommentLines(deps.readFile(report.file)));
       } catch (cause) {
         deps.err(`✗ the decision draft could not be read as JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
         return 1;
+      }
+      // THE TEMPLATE'S `evidence` IS THE REPORT'S `artefacts`: one list, probed
+      // once by the daemon, so a decision and its report cannot disagree about
+      // a reference. Moved here, after any --artefact, a repeat named once.
+      if (typeof draft === "object" && draft !== null && !Array.isArray(draft) && Object.hasOwn(draft, "evidence")) {
+        const { evidence, ...rest } = draft as Record<string, unknown>;
+        if (!Array.isArray(evidence)) {
+          deps.err("✗ the draft's evidence must be a list of commit:<sha>, path:<path>, decision:<dec-id> or queue:<qi-id> — nothing was submitted");
+          return 1;
+        }
+        for (const [index, spec] of evidence.entries()) {
+          const parsedSpec = typeof spec === "string" ? parseArtefactSpec(spec) : { ok: false as const, why: "is not text such as commit:<sha>" };
+          if (!parsedSpec.ok) {
+            deps.err(`✗ the draft's evidence[${index}]: ${printable(parsedSpec.why)} — nothing was submitted`);
+            return 1;
+          }
+          const spelled = spellArtefactRef(parsedSpec.ref);
+          if (!artefacts.some((ref) => spellArtefactRef(ref) === spelled)) artefacts.push(parsedSpec.ref);
+        }
+        draft = rest;
       }
       body = { draft };
       break;
@@ -1306,17 +1353,13 @@ export function runReport(root: string, report: ReportCommand, deps: ReportDeps 
       observedExecution: own.kind === "observed" ? own.token : null,
       job: { plan: report.plan, queueItem: report.queueItem, occurrence: null },
       summary: report.summary,
-      artefacts: report.artefacts,
+      artefacts,
       corrects: report.corrects,
       ...body,
     }),
   );
   if (!parsed.ok) {
     deps.err(`✗ ${printable(parsed.why)} — nothing was submitted`);
-    return 1;
-  }
-  if (parsed.submission.kind === "decision") {
-    deps.err(`✗ ${DECISION_NOT_WIRED}: the draft parsed, and nothing was submitted. Record it with scripts/overseer-decisions.ts for now.`);
     return 1;
   }
   submitReport(root, parsed.submission);
@@ -1604,23 +1647,13 @@ export async function runParsed(parsed: Parsed): Promise<number> {
         if (one.kind === "ineligible") console.error(`✗ scheduler: ${one.jobId} cannot run — ${one.why}`);
       }
       // WORK REPORTS, drained by this daemon and nobody else — it holds the
-      // store's lock, which is the only exclusion the drain relies on. The
-      // checker looks at THIS checkout, from this file's own location, for the
-      // reason `repoRoot` gives. Step [2] (a session's decision) is Stage 3's.
-      const checkArtefact = makeArtefactChecker({ repoDir: repoRoot(), decisionsRoot: decisionsRoot(), queueRoot: queueRoot() });
+      // store's lock, which is the only exclusion the drain relies on. A
+      // session's decision goes into the decision record `decisionsRoot` names.
+      const drainReportsOnce = makeReportDrain(root, process.env);
       const outcome = await runOverseer({
         root,
         baseUrl: parsed.url ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
-        reports: {
-          drain: (register) =>
-            drainReports({
-              root,
-              register,
-              now: () => new Date(),
-              checkArtefact,
-              appendDecision: () => ({ kind: "pending", why: DECISION_NOT_WIRED }),
-            }),
-        },
+        reports: { drain: drainReportsOnce },
         signal: controller.signal,
         // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
         // apart, and absent is what "take the default" means.

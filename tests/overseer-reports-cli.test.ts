@@ -8,12 +8,14 @@
  * Every store is a temp directory; nothing here touches `~/.overseer`.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { parseArgv, runParsed, runReport, runReports, type Parsed, type ReportDeps } from "../scripts/overseer.js";
+import { parseArgv as parseDecisionsArgv, runParsed as runDecisions } from "../scripts/overseer-decisions.js";
+import { makeReportDrain, parseArgv, runParsed, runReport, runReports, type Parsed, type ReportDeps } from "../scripts/overseer.js";
+import { DECISIONS_FILE, readDecisions } from "../tools/overseer/decisions.js";
 import type { SessionKey, StatusKey } from "../tools/overseer/diff.js";
 import { drainReports, INBOX_DIR, REFUSED_DIR, type ReportSubmission } from "../tools/overseer/reports.js";
 import type { RegisterEntry } from "../tools/overseer/store.js";
@@ -169,14 +171,67 @@ describe("runReport", () => {
     expect(c.err.join("\n")).toMatch(/summary/);
   });
 
-  test("a decision is parsed and then refused as not yet wired", () => {
+  test("a decision in `overseer-decisions template`'s shape is submitted, its evidence moved into the report's artefacts", () => {
     const root = tempRoot();
-    const c = deps({ readFile: () => JSON.stringify({ question: "which?" }) });
-    expect(runReport(root, report(["report", "decision", "--summary", "s", "--session", "w", "--file", "d.json"]).report, c.deps)).toBe(1);
+    const text = decisionTemplate().replace('"evidence": []', '"evidence": ["path:package.json", "commit:abc1234"]');
+    expect(text).toContain('"path:package.json"'); // the substitution took
+    expect(text).toMatch(/^\s*\/\//m); // and the template's comment lines are still in it
+    const c = deps({ readFile: () => text });
+    const argv = ["report", "decision", "--summary", "chose the small shape", "--session", "work-reports", "--artefact", "commit:abc1234", "--file", "d.json"];
+    expect(runReport(root, report(argv).report, c.deps), c.err.join("\n")).toBe(0);
+    const files = inbox(root);
+    expect(files).toHaveLength(1);
+    const submitted = JSON.parse(readFileSync(join(root, INBOX_DIR, files[0] ?? ""), "utf8")) as Record<string, unknown>;
+    expect(submitted["kind"]).toBe("decision");
+    // One list, --artefact first, the template's evidence after it, a repeat named once.
+    expect(submitted["artefacts"]).toEqual([
+      { kind: "commit", sha: "abc1234" },
+      { kind: "path", path: "package.json" },
+    ]);
+    expect(Object.keys(submitted["draft"] as object)).not.toContain("evidence");
+    expect(c.out.join("\n")).toMatch(/submitted, not yet recorded/);
+  });
+
+  test("a decision as the Overseer is refused before anything is written", () => {
+    const root = tempRoot();
+    const c = deps({ readFile: () => decisionTemplate() });
+    expect(runReport(root, report(["report", "decision", "--summary", "s", "--as", "overseer", "--file", "d.json"]).report, c.deps)).toBe(1);
     expect(inbox(root)).toEqual([]);
-    expect(c.err.join("\n")).toMatch(/stage 3/);
+    expect(c.err.join("\n")).toMatch(/overseer-decisions add/);
+  });
+
+  test("the daemon's drain, as `run` composes it, puts a session's decision in OVERSEER_DECISIONS_DIR", () => {
+    const root = tempRoot();
+    const decisions = tempRoot();
+    const c = deps({ readFile: () => decisionTemplate() });
+    const argv = ["report", "decision", "--summary", "chose the small shape", "--session", "work-reports", "--file", "d.json"];
+    expect(runReport(root, report(argv).report, c.deps), c.err.join("\n")).toBe(0);
+    const drainOnce = makeReportDrain(root, { OVERSEER_DECISIONS_DIR: decisions }, () => ({ state: "not-found" }));
+    const outcome = drainOnce(new Map([[`$7 name:work-reports` as SessionKey, entry("work-reports", "boot-cli:80:5555")]]));
+    expect(outcome.recorded).toBe(1);
+    expect(existsSync(join(decisions, DECISIONS_FILE))).toBe(true);
+    const read = readDecisions(decisions);
+    expect(read.kind === "decisions" ? read.view.records.map((record) => record.author) : read.kind).toEqual([
+      { kind: "session", name: "work-reports", execution: { kind: "verified", token: "boot-cli:80:5555", since: "2026-09-10T10:00:00.000Z" } },
+    ]);
   });
 });
+
+/** The real `overseer-decisions template` output, comments and all. */
+function decisionTemplate(): string {
+  const printed: string[] = [];
+  const spy = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+    printed.push(String(line));
+  });
+  try {
+    const outcome = parseDecisionsArgv(["template"]);
+    if (outcome.kind !== "run") throw new Error("template did not parse");
+    expect(runDecisions(outcome.parsed, { OVERSEER_DECISIONS_DIR: tempRoot() })).toBe(0);
+  } finally {
+    spy.mockRestore();
+  }
+  return printed.join("\n");
+}
 
 function entry(name: string, token: string): RegisterEntry {
   const at = "2026-09-10T10:00:00.000Z";
@@ -205,7 +260,7 @@ function drain(root: string): void {
     register: new Map([[`$7 name:work-reports` as SessionKey, entry("work-reports", "boot-cli:80:5555")]]),
     now: () => new Date("2026-09-10T12:01:00.000Z"),
     checkArtefact: () => ({ state: "not-found" }),
-    appendDecision: () => ({ kind: "pending", why: "not in this stage" }),
+    decisionsRoot: tempRoot(),
   });
 }
 

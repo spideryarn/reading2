@@ -33,11 +33,17 @@ empty list reads **"not stated"**, never "not reviewed".
 - **`completed`**: the work is over. `--ending` is one of `finished`, `done-enough` or
   `important-work-left`. Name only the revisions you actually reviewed, tested or merged. Leave the
   others out; that reads as "not stated", not as a failure.
-- **`decision`**: a decision you took that outlives your branch. The draft is the schema-2 decision
-  fields, minus `author`; `npx tsx scripts/overseer-decisions.ts template` shows the shape. **Not yet
-  wired**: the command parses the draft and then refuses to submit it, saying so. Until it is, record the
-  decision with `scripts/overseer-decisions.ts`. When it lands, a session's decision becomes one entry in
-  the decision record and one `decision` report pointing at it.
+- **`decision`**: a decision you took that outlives your branch. `--file` takes what
+  `npx tsx scripts/overseer-decisions.ts template` prints, filled in; it has no `author`, because the
+  daemon stamps your session with the run the register has verified for it. The template's `evidence`
+  list is moved into the report's artefacts beside any `--artefact`, so each reference is checked once
+  and the decision and the report agree about it. On the daemon's next pass it becomes **one entry in
+  the decision record** (`$OVERSEER_DECISIONS_DIR`, or `~/.overseer`), recorded `by: daemon` with
+  command id `report:<eventId>`, and **one `decision` report** carrying only that decision's id. It
+  arrives pending review like every other decision: nothing a session says reviews it. If the decision
+  record is busy it waits for the next pass; if the record refuses it, the report is refused with the
+  record's reason. Only a session reports a decision this way — `--as overseer` and `--as greg` are
+  refused, and the Overseer and Greg keep using `overseer-decisions add`.
 
 ## The commands
 

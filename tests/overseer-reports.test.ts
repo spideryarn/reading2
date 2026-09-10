@@ -11,10 +11,12 @@ import { randomUUID } from "node:crypto";
 import {
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -28,14 +30,24 @@ import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { ArtefactCheck, ArtefactRef } from "../tools/fleet/artefact-ref.js";
+import {
+  DECISIONS_FILE,
+  DECISIONS_LOCK_FILE,
+  appendEvents,
+  envelope,
+  parseEventDetailed,
+  readDecisions,
+} from "../tools/overseer/decisions.js";
 import type { SessionKey, StatusKey } from "../tools/overseer/diff.js";
+import { releaseLock, takeLock } from "../tools/overseer/lock.js";
 import { makeArtefactChecker } from "../tools/overseer/report-artefacts.js";
 import { MAX_ANCESTRY_STEPS, observeOwnExecution } from "../tools/overseer/report-identity.js";
 import {
-  DECISION_NOT_WIRED,
   INBOX_DIR,
   MAX_SUBMISSION_BYTES,
   PROCESSING_DIR,
+  QUARANTINE_DIR,
+  QUARANTINE_KEPT,
   REFUSED_DIR,
   REPORTS_FILE,
   REPORTS_INIT_FILE,
@@ -134,10 +146,52 @@ function options(root: string, over: Partial<DrainOptions> = {}): DrainOptions {
     register: register(entry("work-reports", TOKEN_A)),
     now: () => FIRST_NOW,
     checkArtefact: checker().check,
-    appendDecision: () => ({ kind: "pending", why: "not in this stage" }),
+    // A fresh directory per call unless a test names one: nothing here may reach ~/.overseer.
+    decisionsRoot: tempRoot(),
     ...over,
   };
 }
+
+/** A draft in `overseer-decisions template`'s shape, minus author and evidence. */
+function draft(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    class: "decision",
+    question: "Which shape should the drain's decision step use?",
+    options: [
+      { name: "Small", tradeoffs: "One append, frozen bytes." },
+      { name: "General", tradeoffs: "A second log for sessions." },
+    ],
+    chose: { option: "Small", note: null },
+    why: "Two logs would be two answers to what was decided.",
+    advisers: ["nobody"],
+    bearsOn: { sessions: ["work-reports"], plan: null },
+    supersedes: null,
+    consequence: "medium",
+    reversibility: "costly",
+    domain: "technical",
+    recommendation: null,
+    gregAsked: "no",
+    confidence: null,
+    ...over,
+  };
+}
+
+function decisionSubmission(over: Partial<Record<string, unknown>> = {}, draftOver: Record<string, unknown> = {}): ReportSubmission {
+  return submission({ kind: "decision", summary: "chose the small shape", draft: draft(draftOver), ...over });
+}
+
+function decisionsIn(dir: string) {
+  const read = readDecisions(dir);
+  if (read.kind !== "decisions") throw new Error(`expected decisions, got ${read.kind}${read.kind === "unreadable" ? `: ${read.why}` : ""}`);
+  return read.view;
+}
+
+function decisionLines(dir: string): string[] {
+  const file = join(dir, DECISIONS_FILE);
+  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((line) => line.trim() !== "") : [];
+}
+
+const VERIFIED_A = { kind: "verified", token: TOKEN_A, since: "2026-09-10T10:00:00.000Z" };
 
 function rows(root: string) {
   const read = readReports(root);
@@ -359,21 +413,207 @@ describe("invalid input dropped by hand is refused, not recorded", () => {
     expect(stored["original"]).toContain("ready");
   });
 
-  test("a decision submission is refused in this stage, and appendDecision is not called", () => {
+});
+
+describe("a session's decision goes into the decision record, and the report points at it", () => {
+  test("it lands in both logs joined by report:<eventId>, recorded by the daemon, authored by the session, pending review", () => {
     const root = tempRoot();
-    let called = 0;
-    submitReport(root, submission({ kind: "decision", draft: { question: "which?" } }));
-    const outcome = drainReports(
-      options(root, {
-        appendDecision: () => {
-          called += 1;
-          return { kind: "appended" };
-        },
+    const dir = tempRoot();
+    const s = decisionSubmission();
+    submitReport(root, s);
+    const outcome = drainReports(options(root, { decisionsRoot: dir }));
+    expect(outcome.recorded).toBe(1);
+    expect(outcome.refused).toBe(0);
+
+    const report = rows(root).rows[0]?.event;
+    if (report?.kind !== "decision") throw new Error(`expected a decision report, got ${report?.kind}`);
+    const view = decisionsIn(dir);
+    expect(view.problems).toEqual([]);
+    expect(view.records).toHaveLength(1);
+    const record = view.records[0];
+    expect(record?.id).toBe(report.decisionId);
+    const lines = decisionLines(dir);
+    expect(lines).toHaveLength(1);
+    const raw = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
+    expect(raw["commandId"]).toBe(`report:${s.eventId}`);
+    expect(raw["by"]).toBe("daemon");
+    expect(record?.recordedBy).toBe("daemon");
+    expect(record?.author).toEqual({ kind: "session", name: "work-reports", execution: VERIFIED_A });
+    expect(record?.bearsOn.sessions).toEqual([{ name: "work-reports", execution: VERIFIED_A }]);
+    expect(record?.decidedAt).toBe(FIRST_NOW.toISOString());
+    expect(record?.question).toBe(draft()["question"]);
+    // Pending review: nothing a session says reviews it.
+    expect(record?.reviewed).toBe(false);
+    expect(record?.reversed).toBe(false);
+    // The report carries the id and nothing of the decision's content.
+    expect(readFileSync(join(root, REPORTS_FILE), "utf8")).not.toContain(String(draft()["question"]));
+    expect(listed(root, INBOX_DIR)).toEqual([]);
+    expect(listed(root, PROCESSING_DIR)).toEqual([]);
+  });
+
+  test("the decision's evidence checks are the report's artefact checks, one probe each", () => {
+    const root = tempRoot();
+    const dir = tempRoot();
+    const probes = checker((ref) => (ref.kind === "commit" ? { state: "on-dev" } : { state: "not-found" }));
+    submitReport(root, decisionSubmission({ artefacts: [{ kind: "commit", sha: "abc1234" }, { kind: "path", path: "package.json" }] }));
+    drainReports(options(root, { decisionsRoot: dir, checkArtefact: probes.check }));
+    const report = rows(root).rows[0]?.event;
+    expect(report?.artefacts.map((item) => item.check)).toEqual([{ state: "on-dev" }, { state: "not-found" }]);
+    expect(decisionsIn(dir).records[0]?.evidence).toEqual({ kind: "recorded", value: report?.artefacts });
+    expect(probes.calls).toHaveLength(2);
+  });
+
+  const boundaries: DrainBoundary[] = ["processing-written", "decision-appended", "reports-appended", "processing-unlinked"];
+  for (const boundary of boundaries) {
+    test(`crash after ${boundary}: one decision and one report, from the first attempt's frozen bytes`, () => {
+      const root = tempRoot();
+      const dir = tempRoot();
+      submitReport(root, decisionSubmission({ artefacts: [{ kind: "path", path: "package.json" }] }));
+      expect(() =>
+        drainReports(options(root, { decisionsRoot: dir, crashAt: boundary, checkArtefact: checker(() => ({ state: "found-locally" })).check })),
+      ).toThrow(SimulatedCrash);
+
+      // The world has moved on: a later clock, a replaced run, a file now on dev.
+      drainReports(
+        options(root, {
+          decisionsRoot: dir,
+          now: () => LATER_NOW,
+          register: register(entry("work-reports", TOKEN_B)),
+          checkArtefact: checker(() => ({ state: "on-dev" })).check,
+        }),
+      );
+      expect(decisionLines(dir)).toHaveLength(1);
+      const view = decisionsIn(dir);
+      expect(view.problems).toEqual([]);
+      const record = view.records[0];
+      const reports = rows(root);
+      expect(reports.rows).toHaveLength(1);
+      expect(reports.problems).toEqual([]);
+      const report = reports.rows[0]?.event;
+      expect(report?.kind === "decision" ? report.decisionId : null).toBe(record?.id);
+      expect(report?.receivedAt).toBe(FIRST_NOW.toISOString());
+      expect(record?.decidedAt).toBe(FIRST_NOW.toISOString());
+      expect(record?.author).toEqual({ kind: "session", name: "work-reports", execution: VERIFIED_A });
+      expect(record?.evidence).toEqual({ kind: "recorded", value: [{ ref: { kind: "path", path: "package.json" }, check: { state: "found-locally" } }] });
+      expect(listed(root, INBOX_DIR)).toEqual([]);
+      expect(listed(root, PROCESSING_DIR)).toEqual([]);
+      // A leftover inbox copy of a recorded decision is the same claim, not a refusal.
+      expect(readInbox(root).refused).toEqual([]);
+    });
+  }
+
+  test("the decisions lock held: pending, nothing written to either log, later reports not starved", () => {
+    const root = tempRoot();
+    const dir = tempRoot();
+    const lockPath = join(dir, DECISIONS_LOCK_FILE);
+    const held = takeLock(lockPath, () => new Date());
+    if (!held.ok) throw new Error("could not take the decisions lock for the test");
+    const s = decisionSubmission();
+    const other = submission({ summary: "a progress report behind the decision" });
+    try {
+      submitReport(root, s);
+      submitReport(root, other);
+      const outcome = drainReports(options(root, { decisionsRoot: dir }));
+      expect(outcome.pending).toBe(1);
+      expect(outcome.refused).toBe(0);
+      expect(outcome.recorded).toBe(1);
+      expect(outcome.notes.join("\n")).toMatch(new RegExp(`pending ${s.eventId}`));
+      expect(existsSync(join(dir, DECISIONS_FILE))).toBe(false);
+      expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([other.eventId]);
+      expect(listed(root, INBOX_DIR)).toEqual([`${s.eventId}.json`]);
+    } finally {
+      releaseLock(held.lock, lockPath);
+    }
+    const after = drainReports(options(root, { decisionsRoot: dir }));
+    expect(after.replayed).toBe(1);
+    expect(decisionLines(dir)).toHaveLength(1);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([other.eventId, s.eventId]);
+  });
+
+  test("a decision submitted as the Overseer or Greg is refused: they use overseer-decisions add", () => {
+    for (const actor of [{ kind: "overseer" }, { kind: "greg" }]) {
+      const s = decisionSubmission({ actor, observedExecution: null });
+      const parsed = parseSubmission(JSON.stringify(s));
+      expect(parsed.ok).toBe(false);
+      expect(parsed.ok ? "" : parsed.why).toMatch(/overseer-decisions add/);
+
+      // Dropped by hand, past the CLI: the drain refuses it the same way.
+      const root = tempRoot();
+      const dir = tempRoot();
+      drop(root, `${s.eventId}.json`, JSON.stringify(s));
+      const outcome = drainReports(options(root, { decisionsRoot: dir }));
+      expect(outcome.refused).toBe(1);
+      expect(readInbox(root).refused[0]?.why).toMatch(/overseer-decisions add/);
+      expect(existsSync(join(dir, DECISIONS_FILE))).toBe(false);
+    }
+  });
+
+  test("a bad draft is refused naming the field, by the one parser", () => {
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ question: "" }, /question/],
+      [{ why: `ring${BELL}` }, /why/],
+      [{ chose: { option: "Neither", note: null } }, /chose/],
+      [{ consequence: "enormous" }, /consequence/],
+      [{ bearsOn: { sessions: ["no spaces allowed"], plan: null } }, /bearsOn/],
+      [{ author: { kind: "greg" } }, /author/],
+      [{ evidence: ["commit:abc1234"] }, /evidence.*--artefact/],
+      [{ ready: true }, /draft/],
+    ];
+    for (const [over, why] of cases) {
+      const parsed = parseSubmission(JSON.stringify(decisionSubmission({}, over)));
+      expect(parsed.ok, JSON.stringify(over)).toBe(false);
+      expect(parsed.ok ? "" : parsed.why, JSON.stringify(over)).toMatch(why);
+    }
+    expect(parseSubmission(JSON.stringify(decisionSubmission())).ok).toBe(true);
+  });
+
+  test("a decision the record would refuse is refused with the record's reason, and nothing more is written", () => {
+    const root = tempRoot();
+    const dir = tempRoot();
+    const s = decisionSubmission();
+    // Another decision already holds this report's command id, with other content.
+    const prior = parseEventDetailed(
+      JSON.stringify({
+        ...envelope("daemon", { commandId: `report:${s.eventId}` }),
+        kind: "decided",
+        id: "dec-33333333",
+        decidedAt: FIRST_NOW.toISOString(),
+        ...draft({ question: "A different question under the same command id?" }),
+        bearsOn: { sessions: [], plan: null },
+        author: { kind: "session", name: "work-reports", execution: { kind: "not-found" } },
+        evidence: [],
       }),
     );
+    if (!prior.ok) throw new Error(prior.why);
+    expect(appendEvents([prior.event], { root: dir }).ok).toBe(true);
+
+    submitReport(root, s);
+    const outcome = drainReports(options(root, { decisionsRoot: dir }));
     expect(outcome.refused).toBe(1);
-    expect(called).toBe(0);
-    expect(readInbox(root).refused[0]?.why).toBe(DECISION_NOT_WIRED);
+    expect(readInbox(root).refused[0]?.why).toMatch(/command-conflict/);
+    expect(decisionLines(dir)).toHaveLength(1);
+    expect(readReports(root).kind).toBe("never-written");
+    expect(listed(root, PROCESSING_DIR)).toEqual([]);
+    expect(listed(root, INBOX_DIR)).toEqual([]);
+  });
+
+  test("a decision re-dropped after it was recorded is a duplicate; changed under the same id it is refused", () => {
+    const root = tempRoot();
+    const dir = tempRoot();
+    const s = decisionSubmission();
+    submitReport(root, s);
+    drainReports(options(root, { decisionsRoot: dir }));
+    drop(root, `${s.eventId}.json`, serializeSubmission(s));
+    const again = drainReports(options(root, { decisionsRoot: dir }));
+    expect(again.duplicates).toBe(1);
+    expect(again.refused).toBe(0);
+    const changed = decisionSubmission({ eventId: s.eventId }, { question: "A different question after the fact?" });
+    drop(root, `${s.eventId}.json`, serializeSubmission(changed));
+    const conflicting = drainReports(options(root, { decisionsRoot: dir }));
+    expect(conflicting.refused).toBe(1);
+    expect(readInbox(root).refused[0]?.why).toMatch(/different content/);
+    expect(decisionLines(dir)).toHaveLength(1);
+    expect(rows(root).rows).toHaveLength(1);
   });
 });
 
@@ -627,8 +867,96 @@ describe("bounds per pass", () => {
   });
 });
 
+describe("the inbox scan is bounded, and what can never be a report is moved out of its way", () => {
+  function recordedIds(root: string): string[] {
+    const read = readReports(root);
+    return read.kind === "reports" ? read.view.rows.map((row) => row.event.eventId) : [];
+  }
+
+  test("a flood of 5 000 invalid entries and one valid submission: recorded within six passes, none reading more than scanEntries", () => {
+    const root = tempRoot();
+    const inboxDir = join(root, INBOX_DIR);
+    mkdirSync(inboxDir, { recursive: true });
+    for (let i = 0; i < 5000; i += 1) writeFileSync(join(inboxDir, `flood-${i}.txt`), "");
+    const s = submission();
+    submitReport(root, s);
+    const count = (): number => readdirSync(inboxDir).length;
+    let passes = 0;
+    while (passes < 6 && !recordedIds(root).includes(s.eventId)) {
+      const before = count();
+      const outcome = drainReports(options(root));
+      passes += 1;
+      expect(outcome.scanned).toBeLessThanOrEqual(1000);
+      // Measured from OUTSIDE the drain: every entry it read and could not use
+      // was moved away, so the inbox cannot shrink by more than it read.
+      const moved = before - count();
+      expect(moved).toBeGreaterThan(0);
+      expect(moved).toBeLessThanOrEqual(1000);
+    }
+    expect(recordedIds(root)).toEqual([s.eventId]);
+    expect(passes).toBeLessThanOrEqual(6);
+  });
+
+  test(`the quarantine keeps the newest ${200}, and the latest arrivals are among them`, () => {
+    const root = tempRoot();
+    for (let i = 0; i < 300; i += 1) drop(root, `junk-${i}.txt`, "");
+    expect(drainReports(options(root)).quarantined).toBe(300);
+    expect(QUARANTINE_KEPT).toBe(200);
+    expect(listed(root, QUARANTINE_DIR)).toHaveLength(200);
+    for (let i = 0; i < 5; i += 1) drop(root, `late-${i}.txt`, "");
+    expect(drainReports(options(root)).quarantined).toBe(5);
+    const kept = listed(root, QUARANTINE_DIR);
+    expect(kept).toHaveLength(200);
+    for (let i = 0; i < 5; i += 1) expect(kept.some((name) => name.endsWith(`late-${i}.txt`)), `late-${i}`).toBe(true);
+  });
+
+  test("a symlink in the inbox is moved, never followed, and its target is untouched", () => {
+    const root = tempRoot();
+    const elsewhere = join(root, "elsewhere.json");
+    const target = submission();
+    const original = serializeSubmission(target);
+    writeFileSync(elsewhere, original);
+    mkdirSync(join(root, INBOX_DIR), { recursive: true });
+    symlinkSync(elsewhere, join(root, INBOX_DIR, `${target.eventId}.json`));
+
+    const outcome = drainReports(options(root));
+    expect(outcome.quarantined).toBe(1);
+    expect(outcome.recorded).toBe(0);
+    expect(listed(root, INBOX_DIR)).toEqual([]);
+    const moved = listed(root, QUARANTINE_DIR);
+    expect(moved).toHaveLength(1);
+    const link = join(root, QUARANTINE_DIR, moved[0] ?? "");
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(link)).toBe(elsewhere);
+    expect(readFileSync(elsewhere, "utf8")).toBe(original);
+    expect(readReports(root).kind).toBe("never-written");
+  });
+
+  test("a name that is not UTF-8 is moved too, rather than being unreachable by a string path", () => {
+    const root = tempRoot();
+    const inboxDir = join(root, INBOX_DIR);
+    mkdirSync(inboxDir, { recursive: true });
+    writeFileSync(Buffer.concat([Buffer.from(`${inboxDir}/`), Buffer.from([0x61, 0xff, 0x62])]), "x");
+    expect(drainReports(options(root)).quarantined).toBe(1);
+    expect(readdirSync(inboxDir, { encoding: "buffer" })).toEqual([]);
+  });
+
+  test("the scan cap says so when it is hit, and not when it is not", () => {
+    const root = tempRoot();
+    for (let i = 0; i < 5; i += 1) drop(root, `stray-${i}.txt`, "");
+    const capped = drainReports(options(root, { limits: { scanEntries: 3 } }));
+    expect(capped.scanned).toBe(3);
+    expect(capped.scanCapped).toBe(true);
+    expect(capped.notes.join("\n")).toMatch(/order is approximate beyond the first 3 entries/);
+    const rest = drainReports(options(root, { limits: { scanEntries: 3 } }));
+    expect(rest.scanned).toBe(2);
+    expect(rest.scanCapped).toBe(false);
+    expect(rest.notes.join("\n")).not.toMatch(/approximate/);
+  });
+});
+
 describe("inbox hygiene", () => {
-  test("a symlink, a directory and a stray name are skipped; name ≠ id and 17 KiB are refused", () => {
+  test("a symlink, a directory and a stray name are quarantined; name ≠ id and 17 KiB are refused", () => {
     const root = tempRoot();
     const elsewhere = join(root, "elsewhere.json");
     const target = submission();
@@ -646,13 +974,16 @@ describe("inbox hygiene", () => {
 
     const probes = checker();
     const outcome = drainReports(options(root, { checkArtefact: probes.check }));
-    expect(outcome.skippedEntries).toBe(3);
+    expect(outcome.quarantined).toBe(3);
+    expect(outcome.skippedEntries).toBe(0);
     expect(outcome.refused).toBe(2);
     expect(outcome.recorded).toBe(0);
     expect(probes.calls).toEqual([]);
     expect(readReports(root).kind).toBe("never-written");
-    // Skipped entries are left exactly where they were.
-    for (const name of [linkName, dirName, "notes.txt"]) expect(existsSync(join(root, INBOX_DIR, name)), name).toBe(true);
+    // Entries that can never be a report are moved out of the inbox, not deleted and not read.
+    for (const name of [linkName, dirName, "notes.txt"]) expect(existsSync(join(root, INBOX_DIR, name)), name).toBe(false);
+    expect(listed(root, QUARANTINE_DIR)).toHaveLength(3);
+    expect(readFileSync(elsewhere, "utf8")).toBe(serializeSubmission(target));
     const refused = new Map(readInbox(root).refused.map((r) => [r.eventId, r.why]));
     expect(refused.get(mismatchName.slice(0, -5))).toMatch(/named/);
     expect(refused.get(bigName.slice(0, -5))).toMatch(new RegExp(String(MAX_SUBMISSION_BYTES)));
@@ -671,7 +1002,7 @@ describe("inbox hygiene", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
-  test("a hard-linked submission is skipped and neither link is removed", () => {
+  test("a hard-linked submission is quarantined and the other link is untouched", () => {
     const root = tempRoot();
     const s = submission();
     const elsewhere = join(root, "elsewhere.json");
@@ -681,11 +1012,12 @@ describe("inbox hygiene", () => {
     linkSync(elsewhere, inboxFile);
 
     const outcome = drainReports(options(root));
-    expect(outcome.skippedEntries).toBe(1);
+    expect(outcome.quarantined).toBe(1);
     expect(outcome.recorded).toBe(0);
     expect(readReports(root).kind).toBe("never-written");
-    expect(existsSync(elsewhere)).toBe(true);
-    expect(existsSync(inboxFile)).toBe(true);
+    expect(readFileSync(elsewhere, "utf8")).toBe(serializeSubmission(s));
+    expect(existsSync(inboxFile)).toBe(false);
+    expect(listed(root, QUARANTINE_DIR)).toHaveLength(1);
   });
 
   test("a prepared report replaced by a symlink is left pending rather than followed", () => {

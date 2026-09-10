@@ -366,8 +366,33 @@ thing it says. `AGENTS.md`'s entry-point line gained `work-reports.md` — a sig
 needs no approval, and which `tests/doc-links.test.ts` reads doc ownership from. jsdom only; not seen in
 a real browser.
 
-**3b — building**: first the inbox-enumeration bound the Stage 1 review made its condition for landing,
-then a session's decision into `decisions.jsonl`.
+**3b — built, not yet Sol-reviewed.** Opus subagent. First the inbox-enumeration bound the Stage 1 review
+made its condition for landing: each pass iterates the inbox lazily with `opendirSync` and stops after
+`scanEntries` (default 1 000) entries, noting "order is approximate beyond the first N entries" when the
+cap is hit; anything that can never become a report (a bad name, a directory, a symlink, more than one
+hard link) is *moved* to `report-quarantine/`, newest 200 kept, so a hostile prefix cannot fill every
+pass's window. Names are read as raw bytes — a non-UTF-8 name cannot be reached by a string path, so it
+could otherwise never be moved. Then decision reports: a session's `decision` submission is validated by
+building the real `decided` event (`by: daemon`, session author, command id `report:<eventId>`) through
+`parseEventDetailed`; step [1] freezes it in `report-processing/`, step [2] appends exactly those bytes,
+`locked` stays pending, any other refusal from the record refuses the submission atomically; an
+Overseer or Greg actor is refused. The report's `artefacts` are the decision's evidence — probed once, so
+the two cannot disagree. `report decision --file` accepts `overseer-decisions template` output as printed.
+`makeReportDrain(root, env)` honours `OVERSEER_DECISIONS_DIR`. Seen red first: the flood (5 000 entries,
+recorded within six passes), quarantine bounds, symlink moved and its target untouched, both logs joined,
+a crash at each of four boundaries re-draining to exactly one of each. Accepted cost: an `unreadable` or
+`refused` answer from the decision record — including a filesystem error — refuses the submission rather
+than leaving it pending, as the brief said.
+
+**The seam** (orchestrator, a few lines): `tests/fleet-attention.test.ts` asserts the exact set of
+Overseer modules `tools/fleet/` may reach. 3a's `reports-view.ts` imported `reports.ts`, whose type-only
+import of `store.ts` put nineteen modules over the line. `reports.ts` now declares the two register fields
+it reads as a structural `ReportRegister`, and `reports.ts` joins the allowlist with its closure written
+out. Typecheck exit 0; nine affected test files, 238 passed.
+
+Known and left for the review to weigh: `readInbox` still lists the whole inbox on every `GET /api/reports`
+(the dashboard, not the daemon); pruning a quarantined *directory* is recursive; the daemon logs a pass
+that only quarantined nothing.
 
 - [ ] Step [2] of the drain: a session's decision into `decisions.jsonl`, replay tests at each boundary,
   `OVERSEER_DECISIONS_DIR` honoured, a decisions-lock contention left pending.
