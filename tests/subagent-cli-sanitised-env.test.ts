@@ -16,14 +16,18 @@ afterEach(() => {
 });
 
 describe("sanitisedEnv", () => {
-  it("drops a name that is on both lists, and tells the caller which", () => {
+  it("drops every present name on both lists and tells the caller once, without duplicates", () => {
     const told: string[][] = [];
     const out = sanitisedEnv(
-      { PATH: "/bin", ROUTE: "x", OTHER: "y" }, ["ROUTE"], ["ROUTE"], (names) => told.push(names),
+      { PATH: "/bin", ROUTE: "x", OTHER: "y" },
+      ["ROUTE", "OTHER", "ABSENT", "ROUTE"],
+      ["ROUTE", "OTHER", "ABSENT"],
+      (names) => told.push(names),
     );
     expect(out.ROUTE).toBeUndefined();
+    expect(out.OTHER).toBeUndefined();
     expect(out.PATH).toBe("/bin");
-    expect(told).toEqual([["ROUTE"]]);
+    expect(told).toEqual([["ROUTE", "OTHER"]]);
   });
 
   it("drops a secret on both lists, which the re-add step used to put back", () => {
@@ -35,18 +39,31 @@ describe("sanitisedEnv", () => {
 
   it("says nothing about a name the parent does not have", () => {
     /* Nothing was refused: the child would not have had it either way. A warning there would fire
-       on every run of a caller whose drop list names variables most machines never set. */
+       on every run of a caller whose drop list names variables most machines never set.
+       `toString` is inherited from Object.prototype, not an environment entry. */
     const told: string[][] = [];
-    sanitisedEnv({ PATH: "/bin" }, ["ROUTE"], ["ROUTE"], (names) => told.push(names));
+    sanitisedEnv(
+      { PATH: "/bin" },
+      ["ROUTE", "toString"],
+      ["ROUTE", "toString"],
+      (names) => told.push(names),
+    );
     expect(told).toEqual([]);
   });
 
   it("tells stderr by default, so a caller who passed no callback is still told", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    sanitisedEnv({ ROUTE: "x" }, ["ROUTE"], ["ROUTE"]);
+    sanitisedEnv(
+      { ROUTE: "credential-value-one", OTHER: "credential-value-two" },
+      ["ROUTE", "OTHER"],
+      ["ROUTE", "OTHER"],
+    );
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(String(spy.mock.calls[0]?.[0])).toMatch(/ROUTE/);
-    expect(String(spy.mock.calls[0]?.[0])).not.toContain("x");
+    const warning = String(spy.mock.calls[0]?.[0]);
+    expect(warning).toMatch(/ROUTE/);
+    expect(warning).toMatch(/OTHER/);
+    expect(warning).not.toContain("credential-value-one");
+    expect(warning).not.toContain("credential-value-two");
   });
 
   it("still lets passThrough bring back a secret that only the denylist took", () => {

@@ -462,7 +462,9 @@ export function sanitisedEnv(
     if (value !== undefined) out[name] = value;
   }
   // Only names the parent actually has: withholding an absent variable refused nothing.
-  const overruled = [...new Set(passThrough)].filter((n) => dropped.has(n) && parent[n] !== undefined);
+  const overruled = [...new Set(passThrough)].filter(
+    (n) => dropped.has(n) && Object.hasOwn(parent, n) && parent[n] !== undefined,
+  );
   if (overruled.length > 0) onOverruled(overruled);
   return out;
 }

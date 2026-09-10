@@ -51,9 +51,22 @@ A second defect sat in the same place. `sanitisedEnv(parent, passThrough, drop)`
   **What the sweep cannot see.** A test outside the 141 that reaches one of the six in-process,
   through a module it imports transitively. The stage 5 guard covers that case whether or not
   anyone finds it.
-- [ ] Sol review of the list.
+- [x] Sol review of the list: `260910d-review-sol-sweep.md`. Sol did not reject the two-file
+  finding, but showed that the sweep did not establish it repo-wide:
 
-_Status:_ the list is two files, both the ones already named, and both fixed in stage 2.
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F1 (P1, established) | `.env.local` beats the inherited environment, so A and B never actually varied `CODEX_API_KEY` or `OPENAI_API_KEY` | Accepted. The repo-wide R2 below pins both with `SPIDERYARN_ENV_PINNED`. That governs the worker's own load. The lanes overwrite the pin after it, so a `tsx` child that reloads `.env.local` still gets the repo's values; that is the same for every runner, so it is not this class |
+  | F2 (P1, established scope gap) | The filter is textual and lists only files that match directly: 141 of 793 `.test.ts` files, and no `.test.tsx`. `declared-spend.test.ts` reaches `ANTHROPIC_API_KEY` transitively (24/24 either way) | Accepted. Replaced by the repo-wide A/B below |
+  | F3 (P2, reasoned) | Two of the 64 presence combinations are not independence. It misses one-hot cases, cancellation between variables, and empty versus absent | Recorded as a limit. No finite sweep proves value-independence; the guard is what closes the class |
+  | F4 (P3, separate class) | `fleet-transcript.test.ts` returns silently without asserting when `$HOME` has no transcript over 2 MB | Out of scope, since this is `$HOME`, not account routing. Raised in the debrief |
+
+- [ ] **Repo-wide A/B** (F1 and F2). The whole suite, twice, under the pool environment. R1 uses the
+  normal config, with the guard; it is also the stage gate. R2 uses a copy of the config without
+  the guard's delete line, with the two keys pinned.
+
+_Status:_ on the 141 candidates, the list is two files, both the ones already named and both fixed
+in stage 2. That does not establish it repo-wide until the A/B above has run.
 
 ### Stage 2 — the tests stop depending on the runner
 
@@ -94,13 +107,19 @@ change what `run-claude` routes on:
   change (`expected 'oauth-of-another-account' to be undefined`).
 - [x] Green, with the two existing restorable-name tests unchanged. The six suites that reach
   `subagent-cli` pass, 222/222, and typecheck is clean.
-- [ ] Sol review.
+- [x] Sol review (write-capable) of 56511857: `260910d-code-review-sol-stages-3-4.md`. No P0 or
+  P1. The prompt was `260910d-review-prompt-stages-3-4.md`.
 
-A routed run with `--auth env` now reaches the child with no credential. The probe then reports the
-claude.ai login, and `authConflict` refuses it with its message about unapproved API keys. So the
-run is refused loudly, but for a reason that names the wrong cause. A refusal in `parseArgs` that
-says "a routed run takes its account from its state directory" would be clearer. That belongs to
-`run-claude.ts`'s owner and is not done here.
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F1 (P2) | Unrouted `claudeEnv` now puts a restored name in a different position in the child's environment | **Overruled.** The names and values are identical to before, and nothing reads an environment by position. Sol's fix deleted and re-appended keys to keep the old order: eight lines to preserve something that is not a contract. Reverted, along with the test that pinned the order; a comment at the call says why |
+  | F2 (P2) | A name inherited from `Object.prototype` (`toString`) was reported as overruled | Kept: `Object.hasOwn` |
+  | F3 (P2) | A routed run with `--auth env`, or with `--pass-env <credential>`, was refused for the wrong reason | Kept. `parseArgs` now refuses both up front, saying a routed run takes its account from its state directory. It tests the existing routing condition, `--account` or `CLAUDE_CONFIG_DIR` present, and does not change it. `parseArgs` takes `env` so tests can pass one. **This widens `run-claude.ts` beyond the split the Overseer authorised**, and the debrief says so |
+  | F4 (P3) | The routed boundary was under-tested: a future `CLAUDE_*` name, `CLAUDECODE`, and routed restoration of a non-credential `ANTHROPIC_*` | Kept: tests added |
+  | F5 (P3) | Nothing tested that several overruled names are reported together | Kept: tests added |
+
+  After the review, the seven suites that reach this code pass 230/230 under the pool environment.
+  Typecheck and lint are clean.
 
 **Done in-session rather than by Codex**, because it is about twenty lines and the design was
 settled before any code was written.

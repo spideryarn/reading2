@@ -67,6 +67,20 @@ describe("parseArgs", () => {
   it("accepts an explicit account name", () => {
     expect(parseArgs(["--prompt", "x", "--account", "pool-a"]).account).toBe("pool-a");
   });
+
+  it("explains that --auth env cannot replace an inherited routed account", () => {
+    expect(() => parseArgs(
+      ["--prompt", "x", "--auth", "env"],
+      { CLAUDE_CONFIG_DIR: "/configs/pool-a" },
+    )).toThrow(/routed run.*state directory/i);
+  });
+
+  it.each([
+    [["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"], { CLAUDE_CONFIG_DIR: "/configs/pool-a" }],
+    [["--prompt", "x", "--account", "pool-a", "--pass-env", "ANTHROPIC_API_KEY"], {}],
+  ] as const)("does not recommend --auth env for a credential on a routed run", (argv, env) => {
+    expect(() => parseArgs([...argv], env)).toThrow(/routed run.*state directory/i);
+  });
 });
 
 describe("account routing", () => {
@@ -139,6 +153,30 @@ describe("account routing", () => {
       (names) => told.push(names),
     );
     expect(told).toEqual([["CLAUDE_CODE_OAUTH_TOKEN"]]);
+  });
+
+  it("treats routed CLAUDE_* and CLAUDECODE as absolute even when --pass-env asks", () => {
+    for (const name of ["CLAUDE_FUTURE_PROVIDER", "CLAUDECODE"]) {
+      const env = claudeEnv(
+        { [name]: "another-account" },
+        "machine",
+        [name],
+        "/configs/pool-a",
+        () => {},
+      );
+      expect(env[name], name).toBeUndefined();
+    }
+  });
+
+  it("still lets --pass-env restore a routed non-credential ANTHROPIC_* name", () => {
+    const env = claudeEnv(
+      { ANTHROPIC_BASE_URL: "https://deliberate.example" },
+      "machine",
+      ["ANTHROPIC_BASE_URL"],
+      "/configs/pool-a",
+      () => {},
+    );
+    expect(env.ANTHROPIC_BASE_URL).toBe("https://deliberate.example");
   });
 
   it("sets only the selected state directory after sanitising the child environment", () => {
