@@ -356,8 +356,9 @@ bookkeeping. Everything intermediate goes under `logs/changelog/`, which is giti
    [`scripts/changelog/copy-brief.md`](../../scripts/changelog/copy-brief.md).
 6. **`changelog.ts write`** — validates and appends. It refuses rather than writing a bad file, and
    it re-reads the result afterwards.
-7. **Read the new lines yourself before committing them.** They are public claims about the product,
-   written by a model, and this is the only step where a person sees them.
+7. **Commit and push them.** Nobody reads them first. Greg, 2026-09-10: *"I don't want there to be a
+   human review/gate — just go live with them as part of the deploy."* The gates are Sol's review in
+   step 4 and `write`'s checks in step 6; the lines ship with the next deploy of `dev`.
 
 **Write the lines even when nobody is about to deploy them.** Greg, 2026-09-10: *"it should write the
 changelog docs, even if you can't actually deploy them."* The file is committed to `dev` like any
@@ -374,10 +375,10 @@ Vercel access can split it. Never guess intermediate deploy points from git alon
 **Not a step in [get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md), and not in
 `npm run deploy`.** The obvious objection — that the deploy has not happened yet — is a
 non-problem: a run describes the deploys that *have* happened and leaves undeployed work for a later
-one. The real reason is step 7. That sweep runs unattended every three hours and exists to leave
-`dev` committed, green and pushed; a changelog step would dirty the tree afterwards, make an
-editorial decision with nobody watching, and publish reader-facing claims that have nothing to do
-with whether the deploy is ready. And a failure here does not look like a failure: the copy stage can
+one. The real reason is that the sweep runs unattended every three hours and exists to leave
+`dev` committed, green and pushed; a changelog step would dirty the tree afterwards and spend a
+Sol review on a question that has nothing to do with whether the deploy is ready. So it is its own
+job, run by the Overseer at its own cadence, and it needs no person: see step 7. And a failure here does not look like a failure: the copy stage can
 strengthen *"code intended to do X"* into *"X is now available"* while every structural check passes.
 GPT Sol, asked to attack this, landed in the same place — **generate after the facts exist, review
 explicitly, publish one deploy late**
