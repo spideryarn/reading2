@@ -354,7 +354,7 @@ The Overseer queued a `selfCheck` that works under systemd, with its verdict rep
 `/api/state`, as its own stage (`qi-j4jyf3ab`), and withdrew the "publish the rows unverified?"
 question as moot.
 
-**Status — 3b (2026-09-10): built by Codex; independent review next.** `readExecutions`' two `ps`
+**Status — 3b (2026-09-10): built by Codex, independently reviewed by GPT Sol, measured.** `readExecutions`' two `ps`
 calls now run through the owner, one after the other under one shared key, with every `/proc` read
 between them — **the order is the pid-reuse defence and it is unchanged**; a stuck first `ps` refuses
 the second and the refusal carries its pid, an honest half-bracket rather than a false whole one.
@@ -387,16 +387,21 @@ the request thread for more than about 40 ms.** What remains on the thread is `s
 overall HTTP p95 still includes the bench's synchronous *before* phases, so it is not an *after*
 number; the HTTP acceptance is 3a's fixture above.)
 
-**Two things for the 3b review**: `panes()`'s new comment says *"In production `collect` must verify
-that its own pane is present"* — the false premise above, now in a source comment — and the older
-comment near `collect.ts:616` says the collector "runs under `tmux-job.ts` in production". Both are
-to be corrected, and `selfCheck`'s behaviour is not to change.
+**The independent review found no behavioural defect**, and every guard this stage rests on has now
+been seen to fail: disabling `readingFromPs`'s positive control reds the foreign-table test; running
+the two `ps` calls concurrently reds the ordering test; stamping `atMs` before the await reds the
+timestamp test; skipping `selfCheck` reds the read-but-missing-pane test; publishing an unread
+listing reds the listing test. It corrected both source comments that carried the false "production
+runs under tmux" premise — `panes()`'s new one, and the older one near `collect.ts:616` — with a
+source guard that fails on either coming back, and widened the probe-failure coverage to both `ps`
+calls and both refused and timed-out outcomes (a mutation that drops the owner's `why` reds all four).
+`selfCheck`'s behaviour is unchanged.
 
 - [x] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
       and `readPanes` becomes async over `limit(4)`. `tests/fleet-launch-mode.test.ts` drives
       `readPanes` at four call sites and must be updated with it.
 - [x] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
-      unreadable listing is an empty map, an unreadable generation is `null` meaning *unverifiable*,
+      unreadable listing is now an `unread` arm (3b; it was an empty map), an unreadable generation is `null` meaning *unverifiable*,
       and only two numbers that disagree are drift.
 - [x] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
       measured, against a 470 ms synchronous tail and a 250 ms target, they are responsiveness work.

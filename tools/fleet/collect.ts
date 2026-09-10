@@ -541,11 +541,13 @@ type ReadPaneListing = Extract<PaneListing, { kind: "read" }>;
  * Every pane on the box, keyed by its session, and the server they are on, or
  * the reason no listing arrived.
  *
- * Failure is a separate arm rather than an empty map. In production `collect`
- * must verify that its own pane is present before publishing anything, so a
- * failed listing cannot safely produce a snapshot; calling it empty made that
- * guard blame a different box instead of the tmux failure that actually
- * happened.
+ * Failure is a separate arm rather than an empty map. A collector running
+ * under tmux must verify that its own pane is present before publishing
+ * anything, so a failed listing cannot safely produce a snapshot; calling it
+ * empty made that guard blame a different box instead of the tmux failure that
+ * actually happened. The production dashboard runs under systemd, where
+ * `selfCheck` returns `cannot-check`; making that deployment checkable is a
+ * separate decision.
  */
 export async function panes(owner: ProbeOwner): Promise<PaneListing> {
   try {
@@ -623,10 +625,12 @@ export function snapshotFrom(
  * a listing of the right server that has somehow lost us, which is a listing
  * that may have lost others.
  *
- * NOT BEING UNDER TMUX IS NOT A FAULT. The collector runs under `tmux-job.ts` in
- * production and from a shell in every test, so an absent `TMUX` means "cannot
- * check" and must not block — the `/logs/` lesson in `worktree-check.ts`, which
- * is that an alarm nobody can clear is one somebody deletes.
+ * NOT BEING UNDER TMUX IS NOT A FAULT. The production dashboard runs under
+ * systemd without `TMUX`, so `selfCheck` returns `cannot-check` there; a
+ * `tmux-job.ts` dashboard or the collection bench can run inside tmux and can
+ * perform this check. An absent `TMUX` must not block — the `/logs/` lesson in
+ * `worktree-check.ts`, which is that an alarm nobody can clear is one somebody
+ * deletes. Giving the systemd service its own anchor is a separate decision.
  */
 export type SelfCheck =
   /** We are in the listing, so it is ours. */

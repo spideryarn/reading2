@@ -288,8 +288,10 @@ describe("panesBySession", () => {
    * every test passed the pid explicitly and so the default could rot while the
    * suite stayed green. **Every test above passes `selfCheck` an explicit
    * env**, which means all six of them would keep passing if `collect()` were
-   * changed to hand it `{}` — the check would then answer `cannot-check`
-   * forever, in production only, and the tests would say it worked.
+   * changed to hand it `{}` — the check would then answer `cannot-check` even
+   * when the collector runs under tmux, and the tests would say it worked.
+   * Production already runs under systemd and cannot perform this check; that
+   * separate deployment gap does not make the tmux wiring disposable.
    *
    * There is no seam to inject here: the wiring IS the thing under test. So this
    * reads the source, which is the same trick `tests/fleet-rename-route.test.ts`
@@ -348,6 +350,15 @@ describe("panesBySession", () => {
 });
 
 describe("owned tmux probes", () => {
+  it("does not claim the production dashboard can verify its own tmux pane", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
+
+    expect(src).not.toContain("In production `collect`\n * must verify that its own pane is present");
+    expect(src).not.toContain("runs under `tmux-job.ts` in\n * production");
+    expect(src).toContain("dashboard runs under systemd");
+    expect(src).toContain("`selfCheck` returns `cannot-check`");
+  });
+
   it("wires collect through the asynchronous tmux probes", () => {
     const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
 

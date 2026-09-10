@@ -45,7 +45,7 @@ import {
   isExecutionTokenText,
 } from "../tools/fleet/execution-token.js";
 import { probeProcessTableAsync, toRows, readExecutions, type FleetRow } from "../tools/fleet/collect.js";
-import type { ProbeOwner } from "../tools/fleet/child.js";
+import type { OwnedOutcome, ProbeOwner } from "../tools/fleet/child.js";
 import { CLOCK_SKEW_UNMEASURED, parseExecution as parseExecutionBrowser, parseRow } from "../tools/fleet/web/src/types.js";
 import type { ExecutionReading } from "../tools/fleet/wire.js";
 import { diff, identityOf, sessionKey } from "../tools/overseer/diff.js";
@@ -734,33 +734,67 @@ describe("the collection pass", () => {
     expect(order).toEqual(["ps-1", "read-101", "read-200", "ps-2"]);
   });
 
-  it("keeps a refused process probe's stuck pid in every unknown execution", async () => {
-    const rows: FleetRow[] = [
-      { paneId: "%1", panePid: 100, claudeSessionId: "conv-1" } as FleetRow,
-    ];
-    const owner: ProbeOwner = {
-      run: async () => ({
+  it.each([
+    { failureAt: "first", failureKind: "refused", pid: "8123", duration: "7500ms" },
+    { failureAt: "first", failureKind: "timed-out", pid: "8124", duration: "10000ms" },
+    { failureAt: "second", failureKind: "refused", pid: "8123", duration: "7500ms" },
+    { failureAt: "second", failureKind: "timed-out", pid: "8124", duration: "10000ms" },
+  ] as const)(
+    "keeps a $failureKind $failureAt process probe's pid and duration in an honest unknown",
+    async ({ failureAt, failureKind, pid, duration }) => {
+      const rows: FleetRow[] = [
+        { paneId: "%1", panePid: 100, claudeSessionId: "conv-1" } as FleetRow,
+      ];
+      const stdout =
+        `${process.pid} 1 0 vitest\n` +
+        "100 99 500 bash /home/greg/one.sh\n" +
+        "101 100 400 claude --session-id conv-1 --permission-mode auto\n";
+      const ok: OwnedOutcome = { kind: "ok", stdout, stderr: "", tookMs: 1 };
+      const refused: OwnedOutcome = {
         kind: "refused",
         why: 'probe "process-table" still has child pid 8123 unaccounted for after 7500ms; no second child was started',
         pid: 8123,
         liveForMs: 7_500,
-      }),
-      live: () => [],
-    };
+      };
+      const timedOut: OwnedOutcome = {
+        kind: "timed-out",
+        why: 'probe "process-table" reached its 10000ms deadline; sent SIGTERM to process group 8124; child exit has not been observed',
+        tookMs: 11_000,
+        pid: 8124,
+        exitObserved: false,
+      };
+      const failure = failureKind === "refused" ? refused : timedOut;
+      const outcomes = failureAt === "first" ? [failure, refused] : [ok, failure];
+      const keys: string[] = [];
+      const owner: ProbeOwner = {
+        run: async (spec) => {
+          keys.push(spec.key);
+          const outcome = outcomes.shift();
+          if (outcome === undefined) throw new Error("the test asked for an unexpected third process table");
+          return outcome;
+        },
+        live: () => [],
+      };
 
-    await readExecutions(rows, {
-      probe: () => probeProcessTableAsync(owner),
-      boot: () => BOOT,
-      uptime: () => UPTIME,
-      readStart: () => ({ read: false, why: "must not be reached" }),
-    });
+      await readExecutions(rows, {
+        probe: () => probeProcessTableAsync(owner),
+        boot: () => BOOT,
+        uptime: () => UPTIME,
+        readStart: () => ({ read: true, ticks: (UPTIME_S - 400) * 100 }),
+      });
 
-    expect(rows[0]?.execution).toMatchObject({
-      kind: "unknown",
-      cause: "process-table-unreadable",
-      why: expect.stringContaining("8123"),
-    });
-  });
+      expect(keys).toEqual(["process-table", "process-table"]);
+      expect(outcomes).toHaveLength(0);
+      expect(rows[0]?.execution).toMatchObject({
+        kind: "unknown",
+        cause: failureAt === "first" ? "process-table-unreadable" : "process-changed-under-read",
+        why: expect.stringContaining(pid),
+      });
+      expect(rows[0]?.execution.kind).not.toBe("verified");
+      expect(rows[0]?.execution.kind === "unknown" && rows[0].execution.cause).not.toBe("not-probed");
+      expect(rows[0]?.execution.kind === "unknown" && rows[0].execution.why).toContain(duration);
+    },
+  );
 });
 
 /* ------------------------------------------------------------------ *
