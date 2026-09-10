@@ -332,8 +332,11 @@ checked by breaking it three ways — each break went red on exactly its test). 
   test covers the content. Browser work goes to a Sonnet subagent here, and Sonnet is rate-limited
   on this account until 2026-09-12. Recorded as unverified.
 
-**Committed, not yet Sol-reviewed**: the Overseer paused new reviews at 19:1xZ for the five-hour
-window, so the stage review waits for its resume.
+**Committed at `652b5a3d`.** The full suite on it: 1,023 files passed, 4 failed — exactly the four
+known environment files (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-decisions-route`,
+`fleet-reports-route`), so green bar the environment; log
+`logs/tmux-jobs/bj-s2-fullsuite-1935-617892.log`. The Sol stage review waited out the Overseer's
+pause for the five-hour window (19:1x–19:53Z) and runs after the next merge of `dev`.
 
 ### Stage 3 — the evaluation, and the answer
 
