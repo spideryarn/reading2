@@ -146,6 +146,8 @@ import {
   triageSort,
 } from "../tools/fleet/web/src/view";
 import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
+import { actionsStaleAfterMs } from "../tools/fleet/web/src/SessionDetail";
+import { ACTIONS_READ_DEADLINE_MS } from "../tools/fleet/web/src/useActions";
 import { identityWriteGate } from "../tools/fleet/execution-token";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
@@ -3417,6 +3419,8 @@ function mountFull(args: {
   actionsApi?: ActionsApi;
   messagesApi?: MessagesApi;
   historyApi?: HistoryApi;
+  /** The actions poll. An hour unless the test is about the poll's own clock — see below. */
+  actionsPollMs?: number;
 }): void {
   act(() =>
     root.render(
@@ -3431,7 +3435,7 @@ function mountFull(args: {
         /* An hour, so the poll never fires inside a test. The poll itself is
            tested on its own; leaving it live here would make every other test
            in the file depend on a timer. */
-        actionsPollMs={3_600_000}
+        actionsPollMs={args.actionsPollMs ?? 3_600_000}
       />,
     ),
   );
@@ -6948,6 +6952,182 @@ describe("the queue, which is the feature and so is on screen", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * How old the queue on screen is — plan 260910c Stage 4, Sol's F8.
+ *
+ * `useActions` keeps its last good feed through a failure, and since Stage 4a
+ * it knows when that feed arrived. These are about the half that makes the
+ * field worth having: the page SAYS how old the queue is once that matters,
+ * and says the latest read failed, while still drawing what the last good read
+ * found — a queue you cannot currently read is not an empty queue.
+ * ------------------------------------------------------------------ */
+
+describe("how old the queue on screen is", () => {
+  const ROW = steerable({ id: "$1643", title: "the one whose queue ages" });
+  /* "read 30s ago", "read 1m 5s ago" — formatDuration's shapes. NO LEADING
+     `\b`: the section's text runs the heading straight into the line
+     ("…go to itread 0s ago"), so a word boundary there never matches, and
+     every `not.toMatch` below would pass whatever the page drew. */
+  const AGE = /read \d[\dhms ]* ago/;
+  const HELLO = itemWire({ id: "q1", payload: { kind: "message", text: "hello" } });
+
+  function setVisibility(value: "visible" | "hidden"): void {
+    /* jsdom's `visibilityState` is a prototype getter with no setter. Not
+       announced: the point is that the page's own poll skips a hidden tab. */
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  }
+
+  /** The queue's own section, so an age drawn anywhere else on the page cannot answer for it. */
+  function queueSection(): string {
+    const heading = [...container.querySelectorAll("h3")].find((h) => h.textContent === "Waiting to go to it");
+    const section = heading?.closest("section");
+    if (!section) throw new Error("no queue section on the page");
+    return section.textContent ?? "";
+  }
+
+  /** The page open on a session with a queue, and a switch that makes every later read fail. */
+  function openAging(items: unknown[], pollMs?: number): { failWith: (why: string | null) => void } {
+    let failing: string | null = null;
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE], queues: [queueWire({ items })] }));
+    const api: ActionsApi = {
+      ...rec.api,
+      feed: async (signal) => (failing === null ? rec.api.feed(signal) : { ok: false, why: failing }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: api, ...(pollMs === undefined ? {} : { actionsPollMs: pollMs }) });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one whose queue ages");
+    return {
+      failWith: (why) => {
+        failing = why;
+      },
+    };
+  }
+
+  /** One read, now: `online` is one of the two moments the hook reads at once. */
+  async function readNow(): Promise<void> {
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it("draws no age while every poll lands", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      /* Six polls' worth of time. Each lands, so the feed is never older than
+         one interval, which is well inside the threshold. */
+      for (let i = 0; i < 12; i += 1) await advance(5_000);
+      const text = queueSection();
+      expect(text).toContain("hello");
+      expect(text).not.toMatch(AGE);
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws the age once the feed is older than two polls and one read's deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      const stale = actionsStaleAfterMs(10_000);
+      expect(stale).toBe(2 * 10_000 + ACTIONS_READ_DEADLINE_MS);
+
+      /* A hidden tab skips the page's own polls — the one way this feed ages
+         with no error to say so. */
+      setVisibility("hidden");
+      await advance(stale - 2_000);
+      expect(queueSection()).not.toMatch(AGE);
+
+      await advance(4_000);
+      const text = queueSection();
+      expect(text).toContain(`read ${(stale + 2_000) / 1000}s ago`);
+      // The last good queue is still drawn under its age.
+      expect(text).toContain("hello");
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+      setVisibility("visible");
+    }
+  });
+
+  it("draws the error beside the queue, and keeps the items the last good read found", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    expect(queueSection()).toContain("hello");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+
+    const text = queueSection();
+    expect(text).toContain("the latest read failed: connect ECONNREFUSED 127.0.0.1:8787");
+    // With the age, which is what says how much the failure matters.
+    expect(text).toMatch(AGE);
+    // And NOT instead of the queue: the item and its button are still there.
+    expect(text).toContain("hello");
+    expect(buttonSaying("Cancel")).toBeDefined();
+  });
+
+  it("clears the age and the error once a read works again", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    expect(queueSection()).toContain("latest read failed");
+
+    page.failWith(null);
+    await readNow();
+    const text = queueSection();
+    expect(text).not.toContain("latest read failed");
+    expect(text).not.toMatch(AGE);
+    expect(text).toContain("hello");
+  });
+
+  /* The empty queue drew the error INSTEAD of its status line. Right when
+     there is no feed at all; once the age and the error are drawn above it,
+     it is the same error twice, and a claim that the queue "could not be
+     read" beside an age saying when it was. */
+  it("says what the last good read found on an empty queue, and names the failure once", async () => {
+    const page = openAging([]);
+    await act(async () => {});
+    expect(queueSection()).toContain("Nothing is waiting.");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    const text = queueSection();
+    // Not the present tense: nothing here knows what is waiting now.
+    expect(text).not.toContain("Nothing is waiting.");
+    expect(text).toContain("Nothing was waiting at the last read that worked.");
+    expect(text.split("ECONNREFUSED").length - 1).toBe(1);
+  });
+
+  /* The feed-panel and decisions-panel tests mount App with
+     `actionsPollMs={0}`. A threshold that scaled only with the interval would
+     be zero there, and every feed would be "stale" the moment it landed.
+
+     The threshold, not a render. A mounted page at a 0 ms poll cannot be
+     driven deterministically here: on real timers the poll re-renders without
+     pause and `act` timed out at 30 s on correct code; on fake timers every
+     tick schedules the next at +0, and advancing the clock never ends. None
+     of those tests opens a session, so no age can be drawn in them anyway. */
+  it("keeps a floor of one read's deadline at a zero poll interval", () => {
+    expect(actionsStaleAfterMs(0)).toBe(ACTIONS_READ_DEADLINE_MS);
+    expect(actionsStaleAfterMs(0)).toBeGreaterThan(0);
+  });
+});
+
 describe("queueing a message, in one line with the buttons", () => {
   /* WORKING, not idle, and that is now load-bearing: v0.5g stops offering
      Queue on an idle session, so a fixture left at the default status would
@@ -7555,6 +7735,33 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("may be sitting in its input box");
     // And the header says how many sessions are in this state.
     expect(container.textContent).toContain("held after a send nobody can account for");
+  });
+
+  /* Plan 260910c Stage 4b. SessionDetail draws the actions feed's error in its
+     own age line and so asks the shared `SessionQueue` for a past-tense
+     sentence instead; this tab draws no such line, so it must keep the old
+     sentence WITH the reason, or a reader here loses why. */
+  it("still says a held, empty queue could not be read, with the reason, when a read fails", async () => {
+    let failing: string | null = null;
+    const base = heldFleet();
+    const rec = {
+      ...base,
+      api: {
+        ...base.api,
+        feed: async (signal?: AbortSignal) =>
+          failing === null ? base.api.feed(signal) : { ok: false as const, why: failing },
+      },
+    };
+    await mountHeld(rec);
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+
+    failing = "connect ECONNREFUSED 127.0.0.1:8787";
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+    expect(container.textContent).toContain("The queue could not be read: connect ECONNREFUSED 127.0.0.1:8787");
+    expect(container.textContent).not.toContain("Nothing was waiting at the last read that worked.");
   });
 
   it("never says nothing has been sent over a held session", async () => {

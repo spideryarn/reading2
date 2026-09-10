@@ -140,7 +140,7 @@ import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
 import { useExecutionEpoch } from "./continuity";
 import { draftAddressOf, draftNoticeSentence, useDraft } from "./drafts";
-import type { ActionsUi } from "./useActions";
+import { ACTIONS_READ_DEADLINE_MS, type ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
 
@@ -153,6 +153,77 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
       </h3>
       {children}
     </section>
+  );
+}
+
+/**
+ * **WHEN THE QUEUE ON SCREEN STOPS BEING CURRENT** — the age past which
+ * `ActionsFeedAge` says how old the actions feed is. Plan 260910c Stage 4,
+ * Sol's F8.
+ *
+ * Two poll intervals and one read's deadline. A poll that is working leaves at
+ * most one interval and one read between good feeds. One read lost to its
+ * deadline adds at most one more interval, because the deadline is shorter
+ * than the interval (useActions.ts § `ACTIONS_READ_DEADLINE_MS`) and the lost
+ * read is released before the next tick. So a feed older than this means two
+ * reads running have come back without a feed, or none was asked for because
+ * the tab was hidden — and becoming visible reads at once. One lost read is
+ * not news: the next tick replaces it without anybody asking.
+ *
+ * `pollMs` is the interval actually in use, not the default. The deadline is
+ * also the floor, and the floor matters at the edge: the feed-panel and
+ * decisions-panel tests mount App with `actionsPollMs={0}`, and `2 × pollMs`
+ * alone would call every feed stale the moment it landed.
+ */
+export function actionsStaleAfterMs(pollMs: number): number {
+  return 2 * Math.max(0, pollMs) + ACTIONS_READ_DEADLINE_MS;
+}
+
+/**
+ * How old the actions feed on screen is, and whether the latest read of it
+ * failed — drawn at the top of the queue section, and only when one of those
+ * is true.
+ *
+ * **Once, above the queue, rather than beside both sections.** The same feed
+ * carries the buttons in *Ask it to…*, but the catalogue behind them does not
+ * change while the server runs (useActions.ts's header), and a button posts
+ * and the server decides — so an old catalogue changes nothing you would do.
+ * An old queue does: *Nothing is waiting*, read two minutes ago, is the claim
+ * somebody acts on. The tip says the age covers both, which is the truth, and
+ * the clutter rule in this file's header keeps it to one line.
+ *
+ * **Nothing before the first good read.** With no feed there is no age to
+ * give, and `SessionActions` and `SessionQueue` already draw "asking" or the
+ * error in their own empty states.
+ *
+ * **The age joins any error, however young**, because how long the page has
+ * been showing the last good read is what says how much the failure matters.
+ * On its own it waits for `actionsStaleAfterMs`: a fresh age changes nothing
+ * you would do in the next ten seconds.
+ */
+function ActionsFeedAge({ actions, now }: { actions: ActionsUi; now: number }): ReactNode {
+  const { lastGoodAt, error, pollMs } = actions;
+  if (lastGoodAt === null) return null;
+  const staleAfterMs = actionsStaleAfterMs(pollMs);
+  /* Clamped: `now` ticks once a second and `lastGoodAt` is stamped between
+     ticks, so the page clock can trail a good read by up to a second. */
+  const ageMs = Math.max(0, now - lastGoodAt);
+  if (error === null && ageMs <= staleAfterMs) return null;
+  return (
+    <p className="tw:mb-1 tw:px-1 tw:text-[12px] tw:break-words">
+      <Explain
+        tip={{
+          head: "When this was read",
+          what: "How long ago this page last read the queue below and the list of actions above it, by this device's clock. A read that fails does not move it: both are drawn from the last read that worked.",
+          how: `It is asked for every ${formatDuration(pollMs)} while this tab is visible, at once when the tab comes back or the network does, and after anything you press here. This line appears once no read has worked for ${formatDuration(staleAfterMs)} — two of those intervals and one read's ${formatDuration(ACTIONS_READ_DEADLINE_MS)} deadline — or as soon as a read fails.`,
+        }}
+        placement="bottom"
+        className="tw:text-ink-faint"
+      >
+        read {formatDuration(ageMs)} ago
+      </Explain>
+      {error === null ? null : <span className="tw:text-alarm-ink"> — the latest read failed: {error}</span>}
+    </p>
   );
 }
 
@@ -1306,12 +1377,14 @@ export function SessionDetail({
 
           {/* --------------------------------------------- 4. the queue -- */}
           <Section title="Waiting to go to it">
+            <ActionsFeedAge actions={actions} now={now} />
             <SessionQueue
               sessionId={row.id}
               feed={actions.feed}
               api={actions.api}
               asked={actions.asked}
               error={actions.error}
+              errorDrawnAbove
               onChanged={actions.refresh}
             />
           </Section>

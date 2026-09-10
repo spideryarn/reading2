@@ -1307,6 +1307,7 @@ export function SessionQueue({
   api,
   asked,
   error,
+  errorDrawnAbove = false,
   onChanged,
 }: {
   sessionId: string;
@@ -1314,6 +1315,14 @@ export function SessionQueue({
   api: ActionsApi;
   asked: boolean;
   error: string | null;
+  /**
+   * Whether the caller already draws `error`, with the feed's age, just above
+   * this panel — SessionDetail's `ActionsFeedAge` does, and nothing else. When
+   * it does, an empty queue with a last good feed says what that read found
+   * instead of repeating the error. Off by default, so the Overseer tab's
+   * `FleetQueues`, which draws no such line, keeps the sentence with the reason.
+   */
+  errorDrawnAbove?: boolean;
   onChanged: () => void;
 }): ReactNode {
   const [busy, setBusy] = useState(false);
@@ -1449,7 +1458,17 @@ export function SessionQueue({
           {!asked
             ? "Asking what is waiting…"
             : error !== null
-              ? `The queue could not be read: ${error}`
+              ? feed === null || !errorDrawnAbove
+                ? `The queue could not be read: ${error}`
+                : /* A LAST GOOD READ EXISTS AND THE CALLER DRAWS THE ERROR, so
+                     say what that read found, in the past tense — never
+                     "Nothing is waiting", which is a claim about now. Not the
+                     error again: SessionDetail's `ActionsFeedAge` draws it with
+                     the age just above this panel, and repeating it here said
+                     it twice, with "could not be read" beside an age saying
+                     when it was. Opt-in, because a caller without that line
+                     would lose the reason — see `errorDrawnAbove`. */
+                  "Nothing was waiting at the last read that worked."
               : feed !== null && !feed.queuesOffered
                 ? "This server sent no queues at all, which is not the same as having none — it is probably older than this page."
                 : holding
