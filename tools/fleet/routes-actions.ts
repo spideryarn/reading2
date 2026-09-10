@@ -95,6 +95,9 @@ import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
 import {
   beginRecipientReceipt,
   broadcastParentOutcome,
+  isEnactedOp,
+  OPERATOR_DISPOSITIONS,
+  type OperatorDisposition,
   recordUnreachedRecipient,
   recordUnattemptedRecipient,
   sendAttemptOutcome,
@@ -318,7 +321,21 @@ export type ActionErrorCode =
    * A tmux restart already ended it: the pane, and whatever was in its input
    * box, are gone. Nothing is being held back, so there is nothing to release.
    */
-  | "hold-superseded";
+  | "hold-superseded"
+  /** No receipt by that id among the ones this dashboard keeps (plan 260910d, Stage 4). */
+  | "no-such-receipt"
+  /**
+   * The receipt is not an enacted plan whose outcome is unknown, so a person's
+   * statement has nothing to sit beside. A known outcome needs none; a message
+   * or a queued item is not what this gesture is for.
+   */
+  | "not-reconcilable"
+  /**
+   * Somebody already recorded the OTHER statement. One is kept and never
+   * replaced — the same statement again is a 200, which is what makes a lost
+   * response recoverable.
+   */
+  | "reconciled-otherwise";
 
 /**
  * A refusal's HTTP status.
@@ -382,6 +399,9 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "hold-version-mismatch": 409,
   "hold-other-gesture": 409,
   "hold-superseded": 409,
+  "no-such-receipt": 404,
+  "not-reconcilable": 409,
+  "reconciled-otherwise": 409,
 };
 
 /**
@@ -608,6 +628,12 @@ export type ActionResponse =
       nonTerminal: ReceiptSummary[];
       unknownWithoutHold: UnknownWithoutHold[];
     }
+  /**
+   * A person's statement recorded beside an unknown enacted plan — or, with
+   * `repeat`, the same statement already recorded. The receipt's `state` is
+   * unchanged either way.
+   */
+  | { ok: true; op: "reconciled"; repeat: boolean; receipt: ReceiptSummary }
   | { ok: true; op: "cancelled"; item: QueuedItem }
   /** A stale item's clock reset, so the next pass may deliver it. */
   | { ok: true; op: "revived"; item: QueuedItem }
@@ -1871,6 +1897,83 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       nonTerminal: journal.nonTerminal().map(summarizeReceipt),
       unknownWithoutHold,
     });
+  }
+
+  /* ---------------- POST /api/actions/receipts/reconcile ---------------- */
+
+  /**
+   * **A PERSON'S STATEMENT BESIDE AN UNKNOWN ENACTED PLAN, NEVER A NEW
+   * OUTCOME** — plan 260910d, Stage 4.
+   *
+   * A worktree removal or a kill whose outcome the dashboard could not
+   * establish is `outcome-unknown` for good. Somebody who has looked at the box
+   * records it — `operator-confirmed` — or records that they have stopped
+   * trying — `abandoned-unknown`. The receipt keeps its state; the statement
+   * sits beside it with who made it and when.
+   *
+   * **The actor is `client-claimed`, `greg`.** The dashboard has no
+   * authentication — the origin check is CSRF, not identity — and the page is
+   * the only client, operated by a person; the claim is labelled as a claim
+   * wherever it is drawn, exactly as `speaker: "greg"` is on a message.
+   *
+   * One statement per receipt. The same one again answers 200 with `repeat`,
+   * so a lost response is recovered by pressing again; the other one is
+   * refused, and the first is never replaced. The journal enforces both.
+   */
+  async function reconcileRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    const body = asRecord(parsed);
+    const receiptId = asString(body?.["receiptId"]);
+    if (body === null || receiptId === null || receiptId === "" || receiptId.length > 200) {
+      refuse(res, "bad-request", "receiptId must be the id of a receipt, as the receipts list shows it");
+      return;
+    }
+    const disposition = body["disposition"];
+    if (typeof disposition !== "string" || !OPERATOR_DISPOSITIONS.includes(disposition as OperatorDisposition)) {
+      refuse(res, "bad-request", `disposition must be one of ${OPERATOR_DISPOSITIONS.join(", ")}`);
+      return;
+    }
+    const wanted = disposition as OperatorDisposition;
+    const journal = deps.queue.receiptJournal();
+    const state = journal.get(receiptId);
+    if (state === null) {
+      deps.log(`action reconcile: refused code=no-such-receipt receipt=${receiptId}`);
+      refuse(res, "no-such-receipt", `there is no receipt ${receiptId} among the ones this dashboard keeps`);
+      return;
+    }
+    const summary = summarizeReceipt(state);
+    const prior = summary.reconciliation;
+    if (prior !== null && prior.disposition !== "lease-abandoned") {
+      if (prior.disposition === wanted) {
+        deps.log(`action reconcile: repeat receipt=${receiptId} disposition=${wanted}`);
+        respond(res, 200, { ok: true, op: "reconciled", repeat: true, receipt: summary });
+        return;
+      }
+      deps.log(`action reconcile: refused code=reconciled-otherwise receipt=${receiptId}`);
+      refuse(
+        res,
+        "reconciled-otherwise",
+        `somebody already recorded "${prior.disposition}" for this receipt; one statement is kept, and it is not replaced`,
+      );
+      return;
+    }
+    if (!isEnactedOp(state.accepted.op) || summary.state !== "outcome-unknown") {
+      deps.log(`action reconcile: refused code=not-reconcilable receipt=${receiptId} op=${state.accepted.op} state=${summary.state}`);
+      refuse(
+        res,
+        "not-reconcilable",
+        `only an enacted plan whose outcome is unknown takes this statement; this is a ${state.accepted.op} receipt that is ${summary.state}`,
+      );
+      return;
+    }
+    if (!journal.reconcile(receiptId, wanted, { kind: "client-claimed", id: "greg" })) {
+      deps.log(`action reconcile: refused code=receipt-unavailable receipt=${receiptId}`);
+      refuse(res, "receipt-unavailable", "the statement could not be written down, so nothing was recorded");
+      return;
+    }
+    deps.log(`action reconcile: receipt=${receiptId} disposition=${wanted} — a statement; the outcome is unchanged`);
+    respond(res, 200, { ok: true, op: "reconciled", repeat: false, receipt: summarizeReceipt(journal.get(receiptId) ?? state) });
   }
 
   /* ---------------- POST /api/actions/session ---------------- */
@@ -3565,6 +3668,14 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         catalogue(res);
+        return true;
+      }
+      if (pathname === "/api/actions/receipts/reconcile") {
+        if (method !== "POST") {
+          refuse(res, "method-not-allowed", "recording a statement is POST only", undefined, { allow: "POST" });
+          return true;
+        }
+        void guard(reconcileRoute(req, res), res);
         return true;
       }
       if (pathname === "/api/actions/receipts") {

@@ -104,7 +104,7 @@
  * comes back only when that same conversation is verified in front of it.
  * docs/plans/260910c-… § Stage 2.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useExecutionEpoch } from "./continuity";
@@ -114,8 +114,20 @@ import {
   draftNoticeSentence,
   useDraft,
   type DraftAddress,
+  type DraftSubmission,
 } from "./drafts";
-import { httpSteerApi, sentTarget, type SentTarget, type SteerApi, type SteerOutcome } from "./steer-client";
+import { EnvelopeNoticeCard } from "./ReceiptList";
+import { replayConsumesDraft, type EnvelopeNotice, type RequestEnvelope } from "./request-envelope";
+import {
+  httpSteerApi,
+  messageEnvelope,
+  sendMessageEnvelope,
+  sentTarget,
+  type SentTarget,
+  type SteerApi,
+  type SteerMessageBody,
+  type SteerOutcome,
+} from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
 import { overseerClaim, type FleetRow, type OverseerClaim } from "./types";
@@ -132,6 +144,19 @@ import { Button, Card, Mono } from "./ui";
 type Addressee =
   | { kind: "found"; row: FleetRow }
   | { kind: "nobody"; why: string; detail: string };
+
+/**
+ * **A SEND THAT HAS NOT HEARD A DEFINITE ANSWER** — request-envelope.ts. Held
+ * only after `not-confirmed`, for Check, which resends this envelope with the
+ * ticket it was built with. The row travels with it, so a Check after the
+ * claim has moved still goes to the session the words were sent to — it is the
+ * same request, not a new one.
+ *
+ * **Memory-only.** A reload keeps the words (drafts.ts) and loses this, so the
+ * next Send is a new request with a new id and a new ticket. 260910c's F31 is
+ * the same limit for a card unmounted while a request is open.
+ */
+type PendingMessage = { envelope: RequestEnvelope<SteerMessageBody, DraftSubmission>; row: FleetRow; target: SentTarget };
 
 /**
  * The claim, plus the one local check the claim cannot make.
@@ -264,6 +289,8 @@ export function MessageOverseerCard({
   steer?: SteerApi;
 }): ReactNode {
   const [busy, setBusy] = useState(false);
+  /* `setBusy` cannot close the same-event-loop double-tap window. */
+  const envelopeInFlight = useRef(false);
   /**
    * **The outcome and the target it was made against, as one value.**
    *
@@ -296,8 +323,65 @@ export function MessageOverseerCard({
   });
   const text = draft.text;
 
+  const [pending, setPending] = useState<PendingMessage | null>(null);
+  /** What the card shows for a keyed answer that is not the route's own. */
+  const [notice, setNotice] = useState<EnvelopeNotice | null>(null);
+
+  /**
+   * One keyed send, first or Check, and what each answer does — the seam
+   * agreed with `session-continuity` (plan 260910d § Stage 4). Only a
+   * definitive success accepts, and always with the ticket in the envelope,
+   * taken at Send: a ticket taken now would clear whatever was typed since.
+   */
+  const deliver = useCallback(
+    async (sent: PendingMessage): Promise<void> => {
+      if (envelopeInFlight.current) return;
+      envelopeInFlight.current = true;
+      setBusy(true);
+      const result = await sendMessageEnvelope(steer, sent.row, sent.envelope);
+      switch (result.kind) {
+        case "answered":
+          setOutcome({ result: result.outcome, target: sent.target });
+          setNotice(null);
+          setPending(null);
+          /* Only a send the server accepted takes the draft with it. A refusal
+             leaves both the box and the stored copy, so the words are there to
+             try again or to take elsewhere. */
+          if (result.outcome.ok) draft.accept(sent.envelope.ticket);
+          break;
+        case "replay":
+          setOutcome(null);
+          setNotice(result);
+          setPending(null);
+          if (replayConsumesDraft(result.receipt, false)) draft.accept(sent.envelope.ticket);
+          break;
+        case "not-confirmed":
+          /* NEVER ACCEPTED: the words stay in the box and in storage, and the
+             envelope stays for Check. */
+          setOutcome(null);
+          setNotice(result);
+          setPending(sent);
+          break;
+        case "request-id-conflict":
+        case "request-id-expired":
+        case "receipt-unavailable":
+          setOutcome(null);
+          setNotice(result);
+          setPending(null);
+          break;
+        default: {
+          const never: never = result;
+          void never;
+        }
+      }
+      envelopeInFlight.current = false;
+      setBusy(false);
+    },
+    [draft, steer],
+  );
+
   const onSend = useCallback(async () => {
-    if (to.kind !== "found" || !draft.canSubmit) return;
+    if (to.kind !== "found" || !draft.canSubmit || pending !== null) return;
     const submission = draft.submission();
     if (submission === null) return;
     const words = submission.text.trim();
@@ -305,19 +389,16 @@ export function MessageOverseerCard({
        pointer; it does not stop a keyboard path somebody adds later, and an
        empty line typed at an agent is a turn of a paid model spent on nothing. */
     if (words === "") return;
-    setBusy(true);
     /* Snapshotted BEFORE the await. Reading the row after it would read the
        render that resolved the promise, which is the bug `SentTarget` exists
-       for. */
-    const target = sentTarget(to.row);
-    const result = await steer.message(to.row, words);
-    setOutcome({ result, target });
-    /* Only a send the server accepted takes the draft with it. A refusal
-       leaves both the box and the stored copy, so the words are there to try
-       again or to take elsewhere. */
-    if (result.ok) draft.accept(submission);
-    setBusy(false);
-  }, [draft, steer, to]);
+       for. The ticket is taken here too, and travels in the envelope. */
+    await deliver({ envelope: messageEnvelope(to.row, words, submission), row: to.row, target: sentTarget(to.row) });
+  }, [deliver, draft, pending, to]);
+
+  /** The same envelope again: the same id, the same bytes, the original ticket. */
+  const onCheck = useCallback(() => {
+    if (pending !== null) void deliver(pending);
+  }, [deliver, pending]);
 
   return (
     <Card className="tw:mt-3 tw:p-4">
@@ -371,7 +452,7 @@ export function MessageOverseerCard({
           <p className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button
               variant="loud"
-              disabled={busy || text.trim() === "" || !draft.canSubmit}
+              disabled={busy || text.trim() === "" || !draft.canSubmit || pending !== null}
               onClick={() => void onSend()}
             >
               {busy ? "Sending…" : "Send"}
@@ -386,10 +467,16 @@ export function MessageOverseerCard({
           {draft.canSubmit ? null : (
             <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">Send is off: {DRAFT_RECIPIENT_CHANGED_SENTENCE}</p>
           )}
+          {pending === null ? null : (
+            <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">
+              Send is off until you Check the last one — it may already have arrived.
+            </p>
+          )}
         </>
       )}
 
       {outcome === null ? null : <SteerReceipt outcome={outcome.result} target={outcome.target} />}
+      {notice === null ? null : <EnvelopeNoticeCard notice={notice} busy={busy} onCheck={onCheck} />}
     </Card>
   );
 }

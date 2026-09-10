@@ -54,8 +54,17 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import type { AttentionList, OverseerWork, StoredAccountUsage, StoredUsage, UsageReport } from "../fleet/wire.js";
+import { readStartRevision } from "../fleet/revision.js";
+import type {
+  AttentionList,
+  OverseerWork,
+  StartRevision,
+  StoredAccountUsage,
+  StoredUsage,
+  UsageReport,
+} from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import {
@@ -334,6 +343,14 @@ export type UsagePassOutcome =
 export type DaemonOptions = {
   /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
   root?: string;
+  /**
+   * The revision this daemon started from, written into its `daemon-started`
+   * note. Defaults to reading the checkout this module sits in, once, as the
+   * first thing `runOverseer` does — `tools/fleet/revision.ts` says why a read
+   * taken any later names the checkout's HEAD rather than the running code.
+   * Injected by tests.
+   */
+  revision?: StartRevision;
   /** The dashboard's origin. */
   baseUrl: string;
   signal: AbortSignal;
@@ -655,6 +672,9 @@ export type DaemonOutcome =
 export const TICK_MS = 30_000;
 
 export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome> {
+  // FIRST, before anything else can take time: the checkout moves under a
+  // running daemon, and this is the closest we get to what it loaded.
+  const revision = options.revision ?? readStartRevision(fileURLToPath(new URL("../..", import.meta.url)));
   const now = options.now ?? (() => new Date());
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
@@ -765,6 +785,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     source: options.baseUrl,
     opening: describeOpening(store.opening),
     baseline: baselineNote,
+    revision,
   });
 
   // READ AND WRITTEN THROUGH FUNCTIONS, which is not ceremony: it is only ever
