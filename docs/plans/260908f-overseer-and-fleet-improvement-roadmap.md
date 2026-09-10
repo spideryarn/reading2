@@ -1164,6 +1164,22 @@ arguments (pre-existing).
 **Acceptance:** an agent and Greg can find out why work should wait. This stage has value even if the
 next one never ships. Keep the cheap practice: parent runs integrated gates once per finished stage.
 
+**Status (2026-09-10, Overseer): Stages 1–3 on dev (e4206867, b1a2feaa, 4ebd60b5), session
+`admission-visibility`, plan
+[260910a](260910a-admission-visibility-explaining-why-heavy-work-should-wait.md); Stage 4, the
+census of live process roots, dispatched to a fresh session `admission-census` from the task file
+the first session wrote.** `GET /api/admission` answers what the vitest gate would say now, with
+its policy revision, as a forecast in neutral colour (a hypothetical refusal is not a live
+incident); the section lives on Box Health, not a tab (Greg's to move); a refusal writes one file
+per refusal, published by atomic rename. That last design replaced an append scheme whose
+load-bearing claim was false: a sub-`PIPE_BUF` `appendFileSync` is not atomic on a regular file
+(reproduced with `RLIMIT_FSIZE`: sixty bytes of a JSON object left on disk, and the next append
+joins it so the reader loses both records) — it had borrowed `health-history.ts`'s scheme without
+its single-writer lock. Recurring defect across every stage: a true number under a label claiming
+more (twenty-one P1s across four reviews). The would-refuse replay was cut rather than fixed; its
+design survives in the plan's §6. Evidence not in the plan: the box killed the session's
+background processes twice at 17–20 GB available with 13.4 GB swapped, leaving no trace.
+
 ### Stage: Enforced launch admission — bound work we actually launch
 
 - [ ] Decide with evidence whether existing memory admission plus serial parent gates is sufficient.
