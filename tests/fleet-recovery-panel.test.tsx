@@ -293,6 +293,12 @@ describe("the whole answer agrees with itself, or it is no answer (F30)", () => 
   const unchecked = (id: string) => rec(id, { kind: "unchecked", why: "not yet checked" });
   const resolved = (id: string) =>
     rec(id, { kind: "resolved", resolution: { disposition: "dismissed", at: "2026-09-10T14:30:00.000Z", evidence: { requestId: "r-2", why: "by hand" } } });
+  const liveRow = { tmuxId: "$5", name: "live-one", dir: "/work/x", claimedConversationId: null, statusKey: "working", executionToken: null, conversationId: null };
+  const alreadyLive = (id: string, row = liveRow) =>
+    rec(id, { kind: "classified", classification: { kind: "already-live", why: "the same conversation is live", sameRun: true, row }, evidence: evidence() });
+  const unmatched = (id: string, row = liveRow) =>
+    rec(id, { kind: "classified", classification: { kind: "present-but-unmatched", why: "a live row has the same name", row }, evidence: evidence() });
+  const trustedRows = (rows: number) => ({ view: { kind: "checked" as const, checkedAt, inventory: { kind: "trusted" as const, collectedAt: "2026-09-10T14:57:00.000Z", rows } } });
 
   const refused: [string, unknown][] = [
     ["not-yet-checked beside a classified row", feed([interrupted("a")], { view: { kind: "not-yet-checked", why: "not yet" } })],
@@ -309,6 +315,10 @@ describe("the whole answer agrees with itself, or it is no answer (F30)", () => 
     ["an oversize stub that carries a sighting", feed([{ ...unchecked("a"), oversize: true, entry: null, disappearance: null }])],
     ["a record that is no stub and has no disappearance", feed([{ ...unchecked("a"), disappearance: null }])],
     ["a journal record with no entry", feed([{ ...unchecked("a"), entry: null }])],
+    // Sol's fixcheck: "0 sessions" and "Already live" on one page.
+    ["a trusted inventory of 0 sessions beside an already-live row (F30b)", feed([alreadyLive("a")], trustedRows(0))],
+    ["more distinct live rows than the trusted inventory holds (F30b)", feed([alreadyLive("a"), unmatched("b", { ...liveRow, tmuxId: "$6" })], trustedRows(1))],
+    ["one live row carrying two different sets of facts (F30b)", feed([unmatched("a"), unmatched("b", { ...liveRow, dir: "/work/elsewhere" })])],
   ];
   for (const [name, body] of refused) {
     it(`refuses ${name}`, () => {
@@ -328,6 +338,11 @@ describe("the whole answer agrees with itself, or it is no answer (F30)", () => 
       feed([unchecked("a"), resolved("b")]),
     ];
     for (const body of lawful) expect(parseRecoveryFeed(body)).toEqual(body);
+  });
+
+  it("reads two records matched against the same live row, with the same facts, inside a one-session inventory (F30b)", () => {
+    const body = feed([alreadyLive("a"), unmatched("b")], trustedRows(1));
+    expect(parseRecoveryFeed(body)).toEqual(body);
   });
 });
 

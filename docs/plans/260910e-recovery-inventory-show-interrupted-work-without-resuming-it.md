@@ -737,7 +737,44 @@ Worth knowing:
   with no earlier branch that would take `/api/recovery`. What it cannot see: what other routes'
   `handle` methods claim; computed conditions; and whether the server runs.
 
-Status, 2026-09-10: implemented, reviewed (refused), fixed; the narrow check comes next. The shared-file hunks:
+**The final merge from `dev`, `0a684ebb`: clean.** The roadmap and `wire.ts` auto-merged. On the
+merged tree the gates are:
+
+- typecheck exit 0;
+- `build:fleet` exit 0;
+- 13 files / 318 tests passing. That covers the fleet and Overseer recovery suites, the reports and
+  schedule suites that share this code, and `fixture-ids`, **and `fleet-attention` now passes**:
+  `dev`'s `b8505d8b` is in.
+
+**Sol's narrow check of the seven P1 fixes, 2026-09-10, read-only, 20 minutes**
+([the answer](260910e-recovery-inventory-stage3-fixcheck-sol.md)). **Closed: F27, F29 (the stale-view
+exception included), F31, F32 and F33. Not closed: F28 and F30.**
+
+- **F30:** the browser parser still accepted a trusted inventory claiming 0 rows beside an
+  `already-live` row that carried a live session, so the page drew both. **Fixed red first**: the
+  distinct live sessions named by the rows may not exceed `inventory.rows`, and one session may not
+  appear with differing facts.
+- **F28:** a swap race remains. A same-user process could replace an ancestor with a symlink between
+  the drill's final check and its `mkdir`. The only complete fix anchors every operation to an open
+  directory descriptor (`openat2`/`mkdirat`), and Node has no API for that. **Proposed overrule**,
+  settled through Fable per the engineering-manager rule:
+  - there is no privilege boundary, because a process that can win the race as the same user can
+    already write the store directly;
+  - the guard's job is to refuse mistaken targets, and it now refuses every one Sol listed;
+  - a won race can only make the drill create its own new subdirectory. **The drill deletes
+    nothing** (made sure in this pass), and it never writes a store's own files.
+
+  The guard's comment states exactly this strength.
+
+  **The Overseer's ruling:** Fable settles both, with no hold, because this is a technical residual
+  with no privilege boundary and a stated, narrowed guarantee. Its conditions:
+  - the guard's comment states that strength and no more;
+  - **a drill test asserts it deletes nothing even when the guard is beaten**, with the swap
+    simulated and a step failing part way through;
+  - Fable's words are recorded here.
+
+Status, 2026-09-10: implemented, reviewed (refused), fixed, merged and narrow-checked. F30 is being
+fixed, and F28's overrule goes to Fable. The shared-file hunks:
 
 - `server.ts`: the three approved lines.
 - `App.tsx`: the approved mount line, **plus its import line**. The mount cannot exist without it,

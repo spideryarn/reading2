@@ -279,7 +279,35 @@ function contradiction(feed: Published): string | null {
       }
     }
   }
+  // THE LIVE ROWS CAME FROM THE INVENTORY THE VIEW NAMES (Sol's fixcheck on
+  // F30). Otherwise one page says "0 sessions" and "Already live" together. So
+  // one live row is described one way wherever it is cited, and a trusted
+  // inventory holds at least as many sessions as distinct live rows are cited.
+  const live = new Map<string, RecoveryWireLiveRow>();
+  for (const r of records) {
+    if (r.state.kind !== "classified") continue;
+    const c = r.state.classification;
+    if (c.kind !== "already-live" && c.kind !== "present-but-unmatched") continue;
+    const seen = live.get(c.row.tmuxId);
+    if (seen === undefined) live.set(c.row.tmuxId, c.row);
+    else if (!sameLiveRow(seen, c.row)) return `live row ${c.row.tmuxId} is described two different ways`;
+  }
+  if (view.kind === "checked" && view.inventory.kind === "trusted" && live.size > view.inventory.rows) {
+    return `${live.size} distinct live rows are cited against an inventory of ${view.inventory.rows} ${view.inventory.rows === 1 ? "session" : "sessions"}`;
+  }
   return null;
+}
+
+function sameLiveRow(a: RecoveryWireLiveRow, b: RecoveryWireLiveRow): boolean {
+  return (
+    a.tmuxId === b.tmuxId &&
+    a.name === b.name &&
+    a.dir === b.dir &&
+    a.claimedConversationId === b.claimedConversationId &&
+    a.statusKey === b.statusKey &&
+    a.executionToken === b.executionToken &&
+    a.conversationId === b.conversationId
+  );
 }
 
 /** A recursively checked server payload, or this browser's refusal to guess. */

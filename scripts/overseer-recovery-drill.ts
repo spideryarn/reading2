@@ -19,25 +19,25 @@
  *
  *  1. Boot B1, generation G1: four sessions — a Claude that was working (with a
  *     transcript under the drill's own `projects/`), one whose Claude had
- *     exited, a shell running a job, and one whose directory is then deleted.
+ *     exited, a shell running a job, and one whose directory does not exist.
  *  2. The box "reboots": a new daemon, boot B2, a new dashboard run, and its
  *     first accepted collection is empty with no tmux server (`rows: []`, null
  *     generation) — the snapshot that used to erase the register.
  *  3. Generation G2 arrives with the working Claude back under a new execution
  *     token: the same verified conversation in a different run.
  *
- * ## It never touches a live store
+ * ## It refuses a live store, and deletes nothing
  *
  * It refuses a target that is, is inside, or contains a live store —
  * `~/.overseer`, and `OVERSEER_STORE_DIR` when that is set to an absolute path —
  * and a target that is not empty. Both sides are compared **as the file system
  * will resolve them** (`canonicalPath`), so a symlinked ancestor is caught even
- * when the leaf does not exist yet, and the check is repeated on the canonical
- * path immediately before anything is created there (Sol's F28). Everything it
+ * when the leaf does not exist yet (Sol's F28). What the guard does not close is
+ * stated once, at the guard in `buildRecoveryDrill`. Everything it
  * writes is under the target: `store/` (the Overseer's root), `projects/` (a
  * stand-in for `~/.claude/projects`) and `work/` (the sessions' directories).
  */
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -238,7 +238,18 @@ function verified(conversation: string, pid: number, startTicks: number): JsonVa
  */
 export async function buildRecoveryDrill(
   target: string,
-  options: { now?: () => Date; log?: (line: string) => void; hostname?: () => string } & StoreGuard = {},
+  options: {
+    now?: () => Date;
+    log?: (line: string) => void;
+    hostname?: () => string;
+    /**
+     * TEST-ONLY, like the store's `beforeClaim`: called between the final guard
+     * check and the first `mkdir`, so a test can win the race the guard cannot
+     * close (tests/fleet-recovery-wiring.test.ts § the guard beaten). Production
+     * never passes it.
+     */
+    beforeCreate?: (root: string) => void;
+  } & StoreGuard = {},
 ): Promise<DrillResult> {
   const guard: StoreGuard = { home: options.home, env: options.env };
   const refusal = refuseUnsafeTarget(target, guard);
@@ -253,15 +264,21 @@ export async function buildRecoveryDrill(
     shell: join(work, DRILL_SESSIONS.shell),
     deleted: join(work, DRILL_SESSIONS.deleted),
   };
-  // RECHECKED ON THE CANONICAL PATH IMMEDIATELY BEFORE ANYTHING IS CREATED, and
-  // the root is then created by that path and confirmed to still be it, so a
-  // link swapped in after the first check cannot redirect the writes (F28).
+  // THE GUARD'S STRENGTH, EXACTLY: it refuses every mistaken target; a won race
+  // can only create its own new subdirectory; it deletes nothing. The race is a
+  // same-user process swapping an ancestor for a symlink between this check and
+  // the `mkdir`. Closing it needs creation anchored to a held directory
+  // descriptor (`mkdirat`/`openat2`), which Node does not provide, so it is not
+  // attempted.
   const again = refuseUnsafeTarget(root, guard);
   if (again !== null) throw new Error(again);
+  options.beforeCreate?.(root);
   mkdirSync(root, { recursive: true });
   const landed = realpathSync(root);
   if (landed !== root) throw new Error(`refusing: ${root} resolved to ${landed} once created; nothing more is written`);
-  for (const dir of [store, projects, ...Object.values(dirs)]) mkdirSync(dir, { recursive: true });
+  // The fourth session's directory is never created: its absence is the
+  // drill's missing directory, so the drill has nothing to delete.
+  for (const dir of [store, projects, dirs.working, dirs.exited, dirs.shell]) mkdirSync(dir, { recursive: true });
 
   // The working Claude's transcript, where `findTranscript` would look first.
   const transcriptDir = join(projects, slugifyDir(dirs.working));
@@ -352,8 +369,6 @@ export async function buildRecoveryDrill(
 
   // 1. Before: boot B1, generation G1, four sessions.
   await run(BOOT_ONE, [snapshot(beforeRows, { instance: RUN_BEFORE, inventory: 1, tmuxServerPid: G1, collectedAt: at(30) })]);
-  // The fourth session's directory goes away while the box is down.
-  rmSync(dirs.deleted, { recursive: true, force: true });
   // 2 and 3. After: a new daemon under boot B2 — the empty first collection,
   // then G2 with the working Claude back under a new token.
   await run(BOOT_TWO, [

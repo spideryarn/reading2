@@ -14,10 +14,10 @@
  * the kind tests/fleet-health-wiring.test.ts uses, because a missing mount is
  * invisible to every other test (the Overseer's condition on this stage).
  */
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parse as babelParse } from "@babel/parser";
@@ -30,6 +30,23 @@ import { parseRecoveryFeed } from "../tools/fleet/web/src/recovery-client";
 import type { RecoveryFeed, RecoveryWireRecord } from "../tools/fleet/wire.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Every removal the file system is asked for while `on` is set. The drill must
+ * delete nothing (the F28 follow-up): a swap it loses can then at worst create
+ * a new subdirectory somewhere, never remove one. A pass-through wrapper, so
+ * every other call in this file is the real one.
+ */
+const removals = vi.hoisted(() => ({ on: false, paths: [] as string[] }));
+vi.mock("node:fs", async (importOriginal) => {
+  const real = await importOriginal<typeof import("node:fs")>();
+  const recorded = <T,>(fn: T): T =>
+    ((...args: unknown[]) => {
+      if (removals.on) removals.paths.push(String(args[0]));
+      return (fn as (...a: unknown[]) => unknown)(...args);
+    }) as T;
+  return { ...real, rmSync: recorded(real.rmSync), rmdirSync: recorded(real.rmdirSync), unlinkSync: recorded(real.unlinkSync) };
+});
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -155,6 +172,23 @@ describe("the drill, served by the composition server.ts calls", () => {
     expect(refuseUnsafeTarget(join(links, "dangling", "new-drill"), { home: tempDir(), env: {} })).toMatch(/refusing/);
   });
 
+  it("deletes nothing of its own: the missing directory is one it never created (F28b)", async () => {
+    const target = tempDir();
+    removals.paths.length = 0;
+    removals.on = true;
+    let drill: Awaited<ReturnType<typeof buildRecoveryDrill>>;
+    try {
+      drill = await buildRecoveryDrill(target, { hostname: () => "drill-host" });
+    } finally {
+      removals.on = false;
+    }
+    // The daemon's housekeeping inside the store it owns is the daemon's; the
+    // drill itself removes nothing, anywhere.
+    const store = drill.store;
+    expect(removals.paths.filter((p) => p !== store && !p.startsWith(`${store}${sep}`))).toEqual([]);
+    expect(existsSync(drill.dirs.deleted)).toBe(false);
+  }, 60_000);
+
   it("builds nothing when the target resolves into a store (F28)", async () => {
     const home = tempDir();
     const store = join(home, ".overseer");
@@ -164,6 +198,100 @@ describe("the drill, served by the composition server.ts calls", () => {
     await expect(buildRecoveryDrill(join(links, "live", "new-drill"), { home, env: {} })).rejects.toThrow(/live Overseer store/);
     expect(readdirSync(store)).toEqual([]);
   }, 60_000);
+});
+
+/**
+ * **The guard beaten** (the F28 follow-up, the Overseer's condition). The guard
+ * cannot close the race where an ancestor is swapped for a symlink between its
+ * final check and the `mkdir`, because Node has no directory-descriptor-anchored
+ * creation. What it must then guarantee is that a won race only ever *creates*
+ * the drill's own new subdirectory: it deletes nothing, before or after a
+ * failure. The swap is made through the drill's test-only `beforeCreate` seam,
+ * into a fake live store named by an absolute `OVERSEER_STORE_DIR` — never the
+ * real one.
+ */
+describe("the guard beaten by a swap it cannot see (F28b)", () => {
+  const FAKE_FILES: [string, string][] = [
+    ["events.jsonl", '{"kind":"ri3f-fake-event","n":1}\n'],
+    ["current.json", '{"schema":1,"fake":"ri3f"}\n'],
+    ["recovery.json", '{"schema":1,"records":[],"fake":"ri3f"}\n'],
+    [join("recovery-inbox", "req-ri3f.json"), '{"fake":true}\n'],
+  ];
+
+  function fakeLiveStore(): string {
+    const store = tempDir();
+    mkdirSync(join(store, "recovery-inbox"));
+    for (const [rel, text] of FAKE_FILES) writeFileSync(join(store, rel), text);
+    return store;
+  }
+
+  function entries(dir: string): string[] {
+    return (readdirSync(dir, { recursive: true }) as string[]).sort();
+  }
+
+  /** Every file byte-for-byte, nothing gone, and anything new beneath the drill's own leaf. */
+  function expectUntouched(store: string, before: string[], leaf: string): void {
+    for (const [rel, text] of FAKE_FILES) expect(readFileSync(join(store, rel), "utf8"), rel).toBe(text);
+    const after = entries(store);
+    for (const entry of before) expect(after, `${entry} is still there`).toContain(entry);
+    for (const entry of after.filter((e) => !before.includes(e))) expect(entry === leaf || entry.startsWith(`${leaf}${sep}`), entry).toBe(true);
+  }
+
+  it("redirected into a live store, it creates only its own new subdirectory there, deletes nothing, and fails", async () => {
+    const store = fakeLiveStore();
+    const before = entries(store);
+    const links = tempDir();
+    const safe = join(links, "safe");
+    mkdirSync(safe);
+    let swapped = false;
+    removals.paths.length = 0;
+    removals.on = true;
+    try {
+      await expect(
+        buildRecoveryDrill(join(safe, "new-drill"), {
+          home: tempDir(),
+          env: { OVERSEER_STORE_DIR: store },
+          // The race, won: the checked parent becomes a link into the store.
+          // A rename, not a delete, so the test itself removes nothing either.
+          beforeCreate: () => {
+            renameSync(safe, `${safe}-was`);
+            symlinkSync(store, safe);
+            swapped = true;
+          },
+        }),
+      ).rejects.toThrow(/refusing/);
+    } finally {
+      removals.on = false;
+    }
+    expect(swapped).toBe(true);
+    expect(removals.paths).toEqual([]);
+    expectUntouched(store, before, "new-drill");
+    // The one thing a won race can do, and it is left there, not cleaned up.
+    expect(existsSync(join(store, "new-drill"))).toBe(true);
+  });
+
+  it("a failure part-way through a build removes nothing it made", async () => {
+    const target = join(tempDir(), "new-drill");
+    removals.paths.length = 0;
+    removals.on = true;
+    try {
+      await expect(
+        buildRecoveryDrill(target, {
+          home: tempDir(),
+          env: {},
+          now: () => {
+            throw new Error("a builder step failed");
+          },
+        }),
+      ).rejects.toThrow(/a builder step failed/);
+    } finally {
+      removals.on = false;
+    }
+    expect(removals.paths).toEqual([]);
+    expect(existsSync(join(target, "store"))).toBe(true);
+    expect(existsSync(join(target, "projects"))).toBe(true);
+    expect(existsSync(join(target, "work", DRILL_SESSIONS.working))).toBe(true);
+  });
 });
 
 /**
