@@ -268,6 +268,14 @@ stopped, both confirmed by reading the code:
 
 Opus subagent. Scoped suites 266/266, typecheck clean.
 
+**Sol's narrow check of the two fixes** ([findings](260910f-bounded-judgement-proposals-for-the-attention-inbox-stage1-p1-check-sol-findings.md)),
+read-only, of `2eccd2a6`: **both hold, no new findings.** Its own reproductions now print
+`stolen:false` / `secondGranted:false` for F11; for F12 it ran the five stale × outcome cases (stale
+`no-question` + `unavailable` → `unknown`; + `stopped` → `limited` with one unjudged; stale question +
+`unavailable` → the card kept and one unjudged; + `stopped` → `limited`, card kept; + a successful
+re-read → nothing unjudged). **Stage 1 is closed** — one review, one narrow check, then Fable, per the
+brief, and no further round.
+
 **Fable, on the two properties Sol's stopped review never reached** (read-only, of `2eccd2a6`):
 **the cooldown holds** — it starts only on 402/429, ends when `until` passes (pinned 15m → 30m → 1h
 → 2h → 2h → grant), carries across a new day and a second process, and cannot run away, because a
