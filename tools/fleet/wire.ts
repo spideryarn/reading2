@@ -3725,8 +3725,25 @@ export type FleetBoxActionRequest =
  * ================================================================== */
 
 export type StoredWorkGroup = {
-  /** The Overseer's session key. Names a SESSION, never a command line. */
+  /**
+   * The Overseer's session key — an IDENTITY, and never a command line.
+   *
+   * `"$2916 none"`, or `"$2890 claims:<uuid>"`. It is what survives a rename,
+   * which is why the scan is keyed by it, and it is **not** something to put in
+   * front of a reader: see `sessionName`.
+   */
   session: string;
+  /**
+   * The name the launcher gave that session, as it was **at the moment of the
+   * scan** — or null when the register could not supply one.
+   *
+   * Stored beside the key rather than looked up at render time, because a
+   * history is read long after the session it describes has gone: resolving a
+   * name later would either fail for everything interesting or, worse, attach
+   * today's name to yesterday's tmux id after a reuse. Null renders as the key,
+   * which is ugly and true.
+   */
+  sessionName: string | null;
   /** The recogniser's id, as a plain string — the Overseer's vocabulary. */
   recogniser: string;
   /** Job processes with that recogniser under that pane, at the scanned instant. */

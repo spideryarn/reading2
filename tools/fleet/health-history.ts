@@ -279,16 +279,34 @@ function parseStoredWorkGroup(value: unknown): StoredWorkGroup | null {
   if (typeof session !== "string" || typeof recogniser !== "string" || !isFiniteNonNegative(jobs)) return null;
   if (!isRecord(timing)) return null;
 
-  if (timing["kind"] === "unknown") return { session, recogniser, jobs, timing: { kind: "unknown" } };
+  /**
+   * **A MISSING NAME IS NOT A MALFORMED RECORD**, and this is a version
+   * boundary rather than a leniency.
+   *
+   * Every group written before 2026-09-10 has no `sessionName` at all, and
+   * refusing those would turn a day of real history into unreadable lines the
+   * moment this shipped. `null` is also what a live record carries when the
+   * register could not name the session, so the two collapse deliberately: a
+   * row with no name renders as its key either way, and nothing downstream
+   * would do anything different if it could tell them apart.
+   *
+   * A `sessionName` that is present and NOT a string is a different matter —
+   * that is a record this build cannot read, and it is refused with the rest.
+   */
+  const rawName = value["sessionName"];
+  if (rawName !== undefined && rawName !== null && typeof rawName !== "string") return null;
+  const sessionName = typeof rawName === "string" ? rawName : null;
+
+  if (timing["kind"] === "unknown") return { session, sessionName, recogniser, jobs, timing: { kind: "unknown" } };
   const oldestStartedAt = timing["oldestStartedAt"];
   const longestRanForMs = timing["longestRanForMs"];
   if (!isTimestamp(oldestStartedAt) || !isFiniteNonNegative(longestRanForMs)) return null;
   if (timing["kind"] === "known") {
-    return { session, recogniser, jobs, timing: { kind: "known", oldestStartedAt, longestRanForMs } };
+    return { session, sessionName, recogniser, jobs, timing: { kind: "known", oldestStartedAt, longestRanForMs } };
   }
   const knownJobs = timing["knownJobs"];
   if (timing["kind"] !== "partial" || !isFiniteNonNegative(knownJobs)) return null;
-  return { session, recogniser, jobs, timing: { kind: "partial", knownJobs, oldestStartedAt, longestRanForMs } };
+  return { session, sessionName, recogniser, jobs, timing: { kind: "partial", knownJobs, oldestStartedAt, longestRanForMs } };
 }
 
 function parseStoredWork(value: unknown): StoredWork | null {

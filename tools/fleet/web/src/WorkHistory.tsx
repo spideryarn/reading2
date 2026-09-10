@@ -156,7 +156,11 @@ function WorkRowView({
       <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-3 tw:gap-y-1">
         <span className="tw:min-w-0 tw:text-[13px] tw:text-ink">
           <span className="tw:mr-2 tw:text-ink-faint">{row.rank}</span>
-          <span className="tw:font-medium tw:break-all">{row.session}</span>
+          {/* The NAME if the register gave us one, and the key only when it did
+              not. A session key is `$2890 claims:<uuid>` — an identity, correct
+              and unreadable, and it is what this row showed until somebody
+              looked at the page. */}
+          <span className="tw:font-medium tw:break-all">{row.sessionName ?? row.session}</span>
           <span className="tw:ml-2 tw:text-ink-soft">{row.label}</span>
         </span>
         <span className="tw:text-[12px] tw:text-ink-faint">{timing}</span>
@@ -166,7 +170,9 @@ function WorkRowView({
         preserveAspectRatio="none"
         className="tw:mt-1 tw:block tw:h-[18px] tw:w-full tw:rounded-sm tw:bg-panel-raised"
         role="img"
-        aria-label={`${row.session}, ${row.recogniser}: observed ${row.observations.length} time${row.observations.length === 1 ? "" : "s"}. ${timing}.`}
+        /* The same label the sighted reader gets. Reading a uuid out loud is
+           worse than reading it on screen, not better. */
+        aria-label={`${row.sessionName ?? row.session}, ${row.recogniser}: observed ${row.observations.length} time${row.observations.length === 1 ? "" : "s"}. ${timing}.`}
       >
         <line x1={0} x2={PLOT_W} y1={ROW_H / 2} y2={ROW_H / 2} stroke="var(--line)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {row.observations.map((observation) => (
@@ -181,11 +187,25 @@ function WorkRowView({
           />
         ))}
       </svg>
-      <div className="tw:mt-1 tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-1 tw:text-[12px] tw:text-ink-faint">
-        {row.observations.map((observation) => (
-          <span key={observation.atMs}>{observationLabel(observation.atMs, observation.firstCarrierAtMs, at)}</span>
-        ))}
-      </div>
+      {/**
+       * **ONE SENTENCE, NOT ONE LINE PER OBSERVATION**, and the difference was
+       * only visible in a browser.
+       *
+       * This rendered `observationLabel` for every observation in the row. On
+       * the seeded day one group had **seventy-six** of them and the Box Health
+       * page was **5,713px tall at 400px wide** — a wall of "observed at 10:05
+       * AM" under a strip that already says the same thing, better, by putting a
+       * mark at that x position. Every test passed: each label was correct, and
+       * no assertion could see that there were seventy-six of them.
+       *
+       * The strip is the rendering of *when*; this is the rendering of *how many
+       * and over what span*. Nothing is lost — the times are positions above,
+       * the count is in the `aria-label`, and the one fact a reader could not
+       * recover from the marks (that consecutive samples carried an unchanged
+       * reading) is said once for the whole section by `RepeatedReadings`
+       * rather than once per row.
+       */}
+      <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{seenWords(row, at)}</p>
       {partialCounts.map((missing) => (
         <p key={missing} className="tw:mt-1 tw:text-[12px] tw:text-unknown-ink">
           Timing was unavailable for {missing} of these jobs.
@@ -195,11 +215,48 @@ function WorkRowView({
   );
 }
 
-function observationLabel(sourceAtMs: number, carrierAtMs: number, at: TimeLabel): string {
-  const delta = carrierAtMs - sourceAtMs;
-  if (Math.abs(delta) < 1_000) return `observed at ${at(sourceAtMs)}`;
-  const relation = delta > 0 ? "before" : "after";
-  return `observed at ${at(sourceAtMs)} — ${deltaWords(Math.abs(delta))} ${relation} this point`;
+/**
+ * How often this group was seen, and between when and when.
+ *
+ * **`observations` are already deduplicated by source timestamp**, so this
+ * counts observations rather than the samples that carried them — one reading
+ * repeated across five samples is one sighting here, which is the rule
+ * `work-series.ts` exists to enforce. Saying "seen five times" of it would be
+ * the exact claim that rule refuses.
+ *
+ * A single observation gets its own wording rather than a span of zero length:
+ * "seen once at 03:25" and "seen 1 time, 03:25–03:25" are the same fact and only
+ * one of them reads like something a person wrote.
+ */
+function seenWords(row: WorkRow, at: TimeLabel): string {
+  const first = row.observations[0];
+  const last = row.observations[row.observations.length - 1];
+  if (first === undefined || last === undefined) return "No observations in this window.";
+
+  const span =
+    row.observations.length === 1
+      ? `Seen once, at ${at(first.atMs)}`
+      : `Seen ${row.observations.length} times, ${at(first.atMs)}–${at(last.atMs)}`;
+
+  /**
+   * **THE GAP BETWEEN A READING AND THE SAMPLE THAT RECORDED IT, KEPT.**
+   *
+   * Every time above is the SCAN's clock, never its carrier's — that is the
+   * property this whole area is built on. But a reading that was already twenty
+   * minutes old when it was written down is a different fact from a fresh one,
+   * and collapsing the per-observation labels into a span nearly threw it away:
+   * the first draft of this summary said "Seen once, at T+0m" about a reading
+   * whose carrier was at T+20m, which is true and incomplete. A test caught it,
+   * having been written for exactly this.
+   *
+   * The worst gap in the row rather than each one, for the same reason the span
+   * replaced the list. Under a minute is not reported: the dashboard collects
+   * about every seventy-three seconds, so a small gap is the ordinary distance
+   * between a scan and the turn that stored it and means nothing.
+   */
+  const worstGapMs = Math.max(...row.observations.map((o) => o.firstCarrierAtMs - o.atMs));
+  if (worstGapMs < 60_000) return `${span}.`;
+  return `${span} — ${row.observations.length === 1 ? "the reading was" : "the oldest reading was"} ${deltaWords(worstGapMs)} old when it was recorded.`;
 }
 
 function deltaWords(ms: number): string {
@@ -213,18 +270,50 @@ function ScanUncertainty({ scans, at }: { scans: WorkScan[]; at: TimeLabel }): R
   const uncertain = scans.filter((scan) => scan.panes.cannotTell > 0);
   const truncated = scans.filter((scan) => scan.groupsDropped > 0);
   if (uncertain.length === 0 && truncated.length === 0) return null;
+
+  /**
+   * **ONE LINE EACH, NOT ONE LINE PER SCAN.**
+   *
+   * This rendered a paragraph per affected scan. On a day where every scan has
+   * an unreadable pane — which is an ordinary day, not a bad one, since a pane
+   * dying between the inventory and the scan produces exactly that — it was one
+   * identical sentence per five minutes, 288 of them, under a chart. Found by
+   * looking at the page; every test passed, because each sentence was true.
+   *
+   * **Aggregating is not softening**, and the four things that make it a
+   * measurement rather than a shrug are all kept: how many scans were affected,
+   * out of how many, the WORST count seen at once, and when it last happened. A
+   * reader who wants the individual instants has the strips above, where the
+   * position of a mark is its time.
+   */
+  const worstUnreadable = Math.max(0, ...uncertain.map((scan) => scan.panes.cannotTell));
+  const lastUnreadable = uncertain[uncertain.length - 1];
+  const droppedTotal = truncated.reduce((sum, scan) => sum + scan.groupsDropped, 0);
+  const lastTruncated = truncated[truncated.length - 1];
+
   return (
     <div className="tw:mt-2 tw:space-y-1 tw:text-[12px] tw:text-unknown-ink">
-      {truncated.map((scan) => (
-        <p key={`truncated:${scan.atMs}`}>
-          {scan.groupsDropped} lower-ranked group{scan.groupsDropped === 1 ? " was" : "s were"} omitted from this scan to keep the stored reading bounded ({at(scan.atMs)}).
+      {lastTruncated === undefined ? null : (
+        <p>
+          {droppedTotal} lower-ranked group{droppedTotal === 1 ? "" : "s"} {droppedTotal === 1 ? "was" : "were"} omitted
+          {/* "across 1 of 1 scan" is arithmetically true and reads like a machine
+              wrote it. One affected scan is the ordinary case on a short window,
+              so it gets the sentence a person would write. */}
+          {truncated.length === 1
+            ? ` at ${at(lastTruncated.atMs)}`
+            : ` across ${truncated.length} of ${scans.length} scans, most recently at ${at(lastTruncated.atMs)}`}{" "}
+          to keep the stored reading bounded.
         </p>
-      ))}
-      {uncertain.map((scan) => (
-        <p key={`unreadable:${scan.atMs}`}>
-          {scan.panes.cannotTell} pane{scan.panes.cannotTell === 1 ? "" : "s"} could not be read at this sample ({at(scan.atMs)}).
+      )}
+      {lastUnreadable === undefined ? null : (
+        <p>
+          {uncertain.length === 1
+            ? `${worstUnreadable} pane${worstUnreadable === 1 ? "" : "s"} could not be read at ${at(lastUnreadable.atMs)}.`
+            : `Some panes could not be read in ${uncertain.length} of ${scans.length} scans — up to ${worstUnreadable} at once, most recently at ${at(lastUnreadable.atMs)}.`}{" "}
+          {/* The sentence that stops a count from reading as an all-clear. */}
+          Those panes are not evidence that nothing was running on them.
         </p>
-      ))}
+      )}
     </div>
   );
 }

@@ -199,6 +199,7 @@ function collectGroups(panes: ReadonlyMap<string, PaneWork>): {
 function projectScan(
   work: Extract<ResolvedWork, { kind: "scanned" }>,
   checkedAt: string,
+  names: ReadonlyMap<string, string>,
 ): StoredWork {
   const collected = collectGroups(work.panes);
   const { groups } = collected;
@@ -217,12 +218,18 @@ function projectScan(
   /* Bound text AFTER ranking, so truncation cannot change which evidence wins.
      It is visible in each value, rather than quietly turning an identifier into
      a different one. */
-  const storedGroups: StoredWorkGroup[] = groups.map((group) => ({
-    session: boundStoredWorkText(group.session),
-    recogniser: boundStoredWorkText(group.recogniser),
-    jobs: group.jobs,
-    timing: timingOf(group),
-  }));
+  const storedGroups: StoredWorkGroup[] = groups.map((group) => {
+    const name = names.get(group.session);
+    return {
+      session: boundStoredWorkText(group.session),
+      /* Bounded like every other stored string: a name is whatever the launcher
+         was given, and the byte budget has to hold whatever that was. */
+      sessionName: name === undefined ? null : boundStoredWorkText(name),
+      recogniser: boundStoredWorkText(group.recogniser),
+      jobs: group.jobs,
+      timing: timingOf(group),
+    };
+  });
 
   let groupsDropped = 0;
   let result: StoredWork = {
@@ -245,9 +252,21 @@ function projectScan(
     : checkpointUnavailable(checkedAt, "the accepted work scan could not fit the history byte budget");
 }
 
-/** Project one accepted resolver result without reading a clock or doing I/O. */
-export function projectStoredWork(work: ResolvedWork, checkedAt: string): StoredWork {
+/**
+ * Project one accepted resolver result without reading a clock or doing I/O.
+ *
+ * `names` maps a session key to the name its launcher gave it, so a row can be
+ * labelled with something a person recognises rather than with `"$2890
+ * claims:<uuid>"`. An empty map is legitimate — an older checkpoint, or a
+ * register this build could not read — and costs every row its label rather
+ * than the reading.
+ */
+export function projectStoredWork(
+  work: ResolvedWork,
+  checkedAt: string,
+  names: ReadonlyMap<string, string> = new Map(),
+): StoredWork {
   return work.kind === "unavailable"
     ? projectUnavailable(work, checkedAt)
-    : projectScan(work, checkedAt);
+    : projectScan(work, checkedAt, names);
 }

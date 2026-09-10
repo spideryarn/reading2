@@ -479,6 +479,11 @@ describe("the parts that degrade on their own", () => {
       scannedAt: "2026-09-08T12:41:01.000Z",
       groups: [{
         session: "$215 none",
+        /* Joined from the register in the SAME checkpoint read, so a row is
+           labelled with something a person recognises rather than with a tmux id
+           and a conversation claim. The key stays because it, not the name, is
+           what makes two rows the same row across a day. */
+        sessionName: "worktree-schema-move",
         recogniser: "codex-review",
         jobs: 1,
         timing: {

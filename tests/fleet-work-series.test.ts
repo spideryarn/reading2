@@ -91,6 +91,7 @@ function loadPlot(atMs: number, value = 5) {
 
 const codex = {
   session: "resource-history",
+  sessionName: null,
   recogniser: "codex-exec",
   jobs: 3,
   timing: {
@@ -217,6 +218,7 @@ describe("rows and honest empty states", () => {
     const groups: Extract<StoredWork, { kind: "scan" }>["groups"] = [
       {
         session: "partial",
+        sessionName: null,
         recogniser: "vitest",
         jobs: 4,
         timing: {
@@ -227,7 +229,7 @@ describe("rows and honest empty states", () => {
         },
       },
       codex,
-      { session: "unknown", recogniser: "vite", jobs: 1, timing: { kind: "unknown" } },
+      { session: "unknown", sessionName: null, recogniser: "vite", jobs: 1, timing: { kind: "unknown" } },
     ];
     const result = projectWorkHistory(
       view([reading(T0 + 10 * MINUTE, scan(T0 + 9 * MINUTE, groups, { work: 3, none: 0, cannotTell: 0 }))]),

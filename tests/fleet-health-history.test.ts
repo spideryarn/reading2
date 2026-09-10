@@ -39,7 +39,7 @@ import {
   type HealthSample,
 } from "../tools/fleet/health-history.js";
 import { MAX_STORED_WORK_BYTES } from "../tools/fleet/work-groups.js";
-import type { StoredWork, StoredWorkTurn } from "../tools/fleet/wire.js";
+import type { StoredWork, StoredWorkGroup, StoredWorkTurn } from "../tools/fleet/wire.js";
 
 const dirs: string[] = [];
 const open: HealthHistory[] = [];
@@ -717,6 +717,7 @@ describe("bounding a record", () => {
       scannedAt: "2026-09-08T12:00:00.000Z",
       groups: [{
         session: "x".repeat(MAX_LINE_BYTES),
+        sessionName: null,
         recogniser: "vitest",
         jobs: 1,
         timing: { kind: "unknown" },
@@ -743,6 +744,9 @@ describe("bounding a record", () => {
   it("keeps a maximum-work day plus pessimistic ordinary health comfortably inside one rotation", () => {
     const groups = Array.from({ length: 100 }, (_, index) => ({
       session: `session-${index}-${"s".repeat(80)}`,
+      /* Named, and long: the rotation budget has to hold a maximum-sized record,
+         and a name is one more unbounded-looking string on it. */
+      sessionName: `name-${index}-${"n".repeat(60)}`,
       recogniser: `recogniser-${index}-${"r".repeat(40)}`,
       jobs: 99,
       timing: {
@@ -763,7 +767,23 @@ describe("bounding a record", () => {
       maximumWork = { ...maximumWork, groups, groupsDropped: maximumWork.groupsDropped + 1 };
     }
     const workBytes = Buffer.byteLength(JSON.stringify(maximumWork), "utf8");
-    expect(workBytes).toBeGreaterThan(MAX_STORED_WORK_BYTES - 256);
+    /**
+     * **THE FIXTURE REALLY IS AT THE MAXIMUM**, asserted without a magic
+     * tolerance.
+     *
+     * This said `> MAX_STORED_WORK_BYTES - 256`, which stopped being true the
+     * day a field was added to `StoredWorkGroup`: one group is now about three
+     * hundred bytes, so dropping the last one lands further below the cap than
+     * 256 and the day's model would quietly have been built from a SMALLER
+     * record than the budget allows — a rotation proof about the wrong size.
+     *
+     * Putting one group back must break the budget. That is the same claim,
+     * expressed in the fixture's own units, and it cannot go stale when a field
+     * moves.
+     */
+    expect(workBytes).toBeLessThanOrEqual(MAX_STORED_WORK_BYTES);
+    const oneMore = { ...maximumWork, groups: [...groups, groups[0] as StoredWorkGroup] };
+    expect(Buffer.byteLength(JSON.stringify(oneMore), "utf8")).toBeGreaterThan(MAX_STORED_WORK_BYTES);
 
     const pessimisticReport = report({
       load: { kind: "value", load1: 72.5, load5: 61, load15: 44, cores: 16, ratio1: 72.5 / 16 },

@@ -68,7 +68,15 @@ export type WorkGroupObservation = {
 };
 
 export type WorkRow = {
+  /** The session key — the identity a row is grouped by, not the label it wears. */
   session: string;
+  /**
+   * The session's name as recorded at the scan, or null when the register could
+   * not supply one. **Kept beside the key rather than replacing it**: the key is
+   * what makes two rows the same row across a day, and two sessions can wear one
+   * name — a `/rename` is a label, not an identity.
+   */
+  sessionName: string | null;
   /** Human label for the recogniser; unknown future ids remain visible verbatim. */
   label: string;
   recogniser: string;
@@ -340,6 +348,10 @@ function rowsOf(scans: AccumulatedScan[]): WorkRow[] {
       if (found === undefined) {
         rows.set(key, {
           session: group.session,
+          /* The FIRST name seen for this key in the window. A later rename does
+             not retitle the hours before it, and taking the newest would do
+             exactly that. */
+          sessionName: group.sessionName ?? null,
           label: recogniserLabel(group.recogniser),
           recogniser: group.recogniser,
           observations: [observation],

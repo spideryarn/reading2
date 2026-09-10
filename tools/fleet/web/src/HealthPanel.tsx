@@ -316,7 +316,11 @@ function CurrentWork({ currentWork, now }: { currentWork: CurrentWorkView; now: 
                 const measured = group.timing.kind === "unknown" ? null : group.timing.longestRanForMs;
                 return (
                   <li key={`${group.session}:${group.recogniser}`} className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
-                    <span className="tw:font-medium tw:text-ink">{group.session}</span>
+                    {/* The name if the scan recorded one, the key only when it
+                        did not — the same rule the history rows follow, and for
+                        the same reason: a session key is `$2890 claims:<uuid>`,
+                        which is an identity and not something to read. */}
+                    <span className="tw:font-medium tw:text-ink">{group.sessionName ?? group.session}</span>
                     <span className="tw:text-ink-soft">
                       {recogniserLabel(group.recogniser)} · {group.jobs} job{group.jobs === 1 ? "" : "s"}
                     </span>

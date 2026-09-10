@@ -238,6 +238,25 @@ function project(json: unknown, checkedAt: string): ProjectedCheckpoint {
      change must not let history draw a scan whose inventory the register
      rejected by resolving the two with independently chosen inputs. */
   const work = resolveWork(json["work"], lastGoodSnapshotAt, writtenAt, checkedAt);
+  /**
+   * **THE SESSION KEY IS AN IDENTITY, NOT A NAME**, and the page needs both.
+   *
+   * `sessionKey` in tools/overseer/diff.ts is `"$2916 none"` or
+   * `"$2890 claims:<uuid>"` — a tmux id and a conversation claim, with no name
+   * anywhere in it. The work scan is keyed by it because that is what survives a
+   * rename, and the first version of the history therefore drew job groups
+   * called `$2890 claims:66c96b33-0258-4384-bf84-f83bdfb28e57`. Every test
+   * passed; it was only visible in a browser.
+   *
+   * The names are in the register, which is parsed from the SAME checkpoint a
+   * few lines below — so this reads the **whole** array rather than
+   * `projectRegister`'s ranked, capped output, because a history that only named
+   * the eight sessions worth showing on a card would leave the rest as raw
+   * identifiers. A malformed entry is skipped rather than failing the reading:
+   * a missing name costs a row its label, and the register's own projection is
+   * still free to refuse the whole thing on its own terms.
+   */
+  const names = sessionNames(json["register"]);
 
   return {
     overseer: {
@@ -252,7 +271,7 @@ function project(json: unknown, checkedAt: string): ProjectedCheckpoint {
         register: projectRegister(json["register"], writtenAt, work),
       },
     },
-    work: { kind: "published", work: projectStoredWork(work, checkedAt), coordinatorWrittenAt: writtenAt },
+    work: { kind: "published", work: projectStoredWork(work, checkedAt, names), coordinatorWrittenAt: writtenAt },
   };
 }
 
@@ -720,6 +739,29 @@ function registerWork(work: ResolvedWork): OverseerRegisterWork {
  * refusing is one card saying it cannot read the register while the sessions
  * below it carry on.
  */
+/**
+ * Session key → the name the launcher gave it, off the whole register.
+ *
+ * Recognisable, and deliberately **not** an address: `OverseerSessionHistory`'s
+ * comment on `name` says the same thing, and this map is only ever used to put
+ * a word on a row. Skips anything it cannot read rather than refusing, for the
+ * reason on the call site.
+ */
+function sessionNames(u: unknown): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  if (!Array.isArray(u)) return names;
+  for (const raw of u) {
+    if (!isRecord(raw)) continue;
+    const key = nonBlank(raw["key"]);
+    const name = nonBlank(raw["name"]);
+    /* First wins: `projectRegister` refuses a duplicate key outright, and until
+       it does, naming a row after the first entry that claimed the key is the
+       same choice its `keys` set makes. */
+    if (key !== null && name !== null && !names.has(key)) names.set(key, name);
+  }
+  return names;
+}
+
 function projectRegister(u: unknown, writtenAt: string, work: ResolvedWork): OverseerRegister {
   const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
   if (u === undefined) return bad("this checkpoint carries no register");

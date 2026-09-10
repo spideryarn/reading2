@@ -383,6 +383,10 @@ difference"* — which is exactly what a silent duplicate looks like.
 
 ### Stage 2 — the read side over `checkpoint.work` (Codex, gpt-5.6-sol)
 
+**Status 2026-09-10: landed in two rounds, `509f29d4` and `0af436e6`.** The first was dispatched
+before the plan review returned and built the collapsed shape; the second applied F2, F4 and F7.
+Recorded because the second round's diff otherwise reads as churn.
+
 - [ ] New `tools/fleet/work-groups.ts`; a fourth `work` projection out of the one `loadCheckpoint`
       read, sharing `projectRegister`'s `resolveWork` call rather than making a second one.
 - [ ] Types in `wire.ts` (types only, appended).
@@ -401,6 +405,11 @@ difference"* — which is exactly what a silent duplicate looks like.
 
 ### Stage 3 — writing it down (Codex, gpt-5.6-sol)
 
+**Status 2026-09-10: landed at `3f49da1c`.** One defect the scoped tests could not see:
+`StoredWorkTurn` was used in three files and never declared, so every vitest run passed — **vitest
+does not type-check** — while `npm run typecheck` failed in two projects. Written here because it is
+the second time on this branch that a green scoped run was not the gate.
+
 - [ ] `health-history.ts`: `workTurn` on **every** sample arm, parsed back, byte-bounded, with the
       cadence constant. `not-due` is written explicitly; absent means "before work tracking existed"
       and nothing else (F1).
@@ -418,6 +427,13 @@ difference"* — which is exactly what a silent duplicate looks like.
       whose sample has rotated out of the window; a refused append does not advance the cadence.
 
 ### Stage 4 — the page (Codex, gpt-5.6-sol)
+
+**Status 2026-09-10: landed at `15ab391f`.** The run reported honestly that **seven of its ten named
+tests were green on their first run** rather than seen red, so they describe the code rather than
+reproduce a defect. The composition one was the one worth checking and was verified here by
+mutation: replacing `App`'s `currentWork={feed.state?.currentWork ?? …}` with the constant reds both
+end-to-end tests, which is the property that matters — a test passing the prop directly would have
+stayed green. The rest were handed to the code review as explicitly unverified.
 
 - [ ] Disk as the fifth series.
 - [ ] `web/src/work-series.ts` (pure projection, testable without a DOM) and `WorkHistory.tsx`,
@@ -438,10 +454,52 @@ difference"* — which is exactly what a silent duplicate looks like.
 
 ### Stage 5 — gates, browser, land (mine)
 
-- [ ] `npm test` and `npm run typecheck` in full, via `scripts/tmux-job.ts`.
-- [ ] Browser-check the trends at a small size, in a subagent, per `browser-control.md`. **Sonnet
-      subagents are 429ing on this account until 2026-09-12**, so this runs on the default model.
-- [ ] Final Sol review over the whole diff; merge `origin/dev`; push to `dev`; debrief.
+- [x] **The cross-family code review**, at `264c9a8d`, scoped `0d3398e1^..15ab391f` so the merge did
+      not put three other sessions' work in front of it. It **refused the branch**: five established
+      P1s (F9–F13) and a P3 (F14), all fixed inside the stage and landed at `c30e9ce2`. The
+      dispositions are below, under "The code review".
+- [x] `npm run typecheck` — exit 0 across all four projects at every stage.
+- [ ] `npm test` in full, via `scripts/tmux-job.ts`.
+- [x] Merged `origin/dev` twice — `264c9a8d` (one conflict, both branches having appended to
+      `wire.ts`) and `112fb9b7` (three, including `HealthPanel.tsx`'s two return branches becoming
+      one on `dev` at `8eb04544`). See "The two merges" below.
+- [ ] Browser-check the trends at a small size, per `browser-control.md`. **Sonnet subagents are
+      429ing on this account until 2026-09-12**, so this runs on the default model.
+- [ ] Push to `dev`; debrief. **A dashboard restart is needed** for any of this to be live; the
+      Overseer is batching it with `admission-visibility`'s.
+
+### The two merges
+
+Recorded because a merge here is a proposal before it is an edit, and because the second one changed
+a decision rather than only resolving text.
+
+**`264c9a8d`** — one conflict in `tools/fleet/wire.ts`, both branches having appended a new section
+to the end of the file: mine `WORK HISTORY`, `admission-visibility`'s `ADMISSION FORECAST`. No shared
+symbol, no shared line but the decorative banner git aligned on. Both kept in sequence, nothing
+rewritten. Approved by the Overseer before pushing.
+
+**`112fb9b7`** — three conflicts, and the third was structural. `dev` at `8eb04544` merged
+`HealthPanel.tsx`'s two return branches into one, because its own review found that with
+`health: null` the panel returned **before reaching the admission mount**, so that section was absent
+exactly when it was wanted. My `CurrentWork` had the same shape of exposure and had avoided it the
+crude way, by being mounted in both branches. The resolution takes `dev`'s single-branch structure
+and mounts it **once, outside the health conditional**, beside the forecast — which is better than
+what either side had, and for a reason worth keeping: *what the fleet is running is not a fact about
+whether the box's health could be collected.*
+
+Two smaller things went with it. `nowMs={now}` is kept over `dev`'s `Date.now()`, because this panel
+now holds the page's one ticking clock for the work reading's age and two clocks on one card is how
+an age freezes while the chart beside it keeps moving. And `tests/fleet-admission-panel.test.tsx`,
+which arrived from `dev`, needed `currentWork` stated in its `FleetState` fixture — **found by
+`npm run typecheck` and not by any test**, since a missing required field is invisible to vitest.
+
+**The duplicate check after each merge** was `grep -oE '^export (type|const|interface|function)
+[A-Za-z0-9_]+' tools/fleet/wire.ts | sort | uniq -d` (empty) and a component-mount count over
+`HealthPanel.tsx` (`CurrentWork`, `AdmissionSection`, `HealthHistory`, `Verdict`, `StatTile`,
+`BoxActionsCard` all exactly one). A merge of two branches that both appended to one list can keep
+both copies silently, and only the marked hunks are ever commented — so the grep is the check, not
+the absence of conflict markers. Note that a naive `grep -c '======='` over `wire.ts` returns 16
+false hits, because the file's banner comments are made of `=` characters.
 
 ## The plan review, and what was done with it
 
@@ -484,6 +542,44 @@ swap, disk and IO wait are inclusive. The extracted policy preserves that, and
 eight live-probe tests in `tests/overseer-work.test.ts` failed on `EPERM` rather than on behaviour.
 Its 54 pure tests, including the classifier controls, passed. That is a property of the review
 sandbox, not a result about the tree.
+
+## The code review, and what was done with it
+
+GPT Sol reviewed the built branch at `264c9a8d` and **refused it**: five established P1s, no P0, all
+fixed inside the stage and landed at `c30e9ce2`. The full text is
+[260910a-code-review-sol.md](260910a-code-review-sol.md).
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F9 | `groupsDropped` survived storage and projection and was then never **rendered**, so a capped list read as an exhaustive one. | **Taken.** I insisted on this property at the storage layer and did not check it at the drawing layer. |
+| F10 | **`sample-omitted` records bypassed rotation.** The file ceiling was enforced in the ordinary-sample branch while the omission path went through the shared `writeLine`, which had no size check — so repeated oversized reports could grow `health.jsonl` without bound. Reproduced at **8,388,721 bytes** against an 8,388,608-byte cap. | **Taken.** Both bounds now sit at the single write boundary. **This bug predates the branch**; stage 3 only brought it into view by touching the call site. |
+| F11 | The page claimed an exact five-minute cadence when startup sampling and process-local state make it approximate. | **Taken** — my plan wrote that sentence. |
+| F12 | An oversized health reading **discarded a work reading that still fitted**: the code degraded `workTurn` before establishing which half of the composite overflowed. | **Taken.** The omission record is serialised with the original work first and degraded only if still too long. My stage-3 brief specified the wrong order. |
+| F13 | Disk goes amber and red **at** 90 and 97, and the chart's prose said "past 90". | **Taken.** Boundary semantics are carried in `SeriesSpec` rather than one generic word applied to every metric. |
+| F14 | Three source claims contradicted the code: my own policy header said every non-memory boundary was inclusive when **load is strictly greater**; `HealthHistory` still described four plots; and the seeding script called an unwritten interval "nothing was running". | **Taken.** The seed now calls it a gap and says the record cannot tell a box that was down from collection that was down from work that was running — which is the store header's own rule, and I had contradicted it in a file I wrote. |
+
+It also confirmed the two things closed by argument rather than measurement. **F4:** the 4 KiB budget
+does measure exact UTF-8 bytes, with the envelope covered separately by the line limit, and the
+rotation test builds 1,440 real `sampleLine` records. **F7:** the three-arm timing union is the
+better design — *"known among 5 of 6 jobs preserves measured evidence, where nulling both aggregates
+would erase valid measurements without making the result more truthful."* That is the review
+overruling its own earlier recommendation, which is the strongest form of agreement available.
+
+**F10 verified by mutation rather than by reading**, because a fix I did not write is unreviewed code:
+removing the two rotation lines from `writeLine` reds the new test at exactly 8,388,721 **and** reds
+three pre-existing rotation tests — the second half being the proof that `writeLine` is now genuinely
+the one boundary rather than a second copy of one.
+
+**The floor moved again.** "No reading exists" was too strong: F12 discarded a reading that did
+exist, and F9 dropped groups without saying so. The accurate statement now:
+
+> Every displayed scalar and exact count comes from a **retained** reading. When a reading is missing
+> or was discarded, the display states that fact or leaves a gap. A successful work scan says its
+> retained groups were observed at its own `scannedAt`, and if lower-ranked groups were dropped it
+> says how many. It makes no claim about the health sample's instant or the interval between
+> samples. Repeated carriers of one source timestamp count as one observation.
+
+Scoped to live-produced history: seeded data is a demo fixture, not measurement evidence.
 
 ## Things found while planning that the brief did not know
 

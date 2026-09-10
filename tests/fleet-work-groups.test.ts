@@ -118,6 +118,7 @@ describe("projectStoredWork", () => {
       groups: [
         {
           session: "session-review",
+          sessionName: null,
           recogniser: "codex-exec",
           jobs: 1,
           timing: {
@@ -148,6 +149,7 @@ describe("projectStoredWork", () => {
     expect(result.groups).toEqual([
       {
         session: "session-pair",
+        sessionName: null,
         recogniser: "codex-exec",
         jobs: 2,
         timing: {

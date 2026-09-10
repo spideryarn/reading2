@@ -23,7 +23,8 @@ const MINUTE = 60_000;
 
 function group(overrides: Partial<StoredWorkGroup> = {}): StoredWorkGroup {
   return {
-    session: "resource-history",
+    session: "$3100 none",
+    sessionName: "resource-history",
     recogniser: "vitest",
     jobs: 1,
     timing: {
@@ -108,8 +109,13 @@ describe("work history", () => {
   it("uses the scan clock and calls out a stale reading instead of placing it on its carrier sample", () => {
     render(view([sample(START + 20 * MINUTE, dueScan(START, [group()]))]));
 
-    expect(host.textContent).toContain("observed at T+0m — 20 minutes before this point");
-    expect(host.textContent).not.toContain("observed at T+20m");
+    /* The row is labelled with the SCAN's clock, and says the reading was
+       already old when it was written down. Both halves matter: the first is the
+       property, and the second is what nearly went missing when the
+       per-observation labels were collapsed into a span. */
+    expect(host.textContent).toContain("Seen once, at T+0m");
+    expect(host.textContent).toContain("the reading was 20 minutes old when it was recorded");
+    expect(host.textContent).not.toContain("Seen once, at T+20m");
   });
 
   it("draws one source sighting for repeated carriers and says the reading did not change", () => {
@@ -198,13 +204,42 @@ describe("work history", () => {
     render(view([sample(START + 5 * MINUTE, dueScan(START + 5 * MINUTE, [partial], 2))]));
 
     expect(host.textContent).toContain("Timing was unavailable for 1 of these jobs");
-    expect(host.textContent).toContain("2 panes could not be read at this sample");
+    /* Aggregated across scans since the browser check, because one sentence per
+       affected scan is 288 of them on an ordinary day. The count, the worst
+       case, the clock and the "not evidence of an idle pane" sentence all
+       survive that; only the repetition went. */
+    expect(host.textContent).toContain("2 panes could not be read at T+5m");
+    expect(host.textContent).toContain("not evidence that nothing was running on them");
+  });
+
+  /**
+   * **A SESSION KEY IS AN IDENTITY, NOT A NAME**, and this row showed the key
+   * until somebody looked at the real page.
+   *
+   * `sessionKey` is `"$2916 none"` or `"$2890 claims:<uuid>"`, so the first
+   * version of this section drew job groups called
+   * `$2890 claims:66c96b33-0258-4384-bf84-f83bdfb28e57`. Every test passed,
+   * because no assertion had any opinion about what a row was called.
+   */
+  it("labels a row with the session's name, and falls back to the key when there is none", () => {
+    render(view([sample(START + 5 * MINUTE, dueScan(START + 5 * MINUTE, [
+      group({ session: "$2890 claims:66c96b33-0258-4384-bf84-f83bdfb28e57", sessionName: "worktree-extraction" }),
+      group({ session: "$2916 none", sessionName: null, recogniser: "codex-exec" }),
+    ]))]));
+
+    expect(host.textContent).toContain("worktree-extraction");
+    /* The uuid is not on the page at all when a name was recorded — not merely
+       de-emphasised beside it. */
+    expect(host.textContent).not.toContain("66c96b33-0258-4384-bf84-f83bdfb28e57");
+    /* And an unnamed row still says which session it was, because a key is ugly
+       and true and the alternative is a row that names nothing. */
+    expect(host.textContent).toContain("$2916 none");
   });
 
   it("says when the byte budget omitted lower-ranked groups from a scan", () => {
     render(view([sample(START + 5 * MINUTE, dueScan(START + 5 * MINUTE, [group()], 0, 2))]));
 
-    expect(host.textContent).toContain("2 lower-ranked groups were omitted from this scan to keep the stored reading bounded");
+    expect(host.textContent).toContain("2 lower-ranked groups were omitted at T+5m to keep the stored reading bounded");
   });
 
   it("does not print conditional uncertainty when every pane and timing was readable", () => {

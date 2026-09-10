@@ -16,6 +16,7 @@
  */
 import { openHealthHistory, type HealthTurn } from "./health-history.js";
 import type { HealthReport } from "./health.js";
+import type { StoredWorkGroup, StoredWorkTurn } from "./wire.js";
 
 const CADENCE_MS = 73_000;
 const CORES = 16;
@@ -65,6 +66,94 @@ if (opened.kind !== "open") {
   process.exit(2);
 }
 
+/**
+ * A work reading for one turn — **every state the new section has to draw**,
+ * for the same reason the health shapes above exist: so a person can look at it.
+ *
+ * The cadence is the real one, so most turns are `not-due` and the section's
+ * marks are five minutes apart rather than seventy-three seconds apart, which
+ * is the spacing a reader will actually meet.
+ *
+ * Four deliberate stretches, and the third is the one worth seeding:
+ *
+ *  - **the spike at 16h** carries the work it is meant to be explained by —
+ *    three concurrent test suites and a review, which is what that shape on this
+ *    box has always turned out to be;
+ *  - **around 12h** the probe fails, so the section shows the daemon's own
+ *    reason rather than an absence;
+ *  - **around 6h the SAME `scannedAt` repeats for half an hour** — a daemon
+ *    that has stopped producing fresh scans. Drawn naively this is thirty
+ *    minutes of activity; drawn correctly it is one observation, said once. It
+ *    is the one state no test can show you the look of;
+ *  - **around 3h** a group's jobs have unknown starts, so the `partial` and
+ *    `unknown` timing arms are on screen rather than only in a type.
+ */
+function workTurn(at: number, hoursAgo: number): StoredWorkTurn {
+  /* Five minutes, not the collection cadence. `at` rather than a counter, so a
+     skipped sample does not shift the phase of everything after it. */
+  if (Math.floor(at / 300_000) === Math.floor((at - CADENCE_MS) / 300_000)) return { kind: "not-due" };
+
+  const scan = (scannedAt: string, groups: StoredWorkGroup[], panes: { work: number; none: number; cannotTell: number }): StoredWorkTurn => ({
+    kind: "due",
+    result: { kind: "scan", scannedAt, groups, groupsDropped: 0, panes },
+  });
+  /* The seeded key is shaped like a real one (`$id none`) and the name is the
+     readable half, so the demo exercises the same key/name split the live
+     checkpoint does rather than quietly passing a name off as a key. */
+  const known = (session: string, recogniser: string, jobs: number, startedMs: number): StoredWorkGroup => ({
+    session: `$9${session.length}00 none`,
+    sessionName: session,
+    recogniser,
+    jobs,
+    timing: { kind: "known", oldestStartedAt: new Date(startedMs).toISOString(), longestRanForMs: at - startedMs },
+  });
+
+  /* 7.4–8.0, NOT the 11.6–12.4 the first draft used: that window falls inside
+     the four-hour gap above, where no sample is written at all, so the arm
+     seeded nothing and the section drew as though the probe had never failed.
+     Found by counting the arms in the seeded file rather than by reading this. */
+  if (hoursAgo < 8.0 && hoursAgo > 7.4) {
+    return {
+      kind: "due",
+      result: {
+        kind: "probe-failed",
+        attemptedAt: new Date(at).toISOString(),
+        sourceCollectedAt: new Date(at - 4_000).toISOString(),
+        why: "ps -eo pid=,ppid=,etimes=,args= failed: Command failed: spawn EAGAIN",
+      },
+    };
+  }
+
+  if (hoursAgo < 6.5 && hoursAgo > 6) {
+    /* ONE reading, carried by every sample in this stretch. The scan clock is
+       frozen; only the carriers move. */
+    return scan(new Date(now - 6.5 * 3_600_000).toISOString(), [known("overnight-eval", "codex-exec", 1, now - 7 * 3_600_000)], { work: 1, none: 14, cannotTell: 0 });
+  }
+
+  if (hoursAgo < 16.5 && hoursAgo > 15.5) {
+    return scan(new Date(at).toISOString(), [
+      known("worktree-extraction", "vitest", 3, at - 18 * 60_000),
+      known("worktree-hierarchy", "vitest", 2, at - 11 * 60_000),
+      known("roadmap-usage", "codex-exec", 1, at - 34 * 60_000),
+      known("dashboard-ideas", "claude-headless", 1, at - 4 * 60_000),
+    ], { work: 4, none: 9, cannotTell: 2 });
+  }
+
+  if (hoursAgo < 3.4 && hoursAgo > 2.6) {
+    return scan(new Date(at).toISOString(), [
+      { session: "$9210 none", sessionName: "admission-visibility", recogniser: "codex-exec", jobs: 3, timing: { kind: "partial", knownJobs: 1, oldestStartedAt: new Date(at - 21 * 60_000).toISOString(), longestRanForMs: 21 * 60_000 } },
+      /* The one seeded row with no name, so the fallback to the raw key is on
+         screen rather than only in a comment. */
+      { session: "$9211 claims:5f2c1f0e-2b7a-4a6d-9c31-8d0f4b6ea7c2", sessionName: null, recogniser: "vitest", jobs: 1, timing: { kind: "unknown" } },
+    ], { work: 2, none: 12, cannotTell: 1 });
+  }
+
+  const quiet = Math.sin(at / 7_000_000) > 0.3;
+  return quiet
+    ? scan(new Date(at).toISOString(), [known("resource-history", "codex-exec", 1, at - 26 * 60_000)], { work: 1, none: 15, cannotTell: 0 })
+    : scan(new Date(at).toISOString(), [], { work: 0, none: 16, cannotTell: 0 });
+}
+
 const now = Date.now();
 /* Twenty hours, not twenty-four, so the left of the window is genuinely
    "before the history began" and that region can be seen. */
@@ -112,7 +201,7 @@ for (let at = start; at <= now; at += CADENCE_MS) {
     };
   }
 
-  opened.store.append(turn, { at: date.toISOString(), nextDueMs: CADENCE_MS }, { kind: "not-due" });
+  opened.store.append(turn, { at: date.toISOString(), nextDueMs: CADENCE_MS }, workTurn(at, hoursAgo));
   written += 1;
 }
 

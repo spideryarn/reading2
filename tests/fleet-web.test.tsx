@@ -1774,7 +1774,8 @@ describe("box health, whose shape belongs to somebody else", () => {
               kind: "scan",
               scannedAt: new Date(now - 2 * 60_000).toISOString(),
               groups: [{
-                session: "live-resource-job",
+                session: "$3200 none",
+                sessionName: "live-resource-job",
                 recogniser: "vitest",
                 jobs: 1,
                 timing: {
@@ -1868,7 +1869,8 @@ describe("box health, whose shape belongs to somebody else", () => {
             kind: "scan",
             scannedAt: new Date(historicalAt).toISOString(),
             groups: [{
-              session: "historical-resource-job",
+              session: "$3300 none",
+              sessionName: "historical-resource-job",
               recogniser: "codex-exec",
               jobs: 1,
               timing: {

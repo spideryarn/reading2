@@ -70,7 +70,12 @@ function parseGroup(raw: unknown): StoredWorkGroup | null {
   const jobs = count(source["jobs"]);
   if (session === null || recogniser === null || jobs === null || jobs === 0) return null;
   const timing = parseTiming(source["timing"], jobs);
-  return timing === null ? null : { session, recogniser, jobs, timing };
+  /* Absent on every record written before names were stored, and null when the
+     register could not supply one. Both render as the key, so both arrive here
+     as null — health-history.ts's `parseStoredWorkGroup` says why that collapse
+     is deliberate rather than lenient. */
+  const sessionName = nonBlank(source["sessionName"]);
+  return timing === null ? null : { session, sessionName, recogniser, jobs, timing };
 }
 
 export function parseStoredWork(raw: unknown): StoredWork | null {
