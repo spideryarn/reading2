@@ -97,6 +97,8 @@ function isKeystrokeOp(op: ReceiptOp): boolean {
   switch (op) {
     case "queued-message":
     case "queued-action":
+    case "steer-message":
+    case "steer-answer":
       return true;
     default: {
       const never: never = op;

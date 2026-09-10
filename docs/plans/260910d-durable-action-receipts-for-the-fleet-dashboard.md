@@ -1,8 +1,14 @@
 # Durable action receipts for the fleet dashboard
 
-**Status, 2026-09-10: plan settled after two rounds of GPT Sol review (both "rework", no P0) and a
-Fable arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
-Discovery is closed. Stage 1a next. Nothing built.** Queue item
+**Status, 2026-09-10 11:40: Stage 1 is on `dev` (`afbfcf2c`) — queued work writes receipts and
+survives a restart; live after the next dashboard restart. Stage 2 is being implemented by an Opus
+subagent.** The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
+arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
+
+**Learned in Stage 1, for Stages 2 and 4:** a memory-only or locked-out journal refuses every
+*keyed* accept (Stage 1a review F22 — a keyed accept fails closed when it cannot land), so when the
+stores cannot open, every keyed request answers `503 receipt-unavailable`. That is the design; whether
+a client should then offer to resend without an id is a product question for Stage 4. Queue item
 `qi-zabqe99q`, dispatched by the Overseer. This is the roadmap stage
 [260908f § Durable action receipts — restart without guessing or repeating a write](260908f-overseer-and-fleet-improvement-roadmap.md#stage-durable-action-receipts--restart-without-guessing-or-repeating-a-write),
 and it absorbs [260908j § Stage 5 — request ids and receipts](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md#stage-5--request-ids-and-receipts),
@@ -370,6 +376,17 @@ unchanged and green.
 
 ### Stage 2 — request ids and replay, on the steer and enqueue routes
 
+**Status, 2026-09-10 12:00: built by an Opus subagent from [the Stage 2 brief](260910d-durable-action-receipts-stage2-task.md)**
+(the Overseer's Codex budget notice moved implementation off Codex), diff read here, gates re-run;
+Sol stage review next. Five decisions the brief did not settle, each checked and kept: **the route is
+part of the fingerprint** (a message body and an enqueue body can be byte-identical, so without it one
+id could replay a direct steer's receipt as an enqueue); **a keyed `run` on the session route is
+refused** until Stage 3 records enacted runs (honouring the key would let a retry run the plan twice);
+**malformed bytes block a direct send's recovery too** (they could be its `attempted` line);
+`isKeystrokeOp` counts the steer ops for `unknown-without-hold`; an unkeyed direct send that cannot
+be accepted is refused `503`. The same commit carries the server half of the restart-check hold fix
+(`QuarantineBook.durable()`, the catalogue's `holdsDurable`).
+
 - [ ] `requestId` parsed on `/api/steer/message`, `/api/steer/answer` and `/api/actions/session`
   (enqueue); format and freshness; lookup and conflict before the limiter; keyed accept fail-closed.
 - [ ] Receipts for direct steer and answer: `accepted` then `attempted` (both fail-closed when keyed)
@@ -455,8 +472,16 @@ it and write things a dead process could not.
 ## Not mine, and what it needs
 
 - `server.ts`: one call, authorised by the Overseer with the conditions in § The stores.
-- `scripts/fleet-restart-plan.ts` will over-report "discarded" queued items once Stage 1 lands,
-  because it does not read `volatile`. Safe direction; the Overseer should update it.
+- `scripts/fleet-restart-plan.ts` over-reported "discarded" queued items once Stage 1 landed,
+  because it did not read `volatile` — so the Overseer's restart check would have refused every
+  restart with anything queued. **Fixed here on 2026-09-10 (`c3f7bec8`, on dev at `4caf73b1`),
+  authorised by the Overseer**, with the one line in `scripts/fleet-restart.ts` the new field forced
+  and the stale comments in `tools/fleet/send-coordinator.ts`. **Its hold half, also authorised:**
+  the script side is on dev at `e6c0e52c` (`66ae9ef2`) — a hold passes when the catalogue says
+  `holdsDurable: true`, and the "erases" wording is gone; the server side
+  (`QuarantineBook.durable()` and the catalogue's top-level `holdsDurable`,
+  `tests/fleet-holds-durable.test.ts`) lands with the Stage 2 commit and is live after a restart.
+  Until then the check refuses on a hold exactly as before.
 - The Overseer's CLI and `rule-work.ts` can send `requestId`s once Stage 2 lands; `tools/overseer/`.
 - A dashboard restart is needed for any of this to be live.
 
