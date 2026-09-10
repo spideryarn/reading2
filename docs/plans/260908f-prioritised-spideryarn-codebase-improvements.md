@@ -358,6 +358,12 @@ do not reimplement that half.
 
 ### Stage: stream the unsaved asked-term answer first
 
+**Status as of 2026-09-10: built, Sol-reviewed twice (plan and code), on `dev`.** The stage plan,
+its evidence and both reviews are
+[260910g-stream-glossary-answers-as-they-arrive.md](260910g-stream-glossary-answers-as-they-arrive.md).
+One reviewed departure from the bullets below: a provider refusal is now an `error` frame inside a
+200 rather than the response's HTTP status, because the stream's headers go first.
+
 - [ ] Characterise today's owner validation, matched quote/block, failure codes and response schema.
   Trace existing spend/rate-limit middleware in current `routes.ts`; the old feedback note's claim
   that there is none predates later billing work and must not become an assumption.

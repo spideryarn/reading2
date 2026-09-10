@@ -43,9 +43,10 @@
 import { describe, expect, it } from "vitest";
 
 import { MAX_ASKED_TERM } from "../src/asked-term.js";
-import { makeAskAboutTerm } from "../src/term-lookup.js";
+import type { ExplainEnding } from "../src/explain.js";
+import { type AskedTermQuestion, makeAskAboutTerm } from "../src/term-lookup.js";
 import { MAX_TERM } from "../src/vocabulary.js";
-import type { Article, Block, Tree } from "../src/types.js";
+import type { Article, AskedTermAnswer, Block, Tree } from "../src/types.js";
 
 /** One paragraph, with an id a test can name. */
 function para(id: string, text: string): Block {
@@ -89,7 +90,9 @@ function media(id: string): Block {
  * is how the ownership case below is driven — see it for why that is the real
  * check and not a stand-in for one.
  */
-function harness(opts: { blocks?: Block[]; notYours?: boolean } = {}) {
+function harness(
+  opts: { blocks?: Block[]; notYours?: boolean; ending?: ExplainEnding } = {},
+) {
   const blocks = opts.blocks ?? [para("spya-aaaaaa", "An opening paragraph.")];
   const meta = { slug: "harness", title: "A piece" };
   const tree = { rootId: blocks[0]?.id, nodes: {} } as unknown as Tree;
@@ -97,7 +100,7 @@ function harness(opts: { blocks?: Block[]; notYours?: boolean } = {}) {
 
   const asked: { blockId: string; quote: string }[] = [];
 
-  const ask = makeAskAboutTerm({
+  const prepare = makeAskAboutTerm({
     reader: {
       loadArticle: async () => {
         if (opts.notYours) {
@@ -109,14 +112,48 @@ function harness(opts: { blocks?: Block[]; notYours?: boolean } = {}) {
         return article;
       },
     },
-    explain: async (req) => {
+    /* Two deltas and a `done`, the shape `explainStream` promises, ending the
+       way `opts.ending` says. `abandoned`, `truncated` and `filtered` are the
+       three that `explainStream` hands back as `done` carrying half an answer —
+       what it really does, src/explain.ts § the `switch` on `outcome.kind`. See
+       "an answer that stopped part-way" below. */
+    explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
-      return { answer: "An answer.", citations: [], searches: 1, model: "a-model" };
+      yield { type: "delta", text: "An " };
+      yield { type: "delta", text: "answer." };
+      yield {
+        type: "done",
+        ending: opts.ending ?? "finished",
+        answer: "An answer.",
+        citations: [
+          { url: "https://example.org/a", title: "A" },
+          { url: "javascript:alert(1)", title: "Not a link" },
+        ],
+        searches: 1,
+        model: "a-model",
+      };
     },
     now: () => "2026-09-04T00:00:00.000Z",
   });
 
-  return { ask, asked };
+  /** Refuse or answer, drained — what the JSON route used to hand back. */
+  const ask = async (slug: string, term: unknown, signal?: AbortSignal) =>
+    drain(await prepare(slug, term), signal);
+
+  return { ask, prepare, asked };
+}
+
+/**
+ * The one `done`'s answer, or a throw. **A stream that ends without `done`
+ * throws too**, so a test cannot mistake a stopped stream for an answer.
+ */
+async function drain(question: AskedTermQuestion, signal?: AbortSignal): Promise<AskedTermAnswer> {
+  let answer: AskedTermAnswer | undefined;
+  for await (const event of question.stream(signal)) {
+    if (event.type === "done") answer = event.answer;
+  }
+  if (!answer) throw new Error("the stream ended without a done");
+  return answer;
 }
 
 /**
@@ -193,6 +230,79 @@ describe("a term the article uses", () => {
     const answer = await ask("harness", "attention heads");
     expect(Object.keys(answer).sort()).toEqual(["blockId", "lookup", "quote", "term"]);
     expect(answer.lookup.searches).toBe(1);
+  });
+
+  it("filters a citation that is not a web address before it reaches an href", async () => {
+    const { ask } = harness({ blocks });
+    const answer = await ask("harness", "attention heads");
+    expect(answer.lookup.citations.map((c) => c.url)).toEqual(["https://example.org/a"]);
+  });
+});
+
+describe("an answer that stopped part-way", () => {
+  const blocks = [para("spya-aaaaaa", "The piece discusses Attention Heads.")];
+
+  /** The events a stream yields before it ends, and how it ended. */
+  async function run(ending: ExplainEnding): Promise<{ seen: string[]; ended: string }> {
+    const { prepare } = harness({ blocks, ending });
+    const question = await prepare("harness", "attention heads");
+    const seen: string[] = [];
+    const ended = await (async () => {
+      for await (const event of question.stream()) seen.push(event.type);
+    })().then(
+      () => "finished",
+      (err: Error) => err.message,
+    );
+    return { seen, ended };
+  }
+
+  it("knows where the term is before the model is asked anything", async () => {
+    /* The route sends `found` as its `begin` frame before the first word, so
+       it has to exist before the stream starts — and it has to be the
+       article's characters, since it is drawn as a quotation. */
+    const { prepare, asked } = harness({ blocks });
+    const question = await prepare("harness", "ATTENTION HEAD");
+    expect(question.found).toEqual({
+      term: "ATTENTION HEAD",
+      blockId: "spya-aaaaaa",
+      quote: "Attention Heads",
+    });
+    expect(asked).toEqual([]);
+  });
+
+  it("never finishes with the half that had arrived when the reader left", async () => {
+    /* **The contract, and an ending `explainStream` treats differently.** An
+       abandoned explanation *finishes* there, carrying what arrived — right for
+       a comment, wrong here, where the only reader of a `done` is a panel that
+       would draw it as a finished answer. */
+    const { seen, ended } = await run("abandoned");
+    expect(ended).not.toBe("finished");
+    expect(seen).toEqual(["delta", "delta"]);
+  });
+
+  it("refuses an answer that ran out of room, with its own code", async () => {
+    /* GPT Sol's finding on the plan: the first draft checked only the reader's
+       signal, and a 1,500-token ceiling reached mid-sentence came out as a
+       whole answer. */
+    const { seen, ended } = await run("truncated");
+    expect(ended).toMatch(/\[gl-cut-off\]/);
+    expect(seen).not.toContain("done");
+  });
+
+  it("refuses an answer the provider's filter stopped", async () => {
+    const { seen, ended } = await run("filtered");
+    expect(ended).toMatch(/\[ai-filtered\]/);
+    expect(seen).not.toContain("done");
+  });
+
+  it("finishes normally on the endings explainStream calls clean", async () => {
+    /* The control: without it, a stream that never finished at all would pass
+       every case above. */
+    for (const ending of ["finished", "unknown-finish-reason", "wants-tools"] as const) {
+      const { seen, ended } = await run(ending);
+      expect(ended, ending).toBe("finished");
+      expect(seen, ending).toEqual(["delta", "delta", "done"]);
+    }
   });
 });
 

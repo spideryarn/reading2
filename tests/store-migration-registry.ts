@@ -1713,6 +1713,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`contextPaths(job.slug)` for every step it walks and `scratchArticleInPg`'s copy of a " +
       "corpus article, which the draft the walk publishes has to be carried forward from.",
   },
+  "tests/glossary-asked-term-stream-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with cluster E stage 1 (2026-09-10). It seeds one article " +
+      "with `scratchArticleInPg` and drives `POST /api/glossary/:slug/ask` through `handleApi` " +
+      "against a stubbed provider — entirely Postgres. Its reach into the condemned modules is " +
+      "the seeder's copy step and the spend ledger each provider call writes, the same pair " +
+      "`tests/quiz-mark-route.test.ts` is classified by. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2435,6 +2446,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      owners over SQL and needs neither GoTrue nor a bucket. */
   "tests/fetch-allowance.test.ts": "private-postgres",
   "tests/find-article.test.ts": "private-postgres",
+  /* Seeds one article and reads it; the provider is a stubbed `fetch`, so the
+     only Postgres writes are the seed and the spend ledger's row per call. */
+  "tests/glossary-asked-term-stream-route.test.ts": "private-postgres",
   "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
   "tests/glossary-ideas-baseline.test.ts": "private-postgres",
   /* **The scan could not see this one, and T-D's poisoned `DATABASE_URL` found

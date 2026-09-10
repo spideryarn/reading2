@@ -29,7 +29,11 @@
  * thing the panel spent a rewrite acquiring. See docs/project/glossary.md.
  */
 
-import { explain as explainDefault } from "./explain.js";
+import {
+  type ExplainEnding,
+  explain as explainDefault,
+  explainStream as explainStreamDefault,
+} from "./explain.js";
 import { isStale, safeUrl } from "./glossary.js";
 import { log } from "./log.js";
 import type { GlossaryLookupStore } from "./store/contracts.js";
@@ -39,6 +43,8 @@ import {
   ASKED_TERM_ABSENT,
   ASKED_TERM_NO_PROSE,
   ASKED_TERM_PART_WORD,
+  FILTER_STOPPED_IT,
+  GLOSSARY_CUT_OFF,
   GLOSSARY_OUT_OF_DATE,
   GLOSSARY_TERM_NOT_QUOTED,
 } from "./messages.js";
@@ -328,6 +334,47 @@ export function makeLookUpTerm(
   };
 }
 
+/**
+ * **Only a finished answer finishes.** Throws for the endings `explainStream`
+ * accepts as a `done` that the glossary may not.
+ *
+ * Three of them, and the reason is the same: the glossary's only reader of a
+ * `done` draws it as a finished answer — with *checked* above it and its
+ * sources under it — and in `lookUpTerm`'s case saves it. So:
+ *
+ * - `abandoned` — the reader left, or changed the question. `explainStream`
+ *   finishes with whatever had arrived, which is right for a comment and is the
+ *   one thing a glossary answer must never be.
+ * - `truncated` and `filtered` — the model stopped part-way, on our ceiling or
+ *   the provider's filter. Accepted there because a comment has nowhere to say
+ *   so; refused here, as quiz refuses them. Found by GPT Sol reviewing
+ *   docs/plans/260910g-stream-glossary-answers-as-they-arrive.md: the first
+ *   draft checked only the reader's signal.
+ *
+ * The other three stay accepted for `explainStream`'s own reasons at each
+ * `case` there — an unknown finish reason is the deny-list side of a bet quiz
+ * spells out, and a tool request from a call that sends only the web-search
+ * tool is a provider oddity over prose that is prose.
+ */
+function refuseUnfinished(ending: ExplainEnding): void {
+  switch (ending) {
+    case "finished":
+    case "unknown-finish-reason":
+    case "wants-tools":
+      return;
+    case "abandoned":
+      throw new Error("The answer was stopped before it finished, so none of it is kept.");
+    case "truncated":
+      throw new Error(GLOSSARY_CUT_OFF.message);
+    case "filtered":
+      throw new Error(FILTER_STOPPED_IT.message);
+    default: {
+      const never: never = ending;
+      throw new Error(`unhandled explanation ending: ${JSON.stringify(never)}`);
+    }
+  }
+}
+
 /* ------------------------------------------ a term the reader typed in a box -- */
 
 /**
@@ -342,11 +389,51 @@ export interface AskAboutTermDeps {
   /** Where the article's blocks and meta come from. Owner-filtered — see below. */
   readonly reader: { loadArticle(slug: string): Promise<Article> };
 
-  /** Overridable so a test can drive the successful path without a model. */
-  readonly explain?: typeof explainDefault;
+  /**
+   * Overridable so a test can drive the successful path without a model.
+   *
+   * **The stream, not the drain**, since 2026-09-10: the box shows the answer
+   * as it arrives. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+   */
+  readonly explainStream?: typeof explainStreamDefault;
 
   /** Overridable for the same reason. */
   readonly now?: () => string;
+}
+
+/**
+ * Where the box's question was found — **every word of it the server's.**
+ *
+ * `quote` is the run of characters the matcher found in `blockId`, never what
+ * the reader typed; `term` is what they typed, normalised, and is only ever
+ * shown as their own question. The route sends this before the first word of
+ * the answer, so the panel can say where it is looking while it waits.
+ */
+export type AskedTermFound = Omit<AskedTermAnswer, "lookup">;
+
+/**
+ * What an asked term's answer emits: any number of `delta`, then exactly one
+ * `done`. A throw means no `done`, and the deltas so far are **not an answer** —
+ * nothing downstream may treat them as one. `ExplainEvent`'s contract, with the
+ * one difference {@link makeAskAboutTerm} explains: an abandoned stream throws
+ * here rather than finishing.
+ */
+export type AskedTermEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; answer: AskedTermAnswer };
+
+/**
+ * A question that has passed every refusal, and the answer not yet started.
+ *
+ * **Two halves because the route needs a line between them.** Everything that
+ * can refuse — ownership, a malformed term, no prose, a term the piece does not
+ * use — has happened by the time this exists, so the route can still answer
+ * those as ordinary JSON; only then does it open the event stream and call
+ * `stream`, handing it the signal that fires when the reader leaves.
+ */
+export interface AskedTermQuestion {
+  readonly found: AskedTermFound;
+  stream(signal?: AbortSignal): AsyncGenerator<AskedTermEvent>;
 }
 
 /**
@@ -418,14 +505,29 @@ function appearsInsideAWord(term: string, blocks: readonly Block[]): boolean {
  * non-owner cannot tell a bad term from somebody else's article. It used to be
  * preceded by `assertWritable`, the filesystem store's extra 403 over the
  * committed `example/`, which went with that store.
+ *
+ * ## It streams, and only a finished answer finishes
+ *
+ * Since 2026-09-10 the answer arrives a few words at a time
+ * (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md). The promise
+ * settles once every refusal above has been decided; `stream` then drives
+ * `explainStream`.
+ *
+ * **Three endings of `explainStream` are not endings here.** It *finishes*
+ * with whatever had arrived when its caller's signal fires, when the answer
+ * hits its token ceiling and when the provider's filter stops it — right for a
+ * comment, where half an explanation has a row to live on. Here a `done`
+ * carrying half an answer is the one thing this contract exists to prevent, so
+ * `refuseUnfinished` above throws for all three and no `done` is ever built
+ * from an answer that stopped part-way.
  */
 export function makeAskAboutTerm(
   deps: AskAboutTermDeps,
-): (slug: string, asked: unknown, signal?: AbortSignal) => Promise<AskedTermAnswer> {
-  const explain = deps.explain ?? explainDefault;
+): (slug: string, asked: unknown) => Promise<AskedTermQuestion> {
+  const explainStream = deps.explainStream ?? explainStreamDefault;
   const now = deps.now ?? (() => new Date().toISOString());
 
-  return async function askAboutTerm(slug, asked, signal) {
+  return async function askAboutTerm(slug, asked) {
     /* Ownership before anything else, `lookUpTerm`'s order and for its reason:
        "there is no such article" and "that one is not yours" have to be settled
        before the caller learns anything at all — including whether their term
@@ -467,50 +569,77 @@ export function makeAskAboutTerm(
       throw Object.assign(new Error(message), { status: 409 });
     }
 
-    const result = await explain({
-      meta: article.meta,
-      blocks: article.blocks,
+    /* Named here because the narrowing above does not reach into `stream`,
+       and restating the checks inside it would be two places to keep them. */
+    const found: AskedTermFound = {
+      term: parsed.term,
       blockId: anchor.blockId,
-      /* **The article's words, not the reader's.** `anchor.matched` is the run
-         of characters actually in that block, so "the reader has selected this
-         passage" stays literally true through the plural and the capital the
-         matcher folded — and, as a side effect worth stating, the reader's own
-         string never reaches the model at all. */
       quote: anchor.matched,
-      ...(signal ? { signal } : {}),
-    });
-
-    const lookup: GlossaryLookup = {
-      answer: result.answer,
-      /* `safeUrl` for `lookUpTerm`'s reason with one word changed: this is where
-         a model-supplied URL stops being a value in flight and becomes one the
-         panel will put in an `href`. It is not stored, and that changes nothing
-         — the `href` is the hazard, not the column. */
-      citations: result.citations.flatMap((c) => {
-        const url = safeUrl(c.url);
-        return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
-      }),
-      searches: result.searches,
-      model: result.model,
-      at: now(),
     };
+    const chars = parsed.term.length;
 
-    /* **No term and no prose in the line**, which here means the answer, the
-       quote and the words the reader typed — a search box is a reader's private
-       question in a way a stored glossary entry is not. `chars` is what makes
-       the eighty-character bound observable without carrying the string.
-       docs/project/logging.md. */
-    log("store").info(
-      {
-        slug,
-        chars: parsed.term.length,
-        searches: lookup.searches,
-        citations: lookup.citations.length,
-        model: lookup.model,
-      },
-      "explained a term a reader asked about",
-    );
+    async function* stream(signal?: AbortSignal): AsyncGenerator<AskedTermEvent> {
+      for await (const event of explainStream({
+        meta: article.meta,
+        blocks: article.blocks,
+        blockId: found.blockId,
+        /* **The article's words, not the reader's.** `found.quote` is
+           `anchor.matched`, the run of characters actually in that block, so
+           "the reader has selected this passage" stays literally true through
+           the plural and the capital the matcher folded — and, as a side effect
+           worth stating, the reader's own string never reaches the model at
+           all. */
+        quote: found.quote,
+        ...(signal ? { signal } : {}),
+      })) {
+        if (event.type === "delta") {
+          yield event;
+          continue;
+        }
 
-    return { term: parsed.term, blockId: anchor.blockId, quote: anchor.matched, lookup };
+        refuseUnfinished(event.ending);
+
+        const lookup: GlossaryLookup = {
+          answer: event.answer,
+          /* `safeUrl` for `lookUpTerm`'s reason with one word changed: this is
+             where a model-supplied URL stops being a value in flight and
+             becomes one the panel will put in an `href`. It is not stored, and
+             that changes nothing — the `href` is the hazard, not the column. */
+          citations: event.citations.flatMap((c) => {
+            const url = safeUrl(c.url);
+            return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
+          }),
+          searches: event.searches,
+          model: event.model,
+          at: now(),
+        };
+
+        /* **No term and no prose in the line**, which here means the answer,
+           the quote and the words the reader typed — a search box is a reader's
+           private question in a way a stored glossary entry is not. `chars` is
+           what makes the eighty-character bound observable without carrying the
+           string. docs/project/logging.md. */
+        log("store").info(
+          {
+            slug,
+            chars,
+            searches: lookup.searches,
+            citations: lookup.citations.length,
+            model: lookup.model,
+          },
+          "explained a term a reader asked about",
+        );
+
+        yield { type: "done", answer: { ...found, lookup } };
+        return;
+      }
+      /* Unreachable by `explainStream`'s own contract — it yields `done` or
+         throws — and here so an edit that breaks that contract fails loudly
+         rather than ending a stream with no terminal event. `explain`'s
+         drain carries the same line for the same reason. */
+      throw new Error("The explanation ended without an answer.");
+    }
+
+    return { found, stream };
   };
 }

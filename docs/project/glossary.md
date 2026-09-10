@@ -667,6 +667,27 @@ friendlier tone.
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
 that is there. A side effect worth having: the reader's own string never reaches the model at all.
 
+#### It streams, and only a finished answer is an answer
+
+Since 2026-09-10 the answer arrives a few words at a time, on the same `sse` helper and `readEvents`
+reader as comments and quiz marks
+([plan](../plans/260910g-stream-glossary-answers-as-they-arrive.md)). Every refusal below is still
+decided **before** the stream opens, so each is still an ordinary JSON 409 with its code; what
+comes after is frames — a `begin` saying where the term was found (the article's characters, never
+the typed term), the words, and exactly one `done` or `error`.
+
+- **The panel draws the words as unfinished** — the found passage and the text so far, with no
+  *checked* line and no sources — and only a `done` frame turns them into the answer. If the stream
+  breaks, what arrived stays on screen under the failure's sentence, which says it is not all of it.
+- **Three endings `explainStream` accepts are refused here**: the reader leaving, the answer hitting
+  its token ceiling (`[gl-cut-off]`) and the provider's filter (`[ai-filtered]`). A comment keeps a
+  half-answer because it has a row to put it on; a glossary answer drawn as finished would be a
+  claim it cannot back. `refuseUnfinished` in [`term-lookup.ts`](../../src/term-lookup.ts).
+- **Typing, another article, or closing the band aborts the request**, which is what tells the
+  server to stop the paid call rather than only the frames.
+- **A provider refusal is now an `error` frame inside a 200**, not the response's own status: the
+  headers go before the provider is asked. The sentence the box shows is the same.
+
 #### The three ways it comes back empty
 
 Three, not one, because the sibling refusal above was one sentence over three causes and a reader

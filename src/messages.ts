@@ -357,6 +357,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "gl-ask-absent": "blocked",
   "gl-ask-part-word": "blocked",
   "gl-ask-no-prose": "blocked",
+  /* **A glossary answer that hit its ceiling**, refused rather than shown or
+     saved as whole. `retry`, `ai-mark-cut-off`'s reason: a second go usually
+     fits. See `GLOSSARY_CUT_OFF`. */
+  "gl-cut-off": "retry",
   /* **Debate's own, and the only `db-`.** `retry` because the model choosing
      not to search, and a provider falling back to one that dropped the tool,
      both come out differently next time. See `DEBATE_SEARCH_DID_NOT_RUN` for
@@ -2403,6 +2407,22 @@ export const MARK_CUT_OFF: ReaderFacingFailure = {
   message:
     "The reply about your answer ran past the room it had and stopped part-way, so it is not a " +
     "whole mark. Trying again usually gets one that fits. [ai-mark-cut-off]",
+};
+
+/**
+ * A glossary explanation ran into its token ceiling and stopped part-way.
+ *
+ * `MARK_CUT_OFF`'s reasoning, for the glossary: `explainStream` keeps a
+ * truncated answer for a comment, which has nowhere to say it was cut, but the
+ * glossary's only reader of a finished answer draws it as finished — so a cut
+ * one is refused rather than shown, or saved, as whole.
+ * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ */
+export const GLOSSARY_CUT_OFF: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The explanation ran past the room it had and stopped part-way, so it is not shown as a " +
+    "whole answer. Trying again usually gets one that fits. [gl-cut-off]",
 };
 
 /** The call succeeded and the model said nothing. */

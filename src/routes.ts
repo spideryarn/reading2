@@ -32,7 +32,7 @@
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
- *   POST   /api/glossary/:slug/ask   find a term the reader typed and explain it; stores nothing
+ *   POST   /api/glossary/:slug/ask   find a term the reader typed and explain it → SSE; stores nothing
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
@@ -1157,16 +1157,17 @@ export function heartbeat(
  * Server-sent events on a response that is otherwise a plain Node one.
  *
  * Shared by chat and by comments, which were the only two things in this app a
- * reader waited on when this was extracted. **Seven callers now** — add
+ * reader waited on when this was extracted. **Eight callers now** — add
  * meaning-search, quiz marking, both referee runs, the mirror, and the link
- * summary — so "the only two" stopped being true without anyone noticing, which
- * is the ordinary way a count in prose goes wrong. Corrected 2026-09-03, and
- * again on 2026-09-05 by the review of the seventh, which found the same
- * sentence wrong the same way it says it went wrong: **a count in prose is a
- * copy of the code that nothing checks.** If you add an eighth, this is the
- * sentence to fix. Note that `streamChat` writes its own SSE headers
- * rather than coming through here, so a grep for callers of this function
- * undercounts the streams in this file by one.
+ * summary, and the glossary's asked-term answer — so "the only two" stopped
+ * being true without anyone noticing, which is the ordinary way a count in
+ * prose goes wrong. Corrected 2026-09-03, again on 2026-09-05 by the review of
+ * the seventh, and again on 2026-09-10 by the review of the eighth, each of
+ * which found the sentence wrong the same way it says it went wrong: **a count
+ * in prose is a copy of the code that nothing checks.** If you add a ninth,
+ * this is the sentence to fix. Note that `streamChat` writes its own SSE
+ * headers rather than coming through here, so a grep for callers of this
+ * function undercounts the streams in this file by one.
  *
  * Extracted from `streamChat`, where every line of it was
  * already written — see the note on `res.on("close")` there for the one trap it
@@ -1743,6 +1744,52 @@ async function streamLinkSummary(
     /* And then `pending`, so the client forgets rather than remembers — see the
        header. `frame` is a no-op on a socket the reader has already left. */
     frame("pending", { kind: "pending" });
+  } finally {
+    res.end();
+  }
+}
+
+/**
+ * **Explain a term the reader typed into the glossary's box, a few words at a
+ * time** — `POST /api/glossary/:slug/ask`, body `{ term }`, SSE out.
+ *
+ * `answer`'s rule, and `streamLinkSummary`'s: **every refusal is decided before
+ * a header is written.** `askAboutTerm` settles ownership, the term's validity,
+ * the no-prose case and the anchor and only then resolves, so each of those is
+ * still the ordinary JSON 400/404/409 with its `[gl-ask-…]` code that the box
+ * already reads. Once `sse(res)` has run, a throw is a frame.
+ *
+ * Frames: one `begin` carrying where the term was found — `term`, `blockId`,
+ * and the **article's** characters as `quote`, never the reader's — then any
+ * number of `delta`, then exactly one of `done` (the whole `AskedTermAnswer`,
+ * the shape the JSON route used to send) or `error` (`{ error }`, the
+ * reader-facing sentence). **No partial text rides on `error`**, unlike quiz's:
+ * nothing about an asked term is kept, so a half-answer has nowhere to go but
+ * away. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ *
+ * `gone` goes to the model call, so a reader who changes the question or leaves
+ * the article cancels the paid call rather than only the frames — the client
+ * aborts its `fetch` on both.
+ */
+async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse): Promise<void> {
+  const { found, stream } = await askAboutTerm(slug, term);
+
+  const { frame, gone } = sse(res);
+  frame("begin", found);
+  try {
+    for await (const event of stream(gone)) {
+      if (event.type === "delta") {
+        frame("delta", { text: event.text });
+        continue;
+      }
+      frame("done", event.answer);
+    }
+  } catch (err) {
+    /* **Reported here or nowhere** — the note on `answer`. A reader who left
+       is not a failure worth an issue, and `frame` is a no-op on their closed
+       socket anyway. */
+    if (!gone.aborted) captureFailure(err, { route: "glossary-ask", slug });
+    frame("error", { error: (err as Error).message });
   } finally {
     res.end();
   }
@@ -8327,13 +8374,14 @@ export async function serveAuthenticatedApi(
          because it is the shape of every paid request in this file and a scheme
          invented on the day for one endpoint would be the wrong place to put
          one. docs/project/glossary.md § Looking a term up, and the note in
-         docs/user-feedback/ for Greg. */
+         docs/user-feedback/ for Greg.
+
+         Re-traced 2026-09-10 for the move to streaming, and still true: the
+         route has no limiter, and `withSpendAttribution` records rather than
+         gates. It wraps the whole stream, so the one model call inside it is
+         attributed to this article however it ends. `streamAskedTerm` above. */
       const askBody = (await readBody(req)) as { term?: unknown } | null;
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: at }, () => askAboutTerm(at, askBody?.term)),
-      );
+      await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
       return;
     }
     if (ideas && req.method === "GET") {
