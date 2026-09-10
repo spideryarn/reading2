@@ -17,6 +17,10 @@
  * 2. **The panel unmounted mid-poll.**
  * 3. **A duplicate tap on Start**, and a tap after a give-up, which must get a
  *    deadline of its own rather than inherit the old one.
+ * 4. **The exact boundary** — an answer at the deadline is on time under this
+ *    panel's explicit `>` rule; one a millisecond later is not.
+ * 5. **A rejected injected POST** releases the guard without escaping the
+ *    click handler or leaving the reader with no explanation.
  *
  * Mounted on its own, the way tests/fleet-new-session-mic.test.tsx does it,
  * with the dictation hook as a fixture: nothing here is about the microphone,
@@ -413,5 +417,60 @@ describe("pressing Start", () => {
     await steps(10);
     expect(polls).toBe(settled);
     expect(starts).toBe(2);
+  });
+
+  it("releases the action guard and explains it when the POST rejects", async () => {
+    let starts = 0;
+    mount({
+      start: async () => {
+        starts += 1;
+        if (starts === 1) throw new Error("probe rejection");
+        return { accepted: true, launch: launch("S-probe", "starting") };
+      },
+      poll: async () => stillStarting(launch("S-probe", "starting")),
+    });
+    typePrompt("start me");
+
+    act(() => button("Start it").click());
+    await act(async () => {});
+    expect(text()).toContain("the request failed before it answered: probe rejection");
+    expect(button("Start it").disabled).toBe(false);
+
+    act(() => button("Start it").click());
+    await act(async () => {});
+    expect(starts).toBe(2);
+    expect(text()).not.toContain("probe rejection");
+  });
+});
+
+describe("the exact deadline boundary", () => {
+  it.each([
+    { offset: 0, accepted: true },
+    { offset: 1, accepted: false },
+  ])("treats deadline + $offset ms as accepted=$accepted", async ({ offset, accepted }) => {
+    const starting = launch("S-edge", "starting");
+    const held = deferred<PollOutcome>();
+    let heldBegunAt: number | null = null;
+    mount({
+      start: async () => ({ accepted: true, launch: starting }),
+      poll: () => {
+        if (heldBegunAt === null && elapsed() >= POLL_GIVE_UP_MS - POLL_MS) {
+          heldBegunAt = elapsed();
+          return held.promise;
+        }
+        return Promise.resolve(stillStarting(starting));
+      },
+    });
+    typePrompt("start me");
+    await tapStart();
+    await steps(Math.ceil(POLL_GIVE_UP_MS / POLL_MS));
+    if (offset > 0) await steps(1, offset);
+    expect(heldBegunAt).toBe(POLL_GIVE_UP_MS - POLL_MS);
+    expect(elapsed()).toBe(POLL_GIVE_UP_MS + offset);
+    await act(async () => {
+      held.resolve({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [launch("S-edge", "started")] } });
+    });
+    expect(text().includes("Started.")).toBe(accepted);
+    expect(text().includes(STOPPED)).toBe(!accepted);
   });
 });
