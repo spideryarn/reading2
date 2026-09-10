@@ -702,6 +702,17 @@ describe("G12: a line counts only when it BEGINS AFTER the byte offset recorded 
     expect(verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before))).sessionLineSeen).toBe(true);
   });
 
+  test("G20: growth between one and two windows leaves no unread seam: a long unrelated line across the first window's end, then the session's line", async () => {
+    const before = mine("before");
+    const long = `${JSON.stringify({ type: "attachment", filler: "g".repeat(VERIFY_TAIL_BYTES + 100) })}\n`;
+    const body = before + long + mine("the resumed session's line, past the first window");
+    const grown = Buffer.byteLength(body) - Buffer.byteLength(before);
+    expect(grown).toBeGreaterThan(VERIFY_TAIL_BYTES + 1);
+    expect(grown).toBeLessThan(2 * VERIFY_TAIL_BYTES);
+    const reading = await readAfter(body, Buffer.byteLength(before));
+    expect(verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before))).sessionLineSeen).toBe(true);
+  });
+
   test("a reading taken against another attempt's offset is not this attempt's evidence", async () => {
     const before = mine("before");
     const reading = await readAfter(before + mine("after"), 0);

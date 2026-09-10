@@ -638,6 +638,81 @@ fixer, red first. The fixer is to disagree with any it can refute in the code.
 - **G19:** a terminal occurrence still holding its reservation blocked the queue for ever. The fix:
   it is `needs-greg`, with the dispose command, and a named pace blocker.
 
+**The fix pass, 2026-09-10 ~21:00 (an Opus subagent).** All nine findings were checked against the
+code, and none was refuted. Each was fixed red first, and each has a mutation that turns its test
+red. Decisions it recorded:
+
+- **G12:** no timestamp check at all. Only the byte offset proves a line came after the launch.
+- **G14:** retries after a released failure are not capped. The plan names no cap.
+- **G15:** a bounded read cannot attribute an oversized line whose id sits before the 4 MiB window.
+  That case is `unknown`, and is not called the default login.
+- **G17:** the reason codes are `default-login`, `ledger-unreadable`, `ledger-ambiguous`,
+  `account-unusable`, `transcript-elsewhere`, `no-transcript` and `not-resolved`.
+- **G18:** the route blocks only when the index is readable. A missing orphans list reads as none,
+  so a new dashboard works with an old daemon.
+- **G19:** `needs-greg` outranks `resumed`: a slot still held after a verified resume needs Greg.
+
+**Landed with Stage 3a** in `325a9acc`, because they share `wire.ts`, `recovery-resume.ts` and the
+resume tests. `18806dd7` clears a lint error on a Stage 1 line (`position += 1` inside an
+expression). Both are on `dev`, the last pushed at `18806dd7`. The manager's run on the merged tree:
+
+- typecheck exit 0;
+- 22 files / 794 tests, including `no-raw-nul-bytes`;
+- `access-review`'s new `fleet-composed-access`, 76 of 76.
+
+One biome warning remains, pre-existing and hidden past the diagnostics limit. Lint is advice here,
+not a gate.
+
+**Sol's narrow check of the nine fixes, 2026-09-10 ~21:06, read-only**
+([the answer](260910f-gradual-recovery-stage1-2-fixcheck-sol.md),
+[the prompt](260910f-gradual-recovery-stage1-2-fixcheck-sol-prompt.md)): **G11–G19 are all closed.**
+Sol ran one file itself, 66 of 66.
+
+**It found one new defect that a fix introduced: G20, a P1, established.** The G12 reader read a
+first 64 KiB window, dropping its cut-off last line, and read the last 64 KiB only when that tail
+started past the first window. So when the file had grown by between one and two windows, the rest
+went unread. A session line just past one long unrelated line was never seen, which would block
+verification, and the queue, for ever.
+
+- **Fixed by the manager, red first.** Growth that fits in two windows is now read as one
+  contiguous piece. The bound stays at most two windows plus one byte.
+- **Evidence:** the new test was red (`sessionLineSeen` false), then green. The file passes 67 of
+  67, and typecheck exits 0.
+- **Discovery closed** with the narrow check, so **Fable settles G20** (not cross-family), per the
+  engineering-manager rule and the Overseer's terms.
+
+**Stages 1 and 2 are then done:** built, reviewed by Sol (refused on G11–G19), fixed, and
+narrow-checked. G20 was fixed and settled.
+
+## Where this stops: Greg's reprioritisation, 2026-09-10 ~21:10
+
+**Greg, via the Overseer:** Overseer and dashboard work drops to the bottom of the priorities, and
+Spideryarn product work comes up. So this plan lands Stages 1–2, and stops. **Stage 3 is not
+started.**
+
+- **Stage 3a is already on `dev`, and has not been reviewed.** It is the argv reader's
+  `--resume <uuid>` arm and the producer capability, and it landed in `325a9acc` with the G11–G19
+  fixes, because they share `wire.ts`, `recovery-resume.ts` and the resume tests. It has had **no
+  Sol review**, although the Overseer's condition (c) asked for one, because `claude-argv.ts` feeds
+  steer's wrong-conversation guard. Its own red-first tests and its four mutations are its only
+  evidence. **A decision for the Overseer or Greg:** a narrow Sol check of Stage 3a, which is the
+  argv arm alone, or a revert. Until one of them happens, it is live code in the fleet's argv
+  reader.
+- **Stage 3b is briefed, not built.** The brief is [the 3b task](260910f-gradual-recovery-stage3b-task.md):
+  - the `tmux-resume` launcher arm;
+  - gjd-remote's `--resume-conversation`, with the on-box duplicate check;
+  - the adapter from the port to the protocol's `launchOccurrence`, `resumeOccurrence`, `inspect`
+    and `inFlight`;
+  - the daemon's composition of all that;
+  - the `--resume` drill.
+
+  It needs `launch-protocol`'s Stages 1, 1b and 2 on `dev`. Until 3b exists, **the resume port is
+  `unwired` in production**: a tap queues a request, the page shows it pending, and nothing
+  launches. The page says so ("Resume is not available from this dashboard yet"), and gives manual
+  instructions.
+- **Still a question for Greg:** the capability-marker default. Stage 3a puts
+  `"argv-resume-uuid"` on the observation, never in held state, as an assumption pending Greg.
+
 **A raw NUL and a raw SOH byte shipped in `cfc963eb`.** They sat in a string literal on line 251
 of `tests/overseer-recovery-resume.test.ts`: the parser test's control-character input, typed as
 an escape that landed as bytes. That turned `tests/no-raw-nul-bytes` red on `dev` for every
