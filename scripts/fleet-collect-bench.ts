@@ -38,9 +38,11 @@ import { promisify } from "node:util";
 import { hrtime } from "node:process";
 
 import { buildSessionScript, parseSessions, type Session } from "../scripts/gjd-remote-tmux.js";
-import { collect, panesBySession, toRows, type FleetRow, type PaneInfo } from "../tools/fleet/collect.js";
-import { collectHealth } from "../tools/fleet/health.js";
+import { collect, panesBySession, toRows, type FleetRow, type FleetSnapshot, type PaneInfo } from "../tools/fleet/collect.js";
+import { collectHealth, type HealthReport } from "../tools/fleet/health.js";
+import { readCheckpointFeeds } from "../tools/fleet/overseer-status.js";
 import { capturePane } from "../tools/fleet/pane.js";
+import { statePayload as composeStatePayload } from "../tools/fleet/state.js";
 import { statusesOf } from "../tools/fleet/status.js";
 import { probeProcessTable } from "../tools/overseer/work-probe.js";
 
@@ -101,24 +103,73 @@ function lagMeter(): { stop(): number[] } {
 }
 
 /**
- * A server that answers `/api/state` from a cached string, and a child process
- * that asks it 40 times a second.
+ * **HOW MANY REQUESTS MAY BE OUTSTANDING AT ONCE.**
+ *
+ * The first version had no bound, which turned a 30-second measurement into a
+ * ten-minute hang and would have made every percentile a fiction. At 40 requests
+ * a second against a server blocked for thirty seconds, roughly 1,200 sockets
+ * pile up — well past the listen backlog, and beyond it Linux (with
+ * `tcp_abort_on_overflow` at its default 0) silently drops the client's ACK and
+ * leaves the socket retransmitting for minutes. What that measures is the
+ * kernel's accept queue, not the server's latency.
+ *
+ * Sixty-four is more than a dashboard ever has open and small enough that every
+ * one of them is a real sample of a real server.
+ */
+const MAX_FLIGHT = 64;
+
+/** What the poller saw, with every request it issued accounted for. */
+export type PollResult = {
+  /** Requests that came back, in milliseconds. */
+  latencies: number[];
+  /** Requests that errored outright — a different fact from a slow one, never averaged in. */
+  failures: number;
+  /**
+   * Requests still in flight when the drain deadline expired, with how long each
+   * had already been waiting. **These are LOWER BOUNDS**, and they are the
+   * slowest requests in the run by construction, so dropping them would flatter
+   * every percentile.
+   */
+  pending: number[];
+  /** Everything the poller started. `issued === latencies.length + failures + pending.length`. */
+  issued: number;
+};
+
+/**
+ * A server that answers `/api/state` the way the real one does, and a child
+ * process that asks it 40 times a second.
  *
  * THE CHILD IS PLAIN NODE, not tsx: it must start in milliseconds and must not
- * share anything with the process under measurement. It prints one number per
- * line — the milliseconds that request took — and `-1` for a request that
- * failed outright, which is a different fact from a slow one and must not be
- * averaged in with it.
+ * share anything with the process under measurement.
+ *
+ * **IT ACCOUNTS FOR EVERY REQUEST IT ISSUED, AND THE FIRST VERSION DID NOT.**
+ * That version issued a request every 25 ms and then `SIGKILL`ed the child 300 ms
+ * after the phase, so whatever was still in flight was simply gone: a 30-second
+ * run recorded 641 completions out of roughly 1,200 issued. The baseline survived
+ * it — the dropped requests were issued *during* the block and would have been at
+ * least as slow — but a future p95 could pass by omitting exactly the requests
+ * that would have failed it, which is the shape docs/reusable/silent-success.md
+ * is about. GPT Sol's P1 on this plan, 2026-09-10.
+ *
+ * So the parent tells the child to STOP ISSUING, the child drains what is in
+ * flight, and anything still outstanding at the drain deadline is reported as
+ * `pending` with the time it had already waited. `report` then refuses to print
+ * a summary whose parts do not add up to `issued`.
+ *
+ * **AND THE PAYLOAD IS BUILT PER REQUEST, from a function**, rather than served
+ * from a fixed string. The plan's whole diagnosis is that the data is already
+ * collected and only the loop is blocked; a bench that serves a constant cannot
+ * notice the day that stops being true. The real `server.ts` calls
+ * `statePayload()` on every request, and so does this.
  */
-async function pollerAgainst(payloadBytes: number): Promise<{
+async function pollerAgainst(payload: () => string): Promise<{
   server: Server;
-  stop(): Promise<{ latencies: number[]; failures: number }>;
+  stop(): Promise<PollResult>;
 }> {
-  const payload = JSON.stringify({ pad: "x".repeat(Math.max(0, payloadBytes - 12)) });
   const server = createServer((req, res) => {
     if ((req.url ?? "/").startsWith("/api/state")) {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(payload);
+      res.end(payload());
       return;
     }
     res.writeHead(404);
@@ -129,37 +180,94 @@ async function pollerAgainst(payloadBytes: number): Promise<{
   if (address === null || typeof address === "string") throw new Error("the bench server did not bind a port");
   const url = `http://127.0.0.1:${address.port}/api/state`;
 
+  /* The child's protocol, in three line kinds: `L <ms>` completed, `E` failed,
+     `P <ms>` still pending at the drain deadline (a lower bound). It stops
+     issuing when anything arrives on stdin, and exits once the flight is empty
+     or the drain deadline passes — so the parent never has to guess. */
   const child = spawn(
     process.execPath,
     [
       "-e",
       `const http=require('node:http');
        const url=${JSON.stringify(url)};
-       function once(){
-         const t=process.hrtime.bigint();
-         const req=http.get(url,{agent:false},res=>{res.resume();res.on('end',()=>{
-           process.stdout.write(String(Number(process.hrtime.bigint()-t)/1e6)+"\\n");});});
-         req.on('error',()=>process.stdout.write("-1\\n"));
-         req.setTimeout(120000,()=>{req.destroy();});
+       const DRAIN_MS=60000, REQ_MS=90000, MAX_FLIGHT=${MAX_FLIGHT};
+       let issuing=true, inFlight=new Map(), seq=0, done=false;
+       function finish(){
+         if(done) return; done=true;
+         for(const [id,t] of inFlight){
+           if(settled.has(id)) continue; settled.add(id);
+           process.stdout.write("P "+(Number(process.hrtime.bigint()-t)/1e6)+"\\n");
+         }
+         process.stdout.write("END "+seq+"\\n");
+         process.stdout.end(()=>process.exit(0));
        }
-       setInterval(once,25);`,
+       // EXACTLY ONE LINE PER REQUEST, ever. A client-side timeout prints its
+       // lower bound and then destroys the socket, which makes the request emit
+       // 'error' -- so without this guard one request would be reported twice
+       // and the accounting in the parent would go NEGATIVE, which reads as a
+       // poller bug rather than as the double-count it is.
+       const settled=new Set();
+       function settle(id,line){
+         if(settled.has(id)) return; settled.add(id);
+         process.stdout.write(line);
+         inFlight.delete(id);
+         if(!issuing && inFlight.size===0) finish();
+       }
+       function once(){
+         // NEVER MORE THAN MAX_FLIGHT AT ONCE. Beyond the listen backlog the
+         // kernel silently drops the client's ACK and the socket waits minutes
+         // on TCP retransmission -- which is the accept queue's behaviour, not
+         // the server's latency, and it wedged a 30-second run for ten minutes.
+         if(inFlight.size>=MAX_FLIGHT) return;
+         const id=++seq, t=process.hrtime.bigint();
+         const since=()=>Number(process.hrtime.bigint()-t)/1e6;
+         inFlight.set(id,t);
+         const req=http.get(url,{agent:false},res=>{res.resume();res.on('end',()=>settle(id,"L "+since()+"\\n"));});
+         req.on('error',()=>settle(id,"E\\n"));
+         // A request that outlasts this is reported as a LOWER BOUND, not lost
+         // and not called a failure: it is the slowest kind of sample there is.
+         req.setTimeout(REQ_MS,()=>{ settle(id,"P "+since()+"\\n"); req.destroy(); });
+       }
+       const timer=setInterval(once,25);
+       process.stdin.resume();
+       process.stdin.on('data',()=>{
+         if(!issuing) return;
+         issuing=false; clearInterval(timer);
+         if(inFlight.size===0) finish(); else setTimeout(finish,DRAIN_MS);
+       });`,
     ],
-    { stdio: ["ignore", "pipe", "inherit"] },
+    { stdio: ["pipe", "pipe", "inherit"] },
   );
 
   const latencies: number[] = [];
+  const pending: number[] = [];
   let failures = 0;
+  let issued = 0;
   let buffered = "";
+  const ended = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk: string) => {
     buffered += chunk;
     const lines = buffered.split("\n");
     buffered = lines.pop() ?? "";
     for (const line of lines) {
-      const value = Number(line);
+      if (line === "") continue;
+      /* **`issued` COMES FROM THE CHILD'S OWN COUNTER, not from adding up what
+         arrived.** Counting the lines we received would make the accounting
+         below a tautology — it would balance however many results went missing,
+         which is precisely the failure it exists to catch. */
+      if (line.startsWith("END ")) {
+        issued = Number(line.slice(4));
+        continue;
+      }
+      if (line === "E") {
+        failures += 1;
+        continue;
+      }
+      const value = Number(line.slice(2));
       if (!Number.isFinite(value)) continue;
-      if (value < 0) failures += 1;
-      else latencies.push(value);
+      if (line.startsWith("L ")) latencies.push(value);
+      else if (line.startsWith("P ")) pending.push(value);
     }
   });
 
@@ -170,10 +278,26 @@ async function pollerAgainst(payloadBytes: number): Promise<{
   return {
     server,
     stop: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      child.kill("SIGKILL");
+      child.stdin.write("stop\n");
+      /* **BOUNDED, so a poller that will not finish is a reported fault rather
+         than a hung bench.** If it does not exit, `issued` stays 0 and the
+         accounting in `report` fails loudly — which is the right outcome: a run
+         whose sampler had to be killed is not evidence. */
+      const gaveUp = await Promise.race([
+        ended.then(() => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 90_000)),
+      ]);
+      if (gaveUp) {
+        console.error("the poller did not finish draining within 90s and was killed — the accounting below will not balance, and that is the point");
+        child.kill("SIGKILL");
+        await ended;
+      }
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      return { latencies, failures };
+      /* Any socket still held open by a killed child would keep this process
+         alive after `main()` returns — the same handle-leak `subagent-cli.ts`
+         records. `unref` on the server is not enough; the connections are. */
+      server.closeAllConnections?.();
+      return { latencies, failures, pending, issued };
     },
   };
 }
@@ -244,7 +368,52 @@ export function fixtureRows(n: number): FleetRow[] {
 
 type Row = { phase: string; tookMs: number; lag: Summary; note?: string };
 
-function report(title: string, rows: readonly Row[], http: { latencies: number[]; failures: number }, context: readonly string[]): void {
+/**
+ * The thing the bench's `/api/state` serves: the **real** `statePayload()` over
+ * whatever the run has collected so far, recomputed per request exactly as
+ * `server.ts` does.
+ *
+ * A fixed string would have been simpler and would have measured a weaker claim
+ * — it cannot notice the day the composition starts doing real work, which is
+ * the assumption this whole plan rests on. GPT Sol's P1.
+ */
+function livePayload(initial: FleetSnapshot, health: HealthReport | null): { render(): string; keep(s: FleetSnapshot, h: HealthReport | null): void } {
+  let snapshot = initial;
+  let report = health;
+  return {
+    render: () =>
+      composeStatePayload({
+        snapshot,
+        error: null,
+        health: report,
+        refreshMs: 60_000,
+        answeringEnabled: true,
+        attemptedAt: new Date().toISOString(),
+        readCheckpoint: readCheckpointFeeds,
+      }),
+    keep: (s, h) => {
+      snapshot = s;
+      report = h;
+    },
+  };
+}
+
+/** A snapshot over the given rows, for a bench that has not collected one yet. */
+function snapshotOf(rows: FleetRow[]): FleetSnapshot {
+  return { rows, collectedAt: new Date().toISOString(), tookMs: 0, tmuxServerPid: null };
+}
+
+/**
+ * The summary — **and the accounting, which is the part that keeps it honest.**
+ *
+ * Percentiles are taken over completions *and* the lower bounds of anything
+ * still pending, because the pending ones are the slowest requests in the run
+ * by construction and leaving them out is how a bad p95 passes. If the parts do
+ * not add up to what the child says it issued, this prints the discrepancy in
+ * the loudest terms it has and sets a non-zero exit code: a benchmark that has
+ * lost track of its own requests is not evidence of anything.
+ */
+function report(title: string, rows: readonly Row[], http: PollResult, context: readonly string[]): void {
   console.log(`\n## ${title}\n`);
   for (const line of context) console.log(`- ${line}`);
   console.log("");
@@ -253,9 +422,24 @@ function report(title: string, rows: readonly Row[], http: { latencies: number[]
   for (const row of rows) {
     console.log(`| ${row.phase}${row.note === undefined ? "" : ` (${row.note})`} | ${ms(row.tookMs)} | ${ms(row.lag.median)} | ${ms(row.lag.p95)} | ${ms(row.lag.max)} |`);
   }
-  const l = summarise(http.latencies);
+  const accounted = http.latencies.length + http.failures + http.pending.length;
+  const all = summarise([...http.latencies, ...http.pending]);
   console.log("");
-  console.log(`\`/api/state\` from another process, ${l.n} requests at 40/s: median ${ms(l.median)}, p95 ${ms(l.p95)}, **max ${ms(l.max)}**${http.failures > 0 ? `, ${http.failures} failed outright` : ""}`);
+  console.log(
+    `\`/api/state\` from another process at 40/s — **median ${ms(all.median)}, p95 ${ms(all.p95)}, max ${ms(all.max)}**` +
+      ` over ${all.n} requests (completions plus the lower bound of anything still pending).`,
+  );
+  console.log(
+    `Accounting: ${http.issued} issued = ${http.latencies.length} completed + ${http.failures} failed + ${http.pending.length} still pending at the drain deadline.`,
+  );
+  if (accounted !== http.issued) {
+    console.log(
+      `\n**THIS RUN IS NOT EVIDENCE.** ${http.issued - accounted} of the ${http.issued} requests it issued are unaccounted for, ` +
+        `and the ones a run like this loses are its slowest — so every percentile above is flattered by an unknown amount. ` +
+        `Fix the poller before quoting anything from here.`,
+    );
+    process.exitCode = 3;
+  }
 }
 
 async function boxContext(): Promise<string[]> {
@@ -279,7 +463,8 @@ async function boxContext(): Promise<string[]> {
 }
 
 async function modeReal(runs: number): Promise<void> {
-  const poller = await pollerAgainst(64 * 1024);
+  const live = livePayload(snapshotOf([]), null);
+  const poller = await pollerAgainst(live.render);
   const rows: Row[] = [];
   for (let i = 0; i < runs; i += 1) {
     const inventory = await timed("bash -c sessionScript() [already async]", () =>
@@ -327,12 +512,45 @@ async function modeReal(runs: number): Promise<void> {
 
     const whole = await timed("collect() end to end", () => collect());
     rows.push({ phase: whole.name, tookMs: whole.tookMs, lag: whole.lag, note: `${whole.value.rows.length} rows` });
+    // From here on the bench's own `/api/state` serves a real snapshot, so the
+    // per-request cost the poller pays is the one the dashboard pays.
+    live.keep(whole.value, health.value);
+
+    /* **WHAT ONE REQUEST COSTS, SEPARATELY FROM WHAT BLOCKS IT.** The claim
+       this whole plan rests on is that the *data* is already cached, so the
+       only thing standing between a request and its answer is a blocked loop.
+       That claim is false if `statePayload()` does real work per request — and
+       it does some: `readCheckpointFeeds` reads and projects the Overseer's
+       checkpoint file on every call. Measured here so the claim is checked
+       rather than asserted. 200 calls, because one would measure a cold page
+       cache and nothing else. */
+    const payload = await timed("statePayload() × 200 — the per-request cost", () => {
+      let bytes = 0;
+      for (let n = 0; n < 200; n += 1) {
+        bytes += composeStatePayload({
+          snapshot: whole.value,
+          error: null,
+          health: health.value,
+          refreshMs: 60_000,
+          answeringEnabled: true,
+          attemptedAt: new Date().toISOString(),
+          readCheckpoint: readCheckpointFeeds,
+        }).length;
+      }
+      return bytes / 200;
+    });
+    rows.push({
+      phase: payload.name,
+      tookMs: payload.tookMs,
+      lag: payload.lag,
+      note: `${(payload.tookMs / 200).toFixed(2)} ms each, ${(payload.value / 1024).toFixed(0)} KiB`,
+    });
   }
   report(`Real box, ${runs} run(s)`, rows, await poller.stop(), await boxContext());
 }
 
 async function modeSlowProbe(probeMs: number, style: string): Promise<void> {
-  const poller = await pollerAgainst(64 * 1024);
+  const poller = await pollerAgainst(livePayload(snapshotOf(fixtureRows(25)), null).render);
   const seconds = String(Math.round(probeMs / 1000));
   const rows: Row[] = [];
   if (style === "sync") {
@@ -358,10 +576,18 @@ async function modeSlowProbe(probeMs: number, style: string): Promise<void> {
 }
 
 async function modeFixture(sessions: number, probeMs: number): Promise<void> {
-  const poller = await pollerAgainst(64 * 1024);
   const rows = fixtureRows(sessions);
+  const poller = await pollerAgainst(livePayload(snapshotOf(rows), null).render);
   const out: Row[] = [];
   const { readPanes } = await import("../tools/fleet/collect.js");
+
+  /* **THE FIXTURE ASSERTS WHAT IT EXERCISED.** A pass that skipped every row
+     would report a wonderful p95 and an empty measurement — which is what the
+     first version of `fixtureRows` actually did. `fixtureRows` refuses rows
+     that would not be read; these counters check the other end, that the passes
+     below really made N cheap probes and exactly one slow one. GPT Sol's P1. */
+  let cheapProbes = 0;
+  let slowProbes = 0;
 
   /* A capture that costs what a real one costs: an actual child process, not a
      busy-wait. `execFileSync("true")` is ~2–4 ms here, which is the same order
@@ -369,18 +595,23 @@ async function modeFixture(sessions: number, probeMs: number): Promise<void> {
      spawn cost rather than a number somebody chose. */
   const fast = await timed(`readPanes over ${sessions} rows, each capture a real child [sync]`, () =>
     readPanes(rows, () => {
+      cheapProbes += 1;
       execFileSync("true", { encoding: "utf8", timeout: 5_000 });
       return "";
     }),
   );
-  out.push({ phase: fast.name, tookMs: fast.tookMs, lag: fast.lag });
+  out.push({ phase: fast.name, tookMs: fast.tookMs, lag: fast.lag, note: `${cheapProbes} probes` });
+  if (cheapProbes !== sessions) throw new Error(`the cheap pass ran ${cheapProbes} probes over ${sessions} rows — it measured something other than what it claims`);
 
   const seconds = String(Math.round(probeMs / 1000));
+  const before = cheapProbes;
   const slow = await timed(`readPanes over ${sessions} rows, ONE capture sleeps ${seconds}s [sync]`, () => {
     let first = true;
     return readPanes(rows, () => {
+      cheapProbes += 1;
       if (first) {
         first = false;
+        slowProbes += 1;
         try {
           execFileSync("sleep", [seconds], { encoding: "utf8", timeout: probeMs + 60_000 });
         } catch {
@@ -390,7 +621,10 @@ async function modeFixture(sessions: number, probeMs: number): Promise<void> {
       return "";
     });
   });
-  out.push({ phase: slow.name, tookMs: slow.tookMs, lag: slow.lag });
+  out.push({ phase: slow.name, tookMs: slow.tookMs, lag: slow.lag, note: `${cheapProbes - before} probes, ${slowProbes} of them slow` });
+  if (cheapProbes - before !== sessions || slowProbes !== 1) {
+    throw new Error(`the slow pass ran ${cheapProbes - before} probes (${slowProbes} slow) over ${sessions} rows — not the fixture it claims to be`);
+  }
 
   report(`Controlled fixture: ${sessions} sessions, one ${seconds}s probe`, out, await poller.stop(), [
     `${sessions} synthetic rows from fixtureRows(); no tmux session is touched`,
