@@ -4581,3 +4581,117 @@ export type RecoveryFeed =
   | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
   | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
   | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };
+
+/* ---------------- Gradual recovery: resume requests, GET/POST /api/recovery/resume (260910f) ---------------- */
+
+/**
+ * `~/.overseer/recovery-resume.json`, written by the daemon's resume pass and
+ * read by `routes-recovery-resume.ts`. A SEPARATE file from `recovery.json` on
+ * purpose (plan 260910f §3): the inventory's schema and its strict parser are
+ * a contract that shipped first, and a version skew between the daemon and the
+ * dashboard must read as "no resume data", never as "index unreadable".
+ */
+export type RecoveryResumeGateWire = { kind: "clear"; notes: string[] } | { kind: "held"; why: string; until: string | null };
+
+/** The launch protocol's eight states, for a recovery occurrence. Reported, never interpreted, by the page. */
+export type RecoveryResumeLaunchState =
+  | "planned"
+  | "waiting-admission"
+  | "reserved"
+  | "launching"
+  | "observed-running"
+  | "completed"
+  | "failed-before-launch"
+  | "outcome-unknown";
+
+export type RecoveryResumeLaunchWire = {
+  occurrenceId: string;
+  state: RecoveryResumeLaunchState;
+  /** Null before an attempt exists. */
+  attempt: number | null;
+  /** When the launch journal last moved it. */
+  at: string;
+};
+
+/**
+ * One request's state. `resumed` is the inventory's own disposition (a live
+ * VERIFIED execution holds the conversation under a new run) — the only arm that
+ * says the session is back, and the one the pace rule waits for.
+ */
+export type RecoveryResumeRequestState =
+  /** In `pending/`. Only position 1 is evaluated; `why` says what it waits for (a gate, the pace rule, or the one ahead). */
+  | { kind: "pending"; position: number; requestedAt: string; actor: "dashboard" | "cli"; why: string; until: string | null }
+  /** Moved to `refused/` with the reason. Tapping again is allowed. */
+  | { kind: "refused"; requestedAt: string; refusedAt: string; why: string }
+  /** Handed to the launch protocol; not yet verified. `waitingFor` says what verification is still missing. */
+  | { kind: "launched"; requestedAt: string; launch: RecoveryResumeLaunchWire; waitingFor: string }
+  | { kind: "resumed"; requestedAt: string | null; launch: RecoveryResumeLaunchWire | null; at: string };
+
+/**
+ * The previous objective and the uncertainty, for a record whose resume is
+ * `supported`. `brief` and `lastWords` are QUOTATIONS from the verified
+ * transcript — shown, labelled, never a command and never a grant.
+ */
+export type RecoveryResumeQuote = { kind: "quoted"; text: string; truncated: boolean } | { kind: "unavailable"; why: string };
+
+export type RecoveryResumePreview = {
+  candidateId: string;
+  conversationId: string;
+  dir: string;
+  title: string | null;
+  brief: RecoveryResumeQuote;
+  lastWords: RecoveryResumeQuote;
+  /** Sentences derived from the record's evidence, never from transcript prose. */
+  uncertainty: string[];
+  /** The exact text that will be typed first. */
+  nudge: string;
+};
+
+export type RecoveryResumeProjection = {
+  schema: 1;
+  writtenAt: string;
+  /** `unwired` until the launch protocol is composed into the daemon: requests queue, nothing launches. */
+  launcher: { kind: "wired" } | { kind: "unwired"; why: string };
+  /** The gate as last evaluated for the head of the queue; null when nothing is pending. */
+  gate: RecoveryResumeGateWire | null;
+  pace:
+    | { kind: "free" }
+    | { kind: "waiting-for-verification"; candidateId: string; name: string; since: string }
+    | { kind: "spacing"; until: string };
+  requests: { candidateId: string; name: string; state: RecoveryResumeRequestState }[];
+  previews: RecoveryResumePreview[];
+  /** Pending request files past the scan limit: present on disk, not listed. */
+  pendingOverflow: number;
+};
+
+export type RecoveryResumeFeed =
+  | { schema: 1; kind: "published"; composedAt: string; path: string; projection: RecoveryResumeProjection }
+  | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string };
+
+/** What `POST /api/recovery/resume` takes: the id, and what the person was looking at when they tapped. */
+export type RecoveryResumePostBody = { candidateId: string; seen: { checkedAt: string; conversationId: string; dir: string } };
+
+export type RecoveryResumePostAnswer =
+  | { ok: true; outcome: "queued" | "already-requested" | "already-launched"; candidateId: string }
+  | { ok: false; why: string };
+
+/* ── Revision stamps (docs/plans/260910f, Stage 1) ─────────────────────────── */
+
+/**
+ * The git revision a process's checkout was at WHEN THE PROCESS STARTED —
+ * read once, by `tools/fleet/revision.ts`, which says what it can and cannot
+ * claim. `dirty: true` means the sha does not name the running code. `unknown`
+ * is its own arm so that absence can never be read as "same as HEAD".
+ */
+export type StartRevision =
+  | { kind: "known"; sha: string; dirty: boolean; readAt: string }
+  | { kind: "unknown"; why: string; readAt: string };
+
+/**
+ * What the fleet client bundle was built from: the checkout's revision at
+ * `vite build` time, plus when. Compiled into the bundle as `__FLEET_BUILD__`
+ * and written beside it as `dist/build-stamp.json` (`vite.fleet.config.ts`).
+ */
+export type BuildStamp = StartRevision & { builtAt: string };

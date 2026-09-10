@@ -48,6 +48,7 @@ import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
+import { readStartRevision } from "./revision.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
@@ -128,6 +129,10 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 const publicationLedger = new PublicationLedger(serverInstanceId());
+/** The revision this process started from — read once, here, never again: tools/fleet/revision.ts says why. */
+const startRevision = readStartRevision(fileURLToPath(new URL("../..", import.meta.url)));
+// Read by the diagnostics route, Stage 3 (docs/plans/260910f).
+void startRevision;
 
 /**
  * The box's own vital signs, refreshed alongside the fleet.
