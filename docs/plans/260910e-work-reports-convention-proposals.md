@@ -53,7 +53,8 @@ mandatory:
 
 > - **Say what you claim, where Greg can check it.** `npx tsx scripts/overseer.ts report …` records
 >   progress, a block, a decision or completion as a claim with links to its artefacts
->   ([work-reports.md](docs/project/work-reports.md)). Optional; an unreported session is shown as
+>   ([work-reports.md](../project/work-reports.md) — written from AGENTS.md itself, the link
+>   target would be `docs/project/work-reports.md`). Optional; an unreported session is shown as
 >   unreported, not as failing.
 
 Sol's plan review (WR-P7) judged a mandatory rule unnecessary for the first delivery; I agree.

@@ -4072,3 +4072,98 @@ export type ReceiptSummary = {
   queueItemId: string | null;
   materialDeletionPending: boolean;
 };
+
+/* ===== WORK REPORTS — WHAT AN AGENT CLAIMED ====================== *
+ * `GET /api/reports` (plan 260910e). A uniquely named banner, for the
+ * reason the DECISIONS MADE block gives.
+ *
+ * **Every row is a claim, and the types say so**: `claimedBy`, never
+ * "done", "ready", "landed" or "contradicts". A later claim is only a later
+ * claim. Types only; restated from `tools/overseer/reports.ts`, which this
+ * leaf may not import — `routes-reports.ts` assigns the owner's values to
+ * these, so a drift is a compile error there. The artefact types are the
+ * decision block's, which are pinned to `artefact-ref.ts` the same way.
+ * ================================================================== */
+
+export type ReportWireKind = "progress" | "blocked" | "decision" | "completed";
+/** A self-declaration, as a decision's `by` is. */
+export type ReportWireActor = { kind: "session"; name: string } | { kind: "overseer" } | { kind: "greg" };
+/** The submitter's token against the register's verified run; null unless the actor is a session. */
+export type ReportWireExecution = "same-verified-run" | "different-verified-run" | { unverifiable: string } | null;
+export type ReportWireCorrection = { eventId: string; actor: ReportWireActor; at: string };
+export type ReportWireJob = {
+  plan: string | null;
+  queueItem: string | null;
+  occurrence: { jobId: string; scheduledAt: string } | null;
+};
+export type ReportWireBlockedOn = "greg" | "peer" | "review" | "environment" | "other";
+export type ReportWireEnding = "finished" | "done-enough" | "important-work-left";
+/** What the agent SAID it reviewed, tested and merged. An empty list is "not stated". */
+export type ReportWireRevisions = { reviewed: string[]; tested: string[]; merged: string[] };
+
+export type ReportWireClaim = {
+  eventId: string;
+  claimedBy: ReportWireActor;
+  submittedAt: string;
+  receivedAt: string;
+  execution: ReportWireExecution;
+  job: ReportWireJob;
+  summary: string;
+  artefacts: DecisionWireEvidence[];
+  corrects: string | null;
+  correctedBy: ReportWireCorrection | null;
+  /** The next claim by the same reporter, if there is one. Never read as a disagreement. */
+  laterClaim: string | null;
+} & (
+  | { kind: "progress" }
+  | { kind: "blocked"; on: ReportWireBlockedOn; needs: string }
+  | { kind: "completed"; ending: ReportWireEnding; revisions: ReportWireRevisions }
+  | { kind: "decision"; decisionId: string }
+);
+
+/** Unreported is not idle, stuck or failed: it means nothing was said. */
+export type ReportWireClaimed = { kind: "claimed"; claims: number; latest: ReportWireClaim };
+export type ReportWireSession =
+  | { name: string; register: "in-register"; latest: { kind: "unreported" } | ReportWireClaimed }
+  | { name: string; register: "not-in-register"; latest: ReportWireClaimed };
+
+/**
+ * The register join, or why there is none. **Two shapes, so "every session is
+ * unreported" and "the register could not be read" can never look alike.**
+ */
+export type ReportWireSessions =
+  | { kind: "joined-with-register"; rows: ReportWireSession[] }
+  | { kind: "register-unavailable"; why: string; reported: { name: string; latest: ReportWireClaimed }[] };
+
+export type ReportWireProblem = {
+  kind: "unreadable-line" | "duplicate-event" | "invalid-correction";
+  why: string;
+  eventId: string | null;
+};
+
+export type ReportsFeed =
+  | {
+      schema: 1;
+      kind: "never-written";
+      composedAt: string;
+      why: string;
+      /** Submitted and not yet recorded — the sign of a daemon that is not draining. */
+      inFlight: number;
+      refused: number;
+    }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "oversized-file"; composedAt: string; why: string; sizeBytes: number; limitBytes: number }
+  | {
+      schema: 1;
+      kind: "reports";
+      path: string;
+      composedAt: string;
+      sessions: ReportWireSessions;
+      /** Newest first. */
+      recent: ReportWireClaim[];
+      /** Claims left out by the 200-row cap or the 2 MiB byte cap. */
+      recentWithheld: number;
+      inFlight: number;
+      refused: number;
+      problems: ReportWireProblem[];
+    };
