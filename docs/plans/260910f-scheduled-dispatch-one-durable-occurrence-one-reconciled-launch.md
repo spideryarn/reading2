@@ -1,6 +1,6 @@
 # Scheduled dispatch: one durable occurrence, one reconciled launch
 
-Roadmap stage: [260908f § Stage: Scheduled dispatch](260908f-overseer-and-fleet-improvement-roadmap.md#stage-scheduled-dispatch--one-durable-occurrence-one-reconciled-launch)
+Roadmap stage: [260908f § Stage: Scheduled dispatch](260908f-overseer-and-fleet-improvement-roadmap.md#stage-scheduled-dispatch-one-durable-occurrence-one-reconciled-launch)
 — its five checkboxes and acceptance paragraph are the spec. Queue item `qi-qxw727jg`. Session
 `scheduled-dispatch`, worktree `.claude/worktrees/scheduled-dispatch`, dispatched by the Overseer
 2026-09-10.
@@ -34,7 +34,7 @@ socket.
 
 ## What the launch protocol gives us (agreed with its session, 2026-09-10)
 
-- `LaunchProtocol["launchOccurrence"](request) → LaunchOutcome`, handed over as a capability.
+- `LaunchProtocol.launchOccurrence`, which takes a request and answers a `LaunchOutcome`, handed over as a capability.
   Composed in `daemon.ts` by the protocol's Stage 3, which names the value; one line of mine passes
   it into `TickInput`. The scheduler never sees `LaunchParts` or a launcher (their F9).
 - `PlanRequest = { origin: scheduleOrigin(key), material, admissionClass: "claude-session" } &`
@@ -539,3 +539,15 @@ roadmap stage's status.
   `timedOut` are gone; and `verdict.cause` adds `wrapper`, `prompt-unverified` and `hangup`. Stage A's
   `ObservedExitRecord` and ladder are reworked to that shape in Stage B's `observedOf` adapter
   commit, before anything feeds them real records.
+
+**2026-09-10: Stage B started, against a local merge.**
+- To take the wait off the critical path, `worktree-launch-protocol` at 0792c1cb (its Stages 1, 1b
+  and 2) is merged into this branch **locally** (11ee6139): typecheck exit 0; 396 tests in the
+  protocol's and Stage A's suites.
+- **Nothing from this branch is pushed until launch-protocol lands those stages, and its 2b round
+  with `view()`, on dev itself.** Merging dev then takes its final versions. Neither side rebases.
+- Two Opus builders run in parallel on disjoint files:
+  - **B1**: the model, planner, scheduler, dispatch deletion, standing jobs, preview and activation;
+  - **B2**: `ObservedExitRecord` reworked to the protocol's final exit.json shape, and the
+    `observedOf` adapter in `tools/overseer/observed-launch.ts`.
+- `view()` is declared locally in `scheduler.ts` until the protocol ships it.
