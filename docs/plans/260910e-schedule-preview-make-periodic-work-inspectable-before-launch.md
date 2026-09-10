@@ -1,7 +1,7 @@
 # Schedule preview — make periodic work inspectable before launch
 
 The roadmap stage of the same name in
-[260908f § Stage: Schedule preview](260908f-overseer-and-fleet-improvement-roadmap.md#stage-schedule-preview--make-periodic-work-inspectable-before-launch),
+[260908f § Stage: Schedule preview](260908f-overseer-and-fleet-improvement-roadmap.md#stage-schedule-preview-make-periodic-work-inspectable-before-launch),
 dispatched by the Overseer on 2026-09-10 as queue item `qi-2yk4gxas`, session `schedule-preview`.
 
 **This stage launches nothing.** `OVERSEER_JOBS_ENABLED` stays unset and remains Greg's switch. What
