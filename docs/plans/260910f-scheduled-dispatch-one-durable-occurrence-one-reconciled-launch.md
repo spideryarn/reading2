@@ -266,6 +266,118 @@ default tmux server or `~/.overseer`.
 is two ledgers for one launch, a lease in one that disagrees with the reservation in the other, and
 a crash window between them that needs its own reconciliation. D2's projection has none of those.
 
+## Review dispositions: Sol, plan round 1 (these override D1–D8 where they differ)
+
+Review: [260910f-scheduled-dispatch-plan-review-sol.md](260910f-scheduled-dispatch-plan-review-sol.md).
+The full record is [260910f-scheduled-dispatch-plan-review-sol-findings.md](260910f-scheduled-dispatch-plan-review-sol-findings.md),
+written by Sol to `/tmp` because the read-only sandbox refused the repository path, and copied here.
+Verdict: refuse, with eight P1s and one P2. **All nine are accepted**, each checked against the code.
+F1 is also my own finding M1, made independently while the review was running.
+
+- **F1 (P1): `planned` and `waiting-admission` must not hold their own job. Accepted.**
+  - Neither is a run. `lastRunOf` skips them, and the planner gets a new verdict,
+    `resume { existing launch record }`, when the job's newest launch occurrence is in one of those
+    states.
+  - Every gate still applies: the pin, dry-run, spacing and usage.
+  - A `dispatch` calls `launchOccurrence` with **the existing occurrence's origin**, not a fresh
+    key. The protocol's `plan()` is idempotent for the same origin, and `drive()` continues from
+    where the occurrence waited.
+  - Only `reserved`, `launching`, `observed-running` and `outcome-unknown` block, as `launch-open`.
+    `reserved` is transient inside one synchronous call; after a restart, the protocol's
+    reconciliation makes it `failed-before-launch`.
+  - If the behaviour hash moves while an occurrence waits, the waiting one is **superseded**: it is
+    never asked again, it holds no slot, and the projection shows it as `admission-waiting` with a
+    note that a newer revision replaced it. The new revision plans its own occurrence.
+  - Tests: a restart after `planned`, and a wait followed by free capacity, must each invoke the
+    launcher exactly once.
+- **F2 (P1): history authority is per ledger. Accepted.**
+  - `PlanInput.history` becomes a history per kind: rules read `events.jsonl`'s `OccurrenceHistory`,
+    and session jobs read the launch journal's `JournalStatus`.
+  - A lost `events.jsonl` history holds rules only. A launch journal in `history-lost` holds session
+    jobs only, with the protocol's reason, and the preview says the same.
+  - Carried occurrences after a `resolve-history` are projected under their job as held. The
+    protocol's `CarriedEntry` keeps `origin` and `plannedAt` wherever its salvage can read them
+    (`launch-protocol`, Stage 1b).
+  - A carried entry with a null origin is **unattributable**. It holds every session job, and the
+    page lists it at the top as "unattributable, held". It is never dropped. Only Greg's `dispose`
+    moves it.
+  - The checkpoint's `jobs` field, `overseer status`, `reconcile-jobs` and `UNKNOWN_RETENTION` stay
+    about `events.jsonl`, which means rules, and say so. Session jobs' state is in
+    `occurrences.json`, and `overseer status` gains one line pointing at it.
+  - Tests: each ledger corrupted on its own, plus a schedule occurrence carried across a history
+    reset.
+- **F3 (P1): spacing is anchored to the launch, not the due instant. Accepted.**
+  - The nominal instant is for identity only.
+  - Spacing reads each occurrence's first attempt's `launchingAt`, the time of the `launching`
+    event, asked of `launch-protocol`. An occurrence with no attempt does not count.
+  - Test: a delayed admission, then a restart immediately after the launch.
+- **F4 (P1): cadence runs from a stable ending time. Accepted.**
+  - `LastRun.at` for a settled launch occurrence is the fold's `endedAt`: the protocol's Stage 1b
+    puts it on `completed` and `failed-before-launch`, and it never moves on `released`.
+  - `updatedAt` is for freshness and display only.
+  - Test: a terminal append followed by a release six hours later.
+- **F5 (P1): a disposition outranks the open states. Accepted, and already built** in Stage A's
+  classifier.
+  - D6's ladder, as built:
+    1. evidence of an ending (exit record, reboot, failed-before-launch);
+    2. then a disposition with no ending (`interrupted`);
+    3. then the open states.
+  - Within the endings, the table's order stands.
+- **F6 (P1): stale pins must not stop a disarmed install. Accepted.**
+  - Stage B changes `scripts/overseer-activate.ts`: an ineligible live session job is a **warning**
+    when the resulting state is disarmed, and blocks `--arm` or an already-armed result.
+  - Tests for all three.
+- **F7 (P1): the answer link is bound to the result it belongs to. Accepted, and being fixed in
+  Stage A.**
+  - The route serves only an occurrence listed in `occurrences.json`, which holds schedule origins
+    only.
+  - It reads the attempt the projection names, not the newest one.
+  - It opens with `O_NOFOLLOW | O_NONBLOCK`, `fstat`s the same descriptor for a regular file, and
+    checks both the size and the sha256 against the projection's `answer`, which now carries its
+    sha256 from `exit.json`. A mismatch gets 409.
+- **F8 (P1): cancellation must leave a receipt. Accepted; `launch-protocol` builds the wrapper half
+  in its Stage 2 (Overseer-approved, 2026-09-10).**
+  - `runChild` catches SIGHUP (what `tmux kill-session` delivers) as it already does SIGTERM,
+    forwards it to the child's process group, and waits within the existing grace period.
+  - Under `--launch-dir`, the wrapper's finaliser writes `exit.json` with `ending: signalled` before
+    it re-raises the signal. That also fixes a live bug: closing a pane used to orphan Claude.
+  - The page prints exactly `tmux kill-session -t '=<name>'`.
+  - The drill runs that exact command and requires `signalled`, then `interrupted`, then
+    `released`.
+  - Until Stages 1–2 are on dev, nothing prints the command, because nothing writes occurrences
+    yet.
+- **F9 (P2): the verified material crosses the tmux boundary intact. Accepted; asked of
+  `launch-protocol`.**
+  - The `tmux-headless` adapter writes the verified bytes to an attempt-private `prompt.md` (mode
+    0600, synced), bound by sha256 and size in `intent.json`.
+  - The wrapper re-hashes it immediately before it spawns the child, and refuses on a mismatch with
+    `supervisor-failed`.
+- **Other checks, agreed.** Unknown usage clears: Sol cites roadmap lines 1275–1289, and failing
+  closed would be a new product choice. `succeeded` requires `permissionDenials === 0`, and a null
+  is not evidence of none, as built.
+- **Acceptance, as Sol read it.**
+  - A restart after a launch and before its receipt is covered by the protocol.
+  - A missed day is one occurrence.
+  - No schedule licenses a push to `main` or a production write: `get-ready-to-deploy` ends at
+    `dev`, and `feedback-sweep` grants no production write.
+
+**My own amendments, beyond Sol's findings.**
+- **M2**: `due()`'s `due` arm gains `dueAt`, which is deterministic from the job's state:
+  - never run: `arming.at` + `initialDelayMs`;
+  - settled or unresolved: `last.at` + `everyMs`.
+- **M5**: the usage and health gate is Gradual recovery's `launchGate`
+  (`tools/overseer/launch-gate.ts`, on dev at ce633d8c). The daemon calls it once per tick with
+  `onUnknown: "clear"` and `usageStaleAfterMs` of 30 minutes, and the planner takes the result as a
+  value.
+
+**Stage A departures, as built and accepted.**
+- A disposition is dated by its own `at`.
+- The commands follow the result, not the bare state.
+- An exit of 0 with a null verdict is `failed`, never `succeeded`.
+- The parser checks each state is paired with a result the ladder can give it, so a file claiming
+  `succeeded` on a running launch is an unreadable row.
+- Jobs are rows as well as occurrences, so an unknown `next` or run spec spoils only its own job.
+
 ## Stages
 
 Implementation is by Opus subagents in this worktree, in parallel where the file sets allow. The
@@ -321,4 +433,15 @@ roadmap stage's status.
 
 ## Status
 
-**2026-09-10: plan drafted. Stage 0 next.**
+**2026-09-10: plan drafted (888988e5).**
+
+**2026-09-10: Stage 0 reviewed.**
+- Sol refused, with eight P1s and one P2. All are accepted, with dispositions above.
+- The protocol-side needs are agreed with `launch-protocol` by message: `launchingAt`, the carried
+  origin, `endedAt`, the prompt file, and SIGHUP finalisation.
+- A narrow Sol check of the P1 dispositions follows.
+
+**2026-09-10: Stage A built and committed (ee213ec7).**
+- Built by two Opus subagents in parallel: 198 focused tests and typecheck green.
+- F7's evidence-bound answer route is being fixed on top of it.
+- Stages B and C wait for the protocol's Stages 1–2, then 3, on dev.
