@@ -71,7 +71,8 @@ import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
-import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
+import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
+import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
   parseAttempt,
   parseObservation,
@@ -489,6 +490,36 @@ export type DaemonOptions = {
    * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
    */
   schedulerDetail?: string;
+  /**
+   * **THE LIST THE SCHEDULER WOULD RUN, FOR THE SCHEDULE PREVIEW — and nothing
+   * this daemon can dispatch from.** Plan 260910e § D6.
+   *
+   * Separate from `jobs` because `jobs` is absent whenever the scheduler is off,
+   * and off is exactly when a person most needs to see what arming would do.
+   * It carries the definitions, how to read their documents, and facts about
+   * this process — never a spawner or a rule runner, so no code path from here
+   * can start anything. On every checkpoint tick the daemon plans these with
+   * the shared planner against its in-memory ledger and writes
+   * `schedule.json` (`schedule-preview.ts`).
+   *
+   * **Absent means this daemon was given no job list**, and the file it writes
+   * says exactly that — not no file, which is what a daemon predating this
+   * build leaves, and a reader tells the two apart.
+   */
+  preview?: {
+    /** The full list — standing jobs and rules — whatever the arming. */
+    definitions: readonly AuthorisedJob[];
+    /** Read every session job's documents afresh each checkpoint, as the tick does. */
+    readDocument: ReadDocument;
+    /** What this process holds, matching `jobs`: a disarmed daemon holds neither. */
+    capabilities: HeldCapabilities;
+    /** `schedule-preview.ts` § `listRevision` of `definitions`, so a reader can compare its checkout's. */
+    listRevision: string;
+    /** The arming `jobs` would carry — `unknown` on a disarmed daemon, which the preview renders as "after it is armed". */
+    arming: Arming;
+    /** The launch spacing an armed scheduler would apply, so the preview's spacing verdicts are the real ones. */
+    launchSeparationMs: number;
+  };
 };
 
 /**
@@ -774,10 +805,14 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       detail: options.schedulerDetail,
       at: now().toISOString(),
     });
-  const checkpointUpdate = (): CheckpointUpdate => ({
+  // THE HEADLINE CAN BE HANDED IN, so the checkpoint and the schedule preview
+  // written on the same tick carry the same one rather than two readings a
+  // moment apart. Defaulted, because the checkpoint written from `take()` has
+  // no preview beside it to agree with.
+  const checkpointUpdate = (scheduler: StoredScheduler = schedulerStandingNow()): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
-    scheduler: schedulerStandingNow(),
+    scheduler,
     // THE DEADLINE, NOT THE CADENCE, and written on every tick because
     // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
     // this instead of computing its own: sharing `staleAfterMs` stopped the
@@ -793,10 +828,77 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     ...(usage === null ? {} : { usage }),
   });
 
+  /*
+   * THE SCHEDULE PREVIEW, written after every checkpoint the ticker lands —
+   * plan 260910e § D6.
+   *
+   * Computed from what THIS process holds: its loaded definitions, the
+   * documents as they are now, its in-memory ledger (`store.occurrences`, which
+   * is ahead of the checkpoint's copy), its arming and its capabilities — the
+   * reason the daemon writes it rather than a reader computing it (Sol's P1-4).
+   * It plans; it never launches. The preview's `launch` answers without
+   * starting anything, and no spawner is in reach of this code.
+   *
+   * **A failure here never stops the daemon, and is said once.** A preview that
+   * cannot be written is a missing convenience, not a fault in the thing the
+   * daemon is for; logging it every 30 seconds would be the alarm fatigue this
+   * area refuses everywhere else. So: one line when it starts failing, one when
+   * it recovers, and the reason carried between them.
+   */
+  const previewOptions = options.preview;
+  let previewFailing: string | null = null;
+  const writePreview = (headline: StoredScheduler): void => {
+    let written: { ok: true } | { ok: false; why: string };
+    try {
+      const capabilities: HeldCapabilities = previewOptions?.capabilities ?? {
+        session: options.jobs?.spawn !== undefined,
+        rules: options.jobs?.rules !== undefined,
+      };
+      written = writeSchedulePreview(
+        root,
+        schedulePreview({
+          instanceId: store.instanceId,
+          now: now(),
+          list:
+            previewOptions === undefined
+              ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
+              : {
+                  kind: "given",
+                  definitions: previewOptions.definitions,
+                  listRevision: previewOptions.listRevision,
+                  // READ NOW, like the tick and the headline — a preview of the
+                  // documents as they were at start would be defect 1 again.
+                  evidence: resolveEvidence(previewOptions.definitions, previewOptions.readDocument),
+                },
+          occurrences: store.occurrences,
+          history: store.occurrenceHistory,
+          arming: previewOptions?.arming ?? options.jobs?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
+          launchSeparationMs: previewOptions?.launchSeparationMs ?? options.jobs?.launchSeparationMs ?? 0,
+          capabilities,
+          headline,
+        }),
+      );
+    } catch (cause) {
+      written = { ok: false, why: `the preview could not be computed (${cause instanceof Error ? cause.message : String(cause)})` };
+    }
+    if (!written.ok) {
+      if (previewFailing === null) log(`schedule preview: NOT WRITTEN — ${written.why}. The daemon carries on; this is said once, and again when it recovers`);
+      previewFailing = written.why;
+      return;
+    }
+    if (previewFailing !== null) {
+      log(`schedule preview: written again (it had been failing: ${previewFailing})`);
+      previewFailing = null;
+    }
+  };
+
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
-    guard(store.checkpoint(checkpointUpdate()));
+    // ONE HEADLINE FOR BOTH FILES written this tick.
+    const headline = schedulerStandingNow();
+    if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+    writePreview(headline);
   }, tickMs);
   ticker.unref?.();
 

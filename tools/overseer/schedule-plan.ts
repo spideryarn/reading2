@@ -53,6 +53,7 @@ import {
   type BehaviourHash,
   type JobDocument,
   type LastRun,
+  type Occurrence,
   type OccurrenceHistory,
   type OccurrenceIndex,
 } from "./jobs.js";
@@ -132,7 +133,20 @@ export function evidenceAsBuilt(definitions: readonly AuthorisedJob[]): Document
  */
 export type EvidencedAuthorisation =
   | { readonly kind: "authorised"; readonly hash: BehaviourHash; readonly job: AuthorisedJob }
-  | { readonly kind: "unauthorised"; readonly why: string; readonly drift: readonly string[] };
+  /** `found` is what the job fingerprints as now — the string re-pinning copies — or why no fingerprint could be taken. */
+  | { readonly kind: "unauthorised"; readonly why: string; readonly drift: readonly string[]; readonly found: FoundFingerprint };
+
+/**
+ * **WHAT AN UNAUTHORISED JOB FINGERPRINTS AS NOW**, carried for the schedule
+ * preview (plan 260910e § D6: *the behaviour hash against its pin*).
+ *
+ * The gate already computes it — `authorisationOf` needs it to refuse — so it
+ * is handed on rather than recomputed by the preview, which would be a second
+ * copy of how a session job's behaviour is rebuilt from fresh readings. A union,
+ * because a document that could not be read leaves nothing to fingerprint, and
+ * that must not print as a hash.
+ */
+export type FoundFingerprint = { readonly kind: "hash"; readonly hash: BehaviourHash } | { readonly kind: "not-computed"; readonly why: string };
 
 export function authorisationUnder(job: AuthorisedJob, evidence: DocumentEvidence): EvidencedAuthorisation {
   const behaviour = job.definition.behaviour;
@@ -141,34 +155,38 @@ export function authorisationUnder(job: AuthorisedJob, evidence: DocumentEvidenc
       // LOAD-TIME DIGESTS, deliberately — see `DocumentEvidence`.
       const authorisation = authorisationOf(job);
       if (authorisation.kind === "authorised") return { kind: "authorised", hash: authorisation.hash, job };
-      return { kind: "unauthorised", why: authorisation.why, drift: documentDrift(job.authorisedDocuments, behaviour.documents) };
+      return {
+        kind: "unauthorised",
+        why: authorisation.why,
+        drift: documentDrift(job.authorisedDocuments, behaviour.documents),
+        found: { kind: "hash", hash: authorisation.found },
+      };
     }
     case "session": {
       const readings = evidence.get(behaviour.id);
       if (readings === undefined) {
         // FAIL CLOSED. A caller that forgot to read is not evidence that
         // nothing moved.
-        return {
-          kind: "unauthorised",
-          why: "no reading of this job's documents was taken this tick, so what it would follow cannot be compared with its pin; it will not be dispatched",
-          drift: [],
-        };
+        const why = "no reading of this job's documents was taken this tick, so what it would follow cannot be compared with its pin; it will not be dispatched";
+        return { kind: "unauthorised", why, drift: [], found: { kind: "not-computed", why } };
       }
       const documents: JobDocument[] = [];
       for (const reading of readings) {
         if (reading.kind === "unreadable") {
-          return {
-            kind: "unauthorised",
-            why: `${reading.path} could not be read this tick (${reading.why}), so what this job would follow cannot be compared with its pin; it will not be dispatched`,
-            drift: [],
-          };
+          const why = `${reading.path} could not be read this tick (${reading.why}), so what this job would follow cannot be compared with its pin; it will not be dispatched`;
+          return { kind: "unauthorised", why, drift: [], found: { kind: "not-computed", why } };
         }
         documents.push({ path: reading.path, sha256: reading.sha256 });
       }
       const fresh: AuthorisedJob = { ...job, definition: { ...job.definition, behaviour: { ...behaviour, documents } } };
       const authorisation = authorisationOf(fresh);
       if (authorisation.kind === "authorised") return { kind: "authorised", hash: authorisation.hash, job: fresh };
-      return { kind: "unauthorised", why: authorisation.why, drift: documentDrift(job.authorisedDocuments, documents) };
+      return {
+        kind: "unauthorised",
+        why: authorisation.why,
+        drift: documentDrift(job.authorisedDocuments, documents),
+        found: { kind: "hash", hash: authorisation.found },
+      };
     }
     default: {
       const never: never = behaviour.work;
@@ -182,28 +200,84 @@ export function authorisationUnder(job: AuthorisedJob, evidence: DocumentEvidenc
  * tick turns into reports and the preview turns into a row.
  *
  * Every arm past the authorisation gate carries `last`, the job's most recent
- * run as `due()` read it, because *last attempt and result* is a column the
- * preview needs and re-deriving it there would be a second reading of the
- * ledger. Where a next run has an instant, it is an **absolute** one
- * (`nextDueAt`, `firstEligibleAt`) — a backward clock jump must not move it.
+ * run as `due()` read it. Where a next run has an instant, it is an
+ * **absolute** one (`nextDueAt`, `firstEligibleAt`) — a backward clock jump
+ * must not move it.
+ *
+ * **And every arm but `history-lost` carries `attempt`**, the newest occurrence
+ * itself — its state, its instants, its outcome — because *last attempt and
+ * result* is a column the preview needs and `last` has already folded the
+ * state away. Carried here rather than read by the preview, so there is one
+ * reading of the ledger per pass, not two (plan 260910e, Stage 2). A lost
+ * history carries none: its index is not the whole of it, and "never" read off
+ * a partial ledger is C3 again.
  */
 export type JobPlan =
   | { readonly kind: "history-lost"; readonly jobId: string; readonly why: string }
-  | { readonly kind: "duplicate-id"; readonly jobId: string; readonly why: string }
+  | { readonly kind: "duplicate-id"; readonly jobId: string; readonly why: string; readonly attempt: PlannedAttempt }
   /** `drift` names each document that moved, when that is why — empty when the reason is something else. */
-  | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string; readonly drift: readonly string[] }
+  | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string; readonly drift: readonly string[]; readonly attempt: PlannedAttempt }
   /** In flight inside its lease (`last.kind === "in-flight"`: next due after it settles), or never run with no arming to date it from. */
-  | { readonly kind: "held"; readonly jobId: string; readonly why: string; readonly last: LastRun }
-  | { readonly kind: "waiting"; readonly jobId: string; readonly remainingMs: number; readonly nextDueAt: string; readonly last: LastRun }
-  | { readonly kind: "not-yet-eligible"; readonly jobId: string; readonly firstEligibleAt: string; readonly remainingMs: number; readonly last: LastRun }
+  | { readonly kind: "held"; readonly jobId: string; readonly why: string; readonly last: LastRun; readonly attempt: PlannedAttempt }
+  | { readonly kind: "waiting"; readonly jobId: string; readonly remainingMs: number; readonly nextDueAt: string; readonly last: LastRun; readonly attempt: PlannedAttempt }
+  | {
+      readonly kind: "not-yet-eligible";
+      readonly jobId: string;
+      readonly firstEligibleAt: string;
+      readonly remainingMs: number;
+      readonly last: LastRun;
+      readonly attempt: PlannedAttempt;
+    }
   /** Due now, and deliberately left alone: nothing reserved, nothing launched, nothing written. */
-  | { readonly kind: "dry-run"; readonly jobId: string; readonly why: string; readonly last: LastRun }
-  | { readonly kind: "spacing-held"; readonly jobId: string; readonly remainingMs: number; readonly nextDueAt: string; readonly why: string; readonly last: LastRun }
+  | { readonly kind: "dry-run"; readonly jobId: string; readonly why: string; readonly last: LastRun; readonly attempt: PlannedAttempt }
+  | {
+      readonly kind: "spacing-held";
+      readonly jobId: string;
+      readonly remainingMs: number;
+      readonly nextDueAt: string;
+      readonly why: string;
+      readonly last: LastRun;
+      readonly attempt: PlannedAttempt;
+    }
   /**
    * Handed to `launch`. `job` is the job as launched (see `EvidencedAuthorisation`),
    * and `launched` is what `launch` answered.
    */
-  | { readonly kind: "dispatch"; readonly jobId: string; readonly job: AuthorisedJob; readonly launched: boolean; readonly last: LastRun };
+  | {
+      readonly kind: "dispatch";
+      readonly jobId: string;
+      readonly job: AuthorisedJob;
+      readonly launched: boolean;
+      readonly last: LastRun;
+      readonly attempt: PlannedAttempt;
+    };
+
+/**
+ * The newest occurrence the ledger holds for one job, or that it holds none.
+ *
+ * A union rather than `Occurrence | null` for the house reason, and because the
+ * preview turns each arm into a different sentence.
+ */
+export type PlannedAttempt = { readonly kind: "never" } | { readonly kind: "occurred"; readonly occurrence: Occurrence };
+
+/**
+ * **THE SAME OCCURRENCE `lastRunOf` READS**: by lineage (the job id) and newest
+ * by the key's own `scheduledAt`, never by the order events landed.
+ *
+ * A second loop rather than a change to `jobs.ts`, which this stage does not
+ * touch; `lastRunOf` then folds the one it finds into a `LastRun`, and this
+ * hands it on whole. The two rules are one sentence each and must stay the same
+ * sentence — `tests/overseer-schedule-preview.test.ts` § the newest occurrence
+ * holds them together through the verdict.
+ */
+export function newestAttemptOf(index: OccurrenceIndex, jobId: string): PlannedAttempt {
+  let newest: Occurrence | null = null;
+  for (const occurrence of index.values()) {
+    if (occurrence.key.jobId !== jobId) continue;
+    if (newest === null || Date.parse(occurrence.key.scheduledAt) > Date.parse(newest.key.scheduledAt)) newest = occurrence;
+  }
+  return newest === null ? { kind: "never" } : { kind: "occurred", occurrence: newest };
+}
 
 export type PlanInput = {
   readonly definitions: readonly AuthorisedJob[];
@@ -273,8 +347,11 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
   for (const job of input.definitions) {
     const behaviour = job.definition.behaviour;
     const jobId = behaviour.id;
+    // THE NEWEST OCCURRENCE, WHOLE — for the preview's *last attempt* column.
+    // Read here, once, beside the clock's own reading of the same index.
+    const attempt = newestAttemptOf(input.occurrences, jobId);
     if (duplicateIds.has(jobId)) {
-      plans.push({ kind: "duplicate-id", jobId, why: DUPLICATE_WHY });
+      plans.push({ kind: "duplicate-id", jobId, why: DUPLICATE_WHY, attempt });
       continue;
     }
 
@@ -283,7 +360,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
     // since the daemon loaded the definition (plan 260910e, defect 1).
     const authorisation = authorisationUnder(job, input.evidence);
     if (authorisation.kind === "unauthorised") {
-      plans.push({ kind: "unauthorised", jobId, why: authorisation.why, drift: authorisation.drift });
+      plans.push({ kind: "unauthorised", jobId, why: authorisation.why, drift: authorisation.drift, attempt });
       continue;
     }
 
@@ -292,13 +369,20 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
     const verdict = due(job.definition.schedule, last, input.nowMs, input.arming);
     switch (verdict.kind) {
       case "held":
-        plans.push({ kind: "held", jobId, why: verdict.why, last });
+        plans.push({ kind: "held", jobId, why: verdict.why, last, attempt });
         continue;
       case "not-due":
-        plans.push({ kind: "waiting", jobId, remainingMs: verdict.remainingMs, nextDueAt: new Date(input.nowMs + verdict.remainingMs).toISOString(), last });
+        plans.push({
+          kind: "waiting",
+          jobId,
+          remainingMs: verdict.remainingMs,
+          nextDueAt: new Date(input.nowMs + verdict.remainingMs).toISOString(),
+          last,
+          attempt,
+        });
         continue;
       case "not-yet-eligible":
-        plans.push({ kind: "not-yet-eligible", jobId, firstEligibleAt: verdict.firstEligibleAt, remainingMs: verdict.remainingMs, last });
+        plans.push({ kind: "not-yet-eligible", jobId, firstEligibleAt: verdict.firstEligibleAt, remainingMs: verdict.remainingMs, last, attempt });
         continue;
       case "due":
         break;
@@ -313,7 +397,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
     // gate for a launch it will not make — and never moves that gate either.
     const dispatchMode = behaviour.dispatch;
     if (dispatchMode.kind === "dry-run") {
-      plans.push({ kind: "dry-run", jobId, why: `due now; dry-run, so nothing is reserved or launched — ${dispatchMode.why}`, last });
+      plans.push({ kind: "dry-run", jobId, why: `due now; dry-run, so nothing is reserved or launched — ${dispatchMode.why}`, last, attempt });
       continue;
     }
 
@@ -334,6 +418,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
             `it is due, and a Claude session was launched ${Math.round(sinceMs / 1000)}s ago — ` +
             `this box starts at most one every ${Math.round(input.launchSeparationMs / 1000)}s, so this one waits ${Math.round(remainingMs / 1000)}s`,
           last,
+          attempt,
         });
         continue;
       }
@@ -344,7 +429,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
     // the next job against an event that did not happen.
     const launched = launch(authorisation.job);
     if (launched) lastLaunchMs = input.nowMs;
-    plans.push({ kind: "dispatch", jobId, job: authorisation.job, launched, last });
+    plans.push({ kind: "dispatch", jobId, job: authorisation.job, launched, last, attempt });
   }
   return plans;
 }
