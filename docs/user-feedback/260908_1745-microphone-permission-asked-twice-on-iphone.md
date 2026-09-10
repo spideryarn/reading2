@@ -16,11 +16,13 @@ In the Feedback dialog on `temporal-context-reinstatement-spya-dhqkf9`, outline 
 
 ## What we did
 
-**"Twice in a row" was our bug, and it is fixed.** On the first press of every page load, dictation
-briefly started and cancelled a speech recogniser to check what the browser could do. On Safari
-that start puts up a microphone prompt, and cancelling it does not take the prompt away. Then our
-real microphone request put up a second one. The check now runs only on Chrome-family browsers,
-where it costs nothing. Desktop Chrome and Edge behave exactly as before.
+**"Twice in a row" was very probably our bug, and that cause is removed.** On the first press of
+every page load, dictation briefly started and cancelled a speech recogniser to check what the
+browser could do. In Safari's engine, that start goes down the same microphone-permission path as a
+real request, and cancelling it has no way to withdraw a prompt already asked for. Then our real
+microphone request asked again. The check now runs only on Chrome-family browsers (those that
+report a `Chromium` brand), where it costs nothing. Desktop Chrome and Edge behave exactly as
+before.
 
 **"Even though I've given permission before" is mostly Safari's.** A home-screen app on iOS forgets
 the grant whenever the app is reopened from cold. It also forgets after about a minute without a

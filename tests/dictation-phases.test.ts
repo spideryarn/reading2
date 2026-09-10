@@ -260,11 +260,12 @@ function install(Ctor: typeof FakeRecognition) {
   vi.stubGlobal("SpeechRecognition", Ctor);
   vi.stubGlobal("webkitSpeechRecognition", Ctor);
   /* **The engine, as well as the recogniser's shape.** The probe runs only on
-     Chromium, because on WebKit its `start()` puts up a permission prompt that
-     the `abort()` cannot take back (docs/plans/260910g). `userAgentData` is how
-     the hook tells, so each shape brings the engine it belongs to — set or
-     removed every time, since `vi.unstubAllGlobals` does not reach a property
-     defined on `navigator`. */
+     Chromium, because on WebKit its `start()` reaches a permission path and
+     the source has no route for `abort()` to cancel UI already requested
+     (docs/plans/260910g). The `Chromium` brand in `userAgentData` is how the
+     hook tells, so each shape brings the engine it belongs to — set or removed
+     every time, since `vi.unstubAllGlobals` does not reach a property defined
+     on `navigator`. */
   chromiumEngine(Ctor === ChromiumRecognition);
   vi.stubGlobal(
     "MediaStream",
@@ -304,7 +305,7 @@ function install(Ctor: typeof FakeRecognition) {
   });
 }
 
-/** Whether `navigator.userAgentData` exists, which only Chromium ships. */
+/** Give the fixture Chromium's ordinary low-entropy engine brand, or no UA data. */
 function chromiumEngine(on: boolean) {
   if (on) {
     Object.defineProperty(navigator, "userAgentData", {
@@ -312,7 +313,7 @@ function chromiumEngine(on: boolean) {
       value: { brands: [{ brand: "Chromium", version: "151" }], mobile: false, platform: "macOS" },
     });
   } else {
-    // Deleted rather than set to undefined: the hook asks `in`, so it must be absent.
+    // Absence is the ordinary Safari shape; the separate test below covers non-Chromium brands.
     delete (navigator as { userAgentData?: unknown }).userAgentData;
   }
 }
@@ -563,11 +564,11 @@ describe("one microphone, shared or not at all", () => {
     expect(gumCalls).toBe(1);
     /* **Empty, and not even the probe.** Until 2026-09-10 this read `[null]`
        and called that entry harmless: the capability probe started the
-       recogniser and aborted it in the same turn. On WebKit that `start()`
-       reaches the per-site microphone prompt before the abort arrives, and the
-       abort does not take the prompt back — so the reader was asked twice on
-       the first press of every page load, which on an iPhone home-screen app is
-       most presses. SPIDERYARN-READING2-2R; docs/plans/260910g. */
+       recogniser and aborted it in the same turn. WebKit source shows that
+       `start()` reaches its microphone-permission path and no cancellation of
+       UI already requested; that is the leading explanation for the reported
+       second prompt, but jsdom cannot verify the UI. SPIDERYARN-READING2-2R;
+       docs/plans/260910g. */
     expect(latest().started).toEqual([]);
     expect(latest().aborted).toBe(0);
     expect(h.get().liveText).toBe(false);
@@ -575,11 +576,12 @@ describe("one microphone, shared or not at all", () => {
     h.unmount();
   });
 
-  it("asks for the microphone once per press on Safari, the first press included", async () => {
-    /* The report's own shape: "sometimes twice in a row". The first press of a
-       page load was the one that asked twice, so the test presses twice and
-       counts both. `getUserMedia` once each, and the recogniser — the thing
-       that put up the extra prompt — never told to start at all. */
+  it("starts only its owned capture on both Safari presses, the first included", async () => {
+    /* The report's own shape: "sometimes twice in a row". The test presses
+       twice and checks the two API calls the fake can observe: `getUserMedia`
+       once each, and the recogniser — the source-traced cause of the extra
+       permission request — never told to start. A jsdom fake cannot count or
+       reproduce WebKit's permission UI. */
     useSafari();
     const h = drive();
     for (let press = 0; press < 2; press++) {
@@ -600,10 +602,10 @@ describe("one microphone, shared or not at all", () => {
     /* **The gate is the engine, not the recogniser's behaviour**, because
        behaviour is exactly what the probe cannot observe without the side effect
        that costs a prompt. So a recogniser that *would* take a track, in a
-       browser without `userAgentData`, is left alone and the reader gets the
-       Safari row: a recording, a meter, no live words. Losing decoration on an
-       engine that might one day ship the overload is the cheap mistake; a
-       permission prompt the reader cannot explain is the expensive one. */
+       browser without the `Chromium` brand, is left alone and the reader gets
+       the Safari row: a recording, a meter, no live words. Losing decoration
+       on an engine that might one day ship the overload is the cheap mistake;
+       a permission prompt the reader cannot explain is the expensive one. */
     chromiumEngine(false);
     const h = drive();
     act(() => h.get().toggle());
@@ -612,6 +614,29 @@ describe("one microphone, shared or not at all", () => {
     expect(latest().started).toEqual([]);
     expect(h.get().liveText).toBe(false);
     expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  it("does not mistake WebKit's userAgentData implementation for Chromium", async () => {
+    /* WebKit has implemented this API behind an internal setting and a
+       site-specific quirk. Mere property presence is therefore not an engine
+       signal, even though Safari does not expose it generally today. */
+    useSafari();
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: {
+        brands: [{ brand: "AppleWebKit", version: "605.1.15" }],
+        mobile: true,
+        platform: "iOS",
+      },
+    });
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumCalls).toBe(1);
+    expect(latest().started).toEqual([]);
+    expect(latest().aborted).toBe(0);
+    expect(h.get().liveText).toBe(false);
     h.unmount();
   });
 

@@ -1,11 +1,12 @@
 # A cancelled request still asks the reader
 
-For twelve days, on Safari and in the iPhone home-screen app, the first dictation press of every page
-load asked for the microphone twice. The first prompt was for a speech recogniser that our own code
-had already thrown away. It reached a reader, Greg, who reported it from an iPhone as
+For twelve days, the first Safari dictation press of every page load made an extra microphone
+permission request for a speech recogniser our own code had already thrown away. WebKit's source
+flow makes that the leading explanation for the two prompts Greg reported from an iPhone as
 SPIDERYARN-READING2-2R: *"it seems to ask me for permission, sometimes twice in a row, even though
-I've given permission a bunch of times in the past."* Nothing was lost but patience. The fix and the
-evidence are in [260910g](../plans/260910g-dictation-asks-for-the-microphone-twice-on-iphone.md).
+I've given permission a bunch of times in the past."* The match has not been reproduced on a device.
+The fix and the evidence are in
+[260910g](../plans/260910g-dictation-asks-for-the-microphone-twice-on-iphone.md).
 
 ## What happened
 
@@ -16,10 +17,12 @@ and starts. So the code called `r.start(NOT_A_TRACK)`, then `r.abort()` in the s
 turn, and argued in a long comment that the abort beats the task that opens the device, *"so on
 the browsers that fail this probe the microphone is never opened at all."*
 
-That was true of the device. But in WebKit, `start()` hands the request to the UI process, and the
-first thing there is the permission manager. It shows the same per-site "use your microphone?"
-prompt `getUserMedia` shows. The abort removes the request and fires `end`. It does not dismiss the
-prompt. The `getUserMedia` 200 ms later finds no grant yet, so it puts up the second prompt.
+That was true of the device. But in WebKit, `start()` hands the request to the UI process and its
+permission manager, which uses the same per-site user-media decision path as `getUserMedia`. The
+abort removes the speech request and fires `end`; the source has no path for it to cancel permission
+UI already requested. Our `getUserMedia` follows about 200 ms later as a separate request. That flow
+explains the report, but whether Safari's closed-source UI shows, merges or queues the two requests
+has not been observed here.
 
 Introduced in `fcd049cb` (2026-08-27, *"Show the microphone is listening, since it could not say so
 before"*), which moved every browser onto one owned track. That was a good change. The probe was
@@ -55,15 +58,15 @@ are allowed.
   Safari test reused one class. So only the first Safari test in the file could ever see a probe.
   The new two-press test went green against the unfixed code until `useSafari()` began installing a
   fresh subclass.
-- **No iPhone has run dictation.** [dictation.md § What is still open](../project/dictation.md#what-is-still-open)
-  says so: *"Safari's whole path here … is reasoned rather than observed."* The one tester who
-  could see the prompt was the reader.
+- **No iPhone has run the fix.** Greg's report is the observed symptom. The mechanism and the claim
+  that removing the extra request removes the second prompt are source-derived, not device-observed.
 
 ## What would have caught it, ranked by ease against value
 
 1. **Gate a side-effecting probe on the engine, not the behaviour, where the behaviour can only be
-   observed by paying for it.** Done: `probeIsSafe()` asks the question only where `userAgentData`
-   says Chromium, and the Safari tests now assert the recogniser is never started at all. This
+   observed by paying for it.** Done: `probeIsSafe()` asks the question only where the low-entropy
+   `userAgentData.brands` includes `Chromium`, and the Safari tests now assert the recogniser is
+   never started at all. This
    rules out this instance by construction.
 2. **When you write "cancel it at once", list what the operation shows a person.** A habit, and it
    is aimed at the class. Put it next to any `start(); abort()`, `open(); close()` or
@@ -83,7 +86,7 @@ are allowed.
 
 ## The fix that is right for the long term
 
-What shipped is the long-term fix, not a patch. The engine gate is the honest form of the probe,
+The proposed change is the long-term fix, not a patch. The engine gate is the honest form of the probe,
 because no behaviour test exists that doesn't cost a prompt. If WebKit ever ships `start(track)`,
 the gate costs Safari its live words (decoration) until somebody adds a line. That is the cheap
 direction to be wrong in. The deeper fix, one capture that every browser can share with its

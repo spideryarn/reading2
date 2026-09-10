@@ -13,9 +13,11 @@ The machinery is [dictation.md](../project/dictation.md); the note that closes t
 
 ## What is happening
 
-Two separate complaints, and only one is ours.
+The report has two related symptoms. Source reading found a concrete extra permission request in our
+code. It is the leading explanation for the second prompt Greg saw, but that causal match has not
+been reproduced on a device.
 
-**"Twice in a row" is ours.** On the first press after every page load, `beginCapture` in
+**The extra request is ours.** On the first press after every page load, `beginCapture` in
 [`useDictation.ts`](../../src/web/useDictation.ts) runs a capability probe before it opens the
 microphone. The probe asks whether this browser's `SpeechRecognition.start()` takes a
 `MediaStreamTrack` (Chromium 135+ does) by calling `r.start(NOT_A_TRACK)` on a real recogniser:
@@ -23,27 +25,31 @@ Chromium throws `TypeError` and starts nothing, while WebKit ignores the argumen
 code then calls `abort()` in the same turn, waits up to 200 ms for `end`, and calls `getUserMedia`.
 
 The comment justifying this argued that an abort in the same turn beats the task that opens the
-capture. That is true of the capture. It is **false of the permission prompt**. Traced in WebKit
+capture. That is true of the capture and incomplete for the permission request. Traced in WebKit
 `main` by a research subagent, 2026-09-10:
 
 - `SpeechRecognition::start` sends Start to the UI process, and `abort()` sends Abort behind it
   ([SpeechRecognition.cpp](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/Modules/speech/SpeechRecognition.cpp)).
 - Start goes straight to `SpeechRecognitionPermissionManager`
   ([SpeechRecognitionPermissionManager.cpp](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/SpeechRecognitionPermissionManager.cpp)),
-  whose last step is the same per-site "use your microphone?" prompt `getUserMedia` uses
+  whose last step uses the same per-site user-media decision path as `getUserMedia`
   (`checkUserMediaPermissionForSpeechRecognition`). Before that come the system-level Speech
   Recognition and microphone prompts, each asked once per app.
-- Abort removes the request from the server's list and fires `end`. **It does not dismiss the
-  prompt**, and when the reader answers it, the answer is quietly dropped.
-- The grant is shared in principle, but the speech request never becomes the "current" request. So
-  the `getUserMedia` that arrives about 200 ms later, while the first prompt is still on screen,
-  finds no grant and puts up its own prompt. That makes two prompts.
+- Abort removes the request from the server's list and fires `end`. The source has no path that
+  cancels permission UI already requested; when its callback eventually runs, the speech request is
+  gone and the answer is dropped. That the visible prompt remains is inferred from this flow, not
+  observed here.
+- The speech check uses a temporary user-media request rather than becoming the manager's current
+  `getUserMedia` request. The source therefore supports a race in which our `getUserMedia`, about
+  200 ms later, asks separately. Whether Safari's closed-source UI shows, merges or queues the two
+  requests has not been observed here. Greg's report is consistent with it showing both.
 - The speech permission state is cleared on every new main document
   ([WebPageProxy.cpp](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp),
   `didChangeMainDocument`), so this repeats on every page load.
 
 A code-trace subagent confirmed the order in this repo: `start()`, `abort()`, `getUserMedia`,
-`AudioContext`, `MediaRecorder`. It checked that none of the other calls can prompt. It also checked
+`AudioContext`, `MediaRecorder`. `getUserMedia` is the intended permission request; `AudioContext`
+and `MediaRecorder` do not make another one. It also checked
 that the probe's cache is keyed on the global constructor, so the probe really does run once per
 page load: once on the first press, never on later ones. That fits "sometimes". It also found a
 second way the probe could make a reader press twice. The session's `onerror` is attached before
@@ -64,18 +70,20 @@ and from [WebKit bug 215884](https://bugs.webkit.org/show_bug.cgi?id=215884):
 - A home-screen web app has no reachable per-site "Allow" setting. Forum reports in that bug say
   every cold start loses the grant. iOS reloads a backgrounded web app whenever it likes.
 
-So a reader who opens the home-screen app, reads, and dictates feedback is on a fresh page far more
-often than a desktop reader. That makes the first-press double prompt the common case there, not an
-edge.
+So a reader who opens the home-screen app, reads, and dictates feedback is plausibly on a fresh page
+far more often than a desktop reader. That would make the first-press race common there rather than
+an edge.
 
 ## What we are doing
 
-**Only ask the probe's question on Chromium.** `probeIsSafe()` in `useDictation.ts` returns
-`"userAgentData" in navigator`. `navigator.userAgentData` is Chromium's own (Chrome, Edge, Opera,
-Brave, Samsung Internet), and no WebKit or Gecko build ships it. Everywhere else the probe answers
-"no" without starting anything. That lands Safari, iOS (including Chrome on iOS, which is WebKit)
-and anything else in the row it already ended up in: our track, a meter, the recording, the
-transcript, no live words.
+**Only ask the probe's question on Chromium.** `probeIsSafe()` in `useDictation.ts` requires a
+`Chromium` brand in `navigator.userAgentData.brands`. Presence of the property alone is not a safe
+signal: WebKit implemented it in 2025 behind an internal setting and a site-specific quirk
+([WebKit bug 241749](https://bugs.webkit.org/show_bug.cgi?id=241749)). An
+absent property, an empty brand list, or a non-Chromium brand therefore answers "no" without
+starting anything. That lands Safari, iOS (including Chrome on iOS, which is WebKit) and anything
+else in the row it already ended up in: our track, a meter, the recording, the transcript, no live
+words.
 
 What each browser gets afterwards:
 
@@ -83,12 +91,16 @@ What each browser gets afterwards:
 |---|---|---|
 | Chrome / Edge 135+ | probe throws `TypeError`, nothing starts; live words | **unchanged** |
 | Chromium < 135 | probe starts + aborts (shared persisted grant); no live words | unchanged |
-| Safari macOS / iOS / home-screen app | probe starts + aborts, **a prompt nobody asked for**; no live words | no probe, no extra prompt; no live words |
+| Safari macOS / iOS / home-screen app | probe starts + aborts, reaching a permission path nobody asked for; no live words | no probe; expected to remove the extra prompt; no live words |
 | Firefox | no recogniser, no probe | unchanged |
 
-The desktop path is unchanged by construction. On Chromium the gate is true, and everything after
-it is the same code. `tests/dictation-recording.test.ts` proves the gate is what unlocks live words:
-its timer tests went red until its fixture declared a Chromium engine.
+The ordinary secure-context Chrome / Edge desktop path is unchanged by construction: its low-entropy
+brands include `Chromium`, and everything after the gate is the same code. `userAgentData` itself is
+secure-context-only, but so is `getUserMedia`, so an insecure page could not dictate either way. A
+Chromium embedder or overridden user agent that omits the brand loses live words only. The retired
+enterprise switch that disabled UA Client Hints applied only through Chrome 93.
+`tests/dictation-recording.test.ts` proves the gate is what unlocks live words: its timer tests went
+red until its fixture declared a Chromium engine.
 
 This also removes the `[mic-stopped]` risk above on WebKit, because no recogniser is ever started
 there.
@@ -99,7 +111,7 @@ there.
   A brand-check call on a foreign receiver throws on both engines before argument conversion. A
   browser without the overload ignores the argument, so every question you can put to `start` is
   answered by starting. The gate has to be the engine, and the failure it permits is the cheap one:
-  an engine that ships the overload without `userAgentData` loses live words, which are decoration
+  an engine that ships the overload without the `Chromium` brand loses live words, which are decoration
   ([dictation.md § It transcribes twice](../project/dictation.md#it-transcribes-twice)).
 - **A sibling feature detect** (`SpeechRecognition.available`, `SpeechRecognitionPhrase`) that only
   newer Chromium has. That is the same kind of sniff, tied to version numbers we have not measured.
@@ -116,9 +128,10 @@ there.
 
 ## What stays true afterwards, said plainly
 
-A home-screen app on iOS will still ask **once** on the first press after a cold start, and again
-after WebKit's idle timeouts. Nothing a page does changes that. The fix removes the *second* prompt
-and the one we caused, not WebKit's own policy. The note to Greg says so.
+A home-screen app on iOS is still expected to ask **once** on the first press after a cold start, and
+again after WebKit's idle timeouts. Nothing a page does changes that. The fix removes our extra
+speech-recognition permission request; source reading predicts that this removes the second prompt,
+but an iPhone has not yet confirmed it. The note to Greg says so.
 
 ## Verified, and not
 
@@ -138,7 +151,7 @@ Verified here:
 
 **Not verified, and cannot be from this box:**
 
-- **No iPhone ran this.** The box has no audio input and no WebKit ([memory: no audio input device
+- **No iPhone ran the fix.** The box has no audio input and no WebKit ([memory: no audio input device
   on this box]). That the extra prompt disappears on a real iPhone is inferred from the source
   trace, not observed. The check is Greg's: on the home-screen app, force-quit it, reopen, press the
   Feedback microphone once. It should ask once, not twice. Then press again within a minute: no
@@ -155,7 +168,8 @@ gesture. Between the press and `getUserMedia` there is `await claimMicrophone(..
 [`mic-lock.ts`](../../src/web/mic-lock.ts). With nobody else holding the microphone, that resolves
 in microtasks. Before this fix there was also the probe's `setTimeout`-bounded wait for `end`.
 
-**It survives, so there is no second stage.** A third subagent read the source, 2026-09-10. WebKit
+**The source trace says it survives on the click path, so there is no second stage.** A third
+subagent read the source, 2026-09-10. WebKit
 does not propagate the gesture token into promise microtasks in general (only for `fetch` and
 `enumerateDevices`). It does not need to here, because the listener's microtask checkpoint runs in
 `~JSExecState` while the click's `UserGestureIndicator`
@@ -186,4 +200,25 @@ rather than built.
 
 ## Review
 
-[Filled in after GPT Sol.]
+The plan and the code were reviewed together, once, after the build. It was a one-function change
+already red-first, so a separate plan review would have reviewed the same forty lines twice. GPT
+Sol, write-capable, on commit `5a28c915`:
+[prompt](260910g-review-prompt.md) · [answer](260910g-review-sol.md). Verdict: *ship after fixes*.
+All three findings were fixed by the reviewer in the tree. I read the diff and re-ran the gates:
+10 dictation-related files and 200 tests green, and `npm run typecheck` clean.
+
+- **R1 (P1), accepted.** `"userAgentData" in navigator` is not Chromium-only. WebKit `main` ships
+  `NavigatorUAData.cpp`, with an `AppleWebKit` brand, behind a setting and site quirks. I checked the
+  file myself, so this is not taken on the reviewer's word. The gate now requires a `Chromium` entry
+  in `brands`. A new test models WebKit's real brand, and it was red against the presence-only gate.
+- **R2 (P1), accepted.** The first draft of this plan, the postmortem, dictation.md and the comments
+  stated as observed what is only source-derived: that the abort leaves a *visible* prompt, and that
+  two requests *necessarily* mean two prompts. They now say "source-traced, not reproduced on a
+  device".
+- **R3 (P2), accepted.** A test title claimed to count prompts. A jsdom fake counts API calls, so
+  the title now says that.
+
+Sol also traced every `SpeechRecognition.start` in the hook: the probe, the first live start, and
+the `onend` restart. The second and third need the probe to have said yes, so none is reachable on
+WebKit. That answers the conclusion I most wanted checked. Discovery is closed after one round;
+nothing is left open.
