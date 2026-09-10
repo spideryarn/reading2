@@ -910,10 +910,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // ARMED headline over an unauthorised row (or the reverse).
     let evidence: DocumentEvidence | null;
     try {
+      // OVER BOTH LISTS. The headline is judged over `jobs.definitions` and the
+      // preview over its own; a session job in the first and not the second
+      // would have had no reading, and `authorisationUnder` fails closed on
+      // that — a BLOCKED headline over a tick that dispatches. The shipped
+      // wiring makes one a subset of the other; this does not rely on it.
+      // `resolveEvidence` reads each id once.
       evidence =
         previewOptions === undefined
           ? null
-          : resolveEvidence(previewOptions.definitions, options.jobs?.readDocument ?? previewOptions.readDocument);
+          : resolveEvidence(
+              [...(options.jobs?.definitions ?? []), ...previewOptions.definitions],
+              options.jobs?.readDocument ?? previewOptions.readDocument,
+            );
     } catch (cause) {
       const why = `the preview's document evidence could not be resolved (${cause instanceof Error ? cause.message : String(cause)})`;
       // A throwing reader still must not stop the heartbeat. When jobs are live,

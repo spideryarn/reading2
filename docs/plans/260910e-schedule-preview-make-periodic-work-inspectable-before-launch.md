@@ -181,11 +181,15 @@ the checkpoint's scheduler line stays the headline.
 
 Readers: the fleet route reads that file (a few KB, bounded) and forwards it; `overseer status`
 reads it and **also** builds the list from the checkout it runs in, so it can say *"the running
-daemon holds list abc; this checkout builds def — a restart loads it"*. A daemon that predates this
-build writes no file, and both readers say exactly that.
+daemon holds list abc; this checkout builds def — a restart loads it"*. No file means a daemon that
+predates this build, one still inside its first checkpoint interval, or one failing to write it; the
+CLI uses the current checkpoint's instance id to say which it can tell apart, and a preview written
+by another instance says so on its first line.
 
-Limits stated on the page: it is as of `writtenAt` (≤ one tick, 30 s); rows after a proposed launch
-assume it succeeded.
+Limits stated on the page: it is as of `writtenAt` (at most one checkpoint tick while the daemon
+runs); rows after a proposed live session launch assume it succeeded — **including on a disarmed
+daemon**, where the row also says nothing can launch it now, because the spacing arming would apply
+is what a person deciding to arm needs to see.
 
 ### D7. Surfaces: `overseer status` and a section on the Overseer tab
 
@@ -203,7 +207,7 @@ assume it succeeded.
   ReceiptList if that has landed); `daemon.ts`'s scheduler region (not the usage pass) and
   `scripts/overseer.ts`'s `schedulerWiring` and `status` case.
 
-Absence is stated: no file (the daemon predates this build), an unreadable file, a schema this build
+Absence is stated: no file (the three readings above), an unreadable file, a schema this build
 does not know, an unreadable document, `armed.json` missing (the daemon is off, so first runs read
 *"2 h after it is armed"*), and *"this page could not reach the route"* — each its own sentence.
 

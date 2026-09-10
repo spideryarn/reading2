@@ -13,10 +13,11 @@
  * fact was added to the planner's output rather than re-read here.
  *
  * The one thing the planner cannot know is whether a launch succeeds, so the
- * preview's `launch` answers `true` for a live session job when this daemon
- * holds a session dispatcher, and `false` otherwise — and the file says, on
- * every row it affects and once at the top, that **rows after a proposed launch
- * assume it succeeded**.
+ * preview's `launch` answers `true` for every live session job — **even on a
+ * daemon holding no dispatcher**, because the preview forecasts what arming
+ * would do, spacing included — and the file says, on every row it affects and
+ * once at the top, that **rows after a proposed launch assume it succeeded**.
+ * A row on a daemon that cannot launch says so in its own sentence.
  *
  * ## Why the daemon writes it rather than a reader computing it
  *
@@ -51,7 +52,7 @@ import type {
   SchedulePreviewVerdict,
   SchedulePreviewVerdictKind,
 } from "../fleet/wire.js";
-import { zonedReadings, type Zones } from "../fleet/zones.js";
+import { londonFirstLine } from "../fleet/zones.js";
 import { describeAge } from "./format-age.js";
 import type { Arming, AuthorisedJob, JobWork, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
 import { authorisationUnder, planJobs, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
@@ -173,12 +174,15 @@ export function schedulePreview(input: SchedulePreviewInput): SchedulePreview {
       nowMs: input.now.getTime(),
       evidence,
     },
-    // THE PREVIEW'S LAUNCH: a live session job counts as a launch only when this
-    // process has a dispatcher, so the rows after it are spaced exactly as the
-    // tick's would be if the proposed launch succeeded. A refusal for a missing
-    // capability and a rule start no session. (The planner never hands a dry-run
-    // job to `launch`; the check is here so this line says the whole rule.)
-    (job) => input.capabilities.session && job.definition.behaviour.work.kind === "session" && job.definition.behaviour.dispatch.kind === "live",
+    // THE PREVIEW'S LAUNCH: a live session job counts as a launch WHETHER OR NOT
+    // this daemon holds a dispatcher, because the preview is the forecast of
+    // what arming would do — and the spacing arming would apply is exactly what
+    // a person deciding to arm needs to see. A disarmed preview that showed two
+    // sessions due at once would be hiding it (the read-only check of b0b8ee80,
+    // finding 1, reversing a salvaged edit). The row itself says this daemon
+    // cannot launch it now (`dispatchSentence`). A rule starts no session; the
+    // planner never hands a dry-run job to `launch`.
+    (job) => job.definition.behaviour.work.kind === "session" && job.definition.behaviour.dispatch.kind === "live",
   );
   const jobs = definitions.map((job, index) => {
     const plan = plans[index];
@@ -452,31 +456,14 @@ const label = (text: string): string => text.padEnd(LABEL);
 const subLabel = (text: string): string => `${SUB}${text.padEnd(10)}`;
 
 /**
- * **LONDON FIRST**, as plan 260910e § D1 asks — built on `zones.ts`'s
- * readings rather than on `zonedLine`, and the reason is a misreading rather
- * than taste. `zonedLine` prints the FIRST zone's date and marks every zone's
- * day against UTC's, which is right when UTC is first. With London first, an
- * instant at 23:30 UTC would print `2026-09-11 00:30 London (+1d)` — London's
- * own date, and then a `+1d` that reads as the day after it. So the marks here
- * are taken against the first zone, which is the date actually printed.
+ * **LONDON FIRST**, as plan 260910e § D1 asks, with each day marked against
+ * London rather than UTC — `zones.ts` § `zonedLineAgainstFirst` says why. The
+ * formatting lives there, a browser-safe leaf, so the Overseer tab prints these
+ * instants exactly as this block does; what is left here is the CLI's words for
+ * an instant it cannot read.
  */
-const LONDON_FIRST: Zones = [
-  { zone: "Europe/London", label: "London" },
-  { zone: "UTC", label: "UTC" },
-  { zone: "Europe/Athens", label: "Athens" },
-];
-
 export function londonFirst(iso: string): string {
-  const readings = zonedReadings(iso, LONDON_FIRST);
-  const first = readings?.[0];
-  if (readings === null || first === undefined) return `${iso} (a time this build cannot read)`;
-  return readings
-    .map((reading, index) => {
-      const days = reading.dayOffset - first.dayOffset;
-      const mark = days === 0 ? "" : days > 0 ? ` (+${days}d)` : ` (−${Math.abs(days)}d)`;
-      return `${index === 0 ? `${reading.date} ` : ""}${reading.time} ${reading.label}${mark}`;
-    })
-    .join(" · ");
+  return londonFirstLine(iso) ?? `${iso} (a time this build cannot read)`;
 }
 
 /** An instant against the reader's clock, in the direction it lies. */
@@ -531,7 +518,11 @@ export function schedulePreviewLines(
 
 function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null }, nowMs: number): string[] {
   const lines = [
-    `${label("schedule")}${preview.headline.kind.toUpperCase()} — preview as of ${londonFirst(preview.writtenAt)} ` +
+    // A PREVIEW FROM ANOTHER DAEMON INSTANCE SAYS SO ON ITS FIRST LINE, not only
+    // its second: the first line is the one a person reads, and its headline
+    // (ARMED, say) is that other daemon's word, not the current one's.
+    `${label("schedule")}${checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== preview.instanceId ? "FROM ANOTHER DAEMON INSTANCE, " : ""}` +
+      `${preview.headline.kind.toUpperCase()} — preview as of ${londonFirst(preview.writtenAt)} ` +
       `(${describeAge(nowMs - Date.parse(preview.writtenAt))} old), written by instance ${preview.instanceId}`,
     `${INDENT}${listLine(preview.list, checkout, preview.instanceId)}`,
     `${INDENT}arming: ${preview.arming.kind === "armed" ? `armed at ${londonFirst(preview.arming.at)}` : `none — ${preview.arming.why}`}`,

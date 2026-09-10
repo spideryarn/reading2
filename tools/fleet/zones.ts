@@ -133,6 +133,41 @@ export function zonedLine(iso: string, zones: Zones = DISPLAY_ZONES): string | n
     .join(" · ");
 }
 
+/**
+ * **LONDON FIRST** — the list the schedule preview prints in, both in `overseer
+ * status` and on the Overseer tab (plan 260910e § D1). A second list rather
+ * than an edit to `DISPLAY_ZONES`, as that constant's comment asks.
+ */
+export const LONDON_FIRST: Zones = [
+  { zone: "Europe/London", label: "London" },
+  { zone: "UTC", label: "UTC" },
+  { zone: "Europe/Athens", label: "Athens" },
+];
+
+/**
+ * The one-line form with **every day mark taken against the FIRST zone**, which
+ * is the date actually printed — for a list that does not start with UTC.
+ *
+ * `zonedLine` prints the first zone's date and marks every zone against UTC's,
+ * which is right when UTC is first and a misreading otherwise: with London
+ * first, 23:30 UTC would print `2026-09-11 00:30 London (+1d)` — London's own
+ * date, and then a `+1d` that reads as the day after it. Found by plan 260910e's
+ * Stage 2 in the CLI, and moved here so the CLI and the browser print one way.
+ */
+export function zonedLineAgainstFirst(iso: string, zones: Zones): string | null {
+  const readings = zonedReadings(iso, zones);
+  const first = readings?.[0];
+  if (readings === null || first === undefined) return null;
+  return readings
+    .map((r, index) => `${index === 0 ? `${r.date} ` : ""}${r.time} ${r.label}${offsetSuffix(r.dayOffset - first.dayOffset)}`)
+    .join(" · ");
+}
+
+/** `zonedLineAgainstFirst` over `LONDON_FIRST`: `2026-09-11 00:30 London · 23:30 UTC (−1d) · 02:30 Athens`. */
+export function londonFirstLine(iso: string): string | null {
+  return zonedLineAgainstFirst(iso, LONDON_FIRST);
+}
+
 /** `(+1d)`, `(−1d)`, or nothing at all on the ordinary day. A true minus sign; it is prose, not a field. */
 function offsetSuffix(dayOffset: number): string {
   if (dayOffset === 0) return "";

@@ -273,12 +273,20 @@ describe("each verdict the planner can give becomes a row that says so", () => {
     expect(row.verdict.sentence).toContain("no session dispatcher");
   });
 
-  test("a daemon holding no session dispatcher does not space later rows against a launch it cannot make", () => {
+  test("a DISARMED preview still spaces later rows, because it forecasts what arming would do — and says it cannot launch now", () => {
+    // Reversed on 2026-09-10 (the read-only check of b0b8ee80, finding 1). The
+    // salvaged edit stopped counting a launch when no dispatcher was held, so a
+    // disarmed daemon showed two sessions due at once — exactly the spacing Greg
+    // needs to see BEFORE arming, hidden. The row's own sentence always said the
+    // later rows assume the launch "as an armed scheduler's would"; the
+    // predicate now agrees with it.
     const preview = previewOf([sessionJob("first"), sessionJob("second")], {
       capabilities: NONE,
       launchSeparationMs: minutes(30),
     });
-    expect(preview.jobs.map((row) => row.verdict.kind)).toEqual(["dispatch", "dispatch"]);
+    expect(preview.jobs.map((row) => row.verdict.kind)).toEqual(["dispatch", "spacing-held"]);
+    expect(only(preview, "first").verdict.sentence).toContain("this daemon holds no session dispatcher");
+    expect(only(preview, "first").verdict.sentence).toContain("assume the launch");
   });
 
   test("the fixed facts of every row: resource class, the lease labelled as the launcher's, and what is NOT built", () => {

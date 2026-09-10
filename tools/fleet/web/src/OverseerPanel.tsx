@@ -60,6 +60,8 @@ import type { ReactNode } from "react";
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
 import { BroadcastCard } from "./BroadcastCard";
 import { MessageOverseerCard } from "./MessageOverseerCard";
+import { httpScheduleApi, type ScheduleApi } from "./schedule-client";
+import { SchedulePreview } from "./SchedulePreview";
 import { Explain } from "./Tooltip";
 import type {
   ClockSkew,
@@ -617,6 +619,7 @@ export function OverseerPanel({
   now,
   receivedAt,
   skew,
+  scheduleApi = httpScheduleApi,
 }: {
   actions: ActionsUi;
   rows: readonly FleetRow[];
@@ -644,6 +647,8 @@ export function OverseerPanel({
   receivedAt: number | null;
   /** For the usage card only, which is the one that draws wall-clock times. See `UsageCard`. */
   skew: ClockSkew;
+  /** The scheduler preview's read. Injectable so a test drives the seam; the default is the real route. */
+  scheduleApi?: ScheduleApi;
 }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
@@ -657,6 +662,7 @@ export function OverseerPanel({
       {/* FIRST, because it is the answer to "can I trust the rest of this
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
+      <SchedulePreview api={scheduleApi} now={now} />
 
       {/* SECOND, and beside the status card rather than on a tab of its own:
           *is anything watching* and *can either subscription afford more work*

@@ -331,6 +331,16 @@ describe("S8-6: `armedAt` is durable, and the first run is deferred honestly", (
     expect(again).toEqual({ kind: "armed", at: "2026-09-09T14:00:00.000Z" });
   });
 
+  test("a hand-written armedAt in another ISO form is read back CANONICAL, so the preview's parser can read it", () => {
+    // The check of b0b8ee80, finding 2: `readArming` accepted anything
+    // `Date.parse` accepts and handed it on verbatim, the preview wrote it
+    // verbatim, and the parser — which insists on `toISOString()`'s form —
+    // then refused the WHOLE file over one hand-edited instant.
+    const store = tempDir();
+    writeFileSync(join(store, ARMING_FILE), JSON.stringify({ armedAt: "2026-09-01T00:00:00Z" }), "utf8");
+    expect(readArming(store)).toEqual({ kind: "armed", at: "2026-09-01T00:00:00.000Z" });
+  });
+
   test("a corrupt record is `unknown` with a sentence, never a silently invented instant", () => {
     const store = tempDir();
     writeFileSync(join(store, ARMING_FILE), "{not json", "utf8");

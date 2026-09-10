@@ -102,10 +102,15 @@ export function readArming(storeDir: string): Arming | { kind: "absent" } | { ki
   }
   if (parsed === null || typeof parsed !== "object") return { kind: "unusable", why: `${ARMING_FILE} is not an object, so nothing can say when this scheduler was armed` };
   const at = (parsed as Record<string, unknown>)["armedAt"];
-  if (typeof at !== "string" || Number.isNaN(Date.parse(at))) {
+  const ms = typeof at === "string" ? Date.parse(at) : Number.NaN;
+  if (Number.isNaN(ms)) {
     return { kind: "unusable", why: `${ARMING_FILE} has no readable armedAt instant, so nothing can say when this scheduler was armed` };
   }
-  return { kind: "armed", at };
+  // CANONICAL, not verbatim. This process only ever writes `toISOString()`, but
+  // a hand-edited record in another ISO form (`…T00:00:00Z`) used to be handed
+  // on as typed — into the schedule preview, whose parser insists on the
+  // canonical form and refused the whole file over it (plan 260910e).
+  return { kind: "armed", at: new Date(ms).toISOString() };
 }
 
 /**
