@@ -1,0 +1,7 @@
+No P0 found. Three P1s:
+
+- **P1 — stale readings still render numbers.** After 20 minutes only the age turns red; `SectionReading` still renders percentages and reset credits indefinitely. A 45-minute-old case is explicitly accepted by the test. [AccountUsageSections.tsx:234](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tools/fleet/web/src/AccountUsageSections.tsx:234), [test:337](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tests/fleet-account-usage-sections.test.tsx:337)
+- **P1 — malformed `resetCredits` reaches the page as a number.** The account parsers accept any finite value, including negative/fractional counts, which `CodexResetCreditsCard` confidently renders. [types.ts:2564](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tools/fleet/web/src/types.ts:2564), [UsagePanel.tsx:1444](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tools/fleet/web/src/UsagePanel.tsx:1444)
+- **P1 — duplicate inner readings are accepted.** Duplicate Claude window names and duplicate Codex bucket IDs pass the parsers and render as conflicting numbers; only duplicate accounts/providers are refused. [account-usage-feed.ts:140](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tools/fleet/account-usage-feed.ts:140), [AccountUsageSections.tsx:141](/home/greg/code/spideryarn2/.claude/worktrees/usage-per-account/tools/fleet/web/src/AccountUsageSections.tsx:141)
+
+No lesser findings. The six focused suites remain green: 100 tests.

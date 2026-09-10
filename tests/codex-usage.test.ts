@@ -564,4 +564,51 @@ describe("collectCodexUsage app-server protocol", () => {
       expect.objectContaining({ kind: "unknown", retryable: false, why: expect.stringContaining("not the intended account") }),
     );
   });
+
+  /**
+   * THE PIN HAS TO REFUSE SILENCE, NOT ONLY CONTRADICTION.
+   *
+   * A reply carrying `accountId: null` is well-formed and the collector is
+   * right to accept it when nobody named an intended account — that is the
+   * ambient read. But when a caller HAS named one, a null is the app-server
+   * declining to say whose numbers these are, and the whole reason the caller
+   * supplied an id was to be sure. Letting it through means a reading gets
+   * labelled with an account it was never shown to belong to, which is the
+   * per-account twin of the `/login`-swap cache bug `attributeCache` exists to
+   * prevent: a plausible percentage under the wrong heading.
+   *
+   * Found while wiring plan 260910c's per-account collection, reported first by
+   * session `codex-accounts` and then read in the source here.
+   */
+  it("refuses a reading with no account id when an intended account was named", async () => {
+    const anonymous = fixture("app-server-rate-limits.json") as { result: Record<string, unknown> };
+    anonymous.result.accountId = null;
+    const fake = fakeExecutor(anonymous);
+    const reading = await collectCodexUsage({
+      nowMs: NOW_MS,
+      expectedAccountId: "expected-account",
+      env: { HOME: "/home/tester" },
+      executor: fake.executor,
+    });
+    expect(reading).toEqual(
+      expect.objectContaining({
+        kind: "unknown",
+        retryable: false,
+        why: expect.stringContaining("did not say which account"),
+      }),
+    );
+  });
+
+  /** The same reply is a perfectly good ambient reading when nobody named an account. */
+  it("accepts a reading with no account id when no intended account was named", async () => {
+    const anonymous = fixture("app-server-rate-limits.json") as { result: Record<string, unknown> };
+    anonymous.result.accountId = null;
+    const fake = fakeExecutor(anonymous);
+    const reading = await collectCodexUsage({
+      nowMs: NOW_MS,
+      env: { HOME: "/home/tester" },
+      executor: fake.executor,
+    });
+    expect(reading).toEqual(expect.objectContaining({ kind: "value", accountId: null }));
+  });
 });

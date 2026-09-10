@@ -31,6 +31,7 @@ import {
   STORE_SCHEMA,
   attentionNotYetRun,
   schedulerNotYetSaid,
+  accountUsageNotYetRun,
   usageNotYetRun,
   workNotYetRun,
   type Checkpoint,
@@ -72,6 +73,7 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     // Same reasoning one field down: a daemon with no usage pass wired in
     // publishes "nothing has looked", never a report saying no limits were found.
     usage: usageNotYetRun(new Date(NOW - agoMs).toISOString()),
+    accountUsage: accountUsageNotYetRun(new Date(NOW - agoMs).toISOString()),
     scheduler: schedulerNotYetSaid(new Date(NOW - agoMs).toISOString()),
     snapshotStaleAfterMs: null,
     occurrenceHistory: null,
