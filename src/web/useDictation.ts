@@ -1496,9 +1496,16 @@ const overloads = new WeakMap<RecognitionCtor, boolean>();
  * press and never concurrent with ours — the track below is not requested until
  * after this returns.
  *
+ * **That argument is about the device, and it missed the prompt.** On WebKit
+ * the `start()` has already put a microphone permission prompt in front of the
+ * reader by the time the abort lands, and nothing takes it back. So since
+ * 2026-09-10 the question is only asked on Chromium — see `probeIsSafe`.
+ * Everywhere else the answer is taken to be no without asking.
+ *
  * @param r a recogniser that must not be used afterwards if this returns false.
  */
 async function probeTrackOverload(Ctor: RecognitionCtor, r: Recognition): Promise<boolean> {
+  if (!probeIsSafe()) return false;
   const known = overloads.get(Ctor);
   if (known !== undefined) return known;
   let takes = false;
@@ -1540,6 +1547,37 @@ async function probeTrackOverload(Ctor: RecognitionCtor, r: Recognition): Promis
     r.onend = done;
   });
   return false;
+}
+
+/**
+ * Whether asking the probe's question can cost the reader anything.
+ *
+ * **On WebKit it costs a permission prompt, and the abort does not take it
+ * back.** The argument above — `abort()` in the same turn beats the task that
+ * asks for audio — is true of the *capture* and false of the *permission*.
+ * WebKit's `start()` hands the request to the UI process, whose permission
+ * manager puts up the same per-site "use your microphone?" prompt that
+ * `getUserMedia` does; the abort that follows removes the request and fires
+ * `end`, and dismisses nothing. So on Safari and in an iPhone home-screen app
+ * the first press of every page load asked twice — once for a recogniser we
+ * had already thrown away, once for our track — and the speech grant does not
+ * satisfy the `getUserMedia` that arrives while its prompt is still up.
+ * SPIDERYARN-READING2-2R; docs/plans/260910g, which has the WebKit source.
+ *
+ * **Chromium is where the probe is free**: a browser with the overload throws
+ * `TypeError` before anything starts, and one without it (Chromium before
+ * 135) shares a single persisted per-origin grant between the recogniser and
+ * `getUserMedia`. `navigator.userAgentData` is how we tell — it is Chromium's
+ * alone, and no WebKit or Gecko build ships it.
+ *
+ * **This is an engine check, and on purpose not a behaviour check**, because
+ * behaviour is exactly what cannot be observed here without paying for it. The
+ * failure it permits is the cheap one: an engine that one day ships the
+ * overload without `userAgentData` gets the Safari row — a recording, a meter
+ * and the transcript, no live words — until this line learns about it.
+ */
+function probeIsSafe(): boolean {
+  return typeof navigator !== "undefined" && "userAgentData" in navigator;
 }
 
 /**

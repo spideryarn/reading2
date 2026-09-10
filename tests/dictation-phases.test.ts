@@ -259,6 +259,13 @@ function install(Ctor: typeof FakeRecognition) {
   });
   vi.stubGlobal("SpeechRecognition", Ctor);
   vi.stubGlobal("webkitSpeechRecognition", Ctor);
+  /* **The engine, as well as the recogniser's shape.** The probe runs only on
+     Chromium, because on WebKit its `start()` puts up a permission prompt that
+     the `abort()` cannot take back (docs/plans/260910g). `userAgentData` is how
+     the hook tells, so each shape brings the engine it belongs to — set or
+     removed every time, since `vi.unstubAllGlobals` does not reach a property
+     defined on `navigator`. */
+  chromiumEngine(Ctor === ChromiumRecognition);
   vi.stubGlobal(
     "MediaStream",
     class {
@@ -297,13 +304,32 @@ function install(Ctor: typeof FakeRecognition) {
   });
 }
 
+/** Whether `navigator.userAgentData` exists, which only Chromium ships. */
+function chromiumEngine(on: boolean) {
+  if (on) {
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: { brands: [{ brand: "Chromium", version: "151" }], mobile: false, platform: "macOS" },
+    });
+  } else {
+    // Deleted rather than set to undefined: the hook asks `in`, so it must be absent.
+    delete (navigator as { userAgentData?: unknown }).userAgentData;
+  }
+}
+
 /** Swap in the Safari shape mid-test, keeping the frame stubs. */
 function useSafari() {
   built = [];
   vi.unstubAllGlobals();
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
-  install(SafariRecognition);
+  /* **A fresh constructor each time.** The hook caches the probe's answer per
+     constructor for the life of the page, so reusing one class across tests
+     means only the first Safari test in the file can ever see a probe — and a
+     test asserting "no probe" passes in any later position for the wrong
+     reason. Measured: the two-press test below went green against the unfixed
+     hook until this line. */
+  install(class extends SafariRecognition {});
 }
 
 /** The recogniser currently under test — the last one the hook built. */
@@ -527,22 +553,63 @@ describe("one microphone, shared or not at all", () => {
        transcript that comes out of it is the half that gets saved.
 
        Two assertions, and both matter. The stream is opened (there is something
-       to record and something to measure), and `started` is **empty** — the
-       recogniser was probed and then aborted, never started for real. A version
-       that opened our track *and* let the recogniser open its own would pass a
-       test that only checked the first. */
+       to record and something to measure), and `started` is **empty**. A
+       version that opened our track *and* let the recogniser open its own would
+       pass a test that only checked the first. */
     useSafari();
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
     expect(gumCalls).toBe(1);
-    /* One entry, and it is **the probe** — `SafariRecognition.start` ignores its
-       argument and starts, which is exactly the behaviour the probe exists to
-       detect. The abort in the same synchronous turn is what stops that from
-       becoming a second live microphone, and the assertion that matters is that
-       nothing started it *again* afterwards. */
-    expect(latest().started).toEqual([null]);
-    expect(latest().aborted).toBe(1);
+    /* **Empty, and not even the probe.** Until 2026-09-10 this read `[null]`
+       and called that entry harmless: the capability probe started the
+       recogniser and aborted it in the same turn. On WebKit that `start()`
+       reaches the per-site microphone prompt before the abort arrives, and the
+       abort does not take the prompt back — so the reader was asked twice on
+       the first press of every page load, which on an iPhone home-screen app is
+       most presses. SPIDERYARN-READING2-2R; docs/plans/260910g. */
+    expect(latest().started).toEqual([]);
+    expect(latest().aborted).toBe(0);
+    expect(h.get().liveText).toBe(false);
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  it("asks for the microphone once per press on Safari, the first press included", async () => {
+    /* The report's own shape: "sometimes twice in a row". The first press of a
+       page load was the one that asked twice, so the test presses twice and
+       counts both. `getUserMedia` once each, and the recogniser — the thing
+       that put up the extra prompt — never told to start at all. */
+    useSafari();
+    const h = drive();
+    for (let press = 0; press < 2; press++) {
+      act(() => h.get().toggle());
+      await settleCapture();
+      expect(h.get().phase).toBe("listening");
+      talkFor(4000);
+      act(() => h.get().toggle());
+      await drain();
+    }
+    expect(gumCalls).toBe(2);
+    expect(built.flatMap((r) => r.started)).toEqual([]);
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS", "THE SERVER SAID THIS"]);
+    h.unmount();
+  });
+
+  it("does not probe a recogniser outside Chromium, whatever its shape", async () => {
+    /* **The gate is the engine, not the recogniser's behaviour**, because
+       behaviour is exactly what the probe cannot observe without the side effect
+       that costs a prompt. So a recogniser that *would* take a track, in a
+       browser without `userAgentData`, is left alone and the reader gets the
+       Safari row: a recording, a meter, no live words. Losing decoration on an
+       engine that might one day ship the overload is the cheap mistake; a
+       permission prompt the reader cannot explain is the expensive one. */
+    chromiumEngine(false);
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumCalls).toBe(1);
+    expect(latest().started).toEqual([]);
     expect(h.get().liveText).toBe(false);
     expect(h.get().phase).toBe("listening");
     h.unmount();
