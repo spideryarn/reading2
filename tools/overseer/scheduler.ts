@@ -6,7 +6,20 @@
  * three-step dance between them, and it is short on purpose because every line
  * of it is ordering.
  *
- *     append `reserved` and fsync it   ──▶  spawn  ──▶  append `started`
+ *     append `reserved` and fsync it   ──▶  start the rule  ──▶  append `started`
+ *
+ * ## A session job does not dance here any more
+ *
+ * Since plan 260910f (scheduled dispatch), a session job starts through the
+ * launch protocol and nothing else. The tick calls the capability it is handed
+ * (`TickInput.launch`), the protocol's `plan()` is the first durable write, and
+ * **a session job writes nothing to `events.jsonl`**: its history is the launch
+ * journal, projected into the planner by `launch-occurrences.ts`. So the
+ * reserve → start → started dance, the lease and the sweep below are a rule's
+ * now, and the spawn window this file cannot close is a rule's window only.
+ * The session window is the protocol's to close, and it does: an occurrence
+ * that may have launched is open, and holds its job, until evidence or Greg
+ * says otherwise.
  *
  * ## And the same ordering one layer in, for a rule
  *
@@ -124,13 +137,24 @@ import {
   type AuthorisedJob,
   type JobDefinition,
   type JobSpawn,
+  type LaunchOccurrence,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
-  type SpawnJob,
 } from "./jobs.js";
+import { accountOf, NO_LAUNCH_JOURNAL_WHY, scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
+import {
+  occurrenceIdOf,
+  scheduleOrigin,
+  type AbandonResult,
+  type LaunchOccurrenceId,
+  type LaunchOutcome,
+  type LaunchProtocol,
+  type LaunchRecord,
+  type SlotAnswer,
+} from "./launch-protocol.js";
 import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
 import {
   authorisationUnder,
@@ -139,9 +163,13 @@ import {
   evidenceAsBuilt,
   planJobs,
   resolveEvidence,
+  type AccountChoice,
   type DocumentEvidence,
   type JobPlan,
+  type LaunchHow,
   type ReadDocument,
+  type ReadDocumentBytes,
+  type Superseded,
 } from "./schedule-plan.js";
 import type { AppendResult, StoredScheduler } from "./store.js";
 
@@ -188,7 +216,30 @@ export type LostRecord = {
  * that returned only its dispatches could not tell them apart.
  */
 export type SchedulerReport =
+  /** A RULE, reserved and started in process. A session job never produces this arm: its launch is the `launch` arm below. */
   | { readonly kind: "dispatched"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly pid: number }
+  /**
+   * **WHAT THE LAUNCH PROTOCOL ANSWERED, whole** — every `LaunchOutcome` arm is
+   * a report, and `invoked` is only ever "the launcher was called": never a
+   * result. What the run came to is the journal's and its `exit.json`'s to
+   * say (`occurrence-result.ts`). `via` says whether this tick planned the
+   * occurrence or resumed a waiting one; `account` is the pool account it was
+   * planned or pinned on, null only for a record that pins no run spec (a
+   * `tmux` launch — `launch-occurrences.ts` § `accountOf`).
+   */
+  | {
+      readonly kind: "launch";
+      readonly jobId: string;
+      readonly via: "new" | "resume";
+      readonly account: string | null;
+      readonly outcome: LaunchOutcome;
+    }
+  /** D3: a document's bytes, read for the material, were not the ones the pin gate accepted this tick. A report, not an occurrence: nothing was planned. */
+  | { readonly kind: "material-moved"; readonly jobId: string; readonly why: string }
+  /** A waiting occurrence abandoned before it ever launched — a later revision, or a pool account that is gone. `reservation` is the owner's actual answer. */
+  | { readonly kind: "superseded"; readonly jobId: string; readonly launchId: LaunchOccurrenceId; readonly why: string; readonly reservation: SlotAnswer }
+  /** Due and spaced, and no pool account may start it now — or its pinned one is held. Nothing was planned or asked. */
+  | { readonly kind: "usage-held"; readonly jobId: string; readonly why: string; readonly until: string | null }
   | { readonly kind: "refused"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly why: string }
   /** FAIL CLOSED: the reservation, or the acknowledgement, did not become durable. Nothing was started, or nothing can be said about what was. */
   | { readonly kind: "not-dispatched"; readonly jobId: string; readonly why: string }
@@ -243,6 +294,22 @@ export type SchedulerReport =
   /** A reservation left behind by an instance that is gone — noticed, written down, and never retried. */
   | { readonly kind: "unaccounted"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly why: string };
 
+/**
+ * **THE WHOLE CAPABILITY THE SCHEDULER HOLDS** (plan 260910f scheduled
+ * dispatch, § D2 and F1): plan-and-drive a new occurrence, resume a waiting
+ * one, abandon a superseded one, and look — `view()` is the protocol's
+ * read-only `LaunchJournalView` (status, fold, attempt directories) over the
+ * same open store it writes. Never a launcher, a writable journal or an owner
+ * — the protocol's F9.
+ */
+export type SchedulerLaunch = Pick<LaunchProtocol, "launchOccurrence" | "resumeOccurrence" | "abandon" | "view">;
+
+/** No account choice was handed over, so no pool account may start a session: held, never a guess. What an absent `TickInput.accounts` means. */
+export const NO_ACCOUNT_CHOICE: AccountChoice = {
+  chosen: { kind: "held", why: "no pool account choice was handed to this tick", until: null },
+  standing: () => ({ kind: "held", why: "no pool account choice was handed to this tick", until: null }),
+};
+
 export type TickInput = {
   /** Each with the fingerprint it was authorised under — see `AuthorisedJob`, and C2 for what a bare definition let through. */
   readonly definitions: readonly AuthorisedJob[];
@@ -283,27 +350,38 @@ export type TickInput = {
    */
   readonly readDocument: ReadDocument;
   /**
-   * **OPTIONAL, AND THAT IS THE DETERMINISTIC-ONLY ARMING PATH.**
+   * **THE LAUNCH CAPABILITY, AND ITS ABSENCE IS THE DETERMINISTIC-ONLY ARMING
+   * PATH.** Plan 260910f (scheduled dispatch): a live session job starts
+   * through `launchOccurrence` and nothing else, and its history is read
+   * through `view()`.
    *
-   * GPT Sol's SP-4: there was one global switch, arming it supplied both
-   * standing jobs, and both were immediately due — so there was no way to watch
-   * a deterministic rule fire without starting paid model sessions under a gate
-   * 4 that is admittedly unbuilt.
+   * GPT Sol's SP-4 still holds, in the new shape: the fix is a **capability,
+   * not a filter**. A daemon armed for rules only is given no launch protocol
+   * at all, so no code in that process can start a session however due a job
+   * is. It cannot read the launch journal either, so a session job there is
+   * held — an unread history is not an empty one (C3) — rather than planned
+   * against a journal nobody looked at.
    *
-   * The fix is a **capability, not a filter**. A daemon armed for rules only is
-   * given no spawner at all, so no code in that process can create a session
-   * however due a job is or however it got into the list. A job whose work is a
-   * session meets a `refused` — a fact, loud in the log — rather than a
-   * dispatch. `scripts/overseer.ts`'s `schedulerWiring` is the only place that
-   * decides which it is.
-   *
-   * `| undefined` as well as optional, unlike the rest of this codebase's
-   * absent-versus-undefined discipline, and deliberately: here the two mean the
-   * same thing — **this process holds no such capability** — so making a caller
-   * spread conditionally would buy a distinction that does not exist.
+   * `| undefined` as well as optional, and deliberately: here the two mean the
+   * same thing — **this process holds no such capability**.
    */
-  readonly spawn?: SpawnJob | undefined;
-  /** LOOKING, for a rule that may only propose. Absent means such a job is refused for the same reason and in the same way as a session job with no spawner. */
+  readonly launch?: SchedulerLaunch | undefined;
+  /**
+   * **WHICH POOL ACCOUNT A NEW SESSION RUNS ON, AND EACH ACCOUNT'S STANDING** —
+   * one value per tick, computed by the daemon (Stage C) from the account
+   * registry and the shared health and quota gates. Absent is
+   * `NO_ACCOUNT_CHOICE`: every live session is `usage-held`, never started on
+   * a guess.
+   */
+  readonly accounts?: AccountChoice | undefined;
+  /**
+   * **HOW A SESSION'S MATERIAL IS READ** — each document's bytes, once, with
+   * their digest (`standing-jobs.ts` § `readJobDocumentBytes`, the same root,
+   * paths and digest as `readDocument`). Absent refuses any session whose job
+   * leans on a document: material that cannot be read is not material.
+   */
+  readonly readDocumentBytes?: ReadDocumentBytes | undefined;
+  /** LOOKING, for a rule that may only propose. Absent means such a job is refused for the same reason and in the same way as a session job with no launch protocol. */
   readonly rules?: ProposingRuleWork | undefined;
   /**
    * **THE ACTOR, AND IT IS A SEPARATE CAPABILITY FROM `rules` ON PURPOSE.**
@@ -383,7 +461,7 @@ export type JobEligibility =
    */
   | { readonly kind: "dry-run"; readonly jobId: string; readonly why: string };
 
-/** The capabilities a process holds — the same two `TickInput` carries, as booleans, because this asks a yes/no question of them. */
+/** The capabilities a process holds — `TickInput.launch` and `TickInput.rules`, as booleans, because this asks a yes/no question of them. `session` is a launch protocol. */
 export type HeldCapabilities = { readonly session: boolean; readonly rules: boolean };
 
 /**
@@ -414,7 +492,7 @@ export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabili
     if (dispatch.kind === "dry-run") return { kind: "dry-run", jobId, why: `pinned as dry-run, so it will never start anything: ${dispatch.why}` };
     const work = job.definition.behaviour.work;
     if (work.kind === "session" && !held.session) {
-      return { kind: "ineligible", jobId, why: "this daemon holds no session dispatcher, so it cannot start a Claude session for this job" };
+      return { kind: "ineligible", jobId, why: "this daemon holds no launch protocol, so it cannot start a Claude session for this job" };
     }
     if (work.kind === "rule" && !held.rules) {
       return { kind: "ineligible", jobId, why: "this daemon holds no rule capability, so it cannot run this rule" };
@@ -490,34 +568,78 @@ export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
   // `sweep` runs whatever the ledger's state: what it can see is still worth
   // writing down, and it starts nothing.
   const reports: SchedulerReport[] = [...sweep(input, atIso, nowMs)];
-  // THE LAUNCH'S OWN REPORTS, KEPT BY THE JOB OBJECT IT WAS HANDED. A launch
-  // produces one to three reports (the dispatch, a refusal, a record that could
-  // not be written), and they have to come out in the job's place in the list,
-  // not in the order `launch` happened to be called.
-  const launched = new Map<AuthorisedJob, readonly SchedulerReport[]>();
+  // WHAT EACH JOB'S SIDE EFFECTS SAID — a supersession, then the launch or the
+  // resume — kept so they come out in the job's place in the list, not in the
+  // order the ports happened to be called. By id: only a job past the
+  // duplicate gate reaches a port, so an id there names one definition.
+  const said = new Map<string, SchedulerReport[]>();
+  const say = (jobId: string, more: readonly SchedulerReport[]): void => {
+    said.set(jobId, [...(said.get(jobId) ?? []), ...more]);
+  };
+  // ONE MERGE OF THE TWO LEDGERS, the same function the preview uses (F2, P3).
+  const sessionJobIds = new Set(input.definitions.filter((job) => job.definition.behaviour.work.kind === "session").map((job) => job.definition.behaviour.id));
+  const merged = scheduleIndexOf({
+    ledger: input.store.occurrences,
+    ledgerHistory: input.store.occurrenceHistory,
+    journal: journalOf(input.launch),
+    sessionJobIds,
+  });
   const plans = planJobs(
     {
       definitions: input.definitions,
-      occurrences: input.store.occurrences,
-      history: input.store.occurrenceHistory,
+      occurrences: merged.occurrences,
+      history: merged.history,
       arming: input.arming,
       launchSeparationMs: input.launchSeparationMs,
       nowMs,
       // READ NOW, EVERY TICK, AND ONLY FOR SESSION JOBS — `TickInput.readDocument`.
       evidence: resolveEvidence(input.definitions, input.readDocument),
+      accounts: input.accounts ?? NO_ACCOUNT_CHOICE,
     },
-    (job) => {
-      const outcome = launch(input, job.definition, atIso, nowMs);
-      launched.set(job, outcome.reports);
-      return outcome.launched;
+    {
+      launch: (job, how) => {
+        const outcome = launchJob(input, job, how, atIso, nowMs);
+        say(job.definition.behaviour.id, outcome.reports);
+        return outcome.launched;
+      },
+      supersede: (job, occurrence, why) => {
+        const outcome = supersedeWaiting(input.launch, job.definition.behaviour.id, occurrence, why);
+        say(job.definition.behaviour.id, outcome.reports);
+        return outcome.superseded;
+      },
     },
   );
-  for (const plan of plans) reports.push(...reportsOf(plan, launched));
+  for (const plan of plans) {
+    const own = said.get(plan.jobId) ?? [];
+    reports.push(...own, ...reportsOf(plan, own));
+  }
   return reports;
 }
 
-/** One verdict as the reports the log has always carried. `dispatch` is the only arm whose reports were made elsewhere — by `launch`. */
-function reportsOf(plan: JobPlan, launched: ReadonlyMap<AuthorisedJob, readonly SchedulerReport[]>): readonly SchedulerReport[] {
+/** The journal to read this tick, or none. A `view()` that throws is a journal that could not be read — which holds session jobs, rather than throwing out of the daemon's timer. */
+function journalOf(launch: SchedulerLaunch | undefined): LaunchJournalReading | undefined {
+  if (launch === undefined) return undefined;
+  try {
+    return launch.view();
+  } catch (cause) {
+    const why = `the launch journal's view could not be opened (${cause instanceof Error ? cause.message : String(cause)})`;
+    return {
+      status: () => {
+        throw new Error(why);
+      },
+      fold: () => {
+        throw new Error(why);
+      },
+    };
+  }
+}
+
+/**
+ * One verdict as the reports the log has always carried. `dispatch` and
+ * `resume` are the arms whose reports were made elsewhere — by the ports — and
+ * `own` holds them.
+ */
+function reportsOf(plan: JobPlan, own: readonly SchedulerReport[]): readonly SchedulerReport[] {
   switch (plan.kind) {
     case "history-lost":
       return [{ kind: "history-lost", jobId: plan.jobId, why: plan.why }];
@@ -535,11 +657,16 @@ function reportsOf(plan: JobPlan, launched: ReadonlyMap<AuthorisedJob, readonly 
       return [{ kind: "dry-run", jobId: plan.jobId, why: plan.why }];
     case "spacing-held":
       return [{ kind: "spacing-held", jobId: plan.jobId, remainingMs: plan.remainingMs, why: plan.why }];
+    case "usage-held":
+      return [{ kind: "usage-held", jobId: plan.jobId, why: plan.why, until: plan.until }];
     case "dispatch":
+    case "resume":
       // A PLANNED LAUNCH WITH NO RECORD OF IT is a bug in this file, not a
       // state of the world — but the daemon's timer must not throw over it, so
       // it is said out loud instead of swallowed.
-      return launched.get(plan.job) ?? [{ kind: "not-dispatched", jobId: plan.jobId, why: "the planner reported a launch that this tick has no record of making" }];
+      return own.some((report) => report.kind !== "superseded")
+        ? []
+        : [{ kind: "not-dispatched", jobId: plan.jobId, why: "the planner reported a launch that this tick has no record of making" }];
     default: {
       const never: never = plan;
       throw new Error(`no report for plan ${JSON.stringify(never)}`);
@@ -604,28 +731,44 @@ function leaseWhy(occurrence: Occurrence, nowMs: number): string {
 }
 
 /**
- * One job the planner decided to dispatch: reserve, start, record.
- *
- * Every gate is behind it — the history, the id, the pin, the clock, dry-run
- * and spacing are `planJobs`'s — so this is only the ordering that makes a crash
- * visible. `definition` is the job AS AUTHORISED: for a session job, with the
- * document digests read this tick, so the key's hash is the pin that was
- * actually checked.
- *
- * Returns the reports for it — one in every case but the dispatch that fails to
- * acknowledge — **and whether a session was launched**, which is what the
- * planner's spacing clock counts. The flag rather than an inspection of the
- * reports: "did this start a process" is a fact this function knows and a
- * caller matching on report kinds would be re-deriving.
+ * What a launch produced: its reports, **and whether a session was launched or
+ * may have been**, which is what the planner's spacing clock counts. The flag
+ * rather than an inspection of the reports: "did this start a process" is a
+ * fact the launching function knows and a caller matching on report kinds would
+ * be re-deriving.
  */
-function launch(
-  input: TickInput,
-  definition: JobDefinition,
-  at: string,
-  nowMs: number,
-): { readonly launched: boolean; readonly reports: readonly SchedulerReport[] } {
+type Launched = { readonly launched: boolean; readonly reports: readonly SchedulerReport[] };
+
+/**
+ * One job the planner decided to start, the way its `how` says. Every gate is
+ * behind it — the history, the id, the pin, the clock, dry-run, spacing and the
+ * account are `planJobs`'s — so what is left here is the side effect.
+ */
+function launchJob(input: TickInput, job: AuthorisedJob, how: LaunchHow, at: string, nowMs: number): Launched {
+  switch (how.kind) {
+    case "rule":
+      return runRule(input, job.definition, at, nowMs);
+    case "new-session":
+      return planSession(input, job, how);
+    case "resume":
+      return resumeSession(input, job.definition.behaviour.id, how.occurrence.launchId, how.occurrence.standing.kind === "resumable" ? how.occurrence.standing.account : null);
+    default: {
+      const never: never = how;
+      throw new Error(`no launch for ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/**
+ * A RULE the planner decided to run: reserve, start, record.
+ *
+ * This is only the ordering that makes a crash visible. `definition` is the job
+ * AS AUTHORISED. A rule starts no session, so it never moves the spacing gate:
+ * `launched` is false on every path.
+ */
+function runRule(input: TickInput, definition: JobDefinition, at: string, nowMs: number): Launched {
   const jobId = definition.behaviour.id;
-  const held = (reports: readonly SchedulerReport[]): { launched: boolean; reports: readonly SchedulerReport[] } => ({ launched: false, reports });
+  const held = (reports: readonly SchedulerReport[]): Launched => ({ launched: false, reports });
 
   // A RESERVATION IS THE LAUNCH as far as the ledger is concerned, which is
   // why the spacing gate sits before this function rather than inside it: one
@@ -657,7 +800,7 @@ function launch(
   // (2) THE SPAWN — or, for a rule, the two-phase protocol below.
   let outcome: JobSpawn;
   try {
-    outcome = start(input, definition, key, id);
+    outcome = start(input, definition, id);
   } catch (cause) {
     // A THROW IS NOT A REFUSAL, and this is the distinction the whole file is
     // about. `refused` claims the job did not start; a runner that broke its
@@ -668,13 +811,7 @@ function launch(
     // AND IF THAT APPEND FAILED, SAY SO. It used to be dropped, which left the
     // occurrence durably `reserved` while this report claimed it was accounted
     // for — a report disagreeing with the history is the shape of C5.
-    // THE RESERVATION LANDED AND WE CANNOT SAY WHETHER A PROCESS EXISTS, so it
-    // counts against the spacing gate: an uncertain launch rations, for the same
-    // reason `lastSessionLaunchOf` counts an `unknown` occurrence.
-    return {
-      launched: definition.behaviour.work.kind === "session",
-      reports: [{ kind: "unaccounted", jobId, occurrenceId: id, why }, ...lostReports(wrote, jobId, id, "unknown")],
-    };
+    return held([{ kind: "unaccounted", jobId, occurrenceId: id, why }, ...lostReports(wrote, jobId, id, "unknown")]);
   }
   if (outcome.kind === "refused") {
     const wrote = record(input.store, [{ kind: "job-occurrence-refused", at, occurrenceId: id, why: outcome.why }]);
@@ -748,9 +885,8 @@ function launch(
   // for it — `schedulerTick` is synchronous, and it must stay so, because the
   // lease rather than a held promise is what guards overlap — so waiting is the
   // daemon's, at the one moment it matters.
-  if (definition.behaviour.work.kind === "rule") input.onRuleRun?.({ jobId, occurrenceId: id, settled });
-  else void settled;
-  return { launched: definition.behaviour.work.kind === "session", reports };
+  input.onRuleRun?.({ jobId, occurrenceId: id, settled });
+  return { launched: false, reports };
 }
 
 /**
@@ -762,26 +898,16 @@ function launch(
  * so a rule's threshold or its action could move while the pin stayed valid.
  * Here the arm and its whole configuration are the thing that was authorised.
  *
- * **A missing capability is a REFUSAL, and refusals are facts.** A daemon armed
- * for deterministic rules only holds no spawner, so a session job meets a
- * sentence in the log rather than a dispatch — and there is no code in that
- * process that could have started it. See `TickInput.spawn`.
+ * **A missing capability is a REFUSAL, and refusals are facts.** A rule job in a
+ * process holding no rule runner meets a sentence in the log rather than a
+ * dispatch. A session job never reaches here at all: it starts through the
+ * launch protocol (`TickInput.launch`), and this path refuses one outright.
  */
-function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, id: OccurrenceId): JobSpawn {
+function start(input: TickInput, definition: JobDefinition, id: OccurrenceId): JobSpawn {
   const work = definition.behaviour.work;
   switch (work.kind) {
-    case "session": {
-      const spawn = input.spawn;
-      if (spawn === undefined) {
-        return {
-          kind: "refused",
-          why:
-            "this daemon was started with no session dispatcher, so it cannot start a Claude session for any job — " +
-            "it is armed for deterministic rules only",
-        };
-      }
-      return spawn(definition, key);
-    }
+    case "session":
+      return { kind: "refused", why: "a session job starts only through the launch protocol, never through the rule path" };
     case "rule":
       // HANDED STRAIGHT OVER TO THE PINNED PROTOCOL, which is what reads the
       // hashed `disposition` and chooses a runner and a capability. Nothing
@@ -822,6 +948,265 @@ function lostReports(
   return [{ kind: "unrecorded", jobId, occurrenceId: id, fact, why: wrote.why }];
 }
 
+/* ------------------------------------------------------------------ *
+ * A session job, through the launch protocol (plan 260910f scheduled
+ * dispatch, § D2–D4 and F1).
+ * ------------------------------------------------------------------ */
+
+/** A launch-protocol call that must not throw out of the daemon's timer. A throw may have reached the launcher, so it counts against spacing. */
+function called(jobId: string, via: "new" | "resume", account: string | null, call: () => LaunchOutcome): Launched {
+  try {
+    const outcome = call();
+    return { launched: outcome.kind === "invoked", reports: [{ kind: "launch", jobId, via, account, outcome }] };
+  } catch (cause) {
+    return {
+      launched: true,
+      reports: [
+        {
+          kind: "not-dispatched",
+          jobId,
+          why:
+            `the launch protocol threw (${cause instanceof Error ? cause.message : String(cause)}); whether its launcher was reached is for its ` +
+            "reconciliation to find out, so this counts as a launch for spacing",
+        },
+      ],
+    };
+  }
+}
+
+/** What the journal already holds under an id, asked before a plan so the scheduler never plans an id twice. */
+type InJournal =
+  | { readonly kind: "absent" }
+  | { readonly kind: "resumable"; readonly account: string | null }
+  | { readonly kind: "present"; readonly state: LaunchRecord["state"] }
+  | { readonly kind: "carried" }
+  | { readonly kind: "unreadable"; readonly why: string };
+
+function inJournal(capability: SchedulerLaunch, id: LaunchOccurrenceId): InJournal {
+  try {
+    const fold = capability.view().fold();
+    if (fold.carried.has(id)) return { kind: "carried" };
+    const found = fold.occurrences.get(id);
+    if (found === undefined) return { kind: "absent" };
+    if (found.state === "planned" || found.state === "waiting-admission") return { kind: "resumable", account: accountOf(found) };
+    return { kind: "present", state: found.state };
+  } catch (cause) {
+    return { kind: "unreadable", why: cause instanceof Error ? cause.message : String(cause) };
+  }
+}
+
+/**
+ * **A NEW OCCURRENCE OF A SESSION JOB**: keyed at its nominal due instant, its
+ * material pinned, planned and driven by `launchOccurrence` on the
+ * `tmux-headless` launcher in the `claude-session` class.
+ *
+ * The order is the point. (1) An id already in the journal is resumed if it can
+ * be and otherwise left alone — **the scheduler never calls `launchOccurrence`
+ * for an id already in the fold** (F1's narrow check). (2) The material is
+ * built before anything is written, so a moved document costs nothing. (3)
+ * Only then is the protocol asked.
+ */
+function planSession(input: TickInput, job: AuthorisedJob, how: Extract<LaunchHow, { readonly kind: "new-session" }>): Launched {
+  const behaviour = job.definition.behaviour;
+  const jobId = behaviour.id;
+  const refuse = (why: string): Launched => ({ launched: false, reports: [{ kind: "not-dispatched", jobId, why }] });
+  const work = behaviour.work;
+  if (work.kind !== "session") return refuse("a rule was handed to the session path, which is a bug in the planner");
+  const capability = input.launch;
+  if (capability === undefined) return refuse(NO_LAUNCH_JOURNAL_WHY);
+
+  // THE KEY, AND FROM IT THE ID — recomputed, never stored (D1). The due
+  // instant rather than the tick's clock, so the same waiting occurrence is
+  // found again on the next tick and after a restart (D5).
+  const key: OccurrenceKey = { jobId, scheduledAt: how.dueAt, behaviourHash: behaviourHash(behaviour) };
+  const origin = scheduleOrigin(key);
+  const launchId = occurrenceIdOf(origin);
+
+  // (1) NEVER PLAN AN ID TWICE.
+  const existing = inJournal(capability, launchId);
+  switch (existing.kind) {
+    case "absent":
+      break;
+    case "resumable":
+      return resumeSession(input, jobId, launchId, existing.account);
+    case "present":
+      return {
+        launched: false,
+        reports: [
+          {
+            kind: "launch",
+            jobId,
+            via: "new",
+            account: how.account,
+            outcome: { kind: "not-launchable", occurrenceId: launchId, state: existing.state, why: `${launchId} is already in the launch journal as ${existing.state}; the scheduler never plans an occurrence twice` },
+          },
+        ],
+      };
+    case "carried":
+      return {
+        launched: false,
+        reports: [{ kind: "launch", jobId, via: "new", account: how.account, outcome: { kind: "refused", why: `${launchId} was carried over a launch-journal history reset; only Greg's disposition moves it` } }],
+      };
+    case "unreadable":
+      return refuse(`the launch journal could not be asked whether ${launchId} exists (${existing.why}), so nothing was planned`);
+    default: {
+      const never: never = existing;
+      throw new Error(`no step for ${JSON.stringify(never)}`);
+    }
+  }
+
+  // (2) THE MATERIAL, from the bytes the gate accepted this tick (D3).
+  const material = materialOf(job, input.readDocumentBytes);
+  if (!material.ok) return { launched: false, reports: [{ kind: "material-moved", jobId, why: material.why }] };
+
+  // (3) THE RUN: the job's authorised timeout and access, on the pool account
+  // the planner chose this tick. The account is not the job's authority and is
+  // not in its hash (M11); it is pinned in `planned` by the protocol, so a
+  // resume of this occurrence keeps it.
+  return called(jobId, "new", how.account, () =>
+    capability.launchOccurrence({
+      origin,
+      material: material.text,
+      admissionClass: "claude-session",
+      launcherKind: "tmux-headless",
+      run: { ...work.run, account: how.account },
+    }),
+  );
+}
+
+/**
+ * **A WAITING OCCURRENCE, DRIVEN ON FROM ITS STORED RECORD** (F1): no re-plan,
+ * no rebuilt request — the material, launcher, class, run spec and its
+ * account are the ones `planned` pinned, so a mechanical change to the
+ * material's framing can never turn a resume into a conflict.
+ */
+function resumeSession(input: TickInput, jobId: string, launchId: LaunchOccurrenceId, account: string | null): Launched {
+  const capability = input.launch;
+  if (capability === undefined) return { launched: false, reports: [{ kind: "not-dispatched", jobId, why: NO_LAUNCH_JOURNAL_WHY }] };
+  return called(jobId, "resume", account, () => capability.resumeOccurrence(launchId));
+}
+
+/**
+ * Abandon a waiting occurrence that is no longer the one to run, and say when
+ * it ended — the instant its replacement is keyed at. A refused abandon, or one
+ * the journal does not show, plans nothing this tick.
+ */
+function supersedeWaiting(
+  capability: SchedulerLaunch | undefined,
+  jobId: string,
+  occurrence: LaunchOccurrence,
+  why: string,
+): { readonly superseded: Superseded; readonly reports: readonly SchedulerReport[] } {
+  if (capability === undefined) return { superseded: { kind: "refused", why: NO_LAUNCH_JOURNAL_WHY }, reports: [] };
+  let answer: AbandonResult;
+  try {
+    answer = capability.abandon(occurrence.launchId, why);
+  } catch (cause) {
+    return { superseded: { kind: "refused", why: `the launch protocol threw (${cause instanceof Error ? cause.message : String(cause)})` }, reports: [] };
+  }
+  if (answer.kind === "refused") return { superseded: { kind: "refused", why: answer.why }, reports: [] };
+  const reports: SchedulerReport[] = [{ kind: "superseded", jobId, launchId: occurrence.launchId, why, reservation: answer.reservation }];
+  let endedAt: string | null = null;
+  try {
+    const found = capability.view().fold().occurrences.get(occurrence.launchId);
+    endedAt = found?.state === "failed-before-launch" ? found.endedAt : null;
+  } catch {
+    endedAt = null;
+  }
+  if (endedAt === null) {
+    return { superseded: { kind: "refused", why: `${occurrence.launchId} was abandoned and the launch journal does not say when, so its replacement waits for the next tick` }, reports };
+  }
+  return { superseded: { kind: "replaced", at: endedAt }, reports };
+}
+
+/** The sentence the material ends with. The framing is this file's, not pinned — the same boundary `rule-jobs.ts` states for the scheduler — and what is pinned is the `what` and each document's digest. */
+export const MATERIAL_CLOSING = "The documents above are the authorised text; follow them, not the copies on disk.";
+
+export type Material = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly why: string };
+
+/**
+ * **THE MATERIAL HANDED TO THE CHILD, PINNED** — plan 260910f (scheduled
+ * dispatch) § D3.
+ *
+ * A session used to be told "follow `docs/…/x.md`" and read the file minutes
+ * later, which left a window where an edited document ran under an old pin.
+ * So each authorised document's bytes are read ONCE, their digest compared with
+ * the one the pin gate accepted this tick (the job handed here carries it), and
+ * the text handed over verbatim: the job's `what`, then each document under a
+ * header naming its path and sha256, then one sentence saying these are the
+ * authorised text. The protocol then pins `material.txt`, re-hashes it before
+ * launch, and hands the child exactly those bytes (its F5).
+ *
+ * **A mismatch refuses this tick** (`material-moved`), which is a report and
+ * not an occurrence. So does a document that is not UTF-8 text: the material is
+ * a string, and bytes that do not survive the round trip are not verbatim.
+ */
+export function materialOf(job: AuthorisedJob, read: ReadDocumentBytes | undefined): Material {
+  const behaviour = job.definition.behaviour;
+  if (behaviour.documents.length === 0) return { ok: true, text: `${behaviour.what}\n` };
+  if (read === undefined) {
+    return { ok: false, why: "this process holds no reader for a document's bytes, so the material cannot be built from the text that was authorised" };
+  }
+  const sections: string[] = [];
+  for (const document of behaviour.documents) {
+    const got = read(document.path);
+    if (got.kind === "unreadable") return { ok: false, why: `${document.path} could not be read for the material (${got.why}), so nothing was planned` };
+    if (got.sha256 !== document.sha256) {
+      return {
+        ok: false,
+        why:
+          `${document.path} reads as ${got.sha256.slice(0, 12)} for the material and was authorised as ${document.sha256.slice(0, 12)} this tick: ` +
+          "it moved between the gate's reading and the material's, so nothing was planned",
+      };
+    }
+    const text = got.bytes.toString("utf8");
+    if (!Buffer.from(text, "utf8").equals(got.bytes)) return { ok: false, why: `${document.path} is not UTF-8 text, so it cannot be handed over verbatim` };
+    const fence = fenceFor(text);
+    sections.push(`${document.path} (sha256 ${document.sha256})\n${fence}\n${text}${text.endsWith("\n") ? "" : "\n"}${fence}`);
+  }
+  return { ok: true, text: [behaviour.what, "", "The documents this job follows, as they were authorised:", "", sections.join("\n\n"), "", MATERIAL_CLOSING, ""].join("\n") };
+}
+
+/** A backtick fence longer than any run of backticks in the text, so a document's own code blocks cannot close it. */
+function fenceFor(text: string): string {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length);
+  return "`".repeat(Math.max(3, longest + 1));
+}
+
+function describeLaunch(report: Extract<SchedulerReport, { readonly kind: "launch" }>): string {
+  const { jobId, outcome } = report;
+  const on = report.account === null ? "" : ` on pool account ${report.account}`;
+  const how = report.via === "resume" ? "resumed" : "planned";
+  switch (outcome.kind) {
+    case "invoked":
+      return (
+        `job ${jobId}: LAUNCHER INVOKED for ${outcome.occurrenceId} (${outcome.correlationId}, ${how}${on}) — ` +
+        (outcome.launcher === "started" ? `the launcher answered: ${outcome.detail}` : `the launcher threw (${outcome.detail}), so it may or may not have had its effect`) +
+        ". That is not a result: the launch journal and the run's exit.json say how it ends"
+      );
+    case "waiting":
+      return `job ${jobId}: WAITING FOR ADMISSION — ${outcome.occurrenceId} (${how}${on}): ${outcome.why}; it is asked again on the next tick`;
+    case "refused":
+      return `job ${jobId}: LAUNCH REFUSED — ${outcome.why}`;
+    case "conflict":
+      return `job ${jobId}: LAUNCH CONFLICT — ${outcome.occurrenceId}: ${outcome.why}`;
+    case "not-launchable":
+      return `job ${jobId}: NOT LAUNCHED — ${outcome.occurrenceId} is ${outcome.state}: ${outcome.why}`;
+    case "failed-before-launch":
+      return (
+        `job ${jobId}: FAILED BEFORE LAUNCH — ${outcome.occurrenceId} (${outcome.proof}): ${outcome.why}; ` +
+        (outcome.reservation.kind === "released" ? "it holds no slot" : `its slot is still held (${outcome.reservation.why})`)
+      );
+    case "not-launched":
+      return `job ${jobId}: NOT LAUNCHED — ${outcome.occurrenceId}: ${outcome.why}`;
+    default: {
+      const never: never = outcome;
+      throw new Error(String(never));
+    }
+  }
+}
+
 /** One report as a line for the daemon's log. The stuck ones are shouted, because they are the ones that used to be silent. */
 export function describeReport(report: SchedulerReport): string {
   switch (report.kind) {
@@ -853,6 +1238,17 @@ export function describeReport(report: SchedulerReport): string {
       return `job ${report.jobId}: STUCK — ${report.occurrenceId} ${report.why}`;
     case "unaccounted":
       return `job ${report.jobId}: UNACCOUNTED — ${report.occurrenceId} ${report.why}`;
+    case "launch":
+      return describeLaunch(report);
+    case "material-moved":
+      return `job ${report.jobId}: MATERIAL MOVED — ${report.why}`;
+    case "superseded":
+      return (
+        `job ${report.jobId}: SUPERSEDED ${report.launchId} — ${report.why}; it never launched, and ` +
+        (report.reservation.kind === "released" ? "it holds no slot" : `its slot is still held (${report.reservation.why})`)
+      );
+    case "usage-held":
+      return `job ${report.jobId}: HELD FOR A POOL ACCOUNT — ${report.why}${report.until === null ? "" : ` (expected to lift at ${report.until})`}`;
     default: {
       const never: never = report;
       throw new Error(String(never));

@@ -1831,14 +1831,31 @@ describe("suspicion 3: built, and deliberately not called yet", () => {
     }
   }
 
-  test("no production file outside the launch modules imports them — launchOccurrence has no caller", () => {
+  /**
+   * **THE ONE PRODUCTION CALLER**, since plan 260910f (scheduled dispatch) Stage
+   * B: the scheduler, through the capability it is handed (`TickInput.launch`).
+   * It is on this list deliberately, as "built but uncalled" was.
+   */
+  const CALLERS = new Set([join("tools", "overseer", "scheduler.ts")]);
+  /** Every import statement from a protocol module, with whether it is `import type`. `[^;]` spans lines, so a multi-line import is one match. */
+  const IMPORT_STATEMENTS = /import\s+(type\s+)?[^;]*?from\s+["'][^"']*\/launch-(?:protocol|store|admission|artefacts)(?:\.js)?["']/g;
+  /** Whether a file takes a VALUE from the protocol. A file whose every such import is `import type` can name a record and cannot call anything. */
+  const importsLaunchValues = (text: string): boolean => [...text.matchAll(IMPORT_STATEMENTS)].some((match) => match[1] === undefined);
+
+  test("no production file outside the launch modules takes a value from them but the scheduler — the protocol's one caller", () => {
     const files: string[] = [];
     for (const top of ["tools", "scripts", "src", "api", "evals"]) if (existsSync(join(REPO, top))) walk(join(REPO, top), files);
     const importers = files.map((file) => relative(REPO, file)).filter((file) => IMPORTS_LAUNCH.test(readFileSync(join(REPO, file), "utf8")));
     // THE DETECTOR WORKS: it sees the launch modules importing each other, and the writers importing the artefacts.
     expect(importers).toContain(join("tools", "overseer", "launch-store.ts"));
     for (const writer of ARTEFACT_WRITERS) expect(importers).toContain(writer);
-    expect(importers.filter((file) => !LAUNCH_FILES.has(file) && !ARTEFACT_WRITERS.has(file))).toEqual([]);
+    const valueImporters = importers.filter((file) => importsLaunchValues(readFileSync(join(REPO, file), "utf8")));
+    // …and it tells a value import from a type-only one, in both directions.
+    for (const caller of CALLERS) expect(valueImporters).toContain(caller);
+    const typeOnly = join("tools", "overseer", "jobs.ts");
+    expect(importers).toContain(typeOnly);
+    expect(valueImporters).not.toContain(typeOnly);
+    expect(valueImporters.filter((file) => !LAUNCH_FILES.has(file) && !ARTEFACT_WRITERS.has(file) && !CALLERS.has(file))).toEqual([]);
     // A writer reaches the artefact module and nothing past it, so it cannot reach launchOccurrence.
     for (const writer of ARTEFACT_WRITERS) expect(IMPORTS_BEYOND_ARTEFACTS.test(readFileSync(join(REPO, writer), "utf8")), writer).toBe(false);
   });

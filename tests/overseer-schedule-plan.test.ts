@@ -15,11 +15,20 @@
  *   mix. They are here so the refactor onto the planner is shown not to have
  *   moved them, which is the only thing a refactor of a gate order may not do.
  *
+ * **Since plan 260910f (scheduled dispatch) a session job starts through the
+ * launch protocol and nothing else**, so every tick here that launches a
+ * session does it through a REAL launch store and admission owner in a temp
+ * dir, with a fake `tmux-headless` launcher that writes down which job each
+ * invocation was for (`tests/overseer-scheduled-dispatch.test.ts`'s harness, cut
+ * down). A session's history is that journal; the rules keep `events.jsonl`,
+ * and the two scenarios that were about a lease are now a rule's, because only
+ * a rule has one.
+ *
  * Nothing here reads the wall clock, and no id in this file is a uuid:
  * `tests/fixture-ids.test.ts` fails the suite on a uuid shared between two
  * test files.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -33,30 +42,38 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDocument,
+  type JobRunSpec,
   type Occurrence,
   type OccurrenceId,
   type OccurrenceKey,
-  type SpawnJob,
 } from "../tools/overseer/jobs.js";
-import { planJobs, resolveEvidence, type DocumentEvidence, type JobPlan, type Launch } from "../tools/overseer/schedule-plan.js";
-import { eligibilityOf, schedulerStandingOf, schedulerTick, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
+import { openLocalAdmission, type LocalAdmission } from "../tools/overseer/launch-admission.js";
+import { readArtefacts, writeExitFile } from "../tools/overseer/launch-artefacts.js";
+import { composeLaunchProtocol, type LaunchProtocol, type Launcher } from "../tools/overseer/launch-protocol.js";
+import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
+import {
+  planJobs,
+  resolveEvidence,
+  type AccountChoice,
+  type DocumentEvidence,
+  type JobPlan,
+  type Launch,
+  type ReadDocumentBytes,
+} from "../tools/overseer/schedule-plan.js";
+import { eligibilityOf, schedulerStandingOf, schedulerTick, type OccurrenceLog, type SchedulerLaunch, type SchedulerReport, type TickInput } from "../tools/overseer/scheduler.js";
 import { hours, minutes } from "../tools/overseer/schedules.js";
-import { openStore, type OverseerStore } from "../tools/overseer/store.js";
 
-const opened: OverseerStore[] = [];
 const roots: string[] = [];
+const worlds: World[] = [];
 afterEach(() => {
-  for (const store of opened.splice(0)) store.close();
+  for (const one of worlds.splice(0)) one.kill();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function realStore(now: () => Date): OverseerStore {
+function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "overseer-schedule-plan-test-"));
   roots.push(root);
-  const result = openStore({ root, now });
-  if (!result.ok) throw new Error(`the store would not open: ${JSON.stringify(result.refusal)}`);
-  opened.push(result.store);
-  return result.store;
+  return root;
 }
 
 /** A clock the test moves by hand, backwards as well as forwards. */
@@ -67,6 +84,8 @@ function fakeClock(startIso: string): { now: () => Date; set(iso: string): void;
 
 const ARMED_LONG_AGO: Arming = { kind: "armed", at: "2026-09-01T00:00:00.000Z" };
 const NO_SPACING = 0;
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
+const ACCOUNTS: AccountChoice = { chosen: { kind: "chosen", account: "pool-a", notes: [] }, standing: () => ({ kind: "clear" }) };
 
 /** The one document the session jobs here lean on, and the digest it was pinned at. */
 const DOC: JobDocument = { path: "docs/fixture/plan-test-job.md", sha256: "a".repeat(64) };
@@ -85,7 +104,7 @@ function sessionJob(
   options: { dispatch?: Dispatch; documents?: readonly JobDocument[]; everyMs?: number; leaseMs?: number; initialDelayMs?: number; what?: string } = {},
 ): AuthorisedJob {
   const documents = options.documents ?? [DOC];
-  const behaviour: JobBehaviour = { id, what: options.what ?? `run ${id}`, documents, work: { kind: "session" }, dispatch: options.dispatch ?? LIVE };
+  const behaviour: JobBehaviour = { id, what: options.what ?? `run ${id}`, documents, work: { kind: "session", run: RUN }, dispatch: options.dispatch ?? LIVE };
   return {
     definition: {
       behaviour,
@@ -96,7 +115,7 @@ function sessionJob(
   };
 }
 
-function ruleJob(id: string, documents: readonly JobDocument[] = []): AuthorisedJob {
+function ruleJob(id: string, documents: readonly JobDocument[] = [], schedule = { everyMs: minutes(15), leaseMs: minutes(2), initialDelayMs: 0 }): AuthorisedJob {
   const behaviour: JobBehaviour = {
     id,
     what: `look for ${id}`,
@@ -105,7 +124,7 @@ function ruleJob(id: string, documents: readonly JobDocument[] = []): Authorised
     dispatch: LIVE,
   };
   return {
-    definition: { behaviour, schedule: { everyMs: minutes(15), leaseMs: minutes(2), initialDelayMs: 0 } },
+    definition: { behaviour, schedule },
     authorisedHash: behaviourHash(behaviour),
     authorisedDocuments: documents,
   };
@@ -119,7 +138,10 @@ function pinnedReader(reads: string[] = []): (path: string) => { kind: "read"; p
   };
 }
 
-/** A store that records what it was asked to append. Its index does not move — the tests that need it to use `realStore`. */
+/** The same documents' bytes, as the material reader sees them: the pinned digest, and some text. */
+const pinnedBytes: ReadDocumentBytes = (path) => ({ kind: "read", path, sha256: path === DOC.path ? DOC.sha256 : "b".repeat(64), bytes: Buffer.from(`the text of ${path}\n`, "utf8") });
+
+/** The rules' ledger: records what it was asked to append. Its index does not move. A session job writes nothing to it. */
 function fakeStore(
   occurrences: Map<OccurrenceId, Occurrence> = new Map(),
   history: OccurrenceLog["occurrenceHistory"] = { kind: "intact" },
@@ -137,23 +159,117 @@ function fakeStore(
   };
 }
 
-function spawner(settle: "never" | "on-demand" = "never"): { spawn: SpawnJob; started: string[]; finishAll(): void } {
+/* ------------------------------------------------------------------ *
+ * A real launch protocol, cut down.
+ * ------------------------------------------------------------------ */
+
+type World = {
+  readonly launch: SchedulerLaunch;
+  readonly protocol: LaunchProtocol;
+  readonly store: LaunchStore;
+  /** The job each launcher invocation was for, in order — the launcher's own tally, read back from the journal's record. */
+  readonly started: string[];
+  /** Every launch still in flight ends now, with an exit record, and reconciliation settles it. */
+  endAll(): void;
+  kill(): void;
+};
+
+function world(now: () => Date, options: { readonly refuseFirst?: boolean } = {}): World {
+  const root = tempRoot();
+  const opened = openLaunchStore({ root, now });
+  if (!opened.ok) throw new Error(`launch store refused: ${JSON.stringify(opened.refusal)}`);
+  const owned = openLocalAdmission({ root, now });
+  if (!owned.ok) throw new Error(`owner refused: ${JSON.stringify(owned.refusal)}`);
+  const store = opened.store;
+  const owner: LocalAdmission = owned.owner;
+  const sessions = join(root, "sessions");
   const started: string[] = [];
-  const finishers: (() => void)[] = [];
-  return {
-    started,
-    finishAll: () => {
-      for (const finish of finishers.splice(0)) finish();
-    },
-    spawn: (definition) => {
-      started.push(definition.behaviour.id);
-      const done =
-        settle === "never"
-          ? new Promise<never>(() => undefined)
-          : new Promise<{ kind: "exited"; code: number }>((resolve) => finishers.push(() => resolve({ kind: "exited", code: 0 })));
-      return { kind: "spawned", pid: 5151, done };
+  let refusals = options.refuseFirst === true ? 1 : 0;
+  const launcher: Launcher = {
+    kind: "tmux-headless",
+    launch(input) {
+      if (refusals > 0) {
+        refusals -= 1;
+        return { kind: "refused-before-effect", why: "the test's launcher refused this one before doing anything" };
+      }
+      const origin = store.fold().occurrences.get(input.occurrenceId)?.origin;
+      started.push(origin?.kind === "schedule" ? origin.jobId : "?");
+      mkdirSync(sessions, { recursive: true });
+      writeFileSync(join(sessions, input.correlationId), "");
+      return { kind: "started", detail: "a pretend tmux session" };
     },
   };
+  const protocol = composeLaunchProtocol({
+    journal: store,
+    owner,
+    launchers: { "tmux-headless": launcher },
+    evidence: {
+      artefacts: (dir, correlationId) => readArtefacts(dir, correlationId),
+      identity: () => ({ kind: "cannot-tell", why: "no process is probed in this test" }),
+      boot: () => ({ read: true, id: "boot-one" }),
+      tmux: (correlationId) => (existsSync(join(sessions, correlationId)) ? { kind: "found", sessionId: "$1" } : { kind: "absent" }),
+    },
+    now,
+  });
+  let closed = false;
+  const made: World = {
+    protocol,
+    store,
+    started,
+    launch: {
+      launchOccurrence: protocol.launchOccurrence,
+      resumeOccurrence: protocol.resumeOccurrence,
+      abandon: protocol.abandon,
+      view: () => ({ status: () => store.status(), fold: () => store.fold(), attemptDir: (id, attempt) => store.attemptDir(id, attempt) }),
+    },
+    endAll() {
+      for (const record of store.fold().occurrences.values()) {
+        if (record.state !== "launching" && record.state !== "observed-running") continue;
+        const { attempt, correlationId } = record.current;
+        writeExitFile(store.attemptDir(record.id, attempt), {
+          v: 1,
+          kind: "exit",
+          correlationId,
+          at: now().toISOString(),
+          ending: { kind: "exited", code: 0 },
+          verdict: { kind: "ok" },
+          usageLimit: false,
+          permissionDenials: 0,
+          answer: null,
+          transcript: null,
+        });
+        unlinkSync(join(sessions, correlationId));
+      }
+      protocol.reconcile();
+    },
+    kill() {
+      if (closed) return;
+      closed = true;
+      store.close();
+      owner.close();
+    },
+  };
+  worlds.push(made);
+  return made;
+}
+
+/** The jobs the launch journal holds occurrences of, in fold order. */
+function planned(w: World): string[] {
+  return [...w.store.fold().occurrences.values()].map((record) => (record.origin.kind === "schedule" ? record.origin.jobId : "?"));
+}
+
+/** A tick with this file's defaults: every capability a session needs, and whatever the test overrides. */
+function tick(w: World | null, input: Pick<TickInput, "definitions" | "now"> & Partial<TickInput>): readonly SchedulerReport[] {
+  return schedulerTick({
+    store: fakeStore(),
+    launch: w?.launch,
+    accounts: ACCOUNTS,
+    readDocument: pinnedReader(),
+    readDocumentBytes: pinnedBytes,
+    arming: ARMED_LONG_AGO,
+    launchSeparationMs: NO_SPACING,
+    ...input,
+  });
 }
 
 function key(jobId: string, at: string): OccurrenceKey {
@@ -174,119 +290,95 @@ function index(...occurrences: Occurrence[]): Map<OccurrenceId, Occurrence> {
   return new Map(occurrences.map((occurrence) => [occurrence.id, occurrence]));
 }
 
+/** `job:outcome` for a launch, `job:kind` for everything else. */
 function kinds(reports: readonly SchedulerReport[]): string[] {
-  return reports.map((report) => `${report.jobId}:${report.kind}`);
-}
-
-async function settle(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
+  return reports.map((report) => (report.kind === "launch" ? `${report.jobId}:${report.outcome.kind}` : `${report.jobId}:${report.kind}`));
 }
 
 // ───────────────────────────────────────────────────────────── red first
 
 describe("duplicate ids: every definition sharing an id is refused BEFORE anything is planned (red first)", () => {
-  test("ZERO SPAWNS, and both duplicates are refused — not the second one only", () => {
+  test("ZERO LAUNCHES, and both duplicates are refused — not the second one only", () => {
     // RED FIRST, on the code before `schedule-plan.ts`: the loop refused an id
     // only when it met it the SECOND time, so the first definition had already
     // been reserved and spawned while the report said "neither can be addressed"
-    // (Sol's P1-5). The assertion that matters is the spawn count, not the
+    // (Sol's P1-5). The assertion that matters is the launch count, not the
     // presence of a refusal — the old code had a refusal too.
-    const spawn = spawner();
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
     const store = fakeStore();
-    const reports = schedulerTick({
+    const reports = tick(w, {
       definitions: [sessionJob("twin"), sessionJob("twin", { what: "something else entirely" }), sessionJob("bystander")],
       store,
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
-    expect(spawn.started).toEqual(["bystander"]);
-    expect(kinds(reports)).toEqual(["twin:duplicate-id", "twin:duplicate-id", "bystander:dispatched"]);
-    // AND NOTHING WAS RESERVED FOR EITHER TWIN. A reservation is a launch as far
-    // as the ledger is concerned.
-    expect(store.appended.filter((event) => event.kind === "job-occurrence-reserved" && event.jobId === "twin")).toEqual([]);
+    expect(w.started).toEqual(["bystander"]);
+    expect(kinds(reports)).toEqual(["twin:duplicate-id", "twin:duplicate-id", "bystander:invoked"]);
+    // AND NOTHING WAS PLANNED FOR EITHER TWIN, in either ledger. A plan is the
+    // first durable write of a launch.
+    expect(planned(w)).toEqual(["bystander"]);
+    expect(store.appended).toEqual([]);
   });
 
   test("the duplicate is refused wherever it sits in the list, including last", () => {
-    const spawn = spawner();
-    const reports = schedulerTick({
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
+    const reports = tick(w, {
       definitions: [sessionJob("bystander"), ruleJob("twin"), sessionJob("twin")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
-    expect(spawn.started).toEqual(["bystander"]);
+    expect(w.started).toEqual(["bystander"]);
     expect(reports.filter((report) => report.jobId === "twin").map((report) => report.kind)).toEqual(["duplicate-id", "duplicate-id"]);
   });
 });
 
 describe("dry-run: due, and nothing reserved or launched (red first)", () => {
-  test("a due dry-run job reports `dry-run`, writes NOTHING to the ledger, and does not count against spacing", () => {
+  test("a due dry-run job reports `dry-run`, writes NOTHING to either ledger, and does not count against spacing", () => {
     // RED FIRST: before `dispatch` existed the field was invisible and the job
     // was simply dispatched.
-    const spawn = spawner();
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
     const store = fakeStore();
-    const reports = schedulerTick({
+    const reports = tick(w, {
       definitions: [sessionJob("fixture", { dispatch: { kind: "dry-run", why: "a harmless fixture nobody has made live" } }), sessionJob("real")],
       store,
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      // A LIVE GATE, and the second job still dispatches: a dry run started
+      // A LIVE GATE, and the second job still launches: a dry run started
       // nothing, so it must not ration the job behind it.
       launchSeparationMs: minutes(30),
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
-    expect(kinds(reports)).toEqual(["fixture:dry-run", "real:dispatched"]);
-    expect(spawn.started).toEqual(["real"]);
+    expect(kinds(reports)).toEqual(["fixture:dry-run", "real:invoked"]);
+    expect(w.started).toEqual(["real"]);
     // A last attempt that never happened would corrupt the ledger.
-    expect(store.appended.filter((event) => "jobId" in event && event.jobId === "fixture")).toEqual([]);
+    expect(planned(w)).toEqual(["real"]);
+    expect(store.appended).toEqual([]);
     const dry = reports[0];
     expect(dry?.kind === "dry-run" && dry.why).toContain("a harmless fixture nobody has made live");
   });
 
   test("and it stays due, every tick, rather than acquiring a last run it never had", () => {
-    const spawn = spawner();
-    const store = fakeStore();
     const clock = fakeClock("2026-09-10T12:00:00.000Z");
-    const input = {
-      definitions: [sessionJob("fixture", { dispatch: { kind: "dry-run", why: "fixture" } })],
-      store,
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
-      now: clock.now,
-    };
-    expect(kinds(schedulerTick(input))).toEqual(["fixture:dry-run"]);
+    const w = world(clock.now);
+    const store = fakeStore();
+    const input = { definitions: [sessionJob("fixture", { dispatch: { kind: "dry-run", why: "fixture" } })], store, now: clock.now };
+    expect(kinds(tick(w, input))).toEqual(["fixture:dry-run"]);
     clock.advance(minutes(1));
-    expect(kinds(schedulerTick(input))).toEqual(["fixture:dry-run"]);
+    expect(kinds(tick(w, input))).toEqual(["fixture:dry-run"]);
     expect(store.appended).toEqual([]);
+    expect(planned(w)).toEqual([]);
   });
 });
 
 describe("fresh document evidence, every tick (red first)", () => {
-  test("A DOCUMENT EDITED AFTER THE DAEMON BUILT ITS DEFINITIONS IS REFUSED, not dispatched under the old digest", () => {
+  test("A DOCUMENT EDITED AFTER THE DAEMON BUILT ITS DEFINITIONS IS REFUSED, not launched under the old digest", () => {
     // RED FIRST, and this is defect 1 of the plan: the definition in memory
     // still names the old digest and still matches its pin, while the session it
-    // launches is told to follow the document ON DISK — so between an edit and
+    // launches would follow the document as it is now — so between an edit and
     // the next restart, unattended authority grew silently.
-    const spawn = spawner();
-    const reports = schedulerTick({
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
+    const reports = tick(w, {
       definitions: [sessionJob("sweep")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
       readDocument: (path) => ({ kind: "read", path, sha256: "c".repeat(64) }),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
-    expect(spawn.started).toEqual([]);
+    expect(w.started).toEqual([]);
     expect(kinds(reports)).toEqual(["sweep:unauthorised"]);
     const refused = reports[0];
     if (refused?.kind !== "unauthorised") throw new Error("expected a refusal");
@@ -298,17 +390,13 @@ describe("fresh document evidence, every tick (red first)", () => {
   });
 
   test("a document that cannot be read this tick refuses the job with a sentence", () => {
-    const spawn = spawner();
-    const reports = schedulerTick({
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
+    const reports = tick(w, {
       definitions: [sessionJob("sweep")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
       readDocument: (path) => ({ kind: "unreadable", path, why: "ENOENT: it has gone" }),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
-    expect(spawn.started).toEqual([]);
+    expect(w.started).toEqual([]);
     expect(kinds(reports)).toEqual(["sweep:unauthorised"]);
     expect(reports[0]?.kind === "unauthorised" && reports[0].why).toContain("ENOENT: it has gone");
   });
@@ -319,12 +407,9 @@ describe("fresh document evidence, every tick (red first)", () => {
     // daemon, so re-reading them would refuse a rule whose running code has not
     // moved (plan § D3).
     const reads: string[] = [];
-    const reports = schedulerTick({
+    const reports = tick(null, {
       definitions: [ruleJob("wedged", [{ path: "tools/overseer/rules.ts", sha256: "d".repeat(64) }])],
-      store: fakeStore(),
       readDocument: pinnedReader(reads),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => new Date("2026-09-10T12:00:00.000Z"),
     });
     // REFUSED at `start` for want of a `rules` capability — which is to say it
@@ -333,19 +418,11 @@ describe("fresh document evidence, every tick (red first)", () => {
     expect(reads).toEqual([]);
   });
 
-  test("a session job that reads back exactly as pinned dispatches, and the documents were read THIS tick", () => {
+  test("a session job that reads back exactly as pinned launches, and the documents were read THIS tick", () => {
     const reads: string[] = [];
-    const spawn = spawner();
-    schedulerTick({
-      definitions: [sessionJob("sweep")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(reads),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
-      now: () => new Date("2026-09-10T12:00:00.000Z"),
-    });
-    expect(spawn.started).toEqual(["sweep"]);
+    const w = world(() => new Date("2026-09-10T12:00:00.000Z"));
+    tick(w, { definitions: [sessionJob("sweep")], readDocument: pinnedReader(reads), now: () => new Date("2026-09-10T12:00:00.000Z") });
+    expect(w.started).toEqual(["sweep"]);
     expect(reads).toEqual([DOC.path]);
   });
 });
@@ -355,12 +432,19 @@ describe("fresh document evidence, every tick (red first)", () => {
 describe("the planner scenarios of plan § D2 (characterisation: these passed on the old `due()`)", () => {
   const NOW = "2026-09-10T12:00:00.000Z";
 
-  function tickAt(definitions: readonly AuthorisedJob[], store: OccurrenceLog, now: () => Date, arming: Arming = ARMED_LONG_AGO, spawn = spawner()): readonly SchedulerReport[] {
-    return schedulerTick({ definitions, store, spawn: spawn.spawn, readDocument: pinnedReader(), arming, launchSeparationMs: NO_SPACING, now });
+  /** A launch made at `startIso` and ended at `endIso`: the journal then says the job last ran, and ended, then. */
+  function ranAndEnded(job: AuthorisedJob, startIso: string, endIso: string): { w: World; clock: ReturnType<typeof fakeClock> } {
+    const clock = fakeClock(startIso);
+    const w = world(clock.now);
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual([`${job.definition.behaviour.id}:invoked`]);
+    clock.set(endIso);
+    w.endAll();
+    return { w, clock };
   }
 
   test("startup: arming unknown holds a never-run job, loudly", () => {
-    const reports = tickAt([sessionJob("fresh")], fakeStore(), () => new Date(NOW), { kind: "unknown", why: "armed.json is missing" });
+    const w = world(() => new Date(NOW));
+    const reports = tick(w, { definitions: [sessionJob("fresh")], arming: { kind: "unknown", why: "armed.json is missing" }, now: () => new Date(NOW) });
     expect(kinds(reports)).toEqual(["fresh:held"]);
     expect(reports[0]?.kind === "held" && reports[0].why).toContain("armed.json is missing");
   });
@@ -368,71 +452,89 @@ describe("the planner scenarios of plan § D2 (characterisation: these passed on
   test("startup: armed, it is not-yet-eligible until armedAt + initialDelayMs, and due at exactly that instant", () => {
     const job = sessionJob("fresh", { initialDelayMs: hours(2) });
     const arming: Arming = { kind: "armed", at: "2026-09-10T10:00:00.000Z" };
-    const early = tickAt([job], fakeStore(), () => new Date(Date.parse("2026-09-10T12:00:00.000Z") - 1), arming);
+    const clock = fakeClock("2026-09-10T12:00:00.000Z");
+    clock.advance(-1);
+    const w = world(clock.now);
+    const early = tick(w, { definitions: [job], arming, now: clock.now });
     expect(early).toEqual([{ kind: "not-yet-eligible", jobId: "fresh", firstEligibleAt: "2026-09-10T12:00:00.000Z", remainingMs: 1 }]);
-    const spawn = spawner();
-    const onTime = tickAt([job], fakeStore(), () => new Date("2026-09-10T12:00:00.000Z"), arming, spawn);
-    expect(kinds(onTime)).toEqual(["fresh:dispatched"]);
+    clock.advance(1);
+    const onTime = tick(w, { definitions: [job], arming, now: clock.now });
+    expect(kinds(onTime)).toEqual(["fresh:invoked"]);
   });
 
-  test("interval boundary: last + everyMs − 1 is waiting, last + everyMs is due", () => {
+  test("interval boundary: ended + everyMs − 1 is waiting, ended + everyMs is due", () => {
     const job = sessionJob("steady", { everyMs: hours(3) });
-    const last = "2026-09-10T09:00:00.000Z";
-    const store = (): OccurrenceLog => fakeStore(index(settledAt("steady", last)));
-    const before = tickAt([job], store(), () => new Date(Date.parse(last) + hours(3) - 1));
-    expect(before).toEqual([{ kind: "waiting", jobId: "steady", remainingMs: 1 }]);
-    const on = tickAt([job], store(), () => new Date(Date.parse(last) + hours(3)));
-    expect(kinds(on)).toEqual(["steady:dispatched"]);
+    const { w, clock } = ranAndEnded(job, "2026-09-10T08:55:00.000Z", "2026-09-10T09:00:00.000Z");
+    clock.set(new Date(Date.parse("2026-09-10T09:00:00.000Z") + hours(3) - 1).toISOString());
+    expect(tick(w, { definitions: [job], now: clock.now })).toEqual([{ kind: "waiting", jobId: "steady", remainingMs: 1 }]);
+    clock.advance(1);
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["steady:invoked"]);
   });
 
-  test("missed intervals: three days down on a 3h job is ONE dispatch across repeated ticks, then held", async () => {
-    const clock = fakeClock("2026-09-07T12:00:00.000Z");
-    const store = realStore(clock.now);
-    const spawn = spawner("on-demand");
+  test("missed intervals: three days down on a 3h job is ONE launch across repeated ticks, then held", () => {
     const job = sessionJob("steady", { everyMs: hours(3), leaseMs: hours(1) });
-    expect(kinds(tickAt([job], store, clock.now, ARMED_LONG_AGO, spawn))).toEqual(["steady:dispatched"]);
-    spawn.finishAll();
-    await settle();
+    const { w, clock } = ranAndEnded(job, "2026-09-07T12:00:00.000Z", "2026-09-07T12:05:00.000Z");
     // The box is down for three days: twenty-four intervals missed.
     clock.advance(hours(72));
-    expect(kinds(tickAt([job], store, clock.now, ARMED_LONG_AGO, spawn))).toEqual(["steady:dispatched"]);
+    w.protocol.reconcile();
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["steady:invoked"]);
     for (let i = 0; i < 5; i += 1) {
       clock.advance(30_000);
-      expect(kinds(tickAt([job], store, clock.now, ARMED_LONG_AGO, spawn))).toEqual(["steady:held"]);
+      w.protocol.reconcile();
+      expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["steady:held"]);
     }
     // One run for the whole outage, not a replay of it.
-    expect(spawn.started).toEqual(["steady", "steady"]);
+    expect(w.started).toEqual(["steady", "steady"]);
   });
 
   test("forward time jump: a clock thirty days ahead is one run, not thirty days of them", () => {
-    const spawn = spawner();
-    const store = fakeStore(index(settledAt("steady", NOW)));
-    const reports = tickAt([sessionJob("steady")], store, () => new Date(Date.parse(NOW) + hours(24 * 30)), ARMED_LONG_AGO, spawn);
-    expect(kinds(reports)).toEqual(["steady:dispatched"]);
-    expect(spawn.started).toEqual(["steady"]);
-    expect(store.appended.filter((event) => event.kind === "job-occurrence-reserved")).toHaveLength(1);
+    const job = sessionJob("steady");
+    const { w, clock } = ranAndEnded(job, "2026-09-10T11:55:00.000Z", NOW);
+    clock.set(new Date(Date.parse(NOW) + hours(24 * 30)).toISOString());
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["steady:invoked"]);
+    clock.advance(30_000);
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["steady:held"]);
+    expect(w.started).toEqual(["steady", "steady"]);
+    expect(planned(w)).toEqual(["steady", "steady"]);
   });
 
-  test("backward time jump: the next run stays at the absolute last + everyMs", () => {
-    // The clock goes back an hour past the last run. `due` measures from the
-    // last run, so the remaining time grows by exactly the jump — the next run
-    // is still at last + everyMs on the calendar, not everyMs from "now".
-    const reports = tickAt([sessionJob("steady", { everyMs: hours(3) })], fakeStore(index(settledAt("steady", NOW))), () => new Date(Date.parse(NOW) - hours(1)));
-    expect(reports).toEqual([{ kind: "waiting", jobId: "steady", remainingMs: hours(4) }]);
+  test("backward time jump: the next run stays at the absolute ended + everyMs", () => {
+    // The clock goes back an hour past the last run's end. `due` measures from
+    // it, so the remaining time grows by exactly the jump — the next run is
+    // still at ended + everyMs on the calendar, not everyMs from "now".
+    const job = sessionJob("steady", { everyMs: hours(3) });
+    const { w, clock } = ranAndEnded(job, "2026-09-10T11:55:00.000Z", NOW);
+    clock.set(new Date(Date.parse(NOW) - hours(1)).toISOString());
+    expect(tick(w, { definitions: [job], now: clock.now })).toEqual([{ kind: "waiting", jobId: "steady", remainingMs: hours(4) }]);
   });
 
-  test("already running: held inside its lease; released as STUCK after it, and never retried", () => {
+  test("a session launch in flight holds its job with NO lease: before, at and long after the old lease would have run out, and it is never retried", () => {
+    // Re-scoped by plan 260910f (scheduled dispatch): a session no longer has a
+    // lease — "timeout alone is not proof" — so it is held until evidence or
+    // Greg moves it. The lease scenario below is a rule's now.
+    const job = sessionJob("busy", { everyMs: hours(3), leaseMs: hours(1) });
+    const clock = fakeClock("2026-09-10T11:00:00.000Z");
+    const w = world(clock.now);
+    expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["busy:invoked"]);
+    for (const at of ["2026-09-10T11:30:00.000Z", "2026-09-10T12:00:01.000Z", "2026-09-10T18:00:00.000Z"]) {
+      clock.set(at);
+      w.protocol.reconcile();
+      expect(kinds(tick(w, { definitions: [job], now: clock.now }))).toEqual(["busy:held"]);
+    }
+    expect(w.started).toEqual(["busy"]);
+  });
+
+  test("a RULE already running: held inside its lease; released as STUCK after it, and never retried", () => {
+    // The lease scenario, on the one kind of job that still has a lease.
     const reservedAt = "2026-09-10T11:00:00.000Z";
     const leaseUntil = "2026-09-10T12:00:00.000Z";
-    const job = sessionJob("busy", { everyMs: hours(3), leaseMs: hours(1) });
-    const spawn = spawner();
-    const inside = tickAt([job], fakeStore(index(startedAt("busy", reservedAt, leaseUntil))), () => new Date("2026-09-10T11:30:00.000Z"), ARMED_LONG_AGO, spawn);
+    const job = ruleJob("busy", [], { everyMs: hours(3), leaseMs: hours(1), initialDelayMs: 0 });
+    const inside = tick(null, { definitions: [job], store: fakeStore(index(startedAt("busy", reservedAt, leaseUntil))), now: () => new Date("2026-09-10T11:30:00.000Z") });
     expect(kinds(inside)).toEqual(["busy:held"]);
-    const after = tickAt([job], fakeStore(index(startedAt("busy", reservedAt, leaseUntil))), () => new Date("2026-09-10T12:00:01.000Z"), ARMED_LONG_AGO, spawn);
+    const after = tick(null, { definitions: [job], store: fakeStore(index(startedAt("busy", reservedAt, leaseUntil))), now: () => new Date("2026-09-10T12:00:01.000Z") });
     // The sweep reports it and releases the guard; the job then measures its
     // cadence from the reservation, so it WAITS rather than going again.
     expect(kinds(after)).toEqual(["busy:stuck", "busy:waiting"]);
-    expect(spawn.started).toEqual([]);
   });
 });
 
@@ -440,66 +542,44 @@ describe("report sequences the refactor must not move (characterisation)", () =>
   const NOW = new Date("2026-09-10T12:00:00.000Z");
 
   test("sweep first, then dispatch, in one tick", () => {
-    const spawn = spawner();
+    // A rule's, since only a rule is swept: the stuck run is reported, the guard
+    // released, and the same tick then reaches the rule's `start` — refused here
+    // for want of a rule runner, which is past every gate.
     const stuck = startedAt("busy", "2026-09-10T06:00:00.000Z", "2026-09-10T07:00:00.000Z");
-    const reports = schedulerTick({
-      definitions: [sessionJob("busy")],
-      store: fakeStore(index(stuck)),
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
-      now: () => NOW,
-    });
-    expect(kinds(reports)).toEqual(["busy:stuck", "busy:dispatched"]);
+    const job = ruleJob("busy", [], { everyMs: hours(3), leaseMs: hours(1), initialDelayMs: 0 });
+    const reports = tick(null, { definitions: [job], store: fakeStore(index(stuck)), now: () => NOW });
+    expect(kinds(reports)).toEqual(["busy:stuck", "busy:refused"]);
   });
 
-  test("history lost holds every job — duplicates included, because gate 1 comes before the id check", () => {
-    const spawn = spawner();
-    const reports = schedulerTick({
+  test("a lost history holds every job WHOSE HISTORY IT IS — duplicates included, because gate 1 comes before the id check (F2)", () => {
+    // The rules' ledger lost: the rule is held, and the session twins still meet
+    // the duplicate gate, because their history is the launch journal.
+    const w = world(() => NOW);
+    const ledgerLost = tick(w, {
       definitions: [sessionJob("a"), sessionJob("a"), ruleJob("r")],
       store: fakeStore(new Map(), { kind: "lost", why: "the log had a hole in it" }),
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: NO_SPACING,
       now: () => NOW,
     });
-    expect(kinds(reports)).toEqual(["a:history-lost", "a:history-lost", "r:history-lost"]);
-    expect(spawn.started).toEqual([]);
+    expect(kinds(ledgerLost)).toEqual(["a:duplicate-id", "a:duplicate-id", "r:history-lost"]);
+    // No launch journal at all: the session twins are held on it BEFORE the id
+    // check, and the rule, whose ledger is whole, is not.
+    const noJournal = tick(null, { definitions: [sessionJob("a"), sessionJob("a"), ruleJob("r")], now: () => NOW });
+    expect(kinds(noJournal)).toEqual(["a:history-lost", "a:history-lost", "r:refused"]);
+    expect(w.started).toEqual([]);
   });
 
-  test("a session / rule / session mix under a live gate: dispatched, refused, spacing-held", () => {
-    const spawn = spawner();
-    const reports = schedulerTick({
-      definitions: [sessionJob("first"), ruleJob("rule"), sessionJob("second")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: minutes(30),
-      now: () => NOW,
-    });
-    expect(kinds(reports)).toEqual(["first:dispatched", "rule:refused", "second:spacing-held"]);
-    expect(spawn.started).toEqual(["first"]);
+  test("a session / rule / session mix under a live gate: launched, refused, spacing-held", () => {
+    const w = world(() => NOW);
+    const reports = tick(w, { definitions: [sessionJob("first"), ruleJob("rule"), sessionJob("second")], launchSeparationMs: minutes(30), now: () => NOW });
+    expect(kinds(reports)).toEqual(["first:invoked", "rule:refused", "second:spacing-held"]);
+    expect(w.started).toEqual(["first"]);
   });
 
-  test("a runner that REFUSES moves no spacing clock, so the next session job still goes (characterisation)", () => {
-    let calls = 0;
-    const spawn: SpawnJob = () => {
-      calls += 1;
-      return calls === 1 ? { kind: "refused", why: "not this one" } : { kind: "spawned", pid: 6161, done: new Promise<never>(() => undefined) };
-    };
-    const reports = schedulerTick({
-      definitions: [sessionJob("first"), sessionJob("second")],
-      store: fakeStore(),
-      spawn,
-      readDocument: pinnedReader(),
-      arming: ARMED_LONG_AGO,
-      launchSeparationMs: minutes(30),
-      now: () => NOW,
-    });
-    expect(kinds(reports)).toEqual(["first:refused", "second:dispatched"]);
+  test("a launcher that REFUSES moves no spacing clock, so the next session job still goes (characterisation)", () => {
+    const w = world(() => NOW, { refuseFirst: true });
+    const reports = tick(w, { definitions: [sessionJob("first"), sessionJob("second")], launchSeparationMs: minutes(30), now: () => NOW });
+    expect(kinds(reports)).toEqual(["first:failed-before-launch", "second:invoked"]);
+    expect(w.started).toEqual(["second"]);
   });
 });
 
@@ -512,7 +592,8 @@ describe("planJobs, asked directly — the verdicts the preview will print", () 
     definitions: readonly AuthorisedJob[],
     options: {
       occurrences?: Map<OccurrenceId, Occurrence>;
-      history?: OccurrenceLog["occurrenceHistory"];
+      /** The launch journal's history — every session job's. */
+      sessionHistory?: OccurrenceLog["occurrenceHistory"];
       separationMs?: number;
       nowMs?: number;
       evidence?: DocumentEvidence;
@@ -524,15 +605,21 @@ describe("planJobs, asked directly — the verdicts the preview will print", () 
       {
         definitions,
         occurrences: options.occurrences ?? new Map(),
-        history: options.history ?? { kind: "intact" },
+        history: { rules: { kind: "intact" }, sessions: options.sessionHistory ?? { kind: "intact" } },
         arming: ARMED_LONG_AGO,
         launchSeparationMs: options.separationMs ?? NO_SPACING,
         nowMs: options.nowMs ?? NOW_MS,
         evidence: options.evidence ?? resolveEvidence(definitions, pinnedReader()),
+        accounts: ACCOUNTS,
       },
-      (job) => {
-        launched.push(job.definition.behaviour.id);
-        return options.launch?.(job) ?? true;
+      {
+        launch: (job, how) => {
+          launched.push(job.definition.behaviour.id);
+          return options.launch?.(job, how) ?? true;
+        },
+        supersede: () => {
+          throw new Error("no test in this describe has a waiting launch to supersede");
+        },
       },
     );
     return { plans, launched };
@@ -569,7 +656,7 @@ describe("planJobs, asked directly — the verdicts the preview will print", () 
     const twins = [sessionJob("twin"), sessionJob("twin")];
     expect(plan(twins).launched).toEqual([]);
     expect(plan(twins).plans.map((one) => one.kind)).toEqual(["duplicate-id", "duplicate-id"]);
-    expect(plan(twins, { history: { kind: "lost", why: "a hole" } }).plans.map((one) => one.kind)).toEqual(["history-lost", "history-lost"]);
+    expect(plan(twins, { sessionHistory: { kind: "lost", why: "a hole" } }).plans.map((one) => one.kind)).toEqual(["history-lost", "history-lost"]);
   });
 
   test("A SESSION JOB WITH NO READING IS REFUSED, not waved through on the digest it was built with", () => {

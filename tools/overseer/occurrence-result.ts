@@ -9,13 +9,15 @@
  *
  * ## Why the input is a type of its own
  *
- * The launch protocol's types (`launch-protocol.ts`, `launch-artefacts.ts`) are
- * not on this branch yet, so the classifier is written against `ObservedLaunch`,
- * which restates the parts of `LaunchRecord` and `ExitRecord` it reads, in the
- * same shapes. When the protocol lands, one adapter (`observedOf(record,
- * exitRecord)`, Stage B) is the only code that reads the protocol's own types,
- * and a type test pins the protocol's state list against `ObservedState` so a
- * ninth state is a compile error rather than a row that falls through.
+ * `ObservedLaunch` is the parts of a schedule-origin `LaunchRecord` the ladder
+ * and the projection read, flattened. `observed-launch.ts § observedOf` is the
+ * one adapter from the protocol's record to it. The exit record is NOT
+ * restated: it is the protocol's own `ExitFacts` (`launch-protocol.ts`), the
+ * shape `exit.json` and the journal's `completed` evidence share, so a field
+ * the protocol adds or respells is a compile error here. Two type pins below
+ * hold `ObservedState`'s eight arms equal to the protocol's `LaunchState` and to
+ * `wire.ts`'s restated list, so a ninth state is a compile error rather than a
+ * row that falls through.
  *
  * ## The ladder, and its precedence
  *
@@ -26,18 +28,53 @@
  *     admission-waiting  waiting-admission
  *     running            launching, observed-running
  *     unknown            outcome-unknown
- *     launch-failed      failed-before-launch; supervisor-failed; verdict cause spawn
- *     timed-out          timedOut; verdict cause timeout
- *     quota-refused      usageLimit
- *     interrupted        signalled (not a timeout); rebooted; a disposition with no exit record
+ *     superseded         failed-before-launch with proof superseded — abandoned on purpose,
+ *                        and nothing ran; NOT a failure (M13)
+ *     launch-failed      failed-before-launch (any other proof); ending not-run;
+ *                        verdict cause spawn or prompt-unverified
+ *     timed-out          verdict cause timeout
+ *     quota-refused      usageLimit true
+ *     interrupted        verdict cause hangup (a cancellation, whatever the child's ending);
+ *                        ending signalled (not a timeout); ending unobserved; rebooted;
+ *                        a disposition with no ending
  *     permission-denied  permissionDenials > 0
  *     missing-answer     exit 0 without a usable answer; verdict cause no-result or empty-answer
- *     failed             everything else that is not the row below
- *     succeeded          exit 0 AND verdict ok AND a usable projected answer AND exactly 0 denials AND no usage limit
+ *     failed             everything else that is not the row below — a non-zero exit, cli-error,
+ *                        overflow, nonzero, a wrapper failure over a child that ran, and an exit
+ *                        record its exit.json could not confirm
+ *     succeeded          exit 0 AND verdict ok AND a usable projected answer AND exactly 0 denials
+ *                        AND usageLimit false
+ *
+ * **`superseded` is its own kind, not a `launch-failed`** (the plan's M13). The
+ * scheduler abandons a waiting occurrence deliberately — a newer authorised
+ * revision replaced it, or the pool account it was pinned to is gone (M12) —
+ * and the protocol records that as `failed-before-launch` with proof
+ * `superseded`. Nothing ran and nothing went wrong, so a red pill would be an
+ * alarm about a decision. Its `why` is the abandon's own reason, verbatim, and
+ * it is not in `RESULT_FAILED`.
  *
  * **A permission denial with a usable answer is still `permission-denied`.** An
  * unattended job that could not do something it tried is the case somebody must
  * look at, and "the model worked round it" is invisible in the answer.
+ *
+ * ### Three readings of the protocol's final shape, decided here
+ *
+ *  - **`wrapper` is `launch-failed` only when no child ran.** The wrapper names
+ *    that cause over a child that did run too — `scripts/launch-dir.ts §
+ *    exitFactsOf` writes it for "the wrapper exited 0 over a child that did not
+ *    exit 0". Reading that as "nothing ran" would be false, so with a child
+ *    ending the child's ending decides: `failed`, `interrupted` and so on, with
+ *    the wrapper's why. With the `not-run` ending it is `launch-failed`, which
+ *    the not-run row already says. `prompt-unverified` is `launch-failed`
+ *    whatever the ending, since the prompt check precedes any child.
+ *  - **`hangup` is `interrupted` whatever the ending.** The wrapper forwards the
+ *    hangup and waits for the child, so a child that handled it and exited is
+ *    recorded as `exited` (`launch-dir.ts § hangup`). It was still cancelled.
+ *  - **An `unobserved` ending is `interrupted`**: a child ran and the wrapper
+ *    stopped waiting before the kernel reported how it ended (the forced settle
+ *    after a SIGKILL). How it ended is unknown, so it is never `succeeded`, and
+ *    not a plain `failed` either, which would claim a failure the child may not
+ *    have had. A timeout verdict over it is still `timed-out`, by table order.
  *
  * ## A disposition outranks the four rows that are not endings
  *
@@ -56,13 +93,13 @@
  *
  * ## NULL MEANS "THIS EXIT RECORD DID NOT SAY", AND IT IS NEVER EVIDENCE OF SUCCESS
  *
- * `verdict`, `usageLimit`, `permissionDenials` and `answerUsable` are null when
- * the exit record carries no such field — an older writer, or a tmux launch,
- * which has no wrapper and no answer file. `succeeded` needs each of them said,
- * and said well. What an unsaid field does instead:
+ * A job shell writes the ending and nothing else: `verdict`, `usageLimit`,
+ * `permissionDenials`, `answer` and `transcript` all null. `run-codex` gives a
+ * verdict but may leave `usageLimit` and `permissionDenials` null. `succeeded`
+ * needs each of them said, and said well. What an unsaid field does instead:
  *
- *  - `answerUsable` null on an exit of 0 is `missing-answer`: nothing says an
- *    answer exists, and a scheduled job's answer is its product.
+ *  - `answer` null on an exit of 0 is `missing-answer`: nothing says an answer
+ *    exists, and a scheduled job's answer is its product.
  *  - `verdict` null on an exit of 0 with a usable answer is **`failed`**, with a
  *    why saying the wrapper gave no verdict. Not `missing-answer`, because the
  *    answer is there; not `succeeded`, because the wrapper's verdict is the one
@@ -70,6 +107,14 @@
  *    an exit code alone is what this stage exists to stop trusting.
  *  - `usageLimit` null, or `permissionDenials` null, on an otherwise good run is
  *    `failed` for the same reason, naming the field that was not said.
+ *
+ * ## An exit record its exit.json could not confirm is `failed`
+ *
+ * `observedOf` checks the journal's copy of the exit facts against the
+ * attempt's `exit.json`. If the file is unreadable, or says something else, the
+ * completion arrives here as `exit-unconfirmed` with the reason, and reads as
+ * `failed` — not `missing-answer`, because whether there was an answer is
+ * exactly what cannot be said, and never `succeeded`.
  *
  * So a row can only be `succeeded` from the `completed` arm, from an exit
  * record that said all five things, and when the answer projected beside it is
@@ -80,45 +125,25 @@
  * ## `at`
  *
  * Null for `pending`, `admission-waiting` and `running`, which have no ending
- * yet. For an ending, the record's `updatedAt` — except for a disposition,
- * which is dated by the disposition itself, since the record's `updatedAt`
- * moves again when the release that follows it is written.
+ * yet. For `completed` and `failed-before-launch` (so `superseded` too), the record's **`endedAt`** —
+ * the `at` of the line that entered the state, which a later release never
+ * moves (Sol's plan F4). For `unknown`, the record's `updatedAt`, since it is
+ * dated by when the uncertainty was recorded. A disposition is dated by the
+ * disposition itself, since the record's `updatedAt` moves again when the
+ * release that follows it is written.
  */
 import type { ScheduledAnswer, ScheduledLaunchState, ScheduledResult, ScheduledResultKind, ScheduledRunSpec } from "../fleet/wire.js";
+import type { ExitEnding, ExitFacts, FailedProof, LaunchState } from "./launch-protocol.js";
 
-/** How the launched side ended — the protocol's `ExitEnding`, restated. */
-export type ObservedEnding =
-  | { readonly kind: "exited"; readonly code: number }
-  | { readonly kind: "signalled"; readonly signal: string }
-  /** The supervisor itself failed (a spawn error, a refusal after start) and said so. */
-  | { readonly kind: "supervisor-failed"; readonly why: string };
-
-/** The seven ways `run-claude.ts` says a run failed. */
-export type WrapperFailureCause = "spawn" | "overflow" | "timeout" | "cli-error" | "no-result" | "nonzero" | "empty-answer";
-
-/** The wrapper's own reading of the whole run. */
-export type WrapperVerdict = { readonly kind: "ok" } | { readonly kind: "failed"; readonly cause: WrapperFailureCause; readonly why: string };
+/** An attempt's exit facts — `exit.json`'s, as the journal's `completed` evidence copies them. */
+export type ObservedExitRecord = { readonly kind: "exit-record" } & ExitFacts;
 
 /**
- * An attempt's `exit.json`, the fields the ladder reads. Each nullable field is
- * null when the record did not say — see the header: **null is not evidence**.
+ * How a `completed` launch ended: an exit record, a reboot (there is no
+ * `vanished`), or an exit record the attempt's `exit.json` could not confirm —
+ * see the header.
  */
-export type ObservedExitRecord = {
-  readonly kind: "exit-record";
-  readonly ending: ObservedEnding;
-  readonly timedOut: boolean;
-  /** `answer.usable`; null when the record has no answer (a tmux launch, or an older writer). */
-  readonly answerUsable: boolean | null;
-  readonly verdict: WrapperVerdict | null;
-  readonly usageLimit: boolean | null;
-  readonly permissionDenials: number | null;
-};
-
-/** The protocol's `CompletionEvidence`: an exit record, or a reboot. There is no `vanished`. */
-export type ObservedCompletion = { readonly kind: "rebooted" } | ObservedExitRecord;
-
-/** Which proof licensed a `failed-before-launch` — the protocol's `FailedProof`, restated. */
-export type ObservedFailedProof = "admission-refused" | "restarted-before-launching" | "material-mismatch" | "intent-not-written" | "launcher-refused";
+export type ObservedCompletion = { readonly kind: "rebooted" } | ObservedExitRecord | { readonly kind: "exit-unconfirmed"; readonly why: string };
 
 /** The protocol's eight states, each carrying only what it can have. */
 export type ObservedState =
@@ -127,8 +152,8 @@ export type ObservedState =
   | { readonly kind: "reserved" }
   | { readonly kind: "launching"; readonly attempt: number }
   | { readonly kind: "observed-running"; readonly attempt: number }
-  | { readonly kind: "completed"; readonly attempt: number; readonly evidence: ObservedCompletion }
-  | { readonly kind: "failed-before-launch"; readonly attempt: number | null; readonly proof: ObservedFailedProof; readonly why: string }
+  | { readonly kind: "completed"; readonly attempt: number; readonly evidence: ObservedCompletion; readonly endedAt: string }
+  | { readonly kind: "failed-before-launch"; readonly attempt: number | null; readonly proof: FailedProof; readonly why: string; readonly endedAt: string }
   | { readonly kind: "outcome-unknown"; readonly attempt: number; readonly why: string };
 
 /** Greg's decision on an unsettled launch — the protocol's `Disposition`, less who and which request. */
@@ -155,20 +180,23 @@ export type ObservedLaunch = {
 };
 
 /*
- * THE STATE LISTS AGREE, BOTH WAYS. `wire.ts` restates the eight states because
- * it imports nothing; this file restates them as a union's arms. A state added
- * to one and not the other fails to compile here.
+ * THE STATE LISTS AGREE, BOTH WAYS, WITH BOTH NEIGHBOURS. `wire.ts` restates
+ * the eight states because it imports nothing; the protocol owns them. A state
+ * added to either and not here fails to compile.
  */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-const STATES_AGREE: Same<ObservedState["kind"], ScheduledLaunchState> = true;
-void STATES_AGREE;
+const STATES_AGREE_WITH_WIRE: Same<ObservedState["kind"], ScheduledLaunchState> = true;
+const STATES_AGREE_WITH_PROTOCOL: Same<ObservedState["kind"], LaunchState["state"]> = true;
+void STATES_AGREE_WITH_WIRE;
+void STATES_AGREE_WITH_PROTOCOL;
 
-/** Which results are failures, which are not endings yet, and the one good ending. The compiler counts them. */
-const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "failed" | "succeeded">> = {
+/** Which results are failures, which are not endings yet, the one set aside on purpose, and the one good ending. The compiler counts them. */
+const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "set-aside" | "failed" | "succeeded">> = {
   pending: "open",
   "admission-waiting": "open",
   running: "open",
   unknown: "open",
+  superseded: "set-aside",
   "launch-failed": "failed",
   "timed-out": "failed",
   "quota-refused": "failed",
@@ -181,7 +209,8 @@ const RESULT_CLASS: Readonly<Record<ScheduledResultKind, "open" | "failed" | "su
 
 /**
  * The failure kinds, for the page's red pill and the CLI. `unknown` is not
- * among them: it is not an ending, it is an ending nobody can read yet.
+ * among them: it is not an ending, it is an ending nobody can read yet. Nor is
+ * `superseded`: it is an ending, and a deliberate one.
  */
 export const RESULT_FAILED: ReadonlySet<ScheduledResultKind> = new Set(
   (Object.keys(RESULT_CLASS) as ScheduledResultKind[]).filter((kind) => RESULT_CLASS[kind] === "failed"),
@@ -192,7 +221,6 @@ const open = (kind: ScheduledResultKind, why: string): ScheduledResult => ({ kin
 /** The ladder. Exhaustive over the eight states, so a ninth is a compile error here. */
 export function classifyOccurrence(o: ObservedLaunch): ScheduledResult {
   const state = o.state;
-  const ended = (kind: ScheduledResultKind, why: string): ScheduledResult => ({ kind, why, at: o.updatedAt });
   switch (state.kind) {
     case "planned":
     case "waiting-admission":
@@ -201,7 +229,7 @@ export function classifyOccurrence(o: ObservedLaunch): ScheduledResult {
     case "observed-running":
     case "outcome-unknown": {
       // A DISPOSITION FIRST, on every state that has no ending of its own — the
-      // header's second section says why the table's order alone would bury it.
+      // header's disposition section says why the table's order alone would bury it.
       if (o.disposition !== null) {
         const said = o.disposition.decision === "not-running" ? "it was not running" : "it had ended";
         return {
@@ -213,15 +241,25 @@ export function classifyOccurrence(o: ObservedLaunch): ScheduledResult {
       return notEnded(state, o.updatedAt);
     }
     case "failed-before-launch":
-      return ended(
-        "launch-failed",
-        `it failed before launch, with proof that nothing ran (${state.proof}${state.attempt === null ? "" : `, attempt ${state.attempt}`}): ${state.why}`,
-      );
+      // SUPERSEDED BEFORE LAUNCH-FAILED: the scheduler set it aside on purpose
+      // and nothing ran, so it is not a failure — the header's M13 section.
+      if (state.proof === "superseded") return { kind: "superseded", why: state.why, at: state.endedAt };
+      return {
+        kind: "launch-failed",
+        why: `it failed before launch, with proof that nothing ran (${state.proof}${state.attempt === null ? "" : `, attempt ${state.attempt}`}): ${state.why}`,
+        at: state.endedAt,
+      };
     case "completed": {
+      const ended = (kind: ScheduledResultKind, why: string): ScheduledResult => ({ kind, why, at: state.endedAt });
       const evidence = state.evidence;
       switch (evidence.kind) {
         case "rebooted":
           return ended("interrupted", `the box rebooted while attempt ${state.attempt} ran, so it never wrote an exit record`);
+        case "exit-unconfirmed":
+          return ended(
+            "failed",
+            `the journal records attempt ${state.attempt}'s exit record, but the attempt's exit.json could not confirm it, so nothing about how it ended can be claimed: ${evidence.why}`,
+          );
         case "exit-record": {
           const [kind, why] = exitLadder(evidence, o.answer);
           return ended(kind, why);
@@ -265,33 +303,39 @@ function notEnded(state: Exclude<ObservedState, { kind: "completed" | "failed-be
 function exitLadder(e: ObservedExitRecord, answer: ScheduledAnswer): [ScheduledResultKind, string] {
   const cause = e.verdict?.kind === "failed" ? e.verdict.cause : null;
   const wrapperWhy = e.verdict?.kind === "failed" ? e.verdict.why : null;
-  const ending = describeEnding(e.ending);
+  const wrapperSays = cause === null ? "" : `; the wrapper says ${cause}: ${wrapperWhy}`;
+  const ending = e.ending;
+  const how = describeEnding(ending);
 
-  if (e.ending.kind === "supervisor-failed") return ["launch-failed", `the supervisor itself failed and said so: ${e.ending.why}`];
-  if (cause === "spawn") return ["launch-failed", `the wrapper could not start the session (${ending}): ${wrapperWhy}`];
+  // LAUNCH-FAILED: nothing ran, or not the prompt that was pinned.
+  if (ending.kind === "not-run") return ["launch-failed", `no child ran${cause === null ? ", and the wrapper gave no verdict" : `: the wrapper says ${cause}: ${wrapperWhy}`}`];
+  if (cause === "spawn" || cause === "prompt-unverified") return ["launch-failed", `the wrapper says ${cause} (${how}), so the pinned session never started: ${wrapperWhy}`];
 
-  if (e.timedOut) return ["timed-out", `the exit record says it ran past its timeout and was stopped (${ending})`];
-  if (cause === "timeout") return ["timed-out", `the wrapper says it timed out (${ending}): ${wrapperWhy}`];
+  if (cause === "timeout") return ["timed-out", `the wrapper says it ran past its timeout and was stopped (${how}): ${wrapperWhy}`];
 
-  if (e.usageLimit === true) return ["quota-refused", `the exit record says the account's usage limit refused it (${ending})`];
+  if (e.usageLimit === true) return ["quota-refused", `the exit record says the account's usage limit refused it (${how})`];
 
-  if (e.ending.kind === "signalled") return ["interrupted", `it was stopped by ${e.ending.signal} before it finished, and not by its timeout`];
+  // INTERRUPTED: cancelled, stopped by a signal, or ended where nobody could see.
+  if (cause === "hangup") return ["interrupted", `it was cancelled: the wrapper was hung up (hangup, ${how}): ${wrapperWhy}`];
+  if (ending.kind === "signalled") return ["interrupted", `it was stopped by ${ending.signal} before it finished, and not by its timeout${wrapperSays}`];
+  if (ending.kind === "unobserved") return ["interrupted", `the wrapper could not observe how its child ended — it stopped waiting before the kernel reported it${wrapperSays}`];
 
   if (e.permissionDenials !== null && e.permissionDenials > 0) {
-    return ["permission-denied", `the exit record counts ${e.permissionDenials} permission denial${e.permissionDenials === 1 ? "" : "s"} (${ending}), so it could not do something it tried`];
+    return ["permission-denied", `the exit record counts ${e.permissionDenials} permission denial${e.permissionDenials === 1 ? "" : "s"} (${how}), so it could not do something it tried`];
   }
 
-  const code = e.ending.code;
+  const code = ending.code;
+  const recordUsable = e.answer === null ? null : e.answer.usable;
   const projectedAnswerUsable = answer.kind === "present" && answer.usable && answer.bytes > 0;
-  if (code === 0 && (e.answerUsable !== true || !projectedAnswerUsable)) {
-    if (e.answerUsable !== true) {
-      return ["missing-answer", e.answerUsable === false ? "it exited 0 but its answer was empty or unusable" : "it exited 0 and the exit record says nothing of an answer"];
+  if (code === 0 && (recordUsable !== true || !projectedAnswerUsable)) {
+    if (recordUsable !== true) {
+      return ["missing-answer", recordUsable === false ? "it exited 0 but its answer was empty or unusable" : "it exited 0 and the exit record names no answer"];
     }
     return ["missing-answer", "it exited 0 and the exit record calls its answer usable, but the projected answer is absent, unusable or empty"];
   }
-  if (cause === "no-result" || cause === "empty-answer") return ["missing-answer", `the wrapper says there was no answer (${cause}, ${ending}): ${wrapperWhy}`];
+  if (cause === "no-result" || cause === "empty-answer") return ["missing-answer", `the wrapper says there was no answer (${cause}, ${how}): ${wrapperWhy}`];
 
-  if (code !== 0) return ["failed", wrapperWhy === null ? `it exited ${code}` : `it exited ${code}, and the wrapper says ${cause}: ${wrapperWhy}`];
+  if (code !== 0) return ["failed", cause === null ? `it exited ${code}` : `it exited ${code}, and the wrapper says ${cause}: ${wrapperWhy}`];
   if (cause !== null) return ["failed", `it exited 0 but the wrapper says ${cause}: ${wrapperWhy}`];
 
   // EXIT 0, A USABLE ANSWER, NO FAILED VERDICT. Now every unsaid field is a
@@ -304,14 +348,16 @@ function exitLadder(e: ObservedExitRecord, answer: ScheduledAnswer): [ScheduledR
   return ["succeeded", "it exited 0, the wrapper's verdict was ok, its answer is usable, and there were no permission denials and no usage limit"];
 }
 
-function describeEnding(ending: ObservedEnding): string {
+function describeEnding(ending: ExitEnding): string {
   switch (ending.kind) {
     case "exited":
       return `exit ${ending.code}`;
     case "signalled":
       return `stopped by ${ending.signal}`;
-    case "supervisor-failed":
-      return `the supervisor failed: ${ending.why}`;
+    case "not-run":
+      return "no child ran";
+    case "unobserved":
+      return "how the child ended was not observed";
     default: {
       const never: never = ending;
       throw new Error(`no words for ending ${JSON.stringify(never)}`);
