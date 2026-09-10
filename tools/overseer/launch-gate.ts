@@ -33,7 +33,13 @@
  * `why` and the notes are shown to Greg on a web page, so they are short plain
  * English and never the producer's internal wording.
  */
-import type { StoredUsage, UsageLevel, UsageWindowName } from "../fleet/wire.js";
+import type {
+  AccountUsageSection,
+  StoredAccountUsage,
+  StoredUsage,
+  UsageLevel,
+  UsageWindowCard,
+} from "../fleet/wire.js";
 
 export type LaunchGate = { kind: "clear"; notes: string[] } | { kind: "held"; why: string; until: string | null };
 
@@ -164,35 +170,12 @@ export function healthGate(health: unknown, onUnknown: "hold" | "clear"): Launch
 }
 
 /*
- * LOCAL STRUCTURAL COPIES of dev's `UsageWindowCard`, `AccountUsageSection`
- * and `StoredAccountUsage` (tools/fleet/wire.ts on dev since 74634fd3;
- * docs/project/usage-per-account.md). They are not in this worktree yet, and
- * are swapped for the real type imports when dev is merged — same names, same
- * shapes, so the swap changes nothing here. The Codex arm's bucket type is
- * left opaque: this gate never reads it.
+ * The daemon's per-account usage reading (docs/project/usage-per-account.md),
+ * re-exported from wire.ts so the recovery modules and their fakes name one
+ * type through this gate. Stage 1 was built against local copies before dev's
+ * types reached this branch; the merge replaced them with these.
  */
-export type UsageWindowCard =
-  | { kind: "value"; window: UsageWindowName; utilizationPercent: number; resetsAt: string }
-  | { kind: "expired"; window: UsageWindowName; resetsAt: string; why: string }
-  | { kind: "unknown"; window: UsageWindowName; why: string };
-
-export type AccountUsageSection = {
-  name: string;
-  role: "orchestrator" | "pool";
-  origin: "ambient" | "registered";
-  displayEmail: string | null;
-  /** When THIS account was read. */
-  takenAt: string;
-} & (
-  | { family: "claude"; providerAccountId: string; reading: { kind: "windows"; windows: UsageWindowCard[] } }
-  | { family: "claude"; providerAccountId: string | null; reading: { kind: "unknown"; why: string } }
-  | { family: "codex"; providerAccountId: string; reading: { kind: "buckets"; buckets: unknown[]; resetCredits: number | null } }
-  | { family: "codex"; providerAccountId: string | null; reading: { kind: "unknown"; why: string } }
-);
-
-export type StoredAccountUsage =
-  | { kind: "reading"; collectedAt: string; accounts: readonly AccountUsageSection[]; problems: readonly string[] }
-  | { kind: "none"; why: string; at: string };
+export type { AccountUsageSection, StoredAccountUsage, UsageWindowCard };
 
 /** At or past this a window holds. */
 const QUOTA_APPROACHING_PERCENT = 80;

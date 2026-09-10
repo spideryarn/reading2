@@ -92,7 +92,6 @@ import {
   type ResumeAccountPort,
   type ResumeLaunchPort,
 } from "./recovery-resume.js";
-import type { StoredAccountUsage } from "./launch-gate.js";
 import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
 import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
@@ -426,10 +425,10 @@ export type DaemonOptions = {
     port?: ResumeLaunchPort;
     accounts?: ResumeAccountPort;
     /**
-     * The per-account usage reading the gate judges the pinned account by. On
-     * dev the daemon holds it as `accountUsage` (74634fd3); this worktree
-     * predates that, so it is taken here and wired at the merge. Absent: no
-     * reading, which the gate holds on.
+     * The per-account usage reading the gate judges the pinned account by.
+     * Absent: the daemon's own `accountUsage` (the checkpoint's sibling field,
+     * collected on each usage pass — docs/project/usage-per-account.md). Tests
+     * inject one. Null means no pass has read accounts yet, which the gate holds on.
      */
     accountUsage?: () => StoredAccountUsage | null;
     readRange?: ReadRange;
@@ -1131,7 +1130,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         return { inventory, health: accepted?.snapshot.health ?? null, index: { ...index, records: new Map(index.records) } };
       },
       view: () => latestView,
-      accountUsage: resumeOptions?.accountUsage ?? (() => null),
+      accountUsage: resumeOptions?.accountUsage ?? (() => accountUsage),
       previewCache,
       ...(resumeOptions?.readRange === undefined ? {} : { readRange: resumeOptions.readRange }),
       ...(resumeOptions?.beforeRecapture === undefined ? {} : { beforeRecapture: resumeOptions.beforeRecapture }),
