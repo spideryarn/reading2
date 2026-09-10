@@ -46,6 +46,7 @@ import { readinessRoute } from "./routes-readiness.js";
 import { usageHistoryRoute } from "./routes-usage-history.js";
 import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
+import { addressableHost } from "./origin.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
@@ -698,8 +699,50 @@ async function refreshLoop(): Promise<void> {
   }
 }
 
+/**
+ * Why this request's `Host` is refused, or null if it names this dashboard.
+ *
+ * `new URL` rather than splitting on `:`, so `[::1]:8787` and a `Host` smuggling
+ * a userinfo (`127.0.0.1@evil.example`) come out as the name a browser would
+ * have resolved. A missing `Host` is refused as well: HTTP/1.1 requires one and
+ * Node refuses its absence before `handler` runs, but HTTP/1.0 does not.
+ */
+function unaddressedHost(host: string | undefined): string | null {
+  const why =
+    "this dashboard answers only to an IP address, localhost, a *.ts.net name or a single-label name (origin.ts) — any other name is how a DNS-rebinding page reads it";
+  if (host === undefined || host === "") return `the request names no Host; ${why}\n`;
+  let hostname: string;
+  try {
+    hostname = new URL(`http://${host}`).hostname;
+  } catch {
+    return `'${host.slice(0, 100)}' is not a host; ${why}\n`;
+  }
+  return addressableHost(hostname) ? null : `refused the name '${hostname.slice(0, 100)}': ${why}\n`;
+}
+
+/**
+ * A read route's method gate: true to carry on, false having answered 405.
+ * The inline routes below used to ignore the method, so `POST /api/state` was
+ * answered as the poll. Plan 260910f, Stage 2.
+ */
+function readMethod(
+  req: import("node:http").IncomingMessage,
+  res: import("node:http").ServerResponse,
+  allow: "GET" | "GET, HEAD",
+): boolean {
+  const method = req.method ?? "GET";
+  if (allow.split(", ").includes(method)) return true;
+  res.writeHead(405, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", allow });
+  res.end(`${method} is not allowed here; ${allow} only\n`);
+  return false;
+}
+
 function handler(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
   const url = req.url ?? "/";
+  // The four inline routes below match THIS, exactly — not `url` by prefix,
+  // which answered `/api/state.js` and `/api/stateanything` as the poll. Every
+  // route module already matched its exact path; these were never extracted.
+  const pathname = url.split("?")[0] ?? "/";
 
   // BEFORE ANYTHING DECIDES WHAT THE RESPONSE IS. There are five response paths
   // here and two of them live in modules built by other agents; a header set at
@@ -710,10 +753,27 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // and it can now type into those same agents.
   applySecurityHeaders(res);
 
+  // DNS REBINDING, ON THE HALF THAT READS. The write routes refuse a rebound
+  // name on `Origin` (origin.ts), but a page at `evil.example` re-resolved to
+  // this box is same-origin by the browser's own lights, so its script could
+  // GET /api/state and /api/messages — every title, pane excerpt and
+  // transcript tail — and meet no Origin check at all. So the `Host` is checked
+  // here, once, before any route, static included: a copy per route is how one
+  // of them came to lack it. 421: the request reached a server it did not name.
+  const refusedHost = unaddressedHost(req.headers.host);
+  if (refusedHost !== null) {
+    res.writeHead(421, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+    res.end(refusedHost);
+    return;
+  }
+
   // The stream. A new subscriber gets the cached snapshot at once rather than
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
-  if (url.startsWith("/api/live")) {
+  // GET only, not HEAD: a HEAD would be held open as a subscriber that can
+  // never be written to. EventSource never sends one.
+  if (pathname === "/api/live") {
+    if (!readMethod(req, res, "GET")) return;
     subscribe(req, res, initialFramePayload(publicationLedger.stamp(), statePayload));
     return;
   }
@@ -731,7 +791,8 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // a working endpoint to tidy a name is the worse trade. What was actually
   // wrong was the prose in live.ts, which named it five times as "the poll";
   // see there, and instance 10 of docs/postmortems/260908b.
-  if (url.startsWith("/api/state") || url.startsWith("/api/agents")) {
+  if (pathname === "/api/state" || pathname === "/api/agents") {
+    if (!readMethod(req, res, "GET, HEAD")) return;
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
     res.end(statePayload());
     return;
@@ -780,7 +841,8 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Read-only, but not harmless: every string it returns is agent-authored text
   // from a process that may have been handling hostile input. React escapes it;
   // nothing here adds markup.
-  if (url.startsWith("/api/messages")) {
+  if (pathname === "/api/messages") {
+    if (!readMethod(req, res, "GET, HEAD")) return;
     const id = new URL(req.url ?? "/", "http://fleet.invalid").searchParams.get("id");
     const row = snapshot?.rows.find((r) => r.id === id) ?? null;
     if (row === null) {

@@ -1,7 +1,8 @@
 # Fleet access review: prove the guards on the composed server
 
 **Queue item** `qi-eypjh56e`, dispatched by the Overseer on 2026-09-10. **The spec** is the roadmap's
-[§ Stage: Access review — the bounded hardening Greg requested](260908f-overseer-and-fleet-improvement-roadmap.md#stage-access-review--the-bounded-hardening-greg-requested):
+§ *Stage: Access review — the bounded hardening Greg requested* in
+[260908f](260908f-overseer-and-fleet-improvement-roadmap.md):
 its five checkboxes and its acceptance paragraph. **Loopback stays the default; widening the bind
 (Tailscale Serve plus an owner check) is Greg's and is not this stage.** This stage proves what is
 there, on the real composed routes, and fixes what that turns up.
@@ -176,7 +177,48 @@ right fix shape"*). Dispositions:
 | F6 P1 | The roadmap asks to *prove* the page's queue is the drainer's; the plan left it source-level | **Overruled on scope, and sent to the Overseer.** Both F6 and F7's receipt half need a request that reaches a real target: either a session the collector will list on an isolated tmux server (a Claude process tree the collector recognises), or a composition seam in `routes-actions.ts`, which is the `action-receipts` session's file and not this stage's. The receipt actor derivation is tested at the route by that session's work (`receipt-journal.ts`, `routes-steer.ts:1215`). The roadmap's checkbox 3 stays unticked. |
 | F8 P1 | Two of checkbox 4's three properties were dropped, and the acceptance names a browser boundary | **Partly taken.** The existing witnesses for all three are cited under Stage 1. One real-browser check against the composed child: the built page renders under its CSP with no violation, and a page that frames it is refused. A hostile string *through* the composed server needs a listed session, the same obstacle as F6, so that stays at the component level. |
 
+**The Overseer's answers, 2026-09-10 ~19:20Z.** The tailnet bind without Serve and an owner check is
+Greg's and is in front of him; this stage does not change the bind. F6 and F7's receipt half are
+queued as `qi-3mgbkjrn`, after `action-receipts`' Stage 4; checkbox 3 stays unticked. The Host guard
+fails closed on an absent `Host`, and the allowed set is written down in one place (`origin.ts`'s
+header): IP literals, `localhost`, `*.ts.net`, and single-label names — each with why it is safe
+from rebinding. **It is deliberately not narrowed to the exact bind addresses**: an IP-literal
+`Host` involves no attacker-controlled name, so pinning the list would couple the guard to
+deployment config and buy nothing. And the child harness is written up as a reusable helper,
+`tests/helpers/fleet-child-server.ts`, so the next composition test uses it rather than a second one.
+
 ## Status
 
-Plan written 2026-09-10 and revised after Sol's review; Stages 1 and 2 are being implemented by an
-Opus subagent.
+Plan written 2026-09-10 and revised after Sol's review. **Stages 1 and 2 built by an Opus subagent**
+(not Codex — the brief for this account said Opus or Fable), reviewed and gated by the manager;
+Sol's stage review follows.
+
+- `tests/fleet-composed-access.test.ts`: 62 tests, ~3.6 s, over `tests/helpers/fleet-child-server.ts`.
+- **Red before each fix**: `expected 200 to be 421` on `/api/state`, `/`, `/api/live` and
+  `expected 404 to be 421` on `/api/messages` with a hostile `Host`; `/api/stateX` and
+  `POST /api/state` answered 200; `addressableHost("spideryarn-box")` was false. A missing `Host`
+  must be sent over HTTP/1.0 — Node refuses its absence on HTTP/1.1 with a 400 before `handler()`.
+- **Every positive control stops at a 400 before work** — the body `this is not json`, refused at
+  each route's parse, before any receipt, `listSessions`, launcher, rate limiter or fetch — and a
+  final test reads the child's log for any launch or provider line.
+- **Mutations**, each restored byte-for-byte:
+
+  | Mutation | Went red |
+  |---|---|
+  | drop `applySecurityHeaders` | 33 header checks |
+  | disable the `Host` guard | 16 in the `Host` matrix |
+  | allow a missing `Host` | the 8 no-`Host` rows |
+  | `listen()` without a host | bind, and the audit-source log (peer becomes `::ffff:127.0.0.1`) |
+  | prefix match on live / state / agents / messages, each alone | that route's suffixed-path test |
+  | drop the method gate on live, state+agents, messages | their 405 tests |
+  | skip the origin check in steer / new / rename / actions / broadcast / transcribe, each alone | that route's origin tests |
+  | peer address removed from the actions log | the audit-source test |
+  | drop the single-label rule | the allowed-names test |
+
+- **Fallout, fixed**: `tests/fleet-decisions-route.test.ts` and `tests/fleet-reports-route.test.ts`
+  call the real `handler()` with `headers: {}`, which the guard now refuses; each gained a `host`.
+- **What the plan had wrong**: `TMUX_TMPDIR` is read by tmux itself, never by our code; `tsx` runs
+  the script in a grandchild, so the harness spawns detached and signals the group.
+- **Known gap, handed to the stage review**: if vitest itself is killed, the detached child keeps
+  listening on its random port.
+- Gates: the focused set green, `npm run typecheck` exit 0, biome clean on the new files.
