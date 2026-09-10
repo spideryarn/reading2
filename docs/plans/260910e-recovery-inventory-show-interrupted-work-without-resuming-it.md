@@ -355,7 +355,32 @@ Tests, red first, through the real parser, gate, differ and store, driven by a s
   start goes through the new parser and the replay in a scratch root. It must refuse 0 lines and
   derive 0 candidates. It fails outright if it read fewer events than the copy holds.
 
-- [ ] Implementation, tests red → green, typecheck, focused suites; Sol review; commit.
+- [x] Implementation (**Opus subagent**), tests red → green (44 red, then 44 green; five
+  mutations, each turning the intended tests red), typecheck exit 0, 26 focused files / 748 tests
+  green. Live-log check on a frozen copy (2,081 lines, sha256 `21130318…`): 2,081 parsed, 0
+  refused, 0 world changes, 0 candidates.
+- [ ] Sol review; commit.
+
+Status, 2026-09-10: implemented, awaiting its Sol review. Decisions the implementer made, recorded
+so the review can check them:
+
+1. **An unstamped producer counts as the same run** in the candidate rule (`needsCandidate`). Read
+   literally, the rule would write a candidate on every close from a dashboard without stamps.
+2. **Candidates carry `hostBootId`**, so the fold can recover a newly recorded boot id after a crash
+   between the append and `recovery.json`. A whole-log derivation deliberately does not recover it,
+   because that could close out a live new world.
+3. **Any other event for a pending key ends the pending wait**, so an orphaned candidate cannot
+   swallow a real disappearance later.
+4. **`recovery.json` is also written once the log is 1 MiB past its cursor**, so a quiet month cannot
+   push the recovery replay past the 64 MiB ceiling.
+5. An empty fold over an empty log writes no file.
+6. A recovery tail that cannot be read keeps the restored records, and marks the index `not-run`.
+7. `withRecoveryCandidates(events, register, context)`, with the baseline inside `context`.
+8. **The 30-day retention of resolved records moves to Stage 2**, where the dispositions are.
+
+**A narrow window, documented rather than closed:** if the process dies after the append and before
+`recovery.json` is written, *and* the old register was empty, the next start closes the new world's
+sessions a second time. That is noise, not lost evidence.
 
 ### Stage 2: the view, the dispositions and the CLI
 

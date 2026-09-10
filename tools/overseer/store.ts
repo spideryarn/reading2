@@ -106,7 +106,16 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
-import type { AttentionItem, AttentionList, ConversationReading, OverseerWork, PaneJob, PaneWork, StoredUsage } from "../fleet/wire.js";
+import type {
+  AttentionItem,
+  AttentionList,
+  ConversationReading,
+  HarnessKind,
+  OverseerWork,
+  PaneJob,
+  PaneWork,
+  StoredUsage,
+} from "../fleet/wire.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -114,6 +123,7 @@ import {
   REGISTER_ROW_FIELDS,
   sessionKey,
   statusKey,
+  type GenerationRelation,
   type JobEvent,
   type OverseerEvent,
   type RegisterRowField,
@@ -149,6 +159,25 @@ import {
 } from "./lock.js";
 import { parseExecution } from "./observation.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
+import {
+  deriveRecovery,
+  emptyRecoveryFold,
+  foldRecovery,
+  LAST_SEEN_TITLE_MAX,
+  recoveryCandidateId,
+  recoveryIndexOf,
+  type ProducerRunRelation,
+  type RecoveryCandidateId,
+  type RecoveryDisappearance,
+  type RecoveryDispositionEvent,
+  type RecoveryEvent,
+  type RecoveryFold,
+  type RecoveryIndex,
+  type RecoveryLastSeen,
+  type RecoveryRecord,
+  type RecoveryReplay,
+  type RecoveryResolution,
+} from "./recovery.js";
 
 /**
  * Re-exported because this file was where they lived until 2026-09-08, and a
@@ -186,6 +215,39 @@ export const STORE_SCHEMA = 2;
 export const EVENTS_FILE = "events.jsonl";
 export const CHECKPOINT_FILE = "current.json";
 export const LOCK_FILE = "overseer.lock";
+
+/**
+ * THE RECOVERY INDEX — the third fold, in its own file with its own byte
+ * cursor. recovery.ts says what it holds; this is where it lives and when it is
+ * written.
+ *
+ * **Not inside `current.json`.** The dashboard parses that on every poll, and
+ * this index only grows until somebody dismisses things.
+ *
+ * **Its own cursor, so crash order stays the register's argument.** The writes
+ * go events, baseline, `current.json`, `recovery.json` — the last inside
+ * `checkpoint()`, after the checkpoint. On open the index restores from this
+ * file and replays the log from ITS cursor, so a crash before this write
+ * replays the tail rather than losing it. Any other order would be an index
+ * claiming events that were never written.
+ *
+ * **Disposable, like `current.json`.** Absent, of an unknown schema, malformed,
+ * or with a cursor past the end of the log, it is derived again from the whole
+ * log (bounded by the replay ceiling), and the ids come out the same.
+ */
+export const RECOVERY_FILE = "recovery.json";
+
+/** The recovery file's schema. Bumped by `STORE_SCHEMA`'s rule: when a reader ignoring the change would be wrong. */
+export const RECOVERY_SCHEMA = 1;
+
+/**
+ * How far the log may run past `recovery.json`'s cursor before a checkpoint
+ * writes the file with nothing new in it, purely to move the cursor. Without
+ * this a quiet month leaves the cursor so far behind that the tail replay on
+ * the next start crosses the replay ceiling and refuses — an index lost to
+ * nothing having happened.
+ */
+const RECOVERY_CURSOR_STRIDE_BYTES = 1024 * 1024;
 
 /**
  * How many bytes of log a start is willing to replay before it gives up and
@@ -265,7 +327,23 @@ export type StoreOpening = {
    * reviewed read the whole log every time and nothing said so.
    */
   bytesScanned: number;
+  /** How the recovery index came up, which is independent of how the register did. See `RECOVERY_FILE`. */
+  recovery: RecoveryOpening;
 };
+
+/**
+ * How the recovery index came up.
+ *
+ * `restored` is the ordinary start: `recovery.json` plus the log past its own
+ * cursor. `derived` is the one-time pass over the whole log, for a store with no
+ * usable file. `not-run` means the index cannot say what the log holds — over
+ * the ceiling, or across a hole — and the page shows that rather than an empty
+ * list.
+ */
+export type RecoveryOpening =
+  | { kind: "restored"; eventsReplayed: number; bytesScanned: number }
+  | { kind: "derived"; why: string; eventsScanned: number; bytesScanned: number }
+  | { kind: "not-run"; why: string };
 
 /**
  * WHEN THE STATUS BEGAN — and whether that is a reading or a floor.
@@ -794,6 +872,20 @@ export type OverseerStore = {
    * every tick, and a sentence is not consultable.
    */
   readonly occurrenceHistory: OccurrenceHistory;
+  /**
+   * WHAT WAS INTERRUPTED — the third fold, live like the other two: `append`
+   * folds into it. Read-only here; recovery.ts is what it holds and
+   * `RECOVERY_FILE` is where it lives.
+   */
+  readonly recovery: RecoveryIndex;
+  /**
+   * The host's boot id as the daemon just read it, recorded so the next
+   * collection can tell a new boot from this one. Written into `recovery.json`
+   * at the next checkpoint. The daemon calls it only after the collection's
+   * events are on disk, so a crash before then leaves the old boot id and the
+   * close-out happens again rather than not at all.
+   */
+  recordBootId(bootId: string): void;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -1124,6 +1216,8 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "job-occurrence-unknown": true,
   "rule-intended": true,
   "rule-settled": true,
+  "recovery-candidate": true,
+  "recovery-disposition": true,
 };
 
 /** The watched row fields, as a set, so a `fields` list read off the disk can be checked against it. */
@@ -1166,6 +1260,21 @@ const RULE_KINDS: Record<RuleEvent["kind"], true> = {
 
 function isRuleKind(kind: string): kind is RuleEvent["kind"] {
   return Object.hasOwn(RULE_KINDS, kind);
+}
+
+/**
+ * THE FOURTH FAMILY, for `RULE_KINDS`' reason: `parseEvent` casts to a session
+ * kind after the family branches, so a recovery arm with no branch would append
+ * perfectly and be refused on the next read — and a refused line is a hole, and
+ * a hole is a cold start.
+ */
+const RECOVERY_KINDS: Record<RecoveryEvent["kind"], true> = {
+  "recovery-candidate": true,
+  "recovery-disposition": true,
+};
+
+function isRecoveryKind(kind: string): kind is RecoveryEvent["kind"] {
+  return Object.hasOwn(RECOVERY_KINDS, kind);
 }
 
 /** A field that is a non-empty string. Ids and hashes are opaque here; what makes an id well-formed is `occurrenceId()`, checked below. */
@@ -1531,6 +1640,176 @@ function parseRuleEvent(kind: RuleEvent["kind"], u: Record<string, unknown>, at:
   }
 }
 
+/** A `Record` over each closed union a candidate carries, so a new arm stops the build here rather than parsing as junk. */
+const RECOVERY_HARNESS_KINDS: Record<HarnessKind, true> = {
+  "claude-code": true,
+  "claude-headless": true,
+  "codex-batch": true,
+  "codex-interactive": true,
+  shell: true,
+  unknown: true,
+};
+const GENERATION_RELATIONS: Record<GenerationRelation, true> = { same: true, changed: true, unverifiable: true };
+const PRODUCER_RUNS: Record<ProducerRunRelation, true> = { same: true, changed: true, "cannot-tell": true };
+
+function isRecoveryId(u: unknown): u is RecoveryCandidateId {
+  return typeof u === "string" && /^r[cl]-[0-9a-f]{20}$/.test(u);
+}
+
+function parseLastSeen(u: unknown): ParseResult<RecoveryLastSeen | null> {
+  if (u === null) return { ok: true, value: null };
+  if (!isRecord(u)) return { ok: false, reason: "lastSeen is neither an object nor null" };
+  const lastStatusKey = u["statusKey"];
+  if (typeof lastStatusKey !== "string" || lastStatusKey === "") return { ok: false, reason: "lastSeen.statusKey is not a status key" };
+  const title = u["title"];
+  if (!isNullableString(title) || (title !== null && Array.from(title).length > LAST_SEEN_TITLE_MAX)) {
+    return { ok: false, reason: `lastSeen.title is not a string of at most ${LAST_SEEN_TITLE_MAX} characters, or null` };
+  }
+  const harness = u["harness"];
+  if (harness !== null && !(typeof harness === "string" && Object.hasOwn(RECOVERY_HARNESS_KINDS, harness))) {
+    return { ok: false, reason: "lastSeen.harness is not a harness or null" };
+  }
+  const executionToken = u["executionToken"];
+  if (executionToken !== null && !isExecutionTokenText(executionToken)) {
+    return { ok: false, reason: "lastSeen.executionToken is not an execution token or null" };
+  }
+  let conversation: ConversationReading | null = null;
+  if (u["conversation"] !== null) {
+    const parsed = parseConversationReading(u["conversation"]);
+    if (!parsed.ok) return { ok: false, reason: `lastSeen.${parsed.reason}` };
+    conversation = parsed.value;
+  }
+  const collectedAt = u["collectedAt"];
+  if (!isIsoTimestamp(collectedAt)) return { ok: false, reason: "lastSeen.collectedAt is not an ISO timestamp" };
+  return {
+    ok: true,
+    value: {
+      statusKey: lastStatusKey,
+      title,
+      harness: harness as HarnessKind | null,
+      executionToken: executionToken as string | null,
+      conversation,
+      collectedAt,
+    },
+  };
+}
+
+function parseDisappearance(u: unknown): ParseResult<RecoveryDisappearance> {
+  if (!isRecord(u)) return { ok: false, reason: "disappearance is not an object" };
+  const goneWhy = u["goneWhy"];
+  if (typeof goneWhy !== "string" || !GONE_REASONS.has(goneWhy)) return { ok: false, reason: "disappearance.goneWhy is not a gone reason" };
+  const observation = u["observation"];
+  if (!isName(observation)) return { ok: false, reason: "disappearance.observation is not a collection's identity" };
+  const generation = u["generation"];
+  if (typeof generation !== "string" || !Object.hasOwn(GENERATION_RELATIONS, generation)) {
+    return { ok: false, reason: "disappearance.generation is not a generation relation" };
+  }
+  const bootChanged = u["bootChanged"];
+  if (typeof bootChanged !== "boolean") return { ok: false, reason: "disappearance.bootChanged is not a boolean" };
+  // A boot change IS a generation change; a record saying otherwise contradicts itself.
+  if (bootChanged && generation !== "changed") return { ok: false, reason: "disappearance says the boot changed and the generation did not" };
+  const producerRun = u["producerRun"];
+  if (typeof producerRun !== "string" || !Object.hasOwn(PRODUCER_RUNS, producerRun)) {
+    return { ok: false, reason: "disappearance.producerRun is not a producer-run relation" };
+  }
+  const watched = u["watched"];
+  if (typeof watched !== "boolean") return { ok: false, reason: "disappearance.watched is not a boolean" };
+  const hostBootId = u["hostBootId"];
+  if (hostBootId !== null && !isName(hostBootId)) return { ok: false, reason: "disappearance.hostBootId is not a boot id or null" };
+  return {
+    ok: true,
+    value: {
+      goneWhy: goneWhy as RecoveryDisappearance["goneWhy"],
+      observation,
+      generation: generation as GenerationRelation,
+      bootChanged,
+      producerRun: producerRun as ProducerRunRelation,
+      watched,
+      hostBootId,
+    },
+  };
+}
+
+type Resolved = Exclude<RecoveryResolution, { disposition: "unresolved" }>;
+
+/** A disposition and its evidence — one parser for the event and for a record's resolution, so the two cannot drift. */
+function parseResolved(u: Record<string, unknown>, at: string): ParseResult<Resolved> {
+  const evidence = u["evidence"];
+  if (!isRecord(evidence)) return { ok: false, reason: "evidence is not an object" };
+  const disposition = u["disposition"];
+  switch (disposition) {
+    case "resumed": {
+      const previousToken = evidence["previousToken"];
+      const token = evidence["token"];
+      const conversationId = evidence["conversationId"];
+      if (!isExecutionTokenText(previousToken) || !isExecutionTokenText(token)) {
+        return { ok: false, reason: "a resumption's evidence does not carry two execution tokens" };
+      }
+      // THE SAME TOKEN IS NOT A RESUMPTION: it is the run that was never gone (Sol's F2).
+      if (previousToken === token) return { ok: false, reason: "a resumption whose two tokens are equal is the same run" };
+      if (!isName(conversationId)) return { ok: false, reason: "a resumption's evidence names no conversation" };
+      return { ok: true, value: { disposition, evidence: { previousToken, token, conversationId }, at } };
+    }
+    case "superseded": {
+      const by = evidence["by"];
+      if (!isRecoveryId(by)) return { ok: false, reason: "a supersession's evidence names no candidate" };
+      return { ok: true, value: { disposition, evidence: { by }, at } };
+    }
+    case "dismissed": {
+      const requestId = evidence["requestId"];
+      const why = evidence["why"];
+      if (!isName(requestId)) return { ok: false, reason: "a dismissal's evidence carries no request id" };
+      if (typeof why !== "string") return { ok: false, reason: "a dismissal's evidence carries no sentence" };
+      return { ok: true, value: { disposition, evidence: { requestId, why }, at } };
+    }
+    default:
+      return { ok: false, reason: `disposition ${JSON.stringify(disposition)} is not one this version knows` };
+  }
+}
+
+/**
+ * A recovery event off the disk.
+ *
+ * **A candidate's id is RECOMPUTED from its entry and its observation rather
+ * than trusted**, on `parseJobEvent`'s argument: it is derived data, every
+ * disposition addresses the record by it, and a line where the two disagree was
+ * not written by this module.
+ */
+function parseRecoveryEvent(kind: RecoveryEvent["kind"], u: Record<string, unknown>, at: string): ParseResult<RecoveryEvent> {
+  const id = u["id"];
+  if (!isRecoveryId(id)) return { ok: false, reason: "id is not a recovery candidate id" };
+  switch (kind) {
+    case "recovery-candidate": {
+      const entry = parseRegisterEntry(u["entry"]);
+      if (!entry.ok) return { ok: false, reason: `entry: ${entry.reason}` };
+      const lastSeen = parseLastSeen(u["lastSeen"]);
+      if (!lastSeen.ok) return { ok: false, reason: lastSeen.reason };
+      const disappearance = parseDisappearance(u["disappearance"]);
+      if (!disappearance.ok) return { ok: false, reason: disappearance.reason };
+      const expected = recoveryCandidateId({
+        key: entry.value.key,
+        tmuxServerPid: entry.value.tmuxServerPid,
+        startedAt: entry.value.startedAt,
+        executionToken: entry.value.verifiedExecution?.token ?? null,
+        observation: disappearance.value.observation,
+      });
+      if (id !== expected) return { ok: false, reason: `id ${JSON.stringify(id)} is not the id of its own run and collection (${expected})` };
+      return { ok: true, value: { kind, at, id: expected, entry: entry.value, lastSeen: lastSeen.value, disappearance: disappearance.value } };
+    }
+    case "recovery-disposition": {
+      const resolved = parseResolved(u, at);
+      if (!resolved.ok) return { ok: false, reason: resolved.reason };
+      // The cast is `Resolved`'s own guarantee written out: disposition and
+      // evidence came from one arm, which a spread cannot show the compiler.
+      return { ok: true, value: { kind, at, id, disposition: resolved.value.disposition, evidence: resolved.value.evidence } as RecoveryDispositionEvent };
+    }
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no parser for ${String(never)}` };
+    }
+  }
+}
+
 /**
  * One event off the disk, validated per kind.
  *
@@ -1561,6 +1840,9 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
   // would have failed to compile if this line were missing, because the switch
   // below casts. See `RULE_KINDS`.
   if (isRuleKind(kind)) return parseRuleEvent(kind, u, at);
+  // AND THE RECOVERY JOURNAL: a candidate carries a whole register entry rather
+  // than a session identity at the top level. See `RECOVERY_KINDS`.
+  if (isRecoveryKind(kind)) return parseRecoveryEvent(kind, u, at);
 
   const key = u["key"];
   if (typeof key !== "string" || key === "") return { ok: false, reason: "key is not a session key" };
@@ -2421,6 +2703,145 @@ export function readCheckpoint(root: string = storeRoot()): CheckpointRead {
   return { kind: "checkpoint", checkpoint: parsed.value };
 }
 
+/** What `recovery.json` held, or why it is not being used. */
+type RecoveryFileRead =
+  | { kind: "absent" }
+  | { kind: "unusable"; why: string }
+  | { kind: "file"; cursor: { events: number; bytes: number }; fold: RecoveryFold };
+
+/**
+ * The recovery file, parsed strictly and **failing whole**, like the
+ * checkpoint: a file that half-parses is an index that silently lost records,
+ * and the log can derive the whole of it again with the same ids.
+ */
+function readRecoveryFile(root: string): RecoveryFileRead {
+  const path = join(root, RECOVERY_FILE);
+  if (!existsSync(path)) return { kind: "absent" };
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path, "utf8"));
+  } catch (cause) {
+    return { kind: "unusable", why: String(cause) };
+  }
+  const parsed = parseRecoveryFile(json);
+  if (!parsed.ok) return { kind: "unusable", why: parsed.reason };
+  return { kind: "file", ...parsed.value };
+}
+
+function parseRecoveryFile(u: unknown): ParseResult<{ cursor: { events: number; bytes: number }; fold: RecoveryFold }> {
+  if (!isRecord(u)) return { ok: false, reason: "it is not an object" };
+  if (u["schema"] !== RECOVERY_SCHEMA) return { ok: false, reason: `schema ${JSON.stringify(u["schema"])} is not ${RECOVERY_SCHEMA}` };
+  const cursor = u["cursor"];
+  if (!isRecord(cursor) || !isNonNegativeInteger(cursor["events"]) || !isNonNegativeInteger(cursor["bytes"])) {
+    return { ok: false, reason: "cursor is not two byte/event counts" };
+  }
+  const bootId = u["bootId"];
+  if (bootId !== null && !isName(bootId)) return { ok: false, reason: "bootId is not a boot id or null" };
+  const replayed = parseRecoveryReplay(u["replay"]);
+  if (!replayed.ok) return { ok: false, reason: replayed.reason };
+  const fold = emptyRecoveryFold(replayed.value, bootId);
+  const records = u["records"];
+  if (!Array.isArray(records)) return { ok: false, reason: "records is not an array" };
+  for (const [index, raw] of records.entries()) {
+    const record = parseRecoveryRecord(raw);
+    if (!record.ok) return { ok: false, reason: `records[${index}]: ${record.reason}` };
+    if (fold.records.has(record.value.id)) return { ok: false, reason: `records has ${record.value.id} twice` };
+    fold.records.set(record.value.id, record.value);
+  }
+  const overflowIds = u["overflowIds"];
+  if (!Array.isArray(overflowIds) || !overflowIds.every(isRecoveryId)) return { ok: false, reason: "overflowIds is not a list of candidate ids" };
+  for (const id of overflowIds) fold.overflowIds.add(id);
+  if (u["overflow"] !== fold.overflowIds.size) return { ok: false, reason: "overflow does not count overflowIds" };
+  const pending = u["pending"];
+  if (!Array.isArray(pending)) return { ok: false, reason: "pending is not an array" };
+  for (const item of pending) {
+    if (!isRecord(item) || !isName(item["key"]) || !isRecoveryId(item["id"])) return { ok: false, reason: "pending holds something that is not a key and a candidate id" };
+    fold.pending.set(item["key"] as SessionKey, item["id"]);
+  }
+  const applied = u["appliedRequests"];
+  if (!Array.isArray(applied) || !applied.every(isName)) return { ok: false, reason: "appliedRequests is not a list of request ids" };
+  for (const requestId of applied) fold.appliedRequests.add(requestId);
+  return { ok: true, value: { cursor: { events: cursor["events"], bytes: cursor["bytes"] }, fold } };
+}
+
+function parseRecoveryReplay(u: unknown): ParseResult<RecoveryReplay> {
+  if (!isRecord(u)) return { ok: false, reason: "replay is not an object" };
+  if (u["kind"] === "not-run") {
+    return typeof u["why"] === "string" ? { ok: true, value: { kind: "not-run", why: u["why"] } } : { ok: false, reason: "a replay that did not run says no why" };
+  }
+  if (u["kind"] !== "ran") return { ok: false, reason: `replay kind ${JSON.stringify(u["kind"])} is neither ran nor not-run` };
+  const worldChanges = u["worldChanges"];
+  const derived = u["derived"];
+  const scannedBytes = u["scannedBytes"];
+  if (!isNonNegativeInteger(worldChanges) || !isNonNegativeInteger(derived) || !isNonNegativeInteger(scannedBytes)) {
+    return { ok: false, reason: "replay's counts are not counts" };
+  }
+  return { ok: true, value: { kind: "ran", worldChanges, derived, scannedBytes } };
+}
+
+function parseRecoveryRecord(u: unknown): ParseResult<RecoveryRecord> {
+  if (!isRecord(u)) return { ok: false, reason: "not an object" };
+  const id = u["id"];
+  const key = u["key"];
+  const name = u["name"];
+  const at = u["at"];
+  const origin = u["origin"];
+  if (!isRecoveryId(id)) return { ok: false, reason: "id is not a candidate id" };
+  if (!isName(key)) return { ok: false, reason: "key is not a session key" };
+  if (typeof name !== "string") return { ok: false, reason: "name is not a string" };
+  if (!isIsoTimestamp(at)) return { ok: false, reason: "at is not an ISO timestamp" };
+  if (origin !== "journal" && origin !== "legacy") return { ok: false, reason: "origin is neither journal nor legacy" };
+  const rawResolution = u["resolution"];
+  if (!isRecord(rawResolution)) return { ok: false, reason: "resolution is not an object" };
+  let resolution: RecoveryResolution;
+  if (rawResolution["disposition"] === "unresolved") {
+    resolution = { disposition: "unresolved" };
+  } else {
+    const resolvedAt = rawResolution["at"];
+    if (!isIsoTimestamp(resolvedAt)) return { ok: false, reason: "resolution.at is not an ISO timestamp" };
+    const resolved = parseResolved(rawResolution, resolvedAt);
+    if (!resolved.ok) return { ok: false, reason: `resolution: ${resolved.reason}` };
+    resolution = resolved.value;
+  }
+  const common = { id, key: key as SessionKey, name, at, origin, resolution } as const;
+  if (u["oversize"] === true) return { ok: true, value: { ...common, oversize: true } };
+  if (u["oversize"] !== false) return { ok: false, reason: "oversize is not a boolean" };
+  let entry: RegisterEntry | null = null;
+  if (u["entry"] === null) {
+    // NULL ONLY FOR A LEGACY STUB. A journal candidate always carried its entry.
+    if (origin !== "legacy") return { ok: false, reason: "a journal record has no entry" };
+  } else {
+    const parsed = parseRegisterEntry(u["entry"]);
+    if (!parsed.ok) return { ok: false, reason: `entry: ${parsed.reason}` };
+    if (parsed.value.key !== key) return { ok: false, reason: "entry.key does not agree with key" };
+    entry = parsed.value;
+  }
+  const lastSeen = parseLastSeen(u["lastSeen"]);
+  if (!lastSeen.ok) return { ok: false, reason: lastSeen.reason };
+  const disappearance = parseDisappearance(u["disappearance"]);
+  if (!disappearance.ok) return { ok: false, reason: disappearance.reason };
+  return { ok: true, value: { ...common, oversize: false, entry, lastSeen: lastSeen.value, disappearance: disappearance.value } };
+}
+
+function recoveryFileText(fold: RecoveryFold, cursor: { events: number; bytes: number }, writtenAt: string): string {
+  return `${JSON.stringify(
+    {
+      schema: RECOVERY_SCHEMA,
+      writtenAt,
+      cursor,
+      bootId: fold.bootId,
+      replay: fold.replay,
+      overflow: fold.overflowIds.size,
+      records: [...fold.records.values()],
+      overflowIds: [...fold.overflowIds],
+      pending: [...fold.pending].map(([key, id]) => ({ key, id })),
+      appliedRequests: [...fold.appliedRequests],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 /** The key, spelled the way `sessionKey` in diff.ts spells it, for validating one we read back. */
 function keyFor(tmuxId: string, claimedConversationId: string | null): string {
   return `${tmuxId} ${claimedConversationId === null ? "none" : `claims:${claimedConversationId}`}`;
@@ -2600,6 +3021,12 @@ export function foldEvents(
       // absorbed.
       case "rule-intended":
       case "rule-settled":
+      // AND THE RECOVERY JOURNAL'S. A candidate is written immediately BEFORE
+      // the gone it explains, and the gone is what removes the entry; the
+      // candidate itself moves nothing here, or the entry it carries would be
+      // folded twice. Recovery folds in `foldRecovery`, beside this one.
+      case "recovery-candidate":
+      case "recovery-disposition":
         break;
       default: {
         const never: never = event;
@@ -2737,13 +3164,19 @@ export function describeOpening(opening: StoreOpening): string {
       : opening.occurrencesReconciled === undefined
         ? ""
         : ` A held occurrence ledger was reconciled by hand and the hold is cleared: ${opening.occurrencesReconciled}.`;
+  const recovery =
+    opening.recovery.kind === "derived"
+      ? ` Derived the recovery index from ${opening.recovery.eventsScanned} events of the log (${opening.recovery.why}).`
+      : opening.recovery.kind === "not-run"
+        ? ` THE RECOVERY INDEX COULD NOT BE DERIVED: ${opening.recovery.why}.`
+        : "";
   switch (opening.start.kind) {
     case "cold":
-      return `Started COLD (${opening.start.why}): no baseline and no history, so the next snapshot will look like the whole fleet starting at once.${repair}${unreadable}${scanned}${ledger}`;
+      return `Started COLD (${opening.start.why}): no baseline and no history, so the next snapshot will look like the whole fleet starting at once.${repair}${unreadable}${scanned}${ledger}${recovery}`;
     case "rebuilt":
-      return `Rebuilt the register from the event log (${opening.start.why}): ${opening.eventsReplayed} events replayed.${repair}${unreadable}${scanned}${ledger}`;
+      return `Rebuilt the register from the event log (${opening.start.why}): ${opening.eventsReplayed} events replayed.${repair}${unreadable}${scanned}${ledger}${recovery}`;
     case "resumed":
-      return `Resumed from a checkpoint written ${opening.start.checkpointWrittenAt}, ${opening.eventsReplayed} events replayed past its cursor.${repair}${unreadable}${scanned}${ledger}`;
+      return `Resumed from a checkpoint written ${opening.start.checkpointWrittenAt}, ${opening.eventsReplayed} events replayed past its cursor.${repair}${unreadable}${scanned}${ledger}${recovery}`;
     default: {
       const never: never = opening.start;
       throw new Error(String(never));
@@ -2868,6 +3301,12 @@ class Store implements OverseerStore {
   private schedulerHeld: StoredScheduler;
   /** The last deadline a caller declared, or null if none has. Held like the two above so a write that omits it does not blank it. */
   private snapshotStaleAfterMsHeld: number | null = null;
+  /** The third fold over the same events. See `OverseerStore.recovery`. */
+  private readonly recoveryFold: RecoveryFold;
+  /** Whether the fold (or the boot id in it) has changed since `recovery.json` was last written. */
+  private recoveryDirty: boolean;
+  /** The log size `recovery.json`'s cursor names. See `RECOVERY_CURSOR_STRIDE_BYTES`. */
+  private recoveryWrittenAtBytes: number;
   private closed = false;
 
   constructor(input: {
@@ -2883,6 +3322,7 @@ class Store implements OverseerStore {
     events: number;
     /** From the previous checkpoint when there was a readable one; absent on a cold or rebuilt start. */
     usage?: StoredUsage;
+    recovery: { fold: RecoveryFold; dirty: boolean; writtenAtBytes: number };
   }) {
     this.root = input.root;
     this.lock = input.lock;
@@ -2899,10 +3339,39 @@ class Store implements OverseerStore {
     this.work = workNotYetRun(input.now().toISOString());
     this.usageHeld = input.usage ?? usageNotYetRun(input.now().toISOString());
     this.schedulerHeld = schedulerNotYetSaid(input.now().toISOString());
+    this.recoveryFold = input.recovery.fold;
+    this.recoveryDirty = input.recovery.dirty;
+    this.recoveryWrittenAtBytes = input.recovery.writtenAtBytes;
   }
 
   get register(): SessionRegister {
     return this.registerMap;
+  }
+
+  get recovery(): RecoveryIndex {
+    return recoveryIndexOf(this.recoveryFold);
+  }
+
+  recordBootId(bootId: string): void {
+    this.assertOpen();
+    if (this.recoveryFold.bootId === bootId) return;
+    this.recoveryFold.bootId = bootId;
+    this.recoveryDirty = true;
+  }
+
+  /**
+   * Whether this checkpoint should also write `recovery.json`: when the fold
+   * changed, or when the log has run a stride past the file's cursor.
+   *
+   * **Except an empty fold over an empty log**, which says nothing a zero-byte
+   * derivation on the next start would not say again — and writing it would
+   * give every brand-new store a file nobody asked for.
+   */
+  private recoveryDue(): boolean {
+    if (!this.recoveryDirty && this.bytes - this.recoveryWrittenAtBytes < RECOVERY_CURSOR_STRIDE_BYTES) return false;
+    const fold = this.recoveryFold;
+    const empty = fold.records.size === 0 && fold.overflowIds.size === 0 && fold.pending.size === 0 && fold.bootId === null;
+    return !(empty && this.bytes === 0);
   }
 
   get occurrences(): OccurrenceIndex {
@@ -2960,6 +3429,9 @@ class Store implements OverseerStore {
       // on the disk, so a reservation that is visible is a reservation that
       // survived the crash it was written for.
       foldOccurrences(events, this.occurrenceMap, this.instanceId);
+      // AND THE THIRD. A candidate reaches the index only once it and the gone
+      // it explains are on the disk together.
+      if (foldRecovery(events, this.recoveryFold)) this.recoveryDirty = true;
     }
     return { ok: true, appended: events.length, cursor: { events: this.events, bytes: this.bytes } };
   }
@@ -3023,6 +3495,14 @@ class Store implements OverseerStore {
     if (update.scheduler !== undefined) this.schedulerHeld = update.scheduler;
     if (update.snapshotStaleAfterMs !== undefined) this.snapshotStaleAfterMsHeld = update.snapshotStaleAfterMs;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    // AFTER `current.json`, which is the last of the writes the plan orders:
+    // events, baseline, checkpoint, recovery. The cursor is the same one the
+    // checkpoint just wrote, so the file never claims events the log lacks.
+    if (this.recoveryDue()) {
+      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, { events: this.events, bytes: this.bytes }, at));
+      this.recoveryDirty = false;
+      this.recoveryWrittenAtBytes = this.bytes;
+    }
     return { ok: true, checkpoint };
   }
 
@@ -3290,6 +3770,17 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
       start = replayed.events.length > 0 ? { kind: "rebuilt", why } : { kind: "cold", why };
     }
 
+    // THE SECOND BOUNDED REPLAY, from the recovery file's own cursor — never
+    // the tail chosen for `current.json`, which may be ahead of or behind it.
+    // A byte-0 read the register already did is reused rather than repeated.
+    const recovery = openRecovery({
+      root,
+      eventsPath,
+      size,
+      ceiling,
+      wholeLog: from === 0 && replayed.kind === "read" ? replayed : null,
+    });
+
     const opening: StoreOpening = {
       start,
       occurrenceHistory,
@@ -3298,6 +3789,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
       eventsReplayed: replayed.kind === "read" ? replayed.events.length : 0,
       unreadableLines: replayed.unreadable,
       bytesScanned: replayed.bytesScanned,
+      recovery: recovery.opening,
     };
     return {
       ok: true,
@@ -3326,10 +3818,68 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
         // `exactOptionalPropertyTypes` is on precisely so those two cannot be
         // confused, and this is the case it is guarding.
         ...(read.kind === "checkpoint" ? { usage: read.checkpoint.usage } : {}),
+        recovery: { fold: recovery.fold, dirty: recovery.dirty, writtenAtBytes: recovery.writtenAtBytes },
       }),
     };
   } catch (cause) {
     release();
     throw cause;
   }
+}
+
+/**
+ * The recovery index at open: restored and caught up, or derived once, or —
+ * over the ceiling or across a hole — not run, and saying so.
+ *
+ * **A refused TAIL keeps the restored records** and marks the index `not-run`:
+ * the records are evidence already gathered, and dropping them because a later
+ * stretch of log is unreadable would be losing what we have over what we lack.
+ */
+function openRecovery(input: {
+  root: string;
+  eventsPath: string;
+  size: number;
+  ceiling: number;
+  wholeLog: Extract<Replay, { kind: "read" }> | null;
+}): { fold: RecoveryFold; dirty: boolean; writtenAtBytes: number; opening: RecoveryOpening } {
+  const read = readRecoveryFile(input.root);
+  if (read.kind === "file" && read.cursor.bytes <= input.size) {
+    const fold = read.fold;
+    const tail = replay(input.eventsPath, read.cursor.bytes, input.size, input.ceiling);
+    if (tail.kind === "read") {
+      return {
+        fold,
+        dirty: foldRecovery(tail.events, fold),
+        writtenAtBytes: read.cursor.bytes,
+        opening: { kind: "restored", eventsReplayed: tail.events.length, bytesScanned: tail.bytesScanned },
+      };
+    }
+    const why = `the log past ${RECOVERY_FILE}'s cursor could not be read (${tail.why}), so the index may be missing what happened after byte ${read.cursor.bytes}`;
+    fold.replay = { kind: "not-run", why };
+    return { fold, dirty: true, writtenAtBytes: read.cursor.bytes, opening: { kind: "not-run", why } };
+  }
+  const why =
+    read.kind === "absent"
+      ? `there was no ${RECOVERY_FILE}`
+      : read.kind === "unusable"
+        ? `${RECOVERY_FILE} was unusable: ${read.why}`
+        : `${RECOVERY_FILE}'s cursor is ${read.cursor.bytes} bytes into a log of ${input.size}`;
+  const whole = input.wholeLog ?? replay(input.eventsPath, 0, input.size, input.ceiling);
+  if (whole.kind === "refused") {
+    const notRun = `${why}, and the whole log could not be read to derive it (${whole.why}), so the index cannot say what the log holds`;
+    return { fold: emptyRecoveryFold({ kind: "not-run", why: notRun }, null), dirty: true, writtenAtBytes: 0, opening: { kind: "not-run", why: notRun } };
+  }
+  const fold = deriveRecovery(
+    whole.events,
+    (event, into) => {
+      foldEvents([event], into);
+    },
+    whole.bytesScanned,
+  );
+  return {
+    fold,
+    dirty: true,
+    writtenAtBytes: 0,
+    opening: { kind: "derived", why, eventsScanned: whole.events.length, bytesScanned: whole.bytesScanned },
+  };
 }

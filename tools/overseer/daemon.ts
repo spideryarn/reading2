@@ -70,6 +70,7 @@ import {
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
+import { observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
   parseAttempt,
@@ -362,6 +363,12 @@ export type DaemonOptions = {
    */
   probe?: () => ProcessTableReading;
   /**
+   * THIS HOST'S BOOT ID, or null when it cannot be read. Defaults to
+   * `readHostBootId`; injected so a test can drive one boot into the next.
+   * See the close-out in `take()`.
+   */
+  bootId?: () => string | null;
+  /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
    * `claude auth status`, and this file does neither.
@@ -554,6 +561,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
   const probe = options.probe ?? probeProcessTable;
+  const readBootId = options.bootId ?? readHostBootId;
 
   const opened = openStore({ root, now });
   if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
@@ -1277,7 +1285,20 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const [key, entry] of store.register) {
       if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
     }
-    const outcome = diff(baseline, verdict.snapshot, known);
+    // THE HOST'S BOOT ID, BEFORE `diff()` — GPT Sol's F5. `tmuxServerPid` is
+    // only a pid, and a fresh boot can hand tmux the same number, so the pid
+    // rule alone can compare a new world with the old one and see nothing. The
+    // daemon runs on the box, so it asks the kernel rather than waiting for a
+    // wire field. On the first accepted collection under a different boot id,
+    // every register entry is closed out of the old world, each with its
+    // candidate, and this collection is diffed against NO baseline, so every
+    // row is new. An unreadable boot id concludes nothing: never equal, never
+    // changed, and the pid rule applies as it always has. The new id is
+    // recorded only once this collection's events are on disk, below.
+    const hostBootId = readBootId();
+    const recordedBootId = store.recovery.bootId;
+    const bootChanged = hostBootId !== null && recordedBootId !== null && hostBootId !== recordedBootId;
+    const outcome = diff(bootChanged ? null : baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
       // NOT A SILENCE. The baseline stays where it is, so the comparison
       // happens the moment a readable generation arrives; without this note the
@@ -1330,14 +1351,37 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // snapshot after a start with no baseline reconciles the register against
     // it, and the invariant is worth stating plainly: AFTER THE FIRST ACCEPTED
     // SNAPSHOT, THE REGISTER IS THE SNAPSHOT — whatever the daemon started from.
-    const events =
-      baseline === null ? [...goneWhileAway(store.register, verdict.snapshot, at), ...outcome.events] : outcome.events;
+    // A boot change closes out the whole register instead, which covers this.
+    const closures = bootChanged
+      ? closeOutOldBoot(store.register, at)
+      : baseline === null
+        ? goneWhileAway(store.register, verdict.snapshot, at)
+        : [];
+
+    // THE RECOVERY CANDIDATES, IMMEDIATELY BEFORE THE APPEND — over the
+    // differ's gones and the daemon's own closures alike. `store.register` has
+    // not folded this batch yet, so it still holds each removed session's final
+    // entry, and the candidate goes into the same single write as the gone it
+    // explains. recovery.ts says why this is the daemon's job and not `diff()`'s.
+    const events = withRecoveryCandidates([...closures, ...outcome.events], store.register, {
+      observation: observationOf(observed.ordering, observed.clock.at),
+      tmuxServerPid: observed.tmuxServerPid,
+      baseline: baseline === null ? null : { rows: baseline.snapshot.rows, collectedAt: baseline.snapshot.clock.at },
+      producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+      bootChanged,
+      hostBootId,
+    });
 
     if (events.length > 0) {
       const appended = store.append(events);
       if (!guard(appended)) return false;
       log(`${at} ${events.length} events from the collection at ${observed.clock.at} (via ${via})`);
     }
+    // AFTER THE APPEND, so a crash before it leaves the old boot id and the
+    // close-out happens again rather than not at all. The candidates carry the
+    // same id, which is how the recovery fold gets it back if the process dies
+    // before `recovery.json` is written.
+    if (hostBootId !== null) store.recordBootId(hostBootId);
 
     baseline = outcome.baseline;
     lastGoodSnapshotAt = observed.clock.at;
@@ -1348,6 +1392,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //   1. `store.append(events)`   — the events, fsync'd, O_APPEND
     //   2. `saveBaseline(json)`     — the payload those events were derived FROM
     //   3. `store.checkpoint(...)`  — the register, and the cursor into (1)
+    //      — then, inside it, `recovery.json`: the recovery index and its own
+    //      cursor, which `openStore` replays from independently (store.ts §
+    //      `RECOVERY_FILE`)
     //
     // The invariant the order buys: **the event log is always at or ahead of
     // the baseline file, and the baseline file is always at or ahead of the
@@ -1426,8 +1473,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 /**
  * The sessions the restored register holds and this snapshot does not.
  *
- * **THE ONE PLACE THE DAEMON MINTS AN EVENT OUTSIDE `diff()`, and it mints
- * CLOSURES ONLY — never a `session-status`, never a `session-replaced`.** That
+ * **ONE OF TWO PLACES THE DAEMON MINTS AN EVENT OUTSIDE `diff()` — the other is
+ * `closeOutOldBoot` below — and both mint CLOSURES ONLY — never a
+ * `session-status`, never a `session-replaced`.** That
  * restriction is the point rather than an omission, and the next person will
  * want to relax it: comparing a register entry's `lastStatusKey` against a
  * row's status looks like the same job. It is not. A status transition needs
@@ -1485,6 +1533,43 @@ function goneWhileAway(register: SessionRegister, snapshot: AdmissibleSnapshot, 
     });
   }
   return gone;
+}
+
+/**
+ * Every register entry, closed out of the old boot's world — GPT Sol's F5.
+ *
+ * `tmux-server-changed` rather than `absent-from-snapshot`, and whether or not
+ * the new collection lists a row with the same handle and claim: under a new
+ * boot that row is a fresh allocation wearing an old number, which is the whole
+ * reason the boot id is asked. Closures only, for `goneWhileAway`'s reason; the
+ * new collection's rows arrive as `session-seen` from `diff(null, …)`.
+ */
+function closeOutOldBoot(register: SessionRegister, at: string): OverseerEvent[] {
+  return [...register.values()].map((entry) => {
+    const identity: SessionIdentity = { tmuxId: entry.tmuxId, claimedConversationId: entry.claimedConversationId };
+    return {
+      kind: "tmux-session-gone",
+      at,
+      tmuxServerPid: entry.tmuxServerPid,
+      key: sessionKey(identity),
+      identity,
+      name: entry.name,
+      why: "tmux-server-changed",
+    };
+  });
+}
+
+/**
+ * The kernel's id for this boot, or null when it cannot be read — which is any
+ * host that is not Linux, and concludes nothing.
+ */
+export function readHostBootId(): string | null {
+  try {
+    const text = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+    return text === "" ? null : text;
+  } catch {
+    return null;
+  }
 }
 
 function transportRestored(via: Transport): string {
