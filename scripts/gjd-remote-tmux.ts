@@ -811,10 +811,17 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
       # where Greg had set "Overseer" and the page kept showing "Overseer and
       # fleet improvement roadmap".
       #
-      # ONE READ OF THE FILE, because this grep is the dominant cost of a whole
-      # collection -- gjd-remote ls takes 10-12s almost entirely here, over
-      # multi-MB transcripts. The matches are then filtered twice, which is free
-      # because there are a few dozen of them.
+      # ONE READ OF THE FILE per session. The matches are then filtered twice,
+      # which is free because there are a few dozen of them.
+      #
+      # WHAT IT COSTS, measured 2026-09-10 on the Hetzner box and run locally
+      # by the fleet collector: 236-251 ms over the 25 most recently written
+      # transcripts (85 MB, warm cache), inside a script that takes 4.4-5.1 s.
+      # It is NOT the dominant cost of a collection. An earlier comment here
+      # said 10-12 s; that was gjd-remote ls measured through ssh. A cache for
+      # this grep was designed and dropped (plan 260910c, Stage 4): revisit if
+      # it passes about two seconds a pass, or if it ever runs on a request
+      # thread.
       #
       # WHAT THIS DOES NOT FIX, so nobody re-reports it as a bug: renaming a
       # TMUX SESSION writes nothing to the transcript. The tmux name is a

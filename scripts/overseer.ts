@@ -1060,7 +1060,7 @@ export const WHY_IS_NOT_OPTIONAL =
   "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
   "  it is written into the store and read by whoever asks why a job ran twice.";
 
-async function runParsed(parsed: Parsed): Promise<number> {
+export async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
 
   switch (parsed.command) {
@@ -1077,18 +1077,33 @@ async function runParsed(parsed: Parsed): Promise<number> {
       return 0;
     case "events": {
       const tail = readEventTail(root, parsed.limit);
+      if (tail.cause !== null) {
+        console.error(`✗ ${tail.cause}`);
+        return 1;
+      }
       // "0 events" and "no store" are not the same sentence, and printing
       // nothing at all would be a third thing that looks like both.
-      if (tail.total === 0) console.log(`no events in ${join(root, EVENTS_FILE)}`);
+      if (tail.total === 0 && tail.unreadable === 0 && tail.tornTail === null) {
+        console.log(`no events in ${join(root, EVENTS_FILE)}`);
+      }
       for (const event of tail.events) console.log(describeEvent(event));
       if (tail.unreadable > 0) console.log(`(${tail.unreadable} unreadable lines)`);
-      return 0;
+      if (tail.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(tail.tornTail)})`);
+      return tail.unreadable > 0 ? 1 : 0;
     }
     case "notes": {
       const read = readNotes(root, parsed.limit);
-      if (read.notes.length === 0) console.log("the Overseer has written nothing about itself yet");
+      if (read.kind === "unreadable") {
+        console.error(`✗ ${read.cause}`);
+        return 1;
+      }
+      if (read.notes.length === 0 && read.unreadable === 0 && read.tornTail === null) {
+        console.log("the Overseer has written nothing about itself yet");
+      }
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
-      return 0;
+      if (read.unreadable > 0) console.log(`(${read.unreadable} unreadable lines)`);
+      if (read.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(read.tornTail)})`);
+      return read.unreadable > 0 ? 1 : 0;
     }
     case "attention":
       return await runAttentionCommand({

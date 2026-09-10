@@ -186,8 +186,15 @@ only `publication`; a poll and a broadcast of the same state carry the same stam
 process have two instances; the old `parseObservation` accepts a stamped payload (additivity, proved
 rather than asserted).
 
-- [ ] Stamp on the wire, ledger, composition, server wiring, client `Omit`.
-- [ ] Focused tests, typecheck, `build:fleet`; Sol review; commit.
+- [x] Stamp on the wire, ledger, composition, server wiring, client `Omit`. **Implemented by Codex
+  (gpt-5.6-sol).** The ledger's API is `record("success" | "failure")`; the initial-frame decision
+  is `initialFramePayload()` in `state.ts`, pure so a test drives the function production calls.
+- [x] Focused tests, typecheck, `build:fleet` (all green on the manager's own runs, before and after
+  the review's fixes: typecheck exit 0, 13 files / 792 tests, `build:fleet` exit 0); Sol review;
+  commit.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with fixes, all four of the manager's
+points confirmed and fixed in the stage; see Findings.
 
 ### Stage 2 — the consumer orders by run and collection
 
@@ -252,7 +259,12 @@ their tests.
   `observation.ts` lets `paneId` be null beside a real `panePid`, so refusing that on disk would
   refuse events the differ legitimately writes — and `replay()` is all-or-nothing, so one refused line
   starts the store cold. For the same reason, **before this lands the new parser is run read-only
-  over the live `~/.overseer/events.jsonl` (1,811 lines on 2026-09-10) and must refuse none of it.**
+  over the live `~/.overseer/events.jsonl` and must refuse none of it.** The log is frozen for the
+  purpose: a copy taken 2026-09-10 ~09:55 UTC, 1,918 lines, sha256 `6c549b2e…`, read through
+  `openStore({ root })` in a scratch root and `store.readEvents(0)`, never the live store. The
+  script fails outright if it parses fewer than 1,900 lines, because "0 refused" over a file it did
+  not read would be a pass about nothing. **Baseline on today's parser: 1,918 events, 0
+  unreadable.** The same script on the same bytes after Stage 3 must say the same.
 - **The CLI's own event parse.** `readEventTail` accepts anything with a known `kind` and an `at`,
   and `describeEvent` then dereferences `event.row.name`, so one malformed known-kind line crashes
   `overseer events`. It uses the store's parser instead. *Red today.*
@@ -273,9 +285,19 @@ their tests.
   left as it is: they are CLI readers, and the page load never reaches them. Nothing here adds a
   full-history parse to a page load: the dashboard reads only the checkpoint (Sol, finding 6).
 
-- [ ] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail.
-- [ ] The live-log check (read-only), recorded below with its count.
-- [ ] Focused suites, typecheck, full suite via `tmux-job`; Sol review; commit; push.
+- [x] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail. **Implemented by Codex
+  (gpt-5.6-sol), run ahead of Stage 2** because Stage 2's `daemon.ts` edits wait on another
+  session's push to that file, and Stage 3 touches none of it. `parseEventLines` is now exported and
+  takes complete lines, so `readEventTail` uses the store's parser instead of its own kind-and-`at`
+  check; `splitJsonl` in `jsonl.ts` is the one splitter.
+- [x] The live-log check (read-only): **1,918 events, 0 unreadable on the new parser**, the same
+  frozen bytes as the baseline.
+- [x] Focused suites and typecheck green on the manager's own runs, before and after the review's
+  fixes (after: typecheck exit 0; 31 files / 873 tests across the four focused suites and every
+  other suite that reaches these readers; live-log check still 1,918 events, 0 unreadable); Sol
+  review; commit. Full suite and push at the end of the plan.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with three fixes; see Findings.
 
 ## What this deliberately does not do
 
@@ -324,6 +346,63 @@ Each finding was checked against the code before being accepted.
    not on client and server builds matching; `readNotes`/`readEventTail` are described as
    lock-free, not bounded.
 
+### Stage 1 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+The manager raised four points before the review; Sol confirmed all four and fixed them in the
+stage, red first where a behaviour changed.
+
+1. **P1, a composition defect could take the dashboard down.** `fleetState` threw when the stamp's
+   inventory nullness disagreed with the snapshot, and it runs inside `/api/state`, `/api/live`,
+   `tellOverseer` and `broadcast`. **Fixed, and the disposition is a decision worth knowing:** the
+   defect is logged and the payload is served with a deliberately unreadable stamp,
+   `instance: "invalid"`, its inventory nullness normalised to agree with `collectedAt`. The
+   invalid instance fails `INSTANCE_TOKEN`, so Stage 2 parses it as `unreadable`: ordering falls
+   back to the clock and the `ordering` condition opens. That is a named alarm rather than a dead
+   dashboard or a fabricated ordinal a consumer would believe. A test-only assertion was weighed
+   and declined, because it hides the defect in production.
+2. **P2, `/api/live` composed payloads it then discarded.** `initialFramePayload` now takes a
+   composition thunk and calls it only when `publication > 0`; the test proves zero compositions
+   before a kept turn and exactly one after.
+3. **P3, the new test reached the ledger through dynamic-import casts**, a leftover from writing
+   it red before the class existed. Now plain static imports.
+4. **P3, `ProducerStamp` had displaced `FleetState`'s doc comment.** Moved above it.
+
+### Stage 3 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+The manager raised two points; Sol refuted one with a proof and confirmed the other.
+
+- **The frozen log is a survey, not a proof — refuted as a risk, by tracing.** Every constructor in
+  `diff.ts` that emits `session-seen`, `session-replaced` or `session-row-changed`, and
+  `goneWhileAway` in `daemon.ts`, derives `row`, `identity` and `key` from the same values; a claim
+  appearing or clearing takes the `session-replaced` branch, whose new side comes from the row and
+  whose previous side comes from the old one. So the new agreement checks cannot refuse anything the
+  differ legitimately writes, which is the proof the 1,918-line survey could not give.
+- **P1, a log that could not be repaired crashed daemon startup** (confirmed). `openStore` rethrew
+  after releasing its lock, and `openNoteLog` escaped without closing the store. **Fixed:** a new
+  `unusable-log` store refusal on both paths, locks released. This put a 13-line hunk in
+  `daemon.ts`'s startup, outside `take()`; the Overseer was told.
+- **P1, a corrupt note history still produced a reassuring status.** A log with only a corrupt
+  complete note made `overseer status` say *never run* and *all clear*, and `overseer notes` exit 0.
+  **Fixed:** corrupt complete lines make the daemon's standing and its conditions unknown, and both
+  `overseer notes` and `overseer events` exit 1 when a complete line is unreadable.
+- **P2, an unreadable event file crashed both event surfaces.** **Fixed:** `EventTail` carries a
+  named cause; status prints `events UNREADABLE`.
+
+**One behaviour kept rather than softened, and worth knowing.** A torn final line in the notes log
+also makes `overseer status` report the daemon's standing as *cannot tell* (labelled `INCOMPLETE`,
+apart from `UNREADABLE`). A status read that lands mid-append will therefore say so for that one
+read; it corrects itself on the next. Reporting from the last complete note instead was the
+alternative, and it could call a daemon *running* while its stopping note is half-written. Rare,
+transient, and on the safe side, so it was not worth a second paid review round.
+
+**Implementer for Stage 2 changed.** The Overseer's budget notice of 2026-09-10 (~09:35Z) moved
+implementation off Codex, whose weekly window was emptying under seven sessions; Codex is now for
+the obligatory Sol reviews only, capped at 30 minutes. Stage 2 is implemented by an Opus subagent in
+this worktree and reviewed by Sol.
+
 ## Status
 
-2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 next.
+2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
+stamp, Sol stage review passed with four fixes, on `dev`. Stage 3 done ahead of Stage 2: store and
+CLI readers, Sol stage review passed with three fixes. Stage 2 waits on another session's
+`daemon.ts` push, which is held for Greg's approval of a merge conflict with Stage 1.

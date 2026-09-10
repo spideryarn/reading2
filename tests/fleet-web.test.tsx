@@ -145,6 +145,10 @@ import {
   sortRows,
   triageSort,
 } from "../tools/fleet/web/src/view";
+import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
+import { actionsStaleAfterMs } from "../tools/fleet/web/src/SessionDetail";
+import { ACTIONS_READ_DEADLINE_MS } from "../tools/fleet/web/src/useActions";
+import { identityWriteGate } from "../tools/fleet/execution-token";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
    jsdom environment does not set it. Written as a cast rather than a `declare
@@ -470,6 +474,12 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  /* The session composer keeps drafts in sessionStorage (drafts.ts), which
+     jsdom keeps for the whole file — so without this, one test's draft is
+     restored into the next test's box. Through `window`: the bare global is
+     Node's under jsdom. The page's own memory and refusal latch go too. */
+  window.sessionStorage.clear();
+  resetDraftPageStateForTests();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -1770,6 +1780,7 @@ describe("box health, whose shape belongs to somebody else", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -1843,6 +1854,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => ({
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
@@ -2730,6 +2742,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -3406,6 +3419,8 @@ function mountFull(args: {
   actionsApi?: ActionsApi;
   messagesApi?: MessagesApi;
   historyApi?: HistoryApi;
+  /** The actions poll. An hour unless the test is about the poll's own clock — see below. */
+  actionsPollMs?: number;
 }): void {
   act(() =>
     root.render(
@@ -3420,7 +3435,7 @@ function mountFull(args: {
         /* An hour, so the poll never fires inside a test. The poll itself is
            tested on its own; leaving it live here would make every other test
            in the file depend on a timer. */
-        actionsPollMs={3_600_000}
+        actionsPollMs={args.actionsPollMs ?? 3_600_000}
       />,
     ),
   );
@@ -6937,6 +6952,182 @@ describe("the queue, which is the feature and so is on screen", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * How old the queue on screen is — plan 260910c Stage 4, Sol's F8.
+ *
+ * `useActions` keeps its last good feed through a failure, and since Stage 4a
+ * it knows when that feed arrived. These are about the half that makes the
+ * field worth having: the page SAYS how old the queue is once that matters,
+ * and says the latest read failed, while still drawing what the last good read
+ * found — a queue you cannot currently read is not an empty queue.
+ * ------------------------------------------------------------------ */
+
+describe("how old the queue on screen is", () => {
+  const ROW = steerable({ id: "$1643", title: "the one whose queue ages" });
+  /* "read 30s ago", "read 1m 5s ago" — formatDuration's shapes. NO LEADING
+     `\b`: the section's text runs the heading straight into the line
+     ("…go to itread 0s ago"), so a word boundary there never matches, and
+     every `not.toMatch` below would pass whatever the page drew. */
+  const AGE = /read \d[\dhms ]* ago/;
+  const HELLO = itemWire({ id: "q1", payload: { kind: "message", text: "hello" } });
+
+  function setVisibility(value: "visible" | "hidden"): void {
+    /* jsdom's `visibilityState` is a prototype getter with no setter. Not
+       announced: the point is that the page's own poll skips a hidden tab. */
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  }
+
+  /** The queue's own section, so an age drawn anywhere else on the page cannot answer for it. */
+  function queueSection(): string {
+    const heading = [...container.querySelectorAll("h3")].find((h) => h.textContent === "Waiting to go to it");
+    const section = heading?.closest("section");
+    if (!section) throw new Error("no queue section on the page");
+    return section.textContent ?? "";
+  }
+
+  /** The page open on a session with a queue, and a switch that makes every later read fail. */
+  function openAging(items: unknown[], pollMs?: number): { failWith: (why: string | null) => void } {
+    let failing: string | null = null;
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE], queues: [queueWire({ items })] }));
+    const api: ActionsApi = {
+      ...rec.api,
+      feed: async (signal) => (failing === null ? rec.api.feed(signal) : { ok: false, why: failing }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: api, ...(pollMs === undefined ? {} : { actionsPollMs: pollMs }) });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one whose queue ages");
+    return {
+      failWith: (why) => {
+        failing = why;
+      },
+    };
+  }
+
+  /** One read, now: `online` is one of the two moments the hook reads at once. */
+  async function readNow(): Promise<void> {
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it("draws no age while every poll lands", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      /* Six polls' worth of time. Each lands, so the feed is never older than
+         one interval, which is well inside the threshold. */
+      for (let i = 0; i < 12; i += 1) await advance(5_000);
+      const text = queueSection();
+      expect(text).toContain("hello");
+      expect(text).not.toMatch(AGE);
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws the age once the feed is older than two polls and one read's deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      const stale = actionsStaleAfterMs(10_000);
+      expect(stale).toBe(2 * 10_000 + ACTIONS_READ_DEADLINE_MS);
+
+      /* A hidden tab skips the page's own polls — the one way this feed ages
+         with no error to say so. */
+      setVisibility("hidden");
+      await advance(stale - 2_000);
+      expect(queueSection()).not.toMatch(AGE);
+
+      await advance(4_000);
+      const text = queueSection();
+      expect(text).toContain(`read ${(stale + 2_000) / 1000}s ago`);
+      // The last good queue is still drawn under its age.
+      expect(text).toContain("hello");
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+      setVisibility("visible");
+    }
+  });
+
+  it("draws the error beside the queue, and keeps the items the last good read found", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    expect(queueSection()).toContain("hello");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+
+    const text = queueSection();
+    expect(text).toContain("the latest read failed: connect ECONNREFUSED 127.0.0.1:8787");
+    // With the age, which is what says how much the failure matters.
+    expect(text).toMatch(AGE);
+    // And NOT instead of the queue: the item and its button are still there.
+    expect(text).toContain("hello");
+    expect(buttonSaying("Cancel")).toBeDefined();
+  });
+
+  it("clears the age and the error once a read works again", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    expect(queueSection()).toContain("latest read failed");
+
+    page.failWith(null);
+    await readNow();
+    const text = queueSection();
+    expect(text).not.toContain("latest read failed");
+    expect(text).not.toMatch(AGE);
+    expect(text).toContain("hello");
+  });
+
+  /* The empty queue drew the error INSTEAD of its status line. Right when
+     there is no feed at all; once the age and the error are drawn above it,
+     it is the same error twice, and a claim that the queue "could not be
+     read" beside an age saying when it was. */
+  it("says what the last good read found on an empty queue, and names the failure once", async () => {
+    const page = openAging([]);
+    await act(async () => {});
+    expect(queueSection()).toContain("Nothing is waiting.");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    const text = queueSection();
+    // Not the present tense: nothing here knows what is waiting now.
+    expect(text).not.toContain("Nothing is waiting.");
+    expect(text).toContain("Nothing was waiting at the last read that worked.");
+    expect(text.split("ECONNREFUSED").length - 1).toBe(1);
+  });
+
+  /* The feed-panel and decisions-panel tests mount App with
+     `actionsPollMs={0}`. A threshold that scaled only with the interval would
+     be zero there, and every feed would be "stale" the moment it landed.
+
+     The threshold, not a render. A mounted page at a 0 ms poll cannot be
+     driven deterministically here: on real timers the poll re-renders without
+     pause and `act` timed out at 30 s on correct code; on fake timers every
+     tick schedules the next at +0, and advancing the clock never ends. None
+     of those tests opens a session, so no age can be drawn in them anyway. */
+  it("keeps a floor of one read's deadline at a zero poll interval", () => {
+    expect(actionsStaleAfterMs(0)).toBe(ACTIONS_READ_DEADLINE_MS);
+    expect(actionsStaleAfterMs(0)).toBeGreaterThan(0);
+  });
+});
+
 describe("queueing a message, in one line with the buttons", () => {
   /* WORKING, not idle, and that is now load-bearing: v0.5g stops offering
      Queue on an idle session, so a fixture left at the default status would
@@ -7544,6 +7735,33 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("may be sitting in its input box");
     // And the header says how many sessions are in this state.
     expect(container.textContent).toContain("held after a send nobody can account for");
+  });
+
+  /* Plan 260910c Stage 4b. SessionDetail draws the actions feed's error in its
+     own age line and so asks the shared `SessionQueue` for a past-tense
+     sentence instead; this tab draws no such line, so it must keep the old
+     sentence WITH the reason, or a reader here loses why. */
+  it("still says a held, empty queue could not be read, with the reason, when a read fails", async () => {
+    let failing: string | null = null;
+    const base = heldFleet();
+    const rec = {
+      ...base,
+      api: {
+        ...base.api,
+        feed: async (signal?: AbortSignal) =>
+          failing === null ? base.api.feed(signal) : { ok: false as const, why: failing },
+      },
+    };
+    await mountHeld(rec);
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+
+    failing = "connect ECONNREFUSED 127.0.0.1:8787";
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+    expect(container.textContent).toContain("The queue could not be read: connect ECONNREFUSED 127.0.0.1:8787");
+    expect(container.textContent).not.toContain("Nothing was waiting at the last read that worked.");
   });
 
   it("never says nothing has been sent over a held session", async () => {
@@ -9556,6 +9774,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
@@ -10753,8 +10972,27 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
 
     /* Same `id`, same `claudeSessionId`, a different process. Nothing else on
-       the row can tell these two runs apart, which is the whole point. */
-    act(() => feed.push(state({ rows: rowsRunning(ran({ pid: 5150, startTicks: 90_000_000 })) })));
+       the row can tell these two runs apart, which is the whole point.
+
+       **Its conversation could not be checked**, and that is deliberate. A
+       replacement that verifiably runs the SAME conversation gets its draft
+       back — drafts are keyed by the conversation, and a relaunch of it is the
+       same recipient (plan 260910c § Stage 2; the composer's own tests below).
+       So the draft half of this test holds for a replacement the page cannot
+       place, which is the one where keeping the words would be a guess. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsRunning(
+            ran({
+              pid: 5150,
+              startTicks: 90_000_000,
+              conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+            }),
+          ),
+        }),
+      ),
+    );
     await act(async () => {});
 
     expect(composer().value).toBe("");
@@ -10797,7 +11035,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
               title: "the replacement execution",
               status: { kind: "working" },
               claudeSessionId: "conv-A",
-              execution: ran({ pid: 5150, startTicks: 90_000_000 }),
+              /* Unverifiable conversation, for the reason the test above gives:
+                 a verified relaunch of conv-A would rightly get the draft back. */
+              execution: ran({
+                pid: 5150,
+                startTicks: 90_000_000,
+                conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+              }),
             }),
           ],
         }),
@@ -11765,5 +12009,361 @@ describe("the two answering refusals, and who owns each", () => {
 
     expect(container.textContent ?? "").toContain(REFUSED_SERVER);
     expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+});
+
+/**
+ * **THE SESSION COMPOSER KEEPS ITS WORDS THROUGH A RELOAD — for the
+ * conversation they were written to, and for nobody else.**
+ *
+ * drafts.ts is the hook, and its rules are tested one by one in
+ * tests/fleet-drafts.test.tsx. What is under test here is the composer's wiring
+ * through the whole page: the remount Stage 1 keys by execution, the two send
+ * paths that must take the stored draft with them, and what Send and Queue may
+ * do under each execution reading — Fable's table in docs/plans/260910c
+ * § Withhold, caveat or relabel.
+ *
+ * A **reload** here is: unmount, forget the page's memory, mount again.
+ * sessionStorage is what a reload keeps, so it is left alone; the file-wide
+ * `beforeEach` empties it, so one test's draft cannot answer another's
+ * assertion. Conversation ids are not uuids, for tests/fixture-ids.test.ts.
+ */
+describe("the session composer keeps its draft for the conversation it was written to", () => {
+  const KEY_A = draftKey("session-composer", "conv-A");
+  const KEY_B = draftKey("session-composer", "conv-B");
+
+  /**
+   * The prototype of the storage the page actually uses. Under jsdom the bare
+   * `Storage` global is Node's, so a spy on `Storage.prototype` watches a class
+   * nothing calls (tests/fleet-drafts.test.tsx found that the hard way).
+   */
+  const storageProto = (): Storage => Object.getPrototypeOf(window.sessionStorage) as Storage;
+
+  /** The one line beside Send when the page cannot tell which Claude is in the pane. */
+  const CANNOT_TELL_LINE =
+    "The page cannot confirm which Claude is in this pane right now; the box checks before it types.";
+
+  function running(
+    over: {
+      pid?: number;
+      conversation?: ConversationReading;
+      harness?: Extract<ExecutionReading, { kind: "verified" }>["harness"];
+    } = {},
+  ): ExecutionReading {
+    const pid = over.pid ?? 7001;
+    return {
+      kind: "verified",
+      token: { boot: "5d81e0aa-boot", pid, startTicks: 11_000_000 + pid },
+      harness: over.harness ?? "claude-code",
+      conversation: over.conversation ?? { kind: "verified", id: "conv-A" },
+    };
+  }
+
+  /** The box's normal weather: a collection too loaded to look. */
+  const WEATHER: ExecutionReading = {
+    kind: "unknown",
+    cause: "process-table-unreadable",
+    why: "the process table could not be read at load average 300",
+  };
+
+  /**
+   * A different Claude in the pane. A new process, because one process cannot
+   * carry `--session-id conv-A` at one reading and `conv-B` at the next.
+   */
+  const CONFLICTING = running({ pid: 7002, conversation: { kind: "conflicting", claimed: "conv-A", observed: "conv-B" } });
+
+  function rowsOf(execution: ExecutionReading, claim = "conv-A"): FleetState["rows"] {
+    return [steerable({ id: "$d", title: "drafting", status: { kind: "working" }, claudeSessionId: claim, execution })];
+  }
+
+  function composer(): HTMLTextAreaElement {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box on the page");
+    return box;
+  }
+
+  function pressed(text: string): HTMLButtonElement {
+    const button = buttonSaying(text);
+    if (!button) throw new Error(`no button saying ${JSON.stringify(text)} on the page`);
+    return button;
+  }
+
+  /** Mount the page and open the session — unless the hash already has, which after a reload it does. */
+  async function start(
+    execution: ExecutionReading,
+    seams: { steer?: SteerApi; actionsApi?: ActionsApi } = {},
+  ): Promise<ReturnType<typeof manualTransport>> {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, ...seams });
+    act(() => feed.push(state({ rows: rowsOf(execution) })));
+    if (container.querySelector("#steer-text") === null) openSession("drafting");
+    await act(async () => {});
+    return feed;
+  }
+
+  async function arrives(feed: ReturnType<typeof manualTransport>, rows: FleetState["rows"]): Promise<void> {
+    act(() => feed.push(state({ rows })));
+    await act(async () => {});
+  }
+
+  /** What iOS does when it reclaims the tab: the page goes, sessionStorage stays. */
+  function reload(): void {
+    act(() => root.unmount());
+    resetDraftPageStateForTests();
+    root = createRoot(container);
+  }
+
+  function draftKeys(): string[] {
+    const s = window.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < s.length; i += 1) {
+      const key = s.key(i);
+      if (key !== null && key.startsWith("sy.draft.v1:")) keys.push(key);
+    }
+    return keys.sort();
+  }
+
+  // 1
+  it("brings a draft back after a reload, under the same verified conversation", async () => {
+    await start(running());
+    typeInto(composer(), "half a thought about the migration");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("half a thought about the migration");
+
+    reload();
+    await start(running());
+    expect(composer().value).toBe("half a thought about the migration");
+  });
+
+  // 2
+  it("restores nothing in front of a different verified conversation, and never reads the old draft", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "meant for conversation A");
+
+    const getItem = vi.spyOn(storageProto(), "getItem");
+    /* The claim and the process both moved: a genuinely different recipient. */
+    await arrives(feed, [
+      steerable({
+        id: "$d",
+        title: "drafting",
+        status: { kind: "working" },
+        claudeSessionId: "conv-B",
+        execution: running({ pid: 7003, conversation: { kind: "verified", id: "conv-B" } }),
+      }),
+    ]);
+    const read = getItem.mock.calls.map(([key]) => key);
+    getItem.mockRestore();
+
+    expect(composer().value).toBe("");
+    /* The spy is live — it saw the new conversation's key looked up — so its
+       silence about the old one means something. */
+    expect(read).toContain(KEY_B);
+    expect(read).not.toContain(KEY_A);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("meant for conversation A");
+  });
+
+  // 3
+  it("brings the draft back when the same conversation is relaunched in a new process", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "still for conversation A");
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("still for conversation A");
+  });
+
+  // 4
+  it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
+    await start(running());
+    typeInto(composer(), "written before the reload");
+
+    reload();
+    const feed = await start(WEATHER);
+    expect(composer().value).toBe("");
+
+    await arrives(feed, rowsOf(running()));
+    expect(composer().value).toBe("written before the reload");
+  });
+
+  // 5
+  it("keeps typing through an unverifiable gap under the last verified conversation, and under nothing else", async () => {
+    const feed = await start(running());
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "typed while the box was too loaded to look");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("typed while the box was too loaded to look");
+    expect(draftKeys()).toEqual([KEY_A]);
+  });
+
+  it("stores nothing until a conversation is verified, then files the box's words under it", async () => {
+    const feed = await start(WEATHER);
+    typeInto(composer(), "nobody has been verified yet");
+    expect(draftKeys()).toEqual([]);
+
+    await arrives(feed, rowsOf(running()));
+    expect(draftKeys()).toEqual([KEY_A]);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("nobody has been verified yet");
+  });
+
+  // 6
+  it("never replaces what is in the box with a stored draft — the box's words are the ones kept", async () => {
+    await start(running());
+    typeInto(composer(), "the old draft");
+
+    reload();
+    const feed = await start(WEATHER);
+    typeInto(composer(), "what I am typing now");
+    await arrives(feed, rowsOf(running()));
+
+    expect(composer().value).toBe("what I am typing now");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("what I am typing now");
+  });
+
+  // 7 — the hook's own tests cover the three ways storage refuses; this proves the composer draws the line.
+  it("says in one line that the message will not survive a reload when the browser refuses storage", async () => {
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    await start(running());
+    typeInto(composer(), "a message in a private window");
+    expect(composer().value).toBe("a message in a private window");
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("storage-refused"));
+  });
+
+  // 8 — likewise one composer-level case.
+  it("removes the stored copy rather than keep a shorter one when the text goes over the cap, and says so", async () => {
+    await start(running());
+    typeInto(composer(), "the start of it");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("the start of it");
+
+    typeInto(composer(), "x".repeat(DRAFT_CAP + 1));
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("too-long"));
+  });
+
+  // 9
+  it("takes the stored draft away on Clear, on a Send the server accepted, and on a Queue it accepted", async () => {
+    await start(running());
+    typeInto(composer(), "to be cleared");
+    act(() => pressed("Clear").click());
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be sent");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be sent");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be queued");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be queued");
+    await act(async () => {
+      pressed("Queue (~73s)").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+  });
+
+  it("keeps the box and its stored copy when the server refuses the send", async () => {
+    await start(running(), {
+      steer: refusingSteer({
+        ok: false,
+        code: "wrong-pane",
+        why: "pane %2108 is in session $1643 now, not $d",
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    typeInto(composer(), "try this again in a moment");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("try this again in a moment");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("try this again in a moment");
+  });
+
+  // 10 — cannot tell: live, and one line.
+  const cannotTell: [string, ExecutionReading][] = [
+    ["an unknown reading", WEATHER],
+    [
+      "a claimed-only reading",
+      {
+        kind: "claimed-only",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "nothing under the pane could be identified" },
+        why: "no process under the pane matched a harness",
+      },
+    ],
+    [
+      "a verified process whose conversation cannot be checked",
+      running({ conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" } }),
+    ],
+  ];
+  it.each(cannotTell)("keeps Send and Queue live under %s, with one line beside Send", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(pressed("Queue (~73s)").disabled).toBe(false);
+    expect((container.textContent ?? "").split(CANNOT_TELL_LINE)).toHaveLength(2);
+  });
+
+  it("draws no such line when the conversation is verified", async () => {
+    await start(running());
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  // 10 — can tell: off, with the gate's sentence, and typing still on.
+  const canTell: [string, ExecutionReading][] = [
+    ["a conflicting conversation", CONFLICTING],
+    ["a pane whose process claims no conversation", running({ conversation: { kind: "not-claimed" } })],
+    [
+      "a harness that cannot be addressed",
+      running({
+        harness: "claude-headless",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "a headless Claude stopped reading its terminal" },
+      }),
+    ],
+  ];
+  it.each(canTell)("disables Send and Queue under %s, says why in the gate's words, and leaves typing on", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(composer().disabled).toBe(false);
+    expect(composer().value).toBe("go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+
+    const gate = identityWriteGate(execution);
+    if (gate.allowed) throw new Error("this fixture is one the gate allows, so it proves nothing here");
+    expect(container.textContent ?? "").toContain(gate.why);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  /**
+   * **AN UNKNOWN READING DOES NOT END A CONFLICT.** The same rule the
+   * transcript's relabel follows (RecentMessages.tsx, `lastConflict`): a
+   * collection too loaded to look is not evidence that the pane went back to
+   * the conversation this row addresses.
+   */
+  it("keeps Send and Queue off through an unverifiable flicker after a conflict", async () => {
+    const feed = await start(CONFLICTING);
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+  });
+
+  // 11
+  it("puts the claimed conversation's draft back under a conflict, and stores none of the edits", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "for conversation A");
+
+    await arrives(feed, rowsOf(CONFLICTING));
+    expect(composer().value).toBe("for conversation A");
+    expect(pressed("Send now").disabled).toBe(true);
+
+    typeInto(composer(), "for conversation A, and a bit more");
+    expect(composer().value).toBe("for conversation A, and a bit more");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("for conversation A");
+    expect(draftKeys()).toEqual([KEY_A]);
   });
 });

@@ -1022,6 +1022,17 @@ export type AttentionFeed =
  * The whole of `/api/state`.
  * ------------------------------------------------------------------ */
 
+/** The dashboard run and kept collection which supplied a fleet payload. */
+export type ProducerStamp = {
+  /** Which run of the dashboard composed this payload: `serverInstanceId()`, INSTANCE_TOKEN-shaped. */
+  instance: string;
+  /** How many refresh turns this run has kept (success or failure). 0 before the first. */
+  publication: number;
+  /** How many successful collections this run has kept: the ordinal of the one `rows` came from.
+   *  null exactly when `collectedAt` is null — never collected. */
+  inventory: number | null;
+};
+
 /**
  * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
  * three consumers cannot disagree about it.
@@ -1103,6 +1114,7 @@ export type FleetState<Row, Health> = {
    * know, and a version that changes on every addition is one nobody checks.
    */
   schema: 1;
+  producer: ProducerStamp;
   /**
    * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
    * claim about the box when `collectedAt` is non-null, and a freshly restarted
@@ -3876,6 +3888,7 @@ type AdmissionPayloadBase = {
   /** When the server completed building this answer, by the SERVER's clock. */
   computedAtMs: number;
   journal: AdmissionRefusalJournal;
+  census: AdmissionCensusState;
 };
 
 /** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */
@@ -3892,3 +3905,51 @@ export type AdmissionPayload = AdmissionPayloadBase &
         policy?: never;
       }
   );
+
+/** The three executable-shaped process classes the admission census recognises. */
+export type AdmissionCensusClass = "test" | "codex-batch" | "browser";
+
+/** Counts from one completed pass over the process table. */
+export type AdmissionCensusCounts = {
+  byClass: Record<AdmissionCensusClass, { roots: number; uncertain: number }>;
+  /** Rows whose identity, parent, or recogniser-bearing command name changed between the bracketing reads. */
+  changedUnderRead: number;
+  /** Pid entries that existed at enumeration but could not yield one complete row. */
+  unreadable: number;
+  /** Numeric entries returned by the process-table enumeration. */
+  processesSeen: number;
+};
+
+/**
+ * The cached census lifecycle. `observed` describes the kind of evidence on
+ * every arm; it does not imply that a successful observation exists yet.
+ */
+export type AdmissionCensusState =
+  | {
+      kind: "not-yet-computed";
+      label: "observed";
+      startedAtMs: number;
+    }
+  | {
+      kind: "value";
+      label: "observed";
+      census: AdmissionCensusCounts;
+      /** The bounds of the pass during which these rows were observed. */
+      startedAtMs: number;
+      completedAtMs: number;
+      durationMs: number;
+      cadenceMs: number;
+    }
+  | {
+      kind: "failed";
+      label: "observed";
+      why: string;
+      failedAtMs: number;
+      cadenceMs: number;
+      lastGood: {
+        census: AdmissionCensusCounts;
+        /** The bounds of the successful pass whose counts remain available. */
+        startedAtMs: number;
+        completedAtMs: number;
+      } | null;
+    };

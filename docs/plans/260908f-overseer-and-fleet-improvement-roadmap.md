@@ -1114,6 +1114,26 @@ controlled fixture cached requests stay below a provisional 250ms p95, with real
 recorded separately. Repeated timeouts do not multiply live owned children. No collection-speed
 improvement is claimed without before/after output.
 
+**Status (2026-09-10, Overseer): landed on dev at e0e82fca, session `responsive-collection`, plan
+[260910c](260910c-responsive-collection-monitoring-must-keep-answering-while-it-measures.md).**
+Measured with its own instrument (`scripts/fleet-collect-bench.ts`) on the 25-session fixture under
+a 30 s capture: `/api/state` p95 went from 30,018 ms to 7.2 ms, and a production collection turn
+holds the request thread for about 40 ms where it held it about 1.6 s a minute. Wall times are
+unchanged; the claim was a free thread, not speed. `tools/fleet/child.ts` is the owned child
+(freed at timeout plus grace, SIGTERM then SIGKILL to a process group proved at spawn, pid reuse
+checked by `/proc` start time before every signal, a per-key refusal ended only by an observed exit
+or kernel proof); health, the tmux probes and captures, and the two `ps` calls of `readExecutions`
+all go through it. The finding that reshaped the plan: `execFileSync`'s timeout signals and then
+waits without bound (1,000 ms asked, 20,019 ms measured), met twice before and fixed only where it
+hit — postmortem `260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md`; the remaining
+synchronous sites are queued (qi-xdvh82cs). Also found: the collector's this-box `selfCheck` has
+been inert in production since the systemd move (qi-j4jyf3ab, postmortem 260910b); a concurrency
+limiter bounds pending calls, not the children that outlive a timed-out call (twice). The title
+cache checkbox was dropped on measurement (dec-wyaanpzm; revisit condition in the plan). Known, not
+fixed: the owner's registry is in memory, so a restart forgets a stuck survivor; `routes-new.ts`
+still takes the synchronous quick health on session creation. The daemon still calls the synchronous
+`probeProcessTable`.
+
 ### Stage: Resource history — show what was happening when load rose
 
 - [ ] Integrate the dashboard-owned Wave 2 health history at `~/.fleet-health/` first. Preserve its
@@ -1179,6 +1199,21 @@ its single-writer lock. Recurring defect across every stage: a true number under
 more (twenty-one P1s across four reviews). The would-refuse replay was cut rather than fixed; its
 design survives in the plan's §6. Evidence not in the plan: the box killed the session's
 background processes twice at 17–20 GB available with 13.4 GB swapped, leaving no trace.
+
+**Stage 4 landed (2026-09-10, Overseer): on dev at 11189395, session `admission-census`, plan
+[260910d](260910d-admission-census-recognised-process-roots.md); the stage is complete.** The
+admission section's third block, "Recognised live process roots", counts vitest runners, Codex
+batch jobs and browsers observed during the census's last pass over `/proc`, with the pass's start
+and end, per-class uncertain, changed-under-read and unreadable counts, and claims presence only
+(never "heavy", never "active", and a Codex run is never called a review; even "alive right now"
+was too strong over a 0.3–0.6 s async pass). The worst bug was found by measuring on the box, not
+by any test or reviewer: Codex's sandbox sees a three-process pid namespace, so every fixture was a
+tidy table, while the real box returned 387 of 876 rows unreadable (kernel threads and zombies with
+empty cmdlines). Reuse surfaced a live Kill bug: `isVitestRunner` matched any argv token naming a
+vitest path, so the test-suites kill policy could have killed an editor; it now matches the
+executable position only and refuses strictly more. Final measurement: 875 processes, a 428 ms
+pass, 12.6 ms worst loop stall on a 30 s end-chained cadence. Reservation: the section's browser
+refresh grew ~130 lines of lifecycle code in review, the first thing to simplify if it moves.
 
 ### Stage: Enforced launch admission — bound work we actually launch
 

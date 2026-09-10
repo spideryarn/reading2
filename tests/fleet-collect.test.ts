@@ -15,11 +15,27 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { execFileMock, inventoryRunMock } = vi.hoisted(() => {
+  const inventory = vi.fn<() => Promise<{ stdout: string; stderr: string }>>();
+  const execFile = vi.fn();
+  Object.defineProperty(execFile, Symbol.for("nodejs.util.promisify.custom"), { value: inventory });
+  return { execFileMock: execFile, inventoryRunMock: inventory };
+});
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, execFile: execFileMock };
+});
 
 import {
+  generationNow,
   generationDrift,
+  collect,
+  panes,
   panesBySession,
+  readPanes,
   sessionScript,
   snapshotFrom,
   tmuxServerPid,
@@ -29,12 +45,15 @@ import {
   selfCheck,
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
+import { probeOwner, type OwnedOutcome, type ProbeOwner, type ProbeSpec } from "../tools/fleet/child.js";
+import { capturePaneAsync } from "../tools/fleet/pane.js";
 import { parseBinds } from "../tools/fleet/config.js";
 import { readAttemptClock } from "../tools/fleet/attempt-clock.js";
 import { fleetState } from "../tools/fleet/state.js";
 import type { AttentionFeed, OverseerStatusFeed, UsageFeed } from "../tools/fleet/wire.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
+import { buildSessionScript, ROW_COUNT, SESSION_SENTINEL, type Session } from "../scripts/gjd-remote-tmux.js";
+import { report as reportCollectBench } from "../scripts/fleet-collect-bench.js";
 
 /** No status derived for anyone — the map `toRows` falls back from. */
 const NO_STATUS = new Map<string, FleetStatus>();
@@ -61,6 +80,35 @@ function session(over: Partial<Session> = {}): Session {
     ...over,
   };
 }
+
+function interactiveRows(n: number): ReturnType<typeof toRows> {
+  const sessions = Array.from({ length: n }, (_, index) =>
+    session({ id: `$${index + 1}`, name: `session-${index + 1}` }));
+  return toRows(
+    sessions,
+    new Map(sessions.map((item) => [item.id, { kind: "working" } as FleetStatus])),
+    new Map(sessions.map((item, index) => [item.id, { paneId: `%${index + 1}`, panePid: index + 100 }])),
+  );
+}
+
+function ownerReturning(outcomeFor: (spec: ProbeSpec) => OwnedOutcome | Promise<OwnedOutcome>): ProbeOwner {
+  return {
+    run: async (spec) => outcomeFor(spec),
+    live: () => [],
+  };
+}
+
+function permissionWhy(row: ReturnType<typeof toRows>[number]): string {
+  if (row.permissionMode.kind !== "cannot-tell") {
+    throw new Error(`expected cannot-tell, got ${row.permissionMode.kind}`);
+  }
+  return row.permissionMode.why;
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  inventoryRunMock.mockReset();
+});
 
 describe("worktreeOf", () => {
   it("names the worktree a session is in", () => {
@@ -240,8 +288,10 @@ describe("panesBySession", () => {
    * every test passed the pid explicitly and so the default could rot while the
    * suite stayed green. **Every test above passes `selfCheck` an explicit
    * env**, which means all six of them would keep passing if `collect()` were
-   * changed to hand it `{}` — the check would then answer `cannot-check`
-   * forever, in production only, and the tests would say it worked.
+   * changed to hand it `{}` — the check would then answer `cannot-check` even
+   * when the collector runs under tmux, and the tests would say it worked.
+   * Production already runs under systemd and cannot perform this check; that
+   * separate deployment gap does not make the tmux wiring disposable.
    *
    * There is no seam to inject here: the wiring IS the thing under test. So this
    * reads the source, which is the same trick `tests/fleet-rename-route.test.ts`
@@ -295,6 +345,280 @@ describe("panesBySession", () => {
       const info = panesBySession(line).get("$2");
       expect(info?.paneId).toBe("%20");
       expect(info?.panePid).toBeNull();
+    }
+  });
+});
+
+describe("owned tmux probes", () => {
+  it("does not claim the production dashboard can verify its own tmux pane", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
+
+    expect(src).not.toContain("In production `collect`\n * must verify that its own pane is present");
+    expect(src).not.toContain("runs under `tmux-job.ts` in\n * production");
+    expect(src).toContain("dashboard runs under systemd");
+    expect(src).toContain("`selfCheck` returns `cannot-check`");
+  });
+
+  it("wires collect through the asynchronous tmux probes", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
+
+    expect(src).not.toMatch(/^import .*\b(?:execFileSync|spawnSync)\b.*from "node:child_process";/m);
+    expect(src).toContain("const generationBefore = await generationNow(owner)");
+    expect(src).toContain("const listing = await panes(owner)");
+    expect(src).toContain("await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId))");
+    expect(src).toContain("await readExecutions(rows, { probe: () => probeProcessTableAsync(owner) })");
+  });
+
+  it("finishes the other captures when one owner call reports a bounded timeout", async () => {
+    const rows = interactiveRows(6);
+    const completedBeforeSlow: string[] = [];
+    let slowFinished = false;
+    const owner = ownerReturning(async (spec) => {
+      if (spec.key !== "capture-pane:%1") {
+        if (!slowFinished) completedBeforeSlow.push(spec.key);
+        return { kind: "ok", stdout: "", stderr: "", tookMs: 1 };
+      }
+
+      /* The child-side operation never settles; the owner is the boundary that
+         releases its caller. This is the failure a real SIGKILL cannot arrange
+         reliably in a test, and the same seam child.test.ts uses for it. */
+      const never = new Promise<OwnedOutcome>(() => {});
+      const bound = new Promise<OwnedOutcome>((resolve) => {
+        setTimeout(() => {
+          slowFinished = true;
+          resolve({
+            kind: "timed-out",
+            why: `probe "${spec.key}" reached its 10ms deadline`,
+            tookMs: 12,
+            pid: 4312,
+            exitObserved: false,
+          });
+        }, 10);
+      });
+      return Promise.race([never, bound]);
+    });
+
+    const startedAt = Date.now();
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(slowFinished).toBe(true);
+    expect(completedBeforeSlow).toHaveLength(5);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(rows[0]?.permissionMode).toMatchObject({ kind: "cannot-tell" });
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toContain("timed-out");
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toContain("4312");
+    expect(rows.slice(1).every((row) => permissionWhy(row) !== "this session's pane has not been read yet")).toBe(true);
+  });
+
+  it("drives a slow capture through the real owner and releases the other panes", async () => {
+    const rows = interactiveRows(6);
+    const realOwner = probeOwner();
+    const completed: string[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        const slow = spec.key === "capture-pane:%1";
+        const outcome = await realOwner.run({
+          ...spec,
+          cmd: slow ? "sleep" : "true",
+          args: slow ? ["10"] : [],
+          timeoutMs: slow ? 20 : 1_000,
+          graceMs: 20,
+        });
+        if (!slow && outcome.kind === "ok") completed.push(spec.key);
+        return outcome;
+      },
+      live: realOwner.live,
+    };
+
+    const startedAt = Date.now();
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(completed).toHaveLength(5);
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toMatch(/timed-out.*child pid/);
+    await vi.waitFor(() => expect(realOwner.live()).toHaveLength(0), { timeout: 2_000 });
+  });
+
+  it("puts a refused child's pid and age in a different reason from an ordinary failure", async () => {
+    const rows = interactiveRows(2);
+    const owner = ownerReturning((spec) =>
+      spec.key === "capture-pane:%1"
+        ? {
+            kind: "refused",
+            why: `probe "${spec.key}" was refused because its previous child is still live`,
+            pid: 8123,
+            liveForMs: 7_500,
+          }
+        : {
+            kind: "failed",
+            why: "tmux exited with code 1: no such pane",
+            tookMs: 3,
+            exitCode: 1,
+            signal: null,
+          });
+
+    await readPanes(rows, (paneId) => capturePaneAsync(owner, paneId));
+
+    expect(permissionWhy(rows[0] as ReturnType<typeof toRows>[number])).toMatch(/refused.*8123.*7500ms/);
+    expect(permissionWhy(rows[1] as ReturnType<typeof toRows>[number])).toContain("tmux exited with code 1");
+    expect(permissionWhy(rows[1] as ReturnType<typeof toRows>[number])).not.toContain("8123");
+  });
+
+  it("runs at most four captures at once and still reads all rows", async () => {
+    const rows = interactiveRows(11);
+    const seen: string[] = [];
+    let active = 0;
+    let highWater = 0;
+
+    await readPanes(rows, async (paneId) => {
+      seen.push(paneId);
+      active += 1;
+      highWater = Math.max(highWater, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return "";
+    });
+
+    expect(highWater).toBe(4);
+    expect(seen).toHaveLength(11);
+    expect(new Set(seen).size).toBe(11);
+    expect(rows.every((row) => permissionWhy(row) !== "this session's pane has not been read yet")).toBe(true);
+  });
+
+  it("distinguishes a timed-out pane listing from one that was read and empty", async () => {
+    const specs: ProbeSpec[] = [];
+    const owner = ownerReturning((spec) => {
+      specs.push(spec);
+      return {
+        kind: "timed-out",
+        why: `probe "${spec.key}" reached its deadline`,
+        tookMs: spec.timeoutMs + 1_000,
+        pid: 9911,
+        exitObserved: false,
+      };
+    });
+
+    const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
+
+    expect(listing).toEqual({ kind: "unread", why: 'probe "tmux:list-panes" reached its deadline' });
+    expect(generation).toBeNull();
+    expect(generationDrift(generation, 132280)).toBeNull();
+    expect(specs).toEqual(expect.arrayContaining([
+      {
+        key: "tmux:list-panes",
+        cmd: "tmux",
+        args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+        timeoutMs: 10_000,
+      },
+      {
+        key: "tmux:generation",
+        cmd: "tmux",
+        args: ["display-message", "-p", "#{pid}"],
+        timeoutMs: 5_000,
+      },
+    ]));
+  });
+
+  it("distinguishes a refused pane listing from one that was read and empty", async () => {
+    const asked: string[] = [];
+    const owner = ownerReturning((spec) => {
+      asked.push(spec.key);
+      return {
+        kind: "refused",
+        why: `probe "${spec.key}" still has an unaccounted child`,
+        pid: 9_912,
+        liveForMs: 14_000,
+      };
+    });
+
+    const [listing, generation] = await Promise.all([panes(owner), generationNow(owner)]);
+
+    expect(asked.sort()).toEqual(["tmux:generation", "tmux:list-panes"]);
+    expect(listing).toEqual({ kind: "unread", why: 'probe "tmux:list-panes" still has an unaccounted child' });
+    expect(generation).toBeNull();
+    expect(generationDrift(132_280, generation)).toBeNull();
+  });
+
+  it("reports why an unread pane listing failed instead of calling it another box", async () => {
+    inventoryRunMock.mockResolvedValue({ stdout: `${ROW_COUNT} 0\n${SESSION_SENTINEL}`, stderr: "" });
+    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,132280,1");
+    vi.stubEnv("TMUX_PANE", "%9999");
+
+    const failures: Array<Exclude<OwnedOutcome, { kind: "ok" }>> = [
+      {
+        kind: "refused",
+        why: 'probe "tmux:list-panes" still has child pid 8123 unaccounted for after 7500ms; no second child was started',
+        pid: 8123,
+        liveForMs: 7_500,
+      },
+      {
+        kind: "timed-out",
+        why: 'probe "tmux:list-panes" reached its 10000ms deadline; child pid 8124 did not exit',
+        tookMs: 11_000,
+        pid: 8124,
+        exitObserved: false,
+      },
+      {
+        kind: "failed",
+        why: "tmux exited with code 1: server busy",
+        tookMs: 4,
+        exitCode: 1,
+        signal: null,
+      },
+    ];
+
+    for (const failure of failures) {
+      const owner = ownerReturning((spec) =>
+        spec.key === "tmux:generation"
+          ? { kind: "ok", stdout: "132280\n", stderr: "", tookMs: 1 }
+          : failure);
+      const error = await collect(owner).then(
+        () => null,
+        (cause: unknown) => cause instanceof Error ? cause : new Error(String(cause)),
+      );
+      expect(error?.message).toContain("pane listing");
+      expect(error?.message).toContain(failure.why);
+      expect(error?.message).not.toContain("not a listing of this box");
+    }
+  });
+
+  it("still lets selfCheck refuse a pane listing that was read but does not contain us", async () => {
+    inventoryRunMock.mockResolvedValue({ stdout: `${ROW_COUNT} 0\n${SESSION_SENTINEL}`, stderr: "" });
+    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,132280,1");
+    vi.stubEnv("TMUX_PANE", "%9999");
+    const owner = ownerReturning((spec) => ({
+      kind: "ok",
+      stdout: spec.key === "tmux:generation" ? "132280\n" : "$1 %1 100 132280\n",
+      stderr: "",
+      tookMs: 1,
+    }));
+
+    await expect(collect(owner)).rejects.toThrow("not a listing of this box");
+  });
+});
+
+describe("the collection bench refuses flattering HTTP evidence", () => {
+  it("fails a balanced run with no samples or with failed requests", () => {
+    const previousExitCode = process.exitCode;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      for (const http of [
+        { latencies: [], failures: 0, pending: [], issued: 0 },
+        { latencies: [4, 5], failures: 1, pending: [], issued: 3 },
+        { latencies: [4, 5], failures: 0, pending: [], issued: 3 },
+      ]) {
+        process.exitCode = undefined;
+        reportCollectBench("test", [], http, []);
+        expect(process.exitCode).toBe(3);
+      }
+
+      // The positive control: complete, non-empty evidence must remain usable.
+      process.exitCode = undefined;
+      reportCollectBench("test", [], { latencies: [4, 5, 6], failures: 0, pending: [], issued: 3 }, []);
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      log.mockRestore();
+      process.exitCode = previousExitCode;
     }
   });
 });
@@ -432,12 +756,12 @@ describe("fleetState — the one wire shape", () => {
     const now = "2026-09-08T03:31:00.000Z";
 
     // The shape that was indistinguishable from healthy: old data, no error.
-    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 });
     expect(stalled.attemptedAt).toBeNull();
 
     // The same data, with the loop still going round. Same rows, same clock,
     // same null error — and now a reader can tell which of the two it is.
-    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 });
     expect(trying.collectedAt).toBe(stale);
     expect(trying.error).toBeNull();
     expect(trying.attemptedAt).toBe(now);
@@ -488,7 +812,7 @@ describe("fleetState — the one wire shape", () => {
     // `fleetState` writes these in — and a test that only ever saw hand-written
     // objects would keep passing if that ordering assumption stopped holding.
     const live = JSON.parse(
-      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z", NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" })),
+      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z", NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 })),
     ) as Record<string, unknown>;
     expect(readAttemptClock(live).kind).toBe("attempted");
 
@@ -503,7 +827,7 @@ describe("fleetState — the one wire shape", () => {
     // collection has finished. `rows: []` on its own reads as "nothing is
     // running" — and the Overseer, which folds these into a history, would
     // record thirty-six sessions vanishing at once. The null is the message.
-    const s = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const s = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 0, inventory: null });
     expect(s.collectedAt).toBeNull();
     expect(s.rows).toEqual([]);
     expect(s.error).toBeNull();
@@ -516,13 +840,13 @@ describe("fleetState — the one wire shape", () => {
     // Asserted as `toBeNull`, not as `not.toBeString`: a negative assertion is
     // satisfied by undefined, by 0, and by the field disappearing altogether,
     // so it would go on passing through exactly the change it is meant to catch.
-    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }).collectedAt).toBeNull();
+    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 0, inventory: null }).collectedAt).toBeNull();
   });
 
   it("keeps the previous rows and clock when a refresh failed", () => {
     // Stale-and-labelled beats blank. The page shows the age; a blank page is
     // the one reading nobody investigates.
-    const s = fleetState(snap, "tmux: connection refused", null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" });
+    const s = fleetState(snap, "tmux: connection refused", null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 2, inventory: 1 });
     expect(s.collectedAt).toBe(snap.collectedAt);
     expect(s.error).toBe("tmux: connection refused");
   });
@@ -531,15 +855,15 @@ describe("fleetState — the one wire shape", () => {
     // The page flipped to STALE at 30s while the server collected every 60s, so
     // it cried wolf for most of every cycle. A threshold derived from the
     // server's own interval cannot drift away from it.
-    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }).refreshMs).toBe(60_000);
+    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 }).refreshMs).toBe(60_000);
   });
 
   it("tells the page whether answering is switched on, rather than leaving it to guess", () => {
     // The page cannot honestly warn about a server flag it has never been told
     // about: without this it either hedges, or somebody finds out by tapping —
     // and the whole point of the hold is that nobody should tap.
-    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }).answeringEnabled).toBe(false);
-    expect(fleetState(snap, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }).answeringEnabled).toBe(true);
+    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 }).answeringEnabled).toBe(false);
+    expect(fleetState(snap, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER, NO_USAGE, { kind: "checkpoint-absent" }, { instance: "1a2b3c4d", publication: 1, inventory: 1 }).answeringEnabled).toBe(true);
   });
 });
 
@@ -572,7 +896,7 @@ describe("the collector's wiring", () => {
     };
     const snap = snapshotFrom(
       parsed,
-      { panes: new Map([["$7", { paneId: "%70", panePid: 700 }]]), tmuxServerPid: 132280 },
+      { kind: "read", panes: new Map([["$7", { paneId: "%70", panePid: 700 }]]), tmuxServerPid: 132280 },
       5,
     );
     const round = JSON.parse(JSON.stringify(snap)) as FleetSnapshot;
@@ -599,7 +923,7 @@ describe("the collector's wiring", () => {
       agentsWhy: "claude: command not found",
     };
     expect(
-      snapshotFrom(parsed, { panes: new Map(), tmuxServerPid: null }, 5).rows[0]?.status.kind,
+      snapshotFrom(parsed, { kind: "read", panes: new Map(), tmuxServerPid: null }, 5).rows[0]?.status.kind,
     ).toBe("unknown");
   });
 });

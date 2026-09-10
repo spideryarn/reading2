@@ -112,6 +112,7 @@ import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
 import {
   REGISTER_ROW_FIELDS,
+  sessionKey,
   statusKey,
   type JobEvent,
   type OverseerEvent,
@@ -135,7 +136,7 @@ import {
 } from "./jobs.js";
 import type { KillPolicy } from "../fleet/actions.js";
 import type { DriftedSession, LaunchModeFinding, RuleFinding, RuleId, RuleOutcome, WedgedProcess, WedgedWorkFinding } from "./rules.js";
-import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
+import { splitJsonl, truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
   isProcessAlive,
   readLock,
@@ -203,12 +204,15 @@ const REPLAY_CEILING_BYTES = 64 * 1024 * 1024;
  * a sentence saying what a person should do, and an exception gives it nothing
  * to print that is not also a stack trace.
  *
- * **Four of the five arms are `LockRefusal`'s**, declared once in
+ * **Four of the six arms are `LockRefusal`'s**, declared once in
  * [`lock.ts`](./lock.js) rather than restated here — a superset by
  * construction, so `describeRefusal` below still has to be exhaustive and the
  * compiler still says so if the lock grows an arm.
  */
-export type StoreRefusal = LockRefusal | { reason: "relative-store-dir"; path: string };
+export type StoreRefusal =
+  | LockRefusal
+  | { reason: "relative-store-dir"; path: string }
+  | { reason: "unusable-log"; path: string; detail: string };
 
 /** Why there was no checkpoint to resume from. Seven arms because seven different things go wrong. */
 export type ColdReason =
@@ -744,6 +748,8 @@ export type ReadEvents = {
   events: readonly OverseerEvent[];
   /** `line` counts from the first line read, so it is absolute only when reading from byte 0. */
   unreadable: readonly UnreadableLine[];
+  /** Bytes after the last newline: an append in progress, not a corrupt record. */
+  tornTail: string | null;
   /** The byte to read from next time — the cursor a checkpoint stores. */
   nextByte: number;
 };
@@ -1560,6 +1566,10 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
   if (typeof key !== "string" || key === "") return { ok: false, reason: "key is not a session key" };
   const identity = parseIdentity(u["identity"]);
   if (!identity.ok) return { ok: false, reason: identity.reason };
+  const canonicalKey = sessionKey(identity.value);
+  if (key !== canonicalKey) {
+    return { ok: false, reason: `key ${JSON.stringify(key)} does not agree with identity, which spells ${JSON.stringify(canonicalKey)}` };
+  }
   const tmuxServerPid = u["tmuxServerPid"];
   if (tmuxServerPid !== null && !isPidLike(tmuxServerPid)) {
     return { ok: false, reason: "tmuxServerPid is not a pid or null" };
@@ -1570,16 +1580,27 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
     case "session-seen": {
       const row = parseRow(u["row"]);
       if (!row.ok) return { ok: false, reason: row.reason };
+      const agreement = rowIdentityAgreement(row.value, identity.value);
+      if (agreement !== null) return { ok: false, reason: agreement };
       return { ok: true, value: { kind: "session-seen", ...common, row: row.value } };
     }
     case "session-replaced": {
       const row = parseRow(u["row"]);
       if (!row.ok) return { ok: false, reason: row.reason };
+      const agreement = rowIdentityAgreement(row.value, identity.value);
+      if (agreement !== null) return { ok: false, reason: agreement };
       const previous = parseIdentity(u["previous"]);
       if (!previous.ok) return { ok: false, reason: `previous ${previous.reason}` };
       const previousKey = u["previousKey"];
       if (typeof previousKey !== "string" || previousKey === "") {
         return { ok: false, reason: "previousKey is not a session key" };
+      }
+      const canonicalPreviousKey = sessionKey(previous.value);
+      if (previousKey !== canonicalPreviousKey) {
+        return {
+          ok: false,
+          reason: `previousKey ${JSON.stringify(previousKey)} does not agree with previous, which spells ${JSON.stringify(canonicalPreviousKey)}`,
+        };
       }
       return {
         ok: true,
@@ -1625,6 +1646,8 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
     case "session-row-changed": {
       const row = parseRow(u["row"]);
       if (!row.ok) return { ok: false, reason: row.reason };
+      const agreement = rowIdentityAgreement(row.value, identity.value);
+      if (agreement !== null) return { ok: false, reason: agreement };
       const fields = u["fields"];
       // NON-EMPTY, because an empty one is a change that did not happen — the
       // differ never writes it, so a file that has one has been edited or
@@ -1691,6 +1714,19 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
       return { ok: false, reason: `no parser for ${String(never)}` };
     }
   }
+}
+
+function rowIdentityAgreement(row: ObservedRow, identity: SessionIdentity): string | null {
+  if (row.id !== identity.tmuxId) {
+    return `row.id ${JSON.stringify(row.id)} does not agree with identity.tmuxId ${JSON.stringify(identity.tmuxId)}`;
+  }
+  if (row.claimedConversationId !== identity.claimedConversationId) {
+    return (
+      `row.claimedConversationId ${JSON.stringify(row.claimedConversationId)} does not agree with ` +
+      `identity.claimedConversationId ${JSON.stringify(identity.claimedConversationId)}`
+    );
+  }
+  return null;
 }
 
 /**
@@ -2727,6 +2763,8 @@ export function describeRefusal(refusal: StoreRefusal): string {
       return `The store directory ${JSON.stringify(refusal.path)} is relative, so it names a different directory for every process that starts here. Give an absolute path.`;
     case "unusable-directory":
       return `The store directory is unusable: ${refusal.detail}`;
+    case "unusable-log":
+      return `The Overseer log ${refusal.path} could not be opened or repaired: ${refusal.detail}`;
     default: {
       const never: never = refusal;
       throw new Error(String(never));
@@ -2736,16 +2774,16 @@ export function describeRefusal(refusal: StoreRefusal): string {
 
 /**
  * `fromByte` must be a LINE BOUNDARY, and every cursor this module hands out is
- * one: `nextByte` is the file's size and a checkpoint's `cursor.bytes` is the
- * size at the moment it was written, both taken after a newline-terminated
+ * one: `nextByte` stops at the final newline and a checkpoint's `cursor.bytes`
+ * is the size at the moment it was written, taken after a newline-terminated
  * append. A byte in the middle of a line would make the first line read look
  * like garbage — reported as unreadable rather than silently dropped, but wrong
  * either way, so do not invent one.
  */
-function parseEventLines(slice: Buffer): { events: OverseerEvent[]; unreadable: UnreadableLine[] } {
+export function parseEventLines(lines: readonly string[]): { events: OverseerEvent[]; unreadable: UnreadableLine[] } {
   const events: OverseerEvent[] = [];
   const unreadable: UnreadableLine[] = [];
-  for (const [index, text] of slice.toString("utf8").split("\n").entries()) {
+  for (const [index, text] of lines.entries()) {
     if (text === "") continue;
     let json: unknown;
     try {
@@ -2991,8 +3029,14 @@ class Store implements OverseerStore {
   readEvents(fromByte = 0): ReadEvents {
     const path = join(this.root, EVENTS_FILE);
     const slice = readSlice(path, fromByte);
-    const { events, unreadable } = parseEventLines(slice);
-    return { events, unreadable, nextByte: Math.max(fromByte, 0) + slice.byteLength };
+    const split = splitJsonl(slice);
+    const { events, unreadable } = parseEventLines(split.completeLines);
+    return {
+      events,
+      unreadable,
+      tornTail: split.tornTail,
+      nextByte: Math.max(fromByte, 0) + split.completeBytes,
+    };
   }
 
   close(): void {
@@ -3030,9 +3074,15 @@ function replay(path: string, from: number, size: number, ceiling: number): Repl
     return { kind: "refused", why: "log-too-large-to-replay", bytesScanned: 0, unreadable: 0 };
   }
   const slice = readSlice(path, from);
-  const { events, unreadable } = parseEventLines(slice);
-  if (unreadable.length > 0) {
-    return { kind: "refused", why: "log-has-holes", bytesScanned: slice.byteLength, unreadable: unreadable.length };
+  const split = splitJsonl(slice);
+  const { events, unreadable } = parseEventLines(split.completeLines);
+  if (unreadable.length > 0 || split.tornTail !== null) {
+    return {
+      kind: "refused",
+      why: "log-has-holes",
+      bytesScanned: slice.byteLength,
+      unreadable: unreadable.length + (split.tornTail === null ? 0 : 1),
+    };
   }
   return { kind: "read", events, bytesScanned: slice.byteLength, unreadable: 0 };
 }
@@ -3094,7 +3144,16 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     }
     // BEFORE the append handle is opened, so nothing can land after the torn
     // bytes. This is the whole of design call 1.
-    const repair = truncateToLastLine(eventsPath);
+    let repair: JsonlRepair;
+    try {
+      repair = truncateToLastLine(eventsPath);
+    } catch (cause) {
+      release();
+      return {
+        ok: false,
+        refusal: { reason: "unusable-log", path: eventsPath, detail: cause instanceof Error ? cause.message : String(cause) },
+      };
+    }
     if (!stillOurs(lock, lockPath)) {
       closeSync(lock.fd);
       return { ok: false, refusal: { reason: "lost-the-race", holder: null } };

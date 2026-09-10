@@ -83,9 +83,15 @@
  *    ruled it, 2026-09-08. If the server one day lets a shell be typed at, this
  *    is one condition to delete, not a rule to unpick.
  *
- * The one thing checked locally beyond that is whether the row has the
+ * Two things are checked locally beyond that. Whether the row has the
  * identifiers at all (`unaddressable`), because that is a fact about the
- * payload on screen rather than a claim about the box.
+ * payload on screen rather than a claim about the box. And what the execution
+ * reading already shows about the pane (`composerStance`): a reading that
+ * shows it running something this row does not address turns Send and Queue
+ * off — the shell rule's reasoning one step on, a control the page knows will
+ * be refused is not offered — and a reading that cannot tell leaves them live,
+ * with one line. Fable's table, docs/plans/260910c § Withhold, caveat or
+ * relabel.
  *
  * ## The clutter pass, and the rule it left behind
  *
@@ -105,6 +111,9 @@
  * caveat, and `Explain` is how it wears it.
  */
 import { useCallback, useRef, useState, type ReactNode } from "react";
+
+import { identityWriteGate, isAddressableHarness } from "../../execution-token.js";
+import type { ExecutionReading } from "../../wire.js";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { DictationControl, useFleetDictation } from "./DictationControl";
@@ -130,7 +139,8 @@ type SteerFailure = Extract<SteerOutcome, { ok: false }>;
 import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
 import { useExecutionEpoch } from "./continuity";
-import type { ActionsUi } from "./useActions";
+import { draftAddressOf, draftNoticeSentence, useDraft } from "./drafts";
+import { ACTIONS_READ_DEADLINE_MS, type ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
 
@@ -143,6 +153,77 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
       </h3>
       {children}
     </section>
+  );
+}
+
+/**
+ * **WHEN THE QUEUE ON SCREEN STOPS BEING CURRENT** — the age past which
+ * `ActionsFeedAge` says how old the actions feed is. Plan 260910c Stage 4,
+ * Sol's F8.
+ *
+ * Two poll intervals and one read's deadline. A poll that is working leaves at
+ * most one interval and one read between good feeds. One read lost to its
+ * deadline adds at most one more interval, because the deadline is shorter
+ * than the interval (useActions.ts § `ACTIONS_READ_DEADLINE_MS`) and the lost
+ * read is released before the next tick. So a feed older than this means two
+ * reads running have come back without a feed, or none was asked for because
+ * the tab was hidden — and becoming visible reads at once. One lost read is
+ * not news: the next tick replaces it without anybody asking.
+ *
+ * `pollMs` is the interval actually in use, not the default. The deadline is
+ * also the floor, and the floor matters at the edge: the feed-panel and
+ * decisions-panel tests mount App with `actionsPollMs={0}`, and `2 × pollMs`
+ * alone would call every feed stale the moment it landed.
+ */
+export function actionsStaleAfterMs(pollMs: number): number {
+  return 2 * Math.max(0, pollMs) + ACTIONS_READ_DEADLINE_MS;
+}
+
+/**
+ * How old the actions feed on screen is, and whether the latest read of it
+ * failed — drawn at the top of the queue section, and only when one of those
+ * is true.
+ *
+ * **Once, above the queue, rather than beside both sections.** The same feed
+ * carries the buttons in *Ask it to…*, but the catalogue behind them does not
+ * change while the server runs (useActions.ts's header), and a button posts
+ * and the server decides — so an old catalogue changes nothing you would do.
+ * An old queue does: *Nothing is waiting*, read two minutes ago, is the claim
+ * somebody acts on. The tip says the age covers both, which is the truth, and
+ * the clutter rule in this file's header keeps it to one line.
+ *
+ * **Nothing before the first good read.** With no feed there is no age to
+ * give, and `SessionActions` and `SessionQueue` already draw "asking" or the
+ * error in their own empty states.
+ *
+ * **The age joins any error, however young**, because how long the page has
+ * been showing the last good read is what says how much the failure matters.
+ * On its own it waits for `actionsStaleAfterMs`: a fresh age changes nothing
+ * you would do in the next ten seconds.
+ */
+function ActionsFeedAge({ actions, now }: { actions: ActionsUi; now: number }): ReactNode {
+  const { lastGoodAt, error, pollMs } = actions;
+  if (lastGoodAt === null) return null;
+  const staleAfterMs = actionsStaleAfterMs(pollMs);
+  /* Clamped: `now` ticks once a second and `lastGoodAt` is stamped between
+     ticks, so the page clock can trail a good read by up to a second. */
+  const ageMs = Math.max(0, now - lastGoodAt);
+  if (error === null && ageMs <= staleAfterMs) return null;
+  return (
+    <p className="tw:mb-1 tw:px-1 tw:text-[12px] tw:break-words">
+      <Explain
+        tip={{
+          head: "When this was read",
+          what: "How long ago this page last read the queue below and the list of actions above it, by this device's clock. A read that fails does not move it: both are drawn from the last read that worked.",
+          how: `It is asked for every ${formatDuration(pollMs)} while this tab is visible, at once when the tab comes back or the network does, and after anything you press here. This line appears once no read has worked for ${formatDuration(staleAfterMs)} — two of those intervals and one read's ${formatDuration(ACTIONS_READ_DEADLINE_MS)} deadline — or as soon as a read fails.`,
+        }}
+        placement="bottom"
+        className="tw:text-ink-faint"
+      >
+        read {formatDuration(ageMs)} ago
+      </Explain>
+      {error === null ? null : <span className="tw:text-alarm-ink"> — the latest read failed: {error}</span>}
+    </p>
   );
 }
 
@@ -612,6 +693,101 @@ function LastWrote({ view, status, now }: { view: MessagesView | null; status: F
   );
 }
 
+/**
+ * **WHAT SEND AND QUEUE MAY DO UNDER THE EXECUTION READING ON SCREEN** — the
+ * composer's rows of Fable's table, docs/plans/260910c § Withhold, caveat or
+ * relabel. Typing is on in every arm; only the two send buttons change.
+ *
+ *  - `known` — the process is verified and so is its conversation, on a harness
+ *    that can be addressed. Live, and nothing said.
+ *  - `cannot-tell` — no new fact has arrived: `unknown`, `claimed-only`, or a
+ *    conversation that could not be checked. **Live**, with one line beside
+ *    Send. On this box that is the weather, and a page that goes dark in the
+ *    weather is one you cannot use when you most need it. The line claims only
+ *    what is true: `verifyTarget` in steer.ts re-reads the live process's
+ *    `--session-id` at the moment it types, for a Send and for a queued message
+ *    alike (the queue's drain types through the same `sendMessage`).
+ *  - `refused` — a fact has arrived saying this pane is not what the row
+ *    addresses: `conflicting`, `not-claimed`, or a harness
+ *    `isAddressableHarness` rejects. Off, with the sentence `identityWriteGate`
+ *    gives for that reading.
+ *
+ * **Classified here; the gate supplies only the sentence.** Its own header says
+ * a cached verdict is not authority, and it refuses the *cannot tell* arms too —
+ * exactly the ones Fable ruled must not disable anything.
+ */
+type ComposerStance = { kind: "known" } | { kind: "cannot-tell" } | { kind: "refused"; why: string };
+
+const STANCE_KNOWN: ComposerStance = { kind: "known" };
+const STANCE_CANNOT_TELL: ComposerStance = { kind: "cannot-tell" };
+
+function composerStance(reading: ExecutionReading): ComposerStance {
+  switch (reading.kind) {
+    case "unknown":
+    case "claimed-only":
+      return STANCE_CANNOT_TELL;
+    case "verified": {
+      if (!isAddressableHarness(reading.harness)) return refusedBy(reading);
+      const conversation = reading.conversation;
+      switch (conversation.kind) {
+        case "verified":
+          return STANCE_KNOWN;
+        case "unverifiable":
+          return STANCE_CANNOT_TELL;
+        case "conflicting":
+        case "not-claimed":
+          return refusedBy(reading);
+        default: {
+          const never: never = conversation;
+          return never;
+        }
+      }
+    }
+    default: {
+      const never: never = reading;
+      return never;
+    }
+  }
+}
+
+function refusedBy(reading: ExecutionReading): ComposerStance {
+  const gate = identityWriteGate(reading);
+  /* Every reading routed here is one the gate refuses. Were it ever to allow
+     one, that would still not be permission — the classification above decides
+     — so the arm stays off and says why in its own words. */
+  return {
+    kind: "refused",
+    why: gate.allowed ? "the page's reading of this pane contradicts itself, so it will not send from here" : gate.why,
+  };
+}
+
+/**
+ * **THE READING THE COMPOSER ACTS ON: THE ROW'S, EXCEPT THAT AN UNKNOWN DOES
+ * NOT END A REFUSAL.** Once this mount has seen a fact saying the pane is not
+ * what the row addresses, a later collection that simply could not look is not
+ * evidence that it changed back — the rule the transcript's relabel already
+ * follows (`lastConflict` in RecentMessages.tsx). Without it, a conflict
+ * followed by one loaded collection would light Send again, with the claimed
+ * conversation's draft in the box in front of it. A verified conversation
+ * ends it, as it ends the relabel.
+ *
+ * Render-phase state rather than an effect, for continuity.ts's reason: the
+ * refusal has to be in the first frame that shows the reading.
+ */
+function useSettledExecution(reading: ExecutionReading): ExecutionReading {
+  const [refusal, setRefusal] = useState<ExecutionReading | null>(null);
+  const stance = composerStance(reading);
+  if (stance.kind === "refused") {
+    if (refusal === null || JSON.stringify(refusal) !== JSON.stringify(reading)) setRefusal(reading);
+    return reading;
+  }
+  if (stance.kind === "known") {
+    if (refusal !== null) setRefusal(null);
+    return reading;
+  }
+  return refusal ?? reading;
+}
+
 export function SessionDetail({
   row,
   now,
@@ -673,7 +849,29 @@ export function SessionDetail({
   /** Non-null only when the list is not on screen beside this, i.e. one pane. */
   onBack: (() => void) | null;
 }): ReactNode {
-  const [text, setText] = useState("");
+  /**
+   * **THE BOX'S WORDS ARE KEPT THROUGH A RELOAD, UNDER THE CONVERSATION THEY
+   * WERE WRITTEN TO** — drafts.ts, docs/plans/260910c § Stage 2. No `scope`:
+   * SessionsPanel remounts this pane whenever its process, its conversation
+   * claim or its tmux server changes (continuity.ts, `useDetailTargetKey`), so
+   * a mount never outlives its recipient. Under a conflict the address is
+   * `hold(claimed)`: the claimed conversation's draft comes back into the box,
+   * in front of disabled buttons, and nothing typed there is stored.
+   */
+  const execution = useSettledExecution(row.execution);
+  const stance = composerStance(execution);
+  const draft = useDraft({ purpose: "session-composer", address: draftAddressOf(execution) });
+  const text = draft.text;
+  /* **Through refs, like `blocked` below.** The hook hands back new `setText`
+     and `clear` functions on every render; a `useCallback` that listed them
+     would rebuild on every render, and this component renders on every
+     keystroke and while somebody talks. `useFleetDictation` keeps its
+     `onChange` in a ref of its own, so handing it `draft.setText` re-runs
+     nothing. */
+  const drafted = useRef(draft);
+  drafted.current = draft;
+  const refused = useRef(stance.kind === "refused");
+  refused.current = stance.kind === "refused";
   const [busy, setBusy] = useState(false);
   /** The composer, so the dictation knows where the caret is. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -683,7 +881,7 @@ export function SessionDetail({
      named session to the front of the term list for exactly that. */
   const dictate = useFleetDictation({
     value: text,
-    onChange: setText,
+    onChange: draft.setText,
     box,
     context: { kind: "session", sessionId: row.id },
   });
@@ -779,7 +977,8 @@ export function SessionDetail({
   const reading = useRecentMessages(messages, row);
 
   /**
-   * **The only local refusal.** `paneId` is the address and `claudeSessionId`
+   * **The local refusal about the payload itself** — the other, about the
+   * execution reading, is `composerStance`. `paneId` is the address and `claudeSessionId`
    * is the conversation; without either the server has nothing to check the
    * pane against and will refuse. Saying so here costs nothing and is a fact
    * about the payload on screen, not a guess about the box.
@@ -810,7 +1009,9 @@ export function SessionDetail({
       if (!result.ok && result.code === "grants-permission") {
         setPermissionRefusal({ dialog: dialogKey, why: result.why });
       }
-      if (result.ok && clear) setText("");
+      /* Only a send the server accepted takes the draft with it, stored copy
+         and all. A refusal leaves both, so the words are there to try again. */
+      if (result.ok && clear) drafted.current.clear();
       setBusy(false);
     },
     [dialogKey, onAnsweringRefused],
@@ -831,7 +1032,9 @@ export function SessionDetail({
      said until the transcript lands. GPT Sol's review of the built code,
      finding 6. */
   const onSend = useCallback(() => {
-    if (blocked.current) return;
+    /* The same boundary holds the execution rule: under a reading that shows
+       this pane is not what the row addresses, nothing leaves from here. */
+    if (blocked.current || refused.current) return;
     void send(() => steer.message(row, text), sentTarget(row), true);
   }, [row, send, steer, text]);
 
@@ -896,11 +1099,11 @@ export function SessionDetail({
 
   const onQueue = useCallback(async (): Promise<void> => {
     /* Same guard, same reason. See `onSend`. */
-    if (blocked.current) return;
+    if (blocked.current || refused.current) return;
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
     setQueueOutcome(result);
-    if (result.ok) setText("");
+    if (result.ok) drafted.current.clear();
     setBusy(false);
     actions.refresh();
   }, [actions, row, text]);
@@ -1043,7 +1246,7 @@ export function SessionDetail({
                  in flight: `disabled` drops the selection, and the selection is
                  the caret the words are about to be spliced at. */
               readOnly={dictate.readOnly}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => draft.setText(e.target.value)}
               placeholder="e.g. pull the latest dev and carry on"
               className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
             />
@@ -1063,7 +1266,13 @@ export function SessionDetail({
               <Button
                 variant="loud"
                 onClick={onSend}
-                disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                disabled={
+                  busy ||
+                  text.trim() === "" ||
+                  unaddressable !== null ||
+                  dictate.sendBlocked ||
+                  stance.kind === "refused"
+                }
               >
                 {busy ? "Sending…" : "Send now"}
               </Button>
@@ -1081,11 +1290,28 @@ export function SessionDetail({
                 >
                   <Button
                     onClick={() => void onQueue()}
-                    disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                    disabled={
+                      busy ||
+                      text.trim() === "" ||
+                      unaddressable !== null ||
+                      dictate.sendBlocked ||
+                      stance.kind === "refused"
+                    }
                   >
                     Queue (~73s)
                   </Button>
                 </Explain>
+              ) : null}
+              {/* Empties the box and takes the stored copy with it (drafts.ts). */}
+              <Button onClick={draft.clear} disabled={busy || text === ""}>
+                Clear
+              </Button>
+              {/* CANNOT TELL: live, and this one line. It claims only what
+                  `verifyTarget` does — see `composerStance`. */}
+              {stance.kind === "cannot-tell" ? (
+                <span className="tw:text-[12px] tw:text-unknown-ink">
+                  The page cannot confirm which Claude is in this pane right now; the box checks before it types.
+                </span>
               ) : null}
               {/* The newline rule is the server's and is checked there. It stays
                   VISIBLE, unlike the rest: it changes what a thumb does in the
@@ -1093,6 +1319,16 @@ export function SessionDetail({
                   a two-line message arrives as two, the first half a sentence. */}
               <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
             </div>
+            {/* CAN TELL: off, in the gate's own words. */}
+            {stance.kind === "refused" ? (
+              <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+                {offerQueue ? "Send and Queue are off: " : "Send is off: "}
+                {stance.why}
+              </p>
+            ) : null}
+            {draft.notice === null ? null : (
+              <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
+            )}
             {/* On its own row rather than in with the send buttons: it grows a
                 status line, a level meter and sometimes a failure sentence, and
                 a control that changes width should not be pushing Send now
@@ -1141,12 +1377,14 @@ export function SessionDetail({
 
           {/* --------------------------------------------- 4. the queue -- */}
           <Section title="Waiting to go to it">
+            <ActionsFeedAge actions={actions} now={now} />
             <SessionQueue
               sessionId={row.id}
               feed={actions.feed}
               api={actions.api}
               asked={actions.asked}
               error={actions.error}
+              errorDrawnAbove
               onChanged={actions.refresh}
             />
           </Section>

@@ -1,6 +1,15 @@
 # Responsive collection — monitoring must keep answering while it measures
 
-**Status: Stage 0 done and measured; reviewed by GPT Sol and rewritten; Stages 1–4 to build.**
+**Status (2026-09-10): finished.** Stages 0–3 are built, independently reviewed by GPT Sol, and
+measured; Stage 4, the title cache, was dropped on its measurement by the Overseer's decision. The
+acceptance line is met: a 30-second probe now leaves `/api/state` at p95 **7.2 ms** against a
+provisional 250 ms target, where it held it for 30 s; and a real production turn holds the request
+thread for at most about 40 ms, where it held it for about 1.6 s. Full suite on the merged tree: 986
+files passed, and the only two reds are the known environment pair that needs `api-dist/`. Found on
+the way and handed to the Overseer rather than fixed: the other unbounded synchronous child calls on
+the same thread (postmortem 260910a, queued), and `selfCheck` switched off in production by the move
+to systemd (postmortem 260910b, queued as `qi-j4jyf3ab`). Codex (gpt-5.6-sol) implemented every
+build stage; each had an independent review.
 Dispatched by the Overseer as queue item `qi-n6seyeks`, from
 [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fleet-improvement-roadmap.md)
 § "Stage: Responsive collection". That stage's six checkboxes and its acceptance paragraph are the
@@ -153,7 +162,7 @@ is not enforced at all.
       client-side timeout that reports a lower bound rather than being lost, exactly one line is
       emitted per request, and `stop()` is itself bounded so a poller that will not drain becomes a
       loud accounting failure instead of a hung bench.
-- [ ] Once Stage 1 exists, drive the real `runOwned` path in the fixture rather than an injected
+- [x] Once Stage 1 exists, drive the real `runOwned` path in the fixture rather than an injected
       `execFileSync("sleep")`.
 
 ## Stage 1 — Owned children: a probe you can stop waiting for and still be responsible for
@@ -301,13 +310,109 @@ the pane pass, and moves the bench's fixture onto the real owned path; **3b** is
 the `work-probe.ts` extraction. Both edit `collect.ts`, so they cannot run concurrently — two
 processes writing one file is a merge conflict nobody asked for.
 
-- [ ] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
+**Status — 3a (2026-09-10): built by Codex, independently reviewed by GPT Sol, acceptance measured.**
+`generationNow()`, `panes()` and every pane capture now go through the one module-scope owner
+(renamed `fleetProbeOwner`, since it now owns health and tmux probes both).
+
+**The acceptance line, measured** — same instrument, same 25-session fixture, one pane's capture
+taking 30 s, runs minutes apart at load 10–14:
+
+| `/api/state` while one capture takes 30 s | median | **p95** | max | answered in those 30 s |
+|---|---|---|---|---|
+| synchronous — before (`--variant=sync`) | 29222 ms | **30018 ms** | 30096 ms | 85 (85 = 85) |
+| owned, async — after (`--variant=owned`) | 4.2 ms | **7.2 ms** | 57.8 ms | 1209 (1209 = 1209) |
+
+The target was a provisional 250 ms p95. The 30-second child lived its full 30,013 ms and ended
+`ok`; no child was left alive. **This is the pane pass in isolation**: `readExecutions`' two
+synchronous `ps` calls are still on the real collection path until 3b, so the whole-collection
+after on the real box comes then.
+
+**What the review changed.** (1) *The calls-versus-children gap again*, which the Stage 2 review
+found in health: `limit(4)` bounds pending captures, not surviving children, so captures could
+accumulate as pane ids change. A four-child capture cap now matches health's; health children are
+not counted, and a same-key call still reaches the owner's re-check. (2) *The capture deadline is
+2 s, not 10*: a healthy capture measures 12–14 ms here (over 140× headroom), and the worst wedged
+turn — about 98 s all told — now fits inside the 120 s collection deadline, where 10 s captures
+could not. (3) *The bench refuses more flattering evidence*: a run with no requests, or with
+failed ones, balances perfectly and is still not evidence, so both now exit 3.
+
+**What I fixed myself before the review**: the rename broke a Stage 2 source guard that named the
+owner, which 3a's scoped gate list could not see and the every-fleet-file sweep did; and the bench
+could not isolate the owned pass or let its slow child live the full 30 s, so it could not have
+proved the acceptance sentence at all (`--variant`, and the slow child's default deadline).
+
+**A correction, and a finding that predates this plan.** This plan's 3a brief said an unreadable
+pane listing "is an empty map, and the snapshot still arrives". **The second half is false whenever
+the collector runs inside a tmux pane** — a tmux-job dashboard, or this plan's bench run from a
+pane: `selfCheck` looks for its own pane in that empty map, returns `absent`, and `collect()` throws
+*"this is not a listing of this box"* — naming the wrong cause for a slow or failed `list-panes`,
+and contradicting `panes()`'s own comment that the row is still worth showing. It predates
+`b2029e4d`; 3a makes it more reachable, since an owned timeout now produces that map too. **Stage 3b
+fixes the sentence**: the listing is a union of *read* and *unread*, and an unread one fails the
+collection truthfully, still without publishing a listing nobody could verify.
+
+**And the premise the reviewer and I both held was itself wrong.** The review said this fires "under
+production's tmux environment", and I copied that into this plan and 3b's brief before checking it.
+**Production has not run under tmux since 2026-09-08**: the dashboard is `fleet-dashboard.service`
+under systemd, and the process that runs `collect()` has no `TMUX` and no `TMUX_PANE` (verified
+read-only on the live process). So in production `selfCheck` returns `cannot-check` on every
+collection: this bug is masked there — **and so is the wrong-box protection**, which has been off
+in production since the move, about 13 hours after it landed. Postmortem:
+[260910b — a later check reads an earlier fallback as evidence](../postmortems/260910b-a-later-check-reads-an-earlier-fallback-as-evidence.md).
+The Overseer queued a `selfCheck` that works under systemd, with its verdict reported on
+`/api/state`, as its own stage (`qi-j4jyf3ab`), and withdrew the "publish the rows unverified?"
+question as moot.
+
+**Status — 3b (2026-09-10): built by Codex, independently reviewed by GPT Sol, measured.** `readExecutions`' two `ps`
+calls now run through the owner, one after the other under one shared key, with every `/proc` read
+between them — **the order is the pid-reuse defence and it is unchanged**; a stuck first `ps` refuses
+the second and the refusal carries its pid, an honest half-bracket rather than a false whole one.
+`atMs` is stamped after the child returns. The `/proc` reads stay synchronous on purpose:
+microseconds, not subprocesses, and their position between the two tables is the defence.
+**`tools/overseer/work-probe.ts`**, under the Overseer's three conditions: the checks moved verbatim
+into a pure `readingFromPs`; `probeProcessTable` calls it, so there is one copy; its spawn-shaped
+checks — including the known unreachable "killed by SIGTERM" message — are untouched; and a test
+drives `readingFromPs` alone with a foreign process table and watches it refuse. The pane listing is
+a union of `read` and `unread`, `snapshotFrom` accepts only a read one, and an unread one fails the
+collection with *"could not read this box's tmux pane listing: …"*.
+
+**The whole collection on the real box, before and after, in one run** (`npx tsx
+scripts/fleet-collect-bench.ts --mode=real --runs=2`, load ~9–10, 23–24 sessions; request
+accounting 1084 issued = 1084 completed):
+
+| phase | loop lag max |
+|---|---|
+| *before, same run:* `tmux capture-pane` × 24, synchronous | 297 / 293 ms |
+| *before:* `ps` × 2, synchronous | 190 / 167 ms |
+| *before:* `collectHealth`, synchronous | 1161 / 1185 ms |
+| **after: `collect()` end to end, every probe owned** | **31.6 / 28.1 ms** (p95 2.3 / 2.5 ms) |
+| **after: `collectHealthAsync`, owned** | **34.6 / 36.9 ms** (0 children live after) |
+
+Every earlier run of this bench had `collect()` holding the thread for up to **409–478 ms**; it is
+now under 32 ms, roughly 15× lower, while its wall time is unchanged at ~5.3 s because the async
+inventory script still dominates it. **So a production turn — collection plus health — never holds
+the request thread for more than about 40 ms.** What remains on the thread is `statePayload()` at
+~2.5 ms per request, and `drain.ts`, which is out of this plan's scope and now queued. (The run's
+overall HTTP p95 still includes the bench's synchronous *before* phases, so it is not an *after*
+number; the HTTP acceptance is 3a's fixture above.)
+
+**The independent review found no behavioural defect**, and every guard this stage rests on has now
+been seen to fail: disabling `readingFromPs`'s positive control reds the foreign-table test; running
+the two `ps` calls concurrently reds the ordering test; stamping `atMs` before the await reds the
+timestamp test; skipping `selfCheck` reds the read-but-missing-pane test; publishing an unread
+listing reds the listing test. It corrected both source comments that carried the false "production
+runs under tmux" premise — `panes()`'s new one, and the older one near `collect.ts:616` — with a
+source guard that fails on either coming back, and widened the probe-failure coverage to both `ps`
+calls and both refused and timed-out outcomes (a mutation that drops the owner's `why` reds all four).
+`selfCheck`'s behaviour is unchanged.
+
+- [x] `capturePaneAsync` beside `capturePane` in `pane.ts` (the sync one stays — `steer.ts` uses it),
       and `readPanes` becomes async over `limit(4)`. `tests/fleet-launch-mode.test.ts` drives
       `readPanes` at four call sites and must be updated with it.
-- [ ] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
-      unreadable listing is an empty map, an unreadable generation is `null` meaning *unverifiable*,
+- [x] `panes()` and `generationNow()` go through the owner. Their bargains are unchanged: an
+      unreadable listing is now an `unread` arm (3b; it was an empty map), an unreadable generation is `null` meaning *unverifiable*,
       and only two numbers that disagree are drift.
-- [ ] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
+- [x] **`readExecutions`' two `ps` calls, which are no longer optional.** GPT Sol's P1: at 186–199 ms
       measured, against a 470 ms synchronous tail and a 250 ms target, they are responsiveness work.
       It needs the "is this a reading of THIS machine" positive control inside `probeProcessTable`
       reachable from an already-fetched stdout — **a pure extraction in
@@ -316,12 +421,35 @@ processes writing one file is a merge conflict nobody asked for.
       copy, and **a test that drives the extracted function alone with a foreign process table and
       watches it refuse** — the positive control has to be shown firing from the new entry point, not
       only from the old one.
-- [ ] **Per-field unknowns are preserved**, and each now says which kind of not-looking it was: a
+- [x] **Per-field unknowns are preserved**, and each now says which kind of not-looking it was: a
       pane not reached because its probe was refused behind a stuck child reads differently from a
       pane whose capture failed.
-- [ ] Re-run the bench with the fixed accounting. Before/after in this file, or no claim.
+- [x] Re-run the bench with the fixed accounting. Before/after in this file, or no claim.
 
 ## Stage 4 — The title lookup
+
+**Status (2026-09-10): dropped, on the Overseer's decision, with the measurement as the reason.**
+The boxes below are left unticked on purpose: they describe a design that was worked out and then
+not built.
+
+**Measured**: the title grep inside `buildSessionScript` costs **236–251 ms per collection** — 25
+most recently written transcripts, 85 MB, a warm page cache, which is the realistic case for a
+once-a-minute job — inside an inventory that takes **4.4–5.1 s** and already runs in an awaited
+async child. So it costs about 5% of the inventory's freshness and **nothing** of the server's
+responsiveness. The "10–12 s, the dominant cost of a whole collection" in `gjd-remote-tmux.ts`'s
+comment was `gjd-remote ls` measured through `ssh`, not the dashboard; that comment is corrected in
+the same commit as this paragraph, because it is what would send the next reader down this path.
+
+**Against it:** the correct design is the inode-keyed incremental cache below — a day of careful work
+with several ways to show a title wrongly or stale, a bug nobody would notice — for about a quarter of
+a second of freshness a minute. A cheap version does not exist: a bounded tail is provably wrong,
+because Claude titles a conversation early.
+
+**Revisit when**, in the Overseer's words as a number: the title grep across live transcripts
+**exceeds about two seconds per pass** (roughly eight times today's 85 MB), **or it ever moves onto
+the request thread**. Then build the cache as specified below. The Overseer logged this as its own
+engineering call — no user-visible change, measured rather than guessed — so it is not a question for
+Greg.
 
 Demoted from "the dominant cost" by Stage 0: the inventory takes **5.0 s and is already async**, so
 the title grep costs *freshness* and no responsiveness at all. The 10–12 s in the source comment was
@@ -440,4 +568,22 @@ requests that sat behind the block are all counted.
 
 ### After Stages 1–3
 
-*(to be filled in, with the fixed request accounting)*
+Every figure below comes from `scripts/fleet-collect-bench.ts` on the corrected instrument, with each
+run's requests accounted for; the tables and their exact commands are in the stage status blocks.
+
+| what | before | after | where |
+|---|---|---|---|
+| **The acceptance case**: `/api/state` p95 while one of 25 captures takes 30 s | 30018 ms | **7.2 ms** | Stage 3, status — 3a |
+| …and requests answered during those 30 s | 85 | **1209** | Stage 3, status — 3a |
+| `collect()` end to end, loop lag max, real box | 409–478 ms | **28.1–31.6 ms** | Stage 3, status — 3b |
+| The health turn, loop lag max, real box | 1159–1185 ms | **30–44 ms** | Stage 2, status |
+
+The provisional target was a 250 ms p95 on the controlled fixture; the owned path is about 35× under
+it. On the real box, **a production turn — collection plus health — no longer holds the request
+thread for more than about 40 ms**, where it used to hold it for about 1.6 s every minute. Wall times
+are essentially unchanged (the inventory script and `vmstat`'s sampling interval still take what they
+take), and that was never the claim.
+
+**Checked in production, read-only**: the Overseer's 09:44 restart put Stages 0–2 live, and one GET of
+`/api/state` at 08:55 UTC showed all six health readings as values, a health turn of 1012 ms — the
+owned gatherer's figure, not the synchronous 1160 ms — a fresh collection and no error.

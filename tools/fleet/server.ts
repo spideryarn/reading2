@@ -46,6 +46,7 @@ import { usageHistoryRoute } from "./routes-usage-history.js";
 import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { PublicationLedger, serverInstanceId } from "./instance.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { openSharedQuarantine } from "./quarantine.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
@@ -71,7 +72,7 @@ import { openRouterKey } from "./transcribe.js";
 import { readOpeningMessages } from "./transcript.js";
 import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
 import { claimFromSnapshot } from "./overseer-claim.js";
-import { statePayload as composePayload } from "./state.js";
+import { initialFramePayload, statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
 /** Where the built React client lives. */
@@ -123,6 +124,7 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
+const publicationLedger = new PublicationLedger(serverInstanceId());
 
 /**
  * The box's own vital signs, refreshed alongside the fleet.
@@ -134,11 +136,12 @@ let lastError: string | null = null;
 let health: HealthReport | null = null;
 
 /**
- * One owner for the process lifetime. Building this inside `refreshHealth`
- * would forget a stuck child every minute and start it a new sibling, which is
- * the multiplication the owned-child registry exists to prevent.
+ * One owner for every fleet probe over the process lifetime. Building this
+ * inside either health or collection would forget a stuck child every minute
+ * and start it a new sibling, which is the multiplication the owned-child
+ * registry exists to prevent. Health and tmux use disjoint probe-key prefixes.
  */
-const healthProbeOwner = probeOwner();
+const fleetProbeOwner = probeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
@@ -415,6 +418,7 @@ function statePayload(): string {
     refreshMs: REFRESH_MS,
     answeringEnabled: process.env["FLEET_ANSWER_ENABLED"] !== "0",
     attemptedAt,
+    producer: publicationLedger.stamp(),
     readCheckpoint: readCheckpointFeeds,
   });
 }
@@ -438,7 +442,7 @@ function statePayload(): string {
 async function refreshHealth(): Promise<HealthTurn> {
   try {
     const report = await collectHealthAsync({
-      owner: healthProbeOwner,
+      owner: fleetProbeOwner,
       includeSwapActivity: true,
     });
     health = report;
@@ -479,7 +483,7 @@ async function refreshHealth(): Promise<HealthTurn> {
  * The latch is in refresh.ts, where a test can drive it; this is the wiring.
  */
 const collector = singleFlightCollect({
-  run: collect,
+  run: () => collect(fleetProbeOwner),
   deadlineMs: COLLECT_DEADLINE_MS,
   now: Date.now,
   // BEFORE the child is awaited, and only when one is actually started — see
@@ -509,6 +513,7 @@ async function refresh(): Promise<void> {
         // is legible; a blank one is a lie that looks like an empty box.
         lastError = result.error;
       }
+      publicationLedger.record("snapshot" in result ? "success" : "failure");
     },
     refreshHealth,
     // A no-op when the store would not open, rather than a branch in the loop:
@@ -702,7 +707,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
   if (url.startsWith("/api/live")) {
-    subscribe(req, res, snapshot ? statePayload() : null);
+    subscribe(req, res, initialFramePayload(publicationLedger.stamp(), statePayload));
     return;
   }
 

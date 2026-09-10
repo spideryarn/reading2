@@ -646,7 +646,7 @@ export function SessionsPanel({
   const scrolledFor = useRef<string | null>(null);
   if (selectedId === null) scrolledFor.current = null;
   const detailRef = useCallback(
-    (node: HTMLDivElement | null) => {
+    (node: HTMLElement | null) => {
       if (node === null || selectedId === null || scrolledFor.current === selectedId) return;
       scrolledFor.current = selectedId;
       node.focus?.({ preventScroll: true });
@@ -882,10 +882,25 @@ export function SessionsPanel({
 
       {detail !== null && panes === 1 ? (
         /* ONE PANE, SOMETHING SELECTED: the detail is a push. The list is not
-           on screen at all, and the detail carries the button back to it. */
-        <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:mx-auto tw:max-w-3xl tw:pt-2 tw:outline-none">
+           on screen at all, and the detail carries the button back to it.
+
+           **A `<section>` WITH A NAME, WHICH IS WHAT MAKES THE LABEL COUNT**,
+           here and on the two-pane target below. Selecting a session moves
+           focus into this element (`detailRef`). It was a `div`, and an
+           `aria-label` on an element with no role may not be announced at all,
+           so a screen-reader user was moved somewhere with no name. A named
+           `<section>` has the `region` role implicitly: the ARIA role for a
+           significant part of the page a person may want to reach directly,
+           which is what this is. A named region is exposed as a landmark, and
+           its name is read out when focus moves into it. The element rather
+           than `role="region"` on a `div`, because the semantic element is
+           the one that cannot lose its role (biome's `useSemanticElements`).
+           `tabIndex={-1}` keeps it focusable by script and out of the tab
+           order. Not `group`, which is a set of controls rather than a place,
+           and not `dialog`, because nothing behind it is inert. */
+        <section ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:mx-auto tw:max-w-3xl tw:pt-2 tw:outline-none">
           {detail}
-        </div>
+        </section>
       ) : detail !== null ? (
         /* TWO PANES. The list column is exactly `COLUMN_MIN_PX` wide, which is
            the same number `chooseColumns` gives a column up at — one constant,
@@ -895,9 +910,9 @@ export function SessionsPanel({
           style={{ gridTemplateColumns: `minmax(0, ${COLUMN_MIN_PX}px) minmax(0, 1fr)` }}
         >
           <div>{oneColumnList}</div>
-          <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:max-w-3xl tw:outline-none">
+          <section ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:max-w-3xl tw:outline-none">
             {detail}
-          </div>
+          </section>
         </div>
       ) : spread ? (
         <div
