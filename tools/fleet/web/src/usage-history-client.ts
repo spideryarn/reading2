@@ -178,7 +178,20 @@ function parseCodexWindow(raw: unknown, readAtMs: number): CodexWindowView | nul
   return { kind: "value", slot, windowMinutes, usedPercent, resetsAt, resetsAtMs };
 }
 
-function parseCodexBucket(raw: unknown, readAtMs: number): CodexBucketView | null {
+/**
+ * One Codex bucket, checked for self-consistency against the instant it was
+ * read at.
+ *
+ * **Exported since 2026-09-10 so `types.ts` can reuse it** for the per-account
+ * sections (plan 260910c) rather than declaring a second Codex bucket parser.
+ * There would then be two, and they would drift — which is the whole reason
+ * this file's shapes are parsed once and shared. `readAtMs` is the reading's
+ * OWN instant rather than now: the checks are that a window's reset falls
+ * inside the window that produced it, which stays true however old the reading
+ * gets, so a stale reading degrades to an old reading rather than to an
+ * unreadable one.
+ */
+export function parseCodexBucket(raw: unknown, readAtMs: number): CodexBucketView | null {
   const b = obj(raw);
   const limitId = str(b?.["limitId"]);
   const limitName = nullableString(b?.["limitName"]);

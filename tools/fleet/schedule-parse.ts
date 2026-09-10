@@ -219,6 +219,20 @@ function parseNext(value: Obj, where: string): SchedulePreviewNext {
   }
 }
 
+/**
+ * `parseNext`, for the one other file that carries a `next`:
+ * `occurrences-parse.ts`, which restates the preview's own answer and must read
+ * it exactly as this file does. It returns rather than throws, because
+ * `Unreadable` is this file's own exception.
+ */
+export function readSchedulePreviewNext(value: unknown, where: string): { kind: "next"; next: SchedulePreviewNext } | { kind: "unreadable"; why: string } {
+  try {
+    return { kind: "next", next: parseNext(object(value, `${where}'s next run`), where) };
+  } catch (cause) {
+    return { kind: "unreadable", why: reason(cause) };
+  }
+}
+
 /** The states an occurrence arm can carry. Checked BEFORE the fields they share, so an unknown state is named as one rather than as a missing `reservedAt`. */
 const OCCURRENCE_STATES: ReadonlySet<string> = new Set(["reserved", "started", "finished", "refused", "unknown"]);
 

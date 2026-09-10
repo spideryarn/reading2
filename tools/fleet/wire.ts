@@ -1316,6 +1316,24 @@ export type FleetState<Row, Health> = {
    */
   usage: UsageFeed;
   /**
+   * **WHICH SUBSCRIPTION STILL HAS ROOM?** — one live headroom reading per
+   * Claude and Codex account-subscription on the box, or the reason there are
+   * none.
+   *
+   * `usage` above answers the same question for exactly ONE account: the login
+   * the Overseer itself is running as. That was the whole page until 2026-09-10,
+   * and it meant a pool account sitting at 4% while the page showed 96% and
+   * everything looked blocked. This field is the rest of the answer — Greg's
+   * ask, and plan 260910c.
+   *
+   * **Not a replacement for `usage`, and it never will be.** That reading
+   * carries the transcript scan, the 429s and the verdict, none of which can be
+   * made per-account honestly: a rejection in a transcript carries no account
+   * id at all. So the two coexist, one deep reading of the orchestrator's login
+   * and one shallow reading of every login, and each says which it is.
+   */
+  accountUsage: AccountUsageFeed;
+  /**
    * **WHAT EXPENSIVE WORK IS RUNNING NOW.** This is the work projection from
    * the same single checkpoint read as `attention`, `overseer` and `usage`.
    * It is live state, never inferred from the five-minute persistence cadence:
@@ -4059,6 +4077,174 @@ export type AdmissionPayload = AdmissionPayloadBase &
       }
   );
 
+/* ================= PER-ACCOUNT SUBSCRIPTION HEADROOM =============== *
+ * A uniquely named banner rather than the bare separator, for the
+ * reason the two blocks above give: sessions appending blocks that
+ * open with the same line collide in git even when the blocks share
+ * no identifier.
+ *
+ * ONE SECTION PER ACCOUNT-SUBSCRIPTION — plan 260910c.
+ * ================================================================== */
+
+/**
+ * What the account is FOR. The registry's own vocabulary, unchanged.
+ *
+ * **`ambient` is deliberately not a third arm here**, and it was one for an
+ * hour on 2026-09-10 until GPT Sol pointed out that it is a category error:
+ * the ambient login's role is `orchestrator` — it is precisely the account the
+ * Overseer's own model calls are spending. Folding provenance into the role
+ * would have made *what is this account for* unanswerable for the one account
+ * the answer matters most about. `AccountUsageOrigin` carries the other half.
+ */
+export type AccountUsageRole = "orchestrator" | "pool";
+
+/**
+ * How the box knows about this account, **and therefore how much its identity
+ * can be trusted.** Not decoration: the two arms are believed on different
+ * evidence.
+ *
+ *  - `registered` — the account is in `~/.claude-accounts/registry.json`, so
+ *    the reading was checked against a recorded provider id before it was
+ *    published. A mismatch never reaches the page as a number.
+ *  - `ambient` — the login a process gets when nothing sets
+ *    `CLAUDE_CONFIG_DIR` / `CODEX_HOME`. It **cannot be registered** (plan
+ *    260909g), so there is nothing to pin it against and its identity is
+ *    whatever the provider said it was. It still needs a section: it is the
+ *    account the Overseer runs on, and a page silent about it is silent about
+ *    every supervisory call the box makes.
+ */
+export type AccountUsageOrigin = "ambient" | "registered";
+
+/**
+ * **ONE ACCOUNT-SUBSCRIPTION'S HEADROOM, AND NOTHING ELSE.**
+ *
+ * Deliberately NOT a small `UsageSummary`. There is no verdict here and there
+ * are no 429s, because neither can honestly be made per-account: a transcript
+ * rejection carries no account id at all (`UsageIncident`'s header, and rule 4
+ * of the eight in docs/project/usage-history.md), so feeding the one global
+ * scan into a per-account verdict would manufacture evidence — the same
+ * rejection counted once against every account on the box. The scan stays where
+ * it is, global and unattributed, and this type carries only what the provider
+ * itself reported for this login.
+ *
+ * **`takenAt` is per section, not per pass**, and that is the field that keeps
+ * the rest of it honest. The readings are independent calls: one account can
+ * answer at 06:00 while its neighbour fails until 06:12. A pass-level timestamp
+ * would put a fresh badge on a stale reading, which is the failure this whole
+ * subsystem exists to refuse.
+ *
+ * **The family is the discriminant**, because the two providers report
+ * genuinely different shapes — Claude a flat list of named windows, Codex a
+ * list of buckets each holding slotted windows — and flattening them into one
+ * would either drop Codex's bucket structure or invent a bucket for Claude.
+ * docs/project/overseer-direction.md's rule about adapters applies to readings
+ * too: *"flattening them into one … produces a UI that lies."*
+ */
+export type AccountUsageSection = {
+  /** The registry name (`mindstone`), or `ambient` for the unregistered login. */
+  name: string;
+  role: AccountUsageRole;
+  origin: AccountUsageOrigin;
+  /** From the registry pin, or from the provider's own answer. Null when neither said. */
+  displayEmail: string | null;
+  /** ISO. **When THIS account was read**, not when the pass ran. */
+  takenAt: string;
+} & (
+  | {
+      family: "claude";
+      /**
+       * The provider id is non-null on the numeric arm by construction. A
+       * percentage and an unproved identity are not a state callers may spell.
+       */
+      providerAccountId: string;
+      reading: { kind: "windows"; windows: UsageWindowCard[] };
+    }
+  | {
+      family: "claude";
+      /** A failed attempt may still name the pinned account, or may establish no identity. */
+      providerAccountId: string | null;
+      /** No percentage field exists on this arm, by construction. `UsageWindowCard`'s header says why. */
+      reading: { kind: "unknown"; why: string };
+    }
+  | {
+      family: "codex";
+      providerAccountId: string;
+      reading: { kind: "buckets"; buckets: CodexUsageBucket[]; resetCredits: number | null };
+    }
+  | {
+      family: "codex";
+      providerAccountId: string | null;
+      reading: { kind: "unknown"; why: string };
+    }
+);
+
+/**
+ * What the checkpoint knows about every account-subscription on the box.
+ *
+ * **A sibling of `usage`, not a field inside `UsageReport`**, and the reason is
+ * `chooseUsage` in tools/overseer/usage-carry.ts. That function decides whether
+ * to publish a fresh `UsageReport` or re-publish the stored one, and it decides
+ * it on whether the ~2.9 GB transcript scan completed — which it routinely does
+ * not. Live HTTP readings riding inside that report would be discarded by a
+ * decision that has nothing to do with them: *a publication decision is not an
+ * observation*, which docs/project/usage-history.md already names as a mistake
+ * made once here.
+ *
+ * **`none` rather than an empty `reading`.** A pass that read no account at all
+ * must not be spellable as `{ kind: "reading", accounts: [] }`, because an
+ * empty list renders as *this box has no account-subscriptions* — a claim —
+ * where the truth is *nothing could be read*. Rule 8 of the eight: coverage is
+ * what makes a negative believable, and an empty array carries none.
+ *
+ * **`problems` is what stops a SHORT list telling the same lie as an empty
+ * one.** If the registry file is corrupt, every registered account vanishes and
+ * the sections that remain — the ambient logins, which need no registry — draw
+ * perfectly. The page then says *this box has one Claude subscription* with no
+ * hint that it failed to read the list of the others. So a fault that costs the
+ * pass a whole class of account is carried beside the sections rather than
+ * folded into one of them, because it belongs to no account.
+ */
+export type StoredAccountUsage =
+  | {
+      kind: "reading";
+      collectedAt: string;
+      accounts: readonly AccountUsageSection[];
+      /** Faults belonging to no single account — a registry that would not parse, above all. Usually empty. */
+      problems: readonly string[];
+    }
+  | { kind: "none"; why: string; at: string };
+
+/**
+ * The per-account sections' feed, with the same seven ways of having nothing to
+ * say that `UsageFeed` has.
+ *
+ * Not fewer, and specifically not `no-reading` folded into
+ * `checkpoint-unreadable`: *no pass has run* is ordinary and means nothing is
+ * broken, while *a reading is there and this build cannot read it* is a
+ * producer and a consumer that have come apart. Telling somebody nothing is
+ * wrong in the second case is false and sends them away from the thing that is.
+ * That distinction cost a review round on the singular card already
+ * (GPT Sol's P1(3), 2026-09-09) and is inherited here rather than re-learned.
+ */
+export type AccountUsageFeed =
+  /** The server did not look. NOT *there are no accounts*. */
+  | { kind: "not-asked" }
+  | { kind: "checkpoint-absent" }
+  | { kind: "checkpoint-unreadable"; why: string }
+  | { kind: "unsupported-schema"; saw: string; known: number }
+  /** The checkpoint is readable and holds no per-account reading. `at` is when it was WRITTEN. */
+  | { kind: "no-reading"; why: string; at: string }
+  /** A reading IS there and this reader could not make sense of it. Something is wrong, unlike above. */
+  | { kind: "reading-unreadable"; why: string; at: string }
+  | {
+      kind: "published";
+      collectedAt: string;
+      accounts: readonly AccountUsageSection[];
+      /** Carried through unchanged from `StoredAccountUsage`. A short list without these is a lie. */
+      problems: readonly string[];
+      coordinatorWrittenAt: string;
+    };
+
 /** The three executable-shaped process classes the admission census recognises. */
 export type AdmissionCensusClass = "test" | "codex-batch" | "browser";
 
@@ -4175,6 +4361,18 @@ export type ReceiptSummary = {
   attemptedAt: number | null;
   outcomeAt: number | null;
   reconciled: boolean;
+  /**
+   * **A PERSON'S STATEMENT, OR THE ABANDON ROUTE'S — NEVER PROOF** (Stage 4).
+   * Who looked at an unknown receipt, what they said, and when. It never
+   * changes `state`: an unknown stays unknown with this beside it. `actor` is a
+   * claim (`client-claimed`); the dashboard has no authentication. Null when
+   * nobody has reconciled it.
+   */
+  reconciliation: {
+    disposition: "lease-abandoned" | "operator-confirmed" | "abandoned-unknown";
+    actor: { kind: "client-claimed" | "unattributed-http" | "system"; id: string | null };
+    at: number;
+  } | null;
   queueItemId: string | null;
   materialDeletionPending: boolean;
 };
@@ -4675,3 +4873,334 @@ export type RecoveryFeed =
   | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
   | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
   | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };
+
+/* ------------------------------------------------------------------ *
+ * Scheduled occurrences — `~/.overseer/occurrences.json`.
+ * Plan 260910f-scheduled-dispatch § D6, D7.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT THE SCHEDULER HAS LAUNCHED, AND WHAT CAME OF IT**, one checkpoint's
+ * projection, written by the daemon beside `schedule.json`.
+ *
+ * `schedule.json` says what the scheduler WOULD do; this says what it DID. The
+ * one fact both carry is `next`, copied from the same planner pass in the same
+ * checkpoint so the section needs one read — `schedule.json` is its home.
+ *
+ * Session jobs only: a rule runs inside the daemon and its history is the
+ * preview's `lastAttempt`. `tools/fleet/occurrences-parse.ts` is the one
+ * parser; the daemon, the route and the browser all go through it.
+ */
+export type ScheduledOccurrencesFile = {
+  schema: 1;
+  /** When the daemon composed this. Every state below is as of this instant. */
+  writtenAt: string;
+  /** The daemon instance that wrote it. */
+  instanceId: string;
+  /**
+   * Whether the launch journal these occurrences come from could be read whole.
+   * `history-lost` and `not-open` mean the list below may be missing launches,
+   * which a reader must be told rather than shown an empty list as "nothing ran".
+   */
+  journal: ScheduledJournalStanding;
+  jobs: ScheduledOccurrencesJob[];
+};
+
+export type ScheduledJournalStanding = { kind: "whole" } | { kind: "history-lost"; why: string } | { kind: "not-open"; why: string };
+
+/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour. */
+export type ScheduledRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+
+export type ScheduledOccurrencesJob = {
+  jobId: string;
+  dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
+  run: ScheduledRunSpec;
+  /** When it could next run — the preview's own answer, copied. */
+  next: SchedulePreviewNext;
+  /** Newest first by `scheduledAt`, at most `OCCURRENCES_PER_JOB`. */
+  occurrences: ScheduledOccurrence[];
+  /** Older occurrences this file left out. Reachable through `overseer-launches list`. */
+  omitted: number;
+};
+
+/** The launch protocol's eight states, restated because this file imports nothing. */
+export type ScheduledLaunchState =
+  | "planned"
+  | "waiting-admission"
+  | "reserved"
+  | "launching"
+  | "observed-running"
+  | "completed"
+  | "failed-before-launch"
+  | "outcome-unknown";
+
+/**
+ * **THE RESULT, OBSERVED — never a spawn read as a completion.**
+ *
+ * `tools/overseer/occurrence-result.ts` derives it from the launch record and
+ * the attempt's `exit.json`; the ladder and its precedence are there. The first
+ * four are not endings; `succeeded` is the only good ending; every other kind is
+ * a failure that names itself.
+ */
+export type ScheduledResultKind =
+  | "pending"
+  | "admission-waiting"
+  | "running"
+  | "unknown"
+  | "launch-failed"
+  | "timed-out"
+  | "quota-refused"
+  | "interrupted"
+  | "permission-denied"
+  | "missing-answer"
+  | "failed"
+  | "succeeded";
+
+export type ScheduledResult = {
+  kind: ScheduledResultKind;
+  /** One sentence saying what the evidence was, in the classifier's words. */
+  why: string;
+  /** When the evidence for this result was recorded, or null for a result with no ending yet. */
+  at: string | null;
+};
+
+/**
+ * The answer file the result was judged on: its attempt, its size, and the
+ * sha256 of its bytes (64 lower-case hex), as they were when it was judged.
+ * Served by `GET /api/overseer/occurrences/<launchOccurrenceId>/answer` only
+ * while the file on disk is still exactly those bytes — never by a path in this
+ * file, and never another attempt's.
+ */
+export type ScheduledAnswer = { kind: "absent" } | { kind: "present"; attempt: number; bytes: number; sha256: string; usable: boolean };
+
+export type ScheduledOccurrence = {
+  /** `lo-<20 hex>`: the launch protocol's id, a hash of the scheduler key. */
+  launchOccurrenceId: string;
+  /** The scheduler's own id for the same key. */
+  schedulerOccurrenceId: string;
+  /** The key: the nominal due instant, and the authorised definition revision it ran under. */
+  scheduledAt: string;
+  behaviourHash: string;
+  plannedAt: string;
+  updatedAt: string;
+  attempts: number;
+  state: ScheduledLaunchState;
+  run: ScheduledRunSpec;
+  result: ScheduledResult;
+  answer: ScheduledAnswer;
+  /** Shown as text only: a transcript holds every file the job read, so it is not served. */
+  transcriptPath: string | null;
+  /** The tmux session a running occurrence lives in, when known. */
+  tmuxSession: string | null;
+  /** The exact commands a person would run, or null when none applies: cancel a running one, dispose of an unknown one. */
+  commands: { cancel: string | null; dispose: string | null };
+};
+
+/* ---------------- Gradual recovery: resume requests, GET/POST /api/recovery/resume (260910f) ---------------- */
+
+/**
+ * `~/.overseer/recovery-resume.json`, written by the daemon's resume pass and
+ * read by `routes-recovery-resume.ts`. A SEPARATE file from `recovery.json` on
+ * purpose (plan 260910f §3): the inventory's schema and its strict parser are
+ * a contract that shipped first, and a version skew between the daemon and the
+ * dashboard must read as "no resume data", never as "index unreadable".
+ */
+export type RecoveryResumeGateWire = { kind: "clear"; notes: string[] } | { kind: "held"; why: string; until: string | null };
+
+/** The launch protocol's eight states, for a recovery occurrence. Reported, never interpreted, by the page. */
+export type RecoveryResumeLaunchState =
+  | "planned"
+  | "waiting-admission"
+  | "reserved"
+  | "launching"
+  | "observed-running"
+  | "completed"
+  | "failed-before-launch"
+  | "outcome-unknown";
+
+export type RecoveryResumeLaunchWire = {
+  occurrenceId: string;
+  state: RecoveryResumeLaunchState;
+  /** Null before an attempt exists. */
+  attempt: number | null;
+  /** When the launch journal last moved it. */
+  at: string;
+};
+
+/**
+ * One request's state. `resumed` is the inventory's own disposition (a live
+ * VERIFIED execution holds the conversation under a new run) — the only arm that
+ * says the session is back, and the one the pace rule waits for.
+ */
+export type RecoveryResumeRequestState =
+  /** In `pending/`. Only position 1 is evaluated; `why` says what it waits for (a gate, the pace rule, or the one ahead). */
+  | { kind: "pending"; position: number; requestedAt: string; actor: "dashboard" | "cli"; why: string; until: string | null }
+  /** Moved to `refused/` with the reason. Tapping again is allowed. */
+  | { kind: "refused"; requestedAt: string; refusedAt: string; why: string }
+  /** Handed to the launch protocol; not yet verified. `waitingFor` says what verification is still missing. */
+  | { kind: "launched"; requestedAt: string; launch: RecoveryResumeLaunchWire; waitingFor: string }
+  | { kind: "resumed"; requestedAt: string | null; launch: RecoveryResumeLaunchWire | null; at: string };
+
+/**
+ * The previous objective and the uncertainty, for a record whose resume is
+ * `supported`. `brief` and `lastWords` are QUOTATIONS from the verified
+ * transcript — shown, labelled, never a command and never a grant.
+ */
+export type RecoveryResumeQuote = { kind: "quoted"; text: string; truncated: boolean } | { kind: "unavailable"; why: string };
+
+export type RecoveryResumePreview = {
+  candidateId: string;
+  conversationId: string;
+  dir: string;
+  title: string | null;
+  brief: RecoveryResumeQuote;
+  lastWords: RecoveryResumeQuote;
+  /** Sentences derived from the record's evidence, never from transcript prose. */
+  uncertainty: string[];
+  /** The exact text that will be typed first. */
+  nudge: string;
+};
+
+export type RecoveryResumeProjection = {
+  schema: 1;
+  writtenAt: string;
+  /** `unwired` until the launch protocol is composed into the daemon: requests queue, nothing launches. */
+  launcher: { kind: "wired" } | { kind: "unwired"; why: string };
+  /** The gate as last evaluated for the head of the queue; null when nothing is pending. */
+  gate: RecoveryResumeGateWire | null;
+  pace:
+    | { kind: "free" }
+    | { kind: "waiting-for-verification"; candidateId: string; name: string; since: string }
+    | { kind: "spacing"; until: string };
+  requests: { candidateId: string; name: string; state: RecoveryResumeRequestState }[];
+  previews: RecoveryResumePreview[];
+  /** Pending request files past the scan limit: present on disk, not listed. */
+  pendingOverflow: number;
+};
+
+export type RecoveryResumeFeed =
+  | { schema: 1; kind: "published"; composedAt: string; path: string; projection: RecoveryResumeProjection }
+  | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string };
+
+/** What `POST /api/recovery/resume` takes: the id, and what the person was looking at when they tapped. */
+export type RecoveryResumePostBody = { candidateId: string; seen: { checkedAt: string; conversationId: string; dir: string } };
+
+export type RecoveryResumePostAnswer =
+  | { ok: true; outcome: "queued" | "already-requested" | "already-launched"; candidateId: string }
+  | { ok: false; why: string };
+
+/* ── Revision stamps (docs/plans/260910f, Stage 1) ─────────────────────────── */
+
+/**
+ * The git revision a process's checkout was at WHEN THE PROCESS STARTED —
+ * read once, by `tools/fleet/revision.ts`, which says what it can and cannot
+ * claim. `known` records a HEAD sha and a git status observation made during
+ * startup. `dirty: false` means that status reported no tracked changes;
+ * `dirty: true` means it reported at least one tracked change somewhere in the
+ * checkout. Neither proves which bytes the process or bundle loaded; `unknown`
+ * is never rendered as a match. (An untracked imported file or an
+ * `assume-unchanged` flag can run while it says clean; an unrelated tracked
+ * edit says dirty over code that matches the commit.) `unknown` is its own arm
+ * so that absence can never be read as "same as HEAD".
+ */
+export type StartRevision =
+  | { kind: "known"; sha: string; dirty: boolean; readAt: string }
+  | { kind: "unknown"; why: string; readAt: string };
+
+/**
+ * The checkout observed when `vite.fleet.config.ts` loaded, plus when — the
+ * same observation as `StartRevision`, with the same limits, so not proof of
+ * which bytes went into the bundle. Compiled into the bundle as `__FLEET_BUILD__`
+ * and written beside it as `dist/build-stamp.json` (`vite.fleet.config.ts`).
+ */
+export type BuildStamp = StartRevision & { builtAt: string };
+
+/** A build stamp read back from `dist/build-stamp.json`, or why there is none. Never defaulted. */
+export type BuildStampReading = { kind: "stamp"; stamp: BuildStamp } | { kind: "unknown"; why: string };
+
+/* ── Diagnostics, GET /api/diagnostics (docs/plans/260910f, Stage 3) ──────── */
+
+/**
+ * What one file in the Overseer's store looks like from the outside
+ * (`tools/fleet/store-probe.ts` says what each arm means and why four answers
+ * must not collapse). `schema: null` is "could not read one", and
+ * `schemaUnread` says why; it is null exactly when `schema` is not.
+ */
+export type StoreFileProbe =
+  | { name: string; state: "absent" }
+  | { name: string; state: "unreadable"; why: string }
+  | {
+      name: string;
+      state: "present";
+      bytes: number;
+      /** Against the clock the caller gave; negative when the file is from the future. */
+      mtimeAgeMs: number;
+      format: "json" | "jsonl" | "other";
+      schema: number | null | "none-declared";
+      /** Why `schema` is null; null whenever it is not. */
+      schemaUnread: string | null;
+      /** JSONL only: the file does not end in a newline. `null` for any other format. */
+      tornTail: boolean | null;
+      /** JSONL only: the last complete record's own timestamp, when it has one. */
+      lastLineAt?: string;
+    };
+
+/** An instant the server holds, or why it holds none. Ages are computed by the reader against `composedAt`. */
+export type DiagnosticsInstant = { kind: "at"; at: string } | { kind: "never"; why: string };
+
+/**
+ * Which store directory the dashboard reads, and how it came to be that one.
+ * `label` is what a person types to get the same answer: `~/.overseer`, or
+ * `OVERSEER_STORE_DIR=<path>`.
+ */
+export type DiagnosticsStorePath =
+  | { kind: "default"; label: string; path: string }
+  | { kind: "override"; label: string; path: string }
+  | { kind: "unknown"; why: string };
+
+/**
+ * The daemon's start stamp: the LAST `daemon-started` note in `daemon.jsonl`
+ * whose `instanceId` is the one the checkpoint's heartbeat names — never
+ * another instance's. `not-stamped` is a note written before revision stamps
+ * existed. Anything missing, malformed, torn or uncorrelated is `unknown`.
+ */
+export type DiagnosticsDaemonStart =
+  | { kind: "stamped"; instanceId: string; at: string; revision: StartRevision }
+  | { kind: "not-stamped"; instanceId: string; at: string }
+  | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/diagnostics` — what the dashboard can say about itself and the
+ * store without the Overseer's code (plan 260910f D5, amended by Sol's F2).
+ * Three bundle facts are kept apart: `bundleAtStart` (read once, before the
+ * listeners opened), `bundleOnDisk` (read per request) and — in the browser —
+ * the tab's own compiled `__FLEET_BUILD__`. Whether the daemon holds this
+ * checkout's job list is NOT here: only `overseer diagnose` can compute it.
+ */
+export type DiagnosticsSummary = {
+  schema: 1;
+  composedAt: string;
+  dashboard: {
+    /** This server run's instance id (`instance.ts`). */
+    instance: string;
+    start: StartRevision;
+    bundleAtStart: BuildStampReading;
+    bundleOnDisk: BuildStampReading;
+  };
+  collector: {
+    /** When the loop last STARTED a collection (state.ts § `attemptedAt`). */
+    attempted: DiagnosticsInstant;
+    /** When the snapshot being served was collected. */
+    collected: DiagnosticsInstant;
+    lastError: { kind: "none" } | { kind: "error"; message: string };
+  };
+  /** When the box-health reading being served was taken. */
+  health: DiagnosticsInstant;
+  store: {
+    path: DiagnosticsStorePath;
+    files: { kind: "probed"; files: StoreFileProbe[] } | { kind: "unknown"; why: string };
+  };
+  daemon: DiagnosticsDaemonStart;
+};

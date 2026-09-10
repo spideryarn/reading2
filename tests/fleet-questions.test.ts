@@ -457,6 +457,7 @@ describe("the production payload composition", () => {
             attention: attentionFeed,
             overseer: { kind: "not-asked" },
             usage: { kind: "not-asked" },
+            accountUsage: { kind: "not-asked" },
             work: { kind: "checkpoint-absent" },
           };
         },

@@ -58,6 +58,7 @@ import {
   GATE_FIXTURE_ROOT,
   judgeClientBuild,
   judgeDeployments,
+  stagedTooLong,
   judgeHealth,
   judgeLogs,
   ledgerDivergence,
@@ -1148,6 +1149,7 @@ async function waitForDeployment(sha: string, after: number): Promise<VercelDepl
   step("Waiting for Vercel");
   const deadline = Date.now() + 12 * 60_000;
   let said = "";
+  let stagedSince: number | null = null;
 
   while (Date.now() < deadline) {
     const all = (await listDeployments(`sha=${sha}&limit=10`)) as (VercelDeployment & {
@@ -1170,6 +1172,19 @@ async function waitForDeployment(sha: string, after: number): Promise<VercelDepl
       return null;
     }
     if (verdict.kind === "built-not-live") {
+      /* Not a failure yet. Vercel moves the production aliases a beat after
+       * the build goes READY, so the first sighting of STAGED is the normal
+       * case — see STAGED_GRACE_MS for what it costs to be hasty here. */
+      stagedSince ??= Date.now();
+      if (!stagedTooLong(stagedSince, Date.now())) {
+        const note = `built (${verdict.deployment.readySubstate}) — waiting for Vercel to move the production domains onto it`;
+        if (note !== said) {
+          info(note);
+          said = note;
+        }
+        await sleep(5000);
+        continue;
+      }
       bad(`built, but not promoted (readySubstate: ${verdict.deployment.readySubstate})`);
       say(`         vercel promote https://${verdict.deployment.url} --scope ${SCOPE} --yes`);
       failures.push("promotion");

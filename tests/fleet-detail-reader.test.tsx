@@ -540,6 +540,9 @@ function state(rows: FleetRow[]): FleetState {
     questions: { kind: "not-observed", gaps: [{ kind: "attention-not-asked" }] },
     overseer: { kind: "not-asked" },
     usage: { kind: "not-asked" },
+    /* Required since plan 260910c: a page state that forgets the per-account
+       feed is a compile error, not a Usage tab with no sections. */
+    accountUsage: { kind: "not-asked" },
     currentWork: { kind: "not-reported" },
     clockSkew: CLOCK_SKEW_UNMEASURED,
     answeringEnabled: { kind: "not-reported" },

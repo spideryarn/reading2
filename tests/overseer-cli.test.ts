@@ -15,7 +15,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../tools/overseer/status-cli.js";
+import {
+  STALL_AFTER_MS,
+  daemonStanding,
+  describeEvent,
+  readEventTail,
+  readPidIdentity,
+  statusLines,
+  type PidReader,
+} from "../tools/overseer/status-cli.js";
 import type { SessionEvent } from "../tools/overseer/diff.js";
 import {
   CHECKPOINT_FILE,
@@ -23,6 +31,7 @@ import {
   STORE_SCHEMA,
   attentionNotYetRun,
   schedulerNotYetSaid,
+  accountUsageNotYetRun,
   usageNotYetRun,
   workNotYetRun,
   type Checkpoint,
@@ -64,6 +73,7 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     // Same reasoning one field down: a daemon with no usage pass wired in
     // publishes "nothing has looked", never a report saying no limits were found.
     usage: usageNotYetRun(new Date(NOW - agoMs).toISOString()),
+    accountUsage: accountUsageNotYetRun(new Date(NOW - agoMs).toISOString()),
     scheduler: schedulerNotYetSaid(new Date(NOW - agoMs).toISOString()),
     snapshotStaleAfterMs: null,
     occurrenceHistory: null,
@@ -114,14 +124,18 @@ const startedNote: DaemonNote = {
   baseline: "restored",
 };
 
+/** checkpointAt's daemon started at 07:00:00; the process holding its pid started 3 s before that — it is this daemon. */
+const THIS_DAEMON: PidReader = () => ({ kind: "started", atMs: Date.parse("2026-09-08T07:00:00.000Z") - 3_000 });
+const GONE: PidReader = () => ({ kind: "gone" });
+
 describe("telling a dead daemon from a quiet one", () => {
   test("nothing at all is never-run, not healthy", () => {
-    const standing = daemonStanding({ read: { kind: "absent" }, lastNote: null, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: { kind: "absent" }, notes: [], nowMs: NOW, identify: THIS_DAEMON });
     expect(standing.state).toBe("never-run");
   });
 
   test("a fresh checkpoint from a live pid, with no stopping note, is running", () => {
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: startedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [startedNote], nowMs: NOW, identify: THIS_DAEMON });
     expect(standing.state).toBe("running");
   });
 
@@ -132,10 +146,10 @@ describe("telling a dead daemon from a quiet one", () => {
     // green for any value of the constant, which is how a threshold raised to
     // thirty hours survived the first mutation sweep of this file.
     expect(STALL_AFTER_MS).toBeLessThanOrEqual(120_000);
-    const standing = daemonStanding({ read: reads(checkpointAt(15 * 60_000)), lastNote: startedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(15 * 60_000)), notes: [startedNote], nowMs: NOW, identify: THIS_DAEMON });
     expect(standing.state).toBe("stalled");
     expect(standing.detail).toContain("has not written");
-    expect(daemonStanding({ read: reads(checkpointAt(STALL_AFTER_MS + 1_000)), lastNote: startedNote, nowMs: NOW, alive: () => true }).state).toBe("stalled");
+    expect(daemonStanding({ read: reads(checkpointAt(STALL_AFTER_MS + 1_000)), notes: [startedNote], nowMs: NOW, identify: THIS_DAEMON }).state).toBe("stalled");
   });
 
   test("a checkpoint this build cannot read is CANNOT TELL, never NEVER RUN", () => {
@@ -152,9 +166,9 @@ describe("telling a dead daemon from a quiet one", () => {
     // person who reads NEVER RUN goes and starts a second daemon.
     const standing = daemonStanding({
       read: { kind: "unusable", why: "checkpoint-malformed", detail: "schema 1 is not 2" },
-      lastNote: startedNote,
+      notes: [startedNote],
       nowMs: NOW,
-      alive: () => true,
+      identify: THIS_DAEMON,
     });
 
     expect(standing.state).toBe("cannot-tell");
@@ -170,14 +184,177 @@ describe("telling a dead daemon from a quiet one", () => {
   test("a stopping note means it went on purpose, whatever the pid says", () => {
     // A pid is reusable, so "the pid is alive" is weak evidence on its own; the
     // daemon's own last word is not.
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: stoppedNote, nowMs: NOW, alive: () => true });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [stoppedNote], nowMs: NOW, identify: THIS_DAEMON });
     expect(standing.state).toBe("stopped");
   });
 
   test("no stopping note and a pid that is gone is a kill, and says so", () => {
-    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), lastNote: startedNote, nowMs: NOW, alive: () => false });
+    const standing = daemonStanding({ read: reads(checkpointAt(20_000)), notes: [startedNote], nowMs: NOW, identify: GONE });
     expect(standing.state).toBe("killed");
     expect(standing.detail).toContain("4242");
+  });
+});
+
+describe("Sol's stage-2 review: a future clock (F43) and a reused pid (F45)", () => {
+  // checkpointAt's daemon started at 07:00:00. A process that started 3 s before
+  // that is this daemon; one that started 50 minutes after it cannot be.
+  const DAEMON_STARTED = Date.parse("2026-09-08T07:00:00.000Z");
+  const TEN_YEARS = 10 * 365 * 24 * 3_600_000;
+
+  test("F43: a checkpoint written in the future is CANNOT TELL, naming both instants, before liveness is asked", () => {
+    const standing = daemonStanding({ read: reads(checkpointAt(-TEN_YEARS)), notes: [startedNote], nowMs: NOW, identify: THIS_DAEMON });
+    expect(standing.state).toBe("cannot-tell");
+    expect(standing.detail).toContain(new Date(NOW + TEN_YEARS).toISOString());
+    expect(standing.detail).toContain(new Date(NOW).toISOString());
+    expect(standing.detail).not.toContain("ago");
+  });
+
+  test("F43: `status` says the same, even when the pid is gone", () => {
+    const root = tempRoot();
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(checkpointAt(-TEN_YEARS, 2 ** 30)));
+    writeFileSync(join(root, NOTES_FILE), `${JSON.stringify({ ...startedNote, pid: 2 ** 30 })}\n`);
+    const line = statusLines(root, NOW).find((l) => l.startsWith("daemon")) ?? "";
+    expect(line).toMatch(/^daemon\s+CANNOT TELL/);
+    expect(line).toContain("in the future by");
+  });
+
+  test("F45: a live pid whose process started long after this daemon did is a reused pid: KILLED, with both starts", () => {
+    const standing = daemonStanding({
+      read: reads(checkpointAt(1_000)),
+      notes: [startedNote],
+      nowMs: NOW,
+      identify: () => ({ kind: "started", atMs: DAEMON_STARTED + 50 * 60_000 }),
+    });
+    expect(standing.state).toBe("killed");
+    expect(standing.detail).toContain("pid 4242 is alive but is not this daemon");
+    expect(standing.detail).toContain("2026-09-08T07:50:00.000Z");
+    expect(standing.detail).toContain("2026-09-08T07:00:00.000Z");
+  });
+
+  test("F45: a process that started more than two minutes BEFORE this daemon is not it either", () => {
+    const standing = daemonStanding({
+      read: reads(checkpointAt(1_000)),
+      notes: [startedNote],
+      nowMs: NOW,
+      identify: () => ({ kind: "started", atMs: DAEMON_STARTED - 10 * 60_000 }),
+    });
+    expect(standing.state).toBe("killed");
+  });
+
+  test("F45: a pid whose start cannot be read is not RUNNING: present, fresh, unverified", () => {
+    const standing = daemonStanding({
+      read: reads(checkpointAt(1_000)),
+      notes: [startedNote],
+      nowMs: NOW,
+      identify: () => ({ kind: "alive-unverified", why: "/proc/4242/stat could not be read: EACCES" }),
+    });
+    expect(standing.state).toBe("cannot-tell");
+    expect(standing.detail).toContain("pid 4242 present and the checkpoint is fresh; could not verify it is this daemon (/proc/4242/stat could not be read: EACCES)");
+  });
+
+  test("F45: the process that started just before this daemon's startedAt is RUNNING", () => {
+    const standing = daemonStanding({
+      read: reads(checkpointAt(1_000)),
+      notes: [startedNote],
+      nowMs: NOW,
+      identify: () => ({ kind: "started", atMs: DAEMON_STARTED - 3_000 }),
+    });
+    expect(standing.state).toBe("running");
+  });
+
+  test("F45: the real reader, on this test process's own /proc: its start is its start, and a pid above pid_max is gone", () => {
+    const reading = readPidIdentity(process.pid);
+    if (process.platform !== "linux") {
+      expect(reading.kind).toBe("alive-unverified");
+      return;
+    }
+    if (reading.kind !== "started") throw new Error(`expected a start off /proc, got ${JSON.stringify(reading)}`);
+    // Node's own uptime is a second, independent clock for the same instant.
+    const expected = Date.now() - process.uptime() * 1000;
+    expect(Math.abs(reading.atMs - expected)).toBeLessThan(2_000);
+    expect(readPidIdentity(2 ** 30)).toEqual({ kind: "gone" });
+
+    // And through the standing: a daemon that "started" a second after this process did is this process;
+    // one that started an hour later is not, whatever the pid says.
+    // On the REAL clock: the process's start is a real instant, and a fixed test clock two days
+    // behind it would (rightly) be a checkpoint from the future.
+    const realNow = Date.now();
+    const realStart = (startedAtMs: number) => {
+      const fresh = new Date(realNow - 1_000).toISOString();
+      const base = checkpointAt(1_000, process.pid);
+      const checkpoint: Checkpoint = {
+        ...base,
+        writtenAt: fresh,
+        lastGoodSnapshotAt: fresh,
+        heartbeat: { ...base.heartbeat, lastTickAt: fresh, startedAt: new Date(startedAtMs).toISOString() },
+      };
+      return daemonStanding({ read: reads(checkpoint), notes: [], nowMs: realNow, identify: readPidIdentity }).state;
+    };
+    expect(realStart(reading.atMs + 1_000)).toBe("running");
+    // A daemon that recorded its start three minutes BEFORE this process existed cannot be this
+    // process: the pid is held by a later stranger.
+    expect(realStart(reading.atMs - 180_000)).toBe("killed");
+  });
+});
+
+describe("a stop closes only its own start: standing by instance, not by the last note", () => {
+  // GPT Sol's F3 on plan 260910f. The checkpoint names ONE instance; the notes
+  // log spans restarts. Reading the log's last line as if it described the
+  // checkpoint pairs one process's clean stop with another's checkpoint.
+  // Through the real readers, from files, with a pid above Linux's pid_max so
+  // "gone" does not depend on what happens to be running on the box.
+  const DEAD_PID = 2 ** 30;
+  const startOf = (instanceId: string, at: string, pid = DEAD_PID): DaemonNote => ({ ...startedNote, instanceId, at, pid });
+  const stopOf = (instanceId: string, at: string): DaemonNote => ({ kind: "daemon-stopped", at, instanceId, why: "SIGTERM" });
+
+  function storeWith(notes: DaemonNote[]): string {
+    const root = tempRoot();
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(checkpointAt(20 * 60_000, DEAD_PID)));
+    writeFileSync(join(root, NOTES_FILE), notes.map((note) => `${JSON.stringify(note)}\n`).join(""));
+    return root;
+  }
+  const daemonLine = (root: string): string => statusLines(root, NOW).find((line) => line.startsWith("daemon")) ?? "";
+
+  test("A checkpointed and was killed; B started and stopped before its first checkpoint", () => {
+    const line = daemonLine(
+      storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), startOf("i2", "2026-09-08T07:50:00.000Z"), stopOf("i2", "2026-09-08T07:51:00.000Z")]),
+    );
+    // B's clean stop is B's; it says nothing about the checkpoint, which is A's.
+    expect(line).not.toMatch(/stopped on purpose at [^;]*; the last checkpoint/);
+    expect(line).toContain("instance i2 started at 2026-09-08T07:50:00.000Z");
+    expect(line).toContain("without writing a checkpoint");
+    expect(line).toContain("the checkpoint on disk is instance i1's");
+    // And A is not dressed up as having stopped cleanly.
+    expect(line).toMatch(/i1 wrote no stopping note/);
+  });
+
+  test("B started and was killed before its first checkpoint, after A stopped cleanly", () => {
+    const line = daemonLine(
+      storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), stopOf("i1", "2026-09-08T07:40:00.000Z"), startOf("i2", "2026-09-08T07:50:00.000Z")]),
+    );
+    expect(line).toMatch(/^daemon\s+KILLED/);
+    expect(line).toContain("instance i2");
+    expect(line).toContain("without writing a checkpoint");
+    expect(line).toContain("i1 stopped on purpose");
+  });
+
+  test("A killed with no later instance still reads killed", () => {
+    expect(daemonLine(storeWith([startOf("i1", "2026-09-08T07:00:00.000Z")]))).toMatch(/^daemon\s+KILLED — pid \d+ is gone/);
+  });
+
+  test("A stopped cleanly reads stopped", () => {
+    expect(daemonLine(storeWith([startOf("i1", "2026-09-08T07:00:00.000Z"), stopOf("i1", "2026-09-08T07:59:00.000Z")]))).toMatch(
+      /^daemon\s+STOPPED — stopped on purpose at 2026-09-08T07:59:00.000Z/,
+    );
+  });
+
+  test("an OLDER instance's stop does not make the checkpoint's own instance stopped", () => {
+    // i0 stopped, then i1 started, checkpointed and was killed: the last stop in
+    // the log is i0's, and it closes only i0's start.
+    const line = daemonLine(
+      storeWith([startOf("i0", "2026-09-08T06:00:00.000Z"), stopOf("i0", "2026-09-08T06:30:00.000Z"), startOf("i1", "2026-09-08T07:00:00.000Z")]),
+    );
+    expect(line).toMatch(/^daemon\s+KILLED/);
   });
 });
 

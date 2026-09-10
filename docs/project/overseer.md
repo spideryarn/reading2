@@ -256,6 +256,13 @@ the prompt, its fingerprint against its pin, and each document's pinned and curr
 `overseer status` prints it as a `schedule` block, saying whether the running daemon holds the job
 list this checkout builds. The Overseer tab draws the same file. Read it before arming anything.
 
+**Which code each service is running, in one command: `overseer diagnose`** (`--json` for a
+machine). It names the HEAD each service recorded when it started — never the checkout's current
+HEAD, which moves under running services — the checkpoint's schema and both clocks, recorded against
+host boot id, every store file's schema and age, and the same job-list comparison as `status`. A
+service started before revision stamps existed says *not stamped* until it is restarted
+([260910f](../plans/260910f-operational-finish-diagnose-restart-recovery-visibility.md)).
+
 **A job may be pinned `dry-run`**, which is inside the fingerprint: it passes every gate, reports
 *due now* when it would have run, and reserves, launches and records nothing. `schedule-fixture` is
 one — a harmless job that exists so the preview has something inert to show and the first real
@@ -285,6 +292,12 @@ recurring form.
   critical that we have GPT (e.g. for cross-model-family reviews), so if we are running out of
   ChatGPT usage limits, that's as important as running out of Claude usage limits … Basically we
   can't continue working without both."*
+  <br>**Since 2026-09-10 that command also prints one block per REGISTERED account** — every Claude
+  and Codex subscription the box can launch work on, not just the one you are logged in as — and the
+  Usage limits tab draws the same readings as sections. What each says and what it may not claim is
+  [usage-per-account.md](usage-per-account.md). Two things changed in the output: a registry that
+  will not parse is now a `!` line and **exit 1** rather than a thrown command printing nothing, and
+  `--json`'s `accounts` field is a `StoredAccountUsage` rather than an array.
 
 ### The tick
 

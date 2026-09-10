@@ -59,9 +59,13 @@ import type { ReactNode } from "react";
 
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
 import { BroadcastCard } from "./BroadcastCard";
+import type { ReceiptsApi } from "./actions-client";
 import { MessageOverseerCard } from "./MessageOverseerCard";
+import { ReceiptList } from "./ReceiptList";
 import { httpScheduleApi, type ScheduleApi } from "./schedule-client";
 import { SchedulePreview } from "./SchedulePreview";
+import { httpOccurrencesApi, type OccurrencesApi } from "./occurrences-client";
+import { ScheduledOccurrences } from "./ScheduledOccurrences";
 import { Explain } from "./Tooltip";
 import type {
   ClockSkew,
@@ -619,8 +623,16 @@ export function OverseerPanel({
   now,
   receivedAt,
   skew,
+  receipts,
   scheduleApi = httpScheduleApi,
+  occurrencesApi = httpOccurrencesApi,
 }: {
+  /**
+   * The receipts seam — `ReceiptList` reads through it. Optional, and the
+   * browser gets the default; a test that wants the list without a network
+   * passes one.
+   */
+  receipts?: ReceiptsApi;
   actions: ActionsUi;
   rows: readonly FleetRow[];
   /**
@@ -649,6 +661,8 @@ export function OverseerPanel({
   skew: ClockSkew;
   /** The scheduler preview's read. Injectable so a test drives the seam; the default is the real route. */
   scheduleApi?: ScheduleApi;
+  /** What the scheduler has launched. Injectable for the same reason; the default is the real route. */
+  occurrencesApi?: OccurrencesApi;
 }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
@@ -664,6 +678,7 @@ export function OverseerPanel({
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
       <SchedulePreview api={scheduleApi} now={now} currentInstanceId={currentInstanceId} />
+      <ScheduledOccurrences api={occurrencesApi} now={now} />
 
       {/* SECOND, and beside the status card rather than on a tab of its own:
           *is anything watching* and *can either subscription afford more work*
@@ -718,6 +733,12 @@ export function OverseerPanel({
           routes-broadcast.ts § the header says why they are two loops today and
           which way the dependency should run when they become one. */}
       <BroadcastCard rows={rows} unreadableRows={unreadableRows} />
+
+      {/* **WHAT BECAME OF WHAT WAS SENT**, beside the two cards that send —
+          plan 260910d, Stage 4. Here and not in the Sessions detail pane, which
+          remounts on a change of execution identity; this tab is the neutral
+          host its cards already share (agreed with `session-continuity`). */}
+      <ReceiptList {...(receipts === undefined ? {} : { api: receipts })} />
     </div>
   );
 }

@@ -97,7 +97,7 @@ export type UptimeReading = { read: true; seconds: number } | { read: false; why
  * rather than a `getconf CLK_TCK` at startup: the number is a property of the
  * interface we are reading, not of the machine we are reading it on.
  */
-const USER_HZ = 100;
+export const USER_HZ = 100;
 
 /**
  * **HOW FAR THE TWO CLOCKS MAY DISAGREE BEFORE WE STOP BELIEVING THE PAIR.**

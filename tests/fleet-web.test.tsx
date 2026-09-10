@@ -271,6 +271,7 @@ function state(over: Partial<FleetState> = {}): FleetState {
        quiet line on the Overseer tab, and any other default would have every
        fixture in this file silently claiming a usage pass had run. */
     usage: { kind: "not-asked" },
+    accountUsage: { kind: "not-asked" },
     /* Live work is a required pushed field. The ordinary fixture represents an
        older server which did not report it, never a successful empty scan. */
     currentWork: { kind: "not-reported" },
@@ -1037,13 +1038,22 @@ describe("the usage limits tab", () => {
     act(() => feed.push(state()));
     await act(async () => undefined);
     const onTab = container.textContent ?? "";
+    expect(onTab).toContain("There is no per-account reading.");
 
-    window.location.hash = "#overseer";
+    /* Dispatched and proven. Assigning the hash alone never re-rendered — jsdom
+       delivers `hashchange` as a later task — and `claim` is on both tabs, so
+       this assertion passed without the Overseer mount ever being drawn: the
+       "same reading on both mounts" it names was checked against one. */
+    act(() => {
+      window.location.hash = "#overseer";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
     await act(async () => undefined);
     const onOverseer = container.textContent ?? "";
 
     const claim = "The payload arrived and carried no usage reading at all.";
     expect(onTab).toContain(claim);
+    expect(onOverseer).not.toContain("There is no per-account reading.");
     expect(onOverseer).toContain(claim);
   });
 
@@ -1099,11 +1109,191 @@ describe("the usage limits tab", () => {
     act(() => feed.push(state()));
     await act(async () => undefined);
     expect(container.textContent).toContain("61% used");
+    expect(container.textContent).toContain("There is no per-account reading.");
 
-    window.location.hash = "#overseer";
+    /* Dispatched and proven, for the reason the test below gives: assigning the
+       hash alone never left the Usage tab, and "61% used" is on both, so this
+       half passed for years without reaching the Overseer mount. */
+    act(() => {
+      window.location.hash = "#overseer";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
     await act(async () => undefined);
+    expect(container.textContent).not.toContain("There is no per-account reading.");
     expect(container.textContent).toContain("61% used");
     expect(reads).toBe(1);
+  });
+
+  /**
+   * **ONE PLACE PER SUBSCRIPTION — BUT ONLY WHEN THE REPLACEMENT IS ON SCREEN.**
+   *
+   * Plan 260910c. With per-account sections published, the Usage tab's card
+   * drops its Codex half so one subscription is not drawn twice from two files.
+   * The test above is the other half of the rule: with NO sections published
+   * (an older server, or before the first pass), the card keeps it — the first
+   * version suppressed unconditionally and left the tab with no headroom at all.
+   * The Overseer tab has no sections, so it always keeps the card.
+   */
+  it("draws a Codex subscription once on Usage when the sections are published, and keeps the card on Overseer", async () => {
+    const reset = Date.now() + 60 * 60_000;
+    const history: UsageHistoryApi = {
+      window: async () => ({
+        kind: "history",
+        windowHours: 24,
+        fromMs: Date.now() - 86_400_000,
+        toMs: Date.now(),
+        samples: [],
+        predecessor: null,
+        holes: [],
+        earliestAt: null,
+        rotated: false,
+        unreadableLines: 0,
+        unsupportedLines: 0,
+        recorder: { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null },
+        refreshMs: 60_000,
+        latestCodex: {
+          kind: "value",
+          accountId: "same-account",
+          readAt: new Date().toISOString(),
+          resetCredits: null,
+          buckets: [{
+            limitId: "codex",
+            limitName: null,
+            planType: "pro",
+            credits: null,
+            individualLimit: null,
+            spendControlReached: false,
+            rateLimitReachedType: null,
+            windows: [{
+              kind: "value",
+              slot: "primary",
+              windowMinutes: 10_080,
+              usedPercent: 61,
+              resetsAt: new Date(reset).toISOString(),
+              resetsAtMs: reset,
+            }],
+          }],
+        },
+      }),
+    };
+    window.location.hash = "#usage";
+    const feed = manualTransport();
+    mount(feed.transport, recordingDeploys().api, fakeQueue(), history);
+    const accountUsage: Extract<FleetState["accountUsage"], { kind: "published" }> = {
+      kind: "published",
+      collectedAt: new Date().toISOString(),
+      coordinatorWrittenAt: new Date().toISOString(),
+      problems: [],
+      accounts: [{
+        name: "ambient",
+        family: "codex",
+        role: "orchestrator",
+        origin: "ambient",
+        displayEmail: null,
+        providerAccountId: "same-account",
+        takenAt: new Date().toISOString(),
+        reading: {
+          kind: "buckets",
+          resetCredits: null,
+          buckets: [{
+            limitId: "codex",
+            limitName: null,
+            planType: "pro",
+            credits: null,
+            individualLimit: null,
+            spendControlReached: false,
+            rateLimitReachedType: null,
+            windows: [{
+              kind: "value",
+              slot: "primary",
+              windowMinutes: 10_080,
+              usedPercent: 23,
+              resetsAt: new Date(reset).toISOString(),
+              resetsAtMs: reset,
+            }],
+          }],
+        },
+      }],
+    };
+    act(() =>
+      feed.push(
+        state({ accountUsage }),
+      ),
+    );
+    await act(async () => undefined);
+    /* Distinct numbers on purpose, so the assertion can tell WHICH copy is on
+       screen: 23 is the live section, 61 is the history card's. */
+    expect(container.textContent).toContain("23% used");
+    expect(container.textContent).not.toContain("61% used");
+    expect(container.textContent).toContain("Codex subscriptions");
+
+    /* `published` is only the envelope. An unknown section has put no numeric
+       replacement on screen, so it must not spend that bit as permission to
+       hide the history card's still-usable observation. */
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => ({
+          ...section,
+          reading: { kind: "unknown" as const, why: "the live app-server attempt failed" },
+        })),
+      },
+    })));
+    expect(container.textContent).toContain("61% used");
+
+    /* And replacement is per subscription, not per family. A valid live
+       number for another Codex login does not replace this card's account. */
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => ({ ...section, providerAccountId: "different-account" })),
+      },
+    })));
+    expect(container.textContent).toContain("23% used");
+    expect(container.textContent).toContain("61% used");
+
+    /* Expiry is also part of replacement. The section renderer removes 23;
+       the same browser-clock decision must keep the fallback rather than leave
+       the page with no Codex percentage. */
+    const past = Date.now() - 60_000;
+    act(() => feed.push(state({
+      accountUsage: {
+        ...accountUsage,
+        accounts: accountUsage.accounts.map((section) => section.family === "codex" && section.reading.kind === "buckets"
+          ? {
+              ...section,
+              reading: {
+                ...section.reading,
+                buckets: section.reading.buckets.map((bucket) => ({
+                  ...bucket,
+                  windows: bucket.windows.map((window) => window.kind === "value"
+                    ? { ...window, resetsAt: new Date(past).toISOString(), resetsAtMs: past }
+                    : window),
+                })),
+              },
+            }
+          : section) as Extract<FleetState["accountUsage"], { kind: "published" }>["accounts"],
+      },
+    })));
+    expect(container.textContent).not.toContain("23% used");
+    expect(container.textContent).toContain("61% used");
+
+    /* Restore the fully matching live reading before checking the other mount. */
+    act(() => feed.push(state({ accountUsage })));
+
+    /* **THE SWITCH HAS TO BE MADE TO LAND, AND PROVEN TO HAVE.** The app
+       re-renders on `hashchange`, which jsdom delivers as a later task that
+       `await act(async () => undefined)` does not flush — so assigning the hash
+       alone leaves the Usage tab on screen, and an assertion true of both tabs
+       passes without ever reaching the Overseer one. Dispatched explicitly,
+       then checked against a heading only the Usage tab draws. */
+    act(() => {
+      window.location.hash = "#overseer";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await act(async () => undefined);
+    expect(container.textContent).not.toContain("Codex subscriptions");
+    expect(container.textContent).toContain("61% used");
   });
 });
 
@@ -1785,6 +1975,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
           usage: { kind: "not-asked" },
+          accountUsage: { kind: "not-asked" },
           work: {
             kind: "published",
             coordinatorWrittenAt: new Date(now - 30_000).toISOString(),
@@ -1859,6 +2050,7 @@ describe("box health, whose shape belongs to somebody else", () => {
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
             usage: { kind: "not-asked" },
+            accountUsage: { kind: "not-asked" },
             work: { kind: "checkpoint-absent" },
           }),
         }),
@@ -2747,6 +2939,7 @@ describe("the box's clock, read with the phone's", () => {
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
           usage: { kind: "not-asked" },
+          accountUsage: { kind: "not-asked" },
           work: { kind: "checkpoint-absent" },
         }),
       }),

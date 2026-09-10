@@ -55,7 +55,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { AttentionList, OverseerWork, StoredUsage, UsageReport } from "../fleet/wire.js";
+import { readModuleStartRevision } from "../fleet/revision.js";
+import type {
+  AttentionList,
+  OverseerWork,
+  StartRevision,
+  StoredAccountUsage,
+  StoredUsage,
+  UsageReport,
+} from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import {
@@ -334,6 +342,14 @@ export type UsagePassOutcome =
 export type DaemonOptions = {
   /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
   root?: string;
+  /**
+   * The revision this daemon started from, written into its `daemon-started`
+   * note. Defaults to reading the checkout this module sits in, once, as the
+   * first thing `runOverseer` does — `tools/fleet/revision.ts` says why a read
+   * taken any later names the checkout's HEAD rather than the running code.
+   * Injected by tests.
+   */
+  revision?: StartRevision;
   /** The dashboard's origin. */
   baseUrl: string;
   signal: AbortSignal;
@@ -421,6 +437,29 @@ export type DaemonOptions = {
      * `safeOnPass` below. A retention failure is not a usage failure.
      */
     onPass?: (outcome: UsagePassOutcome) => void;
+    /**
+     * **EVERY ACCOUNT-SUBSCRIPTION'S LIVE HEADROOM**, read on this same timer
+     * and published without any judgement from `chooseUsage`.
+     *
+     * Called **after `run` has settled, whichever way it settled**, and that
+     * ordering is load-bearing twice over:
+     *
+     *  - **It runs even when the transcript scan threw.** These are cheap
+     *    provider calls with nothing to do with that scan, and letting a 2.9 GB
+     *    walk failing take them down with it is the *a publication decision is
+     *    not an observation* mistake, one level up from where it was made
+     *    before.
+     *  - **It runs strictly after**, so the composition root may stash a value
+     *    during `run` and read it here. That is how the ambient Codex reading
+     *    reaches it: the pass already spawns one app-server, and taking a
+     *    second would put two independently-measured numbers for one
+     *    subscription on one page. `scripts/overseer.ts` owns the stash and
+     *    says so.
+     *
+     * A daemon given no collector publishes nothing here, and the checkpoint's
+     * `accountUsageNotYetRun` says exactly that rather than an empty list.
+     */
+    accounts?: () => Promise<StoredAccountUsage>;
   };
   /**
    * THE SCHEDULED JOBS, and the schedule as data.
@@ -632,6 +671,9 @@ export type DaemonOutcome =
 export const TICK_MS = 30_000;
 
 export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome> {
+  // FIRST, before anything else can take time: the checkout moves under a
+  // running daemon, and this is the closest we get to what it loaded.
+  const revision = options.revision ?? readModuleStartRevision(import.meta.url, "../..");
   const now = options.now ?? (() => new Date());
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
@@ -742,6 +784,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     source: options.baseUrl,
     opening: describeOpening(store.opening),
     baseline: baselineNote,
+    revision,
   });
 
   // READ AND WRITTEN THROUGH FUNCTIONS, which is not ceremony: it is only ever
@@ -814,6 +857,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
   // thing in each case: leave the store's own report alone.
   let usage: StoredUsage | null = null;
+  // Every account-subscription's live headroom, or null when the pass produced
+  // nothing new. Unlike `usage` there is no supersede judgement to make: each
+  // pass reads every account afresh and a section that failed says so, so the
+  // newest reading is always the one to publish.
+  let accountUsage: StoredAccountUsage | null = null;
   // RECOMPUTED ON EVERY CHECKPOINT, from the documents as they are now. `armed`
   // is read off the option rather than off a flag beside it, so "armed" and
   // "there are jobs" cannot come apart.
@@ -865,6 +913,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     ...(attention === null ? {} : { attention }),
     ...(work === null ? {} : { work }),
     ...(usage === null ? {} : { usage }),
+    ...(accountUsage === null ? {} : { accountUsage }),
   });
 
   // ══ THE RECOVERY VIEW, THE DERIVED DISPOSITIONS AND THE INBOX
@@ -1259,6 +1308,31 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
                 why: cause instanceof Error ? cause.message : String(cause),
                 at: passAt,
               });
+            })
+            /* **UNCONDITIONALLY, AND AFTER.** Not inside the `.then`: the
+               per-account readings are independent of the transcript scan, and
+               a scan that threw must not take them down with it. Not in
+               parallel either: the composition root stashes this pass's Codex
+               observation during `run`, and reading it here is what stops the
+               box spawning a second app-server for the same subscription. */
+            .then(async () => {
+              const collect = usageOptions.accounts;
+              if (collect === undefined) return;
+              try {
+                accountUsage = await collect();
+              } catch (cause) {
+                /* A THROWN PASS BECOMES `none` WITH A REASON, never a held
+                   reading passed off as current — `usage`'s rule above, and it
+                   matters more here: a section is a percentage under an
+                   account's name, and republishing an old one after the reader
+                   broke is the failure this subsystem exists to refuse. */
+                accountUsage = {
+                  kind: "none",
+                  why: `the per-account usage pass failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                  at: now().toISOString(),
+                };
+                log(`per-account usage pass failed: ${String(cause)}`);
+              }
             })
             .finally(() => {
               usageRunning = null;

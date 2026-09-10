@@ -47,9 +47,10 @@ import {
   parseFleetState,
   parseUsage,
   shiftToBrowserClock,
+  type AccountUsageView,
   type UsageView,
 } from "../tools/fleet/web/src/types";
-import type { RateLimitHit, ScanCoverage, StoredUsage, UsageReport } from "../tools/fleet/wire.js";
+import type { AccountUsageSection, RateLimitHit, ScanCoverage, StoredUsage, UsageReport } from "../tools/fleet/wire.js";
 import { describeRefusal, openStore, type OverseerStore } from "../tools/overseer/store.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -83,9 +84,23 @@ function screen(): string {
   return (container.textContent ?? "").replace(/\s+/g, " ");
 }
 
-function draw(usage: UsageView | null, now: number, receivedAt: number | null = now): void {
+function draw(
+  usage: UsageView | null,
+  now: number,
+  receivedAt: number | null = now,
+  accountUsageAbove?: AccountUsageView,
+): void {
   act(() =>
-    root.render(<UsageCard usage={usage} codex={null} now={now} receivedAt={receivedAt} skew={CLOCK_SKEW_UNMEASURED} />),
+    root.render(
+      <UsageCard
+        usage={usage}
+        codex={null}
+        now={now}
+        receivedAt={receivedAt}
+        skew={CLOCK_SKEW_UNMEASURED}
+        {...(accountUsageAbove === undefined ? {} : { accountUsageAbove })}
+      />,
+    ),
   );
 }
 
@@ -558,11 +573,79 @@ describe("the card, against its own clock", () => {
     expect(screen()).toContain("this window reset at");
     expect(screen()).toContain("so its cached number describes nothing");
     /* The window that has NOT passed still shows its number: the rule is about
-       a void reading, not about hiding the cache. Both forms are on screen —
-       the producer's `41% used`, and the `59% left` the reader actually asked
-       for — so the derived number can be checked against the source one. */
-    expect(screen()).toContain("41%");
-    expect(screen()).toContain("59% left");
+       a void reading, not about hiding the cache. **One form only, and it is
+       the producer's** — Greg, 2026-09-09: *"always & only say X% used (and
+       leave it to the user that 100-X% is remaining)"*. The complement used to
+       be the headline with the producer's number beneath it. */
+    expect(screen()).toContain("41% used");
+    expect(screen()).not.toContain("59% left");
+  });
+
+  it("hides Claude's cache only when a current same-account section replaces every live window", () => {
+    const usage = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: null, accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        level: "unknown",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(10 * 60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            { kind: "value", window: "five_hour", utilizationPercent: 61, resetsAt: new Date(BASE + 60 * 60_000).toISOString() },
+            { kind: "value", window: "seven_day", utilizationPercent: 38, resetsAt: new Date(BASE + 24 * 60 * 60_000).toISOString() },
+          ],
+        },
+        limits: { kind: "unknown", why: "not relevant", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    const section = {
+      name: "mindstone",
+      family: "claude" as const,
+      role: "pool" as const,
+      origin: "registered" as const,
+      displayEmail: null,
+      providerAccountId: "acct-1111",
+      takenAt: ago(60_000),
+      reading: {
+        kind: "windows" as const,
+        windows: [
+          { kind: "value" as const, window: "five_hour", utilizationPercent: 23, resetsAt: new Date(BASE + 60 * 60_000).toISOString() },
+        ],
+      },
+    };
+    const published = (accounts: readonly AccountUsageSection[]): AccountUsageView => ({
+      kind: "published",
+      collectedAt: ago(60_000),
+      coordinatorWrittenAt: ago(20_000),
+      problems: [],
+      accounts,
+    });
+
+    draw(usage, BASE, BASE, published([section]));
+    expect(screen()).toContain("61% used");
+    expect(screen()).toContain("38% used");
+
+    const complete = {
+      ...section,
+      reading: {
+        kind: "windows" as const,
+        windows: [
+          ...section.reading.windows,
+          { kind: "value" as const, window: "seven_day", utilizationPercent: 19, resetsAt: new Date(BASE + 24 * 60 * 60_000).toISOString() },
+        ],
+      },
+    };
+    draw(usage, BASE, BASE, published([complete]));
+    expect(screen()).not.toContain("61% used");
+    expect(screen()).not.toContain("38% used");
+
+    draw(usage, BASE, BASE, published([{ ...complete, providerAccountId: "acct-2222" }]));
+    expect(screen()).toContain("61% used");
   });
 
   it("does not invent a severity of its own for a window the verdict calls fine", () => {
@@ -613,7 +696,7 @@ describe("the card, against its own clock", () => {
     });
     draw(feed, BASE);
     const value = container.querySelector('[data-slot="stat-value"]');
-    expect(value?.textContent).toBe("25% left");
+    expect(value?.textContent).toBe("75% used");
     expect(value?.className).not.toContain("alarm");
     expect(value?.className).not.toContain("needs");
     /* **AND NOT THE REASSURING COLOUR EITHER**, which the first fix got wrong:
@@ -621,7 +704,8 @@ describe("the card, against its own clock", () => {
        colour of a session that is running. On a headroom figure green does not
        read as "measured", it reads as "healthy", so `5% left` would have been
        drawn as good news. A severity claim in the opposite direction is still a
-       severity claim. */
+       severity claim. (The value now reads `75% used` rather than `25% left`;
+       the colour argument is unchanged by which way round the number is.) */
     expect(value?.className).not.toContain("work");
   });
 
@@ -659,11 +743,14 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("0% left");
+    /* **THERE IS NO COMPLEMENT TO ROUND ANY MORE.** This test was written
+       against `0% left`, which came from `100 - 99.99` and reached the screen
+       once as `0.010000000000005116` (GPT Sol's UL-06). Drawing the producer's
+       own number disposes of the class rather than rounding it away: nothing on
+       this page is arithmetic derived from the reading. */
+    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("99.99% used");
     expect(screen()).not.toContain("0.0100000");
-    /* The producer's own number survives beside the derived one, so the
-       rounding can be checked rather than trusted. */
-    expect(screen()).toContain("99.99% used");
+    expect(screen()).not.toContain("% left");
   });
 
   it("will not draw another account's percentages under this account's name", () => {

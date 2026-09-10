@@ -119,8 +119,10 @@ import type {
   OverseerWork,
   PaneJob,
   PaneWork,
+  StoredAccountUsage,
   StoredUsage,
 } from "../fleet/wire.js";
+import { parseAccountUsageSections } from "./account-usage.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -608,6 +610,32 @@ export type Checkpoint = {
    */
   usage: StoredUsage;
   /**
+   * HOW MUCH ROOM EACH ACCOUNT-SUBSCRIPTION HAS LEFT — one live reading per
+   * Claude and Codex login the box knows about, produced by `account-usage.ts`
+   * and rendered by the dashboard.
+   *
+   * **No schema bump**, by this file's own rule: a reader that ignores it draws
+   * no per-account sections, which is poorer rather than wrong.
+   *
+   * **A SIBLING OF `usage`, NOT A FIELD INSIDE IT**, and the separation is
+   * load-bearing rather than tidy. `usage` is republished from the stored copy
+   * whenever a fresh transcript scan comes back incomplete — `chooseUsage`'s
+   * whole job. These readings are cheap provider calls with nothing to do with
+   * that scan, so riding inside the report would mean an unfinished 2.9 GB walk
+   * silently discarding a perfectly good set of live percentages. *A
+   * publication decision is not an observation*, which
+   * docs/project/usage-history.md names as a mistake already made once here.
+   *
+   * Held across writes like `usage`, and for the same reason: a percentage and
+   * a reset instant were true before the pass that did not run, and they carry
+   * their own `takenAt` so a stale one is visible rather than remembered as
+   * fresh. Unlike `usage` it is **not** restored across a restart — five
+   * minutes of staleness is the most this can be worth, the collection is
+   * cheap, and a restart is exactly when the box's account list may have
+   * changed under us.
+   */
+  accountUsage: StoredAccountUsage;
+  /**
    * WHAT THE SCHEDULER HAS RUN, AND WHAT IT CANNOT ACCOUNT FOR.
    *
    * **No schema bump**, by this file's own rule: a reader that ignores this
@@ -744,6 +772,24 @@ export function usageNotYetRun(at: string): StoredUsage {
 }
 
 /**
+ * What a checkpoint carries before any per-account pass has run.
+ *
+ * The `none` arm rather than `{ accounts: [] }`, for the reason
+ * [`StoredAccountUsage`](../fleet/wire.ts) gives: an empty list renders as
+ * *this box has no account-subscriptions*, which is a claim, where the truth is
+ * that nobody has looked.
+ */
+export function accountUsageNotYetRun(at: string): StoredAccountUsage {
+  return {
+    kind: "none",
+    why:
+      "no per-account usage pass has run in this Overseer yet, so no subscription has been read. This " +
+      "instant is when the checkpoint was written, not when anything was read.",
+    at,
+  };
+}
+
+/**
  * The list a checkpoint carries before any pass has run.
  *
  * `scannedAt` is the checkpoint's own instant, and `why` says so in as many
@@ -796,6 +842,17 @@ export type CheckpointUpdate = {
    * see `Checkpoint.usage` — and simply omits this when it should not.
    */
   usage?: StoredUsage;
+  /**
+   * A new per-account reading, or omitted to keep the one the store already
+   * holds.
+   *
+   * Omitted is the normal case, for `usage`'s reason at a smaller scale: the
+   * pass runs on the usage timer rather than on a tick. Unlike `usage` there is
+   * no supersede judgement for the caller to make — each pass reads every
+   * account afresh and a section that failed says so, so the newest reading is
+   * always the one to publish.
+   */
+  accountUsage?: StoredAccountUsage;
   /**
    * What to say about the scheduler, or omitted to keep what the store holds.
    *
@@ -2249,6 +2306,7 @@ function parseCheckpoint(u: unknown): ParseResult<Checkpoint> {
       attention: parseAttentionList(u["attention"], writtenAt),
       work: parseWork(u["work"], writtenAt),
       usage: parseStoredUsage(u["usage"], writtenAt),
+      accountUsage: parseStoredAccountUsage(u["accountUsage"], writtenAt),
       jobs: { occurrences: jobs.value },
       scheduler: parseStoredScheduler(u["scheduler"], writtenAt),
       occurrenceHistory: parseOccurrenceHistory(u["occurrenceHistory"]),
@@ -2405,6 +2463,60 @@ function parseStoredUsage(u: unknown, writtenAt: string): StoredUsage {
   // reading is the one thing worse than no reading, because it is indistinguishable
   // from a complete one that found less.
   return report === null ? bad("the report is not one this build can read") : { kind: "report", report };
+}
+
+/**
+ * Read the per-account readings back, **degrading rather than failing the
+ * checkpoint** — `parseStoredUsage`'s rule above, for its reason: the next pass
+ * regenerates them in five minutes, so refusing the whole checkpoint would pay
+ * a log replay for a problem that fixes itself.
+ *
+ * **The sections themselves are parsed by `account-usage.ts`**, which owns
+ * their shape; this function owns the wrapper and the rule that **every failure
+ * becomes `none` with a reason**. Same split, and the same argument: a
+ * consumer-written parser for a producer's type is a second declaration of it,
+ * and it fails quietly — a `windows` arm that lost its array reads as an
+ * account with no limits rather than as one nobody could read.
+ *
+ * `problems` is part of the completeness claim, not optional prose. A malformed
+ * entry refuses the block: silently shortening that list can leave a short
+ * account list looking complete, which is precisely what the field prevents.
+ */
+function parseStoredAccountUsage(u: unknown, writtenAt: string): StoredAccountUsage {
+  if (u === undefined) {
+    return {
+      kind: "none",
+      why: "this checkpoint carries no per-account usage reading: it was written before the Overseer had one.",
+      at: writtenAt,
+    };
+  }
+  const bad = (why: string): StoredAccountUsage => ({
+    kind: "none",
+    why: `the stored per-account usage reading was unusable: ${why}`,
+    at: writtenAt,
+  });
+  if (!isRecord(u)) return bad("it is not an object");
+  if (u["kind"] === "none") {
+    return typeof u["why"] === "string" && isIsoTimestamp(u["at"])
+      ? { kind: "none", why: u["why"], at: u["at"] }
+      : bad("a none arm with no reason or no instant");
+  }
+  if (u["kind"] !== "reading") return bad(`kind ${JSON.stringify(u["kind"])} is neither "reading" nor "none"`);
+  if (!isIsoTimestamp(u["collectedAt"])) return bad("it has no instant saying when it was collected");
+  const accounts = parseAccountUsageSections(u["accounts"]);
+  if (accounts === null) return bad("the sections are not ones this build can read");
+  // An empty array here is `none`, not a reading. The producer cannot emit one,
+  // but a hand-edited or truncated file can, and the arm must not be reachable
+  // through the file either: it renders as "this box has no subscriptions".
+  if (accounts.length === 0) return bad("it carries a reading with no accounts in it");
+  const rawProblems = u["problems"];
+  if (!Array.isArray(rawProblems)) return bad("it carries no problem list");
+  const problems: string[] = [];
+  for (const problem of rawProblems) {
+    if (typeof problem !== "string" || problem.length === 0) return bad("its problem list contains an unreadable entry");
+    problems.push(problem);
+  }
+  return { kind: "reading", collectedAt: u["collectedAt"], accounts, problems };
 }
 
 /**
@@ -3508,6 +3620,21 @@ class Store implements OverseerStore {
    */
   private usageHeld: StoredUsage;
   /**
+   * The last per-account reading a caller handed in, held across writes in this
+   * process and **not restored across a restart** — the opposite of `usageHeld`
+   * directly above, and the difference is worth stating because the two look
+   * alike.
+   *
+   * A rate-limit rejection is durable text with its own `resetsAt`, and
+   * re-earning it costs a 2.9 GB walk, so it is worth carrying over a restart.
+   * A per-account percentage is worth at most five minutes, costs two cheap HTTP
+   * calls to re-take, and a restart is precisely the moment the box's account
+   * list may have changed underneath us — a re-registered account, a new
+   * `CODEX_HOME`. Inheriting the old list would republish a section for a
+   * subscription that is no longer there.
+   */
+  private accountUsageHeld: StoredAccountUsage;
+  /**
    * What the last write said about the scheduler.
    *
    * **NOT restored from the previous checkpoint**, unlike `usageHeld` above and
@@ -3559,6 +3686,7 @@ class Store implements OverseerStore {
     this.attention = attentionNotYetRun(input.now().toISOString());
     this.work = workNotYetRun(input.now().toISOString());
     this.usageHeld = input.usage ?? usageNotYetRun(input.now().toISOString());
+    this.accountUsageHeld = accountUsageNotYetRun(input.now().toISOString());
     this.schedulerHeld = schedulerNotYetSaid(input.now().toISOString());
     this.recoveryFold = input.recovery.fold;
     this.recoveryDirty = input.recovery.dirty;
@@ -3718,6 +3846,7 @@ class Store implements OverseerStore {
       // report, and holding the last one is right because an account has not
       // stopped being rate-limited just because nobody looked.
       usage: update.usage ?? this.usageHeld,
+      accountUsage: update.accountUsage ?? this.accountUsageHeld,
       // FROM THE FOLD, like the register and for the same reason: a caller
       // cannot hand in a list of occurrences that disagrees with the log it was
       // folded from.
@@ -3735,6 +3864,7 @@ class Store implements OverseerStore {
     if (update.attention !== undefined) this.attention = update.attention;
     if (update.work !== undefined) this.work = update.work;
     if (update.usage !== undefined) this.usageHeld = update.usage;
+    if (update.accountUsage !== undefined) this.accountUsageHeld = update.accountUsage;
     if (update.scheduler !== undefined) this.schedulerHeld = update.scheduler;
     if (update.snapshotStaleAfterMs !== undefined) this.snapshotStaleAfterMsHeld = update.snapshotStaleAfterMs;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
