@@ -142,16 +142,34 @@ reviews and commits.
 
 ### Stage A — census, task, route, block
 
-- [ ] `tools/fleet/admission-census.ts`: the pure fold, the `/proc` adapter, and the task with its
+- [x] `tools/fleet/admission-census.ts`: the pure fold, the `/proc` adapter, and the task with its
       three-state cache.
-- [ ] `admission-wiring.ts` composes and starts it; `routes-admission.ts` serves the cache.
-- [ ] `wire.ts` types, `admission-client.ts` parser, `AdmissionSection.tsx` block.
-- [ ] The nine tests from the task file, red first, plus: the stale parent link (start tick later
-      than the child's) is uncertain; the composition test drives a census through the real
-      `makeAdmission`; a census the browser cannot parse leaves the forecast intact.
-- [ ] Measure the pass on the box, wall time and event-loop stall.
+- [x] `admission-wiring.ts` composes and starts it; `routes-admission.ts` serves the cache.
+- [x] `wire.ts` types, `admission-client.ts` parser, `AdmissionSection.tsx` block.
+- [x] The `actions.ts` extraction (Decision 1 (a)): `isBrowserProgram` exported,
+      `isVitestRunner` narrowed to `Pick<ProcRecord, "args">`.
+- [x] The nine tests from the task file, red first, plus the stale parent link, the kernel root,
+      the composition, and a census the browser cannot parse leaving the forecast intact.
+- [x] Measure the pass on the box, wall time and event-loop stall.
+- [ ] Sol code review, two rounds.
 
-**Status:** not started.
+**Status:** implemented by **Codex (GPT Sol, `workspace-write`)** in one run; this session read the
+diff, ran the gates (six focused files, 603 tests, typecheck green) and measured it on the box.
+Codex's own report included a "final GPT Sol review: PASS", which was Codex reviewing its own work
+inside the same run. It does not count as the cross-family review, which follows.
+
+**Measured on the box, 2026-09-10 08:41 UTC, load 8**, the real `readProcRows` + `foldCensus`, 20
+passes over 876 processes: **345 ms median, 407 ms worst wall time per pass; longest event-loop
+stall 2.4 ms median, 15.4 ms worst; the fold alone 3.5 ms median, 6.6 ms worst.** It found 2 vitest
+roots, 2 Codex batch roots and 4 browser roots — and **387 "unreadable"**, which was the finding.
+
+**F47, found by that measurement, not by any test or reader.** 387 of 876 rows were
+"unreadable", because the adapter treats an empty `cmdline` as a failed read. Counted by hand
+straight afterwards: of 862 processes, **396 had an empty `cmdline` — 228 kernel threads, 159
+zombies, and 9 that vanished mid-count.** An empty argv is a readable fact, not a failed read. As
+built, the block would permanently say that about 390 rows could not be read, and would qualify
+every zero as unclean. Codex's sandbox saw a three-process pid namespace with none of these, so no
+fixture it wrote had a kernel thread in it. Handed to the round-1 reviewer to fix red-first.
 
 ---
 

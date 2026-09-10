@@ -1001,7 +1001,7 @@ function tokens(args: string): string[] {
  * that is waiting on it exit by itself; killing the `sh` would orphan the node,
  * which is the wrong half to take.
  */
-export function isVitestRunner(proc: ProcRecord): boolean {
+export function isVitestRunner(proc: Pick<ProcRecord, "args">): boolean {
   const parts = tokens(proc.args);
   return parts.some(
     (t) =>
@@ -1009,6 +1009,15 @@ export function isVitestRunner(proc: ProcRecord): boolean {
       t.endsWith("/node_modules/vitest/vitest.mjs") ||
       /\/node_modules\/vitest\/dist\/.*\.m?js$/.test(t),
   );
+}
+
+/** Is this one of the exact browser program names used by the kill rule? */
+export function isBrowserProgram(proc: Pick<ProcRecord, "comm">): boolean {
+  const name = proc.comm.trim().toLowerCase();
+  // An exact match on the program name. `chrome_crashpad` is a real comm on
+  // this box (16 of them right now) and is not a browser; a prefix test would
+  // have taken it.
+  return name === "chrome" || name === "chromium" || name === "google-chrome";
 }
 
 /**
@@ -1025,12 +1034,7 @@ export function isVitestRunner(proc: ProcRecord): boolean {
  * browsers — do not match.
  */
 export function isOrphanedDebugPipeBrowser(proc: ProcRecord): boolean {
-  const name = proc.comm.trim().toLowerCase();
-  // An exact match on the program name. `chrome_crashpad` is a real comm on
-  // this box (16 of them right now) and is not a browser; a prefix test would
-  // have taken it.
-  const isBrowser = name === "chrome" || name === "chromium" || name === "google-chrome";
-  if (!isBrowser) return false;
+  if (!isBrowserProgram(proc)) return false;
   if (proc.ppid !== 1) return false;
   return proc.args.includes("--remote-debugging-pipe");
 }

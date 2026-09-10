@@ -21,6 +21,36 @@ import type { Transport, TransportSink } from "../tools/fleet/web/src/transport"
 const COMPUTED_AT = Date.parse("2026-09-10T11:12:13.000Z");
 const CAVEAT = "A reduced worker count is the config default; --maxWorkers on the command line overrides it.";
 
+const EMPTY_CENSUS = {
+  byClass: {
+    test: { roots: 0, uncertain: 0 },
+    "codex-batch": { roots: 0, uncertain: 0 },
+    browser: { roots: 0, uncertain: 0 },
+  },
+  changedUnderRead: 0,
+  unreadable: 0,
+  processesSeen: 14,
+} as const;
+
+const CENSUS_VALUE = {
+  kind: "value",
+  label: "observed",
+  census: {
+    byClass: {
+      test: { roots: 2, uncertain: 1 },
+      "codex-batch": { roots: 1, uncertain: 0 },
+      browser: { roots: 3, uncertain: 2 },
+    },
+    changedUnderRead: 4,
+    unreadable: 5,
+    processesSeen: 880,
+  },
+  startedAtMs: Date.parse("2026-09-10T11:12:00.000Z"),
+  completedAtMs: Date.parse("2026-09-10T11:12:01.000Z"),
+  durationMs: 1_000,
+  cadenceMs: 30_000,
+} as const;
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -92,7 +122,15 @@ function forecast(
     policy: { gateVersion: 1, explanation: "The gate uses its measured test-run cost model.", whyWithheld: null },
     outcome,
     journal: { kind: "read", entries: [], unparseableLines: 0 },
+    census: { kind: "not-yet-computed", label: "observed", startedAtMs: COMPUTED_AT },
   };
+}
+
+function forecastWithCensus(census: unknown): AdmissionView {
+  return {
+    ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+    census,
+  } as AdmissionView;
 }
 
 async function mountFull(api: AdmissionApi, nextState: FleetState = state()): Promise<void> {
@@ -382,6 +420,7 @@ describe("the Box health admission section", () => {
         requestKind,
         outcome: { kind: "not-modelled", why: `no measured cost model exists for ${requestKind} work` },
         journal: { kind: "read", entries: [], unparseableLines: 0 },
+        census: { kind: "not-yet-computed", label: "observed", startedAtMs: COMPUTED_AT },
       }),
     });
     const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
@@ -415,6 +454,7 @@ describe("the Box health admission section", () => {
         requestKind: "review",
         outcome: { kind: "not-modelled", why: "no measured cost model exists" },
         journal: { kind: "read", entries: [], unparseableLines: 0 },
+        census: { kind: "not-yet-computed", label: "observed", startedAtMs: COMPUTED_AT },
       } as AdmissionView,
       "tw:bg-unknown",
     ],
@@ -577,5 +617,180 @@ describe("the defensive admission client", () => {
     expect(text).not.toContain("This browser never got an answer");
     /* The time is missing and says so, rather than being absent in silence. */
     expect(text.toLowerCase()).toContain("time");
+  });
+
+  it("keeps a valid forecast when only the census is unreadable", () => {
+    const parsed = parseAdmission({
+      schema: 1,
+      label: "forecast",
+      computedAtMs: COMPUTED_AT,
+      request: { kind: "test" },
+      policy: { gateVersion: 1, explanation: "known", whyWithheld: null },
+      outcome: { kind: "not-applicable", why: "no reserve file" },
+      census: {
+        ...CENSUS_VALUE,
+        census: { ...CENSUS_VALUE.census, processesSeen: "many" },
+      },
+    });
+
+    expect(parsed).toMatchObject({
+      kind: "answer",
+      label: "forecast",
+      outcome: { kind: "not-applicable" },
+      census: { kind: "unreadable" },
+    });
+  });
+});
+
+describe("the recognised process census block", () => {
+  it("renders not-yet-computed as its own sentence, never as a zero or an empty reading", async () => {
+    await mountFull({
+      forecast: async () => forecastWithCensus({
+        kind: "not-yet-computed",
+        label: "observed",
+        startedAtMs: COMPUTED_AT,
+      }),
+    });
+
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain("The dashboard has not finished its first look at the process table yet");
+    expect(text.toLowerCase()).not.toContain("nothing is running");
+    expect(text).not.toMatch(/\b0(?:\.0+)?\b/);
+  });
+
+  it.each([
+    ["not yet", { kind: "not-yet-computed", label: "observed", startedAtMs: COMPUTED_AT }],
+    ["value", CENSUS_VALUE],
+    ["failed before a value", {
+      kind: "failed",
+      label: "observed",
+      why: "proc could not be listed",
+      failedAtMs: COMPUTED_AT,
+      cadenceMs: 30_000,
+      lastGood: null,
+    }],
+    ["failed after a value", {
+      kind: "failed",
+      label: "observed",
+      why: "proc could not be listed",
+      failedAtMs: COMPUTED_AT,
+      cadenceMs: 30_000,
+      lastGood: { census: CENSUS_VALUE.census, completedAtMs: CENSUS_VALUE.completedAtMs },
+    }],
+    ["browser unreadable", { kind: "unreadable", why: "the response had an unknown census shape" }],
+  ] as const)("states its heading and finite scope without banned language in the %s state", async (_name, census) => {
+    await mountFull({ forecast: async () => forecastWithCensus(census) });
+
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain("Recognised live process roots");
+    expect(text).toContain("Vitest runners");
+    expect(text).toContain("Codex batch jobs");
+    expect(text).toContain("Chrome or Chromium browsers");
+    expect(text).toContain("Anything else is not counted at all");
+    expect(text).toContain("may be idle");
+    expect(text.toLowerCase()).not.toMatch(/\b(?:heavy|active|review)\b/);
+  });
+
+  it("states the pass boundary on the corrected clock and calls an old value old", async () => {
+    const skew = { kind: "known", ms: -5 * 60_000 } as const;
+    const completedAtMs = Date.now() + skew.ms - 61_000;
+    const startedAtMs = completedAtMs - 800;
+    await mountFull(
+      { forecast: async () => forecastWithCensus({
+        ...CENSUS_VALUE,
+        startedAtMs,
+        completedAtMs,
+      }) },
+      state({ clockSkew: skew }),
+    );
+
+    const expectedStart = new Date(startedAtMs - skew.ms).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const expectedEnd = new Date(completedAtMs - skew.ms).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain(`ran from ${expectedStart} to ${expectedEnd}`);
+    expect(text).toContain("older than twice its 30-second cadence");
+  });
+
+  it("states every count and says changed and unreadable rows belong to no count above", async () => {
+    await mountFull({ forecast: async () => forecastWithCensus(CENSUS_VALUE) });
+
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain("2 recognised Vitest roots");
+    expect(text).toContain("1 Vitest candidate had unsettled ancestry");
+    expect(text).toContain("1 recognised Codex batch root");
+    expect(text).toContain("Among the rows stable enough to classify, no Codex batch candidates had unsettled ancestry");
+    expect(text).toContain("3 recognised browser roots");
+    expect(text).toContain("2 browser candidates had unsettled ancestry");
+    expect(text).toContain("4 rows changed while they were read and are in no count above");
+    expect(text).toContain("5 process rows could not be read and are in no count above");
+    expect(text).toContain("880 process-table entries were seen during the pass");
+  });
+
+  it("does not present zero roots as clean when rows were unreadable", async () => {
+    await mountFull({ forecast: async () => forecastWithCensus({
+      ...CENSUS_VALUE,
+      census: { ...EMPTY_CENSUS, unreadable: 2 },
+    }) });
+
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain("No recognised Vitest roots were confirmed");
+    expect(text).toContain("No recognised Codex batch roots were confirmed");
+    expect(text).toContain("No recognised browser roots were confirmed");
+    expect(text).toContain("Among the rows stable enough to classify, no Vitest candidates had unsettled ancestry");
+    expect(text).toContain("Among the rows stable enough to classify, no Codex batch candidates had unsettled ancestry");
+    expect(text).toContain("Among the rows stable enough to classify, no browser candidates had unsettled ancestry");
+    expect(text).toContain("not a clean zero");
+    expect(text.toLowerCase()).not.toContain("nothing");
+    expect(text.toLowerCase()).not.toContain("running");
+  });
+
+  it("marks a last good census stale at its own corrected instant after a failure", async () => {
+    const skew = { kind: "known", ms: -5 * 60_000 } as const;
+    await mountFull(
+      { forecast: async () => forecastWithCensus({
+        kind: "failed",
+        label: "observed",
+        why: "permission denied",
+        failedAtMs: COMPUTED_AT + 10_000,
+        cadenceMs: 30_000,
+        lastGood: { census: CENSUS_VALUE.census, completedAtMs: CENSUS_VALUE.completedAtMs },
+      }) },
+      state({ clockSkew: skew }),
+    );
+
+    const staleAt = new Date(CENSUS_VALUE.completedAtMs - skew.ms).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const text = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(text).toContain("permission denied");
+    expect(text).toContain("stale");
+    expect(text).toContain(staleAt);
+    expect(text).toContain("2 recognised Vitest roots");
+  });
+
+  it("renders a valid forecast when the browser cannot parse its census", async () => {
+    const api = makeAdmissionApi(async () => new Response(JSON.stringify({
+      schema: 1,
+      label: "forecast",
+      computedAtMs: COMPUTED_AT,
+      request: { kind: "test" },
+      policy: { gateVersion: 1, explanation: "known", whyWithheld: null },
+      outcome: { kind: "not-applicable", why: "no reserve file" },
+      census: { kind: "future-census", label: "observed" },
+    }), { status: 200 }));
+
+    await mountFull(api);
+    const section = container.querySelector('[data-section="admission"]')?.textContent ?? "";
+    const census = container.querySelector("[data-admission-census]")?.textContent ?? "";
+    expect(section).toContain("The machine has no admission policy");
+    expect(section).not.toContain("This browser never got an answer");
+    expect(census).toContain("This browser could not read the process census");
   });
 });

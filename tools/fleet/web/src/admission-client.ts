@@ -69,6 +69,36 @@ export type AdmissionJournalView =
   | { kind: "directory-absent" }
   | { kind: "unreadable"; why: string };
 
+export type AdmissionCensusClassView = "test" | "codex-batch" | "browser";
+
+export type AdmissionCensusCountsView = {
+  byClass: Record<AdmissionCensusClassView, { roots: number; uncertain: number }>;
+  changedUnderRead: number;
+  unreadable: number;
+  processesSeen: number;
+};
+
+export type AdmissionCensusView =
+  | { kind: "not-yet-computed"; label: "observed"; startedAtMs: number }
+  | {
+      kind: "value";
+      label: "observed";
+      census: AdmissionCensusCountsView;
+      startedAtMs: number;
+      completedAtMs: number;
+      durationMs: number;
+      cadenceMs: number;
+    }
+  | {
+      kind: "failed";
+      label: "observed";
+      why: string;
+      failedAtMs: number;
+      cadenceMs: number;
+      lastGood: { census: AdmissionCensusCountsView; completedAtMs: number } | null;
+    }
+  | { kind: "unreadable"; why: string };
+
 export type AdmissionView =
   | {
       kind: "answer";
@@ -79,6 +109,7 @@ export type AdmissionView =
       policy: AdmissionPolicyView;
       outcome: AdmissionForecastOutcomeView;
       journal: AdmissionJournalView;
+      census: AdmissionCensusView;
     }
   | {
       kind: "answer";
@@ -88,6 +119,7 @@ export type AdmissionView =
       requestKind: "review" | "browser";
       outcome: { kind: "not-modelled"; why: string };
       journal: AdmissionJournalView;
+      census: AdmissionCensusView;
     }
   | { kind: "no-answer"; source: "browser" | "server"; why: string };
 
@@ -265,6 +297,100 @@ function parseJournal(raw: unknown): AdmissionJournalView {
   return { kind: "read", entries: entries as AdmissionRefusalEntryView[], unparseableLines };
 }
 
+function unreadableCensus(why: string): AdmissionCensusView {
+  return { kind: "unreadable", why };
+}
+
+function parseCensusCounts(raw: unknown): AdmissionCensusCountsView | null {
+  if (!isRecord(raw) || !isRecord(raw["byClass"])) return null;
+  const byClass = raw["byClass"];
+  const parseClass = (name: AdmissionCensusClassView): { roots: number; uncertain: number } | null => {
+    const value = byClass[name];
+    if (!isRecord(value)) return null;
+    const roots = nonNegativeInteger(value["roots"]);
+    const uncertain = nonNegativeInteger(value["uncertain"]);
+    return roots === null || uncertain === null ? null : { roots, uncertain };
+  };
+  const test = parseClass("test");
+  const codexBatch = parseClass("codex-batch");
+  const browser = parseClass("browser");
+  const changedUnderRead = nonNegativeInteger(raw["changedUnderRead"]);
+  const unreadable = nonNegativeInteger(raw["unreadable"]);
+  const processesSeen = nonNegativeInteger(raw["processesSeen"]);
+  if (
+    test === null ||
+    codexBatch === null ||
+    browser === null ||
+    changedUnderRead === null ||
+    unreadable === null ||
+    processesSeen === null
+  ) {
+    return null;
+  }
+  return {
+    byClass: { test, "codex-batch": codexBatch, browser },
+    changedUnderRead,
+    unreadable,
+    processesSeen,
+  };
+}
+
+function parseCensus(raw: unknown): AdmissionCensusView {
+  if (!isRecord(raw)) {
+    return unreadableCensus("the response did not contain a readable process census state");
+  }
+  if (raw["label"] !== "observed") {
+    return unreadableCensus("the response's process census had an unknown signal label");
+  }
+  if (raw["kind"] === "not-yet-computed") {
+    const startedAtMs = dateInstant(raw["startedAtMs"]);
+    return startedAtMs === null
+      ? unreadableCensus("the response's unfinished process census had an unreadable start time")
+      : { kind: "not-yet-computed", label: "observed", startedAtMs };
+  }
+  if (raw["kind"] === "value") {
+    const census = parseCensusCounts(raw["census"]);
+    const startedAtMs = dateInstant(raw["startedAtMs"]);
+    const completedAtMs = dateInstant(raw["completedAtMs"]);
+    const durationMs = nonNegativeInteger(raw["durationMs"]);
+    const cadenceMs = positiveInteger(raw["cadenceMs"]);
+    if (
+      census === null ||
+      startedAtMs === null ||
+      completedAtMs === null ||
+      durationMs === null ||
+      cadenceMs === null
+    ) {
+      return unreadableCensus("the response's process census value contained an unreadable field");
+    }
+    return { kind: "value", label: "observed", census, startedAtMs, completedAtMs, durationMs, cadenceMs };
+  }
+  if (raw["kind"] === "failed") {
+    const why = nonEmptyString(raw["why"]);
+    const failedAtMs = dateInstant(raw["failedAtMs"]);
+    const cadenceMs = positiveInteger(raw["cadenceMs"]);
+    const rawLastGood = raw["lastGood"];
+    let lastGood: { census: AdmissionCensusCountsView; completedAtMs: number } | null;
+    if (rawLastGood === null) {
+      lastGood = null;
+    } else if (isRecord(rawLastGood)) {
+      const census = parseCensusCounts(rawLastGood["census"]);
+      const completedAtMs = dateInstant(rawLastGood["completedAtMs"]);
+      if (census === null || completedAtMs === null) {
+        return unreadableCensus("the response's failed process census had an unreadable last value");
+      }
+      lastGood = { census, completedAtMs };
+    } else {
+      return unreadableCensus("the response's failed process census had an unreadable last value");
+    }
+    if (why === null || failedAtMs === null || cadenceMs === null) {
+      return unreadableCensus("the response's failed process census contained an unreadable field");
+    }
+    return { kind: "failed", label: "observed", why, failedAtMs, cadenceMs, lastGood };
+  }
+  return unreadableCensus("the response carried a process census state this page does not understand");
+}
+
 /** Parse an unknown response body without throwing or manufacturing values. */
 export function parseAdmission(raw: unknown): AdmissionView {
   if (!isRecord(raw) || raw["schema"] !== 1) {
@@ -272,6 +398,7 @@ export function parseAdmission(raw: unknown): AdmissionView {
   }
   const computedAtMs = dateInstant(raw["computedAtMs"]);
   const journal = parseJournal(raw["journal"]);
+  const census = parseCensus(raw["census"]);
   const requestKind = parseRequestKind(raw["request"]);
   if (requestKind === null || !isRecord(raw["outcome"])) {
     return noAnswer("the admission response was missing a readable request or outcome");
@@ -294,6 +421,7 @@ export function parseAdmission(raw: unknown): AdmissionView {
       requestKind,
       outcome: { kind: "not-modelled", why },
       journal,
+      census,
     };
   }
 
@@ -305,7 +433,7 @@ export function parseAdmission(raw: unknown): AdmissionView {
   if (policy === null || outcome === null) {
     return noAnswer("the admission forecast contained a field this page could not read");
   }
-  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome, journal };
+  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome, journal, census };
 }
 
 function describe(cause: unknown): string {

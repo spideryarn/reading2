@@ -3,6 +3,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   DATE_LIMIT_MS,
   type AdmissionApi,
+  type AdmissionCensusCountsView,
+  type AdmissionCensusView,
   type AdmissionJournalView,
   type AdmissionView,
 } from "./admission-client";
@@ -148,6 +150,132 @@ function SignalLabel({ label }: { label: "forecast" | "not-modelled" }): ReactNo
   );
 }
 
+function ObservedLabel(): ReactNode {
+  return (
+    <span
+      data-admission-census-label
+      className="tw:inline-flex tw:shrink-0 tw:items-center tw:rounded-full tw:border tw:border-rule-strong tw:bg-panel-raised tw:px-2 tw:py-0.5 tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-soft tw:uppercase tw:whitespace-nowrap"
+    >
+      observed
+    </span>
+  );
+}
+
+type CensusClassCopy = { singular: string; plural: string };
+
+function CensusClassCounts({
+  counts,
+  copy,
+  qualifiedZero,
+}: {
+  counts: { roots: number; uncertain: number };
+  copy: CensusClassCopy;
+  qualifiedZero: boolean;
+}): ReactNode {
+  const roots = counts.roots === 0
+    ? qualifiedZero
+      ? `No recognised ${copy.plural} roots were confirmed; the gaps described below mean this is not a clean zero.`
+      : `No recognised ${copy.plural} roots were observed.`
+    : `${counts.roots} recognised ${counts.roots === 1 ? copy.singular : copy.plural} ${counts.roots === 1 ? "root" : "roots"}.`;
+  const uncertain = counts.uncertain === 0
+    ? qualifiedZero
+      ? `Among the rows stable enough to classify, no ${copy.plural} candidates had unsettled ancestry; the gaps described below mean this is not a clean zero.`
+      : `No ${copy.plural} candidates had unsettled ancestry.`
+    : `${counts.uncertain} ${counts.uncertain === 1 ? copy.singular : copy.plural} ${counts.uncertain === 1 ? "candidate had" : "candidates had"} unsettled ancestry.`;
+  return <li>{roots} {uncertain}</li>;
+}
+
+function CensusCounts({ census }: { census: AdmissionCensusCountsView }): ReactNode {
+  const qualifiedZero = census.changedUnderRead > 0 || census.unreadable > 0;
+  return (
+    <div className="tw:space-y-2">
+      <ul className="tw:space-y-1 tw:pl-5">
+        <CensusClassCounts counts={census.byClass.test} copy={{ singular: "Vitest", plural: "Vitest" }} qualifiedZero={qualifiedZero} />
+        <CensusClassCounts counts={census.byClass["codex-batch"]} copy={{ singular: "Codex batch", plural: "Codex batch" }} qualifiedZero={qualifiedZero} />
+        <CensusClassCounts counts={census.byClass.browser} copy={{ singular: "browser", plural: "browser" }} qualifiedZero={qualifiedZero} />
+      </ul>
+      <p>
+        {census.changedUnderRead === 0
+          ? "No rows changed while they were read; changed rows would be in no count above."
+          : `${census.changedUnderRead} ${census.changedUnderRead === 1 ? "row changed" : "rows changed"} while ${census.changedUnderRead === 1 ? "it was" : "they were"} read and ${census.changedUnderRead === 1 ? "is" : "are"} in no count above.`}
+      </p>
+      <p>
+        {census.unreadable === 0
+          ? "No process rows were unreadable; unreadable rows would be in no count above."
+          : `${census.unreadable} process ${census.unreadable === 1 ? "row" : "rows"} could not be read and ${census.unreadable === 1 ? "is" : "are"} in no count above.`}
+      </p>
+      <p>
+        {census.processesSeen === 0
+          ? "No process-table entries were seen during the pass."
+          : `${census.processesSeen} process-table ${census.processesSeen === 1 ? "entry was" : "entries were"} seen during the pass.`}
+      </p>
+    </div>
+  );
+}
+
+function CensusState({ census, skew }: { census: AdmissionCensusView; skew: ClockSkew }): ReactNode {
+  if (census.kind === "unreadable") {
+    return <p>This browser could not read the process census in the server's response: {census.why}.</p>;
+  }
+  if (census.kind === "not-yet-computed") {
+    return <p>The dashboard has not finished its first look at the process table yet.</p>;
+  }
+  if (census.kind === "failed") {
+    const failedAt = forecastTime(census.failedAtMs, skew);
+    if (census.lastGood === null) {
+      return (
+        <p>
+          The process census failed{failedAt === null ? " at an unreadable time" : ` at ${failedAt}`}: {census.why}.
+          There is no earlier readable census to show.
+        </p>
+      );
+    }
+    const staleAt = forecastTime(census.lastGood.completedAtMs, skew);
+    return (
+      <div className="tw:space-y-2">
+        <p>The latest process census failed{failedAt === null ? " at an unreadable time" : ` at ${failedAt}`}: {census.why}.</p>
+        <p>
+          The counts below are stale; their pass completed {staleAt === null ? "at an unreadable time" : `at ${staleAt}`}.
+        </p>
+        <CensusCounts census={census.lastGood.census} />
+      </div>
+    );
+  }
+
+  const startedAt = forecastTime(census.startedAtMs, skew);
+  const completedAt = forecastTime(census.completedAtMs, skew);
+  const correctedCompletedAt = shiftMsToBrowserClock(census.completedAtMs, skew);
+  const isOld = Number.isFinite(correctedCompletedAt) && Date.now() - correctedCompletedAt > census.cadenceMs * 2;
+  return (
+    <div className="tw:space-y-2">
+      <p>
+        {startedAt === null || completedAt === null
+          ? "These processes were observed during a pass whose time could not be displayed on this page's clock."
+          : `These processes were observed during a pass that ran from ${startedAt} to ${completedAt}.`}
+      </p>
+      {isOld ? <p>This observation is older than twice its {census.cadenceMs / 1_000}-second cadence.</p> : null}
+      <CensusCounts census={census.census} />
+    </div>
+  );
+}
+
+function Census({ census, skew }: { census: AdmissionCensusView; skew: ClockSkew }): ReactNode {
+  return (
+    <div data-admission-census className="tw:mt-4 tw:border-t tw:border-rule tw:pt-3 tw:text-[12px] tw:text-ink-faint">
+      <div className="tw:mb-2 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
+        <p className="tw:font-medium tw:text-ink-soft">Recognised live process roots</p>
+        <ObservedLabel />
+      </div>
+      <p className="tw:mb-2">
+        This recognises three things by their executable: Vitest runners, Codex batch jobs (<code>codex exec</code>),
+        and Chrome or Chromium browsers. Anything else is not counted at all, however much it is doing. A root here
+        may be idle; this says only that the process existed when it was read during the pass.
+      </p>
+      <CensusState census={census} skew={skew} />
+    </div>
+  );
+}
+
 function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: ClockSkew }): ReactNode {
   if (view === null) {
     return <p className="tw:text-[13px] tw:text-ink-faint">Asking the gate for a forecast…</p>;
@@ -184,6 +312,7 @@ function AdmissionBody({ view, skew }: { view: AdmissionView | null; skew: Clock
           missing model is genuinely unknown rather than the page's idle grey. */}
       <div className="tw:mt-3"><SignalLabel label={view.label} /></div>
       <Journal journal={view.journal} skew={skew} />
+      <Census census={view.census} skew={skew} />
     </div>
   );
 }

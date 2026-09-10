@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { decideAdmission as gateDecideAdmission, type AdmissionDecision, type MemorySnapshot } from "../../vitest-admission.js";
 import type {
+  AdmissionCensusState,
   AdmissionOutcome,
   AdmissionPayload,
   AdmissionPolicy,
@@ -25,6 +26,7 @@ export type AdmissionRouteDeps = {
   resolveParallelWorkers(): number;
   policyVersion: number;
   readRefusals(): AdmissionRefusalJournal;
+  readCensus(): AdmissionCensusState;
   decideAdmission?: ((args: {
     nominalWorkers: number;
     snapshot: MemorySnapshot;
@@ -44,6 +46,7 @@ type AdmissionExplanation =
     };
 
 const CAVEAT = "A reduced worker count is the config default; --maxWorkers on the command line overrides it.";
+const CENSUS_CADENCE_MS = 30_000;
 
 const EXPLANATIONS: Readonly<Record<number, string>> = {
   1:
@@ -105,7 +108,20 @@ function payload(
   } catch (cause) {
     journal = { kind: "unreadable", why: `reading the refusal journal threw: ${message(cause)}` };
   }
-  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs(), journal };
+  let census: AdmissionCensusState;
+  try {
+    census = deps.readCensus();
+  } catch (cause) {
+    census = {
+      kind: "failed",
+      label: "observed",
+      why: `reading the admission census threw: ${message(cause)}`,
+      failedAtMs: deps.nowMs(),
+      cadenceMs: CENSUS_CADENCE_MS,
+      lastGood: null,
+    };
+  }
+  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs(), journal, census };
   if (explanation.label === "forecast") {
     return {
       ...base,
