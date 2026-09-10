@@ -196,6 +196,22 @@ describe("what a reader makes of the log afterwards", () => {
     expect(openConditions(notes)).toEqual([]);
   });
 
+  test("the ordering condition is a condition a reader recognises, not a rotted line", () => {
+    // `readNotes` refuses a condition name it does not know and counts the line
+    // as unreadable, which is the alarm that means the log is decaying. So a
+    // new condition the daemon writes and the reader rejects would look like
+    // corruption rather than like an alarm.
+    const root = tempRoot();
+    const log = openNoteLog(root);
+    log.append(started("2026-09-08T07:00:00.000Z"));
+    log.append({ kind: "condition-degraded", at: "2026-09-08T07:01:00.000Z", instanceId: "i1", condition: "ordering", why: "the stamp cannot be believed" });
+    log.close();
+    const read = readNotes(root);
+    if (read.kind !== "read") throw new Error("expected readable notes");
+    expect(read.unreadable).toBe(0);
+    expect(openConditions(read.notes).map((c) => c.condition)).toEqual(["ordering"]);
+  });
+
   test("every note renders as a sentence, so the CLI never prints a bare object", () => {
     const notes: DaemonNote[] = [
       started("2026-09-08T07:00:00.000Z"),

@@ -1387,6 +1387,26 @@ the transport's tick and its refresh; `useActions` is Session continuity's.
 reset presented as measurement. Malformed history becomes a named degraded condition, not a CLI
 crash or empty-success report. This is maintenance supporting later inference, not a new event bus.
 
+**Status (2026-09-10, Overseer): landed on dev at e07102eb, sessions `source-ordering` (draft plan)
+and `source-ordering-2`, plan
+[260910d](260910d-source-ordering-distinguish-a-new-observation-from-a-new-timestamp.md); the stage is
+complete.** Every `/api/state` and `/api/live` payload carries `producer: {instance, publication,
+inventory}` (a kept success advances both, a kept failure only `publication`); additive at schema 1,
+proven by running the pre-change parser on a stamped payload. The daemon orders by run and
+collection when both payloads are stamped (a late payload from a replaced run refused; a same-run
+collection below the last refused as out of order; a new run or newer collection accepted whatever
+the clock did) and falls back to today's clock rules otherwise; an unstamped producer is the
+explicit old-producer state; an unreadable stamp opens a new `ordering` condition and never fails
+the parse. Store and CLI readers: short JSONL reads, identity checks on every event, a torn final
+line kept apart from a corrupt interior one, `readNotes` with an unreadable arm, `overseer notes`
+and `overseer events` exiting 1 on malformed history, and a log that cannot be repaired refusing
+daemon startup instead of crashing it. Found on the way: `parseAttempt` never read `schema`, so a
+schema-2 payload could restore `collector`; `/api/live` withheld its first frame after a failed
+first collection. Sol's sentinel: a stamp disagreeing with its snapshot serves `instance: "invalid"`
+and an alarm, never a throw. Known limits, recorded in the plan: `retired` bounded at 16; a torn
+notes line reads as "cannot tell" for one read; the freshness watchdog still measures from
+`collectedAt`; the CLI readers are lock-free but unbounded.
+
 ### Stage: Maintainable seams — reduce the cost of the next change
 
 - [ ] After request/outcome contracts stabilise, extract `ActionButtons.tsx` by behaviour: session

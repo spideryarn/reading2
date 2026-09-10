@@ -239,8 +239,33 @@ Daemon tests, through the real parser, gate, differ and store, driven by a scrip
 Unit tests for `parseObservation`'s three arms, each `unreadable` cause, `parseAttempt` on an
 unknown schema, and `admissible()`'s rule order.
 
-- [ ] Parse, gate, daemon wiring, condition.
-- [ ] Tests red then green; focused suites, typecheck; Sol review; commit.
+Status, 2026-09-10: started ~10:55 UTC, implemented by an **Opus subagent** (not Codex; see the
+budget note under Findings). Started before web-260910's `daemon.ts` push landed, on the Overseer's
+call: that push waits on Greg's own approval with no bound, and this stage's `take()`/conditions
+hunk does not overlap its usage-pass hunk. `origin/dev` merged immediately before the subagent
+started and again before the push.
+
+- [x] Parse, gate, daemon wiring, condition.
+- [x] Tests red then green (48 new tests red before the implementation, all green after); focused
+  suites and typecheck green on the manager's own runs, before and after the review's fixes (after:
+  typecheck exit 0; 44 files / 1,583 tests); Sol review; commit.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with fixes, and found no defect in
+production behaviour; see Findings.
+
+Decisions the implementer made, recorded so the review can check them:
+
+- **An unknown schema makes the attempt reading "cannot say", not "unchanged".** `parseAttempt`
+  reports no attempt clock for an unsupported schema, and `take()` still folds that in as the
+  latest reading. So a schema-2 payload can neither restore nor clear `collector`: an open alarm
+  stays open, a closed one stays closed. This is Sol's plan-review recommendation ("install only a
+  cannot-tell attempt reading"), and it supersedes this plan's earlier wording that such a payload
+  "changes none of the attempt reading".
+- **"Never collected" ranks below every collection in the same run**, so a late placeholder
+  publication from before the first collection gets the out-of-order sentence.
+- **`producer: null` is unreadable**; only a missing key is unstamped.
+- **`INSTANCE_TOKEN` is imported from `tools/fleet/instance.ts`, not duplicated**: observation.ts
+  already imports two fleet leaf modules, and nothing forbids it.
 
 ### Stage 3 — the store and CLI readers
 
@@ -395,6 +420,34 @@ read; it corrects itself on the next. Reporting from the last complete note inst
 alternative, and it could call a daemon *running* while its stopping note is half-written. Rare,
 transient, and on the safe side, so it was not worth a second paid review round.
 
+### Stage 2 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+No defect in production behaviour. Every hard check held: an A→B dashboard restart, across a
+daemon restart too, produces no events after A's baseline, and a late A payload is refused; every
+inadmissible sample returns before `diff()` and `goneWhileAway()`; a duplicate, re-stamped or
+out-of-order payload cannot move `lastGoodSnapshotAt`; the rule order matches the plan; the Stage 1
+sentinel is tested through the real `statePayload()`.
+
+1. **P2, the tests did not prove two of the safety claims.** Proved by mutation: breaking
+   `parseAttempt` so a schema-2 payload was read opened `collector` with every test still green, and
+   admitting a baseline-null sample produced six false `tmux-session-gone` events, again unseen.
+   **Fixed:** tests for the closed→unknown-schema direction and a warm-register, missing-baseline,
+   unknown-schema empty sample; also pinned a duplicate not moving `lastGoodSnapshotAt`, the startup
+   placeholder's sentence, and the current run surviving retirement trimming.
+2. **P2, the bound on `retired` has a consequence, left as designed — a decision.** After seventeen
+   dashboard replacements the oldest run is let go; a payload from it would then be accepted as a new
+   run, retiring the real current run, whose payloads would be refused until the next dashboard
+   restart. The reviewer did not change it because the plan chose the bound. **Kept, deliberately:**
+   a payload can only come from a live process, and a dashboard sixteen restarts old is not one, so
+   the path needs something the single sequential source cannot deliver. If it ever happened it
+   would not be silent: every refused payload degrades `snapshots`, and the next dashboard restart
+   clears it. Raising the bound would cost nothing in memory but would need either a test that drives
+   a thousand restarts or a new daemon option to inject it, which is more surface than an
+   unreachable path is worth. The test now exposes the whole consequence, so a future change to the
+   bound is made knowingly.
+3. **P3, `daemon.ts`'s module header still described clock-only ordering.** **Fixed**, with two
+   related "the clock moves on" comments.
+
 **Implementer for Stage 2 changed.** The Overseer's budget notice of 2026-09-10 (~09:35Z) moved
 implementation off Codex, whose weekly window was emptying under seven sessions; Codex is now for
 the obligatory Sol reviews only, capped at 30 minutes. Stage 2 is implemented by an Opus subagent in
@@ -402,7 +455,19 @@ this worktree and reviewed by Sol.
 
 ## Status
 
-2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
-stamp, Sol stage review passed with four fixes, on `dev`. Stage 3 done ahead of Stage 2: store and
-CLI readers, Sol stage review passed with three fixes. Stage 2 waits on another session's
-`daemon.ts` push, which is held for Greg's approval of a merge conflict with Stage 1.
+2026-09-10 — **finished.** Every stage done and Sol-reviewed, no second review round needed on any:
+
+- Stage 0, the plan: six findings, all accepted.
+- Stage 1, the producer stamp (Codex): four fixes from its review.
+- Stage 3, the store and CLI readers (Codex, run ahead of Stage 2): three fixes.
+- Stage 2, the daemon's ordering (Opus subagent, started before web-260910's `daemon.ts` push on
+  the Overseer's call): stronger tests, no production defect.
+
+**Full suite on the final merged tree:** 989 files passed, 1 skipped, 2 failed. The two are
+`cold-start-lazy-imports` and `pdf-bundle-trace`, both at "has a build to inspect": the known
+environment failures of a worktree with no `api-dist/`. `fleet-decisions-route`, the third known
+one, passed because `build:fleet` ran first. No Postgres contention failures. Typecheck exit 0.
+**Live-log check:** 0 of 1,918 frozen lines refused at every stage.
+
+**To be live it needs both restarts, in either order:** a dashboard restart makes the stamps exist,
+a daemon restart makes them read. Until then old and new combine without harm in both directions.

@@ -53,8 +53,10 @@ export const NOTES_FILE = "daemon.jsonl";
 /**
  * The ways the Overseer can stop knowing what the fleet is doing.
  *
- * **SIX NAMES, NOT ONE FLAG**, and that is the point of the type. They have
- * one symptom — no new history — and six different causes, and a single
+ * **SEVEN NAMES, NOT ONE FLAG**, and that is the point of the type. Six have
+ * one symptom — no new history — and six different causes; the seventh,
+ * `ordering`, is a history that is still arriving and is ordered by less than
+ * it could be. A single
  * `degraded: boolean` would let the second one overwrite the first, so that
  * curing the stream would report the box healthy while the baseline was still
  * held. Every one of them is independently open and independently closed.
@@ -78,8 +80,17 @@ export const NOTES_FILE = "daemon.jsonl";
  *    where both frozen is a collector that has stopped and will not. Measured
  *    on 2026-09-08 — a `collectedAt` thirty minutes stale with `error: null` —
  *    and invisible until the producer added `attemptedAt` for it.
+ *  - `ordering` — the dashboard's producer stamp (which run composed a payload,
+ *    which collection its rows came from) is present and cannot be believed,
+ *    so payloads are being ordered by their clock alone. Not a loss of
+ *    knowledge today, and that is why it is its own name rather than a cause
+ *    of `snapshots`: nothing is refused because of it, and what is lost is the
+ *    ordering that survives a clock step or a restart. A producer that sends
+ *    NO stamp does not raise it — an old dashboard is ordered exactly as well
+ *    as it was before stamps existed, and an alarm about that would mean
+ *    nothing. docs/plans/260910d § The daemon.
  */
-export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector";
+export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector" | "ordering";
 
 const CONDITIONS: Record<OverseerCondition, true> = {
   "sse-stream": true,
@@ -88,6 +99,7 @@ const CONDITIONS: Record<OverseerCondition, true> = {
   freshness: true,
   baseline: true,
   collector: true,
+  ordering: true,
 };
 
 /**

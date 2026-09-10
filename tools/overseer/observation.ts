@@ -56,6 +56,7 @@ import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
 import { readAttemptClock } from "../fleet/attempt-clock.js";
 import { isAddressableHarness } from "../fleet/execution-token.js";
+import { INSTANCE_TOKEN } from "../fleet/instance.js";
 import type { ConversationReading, ExecutionReading, ExecutionUnknownCause, HarnessKind } from "../fleet/wire.js";
 
 /**
@@ -243,6 +244,31 @@ export type ObservedRow = {
   readonly status: ObservedStatus;
 };
 
+/**
+ * Which run of the dashboard composed a payload, and which of its collections
+ * the rows came from — the producer's `ProducerStamp` (tools/fleet/wire.ts),
+ * read. docs/plans/260910d § Consumer.
+ *
+ * **THREE ARMS, AND THE MIDDLE ONE IS NOT A FAULT.** A dashboard built before
+ * the stamp existed sends no `producer` key, and it is ordered exactly as well
+ * as it was before: by its clock. That is `unstamped`, an explicit state rather
+ * than an absence, so the gate can say "the clock rules apply" in as many
+ * words. `unreadable` is a stamp that is there and cannot be believed — a
+ * producer defect, with the sentence saying which — and it is ordered by the
+ * clock too, and raises the daemon's `ordering` condition.
+ *
+ * **IT CANNOT FAIL THE SNAPSHOT**, on `parseAttempt`'s rule: the rows are good
+ * and the history is built from them, and refusing the whole payload over its
+ * ordering would take the Overseer off the air to punish a producer defect it
+ * can report instead.
+ */
+export type SourceOrdering =
+  | { kind: "stamped"; instance: string; publication: number; inventory: number | null }
+  /** No `producer` key: a dashboard built before this plan. The explicit old-producer state. */
+  | { kind: "unstamped" }
+  /** Present and not a stamp this reader can believe — a producer defect, said in `why`. */
+  | { kind: "unreadable"; why: string };
+
 /** One snapshot, as the dashboard reported it. */
 export type ObservedSnapshot = {
   readonly schema: 1;
@@ -262,6 +288,12 @@ export type ObservedSnapshot = {
    * is the one field whose malformation does not fail the snapshot.
    */
   readonly attempt: ObservedAttemptClock;
+  /**
+   * The wire's `producer` — which dashboard run, which collection. See
+   * `SourceOrdering`; like `attempt`, a field whose malformation does not fail
+   * the snapshot.
+   */
+  readonly ordering: SourceOrdering;
   readonly tookMs: number;
   /** The last collection's failure. A stale payload keeps its old rows and is broadcast anyway. */
   readonly error: string | null;
@@ -801,6 +833,21 @@ function parseConversation(u: unknown): ConversationReading | null {
 export function parseAttempt(u: unknown): ObservedAttemptClock {
   if (!isRecord(u)) return { reported: false, why: `the payload is ${typeName(u)}, so it carries no attempt clock` };
 
+  // SCHEMA BEFORE ANY FIELD, as `parseObservation` does it, and for a reason
+  // that only bites here. The daemon reads this off payloads that FAILED to
+  // parse, and an unread schema is one of those — so without this check a
+  // schema-2 payload's `attemptedAt` was read with schema-1 rules and could
+  // restore the `collector` condition. A producer nobody here has read cannot
+  // say anything about its collector that this reader should believe. Sol's
+  // finding 1 on docs/plans/260910d.
+  const schema = u["schema"];
+  if (schema !== OBSERVATION_SCHEMA) {
+    return {
+      reported: false,
+      why: `the payload says schema ${JSON.stringify(schema)}, and this reader only reads an attempt clock from schema ${OBSERVATION_SCHEMA}`,
+    };
+  }
+
   const raw = u["attemptedAt"];
   let stamp: { iso: string; ms: number } | null = null;
   if (raw !== undefined && raw !== null) {
@@ -845,6 +892,71 @@ export function parseAttempt(u: unknown): ObservedAttemptClock {
       return { reported: false, why: `the attempt clock is ${JSON.stringify(never)}, which this version has no arm for` };
     }
   }
+}
+
+/**
+ * The producer stamp, read off a whole payload — see `SourceOrdering`.
+ *
+ * TAKES THE PAYLOAD AND THE PARSED CLOCK, because one of the causes is a
+ * disagreement between the two: `inventory` is null exactly when `collectedAt`
+ * is, and a stamp that says otherwise is one of them lying about whether the
+ * producer has ever collected.
+ *
+ * THE RUN-ID GRAMMAR IS THE PRODUCER'S, IMPORTED — `INSTANCE_TOKEN` from
+ * tools/fleet/instance.ts — for the reason `parseMeta` imports `isRepoValue`: a
+ * copy would go on agreeing with today's producer while the producer's own
+ * grammar moved. That module runs nothing at module scope (its one memo is a
+ * `let` that starts null), and this file already imports two fleet leaves.
+ * The producer's composition-defect sentinel, `instance: "invalid"` (state.ts,
+ * `producerForSnapshot`), exists precisely to fail this check.
+ */
+function parseOrdering(payload: Record<string, unknown>, clock: CollectionClock): SourceOrdering {
+  // ABSENT, NOT NULL, IS THE OLD PRODUCER. JSON cannot carry `undefined`, so a
+  // key that is not there is the only way a payload says "built before stamps";
+  // `producer: null` is a producer that tried and sent nothing usable.
+  if (!Object.hasOwn(payload, "producer")) return { kind: "unstamped" };
+  const unreadable = (why: string): SourceOrdering => ({ kind: "unreadable", why });
+
+  const u = payload["producer"];
+  if (!isRecord(u)) return unreadable(`producer is ${typeName(u)}, not an object`);
+
+  const instance = u["instance"];
+  if (typeof instance !== "string" || !INSTANCE_TOKEN.test(instance)) {
+    return unreadable(`producer.instance is ${JSON.stringify(instance) ?? "missing"}, which is not a dashboard run id`);
+  }
+
+  // Non-negative whole numbers: both are counters that start at 0 (publication)
+  // or at null-then-1 (inventory) and only ever go up by one.
+  if (u["publication"] === undefined) return unreadable("producer.publication is missing");
+  const publication = safeInteger(u["publication"], "producer.publication", 0, "a count of kept turns");
+  if (!publication.ok) return unreadable(publication.reason);
+
+  const rawInventory = u["inventory"];
+  if (rawInventory === undefined) {
+    return unreadable("producer.inventory is missing, and null is how the producer says it has never collected");
+  }
+  let inventory: number | null = null;
+  if (rawInventory !== null) {
+    const parsed = safeInteger(rawInventory, "producer.inventory", 0, "a count of collections");
+    if (!parsed.ok) return unreadable(parsed.reason);
+    inventory = parsed.value;
+  }
+
+  // Every successful turn is also a kept turn, so a run cannot have kept more
+  // collections than turns.
+  if (inventory !== null && inventory > publication.value) {
+    return unreadable(
+      `producer.inventory is ${inventory} and producer.publication ${publication.value}: a run cannot have kept more collections than turns`,
+    );
+  }
+  if ((inventory === null) === clock.collected) {
+    return unreadable(
+      clock.collected
+        ? `producer.inventory is null, which says this run has never collected, beside a collectedAt of ${clock.at}`
+        : `producer.inventory is ${String(inventory)}, which says this run has collected, beside a null collectedAt`,
+    );
+  }
+  return { kind: "stamped", instance, publication: publication.value, inventory };
 }
 
 /**
@@ -933,6 +1045,10 @@ export function parseObservation(u: unknown): ParseResult<ObservedSnapshot> {
       // dashboard built before the field existed is an old producer rather than
       // a broken one and the Overseer has to go on watching it.
       attempt: parseAttempt(u),
+      // NOR THIS ONE, for the same reason: a dashboard built before the stamp
+      // is old rather than broken, and a stamp that is wrong is a condition
+      // the daemon raises, not a snapshot it throws away.
+      ordering: parseOrdering(u, clock),
       tookMs: tookMs.value,
       error: error.value,
       refreshMs: refreshMs.value,
