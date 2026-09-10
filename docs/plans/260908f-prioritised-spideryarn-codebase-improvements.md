@@ -5,7 +5,8 @@ Status as of 2026-09-08: **researched umbrella plan; implementation not started*
 results are recorded at the end. This is a plan-only commission: completing this document does
 not authorise implementing every product decision below.
 
-**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. Nothing else yet.
+**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
+prepared the same day — see § P. Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
 > combination of ease and value), with enough research and detail that another less-capable agent
