@@ -1617,6 +1617,29 @@ and whether the inert `schedule-fixture` job goes live for Scheduled dispatch's 
 missed day does not produce a storm; failed/answerless jobs are visibly failed. No automatic
 `main` push or production mutation is licensed by a schedule.
 
+**Status (2026-09-10, Overseer): done enough to stop, Stages A and B on dev at c065286e; session
+`scheduled-dispatch`, plan
+[260910f-scheduled-dispatch-one-durable-occurrence-one-reconciled-launch.md](260910f-scheduled-dispatch-one-durable-occurrence-one-reconciled-launch.md)
+(its dispositions section, M11–M13, is the authoritative design).** Stage A (8e30f8a0): the result
+classifier, `occurrences.json` and its parser, `GET /api/overseer/occurrences` with an answer link
+that serves only a listed occurrence with size and sha256 verified, and "What the scheduler has
+launched" on the Overseer tab; Sol's S1–S6 fixed. Stage B: a live session job starts only through
+the launch protocol (`launchOccurrence`, `resumeOccurrence`, `abandon`), its history projected from
+the launch journal (the events.jsonl session path and `gjdRemoteDispatch` deleted; rules keep their
+ledger); each document pinned into the child's material once and re-hashed, a digest mismatch
+refusing the launch; a hashed run spec per job; a pool account chosen and pinned per occurrence,
+never the daemon's own; an abandoned occurrence releases its due instant; a replaced one reads as
+`superseded`; the preview at schema 2; Sol's T1–T5 fixed red first (cd9f0412; T4 was a record with
+no pinned account being resumed around the pin). **Stage C is not built** and stops here at Greg's
+reprioritisation of 2026-09-10 21:10Z; its brief is `260910f-scheduled-dispatch-stageC-task.md`
+(the daemon hands the composed protocol to the tick, chooses the account per tick from the same
+health and usage the recovery pass reads, writes `occurrences.json` at every checkpoint; the drill;
+a browser check) and it waits on Launch protocol's Stage 3, which nobody is building. After the
+restart the Overseer owes, session jobs read "journal not available", the scheduler holds no
+session capability, and only rules can earn ARMED. Pending Greg: run specs for the two real jobs
+(proposed 180 and 120 minutes, both with write access, each a re-pin) — the same access question
+Launch protocol raised. Worktree `scheduled-dispatch` standing, clean.
+
 ### Stage: Recovery inventory — show interrupted work without resuming it
 
 **Status, 2026-09-10 (plan
