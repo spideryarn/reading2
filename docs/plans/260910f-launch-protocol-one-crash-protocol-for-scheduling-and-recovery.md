@@ -422,10 +422,43 @@ a daemon restart.** `infra/hetzner/systemd/overseer.service` sets no `KillMode`,
 (`control-group`) kills every process in the unit's cgroup on stop or restart. A headless wrapper
 spawned directly by the daemon therefore dies with every Overseer restart and, under F1, strands
 its occurrence as `outcome-unknown`. A session created on the **already running** tmux server lives
-outside the cgroup. Proposed to `scheduled-dispatch`: scheduled jobs use a third adapter, **a tmux
+outside the cgroup. Agreed with `scheduled-dispatch`: scheduled jobs use a third adapter, **a tmux
 session that runs `run-claude --launch-dir …`** (the id at creation, the wrapper's exit status and
 answer in `exit.json`, survives restarts), refusing if no tmux server is running rather than forking
 one inside the cgroup. The interactive `gjd-remote new-claude` adapter stays, for recovery.
+
+**Added to Stage 2 at `scheduled-dispatch`'s request (all accepted), handed to the Stage 2 builder
+mid-stage:** (1) launcher kind `tmux-headless`, as above; (2) a per-occurrence **run spec**
+`RunSpec = { timeoutMinutes; access }`, with `PlanRequest` a union so `run` is required for
+`headless`/`tmux-headless` and forbidden for `tmux` — recorded in `planned` and `intent.json`, part of
+F5's conflict check, the adapter's only source of timeout and access; (3) the wrapper's **verdict**
+in `exit.json` (`ok` or `failed` with a cause from the wrapper's existing classification, plus
+`usageLimit` and `permissionDenials`), which is how the scheduler will tell quota refusal and
+permission denial from a generic non-zero exit, reconciled with Stage 1's `ending` into one shape;
+(4) **paths** in `exit.json` (`answer.path`, `transcript`), defaulting to `<artefactDir>/answer.md`
+and `<artefactDir>/transcript.ndjson` under `--launch-dir`. The seam itself: the scheduler holds
+`LaunchProtocol["launchOccurrence"]` as a `TickInput` capability; Stage 3 composes it in `daemon.ts`
+and `scheduled-dispatch` adds the one line passing it; outcomes are read from the fold; the page
+reads `launches.json` through Stage 3's `wire.ts` block.
+
+**Agreed with `gradual-recovery` (2026-09-10).** It holds `LaunchProtocol["launchOccurrence"]`,
+never the parts; origin `recoveryOrigin(candidateId)`; re-offers only after `failed-before-launch`.
+(Q1) It adds resume itself after Stage 2 is on dev: a `tmux-resume` launcher kind whose `PlanRequest`
+arm pins `resume: { conversationId, dir }` (in `planned`, `intent.json` and F5's conflict check),
+and `gjd-remote new-claude --resume-conversation <uuid>`, exclusive with minting a session id. (Q3)
+A completed, disposed or reset-carried occurrence is never launchable again; a later reboot is a
+new candidate.
+
+**(Q2) Admission classes get a typed hold condition — a change to D5 and to the invariant's
+wording, built in the fix round after the Stage 1 re-review.** One capacity-1 class held until exit
+would let one resumed interactive session block scheduled jobs and every other resume for hours;
+releasing every reservation at `observed-running` would free capacity from a child nobody has seen
+end. So: `claude-session` (scheduled, `tmux-headless`, bounded by its timeout) is **held until exit
+evidence**, capacity 1; `recovery-resume` is **released on `observed-running` evidence**, capacity
+1 — at most one resume is ever between `launching` and seen-running, and recovery's own
+verified-resume rule paces the rest. `outcome-unknown` holds in both. The invariant becomes: *never
+release a reservation without evidence that its class's hold condition has ended, or an attributed
+disposition.*
 
 ### Stage 2: the launchers
 
