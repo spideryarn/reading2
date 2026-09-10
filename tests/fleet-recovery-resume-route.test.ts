@@ -125,6 +125,28 @@ function writeIndex(root: string, state: Record<string, unknown>): void {
 
 const LAUNCH = { occurrenceId: "lo-1", state: "observed-running", attempt: 1, reservationHeld: false, disposed: false, endedAt: null, completion: null };
 
+describe("G18: a candidate the readable index does not hold is refused before anything is written", () => {
+  it("a valid id absent from recovery.json's records: 409 no such interrupted record, and no request file", async () => {
+    const root = tempRoot();
+    writeIndex(root, { kind: "refused", requestedAt: "2026-09-10T14:50:00.000Z", refusedAt: "2026-09-10T14:51:00.000Z", why: "the directory is gone" });
+    const absent = "rc-ffffffffffffffffffff";
+    const answer = await call(root, { body: body({ candidateId: absent }) });
+    expect(answer.status).toBe(409);
+    expect(answer.json).toMatchObject({ ok: false });
+    expect(String(answer.json?.["why"])).toContain("no such interrupted record");
+    expect(written(root)).toEqual([]);
+    // The candidate it does hold is still queued.
+    expect((await call(root, { body: body() })).status).toBe(202);
+  });
+
+  it("no index, or one that cannot be read, stops nothing: membership is not known, and the daemon revalidates", async () => {
+    expect((await call(tempRoot(), { body: body() })).status).toBe(202);
+    const root = tempRoot();
+    writeFileSync(join(root, "recovery.json"), "{not json");
+    expect((await call(root, { body: body() })).status).toBe(202);
+  });
+});
+
 describe("POST /api/recovery/resume: queues one request through the leaf", () => {
   it("a same-origin JSON POST answers 202 queued, and exactly one pending file appears, from the dashboard, with what was seen", async () => {
     const root = tempRoot();

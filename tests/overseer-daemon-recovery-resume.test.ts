@@ -111,18 +111,27 @@ function rowFor(w: World, name: string, token: { pid: number; startTicks: number
 const BEFORE_TOKEN = (i: number) => ({ pid: 8100 + i, startTicks: 10 + i });
 const NEW_TOKEN = (i: number) => ({ pid: 9100 + i, startTicks: 50 + i });
 
+/**
+ * What today's dashboard declares on every payload (tools/fleet/state.ts), so
+ * the resume pass will launch (Sol's G3). `"absent"` is a dashboard built
+ * before the field.
+ */
+const THIS_BUILD: JsonValue[] = ["argv-resume-uuid"];
+type Declared = JsonValue[] | "absent";
+
 /** A collection after the reboot: the new tmux generation, the next inventory number, and these rows. */
-function collection(w: World, rows: JsonValue[] = [], health: JsonValue = OK_HEALTH): JsonValue {
+function collection(w: World, rows: JsonValue[] = [], health: JsonValue = OK_HEALTH, capabilities: Declared = THIS_BUILD): JsonValue {
   w.inventory += 1;
   const fixture = editableFixture("session-new-before");
-  return {
+  const body = {
     ...fixture,
     rows,
     tmuxServerPid: G2,
     collectedAt: new Date(Date.parse(BEFORE_AT) + w.inventory * 60_000).toISOString(),
     health,
     producer: { instance: RUN_B, publication: w.inventory, inventory: w.inventory },
-  } as unknown as JsonValue;
+  };
+  return (capabilities === "absent" ? body : { ...body, capabilities }) as unknown as JsonValue;
 }
 
 function transcriptPath(w: World, name: string): string {
@@ -283,8 +292,8 @@ function acceptedAt(w: World): string | null {
 }
 
 /** Yield a collection and wait until the daemon has accepted it (its checkpoint says so). */
-async function* accept(w: World, rows: JsonValue[] = [], health: JsonValue = OK_HEALTH): AsyncGenerator<SourceMessage> {
-  const json = collection(w, rows, health) as Record<string, JsonValue>;
+async function* accept(w: World, rows: JsonValue[] = [], health: JsonValue = OK_HEALTH, capabilities: Declared = THIS_BUILD): AsyncGenerator<SourceMessage> {
+  const json = collection(w, rows, health, capabilities) as Record<string, JsonValue>;
   yield payload(json);
   await until(() => acceptedAt(w) === json["collectedAt"], "the collection to be accepted");
 }
@@ -464,6 +473,70 @@ describe("the gates and the unwired capability", () => {
     expect(filesIn(w, "refused")).toEqual([]);
     expect(markerLines(w.port.markerPath)).toHaveLength(0);
     expect(resumeOf(w)?.gate).toMatchObject({ kind: "held" });
+  });
+
+  /**
+   * SOL'S G3: A NEW DAEMON MUST NOT LAUNCH A RESUME THAT THE DASHBOARD
+   * COLLECTING THE BOX CANNOT VERIFY. An older dashboard reads `--resume <uuid>`
+   * as unreadable, so the resumed session would stay `claimed-only`, `resumed`
+   * would never be derived, and the pace rule would wait for ever behind a
+   * session that is really running. The waits below stop at the deferral OR a
+   * launch, so a launch is a failed assertion rather than a timeout.
+   */
+  const deferredForProducer = (w: World, name: string): boolean =>
+    JSON.stringify(stateOf(w, name) ?? {}).includes("cannot yet verify a resumed session");
+
+  test("G3: an old dashboard (no capability) defers the request: never refused, never launched, and the page says restart it", async () => {
+    const w = await rebootedWorld();
+    const [a] = w.names as [string];
+    tap(w, a);
+    await daemon(
+      w,
+      async function* () {
+        yield* accept(w, [], OK_HEALTH, "absent");
+        await until(() => deferredForProducer(w, a) || markerLines(w.port.markerPath).length > 0, "the deferral, or a launch");
+      },
+      { port: w.port },
+    );
+    expect(markerLines(w.port.markerPath)).toHaveLength(0);
+    expect(w.port.calls).toHaveLength(0);
+    expect(filesIn(w, "pending")).toHaveLength(1);
+    expect(filesIn(w, "refused")).toEqual([]);
+    expect(JSON.stringify(stateOf(w, a))).toContain("it needs a restart");
+  });
+
+  test("G3: a malformed declaration counts as none", async () => {
+    const w = await rebootedWorld();
+    const [a] = w.names as [string];
+    tap(w, a);
+    await daemon(
+      w,
+      async function* () {
+        yield* accept(w, [], OK_HEALTH, ["argv-resume-uuid", 42]);
+        await until(() => deferredForProducer(w, a) || markerLines(w.port.markerPath).length > 0, "the deferral, or a launch");
+      },
+      { port: w.port },
+    );
+    expect(markerLines(w.port.markerPath)).toHaveLength(0);
+    expect(deferredForProducer(w, a)).toBe(true);
+  });
+
+  test("G3: the same request launches once the collecting dashboard declares it can verify", async () => {
+    const w = await rebootedWorld();
+    const [a] = w.names as [string];
+    tap(w, a);
+    await daemon(
+      w,
+      async function* () {
+        yield* accept(w, [], OK_HEALTH, "absent");
+        await until(() => deferredForProducer(w, a) || markerLines(w.port.markerPath).length > 0, "the deferral, or a launch");
+        expect(markerLines(w.port.markerPath)).toHaveLength(0);
+        yield* accept(w);
+        await until(() => markerLines(w.port.markerPath).length === 1, "the launch");
+      },
+      { port: w.port },
+    );
+    expect(markerLines(w.port.markerPath)[0]?.candidateId).toBe(idOf(w, a));
   });
 
   test("unwired: requests queue, nothing is refused, nothing launches, and `list` says so", async () => {

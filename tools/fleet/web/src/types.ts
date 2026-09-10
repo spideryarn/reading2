@@ -547,6 +547,9 @@ export type FleetState = Omit<
   | "attemptedAt"
   /* Declined: the page orders its own poll and stream and draws no age from the producer stamp. */
   | "producer"
+  /* Declined: the build's declared capabilities are for the Overseer's resume
+     pass (plan 260910f, Sol's G3); nothing on this page is gated on them. */
+  | "capabilities"
   /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
      believe the payload at all (`parseFleetState` refuses anything else), and
      `servedAt` is consumed into `clockSkew` below — carrying either would be a

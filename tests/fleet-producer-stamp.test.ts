@@ -173,4 +173,19 @@ describe("the stamp on the fleet payload", () => {
     expect(stampedOrdering).toEqual({ kind: "stamped", instance: "1a2b3c4d", publication: 1, inventory: 1 });
     expect(unstampedOrdering).toEqual({ kind: "unstamped" });
   });
+
+  test("declares what this build can do beside the stamp, and the Overseer's parser reads it", () => {
+    // Plan 260910f, Sol's G3: the resume pass defers until the collecting
+    // dashboard says it reads `--resume <uuid>`. Through the production
+    // composition, not a hand-built payload.
+    const publications = new PublicationLedger("1a2b3c4d");
+    publications.record("success");
+    const body = JSON.parse(payload(publications.stamp())) as Record<string, JsonValue>;
+    expect(body["capabilities"]).toEqual(["argv-resume-uuid"]);
+    const parsed = parseObservation(body);
+    expect(parsed.ok && parsed.value.capabilities).toEqual(["argv-resume-uuid"]);
+    // and a never-collected payload declares it too: it is a fact about the build
+    const empty = JSON.parse(payload(new PublicationLedger("5e6f7890").stamp(), { snapshot: null })) as Record<string, JsonValue>;
+    expect(empty["capabilities"]).toEqual(["argv-resume-uuid"]);
+  });
 });
