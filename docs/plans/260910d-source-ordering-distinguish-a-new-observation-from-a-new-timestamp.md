@@ -42,11 +42,17 @@ export type ProducerStamp = {
 
 - **Both counters advance in the same synchronous `keep()` call.** A success increments both; a
   failure increments `publication` only. Nothing can serialise the payload between the two
-  increments, so no payload shows one moved and the other not. Health, `attemptedAt` and the
-  checkpoint-derived feeds change *inside* a turn and ride under that turn's number: they are not
-  ordering facts, and the Overseer does not compare them.
+  increments, so no payload shows one moved and the other not. **`publication` counts kept
+  outcomes, and it is not a revision number for the whole payload.** Health, `attemptedAt` and the
+  checkpoint-derived feeds change between keeps — `attemptedAt` moves in `onStart`, before the
+  collector is awaited, so a poll in that window shows the new attempt under the previous
+  publication number (Sol, finding 3). None of them are ordering facts, and the Overseer does not
+  compare them.
 - **Shared by poll and stream by construction.** `/api/state`, the SSE initial frame and every
-  broadcast all go through `statePayload()`, which reads the one ledger.
+  broadcast all go through `statePayload()`, which reads the one ledger. **The initial frame is sent
+  once any turn has been kept, not only once a snapshot exists** (`server.ts` today sends it only
+  when `snapshot` is non-null, so after a failed first collection a poll sees publication 1 and the
+  error while a new stream subscriber sees nothing — Sol, finding 2).
 - **Invariants a consumer may check:** `inventory === null` ⇔ `collectedAt === null`;
   `inventory ≤ publication`; within one `instance` neither counter ever goes down; one `(instance,
   inventory)` pair always carries the same `collectedAt`, `rows`, `tmuxServerPid` and `tookMs`.
@@ -55,9 +61,11 @@ export type ProducerStamp = {
   reaching for one, per that file's header, so a test can build two.
 
 **Additive, not a schema bump.** `wire.ts`'s own rule is to bump `schema` when a consumer that
-ignored the change would be *wrong* rather than poorer. An old daemon ignoring `producer` orders by
-`collectedAt` exactly as it does today — poorer, not wrong. The browser client is built and served
-with the server, so it never sees a mismatched producer. `schema` stays `1`.
+ignored the change would be *wrong* rather than poorer. **An old daemon ignores the new key and orders
+by `collectedAt` exactly as it does today** — poorer, not wrong: today's `parseObservation` refuses an
+unknown `schema` but ignores unknown top-level keys. An old browser tab can reconnect to a newer
+server, and it is safe for the same reason: the client's parser also ignores fields it does not name.
+`schema` stays `1`.
 
 ### Consumer: the ordering the daemon reads
 
@@ -118,13 +126,19 @@ a backward clock step, at the moment of upgrade, stalls as it would have done ye
 
 - `retired` is held in `runOverseer` beside `accepted`: when an accepted stamped snapshot's run
   differs from the previous accepted one's, the previous run is retired. The set is bounded (last 16
-  runs) because a daemon runs for weeks. It starts empty after a daemon restart: the old dashboard
-  process is gone by then, so nothing can arrive from it.
+  runs) because a daemon runs for weeks. It starts empty after a daemon restart, and that is safe
+  not because the old dashboard is gone — restarting the Overseer does not stop the dashboard — but
+  because the source is sequential (stream and poll never overlap, `source.ts`) and the restored
+  `accepted` carries its run: the first payload from a new run B retires the stored run A, and
+  anything from A after that is refused (Sol, finding 4).
 - A stored baseline (`last-snapshot.json`) keeps its stamp, because the payload is stored verbatim,
   so a restored `accepted` carries its run and collection, and the first payload after a daemon
   restart is a duplicate rather than a re-announcement.
 - **A new condition, `ordering`, for `unreadable` only.** It degrades when a payload's stamp is present
-  and unbelievable, and is restored by the next readable stamp. **`unstamped` raises nothing**, and
+  and unbelievable, and is restored by the next payload that is either readably stamped or
+  unstamped — unstamped is a supported fallback, so a rollback after one malformed stamp must not
+  leave the alarm open for ever (conditions persist until an explicit restore; Sol, finding 5).
+  **`unstamped` raises nothing**, and
   that is the design decision this stage is most likely to be asked about: an old producer is ordered
   exactly as well as it was yesterday. A condition about something no worse than before is an alarm
   that means nothing, which is the watchdog's own argument for its large threshold (`daemon.ts` §
@@ -146,7 +160,8 @@ reviewed by GPT Sol at the end, and committed by me.
 
 ### Stage 0 — this plan, reviewed
 
-- [ ] Plan reviewed by GPT Sol (read-only). Findings and dispositions below.
+- [x] Plan reviewed by GPT Sol (read-only), 2026-09-10: *ready with changes*, six findings, all
+  accepted and folded into the sections above. Findings and dispositions below.
 
 ### Stage 1 — the producer stamp
 
@@ -159,6 +174,8 @@ set, and I need both:**
   in `keep`, and pass `ledger.stamp()` to `composePayload`. The composition root is the only place
   that can hand the stamp in; `state.ts` holding a module-level counter instead would be the global
   that `instance.ts`'s header argues against.
+  The same file's `/api/live` handler also changes one condition: the initial frame goes out once
+  the ledger has kept a turn, not only once `snapshot` is non-null (Sol, finding 2).
 - `tools/fleet/web/src/types.ts` — one entry in the **declined** half of `FleetState`'s `Omit<>`,
   with its reason (the page orders by its own poll and stream and draws no age from the stamp).
   A new required wire key does not compile on the client until it is either parsed or named there;
@@ -201,9 +218,19 @@ Daemon tests, through the real parser, gate, differ and store, driven by a scrip
   `collector`, no `freshness` condition, and today's clock ordering. Stamped then unstamped (a
   rollback) falls back to the clock.
 - **Daemon restart** — a stored stamped baseline makes the first identical payload a duplicate.
+- **Daemon restart across a dashboard restart** — persisted baseline from run A; the daemon starts
+  while the dashboard is already run B with an earlier clock: B's first collection is accepted with
+  zero events, A is retired, and a synthetic late A payload is refused (Sol, finding 4).
+- **Unknown schema stays unknown** — a `schema: 2` payload carrying a plausible `attemptedAt` changes
+  none of the attempt reading, ordering, `retired` or `accepted`. *Red today:* `take()` falls back to
+  `parseAttempt(json)` on every parse failure, and `parseAttempt` does not look at `schema`, so a
+  schema-2 payload can restore `collector`. Fix in `parseAttempt`: an unsupported schema is
+  `reported: false` before any field is read (Sol, finding 1).
+- **`ordering` transitions** — unreadable → unstamped restores it; unreadable → readable restores
+  it; an unknown-schema payload neither raises nor restores it.
 
-Unit tests for `parseObservation`'s three arms, each `unreadable` cause, and `admissible()`'s rule
-order.
+Unit tests for `parseObservation`'s three arms, each `unreadable` cause, `parseAttempt` on an
+unknown schema, and `admissible()`'s rule order.
 
 - [ ] Parse, gate, daemon wiring, condition.
 - [ ] Tests red then green; focused suites, typecheck; Sol review; commit.
@@ -241,8 +268,10 @@ their tests.
   stops `nextByte` at the last newline; `readNotes` and `readEventTail` report the tail apart from
   `unreadable`. `replay()` at open still refuses both, because `openStore` truncates before replaying
   and a tail there means something unexpected. Tests hold the two cases apart for each reader.
-- Readers stay lock-free and bounded where they were. Nothing here adds a full-history parse to a
-  page load: the dashboard reads only the checkpoint.
+- Readers stay lock-free, and bounded where they were bounded. `readNotes` and `readEventTail` read
+  and parse their whole file before applying `limit` today — lock-free but not bounded — and that is
+  left as it is: they are CLI readers, and the page load never reaches them. Nothing here adds a
+  full-history parse to a page load: the dashboard reads only the checkpoint (Sol, finding 6).
 
 - [ ] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail.
 - [ ] The live-log check (read-only), recorded below with its count.
@@ -274,8 +303,27 @@ their tests.
 
 ## Findings
 
-(Filled in as reviews come back.)
+### Stage 0 — plan review, GPT Sol, 2026-09-10 (*ready with changes*)
+
+Each finding was checked against the code before being accepted.
+
+1. **P1, unknown schemas were not fully unknown.** `take()` calls `parseAttempt(json)` on every
+   parse failure, and `parseAttempt` never reads `schema`, so a schema-2 payload's `attemptedAt`
+   could restore `collector`. Checked (`observation.ts` `parseAttempt`, `daemon.ts` `take()`).
+   **Accepted:** `parseAttempt` refuses an unsupported schema before any field; a daemon test added
+   to Stage 2.
+2. **P1, the stream missed the failed-first-collection case.** `/api/live` sends its initial frame
+   only when `snapshot` is non-null. Checked (`server.ts`, the `/api/live` branch). **Accepted:**
+   the frame goes out once a turn has been kept; a poll/SSE parity test added to Stage 1.
+3. **P2, `attemptedAt` does not ride under its turn's number.** **Accepted:** `publication` is
+   defined as kept outcomes, and the prose now says so.
+4. **P2, the daemon-restart rationale was wrong.** **Accepted:** the rationale is now the sequential
+   source plus the restored run, and the A-then-B restart test is added.
+5. **P2, `unreadable → unstamped` would leave `ordering` open.** **Accepted:** unstamped restores it.
+6. **P3, two factual claims.** **Accepted:** additivity rests on both parsers ignoring unknown keys,
+   not on client and server builds matching; `readNotes`/`readEventTail` are described as
+   lock-free, not bounded.
 
 ## Status
 
-2026-09-10 — plan written; Stage 0 review next.
+2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 next.
