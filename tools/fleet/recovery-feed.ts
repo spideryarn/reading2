@@ -33,15 +33,26 @@
  * facts. A malformed view is drawn as its own state, `unreadable`, over records
  * shown unchecked — never folded into the records' verdict, and never hidden.
  *
+ * ## The fields that must agree are checked to agree (Sol's F29)
+ *
+ * Each field parsing on its own is not enough: a record whose `entry` is
+ * another session's, or a view item whose id is one record's and whose
+ * identity is another's, would draw one session's directory, classification
+ * or evidence under another's name — the one thing this page may never do. So
+ * `entry.key` must be the record's key (the store refuses the file on this
+ * too, store.ts § `parseRecoveryRecord`), and every view item must name a
+ * record the file holds, once, with that record's key, name, time and
+ * resolution, carrying a classification and evidence exactly when it is
+ * unresolved. One exception, and only in one direction: see `parseView`.
+ *
  * ## Asynchronous, on purpose
  *
  * The route calls this on a request, in the one Node process that serves the
  * whole dashboard. `routes-decisions.ts` reads its file synchronously and
  * defends that with an input ceiling; this reads through `fs/promises`, so a
  * slow disk stalls one request rather than the server. The ceiling is here as
- * well, and is checked on the descriptor that is then read, so the bytes
- * measured are the bytes loaded (the rule `loadCheckpoint` in attention.ts
- * states).
+ * well, and it bounds **the bytes read from the descriptor**, not the size a
+ * `stat` reported a moment earlier — see `loadRecoveryFile`.
  */
 import { open } from "node:fs/promises";
 import { join } from "node:path";
@@ -85,6 +96,9 @@ export const RECOVERY_FIRST_PAGE = 100;
  * unresolved worst case and four orders of magnitude over the ordinary one.
  */
 export const MAX_RECOVERY_INPUT_BYTES = 16 * 1024 * 1024;
+
+/** One read's worth: an ordinary index is one read, the ceiling a few dozen. */
+const READ_CHUNK_BYTES = 256 * 1024;
 
 /** What the file system can tell us, and nothing about the shape. */
 export type RecoveryFileLoad =
@@ -131,7 +145,27 @@ export async function loadRecoveryFile(root?: string): Promise<RecoveryFileLoad>
     if (stats.size > MAX_RECOVERY_INPUT_BYTES) {
       return { kind: "oversized", path, sizeBytes: stats.size, limitBytes: MAX_RECOVERY_INPUT_BYTES };
     }
-    text = await handle.readFile({ encoding: "utf8" });
+    // THE CEILING BOUNDS THE BYTES READ, NOT THE SIZE `stat` REPORTED (Sol's
+    // F27). `readFile` reads to EOF, so a file that grew after the check above
+    // was loaded whole, whatever the limit said. So read from the descriptor,
+    // at most one byte past the limit, and let that one byte mean `oversized`;
+    // only the bounded buffer is ever decoded. The check above stays as the
+    // cheap refusal that reads nothing.
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total <= MAX_RECOVERY_INPUT_BYTES) {
+      const want = Math.min(READ_CHUNK_BYTES, MAX_RECOVERY_INPUT_BYTES + 1 - total);
+      const chunk = Buffer.allocUnsafe(want);
+      const { bytesRead } = await handle.read(chunk, 0, want, total);
+      if (bytesRead === 0) break;
+      chunks.push(chunk.subarray(0, bytesRead));
+      total += bytesRead;
+    }
+    if (total > MAX_RECOVERY_INPUT_BYTES) {
+      const grown = await handle.stat().catch(() => null);
+      return { kind: "oversized", path, sizeBytes: Math.max(total, grown?.size ?? 0), limitBytes: MAX_RECOVERY_INPUT_BYTES };
+    }
+    text = Buffer.concat(chunks, total).toString("utf8");
   } catch (cause) {
     return { kind: "unreadable", why: `${path} could not be read: ${errnoCode(cause) ?? String(cause)}` };
   } finally {
@@ -198,8 +232,10 @@ function parseResolution(u: unknown): Parsed<RecoveryWireResolution> {
   }
 }
 
-function parseEntry(u: unknown): Parsed<RecoveryWireEntry> {
+/** The entry, and the key it says it belongs to — kept only to be compared, and not put on the wire. */
+function parseEntry(u: unknown): Parsed<{ key: string; entry: RecoveryWireEntry }> {
   if (!isRecord(u)) return bad("entry is not an object");
+  if (!nonBlank(u["key"])) return bad("entry.key is not a session key");
   const meta = u["meta"];
   if (!isRecord(meta)) return bad("entry.meta is not an object");
   let dir: string | null;
@@ -209,7 +245,7 @@ function parseEntry(u: unknown): Parsed<RecoveryWireEntry> {
   if (!textOrNull(u["worktree"])) return bad("entry.worktree is not text or null");
   if (!instant(u["lastSeenAlive"])) return bad("entry.lastSeenAlive is not a timestamp");
   if (!nonBlank(u["lastStatusKey"])) return bad("entry.lastStatusKey is not a status key");
-  return ok({ dir, worktree: u["worktree"], lastSeenAlive: u["lastSeenAlive"], lastStatusKey: u["lastStatusKey"] });
+  return ok({ key: u["key"], entry: { dir, worktree: u["worktree"], lastSeenAlive: u["lastSeenAlive"], lastStatusKey: u["lastStatusKey"] } });
 }
 
 function parseLastSeen(u: unknown): Parsed<RecoveryWireLastSeen | null> {
@@ -255,7 +291,12 @@ function parseRecord(u: unknown): Parsed<RecordFacts> {
   } else {
     const parsed = parseEntry(u["entry"]);
     if (!parsed.ok) return parsed;
-    entry = parsed.value;
+    // THE ENTRY IS THIS RECORD'S, or the file is refused (Sol's F29) — the
+    // store's own parser refuses it on exactly this.
+    if (parsed.value.key !== key) {
+      return bad(`entry.key ${JSON.stringify(parsed.value.key)} does not agree with the record's key ${JSON.stringify(key)}`);
+    }
+    entry = parsed.value.entry;
   }
   const lastSeen = parseLastSeen(u["lastSeen"]);
   if (!lastSeen.ok) return lastSeen;
@@ -436,13 +477,33 @@ function parseEvidence(u: unknown): Parsed<RecoveryWireEvidence> {
   });
 }
 
-type ViewItem = { classification: RecoveryWireClass | null; evidence: RecoveryWireEvidence | null };
+/** Held only for an unresolved record the view is current about, so both halves are always there. */
+type ViewItem = { classification: RecoveryWireClass; evidence: RecoveryWireEvidence };
 
 type ParsedView =
   | { kind: "not-yet-checked" }
   | { kind: "checked"; wire: Extract<RecoveryWireView, { kind: "checked" }>; items: Map<string, ViewItem> };
 
-function parseView(u: unknown): Parsed<ParsedView> {
+/** Both sides come from `parseResolution`, which builds each arm with one key order. */
+function sameResolution(a: RecoveryWireResolution, b: RecoveryWireResolution): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * The view, checked against the records it describes (Sol's F29).
+ *
+ * **One disagreement is lawful, in one direction only.** An item may say
+ * `unresolved` of a record the file now holds resolved. The daemon appends a
+ * derived disposition, and the next checkpoint writes the fold beside the view
+ * it already held, before the pass it asked for lands (daemon.ts §
+ * `appendDerived`, store.ts § `checkpoint`). That is the view lagging the fold,
+ * not a contradiction, and refusing it would put an alarm on the page after
+ * every resume. Such an item is still checked for shape and identity, and then
+ * not used: the record's own resolution decides its state. Every other
+ * disagreement — a resolved item over an unresolved record, or two different
+ * resolutions — makes the view unreadable.
+ */
+function parseView(u: unknown, records: ReadonlyMap<string, RecordFacts>): Parsed<ParsedView> {
   if (u === null || u === undefined) return ok({ kind: "not-yet-checked" });
   if (!isRecord(u)) return bad("the view is not an object or null");
   if (!instant(u["checkedAt"])) return bad("view.checkedAt is not a timestamp");
@@ -458,21 +519,37 @@ function parseView(u: unknown): Parsed<ParsedView> {
   const page = u["page"];
   if (!Array.isArray(page)) return bad("view.page is not a list");
   const items = new Map<string, ViewItem>();
+  const listed = new Set<string>();
   for (const [index, raw] of page.entries()) {
-    if (!isRecord(raw) || !nonBlank(raw["id"])) return bad(`view.page[${index}] has no id`);
-    let classification: RecoveryWireClass | null = null;
-    let evidence: RecoveryWireEvidence | null = null;
-    if (raw["classification"] !== null) {
-      const parsed = parseClass(raw["classification"]);
-      if (!parsed.ok) return bad(`view.page[${index}]: ${parsed.why}`);
-      classification = parsed.value;
+    const where = `view.page[${index}]`;
+    if (!isRecord(raw) || !nonBlank(raw["id"])) return bad(`${where} has no id`);
+    const id = raw["id"];
+    if (listed.has(id)) return bad(`${where}: the view lists ${id} twice`);
+    listed.add(id);
+    const record = records.get(id);
+    if (record === undefined) return bad(`${where} names ${id}, which the index does not hold`);
+    if (raw["key"] !== record.key || raw["name"] !== record.name || raw["at"] !== record.at) {
+      return bad(`${where} names ${id} but carries a different key, name or time from that record's`);
     }
-    if (raw["evidence"] !== null) {
-      const parsed = parseEvidence(raw["evidence"]);
-      if (!parsed.ok) return bad(`view.page[${index}]: ${parsed.why}`);
-      evidence = parsed.value;
+    const resolution = parseResolution(raw["resolution"]);
+    if (!resolution.ok) return bad(`${where}: ${resolution.why}`);
+    const unresolved = resolution.value.disposition === "unresolved";
+    let current = true;
+    if (!sameResolution(resolution.value, record.resolution)) {
+      // The lag in this function's comment, and nothing else.
+      if (unresolved && record.resolution.disposition !== "unresolved") current = false;
+      else return bad(`${where}: its resolution disagrees with ${id}'s own`);
     }
-    items.set(raw["id"], { classification, evidence });
+    if (!unresolved) {
+      if (raw["classification"] !== null || raw["evidence"] !== null) return bad(`${where} is resolved and still carries a classification or evidence`);
+      continue;
+    }
+    if (raw["classification"] === null || raw["evidence"] === null) return bad(`${where} is unresolved and lacks its classification or its evidence`);
+    const classification = parseClass(raw["classification"]);
+    if (!classification.ok) return bad(`${where}: ${classification.why}`);
+    const evidence = parseEvidence(raw["evidence"]);
+    if (!evidence.ok) return bad(`${where}: ${evidence.why}`);
+    if (current) items.set(id, { classification: classification.value, evidence: evidence.value });
   }
   return ok({ kind: "checked", wire: { kind: "checked", checkedAt: u["checkedAt"], inventory }, items });
 }
@@ -525,7 +602,7 @@ function stateOf(facts: RecordFacts, view: ParsedView | { kind: "unreadable" }):
   }
   if (view.kind === "unreadable") return { kind: "unchecked", why: "the daemon's view could not be read, so this record's classification is unknown" };
   const item = view.items.get(facts.id);
-  if (item === undefined || item.classification === null || item.evidence === null) {
+  if (item === undefined) {
     return {
       kind: "unchecked",
       why: "the daemon's last check did not classify this record: it arrived after that pass, or lies past the pass's first page",
@@ -544,15 +621,15 @@ function projectPublished(path: string, json: Record<string, unknown>, composedA
   const rawRecords = json["records"];
   if (!Array.isArray(rawRecords)) return unreadable("records is not a list");
   const facts: RecordFacts[] = [];
-  const seen = new Set<string>();
+  const byId = new Map<string, RecordFacts>();
   for (const [index, raw] of rawRecords.entries()) {
     const parsed = parseRecord(raw);
     if (!parsed.ok) return unreadable(`records[${index}]: ${parsed.why}. The index is refused whole rather than drawn without it`);
-    if (seen.has(parsed.value.id)) return unreadable(`records holds ${parsed.value.id} twice`);
-    seen.add(parsed.value.id);
+    if (byId.has(parsed.value.id)) return unreadable(`records holds ${parsed.value.id} twice`);
+    byId.set(parsed.value.id, parsed.value);
     facts.push(parsed.value);
   }
-  const viewParse = parseView(json["view"]);
+  const viewParse = parseView(json["view"], byId);
   const view: ParsedView | { kind: "unreadable" } = viewParse.ok ? viewParse.value : { kind: "unreadable" };
   const wireView: RecoveryWireView = !viewParse.ok
     ? { kind: "unreadable", why: viewParse.why }

@@ -12,8 +12,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { App } from "../tools/fleet/web/src/App";
 import { RECOVERY_POLL_MS, RecoveryPanel } from "../tools/fleet/web/src/RecoveryPanel";
-import { makeRecoveryApi, type RecoveryApi, type RecoveryView } from "../tools/fleet/web/src/recovery-client";
+import { makeRecoveryApi, parseRecoveryFeed, type RecoveryApi, type RecoveryView } from "../tools/fleet/web/src/recovery-client";
+import type { Transport } from "../tools/fleet/web/src/transport";
 import type { RecoveryFeed, RecoveryWireEvidence, RecoveryWireRecord, RecoveryWireRecordState } from "../tools/fleet/wire";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -172,14 +174,187 @@ describe("the banners at the top of a published index", () => {
     expect(banner).toContain("events.jsonl");
   });
 
-  it("the view's age, against the page's clock", async () => {
+  it("the view's age, on the server's clock", async () => {
     await show(feed([]));
     expect(testId("recovery-age")?.textContent).toMatch(/Checked 2m ago/);
+  });
+
+  it("the view's age is the server's: its composition time, advanced by how long this page has held the answer (F31)", async () => {
+    // This phone's clock runs thirty minutes behind the box.
+    const phone = Date.parse("2026-09-10T14:30:00.000Z");
+    const served = feed([], {
+      composedAt: "2026-09-10T15:00:00.000Z",
+      view: { kind: "checked", checkedAt: "2026-09-10T14:30:00.000Z", inventory: { kind: "trusted", collectedAt: "2026-09-10T14:29:00.000Z", rows: 3 } },
+    });
+    const stable = api(served);
+    await act(async () => {
+      root.render(<RecoveryPanel api={stable} nowMs={phone} />);
+    });
+    expect(testId("recovery-age")?.textContent).toMatch(/Checked 30m ago by the server's clock/);
+    await act(async () => {
+      root.render(<RecoveryPanel api={stable} nowMs={phone + 60_000} />);
+    });
+    expect(testId("recovery-age")?.textContent).toMatch(/Checked 31m ago by the server's clock/);
   });
 
   it("a read index with nothing in it says so, and only then", async () => {
     await show(feed([]));
     expect(testId("recovery-empty")?.textContent).toContain("No interrupted work is recorded");
+  });
+
+  it("an empty page beside an overflow says the index holds no records, never that no work is recorded (F33)", async () => {
+    await show(feed([], { overflow: 1 }));
+    expect(testId("recovery-empty")?.textContent).toBe("The recovery index currently holds no records.");
+    expect(text()).not.toContain("No interrupted work is recorded");
+  });
+
+  it("and so does an empty page beside a replay that did not run (F33)", async () => {
+    await show(feed([], { replay: { kind: "not-run", why: "the log is over the replay ceiling" } }));
+    expect(testId("recovery-empty")?.textContent).toBe("The recovery index currently holds no records.");
+    expect(text()).not.toContain("No interrupted work is recorded");
+  });
+});
+
+describe("the evidence on every row (F32)", () => {
+  function factsOf(card: Element | null): Map<string, string> {
+    const out = new Map<string, string>();
+    if (card === null) return out;
+    for (const dt of card.querySelectorAll("dt")) out.set(dt.textContent ?? "", dt.nextElementSibling?.textContent ?? "");
+    return out;
+  }
+  const live = {
+    tmuxId: "$77",
+    name: "live-two",
+    dir: "/work/somewhere-else",
+    claimedConversationId: CLAIM,
+    statusKey: "working",
+    executionToken: "exec-boot:4242:99",
+    conversationId: CONVERSATION,
+  };
+
+  it("a live row shows its directory, its claim, its verified conversation and its execution token, on both classes that carry one", async () => {
+    await show(
+      feed([
+        rec("m", { kind: "classified", classification: { kind: "present-but-unmatched", why: "a live row has the same name", row: live }, evidence: evidence() }),
+        rec("l", { kind: "classified", classification: { kind: "already-live", why: "the same conversation is live", sameRun: false, row: live }, evidence: evidence() }),
+      ]),
+    );
+    const cards = [...host.querySelectorAll('[data-testid="recovery-record"]')];
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      const facts = factsOf(card);
+      expect(facts.get("live directory")).toContain("/work/somewhere-else");
+      expect(facts.get("live claim")).toContain(CLAIM);
+      expect(facts.get("live conversation")).toContain(CONVERSATION);
+      expect(facts.get("live run")).toContain("exec-boot:4242:99");
+    }
+  });
+
+  it("a live row with nothing verified says so for each of the four, rather than leaving them out", async () => {
+    const bare = { ...live, dir: null, claimedConversationId: null, executionToken: null, conversationId: null };
+    await show(feed([rec("b", { kind: "classified", classification: { kind: "present-but-unmatched", why: "same name", row: bare }, evidence: evidence() })]));
+    const facts = factsOf(host.querySelector('[data-testid="recovery-record"]'));
+    expect(facts.get("live directory")).toBe("not recorded");
+    expect(facts.get("live claim")).toBe("none");
+    expect(facts.get("live conversation")).toBe("not verified");
+    expect(facts.get("live run")).toBe("not verified");
+  });
+
+  it("an unchecked record shows its stored worktree, and that resume was not checked", async () => {
+    await show(
+      feed([
+        rec("u", { kind: "unchecked", why: "not yet checked" }, { entry: { dir: "/work/u", worktree: "wt-recovery-drill", lastSeenAlive: "2026-09-10T13:00:00.000Z", lastStatusKey: "working" } }),
+      ]),
+    );
+    const facts = factsOf(host.querySelector('[data-testid="recovery-record"]'));
+    expect(facts.get("worktree")).toContain("wt-recovery-drill");
+    expect(facts.get("resume")).toBe("not checked");
+  });
+
+  it("a resolved record shows its stored worktree, and that resume does not apply", async () => {
+    await show(
+      feed([rec("r", { kind: "resolved", resolution: { disposition: "dismissed", at: "2026-09-10T14:30:00.000Z", evidence: { requestId: "r-3", why: "by hand" } } })]),
+    );
+    const facts = factsOf(host.querySelector('[data-testid="recovery-record"]'));
+    expect(facts.get("worktree")).toBe("none recorded");
+    expect(facts.get("resume")).toBe("not applicable, this record is resolved");
+  });
+
+  it("a record with no stored entry still says what resume is", async () => {
+    await show(feed([rec("s", { kind: "unchecked", why: "not yet checked" }, { origin: "legacy", entry: null, lastSeen: null })]));
+    expect(factsOf(host.querySelector('[data-testid="recovery-record"]')).get("resume")).toBe("not checked");
+  });
+});
+
+describe("the whole answer agrees with itself, or it is no answer (F30)", () => {
+  const checkedAt = "2026-09-10T14:58:00.000Z";
+  const interrupted = (id: string) =>
+    rec(id, { kind: "classified", classification: { kind: "interrupted", why: "the host rebooted while this session was running" }, evidence: evidence() });
+  const unchecked = (id: string) => rec(id, { kind: "unchecked", why: "not yet checked" });
+  const resolved = (id: string) =>
+    rec(id, { kind: "resolved", resolution: { disposition: "dismissed", at: "2026-09-10T14:30:00.000Z", evidence: { requestId: "r-2", why: "by hand" } } });
+
+  const refused: [string, unknown][] = [
+    ["not-yet-checked beside a classified row", feed([interrupted("a")], { view: { kind: "not-yet-checked", why: "not yet" } })],
+    ["an unreadable view beside a classified row", feed([interrupted("a")], { view: { kind: "unreadable", why: "bad" } })],
+    ["an untrusted inventory beside a row that is not unknown", feed([interrupted("a")], { view: { kind: "checked", checkedAt, inventory: { kind: "untrusted", why: "refused" } } })],
+    ["one id twice", feed([unchecked("a"), unchecked("a")])],
+    ["more than the first page of 100", feed(Array.from({ length: 101 }, (_, i) => unchecked(`p${i}`)))],
+    ["more unresolved than records", feed([unchecked("a")], { unresolved: 2 })],
+    ["more unresolved rows shown than are unresolved", feed([unchecked("a"), unchecked("b")], { unresolved: 1 })],
+    ["more resolved rows shown than are resolved", feed([resolved("a")], { unresolved: 1 })],
+    ["a resolved row shown while an unresolved record is not", feed([resolved("a")], { total: 2, unresolved: 1, olderCount: 1 })],
+    ["an oversize stub that carries an entry", feed([{ ...unchecked("a"), oversize: true, lastSeen: null, disappearance: null }])],
+    ["an oversize stub that carries a disappearance", feed([{ ...unchecked("a"), oversize: true, entry: null, lastSeen: null }])],
+    ["an oversize stub that carries a sighting", feed([{ ...unchecked("a"), oversize: true, entry: null, disappearance: null }])],
+    ["a record that is no stub and has no disappearance", feed([{ ...unchecked("a"), disappearance: null }])],
+    ["a journal record with no entry", feed([{ ...unchecked("a"), entry: null }])],
+  ];
+  for (const [name, body] of refused) {
+    it(`refuses ${name}`, () => {
+      expect(parseRecoveryFeed(body)).toMatchObject({ kind: "no-answer" });
+    });
+  }
+
+  it("reads the lawful shape of each of the same things", () => {
+    const lawful: RecoveryFeed[] = [
+      feed([unchecked("a")], { view: { kind: "not-yet-checked", why: "not yet" } }),
+      feed([rec("u", { kind: "classified", classification: { kind: "unknown", why: "x" }, evidence: evidence() })], {
+        view: { kind: "checked", checkedAt, inventory: { kind: "untrusted", why: "refused" } },
+      }),
+      feed(Array.from({ length: 100 }, (_, i) => unchecked(`q${i}`)), { total: 150, unresolved: 120, olderCount: 50 }),
+      feed([{ ...unchecked("s"), oversize: true, entry: null, lastSeen: null, disappearance: null }]),
+      feed([{ ...unchecked("l"), origin: "legacy", entry: null, lastSeen: null }]),
+      feed([unchecked("a"), resolved("b")]),
+    ];
+    for (const body of lawful) expect(parseRecoveryFeed(body)).toEqual(body);
+  });
+});
+
+describe("the page mounts it (F35)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.location.hash = "";
+  });
+
+  it("the real App, opened on #overseer, draws this section from /api/recovery", async () => {
+    window.location.hash = "#overseer";
+    const asked: string[] = [];
+    const json = (body: unknown, status: number): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = String(input);
+      asked.push(url);
+      return Promise.resolve(url.endsWith("api/recovery") ? json(feed([rec("mounted", { kind: "unchecked", why: "not yet checked" })]), 200) : json({}, 404));
+    });
+    const idle: Transport = () => ({ refresh: () => {}, stop: () => {} });
+    await act(async () => {
+      root.render(<App transport={idle} actionsPollMs={3_600_000} />);
+    });
+    await act(async () => {});
+    const panel = testId("recovery-panel");
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector('[data-testid="recovery-record"]')?.textContent).toContain("session-mounted");
+    expect(asked.some((url) => url.endsWith("api/recovery"))).toBe(true);
   });
 });
 

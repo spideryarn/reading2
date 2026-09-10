@@ -659,7 +659,85 @@ Files: `tools/fleet/wire.ts` (appended block), `tools/fleet/recovery-feed.ts` (n
   console errors.
 - [ ] Sol review; commit; full suite; push.
 
-Status, 2026-09-10: implemented, awaiting its read-only Sol review. The shared-file hunks:
+**Sol's review, read-only, 2026-09-10: *refuse*, on seven established P1s; no P0**
+([the review](260910e-recovery-inventory-stage3-review-sol.md)):
+
+- **F27:** the 16 MiB ceiling was `stat` then `readFile`, so a growing file defeats it.
+- **F28:** the drill's guard for the live store was beaten by a symlinked ancestor, and it ignored
+  an absolute `OVERSEER_STORE_DIR`.
+- **F29:** the fleet parser did not require the fields that must agree to agree, so one session's
+  evidence could attach to another record.
+- **F30:** the browser parser had no whole-payload check, so contradictory claims rendered side by
+  side.
+- **F31:** the view's age came from the browser's clock.
+- **F32:** some rows omitted evidence the plan requires.
+- **F33:** the empty-state sentence contradicted the overflow banner.
+
+Two P2s: F34 (parsing 16 MiB synchronously), which is **measured, not rebuilt**, and F35 (the
+wiring guards were text searches), where the page side renders the real `App` and the server side
+stays a stronger source check. All of them go to one Opus fixer
+([the brief](260910e-recovery-inventory-stage3-fixes-task.md)).
+
+**The Overseer's terms for what follows.** One read-only Sol check of the seven P1 fixes only: 20
+minutes, raw red/green handed over, findings to a separate file. If it times out, Fable, recorded as
+not cross-family, and no further round.
+
+- **F29 and F30 are handed over with the most care.** A parser that never checks the fields that
+  must agree is the "true number under a label claiming more" class. One session's evidence
+  rendered on another's record is the one output this page may never produce.
+- **The drill's live-store guard (F28) is not to be trusted until it resolves real paths and
+  honours an absolute `OVERSEER_STORE_DIR`.** Until the fix is checked, run the drill only with a
+  target that is plainly a fresh scratch directory.
+
+**The full suite on `bcd11529`** (`npm test` through `tmux-job`): 1,019 files passed, 3 failed,
+1 skipped. The three:
+
+- **`cold-start-lazy-imports` and `pdf-bundle-trace`**: the known environment failures of a worktree
+  with no `api-dist/`.
+- **`fleet-attention` › "imports only the Overseer modules that were argued for"**: not this plan's.
+  The `dev` snapshot merged at `f938b023` had `schedule-preview`'s `schedule-wiring.ts` importing
+  `tools/overseer/store.ts`. That pulled `store.ts`'s whole graph onto the fleet side, and since
+  Stage 1 that graph includes `recovery.ts` and `recovery-view.ts`. None of this plan's fleet files
+  imports anything from `tools/overseer/`. `schedule-preview` fixed it on `dev` in `b8505d8b` (16:39,
+  "keep the dashboard off the Overseer's module graph"). The final merge picks that up, and the
+  test is re-run on it.
+
+**The fixes (an Opus subagent), 2026-09-10.** F27–F33 went red first, for the intended reasons, and
+then green. F35 is a check-only change, so it was shown red by mutation: the old check passed a
+mutant `App` and Sol's `if (false)` server mutant, and the new one refuses both.
+
+Gates:
+- the four recovery suites, 95 of 95;
+- typecheck exit 0;
+- `build:fleet` exit 0;
+- `fixture-ids` 5 of 5;
+- a fresh 400 px browser check on the implementer's own server (8796).
+
+Worth knowing:
+
+- **F28:** the drill's guard now covers both `~/.overseer` and an absolute `OVERSEER_STORE_DIR`. It
+  resolves the nearest existing ancestor's real path, refuses a dangling link, and refuses a store
+  inside the target. It rechecks immediately before creating anything, and confirms the new root
+  by `realpath`.
+- **F29, one deliberate deviation from the brief.** A view item that says `unresolved`, beside a
+  record the file now holds as resolved, is **accepted and ignored**, not refused. The daemon
+  writes exactly that state: `appendDerived` appends the disposition, and the next checkpoint writes
+  the new records beside the view it already held. The record's own resolution decides its state,
+  so none of the stale item's evidence is drawn. Every other resolution mismatch is refused.
+  Strict equality would have raised a "view unreadable" alarm after every resume. The narrow check
+  is asked about this by name.
+- **F34, measured, not rebuilt.** The files were in the producer's shape, and each figure is the
+  median of 5 runs at a load average of about 9.5:
+  - 500 unresolved records at the 16 KB cap: 8.09 MiB, blocking the event loop for **27 ms**;
+  - the same plus 493 resolved, just under the ceiling: 15.98 MiB, **45 ms**.
+
+  Both are under 100 ms, so the ceiling stays at 16 MiB and there is no worker.
+- **F35:** the page side renders the real `App` on `#overseer`. The server side parses `server.ts`
+  with `@babel/parser`, and checks that the dispatch is a direct top-level statement of `handler`,
+  with no earlier branch that would take `/api/recovery`. What it cannot see: what other routes'
+  `handle` methods claim; computed conditions; and whether the server runs.
+
+Status, 2026-09-10: implemented, reviewed (refused), fixed; the narrow check comes next. The shared-file hunks:
 
 - `server.ts`: the three approved lines.
 - `App.tsx`: the approved mount line, **plus its import line**. The mount cannot exist without it,

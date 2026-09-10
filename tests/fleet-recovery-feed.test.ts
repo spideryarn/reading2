@@ -7,7 +7,8 @@
  * suite is about the fleet's validator, not the daemon. The drill in
  * tests/fleet-recovery-wiring.test.ts is the file the real daemon writes.
  */
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync, type Stats } from "node:fs";
+import { open, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,6 +23,7 @@ import {
   projectRecovery,
   type RecoveryFileLoad,
 } from "../tools/fleet/recovery-feed.js";
+import { parseRecoveryFeed } from "../tools/fleet/web/src/recovery-client";
 import type { RecoveryFeed } from "../tools/fleet/wire.js";
 
 const COMPOSED = "2026-09-10T15:00:00.000Z";
@@ -106,6 +108,10 @@ function project(json: unknown): RecoveryFeed {
 
 function published(feed: RecoveryFeed): Extract<RecoveryFeed, { kind: "published" }> {
   if (feed.kind !== "published") throw new Error(`expected published, got ${JSON.stringify(feed)}`);
+  // EVERY PUBLISHED PROJECTION IN THIS FILE MUST SATISFY THE BROWSER'S
+  // WHOLE-PAYLOAD CONTRACT (Sol's F30). A rule the client refuses that this
+  // projection produces would be a page saying "no answer" over a good index.
+  expect(parseRecoveryFeed(JSON.parse(JSON.stringify(feed)))).toEqual(feed);
   return feed;
 }
 
@@ -146,6 +152,44 @@ describe("reading the file: the arms before any shape", () => {
     const feed = projectRecovery(load, COMPOSED);
     expect(feed).toMatchObject({ kind: "oversized", sizeBytes: MAX_RECOVERY_INPUT_BYTES + 1, limitBytes: MAX_RECOVERY_INPUT_BYTES });
     expect(feed).not.toHaveProperty("records");
+  });
+
+  it("a file that grows after its size is checked is refused as oversized, and never read past one byte over the limit (F27)", async () => {
+    const root = tempRoot();
+    const path = join(root, RECOVERY_FILE);
+    writeFileSync(path, JSON.stringify(file([], null)));
+    const probe = await open(path, "r");
+    const proto = Object.getPrototypeOf(probe) as FileHandle;
+    await probe.close();
+    const realStat = proto.stat as (this: FileHandle) => Promise<Stats>;
+    const realRead = proto.read as (this: FileHandle, ...args: unknown[]) => Promise<{ bytesRead: number }>;
+    let grown = 0;
+    let bytesRead = 0;
+    // THE RACE, MADE DETERMINISTIC: the size is taken, and then the file grows
+    // (sparse, so this costs no disk) before anything reads it.
+    const stat = vi.spyOn(proto as unknown as { stat(): Promise<Stats> }, "stat").mockImplementation(async function (this: FileHandle) {
+      const stats = await realStat.call(this);
+      truncateSync(path, MAX_RECOVERY_INPUT_BYTES + 4096);
+      grown += 1;
+      return stats;
+    });
+    const read = vi
+      .spyOn(proto as unknown as { read(...args: unknown[]): Promise<{ bytesRead: number }> }, "read")
+      .mockImplementation(async function (this: FileHandle, ...args: unknown[]) {
+        const result = await realRead.apply(this, args);
+        bytesRead += result.bytesRead;
+        return result;
+      });
+    try {
+      const load = await loadRecoveryFile(root);
+      expect(grown).toBeGreaterThan(0);
+      expect(load).toMatchObject({ kind: "oversized", path, limitBytes: MAX_RECOVERY_INPUT_BYTES });
+      if (load.kind === "oversized") expect(load.sizeBytes).toBeGreaterThan(MAX_RECOVERY_INPUT_BYTES);
+      expect(bytesRead).toBeLessThanOrEqual(MAX_RECOVERY_INPUT_BYTES + 1);
+    } finally {
+      stat.mockRestore();
+      read.mockRestore();
+    }
   });
 
   it("resolves the store from OVERSEER_STORE_DIR at call time, and a relative one is unreadable rather than a throw", async () => {
@@ -254,6 +298,87 @@ describe("the view, and the states that are not a list", () => {
     const records = [rawRecord("rc-a", "2026-09-10T14:00:00.000Z")];
     const page = [item(records[0] as Json, { kind: "interrupted", why: "x" }, checked({ kind: "maybe", why: "?" }))];
     expect(published(project(file(records, view(page)))).view.kind).toBe("unreadable");
+  });
+});
+
+describe("the fields that must agree, agree (F29): one record's evidence never lands on another", () => {
+  const A_AT = "2026-09-10T14:00:00.000Z";
+  const B_AT = "2026-09-10T14:05:00.000Z";
+  const interrupted: Json = { kind: "interrupted", why: "the host rebooted while this session was running" };
+  const dismissed: Json = { disposition: "dismissed", at: B_AT, evidence: { requestId: "req-f29", why: "checked by hand" } };
+
+  function pair(): [Json, Json] {
+    const a = rawRecord("rc-a", A_AT);
+    const bKey = `$2 claims:${CLAIM}`;
+    const b = rawRecord("rc-b", B_AT, { key: bKey, name: "session-b-elsewhere", entry: { ...(rawRecord("rc-b", B_AT)["entry"] as Json), key: bKey } });
+    return [a, b];
+  }
+
+  it("a record whose entry.key names another session makes the file unreadable, as the store's own parser does", () => {
+    // rawRecord's entry.key is "$4 none"; the record now says "$1 none".
+    const feed = project(file([rawRecord("rc-a", A_AT, { key: "$1 none" })], null));
+    expect(feed.kind).toBe("unreadable");
+    expect(feed).toMatchObject({ why: expect.stringMatching(/entry\.key/) });
+    expect(feed).not.toHaveProperty("records");
+  });
+
+  it("a view item carrying another record's key, name, time or resolution makes the view unreadable, and every record unchecked", () => {
+    const [a, b] = pair();
+    const mutants: [string, Json][] = [
+      ["key", { key: b["key"] }],
+      ["name", { name: b["name"] }],
+      ["at", { at: b["at"] }],
+      ["resolution", { resolution: dismissed, classification: null, evidence: null }],
+    ];
+    for (const [field, over] of mutants) {
+      const page = [{ ...item(a, interrupted), ...over }, item(b, { kind: "unknown", why: "nobody watched it go" })];
+      const feed = published(project(file([a, b], view(page))));
+      expect(feed.view, field).toMatchObject({ kind: "unreadable" });
+      for (const r of feed.records) expect(r.state.kind, field).toBe("unchecked");
+    }
+  });
+
+  it("a view that lists one id twice is unreadable, never last-one-wins", () => {
+    const [a, b] = pair();
+    const page = [item(a, interrupted), item(a, { kind: "unknown", why: "nobody watched it go" }), item(b, interrupted)];
+    expect(published(project(file([a, b], view(page)))).view).toMatchObject({ kind: "unreadable", why: expect.stringMatching(/twice/) });
+  });
+
+  it("a view item for a record the index does not hold is unreadable", () => {
+    const [a] = pair();
+    const page = [item(a, interrupted), item(rawRecord("rc-ghost", B_AT), interrupted)];
+    expect(published(project(file([a], view(page)))).view.kind).toBe("unreadable");
+  });
+
+  it("an unresolved item carries both its classification and its evidence; a resolved one carries neither", () => {
+    const [a] = pair();
+    const done = rawRecord("rc-done", B_AT, { resolution: dismissed });
+    const broken: Json[][] = [
+      [item(a, interrupted, null), item(done, null, null)],
+      [item(a, null, checked()), item(done, null, null)],
+      [item(a, null, null), item(done, null, null)],
+      [item(a, interrupted), item(done, interrupted, null)],
+      [item(a, interrupted), item(done, null, checked())],
+    ];
+    for (const [index, page] of broken.entries()) {
+      expect(published(project(file([a, done], view(page)))).view.kind, `case ${index}`).toBe("unreadable");
+    }
+    const lawful = published(project(file([a, done], view([item(a, interrupted), item(done, null, null)]))));
+    expect(lawful.view.kind).toBe("checked");
+  });
+
+  it("an item written before its record was resolved is the view lagging the fold: the record shows resolved, and the view is still read", () => {
+    // Reachable: `appendDerived` appends a disposition, and the next
+    // checkpoint writes the fold with the view the store already held
+    // (daemon.ts § appendDerived, store.ts § checkpoint). The record's own
+    // resolution wins, so the lagging item's classification is used by nothing.
+    const [a, b] = pair();
+    const resumed = { disposition: "resumed", at: B_AT, evidence: { previousToken: "b:1:2", token: "b:3:4", conversationId: CONVERSATION } };
+    const page = [item(a, interrupted), item(b, interrupted)];
+    const feed = published(project(file([{ ...a, resolution: resumed }, b], view(page))));
+    expect(feed.view.kind).toBe("checked");
+    expect(feed.records.find((r) => r.id === "rc-a")?.state).toMatchObject({ kind: "resolved", resolution: { disposition: "resumed" } });
+    expect(feed.records.find((r) => r.id === "rc-b")?.state).toMatchObject({ kind: "classified", classification: { kind: "interrupted" } });
   });
 });
 

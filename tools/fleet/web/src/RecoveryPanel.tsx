@@ -26,7 +26,7 @@
  * changes and does not sort, for DecisionsPanel's reason: a second ordering rule
  * in the browser would let two readers of one index disagree.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { httpRecoveryApi, type RecoveryApi, type RecoveryView } from "./recovery-client";
 import { Card, Mono, Pill, SectionHeading, cx, toneClasses } from "./ui";
@@ -34,6 +34,7 @@ import { formatDuration, type Tone } from "./view";
 import type {
   RecoveryFeed,
   RecoveryWireEvidence,
+  RecoveryWireLiveRow,
   RecoveryWireRecord,
   RecoveryWireRecordState,
   RecoveryWireTranscript,
@@ -77,11 +78,11 @@ function groupOf(state: RecoveryWireRecordState): Group {
   }
 }
 
-/** An age in words, or the honest non-answer — never "0s" standing in for a clock this page cannot read. */
-function ago(at: string, nowMs: number): string {
+/** An age in words, or null — never "0s" standing in for a clock this page cannot read. */
+function ageOf(at: string, nowMs: number): string | null {
   const parsed = Date.parse(at);
-  if (!Number.isFinite(parsed) || nowMs - parsed < 0) return "at a time this page cannot read";
-  return `${formatDuration(nowMs - parsed)} ago`;
+  if (!Number.isFinite(parsed) || !Number.isFinite(nowMs) || nowMs - parsed < 0) return null;
+  return formatDuration(nowMs - parsed);
 }
 
 function When({ at }: { at: string }): ReactNode {
@@ -207,6 +208,43 @@ function EvidenceFacts({ evidence }: { evidence: RecoveryWireEvidence }): ReactN
   );
 }
 
+/**
+ * The live row a record was matched against, or only resembles — **with the
+ * four facts the match turns on** (Sol's F32): its directory, the conversation
+ * its session claims, the conversation it was verified to be running, and its
+ * execution token. Without them "present but unmatched" is a verdict nobody can
+ * check. Each says so when it is absent rather than being left out.
+ */
+function LiveRowFacts({ row }: { row: RecoveryWireLiveRow }): ReactNode {
+  return (
+    <>
+      <Fact label="live row">
+        <Mono>{row.name}</Mono> ({row.tmuxId}), {row.statusKey}
+      </Fact>
+      <Fact label="live directory">{row.dir === null ? "not recorded" : <PathText path={row.dir} />}</Fact>
+      <Fact label="live claim">
+        {row.claimedConversationId === null ? (
+          "none"
+        ) : (
+          <>
+            <Mono>{row.claimedConversationId}</Mono> (the session's claim, unverified)
+          </>
+        )}
+      </Fact>
+      <Fact label="live conversation">
+        {row.conversationId === null ? (
+          "not verified"
+        ) : (
+          <>
+            <Mono>{row.conversationId}</Mono> (verified)
+          </>
+        )}
+      </Fact>
+      <Fact label="live run">{row.executionToken === null ? "not verified" : <Mono>{row.executionToken}</Mono>}</Fact>
+    </>
+  );
+}
+
 function RecordCard({ record, untrusted }: { record: RecoveryWireRecord; untrusted: boolean }): ReactNode {
   const group = groupOf(record.state);
   const state = record.state;
@@ -259,27 +297,32 @@ function RecordCard({ record, untrusted }: { record: RecoveryWireRecord; untrust
           </Fact>
           {record.oversize ? <Fact label="record">too large for the index; the full candidate is in events.jsonl</Fact> : null}
           {state.kind === "classified" && (state.classification.kind === "already-live" || state.classification.kind === "present-but-unmatched") ? (
-            <Fact label="live row">
-              <Mono>{state.classification.row.name}</Mono> ({state.classification.row.tmuxId}), {state.classification.row.statusKey}
-            </Fact>
+            <LiveRowFacts row={state.classification.row} />
           ) : null}
           {state.kind === "classified" ? (
             <EvidenceFacts evidence={state.evidence} />
-          ) : record.entry === null ? null : (
+          ) : (
             <>
-              <Fact label="directory">
-                {record.entry.dir === null ? (
-                  "not recorded"
-                ) : (
-                  <>
-                    <PathText path={record.entry.dir} /> — whether it exists was not checked
-                  </>
-                )}
-              </Fact>
-              <Fact label="transcript">not checked</Fact>
-              <Fact label="last activity">
-                ≥ <When at={record.entry.lastSeenAlive} /> (a floor: alive at least this recently)
-              </Fact>
+              {record.entry === null ? null : (
+                <>
+                  <Fact label="directory">
+                    {record.entry.dir === null ? (
+                      "not recorded"
+                    ) : (
+                      <>
+                        <PathText path={record.entry.dir} /> — whether it exists was not checked
+                      </>
+                    )}
+                  </Fact>
+                  {/* THE STORED WORKTREE, AS RECORDED (Sol's F32): a name, unchecked. */}
+                  <Fact label="worktree">{record.entry.worktree === null ? "none recorded" : <Mono>{record.entry.worktree}</Mono>}</Fact>
+                  <Fact label="transcript">not checked</Fact>
+                  <Fact label="last activity">
+                    ≥ <When at={record.entry.lastSeenAlive} /> (a floor: alive at least this recently)
+                  </Fact>
+                </>
+              )}
+              <Fact label="resume">{state.kind === "resolved" ? "not applicable, this record is resolved" : "not checked"}</Fact>
             </>
           )}
           <Fact label="latest evidence">
@@ -308,9 +351,21 @@ function RecordCard({ record, untrusted }: { record: RecoveryWireRecord; untrust
   );
 }
 
-function PublishedView({ feed, nowMs }: { feed: Published; nowMs: number }): ReactNode {
+function PublishedView({ feed, nowMs, receivedAtMs }: { feed: Published; nowMs: number; receivedAtMs: number }): ReactNode {
   const view = feed.view;
   const untrusted = view.kind === "checked" && view.inventory.kind === "untrusted";
+  // THE AGE IS THE SERVER'S (Sol's F31). `checkedAt` is the box's clock; a
+  // phone's can be minutes out, and measuring one against the other said
+  // "checked 0s ago" of a view the server already knew was half an hour old.
+  // So it is measured against `composedAt`, the server's clock when it
+  // answered, advanced by how long this page has held the answer — an interval
+  // on this page's clock, which is the one thing that clock can measure.
+  const serverNowMs = Date.parse(feed.composedAt) + Math.max(0, nowMs - receivedAtMs);
+  const age = view.kind === "checked" ? ageOf(view.checkedAt, serverNowMs) : null;
+  // THE PLAIN EMPTY STATE ONLY FOR A TRULY EMPTY INDEX (Sol's F33). Beside an
+  // overflow, or a replay that did not run, "no interrupted work is recorded"
+  // contradicts the banner above it: there is work recorded, just not here.
+  const trulyEmpty = feed.total === 0 && feed.overflow === 0 && feed.replay.kind === "ran";
   let lastGroup: string | null = null;
   return (
     <div>
@@ -345,7 +400,15 @@ function PublishedView({ feed, nowMs }: { feed: Published; nowMs: number }): Rea
       <p data-testid="recovery-age" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:text-ink-faint">
         {view.kind === "checked" ? (
           <>
-            Checked {ago(view.checkedAt, nowMs)}, at <When at={view.checkedAt} />
+            {age === null ? (
+              <>
+                Checked at <When at={view.checkedAt} /> (how long ago cannot be read from the server's clock)
+              </>
+            ) : (
+              <>
+                Checked {age} ago by the server's clock, at <When at={view.checkedAt} />
+              </>
+            )}
             {view.inventory.kind === "trusted" ? (
               <>
                 , against the inventory collected at <When at={view.inventory.collectedAt} /> ({view.inventory.rows}{" "}
@@ -365,12 +428,20 @@ function PublishedView({ feed, nowMs }: { feed: Published; nowMs: number }): Rea
       </p>
 
       {feed.records.length === 0 ? (
-        <Card className="tw:p-3">
-          <p data-testid="recovery-empty" className="tw:text-[13px] tw:text-ink">
-            No interrupted work is recorded.
-          </p>
-          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">The index was read, and it holds no records.</p>
-        </Card>
+        trulyEmpty ? (
+          <Card className="tw:p-3">
+            <p data-testid="recovery-empty" className="tw:text-[13px] tw:text-ink">
+              No interrupted work is recorded.
+            </p>
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">The index was read, and it holds no records.</p>
+          </Card>
+        ) : (
+          <Card className="tw:p-3">
+            <p data-testid="recovery-empty" className="tw:text-[13px] tw:text-ink">
+              The recovery index currently holds no records.
+            </p>
+          </Card>
+        )
       ) : (
         feed.records.map((record) => {
           const group = groupOf(record.state).label;
@@ -401,7 +472,7 @@ function PublishedView({ feed, nowMs }: { feed: Published; nowMs: number }): Rea
   );
 }
 
-function Body({ view, nowMs }: { view: PanelView; nowMs: number }): ReactNode {
+function Body({ view, nowMs, receivedAtMs }: { view: PanelView; nowMs: number; receivedAtMs: number }): ReactNode {
   switch (view.kind) {
     case "loading":
       return <p className="tw:p-3 tw:text-[13px] tw:text-ink-faint">Reading the recovery index…</p>;
@@ -437,7 +508,7 @@ function Body({ view, nowMs }: { view: PanelView; nowMs: number }): ReactNode {
         </Banner>
       );
     case "published":
-      return <PublishedView feed={view} nowMs={nowMs} />;
+      return <PublishedView feed={view} nowMs={nowMs} receivedAtMs={receivedAtMs} />;
     default: {
       const never: never = view;
       return never;
@@ -456,7 +527,13 @@ export function RecoveryPanel({
   /** The page's ticking clock, for the view's age. */
   nowMs?: number;
 }): ReactNode {
-  const [view, setView] = useState<PanelView>({ kind: "loading" });
+  // The answer, and when this page got it on the page's own clock: the view's
+  // age is the server's clock advanced by the interval since (F31).
+  const [held, setHeld] = useState<{ view: PanelView; receivedAtMs: number }>({ view: { kind: "loading" }, receivedAtMs: 0 });
+  const pageClock = useRef(nowMs);
+  useEffect(() => {
+    pageClock.current = nowMs;
+  }, [nowMs]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
   useEffect(() => {
@@ -467,7 +544,7 @@ export function RecoveryPanel({
       const request = new AbortController();
       current = request;
       void api.fetch(request.signal).then((next) => {
-        if (live && !request.signal.aborted) setView(next);
+        if (live && !request.signal.aborted) setHeld({ view: next, receivedAtMs: pageClock.current ?? Date.now() });
       });
     };
     load();
@@ -482,7 +559,7 @@ export function RecoveryPanel({
   return (
     <section aria-label="Interrupted work" data-testid="recovery-panel">
       <SectionHeading>Interrupted work</SectionHeading>
-      <Body view={view} nowMs={nowMs ?? Date.now()} />
+      <Body view={held.view} nowMs={nowMs ?? Date.now()} receivedAtMs={held.receivedAtMs} />
       <p className="tw:mt-3 tw:px-1 tw:text-[12px] tw:text-ink-faint">
         Read-only. Nothing on this page starts, resumes or dismisses anything.
       </p>

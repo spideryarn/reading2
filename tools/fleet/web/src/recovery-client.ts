@@ -12,6 +12,13 @@
  * **The parser is strict and fails whole.** A record that does not parse makes
  * the whole answer `no-answer`, never a shorter list: a record dropped here is
  * interrupted work nobody is shown.
+ *
+ * **And the answer must agree with itself** (Sol's F30). Every field can parse
+ * and the whole still be a contradiction — a row classified `interrupted` under
+ * a view that says nothing has been checked yet, or more unresolved rows than
+ * the counts say exist — and drawn as it is, the page would state both halves
+ * side by side. `contradiction` holds the server's cross-field contract
+ * (recovery-feed.ts § the projection); a violation is `no-answer`.
  */
 import type {
   RecoveryFeed,
@@ -236,6 +243,45 @@ function noAnswer(why: string): Extract<RecoveryView, { kind: "no-answer" }> {
   return { kind: "no-answer", why };
 }
 
+type Published = Extract<RecoveryFeed, { kind: "published" }>;
+
+/** The largest first page the server sends (recovery-feed.ts § `RECOVERY_FIRST_PAGE`). */
+export const RECOVERY_FIRST_PAGE_MAX = 100;
+
+/** What makes a published answer contradict itself, or null. Called only once every field has parsed. */
+function contradiction(feed: Published): string | null {
+  const { records, view } = feed;
+  if (records.length > RECOVERY_FIRST_PAGE_MAX) return `${records.length} records, over the first page of ${RECOVERY_FIRST_PAGE_MAX}`;
+  const ids = new Set<string>();
+  for (const r of records) {
+    if (ids.has(r.id)) return `record ${r.id} appears twice`;
+    ids.add(r.id);
+  }
+  if (feed.unresolved > feed.total) return `${feed.unresolved} unresolved of only ${feed.total} records`;
+  const shownUnresolved = records.filter((r) => r.state.kind !== "resolved").length;
+  const shownResolved = records.length - shownUnresolved;
+  if (shownUnresolved > feed.unresolved) return `${shownUnresolved} unresolved rows shown, of ${feed.unresolved} unresolved`;
+  if (shownResolved > feed.total - feed.unresolved) return `${shownResolved} resolved rows shown, of ${feed.total - feed.unresolved} resolved`;
+  // The first page takes every unresolved record before any resolved one.
+  if (shownResolved > 0 && shownUnresolved < feed.unresolved) return "a resolved row is shown while an unresolved record is not";
+  for (const r of records) {
+    // An oversize stub keeps its address and nothing else (recovery-feed.ts § parseRecord).
+    if (r.oversize) {
+      if (r.entry !== null || r.lastSeen !== null || r.disappearance !== null) return `${r.id} is an oversize stub that carries the facts a stub drops`;
+    } else {
+      if (r.disappearance === null) return `${r.id} is no stub and has no disappearance`;
+      if (r.entry === null && r.origin !== "legacy") return `${r.id} is a journal record with no entry`;
+    }
+    if (r.state.kind === "classified") {
+      if (view.kind !== "checked") return `${r.id} is classified, under a view that is ${view.kind}`;
+      if (view.inventory.kind === "untrusted" && r.state.classification.kind !== "unknown") {
+        return `${r.id} is ${r.state.classification.kind} against an inventory that cannot be trusted`;
+      }
+    }
+  }
+  return null;
+}
+
 /** A recursively checked server payload, or this browser's refusal to guess. */
 export function parseRecoveryFeed(body: unknown): RecoveryView {
   if (!isRecord(body)) return noAnswer("this browser received something that is not the recovery API");
@@ -273,7 +319,10 @@ export function parseRecoveryFeed(body: unknown): RecoveryView {
   if (body["olderCount"] !== body["total"] - records.length) {
     return noAnswer(`this browser received ${records.length} records and an older count of ${body["olderCount"]}, which do not add up to ${body["total"]}`);
   }
-  return body as RecoveryFeed;
+  const feed = body as Published;
+  const why = contradiction(feed);
+  if (why !== null) return noAnswer(`this browser received a recovery answer that contradicts itself: ${why}`);
+  return feed;
 }
 
 /** Build the seam against an injectable request leaf. */

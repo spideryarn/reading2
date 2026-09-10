@@ -26,16 +26,20 @@
  *  3. Generation G2 arrives with the working Claude back under a new execution
  *     token: the same verified conversation in a different run.
  *
- * ## It never touches `~/.overseer`
+ * ## It never touches a live store
  *
- * It refuses a target that is, or is inside, `~/.overseer`, and a target that
- * is not empty. Everything it writes is under the target: `store/` (the
- * Overseer's root), `projects/` (a stand-in for `~/.claude/projects`) and
- * `work/` (the sessions' directories).
+ * It refuses a target that is, is inside, or contains a live store —
+ * `~/.overseer`, and `OVERSEER_STORE_DIR` when that is set to an absolute path —
+ * and a target that is not empty. Both sides are compared **as the file system
+ * will resolve them** (`canonicalPath`), so a symlinked ancestor is caught even
+ * when the leaf does not exist yet, and the check is repeated on the canonical
+ * path immediately before anything is created there (Sol's F28). Everything it
+ * writes is under the target: `store/` (the Overseer's root), `projects/` (a
+ * stand-in for `~/.claude/projects`) and `work/` (the sessions' directories).
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { slugifyDir } from "../tools/fleet/transcript.js";
@@ -74,37 +78,97 @@ export type DrillResult = {
   dirs: Record<keyof typeof DRILL_SESSIONS, string>;
 };
 
-/** Where the real store lives, both as written and as resolved, so a symlinked home is caught too. */
-function overseerHomes(): string[] {
-  const home = join(homedir(), ".overseer");
-  const homes = [resolve(home)];
-  try {
-    homes.push(realpathSync(home));
-  } catch {
-    /* no live store on this machine: the written path is the whole check */
-  }
-  return homes;
+/**
+ * Where the guard looks for live stores. Production passes nothing and gets
+ * this process's home and environment; the tests pass a fake home, so proving
+ * the guard never involves the real `~/.overseer`.
+ */
+export type StoreGuard = { home?: string | undefined; env?: NodeJS.ProcessEnv | undefined };
+
+function errnoCode(cause: unknown): string | null {
+  if (typeof cause !== "object" || cause === null) return null;
+  const code = (cause as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
 }
 
-function resolvedTarget(target: string): string {
-  const absolute = resolve(target);
-  try {
-    return realpathSync(absolute);
-  } catch {
-    return absolute;
+function message(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * A path as the file system will resolve it when something is created there:
+ * the nearest ancestor that exists, canonicalised, with the part that does not
+ * exist yet appended.
+ *
+ * `realpathSync` of the whole path fails whenever the leaf is new — which is
+ * the drill's ordinary case — and the fallback to the lexical path there is
+ * what let `/tmp/live/new-drill` through when `/tmp/live -> ~/.overseer`
+ * (Sol's F28). **Throws on a dangling link on the way**: creating through one
+ * lands wherever it points, which cannot be checked before it exists.
+ */
+export function canonicalPath(path: string): string {
+  const missing: string[] = [];
+  let probe = resolve(path);
+  for (;;) {
+    let real: string | null = null;
+    try {
+      real = realpathSync(probe);
+    } catch (cause) {
+      if (errnoCode(cause) !== "ENOENT") throw cause;
+    }
+    if (real !== null) return missing.length === 0 ? real : join(real, ...missing.reverse());
+    let dangling = false;
+    try {
+      dangling = lstatSync(probe).isSymbolicLink();
+    } catch {
+      /* absent: keep walking up */
+    }
+    if (dangling) throw new Error(`${probe} is a symbolic link to somewhere that does not exist`);
+    const parent = dirname(probe);
+    if (parent === probe) return resolve(path);
+    missing.push(basename(probe));
+    probe = parent;
   }
 }
 
-/** Refuse a target that is, or is inside, `~/.overseer`, and one with anything in it. */
-export function refuseUnsafeTarget(target: string): string | null {
-  const resolved = resolvedTarget(target);
-  for (const home of overseerHomes()) {
-    if (resolved === home || resolved.startsWith(`${home}${sep}`)) {
-      return `refusing: ${target} resolves to the live Overseer store (${home}). The drill only ever builds a disposable one.`;
+/** `~/.overseer`, and `OVERSEER_STORE_DIR` when it is absolute — the only form the daemon accepts (attention.ts § storeRoot). */
+function liveStores(guard: StoreGuard): string[] {
+  const stores = [join(guard.home ?? homedir(), ".overseer")];
+  const override = (guard.env ?? process.env)["OVERSEER_STORE_DIR"]?.trim();
+  if (override !== undefined && override !== "" && isAbsolute(override)) stores.push(override);
+  return stores;
+}
+
+function within(inner: string, outer: string): boolean {
+  return inner === outer || inner.startsWith(outer.endsWith(sep) ? outer : `${outer}${sep}`);
+}
+
+/**
+ * Refuse a target that is, is inside, or contains a live store, and one with
+ * anything in it. Both directions of containment, because the drill writes
+ * `store/` beneath its target.
+ */
+export function refuseUnsafeTarget(target: string, guard: StoreGuard = {}): string | null {
+  let resolved: string;
+  try {
+    resolved = canonicalPath(target);
+  } catch (cause) {
+    return `refusing: ${target} cannot be resolved safely: ${message(cause)}`;
+  }
+  for (const store of liveStores(guard)) {
+    let canonical: string;
+    try {
+      canonical = canonicalPath(store);
+    } catch (cause) {
+      return `refusing: the live Overseer store ${store} cannot be resolved, so ${target} cannot be shown to be outside it: ${message(cause)}`;
+    }
+    if (within(resolved, canonical) || within(canonical, resolved)) {
+      return `refusing: ${target} resolves to ${resolved}, which is or overlaps the live Overseer store (${canonical}). The drill only ever builds a disposable one.`;
     }
   }
-  if (existsSync(resolved) && readdirSync(resolved).length > 0) {
-    return `refusing: ${target} is not empty. Give the drill a new or empty directory.`;
+  if (existsSync(resolved)) {
+    if (!statSync(resolved).isDirectory()) return `refusing: ${target} is not a directory.`;
+    if (readdirSync(resolved).length > 0) return `refusing: ${target} is not empty. Give the drill a new or empty directory.`;
   }
   return null;
 }
@@ -174,11 +238,12 @@ function verified(conversation: string, pid: number, startTicks: number): JsonVa
  */
 export async function buildRecoveryDrill(
   target: string,
-  options: { now?: () => Date; log?: (line: string) => void; hostname?: () => string } = {},
+  options: { now?: () => Date; log?: (line: string) => void; hostname?: () => string } & StoreGuard = {},
 ): Promise<DrillResult> {
-  const refusal = refuseUnsafeTarget(target);
+  const guard: StoreGuard = { home: options.home, env: options.env };
+  const refusal = refuseUnsafeTarget(target, guard);
   if (refusal !== null) throw new Error(refusal);
-  const root = resolvedTarget(target);
+  const root = canonicalPath(target);
   const store = join(root, "store");
   const projects = join(root, "projects");
   const work = join(root, "work");
@@ -188,6 +253,14 @@ export async function buildRecoveryDrill(
     shell: join(work, DRILL_SESSIONS.shell),
     deleted: join(work, DRILL_SESSIONS.deleted),
   };
+  // RECHECKED ON THE CANONICAL PATH IMMEDIATELY BEFORE ANYTHING IS CREATED, and
+  // the root is then created by that path and confirmed to still be it, so a
+  // link swapped in after the first check cannot redirect the writes (F28).
+  const again = refuseUnsafeTarget(root, guard);
+  if (again !== null) throw new Error(again);
+  mkdirSync(root, { recursive: true });
+  const landed = realpathSync(root);
+  if (landed !== root) throw new Error(`refusing: ${root} resolved to ${landed} once created; nothing more is written`);
   for (const dir of [store, projects, ...Object.values(dirs)]) mkdirSync(dir, { recursive: true });
 
   // The working Claude's transcript, where `findTranscript` would look first.
