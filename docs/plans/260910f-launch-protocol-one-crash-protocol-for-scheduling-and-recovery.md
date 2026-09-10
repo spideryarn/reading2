@@ -685,9 +685,65 @@ applied once; a crash after `disposed` still releases (F7); `resolve-history` pr
 journal byte-for-byte and starts a fresh one with `history-reset` (F2); the projection's bound and
 overflow count (F10); the drill's exact counts, and its no-op negative control failing (F12).
 
+## Stage 3, not built — the handover
+
+**Greg moved Overseer and dashboard work to the bottom of the priorities on 2026-09-10 (relayed by
+the Overseer), so this session landed Stages 1, 1b, 2 and 2b and stopped.** A Stage 3 builder had
+been started minutes before the instruction arrived; it was stopped and left no file changed.
+
+What Stage 3 would do, in full, so it can be picked up as it stands — the brief is
+`260910f-launch-protocol-stage3-task.md`, updated to everything Stages 1–2b settled:
+
+1. **`tools/overseer/daemon.ts`** (small edits, outside the usage pass): open the launch store and
+   the admission owner under the store root at start (a refusal is logged and leaves launching
+   unavailable, never stops the daemon); **compose the protocol once**
+   (`composeLaunchProtocol` with the three launchers, their `env` the sanitised set — never the
+   daemon's own environment, checked by variable name only) and export it as one named value beside
+   the scheduler's tick site, for `scheduled-dispatch` to hand to `TickInput`; run `reconcile()` at
+   start and on every checkpoint tick; drain the launch inbox; write `launches.json`.
+2. **`tools/overseer/launch-inbox.ts`**: the drop-directory shape of `recovery-inbox.ts` — `dispose`
+   and `resolve-history` requests, validated against the fold, applied once by request id.
+3. **`scripts/overseer-launches.ts`**: `list`, `show <id>`, and the pinned
+   `dispose <lo-id> --as not-running|ended --why "<reason>"` (request id and actor filled by the
+   script), plus `resolve-history --why … --accept-hidden-launch-risk`.
+4. **`tools/overseer/launch-projection.ts`**: `launches.json`, bounded (200 non-terminal, most
+   actionable first; the newest 50 terminal; totals and omitted counts; each class's capacity and
+   holders; the journal's and the owner's replay status).
+5. **`tools/fleet/wire.ts`**: one appended block of the projection's types, for the page.
+6. **`scripts/launch-protocol-drill.ts`**: D11 as amended by F12 — the fixture job's real occurrence
+   on a scratch store, scratch owner and disposable tmux socket, killed and reopened at every
+   boundary of D4's table, exact counts per boundary with the external effects counted
+   independently, and a `--negative-control` no-op launcher that must fail. **This drill is the
+   roadmap stage's acceptance evidence; until it exists, the acceptance paragraph is met by the
+   fault-injection tests in `tests/overseer-launch-protocol.test.ts`, not by a drill.**
+7. **Then, not this stage:** the fleet route, client and panel, and the `server.ts`/`App.tsx` lines
+   (moved to Scheduled dispatch by F8); `scheduled-dispatch`'s one `TickInput` line; and
+   `gradual-recovery`'s `tmux-resume` launcher kind and `--resume-conversation`.
+
+**What that leaves true on dev today:** the launch protocol, its store, the admission owner, the
+three launchers and the wrapper and gjd-remote changes are all built, reviewed and tested, **and
+nothing calls them** — a test asserts it. No daemon opens the launch store, so there is no
+`~/.overseer/launches/` on the box, and **no restart is needed or useful** until Stage 3 lands.
+
+**Also left, and named:** the `run-codex` test redaction the Overseer approved as a follow-up
+(five assertions in `tests/run-codex.test.ts` that would print the real `CODEX_API_KEY` on failure —
+see the postmortem) is **not done**; the per-lane secret scrub is the Overseer's queue item
+`qi-xj735ng4`; and `docs/project/testing.md`'s ".env.local is loaded into tests" section still
+names `vite.config.ts` rather than the setup files.
+
 ## Status
 
-**2026-09-10 — Stage 0 done.** Plan d7f5f3c7 reviewed by Sol (read-only, one round): refused on
-three established P1s, all thirteen findings accepted and folded in above. No second plan round —
-the dispositions adopt Sol's own replacement wording, and the stage reviews will check the code
-built from it. Stage 1 next.
+**2026-09-10 — Stages 1, 1b, 2 and 2b landed on dev; Stage 3 not built (Greg's reprioritisation).
+Ending: important work left** — the daemon wiring, Greg's inbox and CLI, the projection, and the
+drill that is the roadmap's acceptance evidence (the handover above says exactly what). Leaving it
+costs little today: nothing calls the protocol, a test says so, and neither consumer can launch
+through it until Stage 3 composes it in the daemon.
+
+Reviews: the plan (Sol, 13 findings, 3 P1, all accepted); Stage 1 (Sol, one review in two runs —
+the first stopped by Codex's content filter — F14–F19, then a narrow check closing all five P1s);
+Stage 2 (Sol, one review in two runs — the first stopped at capacity — F20–F24, then a narrow check
+closing all three P1s). Implemented by Opus subagents throughout, no Codex implementation. One
+full suite on the merged tree, accounted for (above). Two out-of-set edits, both approved by the
+Overseer: `runChild`'s SIGHUP handling in `scripts/subagent-cli.ts` (an orphan fix) and one
+`ALLOWED` reason in `tests/no-undeclared-spend.test.ts`. One incident: a red-first env test printed
+real keys into a subagent's context — postmortem 260910d, rotation with Greg.
