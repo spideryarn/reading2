@@ -7,6 +7,7 @@ not authorise implementing every product decision below.
 
 **Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
+L (the unknown-throw mapper) investigated the same day and closed with no change — see § L.
 I (retire the revision alias) built the same day — see § I.
 Each stage's own status line is the authority.
 
@@ -623,16 +624,52 @@ rebuild any of those. They close the class in
 
 ### Stage: a short reachability investigation that may end with no change
 
-- [ ] Inspect the outer catch/status mapper in `src/routes.ts` (around 6420), not just
+**Status, 2026-09-10: investigated; no realistic seam found; no code change.** The stage ended the
+way its last box allows. What was looked at, so the next person need not repeat it (line numbers
+are coordinates at `f5e486bf`):
+
+- **The mapper** is the `catch` in `serveApi` (`src/routes.ts`, `(err as { status?: number }).status`
+  ≈6468, then `.code` and `.message`). It crashes only on `null`, `undefined`, or a value whose
+  `status`/`code`/`message` accessor throws. A primitive (`throw "x"`) does not crash it — it maps
+  to 500.
+- **Our own server code** (`src/` less `src/web/`) originates no non-`Error` throw or rejection:
+  explicit promise rejections pass an `Error` (the one fflate bridge forwards its typed
+  `FlateError`); every `AbortController.abort(…)` is given an `Error` (or no argument, which yields
+  a `DOMException`); the one `throw signal.reason` already has `?? new Error("aborted")`; there is
+  no `throw <x>.reason` or `throw <x>.error` rethrow of a stored value. Plain `throw err`
+  catch-and-rethrows do exist; they preserve a dependency's value rather than originate one, so the
+  dependency paths are considered below.
+- **The store** cannot be the source: `guardDbStore` sends anything that fails `mayPassThrough` —
+  `null` and `undefined` included — through `scrubDbError`, which returns an `Error`.
+- **The request-path dependencies** (`@anthropic-ai/sdk`, `@mozilla/readability`, `@supabase`,
+  `drizzle-orm`, `fflate`, `jsdom`, `pdf-lib`, `pdfjs-dist`, `pg`, `pg-pool`, `pg-protocol`,
+  `p-queue`, `stripe`, `undici`, `html-encoding-sniffer`, `mdast-util-from-markdown`) contain no
+  literal `throw null|undefined|void 0`, `reject()`, `reject(null|undefined)` or
+  `Promise.reject()` in their shipped JavaScript. pdf.js's worker boundary refuses a non-object
+  reason (`wrapReason`).
+- **If one did arrive before headers were sent**, the `finally` still logs (with `res.statusCode`,
+  so a misleading 200 line), and the resulting `TypeError` escapes to `src/vercel.ts`'s last-resort
+  `catch`, which answers 500, logs the stack and calls `captureFailure`. The dev middleware logs
+  the stack and answers 500 too. After an SSE route has sent its 200 headers, neither fallback can
+  change the wire status: Vercel ends the stream, while the dev middleware's unguarded `setHeader`
+  can itself throw. No realistic source reaches either branch, but the earlier blanket claim that
+  every case answers 500 and fails closed was too broad.
+
+So there is no route-level red witness to write, and a contrived getter handed to the helper would
+be exactly the non-evidence the next box warns about. Reopen only if a real throw of a non-object
+is seen in a log.
+
+- [x] Inspect the outer catch/status mapper in `src/routes.ts` (around 6420), not just
   `mayPassThrough` in `src/store/db-errors.ts`. It reads properties of an unknown thrown value;
   a `null` or throwing accessor could make the catch throw. **No production source of such a
   value was established by this audit.**
-- [ ] Find a realistic route/dependency seam that can throw the value, then write a route-level red
+- [x] (Searched; none found — so neither this box's red witness nor the next box's fix applies.)
+  Find a realistic route/dependency seam that can throw the value, then write a route-level red
   witness. A contrived getter passed only to a private helper is not evidence of a product defect.
 - [ ] If reachable, make the mapper total over that input while preserving the shipped status,
   scrub and logging contracts. Keep all three existing suites unchanged/green unless the new case
   belongs in one. Do not introduce another class inventory or parser.
-- [ ] If no realistic seam is found, record that and stop. This is an XS investigation, not the
+- [x] If no realistic seam is found, record that and stop. This is an XS investigation, not the
   M-sized prevention rewrite in the first draft. A real fix, if warranted, gets its own sizing,
   root-cause note and common checks.
 
