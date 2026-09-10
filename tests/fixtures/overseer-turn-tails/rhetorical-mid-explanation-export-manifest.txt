@@ -1,0 +1,20 @@
+
+❯ look at the stale export
+
+● What does a reader actually get when the export runs twice? Two archives with the same name, the second silently
+  replacing the first, which is fine for them and was never the bug.
+
+  The bug was the manifest: it was written before the images finished uploading, so a reader who downloaded during
+  that window got a manifest listing files that were not there yet. The manifest is now written last, after every
+  upload has resolved, and a test pins the order by making one upload slow.
+
+  Committed as one change with its test, pushed to dev. Scoped tests, typecheck and the full suite are all green.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

@@ -3,8 +3,10 @@
  *
  * Driven against REAL CAPTURES with an injected classifier, so the pass can be
  * exercised on the panes the live box actually produces without tmux and without
- * spending anything. Every fixture under tests/fixtures/overseer-turn-tails/ was
- * taken with `tmux capture-pane -p` on this box on 2026-09-08, read only.
+ * spending anything. The fixtures under tests/fixtures/overseer-turn-tails/ named
+ * `ended-*`, `mid-turn-*` and `no-input-box-*` were taken with
+ * `tmux capture-pane -p` on this box on 2026-09-08, read only; the rest are
+ * hand-written for plan 260910f's labelled set (labels.json beside them).
  *
  * THE THING THIS FILE IS REALLY ABOUT is the accounting. An empty inbox is the
  * output the whole system is trying to earn, and it is also what a completely

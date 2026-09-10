@@ -1,0 +1,21 @@
+
+❯ run the full suite and push if green
+
+● The full suite finished in tmux: 2,318 passed, 3 failed. The three are tests/store-publish-guards.test.ts,
+  tests/pg-shelf.test.ts and tests/ingest-queue.test.ts, all timing out waiting on a database lock.
+
+  None of them imports anything I touched — my change is two files under tools/overseer/ — and shared-database
+  contention is known to red Postgres files in a full run.
+
+  Are these failures mine or somebody else's?
+
+  I haven't pushed yet.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

@@ -113,8 +113,10 @@ classification: Fable, *"debriefs end with 'shall I remove the worktree?' consta
 irreversible question"*.
 
 **D11. Misdirection is out of scope for this detector, and the eval says so in numbers.** The
-wrong-task and concluded-work fixtures are labelled `out-of-scope-for-this-detector`, not
-expected-negative, and are **excluded from precision and recall**: *"an expected-negative counts
+wrong-task fixtures, and concluded work that is really misdirection (*"done — I skipped the gates"*),
+are labelled `out-of-scope-for-this-detector`, not expected-negative, and are **excluded from
+precision and recall**. A clean debrief with nothing pending is an ordinary `no-question` and is
+scored — the detector should stay silent on it, and that is checkable. Fable: *"an expected-negative counts
 toward precision; these are cases the detector is structurally blind to"*. The eval header reads
 *"N of M labelled items are misdirection; this stage detects 0 of them by design."* The proposer is
 not asked to flag them.
@@ -165,11 +167,18 @@ it finds; P1 fixes get one narrow 20-minute check, then Fable, and no further ro
 
 ### Stage 1 — the labelled set, the version in the key, and the day budget
 
-- [ ] Extend `tests/fixtures/overseer-turn-tails/` with labelled cases for the six the roadmap names:
+- [x] Extend `tests/fixtures/overseer-turn-tails/` with labelled cases for the six the roadmap names:
       prose question without `?`, rhetorical question, concluded work, background review, permission
       defect, working confidently on the wrong task. A `labels.json` beside them: expected verdict,
       expected recipient where it is a question, and what the **mechanical inbox** (dialog parse +
       `?` grep) says about it. Sanitised, hand-written from real shapes; no live pane is committed.
+      **Built** (Opus subagent): 14 new fixtures, 24 labelled items, `tools/overseer/attention-labels.ts`
+      (`mechanicalInbox`, `scoreMechanical`), `tests/overseer-attention-labels.test.ts`, seen red
+      first. **The mechanical baseline: 3 of 8 questions caught, 1 false alarm in 9 non-questions**
+      (a rhetorical question at the end of a turn); 2 out-of-scope items not scored; the 1
+      permission defect seen as a permission dialog. The three it catches are the ones that end in
+      `?` — two `overseer`, one `self` — so **every question for Sol, Fable or Greg in the set is
+      invisible without a model**, which is the whole case for this stage in one line.
 - [ ] `CLASSIFIER_VERSION` in the cache key; a verdict from another version is a miss. Red first.
 - [ ] `model-budget.ts`: the ledger (D4), cooldown (D5), refusal before a call rather than after,
       one call in flight, and the pass reporting `judgement` (D6) through the list. Red first:
