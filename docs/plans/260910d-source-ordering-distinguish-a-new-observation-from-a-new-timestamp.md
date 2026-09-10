@@ -455,7 +455,19 @@ this worktree and reviewed by Sol.
 
 ## Status
 
-2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
-stamp, Sol stage review passed with four fixes, on `dev`. Stage 3 done ahead of Stage 2: store and
-CLI readers, Sol stage review passed with three fixes. Stage 2 waits on another session's
-`daemon.ts` push, which is held for Greg's approval of a merge conflict with Stage 1.
+2026-09-10 — **finished.** Every stage done and Sol-reviewed, no second review round needed on any:
+
+- Stage 0, the plan: six findings, all accepted.
+- Stage 1, the producer stamp (Codex): four fixes from its review.
+- Stage 3, the store and CLI readers (Codex, run ahead of Stage 2): three fixes.
+- Stage 2, the daemon's ordering (Opus subagent, started before web-260910's `daemon.ts` push on
+  the Overseer's call): stronger tests, no production defect.
+
+**Full suite on the final merged tree:** 989 files passed, 1 skipped, 2 failed. The two are
+`cold-start-lazy-imports` and `pdf-bundle-trace`, both at "has a build to inspect": the known
+environment failures of a worktree with no `api-dist/`. `fleet-decisions-route`, the third known
+one, passed because `build:fleet` ran first. No Postgres contention failures. Typecheck exit 0.
+**Live-log check:** 0 of 1,918 frozen lines refused at every stage.
+
+**To be live it needs both restarts, in either order:** a dashboard restart makes the stamps exist,
+a daemon restart makes them read. Until then old and new combine without harm in both directions.
