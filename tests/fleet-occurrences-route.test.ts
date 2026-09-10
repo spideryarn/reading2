@@ -9,16 +9,21 @@
  * what it refuses:
  *
  * - an id that is not `lo-<20 hex>`, a `..`, and an encoded traversal — 400;
+ * - a well-shaped id `occurrences.json` does not list, or lists only as an
+ *   unreadable row, or lists with no answer — 404, whatever is on disk;
  * - a symlink at any level it opens (the launches tree, the id's directory,
- *   the attempt directory, the answer itself) — refused, never followed, and
- *   never "fall back to the attempt before";
+ *   the attempt directory, the answer itself) and a FIFO — 403, never followed,
+ *   and the FIFO never blocks the open;
  * - a file past 256 KB — 413, without reading it;
- * - no answer — 404 with a sentence.
+ * - a file whose size or sha256 is not the projection's — 409: it is not the
+ *   answer the shown result was judged on.
  *
- * It picks the HIGHEST `a<n>`, numerically, not lexically. Every store root is a
- * temp directory; `~/.overseer` is never touched. No id is a uuid.
+ * It serves the attempt the projection names, never the highest on disk. Every
+ * store root is a temp directory; `~/.overseer` is never touched. No id is a uuid.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -38,9 +43,20 @@ import {
   type OccurrencesRouteDeps,
 } from "../tools/fleet/routes-occurrences.js";
 import { answerUrlOf, makeOccurrencesApi, parseOccurrencesPayload } from "../tools/fleet/web/src/occurrences-client";
-import type { ScheduledOccurrence, ScheduledOccurrencesFile } from "../tools/fleet/wire.js";
+import type { ScheduledAnswer, ScheduledOccurrence, ScheduledOccurrencesFile } from "../tools/fleet/wire.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/** The projection's record of an answer with exactly this text. */
+function present(attempt: number, text: string): ScheduledAnswer {
+  return { kind: "present", attempt, bytes: Buffer.byteLength(text, "utf8"), sha256: sha256(text), usable: text !== "" };
+}
+
+const ANSWER_TEXT = "schedule fixture ran";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -68,7 +84,7 @@ const OCCURRENCE: ScheduledOccurrence = {
   state: "completed",
   run: { timeoutMinutes: 5, access: "read-only" },
   result: { kind: "succeeded", why: "exit 0, a usable answer", at: "2026-09-10T11:03:00.000Z" },
-  answer: { kind: "present", attempt: 2, bytes: 21, usable: true },
+  answer: present(2, ANSWER_TEXT),
   transcriptPath: null,
   tmuxSession: null,
   commands: { cancel: null, dispose: null },
@@ -138,6 +154,20 @@ function writeAnswer(storeDir: string, id: string, attempt: string, text: string
   const path = join(dir, "answer.md");
   writeFileSync(path, text, "utf8");
   return path;
+}
+
+/** `<store>/occurrences.json`, listing these occurrences under one job. */
+function listing(storeDir: string, occurrences: unknown[]): void {
+  const job = { ...FILE.jobs[0], occurrences };
+  writeFileSync(join(storeDir, OCCURRENCES_FILE), JSON.stringify({ ...FILE, jobs: [job] }), "utf8");
+}
+
+/** A store whose projection lists `ID` with an answer at `attempt` of exactly `text`, and that text on disk there. */
+function listedStore(attempt: number, text: string): string {
+  const storeDir = tempRoot();
+  listing(storeDir, [{ ...OCCURRENCE, answer: present(attempt, text) }]);
+  writeAnswer(storeDir, ID, `a${attempt}`, text);
+  return storeDir;
 }
 
 function answerPath(id = ID): string {
@@ -234,27 +264,96 @@ describe("the list payload over a real store directory, through makeOccurrences(
 });
 
 describe("the answer route: the durable result link", () => {
-  it("serves the newest attempt's answer, as plain text that is never sniffed or cached", () => {
-    const storeDir = tempRoot();
+  it("THE POSITIVE CONTROL: serves a listed occurrence's answer whose size and hash match, as plain text never sniffed or cached", () => {
+    const storeDir = listedStore(2, ANSWER_TEXT);
     writeAnswer(storeDir, ID, "a1", "the first attempt's answer");
-    writeAnswer(storeDir, ID, "a2", "schedule fixture ran");
     const answer = call(makeOccurrences({ storeDir }).route, answerPath());
     expect(answer.status).toBe(200);
-    expect(answer.raw).toBe("schedule fixture ran");
+    expect(answer.raw).toBe(ANSWER_TEXT);
     expect(answer.headers["content-type"]).toBe("text/plain; charset=utf-8");
     expect(answer.headers["x-content-type-options"]).toBe("nosniff");
     expect(answer.headers["cache-control"]).toBe("no-store");
   });
 
-  it("picks the highest attempt numerically, and ignores names that are not a1..a999", () => {
-    const storeDir = tempRoot();
-    writeAnswer(storeDir, ID, "a9", "nine");
+  it("serves the attempt the projection names, even when a higher attempt directory holds an answer", () => {
+    const storeDir = listedStore(9, "nine");
     writeAnswer(storeDir, ID, "a10", "ten");
-    writeAnswer(storeDir, ID, "a1000", "not an attempt");
-    writeAnswer(storeDir, ID, "a0", "not an attempt");
-    writeAnswer(storeDir, ID, "a011", "not an attempt");
-    writeAnswer(storeDir, ID, "b99", "not an attempt");
-    expect(readAnswerFile(storeDir, ID)).toEqual({ kind: "read", attempt: 10, body: Buffer.from("ten") });
+    expect(readAnswerFile(storeDir, ID)).toEqual({ kind: "read", attempt: 9, body: Buffer.from("nine") });
+    expect(call(makeOccurrences({ storeDir }).route, answerPath()).raw).toBe("nine");
+  });
+
+  it("answers 404 for a well-shaped id the projection does not list, though its answer is on disk", () => {
+    const OTHER = "lo-dddddddddddddddddddd";
+    const storeDir = listedStore(2, ANSWER_TEXT);
+    writeAnswer(storeDir, OTHER, "a1", "another origin's answer");
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath(OTHER));
+    expect(answer.status).toBe(404);
+    expect(answer.raw).toContain(OTHER);
+    expect(answer.raw).not.toContain("another origin's answer");
+  });
+
+  it("answers 404 when occurrences.json is absent or unreadable, whatever is on disk", () => {
+    const absent = tempRoot();
+    writeAnswer(absent, ID, "a2", ANSWER_TEXT);
+    const junk = tempRoot();
+    writeAnswer(junk, ID, "a2", ANSWER_TEXT);
+    writeFileSync(join(junk, OCCURRENCES_FILE), "{ not json", "utf8");
+    const schema = tempRoot();
+    writeAnswer(schema, ID, "a2", ANSWER_TEXT);
+    writeFileSync(join(schema, OCCURRENCES_FILE), JSON.stringify({ schema: 9 }), "utf8");
+    for (const storeDir of [absent, junk, schema]) {
+      const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+      expect(answer.status).toBe(404);
+      expect(answer.raw).not.toContain(ANSWER_TEXT);
+    }
+  });
+
+  it("answers 404 for an occurrence whose own row is unreadable, and for one with no answer", () => {
+    /* `succeeded` on a launching record: the parser refuses the row. */
+    const unreadable = tempRoot();
+    listing(unreadable, [{ ...OCCURRENCE, state: "launching" }]);
+    writeAnswer(unreadable, ID, "a2", ANSWER_TEXT);
+    /* An attempt past the protocol's 999: also the row's refusal. */
+    const farAttempt = tempRoot();
+    listing(farAttempt, [{ ...OCCURRENCE, answer: { ...present(1000, ANSWER_TEXT) } }]);
+    writeAnswer(farAttempt, ID, "a1000", ANSWER_TEXT);
+    /* Listed, and the projection says it has no answer. */
+    const noAnswer = tempRoot();
+    listing(noAnswer, [{ ...OCCURRENCE, answer: { kind: "absent" } }]);
+    writeAnswer(noAnswer, ID, "a2", ANSWER_TEXT);
+    for (const storeDir of [unreadable, farAttempt, noAnswer]) {
+      const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+      expect(answer.status).toBe(404);
+      expect(answer.raw).toContain(ID);
+      expect(answer.raw).not.toContain(ANSWER_TEXT);
+    }
+  });
+
+  it("answers 409 when the file on disk was changed after it was judged, at the same size", () => {
+    const storeDir = listedStore(2, ANSWER_TEXT);
+    writeAnswer(storeDir, ID, "a2", "schedule fixture RAN");
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+    expect(answer.status).toBe(409);
+    expect(answer.raw).toContain("not the one");
+    expect(answer.raw).not.toContain("RAN");
+  });
+
+  it("answers 409 when the file on disk is a different size from the one judged", () => {
+    const storeDir = listedStore(2, ANSWER_TEXT);
+    writeAnswer(storeDir, ID, "a2", `${ANSWER_TEXT}, and then some`);
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+    expect(answer.status).toBe(409);
+    expect(answer.raw).not.toContain("and then some");
+  });
+
+  it("answers 409 when answer.md was swapped for another readable file, by rename", () => {
+    const storeDir = listedStore(2, ANSWER_TEXT);
+    const other = join(storeDir, "launches", "o", ID, "a2", "other.md");
+    writeFileSync(other, "a different readable file", "utf8");
+    renameSync(other, join(storeDir, "launches", "o", ID, "a2", "answer.md"));
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+    expect(answer.status).toBe(409);
+    expect(answer.raw).not.toContain("different readable");
   });
 
   it("refuses an id that is not the protocol's shape, a `..`, and an encoded traversal, with 400 and without touching the disk", () => {
@@ -275,11 +374,13 @@ describe("the answer route: the durable result link", () => {
     expect(call(route, `${OCCURRENCES_PATH}/../../etc/passwd`).status).toBe(404);
   });
 
-  it("refuses a symlinked answer, and does not fall back to an older attempt", () => {
+  it("refuses a symlinked answer with 403 — even one whose target has the judged bytes — and does not fall back to an older attempt", () => {
+    const OUTSIDE_TEXT = "a file outside the store";
     const storeDir = tempRoot();
+    listing(storeDir, [{ ...OCCURRENCE, answer: present(2, OUTSIDE_TEXT) }]);
     writeAnswer(storeDir, ID, "a1", "older");
     const outside = join(tempRoot(), "secret.md");
-    writeFileSync(outside, "a file outside the store", "utf8");
+    writeFileSync(outside, OUTSIDE_TEXT, "utf8");
     mkdirSync(join(storeDir, "launches", "o", ID, "a2"));
     symlinkSync(outside, join(storeDir, "launches", "o", ID, "a2", "answer.md"));
     const answer = call(makeOccurrences({ storeDir }).route, answerPath());
@@ -288,9 +389,21 @@ describe("the answer route: the durable result link", () => {
     expect(answer.raw).not.toContain("older");
   });
 
-  it("refuses a symlinked attempt directory, a symlinked id directory and a symlinked launches tree", () => {
+  it("refuses a FIFO answer with 403, without blocking on the open", () => {
+    const storeDir = tempRoot();
+    listing(storeDir, [OCCURRENCE]);
+    mkdirSync(join(storeDir, "launches", "o", ID, "a2"), { recursive: true });
+    /* No writer ever opens it: an open without O_NONBLOCK would hang here. */
+    execFileSync("mkfifo", [join(storeDir, "launches", "o", ID, "a2", "answer.md")]);
+    const answer = call(makeOccurrences({ storeDir }).route, answerPath());
+    expect(answer.status).toBe(403);
+  });
+
+  it("refuses a symlinked attempt directory, a symlinked id directory, a symlinked o and a symlinked launches tree, with 403", () => {
+    /* THE TARGET HOLDS THE JUDGED BYTES, so only the symlink refusal stops it. */
+    const OUTSIDE_TEXT = "a file outside the store";
     const elsewhere = tempRoot();
-    writeAnswer(elsewhere, ID, "a1", "a file outside the store");
+    writeAnswer(elsewhere, ID, "a1", OUTSIDE_TEXT);
 
     const attempt = tempRoot();
     mkdirSync(join(attempt, "launches", "o", ID), { recursive: true });
@@ -300,10 +413,15 @@ describe("the answer route: the durable result link", () => {
     mkdirSync(join(idDir, "launches", "o"), { recursive: true });
     symlinkSync(join(elsewhere, "launches", "o", ID), join(idDir, "launches", "o", ID));
 
+    const oDir = tempRoot();
+    mkdirSync(join(oDir, "launches"), { recursive: true });
+    symlinkSync(join(elsewhere, "launches", "o"), join(oDir, "launches", "o"));
+
     const tree = tempRoot();
     symlinkSync(join(elsewhere, "launches"), join(tree, "launches"));
 
-    for (const storeDir of [attempt, idDir, tree]) {
+    for (const storeDir of [attempt, idDir, oDir, tree]) {
+      listing(storeDir, [{ ...OCCURRENCE, answer: present(1, OUTSIDE_TEXT) }]);
       const answer = call(makeOccurrences({ storeDir }).route, answerPath());
       expect(answer.status).toBe(403);
       expect(answer.raw).not.toContain("outside the store");
@@ -311,21 +429,22 @@ describe("the answer route: the durable result link", () => {
   });
 
   it("refuses an answer over 256 KB with 413, without reading it", () => {
-    const storeDir = tempRoot();
-    writeAnswer(storeDir, ID, "a1", "x".repeat(MAX_ANSWER_BYTES + 1));
+    /* The projection agrees with the file, so only the cap refuses it. */
+    const storeDir = listedStore(1, "x".repeat(MAX_ANSWER_BYTES + 1));
     expect(MAX_ANSWER_BYTES).toBe(256 * 1024);
     const answer = call(makeOccurrences({ storeDir }).route, answerPath());
     expect(answer.status).toBe(413);
     expect(answer.raw).toContain(`${MAX_ANSWER_BYTES + 1} bytes`);
   });
 
-  it("answers 404 with a sentence when there is no launch, no attempt, or an attempt with no answer", () => {
+  it("answers 404 with a sentence when a listed answer has no launch, no attempt, or no answer.md on disk", () => {
     const none = tempRoot();
     const noAttempt = tempRoot();
-    mkdirSync(join(noAttempt, "launches", "o", ID), { recursive: true });
+    mkdirSync(join(noAttempt, "launches", "o", ID, "a1"), { recursive: true });
     const noAnswer = tempRoot();
-    mkdirSync(join(noAnswer, "launches", "o", ID, "a1"), { recursive: true });
+    mkdirSync(join(noAnswer, "launches", "o", ID, "a2"), { recursive: true });
     for (const storeDir of [none, noAttempt, noAnswer]) {
+      listing(storeDir, [OCCURRENCE]);
       const answer = call(makeOccurrences({ storeDir }).route, answerPath());
       expect(answer.status).toBe(404);
       expect(answer.raw).toContain(ID);

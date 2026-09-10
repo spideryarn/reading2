@@ -250,7 +250,7 @@ describe("only a completed exit record can be succeeded", () => {
   });
 
   test.each(everyState)("%j is not succeeded, even with a live tmux session and a usable answer beside it", (state) => {
-    const result = classify(state, { tmuxSession: "sched-fixture", answer: { kind: "present", attempt: 1, bytes: 40, usable: true } });
+    const result = classify(state, { tmuxSession: "sched-fixture", answer: { kind: "present", attempt: 1, bytes: 40, sha256: "0123456789abcdef".repeat(4), usable: true } });
     expect(result.kind).not.toBe("succeeded");
   });
 

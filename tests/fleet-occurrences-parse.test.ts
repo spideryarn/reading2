@@ -33,7 +33,7 @@ const SUCCEEDED: ScheduledOccurrence = {
   state: "completed",
   run: { timeoutMinutes: 5, access: "read-only" },
   result: { kind: "succeeded", why: "exit 0, a usable answer, no denials", at: "2026-09-10T11:03:00.000Z" },
-  answer: { kind: "present", attempt: 1, bytes: 21, usable: true },
+  answer: { kind: "present", attempt: 1, bytes: 21, sha256: "0123456789abcdef".repeat(4), usable: true },
   transcriptPath: "/scratch/launches/o/lo-0123456789abcdef0123/a1/transcript.ndjson",
   tmuxSession: null,
   commands: { cancel: null, dispose: null },
@@ -181,6 +181,20 @@ describe("what it does not know, it says it does not know — per row", () => {
       const job = parsed(value).jobs[0];
       if (job?.kind !== "job") throw new Error("expected the job row");
       expect(job.job.occurrences[0]?.kind).toBe("unreadable");
+    }
+  });
+
+  test("a present answer without the sha256 it was judged on — missing, short, upper-case, not a string — is an unreadable occurrence row", () => {
+    const good = "0123456789abcdef".repeat(4);
+    for (const sha256 of [undefined, good.slice(1), good.toUpperCase(), `${good}0`, 42, null]) {
+      const value = copy();
+      const answer = { kind: "present", attempt: 1, bytes: 21, usable: true, ...(sha256 === undefined ? {} : { sha256 }) };
+      (occurrencesOf(value)[0] as Record<string, unknown>)["answer"] = answer;
+      const job = parsed(value).jobs[0];
+      if (job?.kind !== "job") throw new Error("expected the job row");
+      expect(job.job.occurrences[0], String(sha256)).toEqual({ kind: "unreadable", launchOccurrenceId: SUCCEEDED.launchOccurrenceId, why: expect.stringContaining("sha256") });
+      /* ONLY THAT ROW. */
+      expect(job.job.occurrences[1]?.kind).toBe("occurrence");
     }
   });
 

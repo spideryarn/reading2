@@ -4660,8 +4660,14 @@ export type ScheduledResult = {
   at: string | null;
 };
 
-/** The answer file of the newest attempt. Served by `GET /api/overseer/occurrences/<launchOccurrenceId>/answer`, never by a path in this file. */
-export type ScheduledAnswer = { kind: "absent" } | { kind: "present"; attempt: number; bytes: number; usable: boolean };
+/**
+ * The answer file the result was judged on: its attempt, its size, and the
+ * sha256 of its bytes (64 lower-case hex), as they were when it was judged.
+ * Served by `GET /api/overseer/occurrences/<launchOccurrenceId>/answer` only
+ * while the file on disk is still exactly those bytes — never by a path in this
+ * file, and never another attempt's.
+ */
+export type ScheduledAnswer = { kind: "absent" } | { kind: "present"; attempt: number; bytes: number; sha256: string; usable: boolean };
 
 export type ScheduledOccurrence = {
   /** `lo-<20 hex>`: the launch protocol's id, a hash of the scheduler key. */

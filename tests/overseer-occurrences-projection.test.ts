@@ -124,7 +124,7 @@ describe("each occurrence", () => {
       state: { kind: "completed", attempt: 2, evidence: { kind: "rebooted" } },
       attempts: 2,
       transcriptPath: "/scratch/launches/o/x/a2/transcript.ndjson",
-      answer: { kind: "present", attempt: 2, bytes: 120, usable: true },
+      answer: { kind: "present", attempt: 2, bytes: 120, sha256: "0123456789abcdef".repeat(4), usable: true },
       updatedAt: "2026-09-04T09:10:00.000Z",
     });
     expect(only(input)).toEqual({
@@ -138,7 +138,7 @@ describe("each occurrence", () => {
       state: "completed",
       run: { timeoutMinutes: 5, access: "read-only" },
       result: classifyOccurrence(input),
-      answer: { kind: "present", attempt: 2, bytes: 120, usable: true },
+      answer: { kind: "present", attempt: 2, bytes: 120, sha256: "0123456789abcdef".repeat(4), usable: true },
       transcriptPath: "/scratch/launches/o/x/a2/transcript.ndjson",
       tmuxSession: null,
       commands: { cancel: null, dispose: null },

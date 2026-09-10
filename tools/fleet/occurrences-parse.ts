@@ -92,6 +92,8 @@ const MAX_ATTEMPTS = 999;
 const MAX_TIMEOUT_MINUTES = 7 * 24 * 60;
 const INSTANT_RANGE_MS = 8.64e15;
 const HEX = /^[0-9a-f]{8,64}$/;
+/** A whole sha256, as `digest("hex")` writes it. */
+const SHA256 = /^[0-9a-f]{64}$/;
 
 /** Every result kind this build knows, with the compiler counting. */
 const RESULT_KINDS: { readonly [K in ScheduledResultKind]: true } = {
@@ -258,7 +260,10 @@ function parseAnswer(value: Obj, where: string): ScheduledAnswer {
   if (attempt < 1) fail(`${where}'s answer names attempt 0, and attempts start at 1`);
   const usable = value["usable"];
   if (typeof usable !== "boolean") fail(`${where}'s answer does not say whether it is usable`);
-  return { kind, attempt, bytes: count(value, "bytes", `${where}'s answer`, Number.MAX_SAFE_INTEGER), usable };
+  /* THE ANSWER ROUTE SERVES ONLY THESE BYTES, so an answer without them cannot be linked. */
+  const sha256 = value["sha256"];
+  if (typeof sha256 !== "string" || !SHA256.test(sha256)) fail(`${where}'s answer has no sha256 of the bytes it was judged on (64 lower-case hex)`);
+  return { kind, attempt, bytes: count(value, "bytes", `${where}'s answer`, Number.MAX_SAFE_INTEGER), sha256, usable };
 }
 
 function parseRun(value: Obj, where: string): ScheduledRunSpec {

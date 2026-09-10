@@ -75,7 +75,7 @@ function observed(n: number, state: ObservedState, disposed: boolean): ObservedL
     run: { timeoutMinutes: 5, access: "read-only" },
     tmuxSession: state.kind === "observed-running" || state.kind === "launching" ? `job-${n}-0901-0000` : null,
     transcriptPath: state.kind === "completed" ? `/scratch/launches/o/${loId(n)}/a1/transcript.ndjson` : null,
-    answer: state.kind === "completed" ? { kind: "present", attempt: 1, bytes: 42, usable: true } : { kind: "absent" },
+    answer: state.kind === "completed" ? { kind: "present", attempt: 1, bytes: 42, sha256: "0123456789abcdef".repeat(4), usable: true } : { kind: "absent" },
     disposition: disposed ? { decision: "ended", why: "Greg checked the box", at: at(n + 2) } : null,
     state,
   };

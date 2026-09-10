@@ -12,39 +12,50 @@
  * bytes — `routes-schedule.ts` § It forwards the file's own JSON. Every failure
  * to read is its own arm with a sentence; the 500 is kept for a bug here.
  *
- * ## The answer: a path built from nothing but the validated id
+ * ## The answer: exactly the answer the shown result was judged on
  *
  * This is the one route on the dashboard that serves a file a request names, so
- * what it refuses is the point:
+ * what it refuses is the point (Sol's F7 on plan 260910f):
  *
- * - **The path is `<store>/launches/o/<id>/a<n>/answer.md`**, the launch
- *   protocol's fixed layout, built ONLY from an id matching `lo-<20 hex>` and
- *   an `a<n>` (1 to 999) this route found by listing the id's directory. Never
- *   from a path in `occurrences.json` — the file says `transcriptPath` for a
- *   person to read, and nothing here reads it — and never from the request
- *   beyond the id. An id is checked on the raw path segment, undecoded, so
- *   `%2e%2e` is refused as a bad id rather than decoded into one.
- * - **The newest attempt**, by number, not by name: `a10` is after `a9`.
+ * - **Only an occurrence the projection lists.** The id must match
+ *   `lo-<20 hex>`, checked on the raw path segment, undecoded, so `%2e%2e` is
+ *   refused as a bad id rather than decoded into one. Then `occurrences.json`,
+ *   read by the list's own bounded reader and the one parser, must list it as a
+ *   readable occurrence with a present answer. An id it does not list — another
+ *   launch origin's — is a 404 whatever is on disk; so is an occurrence whose
+ *   row is unreadable, and so is every id while the file is absent or
+ *   unreadable.
+ * - **The path is `<store>/launches/o/<id>/a<attempt>/answer.md`**, the launch
+ *   protocol's fixed layout, built ONLY from the validated id and the
+ *   projection's `answer.attempt` (1 to 999). Never from a path in the file —
+ *   `transcriptPath` is for a person to read, and nothing here reads it — never
+ *   from a directory listing, and never the newest attempt, which need not be
+ *   the one the result was judged on.
  * - **No symlink is followed at any level it opens.** `launches`, `o`, the id's
- *   directory and the attempt's are each `lstat`ed and must be real
- *   directories; `answer.md` is opened `O_NOFOLLOW`. A refused newest attempt
- *   is refused — it never falls back to the one before, which would serve an
- *   older answer as the current one. (`lstat` then `readdir` is not atomic;
- *   the store belongs to the same user as this process, and the check is
- *   against a store damaged or mis-set-up, not against a racing local
- *   attacker, who could as well edit the answer.) The store root itself is
- *   taken as configured, as the schedule route takes it.
- * - **At most 256 KB** (413 past it, refused on the descriptor's size before
- *   reading), served `text/plain; charset=utf-8` with `nosniff` and
- *   `no-store`, so a model's answer can never be run as a page on this origin.
+ *   directory and the attempt's are each `lstat`ed and must be real directories
+ *   (403). `answer.md` is opened `O_NOFOLLOW | O_NONBLOCK`, as the schedule
+ *   route opens its file, so a FIFO cannot block the open, and `fstat`ed
+ *   through that descriptor: anything but a regular file is 403. The store root
+ *   itself is taken as configured, as the schedule route takes it.
+ * - **The bytes are the judged ones.** Past 256 KB is 413, refused on the
+ *   descriptor's size before reading. A size that is not the projection's
+ *   `bytes`, or bytes read from that same descriptor whose sha256 is not its
+ *   `sha256`, is 409: the file was replaced or edited after the result was
+ *   judged, and serving it would put a different answer under that result.
+ *   (`lstat` then `open` is not atomic, but whatever a race swaps in, the bytes
+ *   served are the judged bytes or nothing.)
+ * - Served `text/plain; charset=utf-8` with `nosniff` and `no-store`, so a
+ *   model's answer can never be run as a page on this origin.
  *
  * There is no transcript route: a transcript holds every file the job read.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
 import { LAUNCH_OCCURRENCE_ID, OCCURRENCES_FILE, OCCURRENCES_SCHEMA, parseOccurrencesFile } from "./occurrences-parse.js";
+import type { ScheduledAnswer } from "./wire.js";
 
 export const OCCURRENCES_PATH = "/api/overseer/occurrences";
 
@@ -58,8 +69,8 @@ export const MAX_OCCURRENCES_FILE_BYTES = 256 * 1024;
 export const MAX_ANSWER_BYTES = 256 * 1024;
 
 const ANSWER_FILE = "answer.md";
-/** `a1`..`a999`, with no leading zero, so one attempt has exactly one name. */
-const ATTEMPT_DIR = /^a([1-9][0-9]{0,2})$/;
+/** The protocol's attempt directories run `a1`..`a999`. */
+const MAX_ATTEMPT = 999;
 
 /** What reading the store's file found, before the parser has seen it. */
 export type OccurrencesFileRead = { kind: "absent" } | { kind: "too-large"; bytes: number } | { kind: "unreadable"; why: string } | { kind: "read"; json: unknown };
@@ -67,12 +78,14 @@ export type OccurrencesFileRead = { kind: "absent" } | { kind: "too-large"; byte
 /** What looking for an occurrence's answer found. Each arm is a different response. */
 export type AnswerRead =
   | { kind: "read"; attempt: number; body: Buffer }
-  /** Looked, and there is no answer: 404. */
+  /** It is not an occurrence the projection lists with an answer, or it is and the file is not there: 404. */
   | { kind: "absent"; why: string }
   /** There is something, and it is a symlink or not a regular file, so it was not followed: 403. */
   | { kind: "refused"; why: string }
   /** 413, refused on its size before it was read. */
   | { kind: "too-large"; attempt: number; bytes: number }
+  /** The file's size or sha256 is not the projection's: not the answer the result was judged on. 409. */
+  | { kind: "not-judged"; attempt: number; why: string }
   /** Could not look: 503. Never 404, because "we could not look" is not "we found nothing". */
   | { kind: "unreadable"; why: string };
 
@@ -184,56 +197,128 @@ function directoryStanding(path: string, name: string): DirectoryStanding {
   }
 }
 
+type PresentAnswer = Extract<ScheduledAnswer, { kind: "present" }>;
+
 /**
- * The newest attempt's `answer.md` for one occurrence. The path is built from
- * `launchOccurrenceId` — checked again here, so no caller can hand it anything
- * else — and from an `a<n>` this function found and parsed itself.
+ * The answer `occurrences.json` lists for this id, or why there is none a page
+ * shows. Read through the list's own bounded reader and the one parser, so the
+ * route serves an answer only for a row the page could have drawn.
+ */
+function listedAnswer(storeDir: string, launchOccurrenceId: string): { kind: "listed"; answer: PresentAnswer } | { kind: "absent"; why: string } {
+  const notShown = (why: string) => ({ kind: "absent", why: `${launchOccurrenceId} is not a scheduled occurrence with an answer that this page shows: ${why}` }) as const;
+  const read = readOccurrencesFile(storeDir);
+  switch (read.kind) {
+    case "absent":
+      return notShown(`there is no ${OCCURRENCES_FILE} in the Overseer store`);
+    case "too-large":
+      return notShown(`${OCCURRENCES_FILE} is ${read.bytes} bytes, more than the ${MAX_OCCURRENCES_FILE_BYTES} this route will read`);
+    case "unreadable":
+      return notShown(read.why);
+    case "read":
+      break;
+    default: {
+      const never: never = read;
+      throw new Error(`no listing for ${JSON.stringify(never)}`);
+    }
+  }
+  const parsed = parseOccurrencesFile(read.json);
+  if (parsed.kind !== "parsed") return notShown(parsed.why);
+  const rows = parsed.file.jobs
+    .flatMap((job) => (job.kind === "job" ? job.job.occurrences : []))
+    .filter((row) => (row.kind === "occurrence" ? row.occurrence.launchOccurrenceId : row.launchOccurrenceId) === launchOccurrenceId);
+  const [row] = rows;
+  if (row === undefined) return notShown(`${OCCURRENCES_FILE} does not list it`);
+  if (rows.length > 1) return notShown(`${OCCURRENCES_FILE} lists it ${rows.length} times, so which answer was judged cannot be told`);
+  if (row.kind === "unreadable") return notShown(`its row in ${OCCURRENCES_FILE} is unreadable (${row.why})`);
+  if (row.occurrence.answer.kind === "absent") return notShown(`${OCCURRENCES_FILE} records no answer for it`);
+  return { kind: "listed", answer: row.occurrence.answer };
+}
+
+type JudgedRead =
+  | { kind: "absent" }
+  | { kind: "not-regular" }
+  | { kind: "too-large"; bytes: number }
+  | { kind: "not-judged"; why: string }
+  | { kind: "read"; body: Buffer }
+  | { kind: "failed"; why: string };
+
+/**
+ * One answer file, opened as `readScheduleFile` opens its file — no final
+ * symlink followed, no FIFO blocking — then measured and read through that one
+ * descriptor, and served only if its size and sha256 are the judged ones.
+ */
+function readJudgedFile(path: string, maxBytes: number, judged: PresentAnswer): JudgedRead {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (cause) {
+    const code = errno(cause);
+    if (code === "ENOENT") return { kind: "absent" };
+    if (code === "ELOOP") return { kind: "not-regular" };
+    return { kind: "failed", why: `could not be opened (${message(cause)})` };
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return { kind: "not-regular" };
+    if (stat.size > maxBytes) return { kind: "too-large", bytes: stat.size };
+    if (stat.size !== judged.bytes) return { kind: "not-judged", why: `it is ${stat.size} bytes, and the answer judged was ${judged.bytes}` };
+    const body = readFileSync(fd);
+    /* It changed between the fstat and the read. Still refused. */
+    if (body.length > maxBytes) return { kind: "too-large", bytes: body.length };
+    if (body.length !== judged.bytes) return { kind: "not-judged", why: `it read as ${body.length} bytes, and the answer judged was ${judged.bytes}` };
+    const sha256 = createHash("sha256").update(body).digest("hex");
+    if (sha256 !== judged.sha256) return { kind: "not-judged", why: `its sha256 is ${sha256}, and the answer judged has ${judged.sha256}` };
+    return { kind: "read", body };
+  } catch (cause) {
+    return { kind: "failed", why: `could not be read (${message(cause)})` };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * The `answer.md` the result was judged on, for an occurrence the projection
+ * lists. The path is built from `launchOccurrenceId` — checked again here, so
+ * no caller can hand it anything else — and the projection's attempt, and
+ * nothing else.
  */
 export function readAnswerFile(storeDir: string, launchOccurrenceId: string, maxBytes = MAX_ANSWER_BYTES): AnswerRead {
   if (!LAUNCH_OCCURRENCE_ID.test(launchOccurrenceId)) return { kind: "refused", why: "that is not a launch occurrence id (lo- and twenty hex)" };
-  const nothing = (why: string): AnswerRead => ({ kind: "absent", why: `there is no answer for ${launchOccurrenceId}: ${why}` });
+  const listed = listedAnswer(storeDir, launchOccurrenceId);
+  if (listed.kind === "absent") return listed;
+  const { attempt } = listed.answer;
+  /* The parser already refuses any other; checked again because it builds a path. */
+  if (!Number.isSafeInteger(attempt) || attempt < 1 || attempt > MAX_ATTEMPT) {
+    return { kind: "absent", why: `${launchOccurrenceId} names attempt ${attempt}, which is not one of the protocol's a1 to a${MAX_ATTEMPT}` };
+  }
+  const attemptName = `attempt a${attempt} of ${launchOccurrenceId}`;
+  const nothing = (why: string): AnswerRead => ({ kind: "absent", why: `there is no answer on disk for ${attemptName}, which ${OCCURRENCES_FILE} lists: ${why}` });
 
   let dir = storeDir;
   for (const [segment, name] of [
     ["launches", "the launches directory"],
     ["o", "the launches/o directory"],
     [launchOccurrenceId, `the directory of ${launchOccurrenceId}`],
+    [`a${attempt}`, `the directory of ${attemptName}`],
   ] as const) {
     dir = join(dir, segment);
     const standing = directoryStanding(dir, name);
-    if (standing.kind === "absent") return nothing(`${name} does not exist, so this store has never launched it`);
+    if (standing.kind === "absent") return nothing(`${name} does not exist`);
     if (standing.kind !== "directory") return standing;
   }
 
-  let names: string[];
-  try {
-    names = readdirSync(dir);
-  } catch (cause) {
-    return { kind: "unreadable", why: `the directory of ${launchOccurrenceId} could not be listed (${message(cause)})` };
-  }
-  let newest = 0;
-  for (const name of names) {
-    const match = ATTEMPT_DIR.exec(name);
-    if (match !== null) newest = Math.max(newest, Number(match[1]));
-  }
-  if (newest === 0) return nothing("it has no attempt yet");
-
-  const attemptName = `attempt a${newest} of ${launchOccurrenceId}`;
-  const attemptDir = join(dir, `a${newest}`);
-  const standing = directoryStanding(attemptDir, attemptName);
-  if (standing.kind === "absent") return nothing(`${attemptName} went away while it was being read`);
-  if (standing.kind !== "directory") return standing;
-
-  const read = readRegularFile(join(attemptDir, ANSWER_FILE), maxBytes);
+  const read = readJudgedFile(join(dir, ANSWER_FILE), maxBytes, listed.answer);
   switch (read.kind) {
     case "read":
-      return { kind: "read", attempt: newest, body: read.body };
+      return { kind: "read", attempt, body: read.body };
     case "absent":
-      return nothing(`${attemptName} wrote no ${ANSWER_FILE}`);
+      return nothing(`it wrote no ${ANSWER_FILE}`);
     case "not-regular":
       return { kind: "refused", why: `the ${ANSWER_FILE} of ${attemptName} is a symlink or not a regular file, so it was not followed` };
     case "too-large":
-      return { kind: "too-large", attempt: newest, bytes: read.bytes };
+      return { kind: "too-large", attempt, bytes: read.bytes };
+    case "not-judged":
+      return { kind: "not-judged", attempt, why: read.why };
     case "failed":
       return { kind: "unreadable", why: `the ${ANSWER_FILE} of ${attemptName} ${read.why}` };
     default: {
@@ -329,6 +414,14 @@ function serveAnswer(deps: OccurrencesRouteDeps, launchOccurrenceId: string, req
         req,
         413,
         `Not served: the answer of attempt a${read.attempt} of ${launchOccurrenceId} is ${read.bytes} bytes, more than the ${MAX_ANSWER_BYTES} this route will read. Read it on the box.\n`,
+      );
+      return;
+    case "not-judged":
+      text(
+        res,
+        req,
+        409,
+        `Not served: the answer on disk for attempt a${read.attempt} of ${launchOccurrenceId} is not the one the result was judged on — ${read.why}.\n`,
       );
       return;
     case "unreadable":

@@ -75,7 +75,7 @@ const BASE: ScheduledOccurrence = {
   state: "completed",
   run: { timeoutMinutes: 5, access: "read-only" },
   result: { kind: "timed-out", why: "the wrapper stopped it at its 5-minute limit", at: "2026-09-10T11:05:02.000Z" },
-  answer: { kind: "present", attempt: 1, bytes: 0, usable: false },
+  answer: { kind: "present", attempt: 1, bytes: 0, sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", usable: false },
   transcriptPath: "/scratch/launches/o/lo-1111111111111111111a/a1/transcript.ndjson",
   tmuxSession: null,
   commands: { cancel: null, dispose: null },
@@ -86,7 +86,7 @@ const OLDER_SUCCEEDED: ScheduledOccurrence = {
   launchOccurrenceId: "lo-2222222222222222222b",
   scheduledAt: "2026-09-09T11:00:00.000Z",
   result: { kind: "succeeded", why: "exit 0, a usable answer, no denials", at: "2026-09-09T11:02:00.000Z" },
-  answer: { kind: "present", attempt: 1, bytes: 21, usable: true },
+  answer: { kind: "present", attempt: 1, bytes: 21, sha256: "0123456789abcdef".repeat(4), usable: true },
 };
 
 const TIMED_OUT_JOB: ScheduledOccurrencesJob = {
