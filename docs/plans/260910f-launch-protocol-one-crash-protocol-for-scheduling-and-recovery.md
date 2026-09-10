@@ -1,6 +1,6 @@
 # Launch protocol: one crash protocol for scheduling and recovery
 
-Roadmap stage: [260908f § Stage: Launch protocol](260908f-overseer-and-fleet-improvement-roadmap.md#stage-launch-protocol--give-scheduling-and-recovery-one-crash-protocol).
+Roadmap stage: [260908f § Stage: Launch protocol](260908f-overseer-and-fleet-improvement-roadmap.md#stage-launch-protocol-give-scheduling-and-recovery-one-crash-protocol).
 Queue item `qi-qzpjafp7`. Session `launch-protocol`, worktree `.claude/worktrees/launch-protocol`,
 dispatched by the Overseer 2026-09-10.
 
