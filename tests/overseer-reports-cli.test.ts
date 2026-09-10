@@ -325,6 +325,7 @@ describe("runReports", () => {
     const out: string[] = [];
     runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (l) => out.push(l));
     expect(out.join("\n")).toMatch(new RegExp(`refused.*\\n.*${id}`, "s"));
+    expect(out.join("\n")).toContain(`nothing empties it automatically; look at them, then delete them: ${join(root, REFUSED_DIR)}`);
   });
 
   test("a hand-written refusal cannot put control characters in terminal output", () => {

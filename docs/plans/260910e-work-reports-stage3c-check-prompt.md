@@ -10,7 +10,12 @@ anything else.
 This is the sixth and last Sol run for this plan. Discovery is closed: do not re-review Stages 1, 2, 3a or
 3b. Your earlier Stage 3 findings are `docs/plans/260910e-work-reports-stage3-review-sol-findings.md`.
 
-## The two fixes (commit STAGE_3C_SHA — `git show` it)
+## The two fixes (commit `53ee5bcb`, and its follow-up FOLLOWUP_SHA — `git show` both)
+
+The follow-up applies the same rule to the two places 3c's builder flagged: the daemon never deletes from
+`report-refused/` either (its prune-to-200 listed and sorted the whole directory on every refusal), and
+the `report-processing/` replay — at the start of every pass, and in the lost-log branch — is read lazily
+under the drain's `scanEntries` cap. Check those under question 1 below.
 
 1. **WR-S3-4 (was P0).** The drain no longer deletes anything from `report-quarantine/` (the decided
    route, instead of a budgeted cleanup protocol: moving an entry there costs no disk, and emptying it is a

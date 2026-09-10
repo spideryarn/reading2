@@ -77,6 +77,8 @@ the inbox, and the Claims section then shows them as *submitted, not yet recorde
 `overseer reports --event <id>` says where one report has got to.
 
 Invalid input is **refused**: a reason is written to `report-refused/`, and `overseer reports` lists it.
+The daemon never deletes a refusal record either: each one replaces the inbox file it came from, so the
+directory grows only as fast as submitters write. Look at it, then delete it.
 A failure that says nothing about the input, such as a checker that could not run, leaves the report
 **pending** for the next pass. The details, including what a pass is bounded by and how a crash
 mid-pass is replayed, are in `tools/overseer/reports.ts` § `drainReports`.

@@ -66,7 +66,9 @@ overseer reports                                 [3] append the prepared report 
   same bytes, and does. A report already in `reports.jsonl` with identical bytes is skipped.
 - **Refused vs pending.** Invalid input (shape, unknown kind, oversized, name ≠ id, a conflicting
   duplicate) is refused: one atomically written `refused/<id>.json` holding the reason and the original
-  text, then the inbox file is removed; refused records are kept to the newest 200. **Transient failure**
+  text, then the inbox file is removed; refused records are never deleted by the daemon (Stage 3c —
+each replaces the inbox file it came from, and pruning under a listing was unbounded work in the
+daemon's loop), and their count shows, capped, beside the quarantine's. **Transient failure**
   (decisions lock held, a checker that could not run) leaves the item pending for the next pass.
 - **Bounds per pass**: 50 files, 1 MiB read, 200 artefact probes, 5 s wall clock; the rest waits. The
   pass is synchronous, so two cannot overlap and shutdown cannot interrupt one mid-step.
@@ -370,8 +372,8 @@ a real browser.
 made its condition for landing: each pass iterates the inbox lazily with `opendirSync` and stops after
 `scanEntries` (default 1 000) entries, noting "order is approximate beyond the first N entries" when the
 cap is hit; anything that can never become a report (a bad name, a directory, a symlink, more than one
-hard link) is *moved* to `report-quarantine/`, newest 200 kept, so a hostile prefix cannot fill every
-pass's window. Names are read as raw bytes — a non-UTF-8 name cannot be reached by a string path, so it
+hard link) is *moved* to `report-quarantine/` — and, since 3c, never deleted from there — so a hostile
+prefix cannot fill every pass's window. Names are read as raw bytes — a non-UTF-8 name cannot be reached by a string path, so it
 could otherwise never be moved. Then decision reports: a session's `decision` submission is validated by
 building the real `decided` event (`by: daemon`, session author, command id `report:<eventId>`) through
 `parseEventDetailed`; step [1] freezes it in `report-processing/`, step [2] appends exactly those bytes,
@@ -390,9 +392,10 @@ import of `store.ts` put nineteen modules over the line. `reports.ts` now declar
 it reads as a structural `ReportRegister`, and `reports.ts` joins the allowlist with its closure written
 out. Typecheck exit 0; nine affected test files, 238 passed.
 
-Known and left for the review to weigh: `readInbox` still lists the whole inbox on every `GET /api/reports`
-(the dashboard, not the daemon); pruning a quarantined *directory* is recursive; the daemon logs a pass
-that only quarantined nothing.
+Known and left for the review to weigh, as 3b landed: `readInbox` still listed the whole inbox on every
+`GET /api/reports` (the dashboard, not the daemon); pruning a quarantined *directory* was recursive; the
+daemon logs nothing for a pass that only quarantined. The first two became WR-S3-5 and WR-S3-4 below and
+are fixed in 3c; the third remains, and is cosmetic.
 
 **Sol's Stage 3 review** ([findings](260910e-work-reports-stage3-review-sol-findings.md),
 [answer](260910e-work-reports-stage3-review-sol.md); 3a and 3b together, 30 minutes, findings written to a

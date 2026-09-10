@@ -58,6 +58,9 @@
  * it never lists it and never deletes from it, because one quarantined
  * directory can hold a tree of any size (GPT Sol's WR-S3-4). Emptying it is a
  * person's act; `readInbox` says how big it has grown, so growth shows.
+ * `report-refused/` is kept the same way — never pruned, only counted — and the
+ * start-of-pass replay reads `report-processing/` under the same cap as the
+ * inbox scan.
  *
  * The reader keeps the same rule. `readInbox` — called on every
  * `GET /api/reports` — reads each directory lazily under a cap, and every count
@@ -76,7 +79,6 @@ import {
   mkdirSync,
   opendirSync,
   openSync,
-  readdirSync,
   readFileSync,
   readSync,
   renameSync,
@@ -144,6 +146,13 @@ export const REPORTS_INIT_FILE = "reports.created";
    is not a submission out of the way — a subdirectory there would be moved. */
 export const INBOX_DIR = "report-inbox";
 export const PROCESSING_DIR = "report-processing";
+/**
+ * One record per refused submission, written in place of the inbox file it came
+ * from, so it grows only as fast as submitters write. **The daemon never prunes
+ * it**: a prune lists, stats and sorts the directory inside the loop, which is
+ * work proportional to what a writer put here. `readInbox` counts it, capped;
+ * emptying it is a person's act.
+ */
 export const REFUSED_DIR = "report-refused";
 /**
  * Where an inbox entry goes when it can never become a report: a name that is
@@ -171,7 +180,6 @@ export const MAX_SUMMARY_CHARS = 1000;
 export const MAX_NEEDS_CHARS = 500;
 export const MAX_REVISIONS = 20;
 export const MAX_WHY_CHARS = 300;
-export const REFUSED_KEPT = 200;
 /** A `.tmp-*` older than this was left by a submitter that died between open and rename. */
 export const TMP_DEBRIS_AGE_MS = 60 * 60 * 1000;
 
@@ -832,11 +840,6 @@ function readBounded(file: string, limit: number = MAX_SUBMISSION_BYTES): Bounde
   }
 }
 
-function uuidJsonNames(directory: string): string[] {
-  if (!existsSync(directory)) return [];
-  return readdirSync(directory).filter((name) => INBOX_NAME_RULE.test(name));
-}
-
 /** A Buffer path too: the inbox scan names entries by their bytes. */
 function unlinkQuietly(file: string | Buffer): void {
   try {
@@ -899,7 +902,9 @@ function readPrepared(text: string, eventId: string): { prepared: PreparedReport
  * else. `scanEntries` bounds the directory listing itself — Sol's Stage 1
  * second review: a `readdirSync` of the whole inbox, a `stat` per entry and a
  * sort, all synchronous inside the daemon, is unbounded work however few files
- * are then read, and slicing the array afterwards bounds none of it.
+ * are then read, and slicing the array afterwards bounds none of it. The same
+ * cap bounds the start-of-pass look at `report-processing/` and the lost-log
+ * count of both directories.
  */
 export type DrainLimits = { files: number; bytes: number; probes: number; wallMs: number; scanEntries: number };
 export const DEFAULT_DRAIN_LIMITS: DrainLimits = { files: 50, bytes: 1024 * 1024, probes: 200, wallMs: 5_000, scanEntries: 1_000 };
@@ -1095,22 +1100,13 @@ function scanInbox(inboxDir: string, quarantineDir: string, cap: number, nowMs: 
   return candidates;
 }
 
-/** Submissions among the first `cap` inbox entries — for the lost-log answer, which must not list a flood either. */
-function countSubmissions(inboxDir: string, cap: number): { count: number; capped: boolean } {
-  let seen = 0;
+/** `<uuid>.json` names among a directory's first `cap` entries — for the lost-log answer, which must not list a flood either. */
+function countUuidJson(directory: string, cap: number): { count: number; capped: boolean } {
   let count = 0;
-  const dir = opendirSync(inboxDir);
-  try {
-    while (seen < cap) {
-      const entry = dir.readSync();
-      if (entry === null) break;
-      seen += 1;
-      if (INBOX_NAME_RULE.test(entry.name)) count += 1;
-    }
-  } finally {
-    dir.closeSync();
-  }
-  return { count, capped: seen >= cap };
+  const { complete } = scanDirectory(directory, cap, (name) => {
+    if (INBOX_NAME_RULE.test(name)) count += 1;
+  });
+  return { count, capped: !complete };
 }
 
 /** The register's run for a session name, compared with the token the submitter observed. */
@@ -1243,9 +1239,14 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
 
   const log = openLog(root);
   if (log.kind === "lost") {
-    const waiting = countSubmissions(inboxDir, limits.scanEntries);
-    outcome.pending = uuidJsonNames(processingDir).length + waiting.count;
-    outcome.notes.push(waiting.capped ? `${log.why} (at least ${outcome.pending} waiting; the inbox was counted only to ${limits.scanEntries} entries)` : log.why);
+    const preparing = countUuidJson(processingDir, limits.scanEntries);
+    const waiting = countUuidJson(inboxDir, limits.scanEntries);
+    outcome.pending = preparing.count + waiting.count;
+    outcome.notes.push(
+      preparing.capped || waiting.capped
+        ? `${log.why} (at least ${outcome.pending} waiting; ${PROCESSING_DIR}/ and the inbox were each counted only to ${limits.scanEntries} entries)`
+        : log.why,
+    );
     return outcome;
   }
   const recorded = log.recorded;
@@ -1262,20 +1263,17 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       }
     });
 
-  /** One refusal record, atomically, then the inputs go. Newest 200 kept. */
+  /**
+   * One refusal record, atomically, then the inputs go. Nothing is pruned: the
+   * record replaces the inbox file it came from, and listing the directory to
+   * prune it was the unbounded step (see `REFUSED_DIR`).
+   */
   const refuseItem = (eventId: string, why: string, original: string, inputs: readonly string[]): void => {
     const body = { eventId, refusedAt: now().toISOString(), why, original: original.slice(0, MAX_SUBMISSION_BYTES) };
     writeAtomically(path.join(refusedDir, `${eventId}.json`), refusedDir, `${JSON.stringify(body)}\n`);
     for (const input of inputs) unlinkQuietly(input);
     outcome.refused += 1;
     outcome.notes.push(`refused ${eventId}: ${why}`);
-    const kept = uuidJsonNames(refusedDir);
-    if (kept.length > REFUSED_KEPT) {
-      const byAge = kept
-        .map((name) => ({ name, mtimeMs: lstatSync(path.join(refusedDir, name)).mtimeMs }))
-        .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
-      for (const old of byAge.slice(0, kept.length - REFUSED_KEPT)) unlinkQuietly(path.join(refusedDir, old.name));
-    }
   };
 
   /** Steps [2], [3] and [4] for one prepared report — the same code for a first attempt and a replay. */
@@ -1313,9 +1311,19 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     return "recorded";
   };
 
-  /* ---- Start of pass: replay every prepared report with its frozen bytes. ---- */
+  /* ---- Start of pass: replay prepared reports with their frozen bytes — at most
+     `scanEntries` of them, read lazily. These files are the daemon's own, so
+     there is no quarantine step, only the bound; the rest wait for later passes,
+     and the inbox loop below leaves any inbox copy of theirs alone. ---- */
+  const toReplay: string[] = [];
+  const replayScan = scanDirectory(processingDir, limits.scanEntries, (name) => {
+    if (INBOX_NAME_RULE.test(name)) toReplay.push(name);
+  });
+  if (!replayScan.complete) {
+    outcome.notes.push(`the replay of ${PROCESSING_DIR}/ stopped at its cap of ${limits.scanEntries} entries; the rest are replayed on later passes`);
+  }
   const inFlight = new Set<string>();
-  for (const name of uuidJsonNames(processingDir)) {
+  for (const name of toReplay) {
     const eventId = name.slice(0, -".json".length);
     const inboxFile = path.join(inboxDir, name);
     try {

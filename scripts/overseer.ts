@@ -73,6 +73,7 @@ import {
   BLOCKED_ON,
   COMPLETED_ENDINGS,
   QUARANTINE_DIR,
+  REFUSED_DIR,
   REPORT_KINDS,
   addCounts,
   countValue,
@@ -1567,6 +1568,8 @@ export function runReports(
     }
   }
   for (const item of refused) out(`  ${item.refusedAt}  ${item.eventId} — ${printable(item.why)}`);
+  // Like the quarantine, the daemon never prunes refusals, so say where they are.
+  if (countValue(allRefused) > 0) out(`  nothing empties it automatically; look at them, then delete them: ${join(root, REFUSED_DIR)}`);
 
   out("");
   out("Quarantined — inbox entries that can never become a report, moved aside unread");

@@ -1077,6 +1077,111 @@ describe("readInbox is bounded, and every count says whether it was capped", () 
   });
 });
 
+describe("the drain's own directories are bounded too", () => {
+  function refusals(root: string, count: number): string {
+    const refusedDir = join(root, REFUSED_DIR);
+    mkdirSync(refusedDir, { recursive: true });
+    const old = Date.parse("2026-09-01T00:00:00.000Z");
+    for (let i = 0; i < count; i += 1) {
+      const id = randomUUID();
+      const body = { eventId: id, refusedAt: new Date(old + i * 1000).toISOString(), why: "an old refusal", original: "" };
+      writeFileSync(join(refusedDir, `${id}.json`), `${JSON.stringify(body)}\n`);
+    }
+    return refusedDir;
+  }
+
+  function refusable(root: string): string {
+    const s = submission();
+    drop(root, `${s.eventId}.json`, JSON.stringify({ ...s, kind: "ready" }));
+    return s.eventId;
+  }
+
+  /** A prepared record as step [1] writes it, built by hand so that many can wait at once. */
+  function prepared(root: string, summary: string): string {
+    const eventId = randomUUID();
+    const parsed = parseReportEvent(
+      JSON.stringify({
+        schema: 1,
+        eventId,
+        submittedAt: "2026-09-10T11:59:00.000Z",
+        receivedAt: "2026-09-10T11:59:30.000Z",
+        kind: "progress",
+        actor: { kind: "session", name: "work-reports" },
+        observedExecution: null,
+        execution: { unverifiable: "no token in this test" },
+        job: { plan: null, queueItem: null, occurrence: null },
+        summary,
+        artefacts: [],
+        corrects: null,
+      }),
+    );
+    if (!parsed.ok) throw new Error(parsed.why);
+    mkdirSync(join(root, PROCESSING_DIR), { recursive: true });
+    writeFileSync(join(root, PROCESSING_DIR, `${eventId}.json`), `${JSON.stringify({ schema: 1, eventId, reportLine: JSON.stringify(parsed.event) })}\n`);
+    return eventId;
+  }
+
+  test("the drain never deletes from report-refused/: 500 records, one more refused, and all 501 are there", () => {
+    const root = tempRoot();
+    const refusedDir = refusals(root, 500);
+    const id = refusable(root);
+    const outcome = drainReports(options(root));
+    expect(outcome.refused).toBe(1);
+    const names = listed(root, REFUSED_DIR).filter((name) => !name.includes(".tmp-"));
+    expect(names).toHaveLength(501);
+    expect(names).toContain(`${id}.json`);
+    expect(readFileSync(join(refusedDir, names.find((name) => name !== `${id}.json`) ?? ""), "utf8")).toMatch(/an old refusal/);
+  });
+
+  test("a refusal never lists report-refused/: one the daemon may enter but not read still takes it, and nothing is left pending", () => {
+    if (process.getuid?.() === 0) return; // root reads whatever the mode says, so the control below could not fail
+    const root = tempRoot();
+    const refusedDir = refusals(root, 500);
+    const id = refusable(root);
+    chmodSync(refusedDir, 0o300);
+    let outcome: ReturnType<typeof drainReports>;
+    try {
+      expect(() => readdirSync(refusedDir)).toThrow(/EACCES/); // the control: this directory cannot be listed
+      outcome = drainReports(options(root));
+    } finally {
+      chmodSync(refusedDir, 0o700);
+    }
+    expect(outcome.refused).toBe(1);
+    expect(outcome.pending).toBe(0);
+    expect(existsSync(join(refusedDir, `${id}.json`))).toBe(true);
+    expect(listed(root, REFUSED_DIR).filter((name) => !name.includes(".tmp-"))).toHaveLength(501);
+  });
+
+  test("report-processing/ holding more than scanEntries records is replayed across passes, none taking more than the cap", () => {
+    const root = tempRoot();
+    const ids = Array.from({ length: 7 }, (_, i) => prepared(root, `prepared ${i}`));
+    const waiting = (): number => listed(root, PROCESSING_DIR).length;
+    let passes = 0;
+    while (waiting() > 0 && passes < 5) {
+      const before = waiting();
+      const outcome = drainReports(options(root, { limits: { scanEntries: 3 } }));
+      passes += 1;
+      expect(outcome.replayed).toBeLessThanOrEqual(3);
+      expect(before - waiting()).toBeLessThanOrEqual(3);
+      if (before > 3) expect(outcome.notes.join("\n")).toMatch(/report-processing\/ .*cap of 3/);
+      else expect(outcome.notes.join("\n")).not.toMatch(/report-processing\/ .*cap/);
+    }
+    expect(passes).toBe(3);
+    expect(new Set(rows(root).rows.map((row) => row.event.eventId))).toEqual(new Set(ids));
+  });
+
+  test("the lost-log answer counts report-processing/ only to the cap, and says 'at least'", () => {
+    const root = tempRoot();
+    writeFileSync(join(root, REPORTS_INIT_FILE), "reports were recorded here\n");
+    mkdirSync(join(root, PROCESSING_DIR), { recursive: true });
+    for (let i = 0; i < 5; i += 1) writeFileSync(join(root, PROCESSING_DIR, `${randomUUID()}.json`), "{}");
+    const outcome = drainReports(options(root, { limits: { scanEntries: 3 } }));
+    expect(outcome.pending).toBe(3);
+    expect(outcome.notes.join("\n")).toMatch(/at least 3 waiting/);
+    expect(listed(root, PROCESSING_DIR)).toHaveLength(5);
+  });
+});
+
 describe("inbox hygiene", () => {
   test("a symlink, a directory and a stray name are quarantined; name ≠ id and 17 KiB are refused", () => {
     const root = tempRoot();
