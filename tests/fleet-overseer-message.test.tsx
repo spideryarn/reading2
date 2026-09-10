@@ -527,6 +527,27 @@ describe("the unsent line, kept under the Overseer's verified conversation", () 
     expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBe("to the first");
   });
 
+  it("does not let the new Overseer send words typed for the previous one", async () => {
+    const { api, calls } = fakeApi(SENT);
+    const before = [
+      overseerRow({ id: "$1", name: "first-overseer", execution: running("conv-overseer-1", 6100) }),
+      row({ id: "$2", name: "second-overseer", execution: running("conv-overseer-2", 6200) }),
+    ];
+    render(<MessageOverseerCard rows={before} unreadableRows={0} steer={api} />);
+    type("only the first Overseer should receive this");
+
+    const after = [
+      row({ id: "$1", name: "first-overseer", execution: running("conv-overseer-1", 6100) }),
+      overseerRow({ id: "$2", name: "second-overseer", execution: running("conv-overseer-2", 6200) }),
+    ];
+    render(<MessageOverseerCard rows={after} unreadableRows={0} steer={api} />);
+
+    expect(box().value).toBe("only the first Overseer should receive this");
+    expect(button("Send").disabled).toBe(true);
+    await act(async () => button("Send").click());
+    expect(calls).toHaveLength(0);
+  });
+
   it("removes the stored line after a send that went, and keeps it after a refusal", async () => {
     const rows = [overseerRow({ id: "$1643", execution: running("conv-overseer-1") })];
     const refusing = fakeApi({

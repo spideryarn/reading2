@@ -614,6 +614,34 @@ describe("the unsent sentence, kept under the purpose alone", () => {
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 
+  it("does not erase words typed after the broadcast began when its answer arrives", async () => {
+    let settle: ((outcome: BroadcastOutcome) => void) | null = null;
+    let calls = 0;
+    const api: BroadcastApi = {
+      send: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }]);
+        }
+        return await new Promise<BroadcastOutcome>((resolve) => {
+          settle = resolve;
+        });
+      },
+    };
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("the sentence that was sent");
+    await press("Preview");
+    act(() => button("Send it")?.click());
+
+    type("a new sentence I started while the server answered");
+    await act(async () => {
+      settle?.(ran("broadcast", [{ sessionId: "$1", paneId: "%1", kind: "queued", position: 1 }], { queued: 1 }));
+    });
+
+    expect(box().value).toBe("a new sentence I started while the server answered");
+    expect(window.sessionStorage.getItem(KEY)).toBe("a new sentence I started while the server answered");
+  });
+
   it("keeps it when the broadcast was refused", async () => {
     const { api } = fakeApi([
       ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }]),

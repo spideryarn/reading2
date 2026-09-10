@@ -729,6 +729,7 @@ export function SessionsPanel({
            `replaced`. */
         key={detailKey}
         row={selected}
+        draftScope={detailKey}
         now={now}
         answeringEnabled={answeringEnabled}
         answeringRefusal={answeringRefusal}

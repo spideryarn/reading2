@@ -93,7 +93,7 @@ function Box({
   scope?: string | null;
   purpose?: ConversationPurpose;
 }) {
-  const draft = useDraft({ purpose, address, scope });
+  const draft = useDraft({ purpose, address, scope, pageSlot: "box" });
   return (
     <div>
       <textarea aria-label="box" value={draft.text} onChange={(e) => draft.setText(e.target.value)} />
