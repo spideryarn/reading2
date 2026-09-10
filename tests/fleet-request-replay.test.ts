@@ -91,7 +91,14 @@ const OK = (target: SteerTarget): SteerResult => ({
 
 type Res = { status: number | null; json: Record<string, unknown> };
 
-function bodyFor(route: RequestRoute, variant: "original" | "altered" = "original"): Record<string, unknown> {
+/**
+ * The three Stage 2 routes this file drives. The two Stage 3 routes that take
+ * a `requestId` — `actions-box` and `broadcast` — are driven by
+ * tests/fleet-enacted-receipts.test.ts and tests/fleet-broadcast-receipts.test.ts.
+ */
+type ReplayRoute = Extract<RequestRoute, "steer-message" | "steer-answer" | "actions-session">;
+
+function bodyFor(route: ReplayRoute, variant: "original" | "altered" = "original"): Record<string, unknown> {
   const target = { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVERSATION, panePid: PANE_PID };
   switch (route) {
     case "steer-message":
@@ -108,7 +115,7 @@ function bodyFor(route: RequestRoute, variant: "original" | "altered" = "origina
 }
 
 /** A body today's parse refuses — a speaker, an index or an action this build does not know. */
-function retiredBody(route: RequestRoute): Record<string, unknown> {
+function retiredBody(route: ReplayRoute): Record<string, unknown> {
   switch (route) {
     case "steer-message":
       return { ...bodyFor(route), speaker: "a-speaker-this-build-refuses" };
@@ -125,14 +132,14 @@ function retiredBody(route: RequestRoute): Record<string, unknown> {
   }
 }
 
-const URL: Record<RequestRoute, string> = {
+const URL: Record<ReplayRoute, string> = {
   "steer-message": "/api/steer/message",
   "steer-answer": "/api/steer/answer",
   "actions-session": "/api/actions/session",
 };
 
 function world(
-  route: RequestRoute,
+  route: ReplayRoute,
   options: { disk?: FrozenDisk; limiter?: RateLimiter; result?: (target: SteerTarget) => SteerResult } = {},
 ) {
   const disk = options.disk ?? new FrozenDisk();
@@ -209,7 +216,7 @@ function world(
   };
 }
 
-const ROUTES: RequestRoute[] = ["steer-message", "steer-answer", "actions-session"];
+const ROUTES: ReplayRoute[] = ["steer-message", "steer-answer", "actions-session"];
 
 describe.each(ROUTES)("a keyed request on %s", (route) => {
   it("the same id and body twice has one effect and returns one receipt twice", async () => {

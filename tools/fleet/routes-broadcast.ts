@@ -117,7 +117,20 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderMessage, type Speaker } from "./actions.js";
+import { sharedReceiptJournal } from "./action-stores.js";
 import { deliveryGate, type EnqueueRefusalRule } from "./queue.js";
+import {
+  beginRecipientReceipt,
+  describeChildren,
+  recordUnreachedRecipient,
+  sendAttemptOutcome,
+  summarizeReceipt,
+  type ReceiptActor,
+  type ReceiptJournal,
+  type ReceiptOutcome,
+  type RecipientReceipt,
+} from "./receipt-journal.js";
+import { lookupRequest, readRequestKey, type RequestLookup } from "./request-key.js";
 /* **THE ONE DOOR TO THE ONE QUEUE.** Written like `drainSharedQueues` beside
    it, and for the reason both that function and server.ts's mount point already
    state: two `SteeringQueue`s would be two queues, and the one the page can see
@@ -142,7 +155,7 @@ import {
 import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import { checkText, describeSend, type SteerTarget } from "./steer.js";
 import type { FleetStatus } from "./status.js";
-import type { Delivery } from "./wire.js";
+import type { Delivery, ReceiptSummary } from "./wire.js";
 
 /**
  * How long before the fleet may be told anything again.
@@ -255,8 +268,15 @@ export type BroadcastRecipient = { sessionId: string; paneId: string } & (
    * a hold is a thing a person releases. `why` is the hold's own sentence.
    */
   | { kind: "held"; why: string }
-  /** Working, so it went in that session's queue and drains at its next prompt. */
-  | { kind: "queued"; position: number }
+  /**
+   * Working, so it went in that session's queue and drains at its next prompt.
+   *
+   * **`durable` IS THE QUEUE'S OWN WORD, carried through** — plan 260910d, the
+   * Stage 1b review's F36. `false` means that item's receipt lives only in this
+   * process's memory and a dashboard restart forgets it, so the row is never a
+   * plain *queued*. The door dropped this bit until Stage 3.
+   */
+  | { kind: "queued"; position: number; durable: boolean }
   /** Could never be typed into — a shell, a dead Claude. `drainGate`'s sentence. */
   | { kind: "skipped"; code: string; why: string }
   /** The fan-out stopped before it got here. Nothing was sent and nothing queued. */
@@ -305,11 +325,21 @@ export type BroadcastResponse =
       ok: true;
       op: "broadcast";
       result: { counts: BroadcastCounts; recipients: BroadcastRecipient[] };
+      /** The broadcast's own receipt — present only on a keyed request (plan 260910d Stage 3). */
+      receiptId?: string;
     }
+  /**
+   * **A REPLAY: NOTHING WAS SENT OR QUEUED ON THIS REQUEST.** The same
+   * `requestId` and body were accepted before. This is the broadcast's receipt
+   * and each recipient's, text-free; the children say what became of each one.
+   */
+  | { ok: true; op: "receipt"; replay: true; receipt: ReceiptSummary; children: ReceiptSummary[] }
   | {
       ok: false;
       code: string;
       why: string;
+      /** Present on a keyed request that got as far as its receipt. */
+      receiptId?: string;
       /**
        * **PRESENT ON `not-steerable`, AND THE REASON IT IS OPTIONAL RATHER THAN
        * ABSENT.** When every row is skipped there is no fan-out to report, and
@@ -352,8 +382,11 @@ export type EnqueueForBroadcast =
       target: { sessionId: string; claudeSessionId: string },
       text: string,
       speaker: Speaker,
+      /** The broadcast's receipt: the item's own receipt is its child. */
+      parentReceiptId: string | null,
     ) =>
-      | { ok: true; position: number }
+      /** `durable` and `receiptId` are the queue's own, carried through (F36). */
+      | { ok: true; position: number; durable: boolean; receiptId: string }
       /**
        * `rule` travels because two of its arms want opposite handling in a
        * fan-out. `bad-text` is a fact about the MESSAGE and will fail
@@ -375,6 +408,14 @@ export type BroadcastDeps = {
    * `tests/fleet-compile-guards.test.ts` fails if a transport reappears here.
    */
   send: SendCoordinator;
+  /**
+   * Where the broadcast's receipts go — plan 260910d Stage 3: one parent per
+   * request, carrying its `requestId`, and a child per recipient. **The same
+   * journal the queue writes**, so a queued recipient's own receipt and the
+   * parent it names are in one file; production reaches both through
+   * `sharedReceiptJournal()`.
+   */
+  receipts: ReceiptJournal;
   now: () => number;
   log: (line: string) => void;
   /** See `EnqueueForBroadcast`. */
@@ -407,6 +448,7 @@ export function realBroadcastDeps(): BroadcastDeps {
        drain opened stops this route. `tests/fleet-send-composition.test.ts`
        asserts that by identity rather than leaving it to this comment. */
     send: sharedSendCoordinator(),
+    receipts: sharedReceiptJournal(),
     now: () => Date.now(),
     log: (line) => console.log(line),
     enqueue: null,
@@ -505,6 +547,61 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
   const deps: BroadcastDeps = { ...realBroadcastDeps(), ...overrides };
   let lastBroadcastAt: number | null = null;
 
+  /* ---------------- receipts — plan 260910d Stage 3 ---------------- */
+
+  /** The broadcast's own receipt, and who its children are attributed to. */
+  type ParentReceipt = { receiptId: string; actor: ReceiptActor; speaker: Speaker; what: string };
+
+  /** Fail-open: a lost outcome line recovers as `outcome-unknown`, which is true. */
+  function settleReceipt(receiptId: string, arm: ReceiptOutcome): void {
+    if (!deps.receipts.outcome(receiptId, arm)) {
+      deps.log(`broadcast: receipt=${receiptId} outcome ${arm.state}/${arm.reason} was not recorded`);
+    }
+  }
+
+  function childOf(parent: ParentReceipt, rec: Recipient): RecipientReceipt {
+    return {
+      parentReceiptId: parent.receiptId,
+      actor: parent.actor,
+      speaker: parent.speaker,
+      what: parent.what,
+      target: {
+        sessionId: rec.target.sessionId,
+        paneId: rec.target.paneId,
+        claudeSessionId: rec.target.claudeSessionId,
+        tmuxGeneration: deps.send.book().knownGeneration() ?? deps.receipts.lastGeneration(),
+      },
+    };
+  }
+
+  /**
+   * A known request id, answered. A replay is the broadcast's receipt AND its
+   * children's, and nothing else happens: no parse, no cooldown, no send.
+   */
+  function answerLookup(res: ServerResponse, found: Exclude<RequestLookup, { kind: "fresh" }>): void {
+    switch (found.kind) {
+      case "replay": {
+        const receipt = summarizeReceipt(found.receipt);
+        const children = deps.receipts.childrenOf(found.receipt.receiptId).map(summarizeReceipt);
+        deps.log(`broadcast: REPLAY receipt=${receipt.receiptId} state=${receipt.state} children=${children.length} — nothing was sent on this request`);
+        respond(res, 200, { ok: true, op: "receipt", replay: true, receipt, children });
+        return;
+      }
+      case "conflict":
+        deps.log("broadcast: refused code=request-id-conflict");
+        respond(res, 409, { ok: false, code: "request-id-conflict", why: found.why });
+        return;
+      case "expired":
+        deps.log("broadcast: refused code=request-id-expired");
+        respond(res, 409, { ok: false, code: "request-id-expired", why: found.why });
+        return;
+      default: {
+        const never: never = found;
+        void never;
+      }
+    }
+  }
+
   /**
    * **THE LOOP, AND IT KNOWS NOTHING ABOUT AUTHORITY.**
    *
@@ -526,6 +623,8 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     render: (index: number, total: number) => string,
     startedAt: number,
     into: Map<string, BroadcastRecipient>,
+    /** The broadcast's receipt. Each recipient gets a child of it. */
+    parent: ParentReceipt,
   ): Promise<void> {
     const total = deliverable.length;
     for (let index = 0; index < total; index += 1) {
@@ -543,6 +642,10 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
          keeps about the moment before the keys go out. */
       if (index > 0) await deps.yieldToLoop();
       if (deps.now() - startedAt > BROADCAST_DEADLINE_MS) {
+        // Accounted for by a child that was never attempted: `not-sent`/`not-reached`.
+        if (!recordUnreachedRecipient(deps.receipts, childOf(parent, rec))) {
+          deps.log(`broadcast: receipt for the unreached ${rec.target.sessionId} was not recorded`);
+        }
         into.set(rec.target.paneId, {
           ...where,
           kind: "not-reached",
@@ -589,7 +692,22 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         onThrow: "hold",
         record: { kind: "book" },
       };
+      /* THIS RECIPIENT'S OWN RECEIPT — accepted and attempted on the line above
+         the send, settled on the line below it, exactly as a direct steer is
+         (plan 260910d Stage 3). No receipt, no send: the row carries the 503
+         the steer route would have answered, because nothing was typed. */
+      const child = beginRecipientReceipt(deps.receipts, childOf(parent, rec));
+      if (!child.ok) {
+        deps.log(`broadcast: not sent session=${rec.target.sessionId} code=receipt-unavailable`);
+        into.set(rec.target.paneId, {
+          ...where,
+          kind: "attempted",
+          attempt: { status: 503, ok: false, code: "receipt-unavailable", why: child.why, delivery: "none" },
+        });
+        continue;
+      }
       const attempt = deps.send.message(rec.target, text, rec.declaredStatus, purpose);
+      settleReceipt(child.receiptId, sendAttemptOutcome(attempt));
 
       if (attempt.kind === "held") {
         /* **NOTHING WAS TYPED AT THIS ONE**, and the loop carries on to the
@@ -750,6 +868,24 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     } catch (e) {
       respond(res, 400, { ok: false, code: "bad-request", why: `the body is not JSON: ${(e as Error).message}` });
       return;
+    }
+    /* THE KEY IS READ AND LOOKED UP BEFORE THE PARSE — plan 260910d § The
+       fingerprint (Sol F16). A replay is answered from the receipts before the
+       cooldown, the gates or the kill switch are asked anything, so a retry
+       after a lost response gets the broadcast back and types at nobody. A
+       malformed key is refused, never downgraded to an unkeyed broadcast. */
+    const key = readRequestKey("broadcast", raw);
+    if (key.kind === "bad") {
+      deps.log("broadcast: refused code=bad-request-id");
+      respond(res, 400, { ok: false, code: "bad-request-id", why: key.why });
+      return;
+    }
+    if (key.kind === "keyed") {
+      const found = lookupRequest(deps.receipts, key, deps.now());
+      if (found.kind !== "fresh") {
+        answerLookup(res, found);
+        return;
+      }
     }
     const parsed = parseBody(raw);
     if (!parsed.ok) {
@@ -956,8 +1092,71 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
     const cooldownWas = lastBroadcastAt;
     lastBroadcastAt = at;
 
+    /* **THE PARENT RECEIPT, ACCEPTED AND ATTEMPTED BEFORE ANY RECIPIENT** —
+       plan 260910d Stage 3. Accepted synchronously: nothing has awaited since
+       the request id was looked up. A keyed accept that cannot land sends and
+       queues nothing (Sol F1), and `attempted` is fail-closed when the accept
+       is durable, so a crash mid fan-out reads on restart as an attempt that
+       began, never as a broadcast proven not to have started. Either refusal
+       hands the cooldown back: nobody was interrupted. */
+    const keyed = key.kind === "keyed" ? key : null;
+    const actor: ReceiptActor = { kind: "client-claimed", id: request.speaker };
+    const accepted = deps.receipts.accept({
+      requestId: keyed?.requestId ?? null,
+      fingerprint: keyed?.fingerprint ?? null,
+      op: "broadcast",
+      origin: "broadcast",
+      target: null,
+      actor,
+      speaker: request.speaker,
+      what: `broadcast (${rendered.text.length} characters) to ${reachable} recipient(s)`,
+      queue: null,
+    });
+    if (!accepted.ok) {
+      lastBroadcastAt = cooldownWas;
+      if (keyed !== null) {
+        const again = lookupRequest(deps.receipts, keyed, deps.now());
+        if (again.kind === "replay") {
+          answerLookup(res, again);
+          return;
+        }
+      }
+      deps.log(`broadcast: refused code=receipt-unavailable why=${oneLine(accepted.why)}`);
+      respond(res, 503, {
+        ok: false,
+        code: "receipt-unavailable",
+        why: `nothing was sent or queued: this broadcast could not be given a receipt first (${accepted.why})`,
+      });
+      return;
+    }
+    const parent: ParentReceipt = {
+      receiptId: accepted.receiptId,
+      actor,
+      speaker: request.speaker,
+      what: `broadcast (${rendered.text.length} characters), one recipient`,
+    };
+    /** Only a keyed request is told its receipt id: that is the request that can ask again. */
+    const tag: { receiptId?: string } = keyed === null ? {} : { receiptId: parent.receiptId };
+    if (!deps.receipts.attempted(parent.receiptId).landed) {
+      lastBroadcastAt = cooldownWas;
+      settleReceipt(parent.receiptId, {
+        state: "not-sent",
+        reason: "attempt-not-recorded",
+        code: null,
+        why: "the record that this broadcast was being attempted could not be written, so nothing was sent or queued",
+      });
+      deps.log(`broadcast: refused code=receipt-unavailable receipt=${parent.receiptId} why=attempt-not-recorded`);
+      respond(res, 503, {
+        ok: false,
+        code: "receipt-unavailable",
+        why: "nothing was sent or queued: the record that this broadcast was being attempted could not be written",
+        ...tag,
+      });
+      return;
+    }
+
     deps.log(
-      `broadcast: RUN asked=${asked} send=${deliverable.length} queue=${queueable.length} chars=${rendered.text.length}`,
+      `broadcast: RUN asked=${asked} send=${deliverable.length} queue=${queueable.length} chars=${rendered.text.length} receipt=${parent.receiptId}`,
     );
 
     /* **THE QUEUE HALF GOES FIRST, and the order is a decision.** Enqueueing is
@@ -986,10 +1185,16 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
           { sessionId: rec.target.sessionId, claudeSessionId: rec.target.claudeSessionId },
           request.text,
           request.speaker,
+          parent.receiptId,
         );
         if (result.ok) {
-          deps.log(`broadcast: QUEUED session=${rec.target.sessionId} position=${result.position}`);
-          outcomes.set(rec.target.paneId, { ...where, kind: "queued", position: result.position });
+          /* **`durable` IS CARRIED, NEVER ASSUMED** (F36): an item whose receipt
+             lives only in memory is one a restart forgets, and the row says so. */
+          deps.log(
+            `broadcast: QUEUED session=${rec.target.sessionId} position=${result.position} receipt=${result.receiptId}` +
+              (result.durable ? "" : " NOT DURABLE"),
+          );
+          outcomes.set(rec.target.paneId, { ...where, kind: "queued", position: result.position, durable: result.durable });
           continue;
         }
         /* **`bad-text` IS ONE TRUTH, NOT ONE PER RECIPIENT**, and it ends the
@@ -1005,8 +1210,14 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
            it and here awaits, so no second request can have seen it. */
         if (result.rule === "bad-text") {
           lastBroadcastAt = cooldownWas;
+          settleReceipt(parent.receiptId, {
+            state: "not-sent",
+            reason: "undeliverable",
+            code: "bad-text",
+            why: "the queue refused the message itself before anything was sent or queued",
+          });
           deps.log(`broadcast: refused code=bad-text why=${oneLine(result.why)}`);
-          respond(res, 400, { ok: false, code: "bad-text", why: result.why });
+          respond(res, 400, { ok: false, code: "bad-text", why: result.why, ...tag });
           return;
         }
         deps.log(`broadcast: queue refused session=${rec.target.sessionId} rule=${result.rule}`);
@@ -1019,7 +1230,19 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
       }
     }
 
-    await fanOut(deliverable, render, at, outcomes);
+    try {
+      await fanOut(deliverable, render, at, outcomes, parent);
+    } catch (e) {
+      /* A throw is a bug, not a crash: this process is alive to say the fan-out
+         did not finish. (A crash is concluded `interrupted` at the next start.) */
+      settleReceipt(parent.receiptId, {
+        state: "outcome-unknown",
+        reason: "threw",
+        code: null,
+        why: "the fan-out threw part-way; each recipient's own receipt says how far it got",
+      });
+      throw e;
+    }
     const rows = ordered(request, outcomes);
     const counts = countOf(rows, asked);
     /* **A RUN THAT REACHED NOBODY HANDS THE COOLDOWN BACK.** GPT Sol's P2: a
@@ -1044,7 +1267,16 @@ export function makeBroadcastRoutes(overrides: Partial<BroadcastDeps> = {}): Bro
         `skipped=${counts.skipped} held=${counts.held} notReached=${counts.notReached}`,
     );
 
-    respond(res, 200, { ok: true, op: "broadcast", result: { counts, recipients: rows } });
+    /* THE PARENT IS COMPLETE: every recipient it began has its own receipt, and
+       its `why` counts them by state — the children, not this, say what
+       happened to each. */
+    settleReceipt(parent.receiptId, {
+      state: "completed",
+      reason: "fan-out-finished",
+      code: null,
+      why: describeChildren(deps.receipts, parent.receiptId),
+    });
+    respond(res, 200, { ok: true, op: "broadcast", result: { counts, recipients: rows }, ...tag });
   }
 
   return {

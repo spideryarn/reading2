@@ -3963,8 +3963,20 @@ export type AdmissionCensusState =
  */
 export type ReceiptSummary = {
   receiptId: string;
-  op: "queued-message" | "queued-action" | "steer-message" | "steer-answer";
-  origin: "enqueue" | "broadcast" | "direct-steer";
+  op:
+    | "queued-message"
+    | "queued-action"
+    | "steer-message"
+    | "steer-answer"
+    /** Stage 3: `remove-worktree` or `kill-session`, run from one session's row. */
+    | "enacted-session"
+    /** Stage 3: one recipient of a broadcast, sent to directly. `parentReceiptId` names the broadcast. */
+    | "broadcast-recipient"
+    /** Stage 3: a box-wide kill. Box-scoped, so `target` is null. */
+    | "enacted-box"
+    /** Stage 3: the parent of one broadcast request. Box-scoped; its recipients are its children. */
+    | "broadcast";
+  origin: "enqueue" | "broadcast" | "direct-steer" | "enacted";
   /**
    * True while the receipt is still non-terminal — `accepted`, `attempted` or
    * `returned`. A replay of a pending receipt is not an outcome: the action may
@@ -3976,12 +3988,21 @@ export type ReceiptSummary = {
     id: string | null;
   };
   speaker: Speaker | null;
+  /** Null exactly for a box-scoped op (`enacted-box`, `broadcast`) — never a sentinel session. */
   target: {
     sessionId: string;
     paneId: string | null;
     claudeSessionId: string | null;
     tmuxGeneration: number | null;
-  };
+  } | null;
+  /** The broadcast this receipt is one recipient of, or null. */
+  parentReceiptId: string | null;
+  /**
+   * For an enacted plan, the steps known to have finished (each with its gate's
+   * verdict on the receipt); null for anything that is not a plan. After a crash
+   * mid-plan this is how far it is known to have got — never further.
+   */
+  stepsCompleted: number | null;
   /** A bounded description such as `message (42 characters)`, never its text. */
   what: string;
   acceptedAt: number;
@@ -3992,7 +4013,11 @@ export type ReceiptSummary = {
     | "withdrawn"
     | "keys-submitted"
     | "not-sent"
-    | "outcome-unknown";
+    | "outcome-unknown"
+    /** Stage 3: an enacted plan passed every gate, or a broadcast's fan-out came to an end. */
+    | "completed"
+    /** Stage 3: an enacted plan stopped at a gate; `reason` is `gate-refused`. */
+    | "plan-stopped";
   reason: string | null;
   attemptedAt: number | null;
   outcomeAt: number | null;
