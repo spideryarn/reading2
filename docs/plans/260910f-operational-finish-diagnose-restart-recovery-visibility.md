@@ -117,7 +117,20 @@ carry a real revision by default.
 
 ### Stage 2 — `overseer diagnose`
 
-- [ ] `tools/overseer/diagnose.ts`: composes the daemon's standing (`daemonStanding`), its start
+**Status, 2026-09-10: built (Opus subagent), 31 tests, typecheck 0; Sol stage review next.** Live
+read-only smoke: the running daemon reads *not stamped*, as it must until the Overseer restarts it;
+the held job list matches this checkout's.
+
+**What the plan did not know.** (1) A file has a *set* of schemas this build reads, not one:
+`decisions.jsonl` is schema 1 on the live store and `DECISIONS_SCHEMA` is 2, with 1 still read as
+`LEGACY_DECISIONS_SCHEMA` — a single number would flag a false mismatch. (2) `usage.jsonl` names its
+field `lineSchema`, so the probe takes a field name per file. (3) `last-snapshot.json`'s schema 1 is a
+bare literal in `daemon.ts`, so it shows *no known schema*. (4) An unusable checkpoint names no
+instance, so no start revision is shown; the lock file's `instanceId` could fill that and does not
+yet. (5) The "cannot tell" rule for incomplete notes lived inside `statusLines`; it is now the
+exported `standingFromReads`, shared by `status` and `diagnose`.
+
+- [x] `tools/overseer/diagnose.ts`: composes the daemon's standing (`daemonStanding`), its start
   revision (last `daemon-started` of the checkpoint's instance), checkpoint schema vs `STORE_SCHEMA`,
   the two clocks and their ages, recorded vs host boot id, every store file via `store-probe.ts`,
   held vs built job list (`schedulePreviewLines`' comparison), and the dashboard's
@@ -223,13 +236,35 @@ end-to-end test below.
 grace, and exactly one (dedup is the service's, per state change); (3) resume → one recovery
 notice; (4) point the watchdog at a scratch store with a stopped heartbeat → a `/fail` with body
 `stale`, and the body contains nothing but the vocabulary; (5) make the destination unreachable
-(bogus host) → the watchdog logs the failed ping locally and exits non-zero, and the service alerts
-because pings stopped — the monitor's own failure fails loud. Then the real check, and one
+from the disposable pinger → it logs the failed delivery locally and exits non-zero; if the
+provider remains healthy, its missing-ping alert proves a host-to-provider delivery failure is
+visible. This does **not** test a provider outage: the provider or the notification channel failing
+remains a stated residual risk, covered only by the monthly end-to-end test or by a separately
+authorised independent monitor (Sol's F9). Then the real check, and one
 deliberate alert end to end, repeated monthly.
 
 **What it needs from Greg**: pick A, B or C (and for A, Pushover or ntfy); authorise creating the
 account/check; say now, provisioning, or both for the timer unit and the secret file — the box's own
 rule ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)).
+
+## Plan review (GPT Sol, `--sandbox review`, at `2c751326`)
+
+Verdict *request changes*: established P1s F1, F2, F3, F5, F6; no P0. The answer is
+`260910f-…plan-review-answer.md` beside this file (the reviewer could not write the separate
+findings file from its sandbox and put them in the answer instead). Stage 1 had started before it
+returned. Every finding accepted; where it lands:
+
+| ID | Finding, short | Disposition |
+|----|----------------|-------------|
+| F1 | A start stamp names the checkout, not the loaded bytes; dirty starts typed `known`; "same" reads as "the running code is" | **Accepted, as wording.** D1 now reads: *a stamp is a checkout observation at start, not a code identity.* A dirty stamp renders `code revision unknown — base HEAD <sha>, checkout dirty at start`; a clean one only as `recorded start HEAD matches / is N behind / is not an ancestor of this checkout's HEAD`. No text says the running code or bundle *is* a revision. The type keeps `known` (renaming it is churn with no reader change); fixed in `diagnose.ts` and the page |
+| F2 | D5's payload cannot serve Stage 3: no daemon start stamp, no bundle stamp at server start, no store-path label, no health age | **Accepted.** D5 amended as the reviewer wrote it: add the client build stamp captured once before listeners open, the latest health-reading age, the resolved store-path label, and the daemon's start stamp from a fleet-owned tolerant reader of `daemon.jsonl` correlated to the checkpoint's `instanceId`. `HealthPanel.tsx` named in the file set |
+| F3 | `daemonStanding` pairs one global last note with the checkpoint: A checkpointed and was killed, B started and stopped cleanly → A's checkpoint with B's clean stop | **Accepted, a real bug in shared code** (now reached by `status` and `diagnose` both). Standing resolves from start/stop correlated by `instanceId`; regression test is the reviewer's scenario. `status-cli.ts` and `tests/overseer-cli.test.ts` added to the file set |
+| F4 | The dashboard read in `diagnose` has no deadline or body bound | **Accepted**, in Stage 3 where the route exists: injected `fetch`, 5 s `AbortSignal`, bounded body, non-2xx and malformed JSON each a named `unusable` line |
+| F5 | The spawned-server test is not isolated: readiness scans `process.cwd()`'s job logs at start; `openRouterKey()` reads the real `.env.local` before the zero budget; `OVERSEER_QUEUE_DIR` omitted | **Accepted**, relayed to the Stage 4b agent before it spawned anything: disposable git checkout as `cwd`, an invalid `OPENROUTER_API_KEY` sentinel, the reviewer's env list, and an assertion that every resolved path is beneath scratch |
+| F6 | The killed-daemon process test is optional; an aborted `runOverseer` is a graceful stop, not a crash | **Accepted — now required** (Stage 4c): `overseer run --no-attention --no-usage`, jobs and rules disabled, scratch everything, SIGKILL, `diagnose` says killed, a second child takes the lock |
+| F7 | The outage test must see a *moving* source clock stop, not start from null | **Accepted** (Stage 4c): assert non-null `t0` before the outage, `t0` held across ≥ 2 later checkpoints, `t1 > t0` after, and `diagnose` renders the stopped clock |
+| F8 | The per-request probe has no byte, file-type or symlink contract | **Accepted** (Stage 3, `store-probe.ts`): fixed allow-list, `lstat`, symlinks and non-regular files reported not followed, a JSON byte ceiling, JSONL tail-only |
+| F9 | Stage 5 item 5 claims more than it tests | **Accepted**; item 5 reworded below |
 
 ## Status
 

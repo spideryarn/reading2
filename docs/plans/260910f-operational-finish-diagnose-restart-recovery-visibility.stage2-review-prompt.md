@@ -45,6 +45,15 @@ established P0/P1.
 if you can write at all; otherwise put the full findings in your final message. The `--output` file
 is overwritten with your closing message at exit.
 
+## Already known, and being fixed — do not spend the run on these
+
+From the plan review (the table in the plan): **F3** — `daemonStanding` pairs one global last note
+with the checkpoint, so "A checkpointed and was killed; B started and stopped before its first
+checkpoint" reads as a clean stop of A; **F1** — clean-start verdicts must read "recorded start HEAD
+matches…", never "same"/"is running"; **F4** — the dashboard fetch needs a deadline and body bound
+(it arrives with Stage 3's route); **F8** — `store-probe.ts` needs a byte ceiling for JSON, `lstat`,
+and symlink/non-regular handling. Findings about anything else come first.
+
 ## My own suspicions — read last
 
 - `diagnose.ts` imports `daemon.ts` (for `BASELINE_FILE`, `readHostBootId`) — does importing it
