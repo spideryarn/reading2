@@ -37,6 +37,14 @@ It also proves the acceptance paragraph end to end, on scratch infrastructure on
         30 * 60_000))` answers clear. That gives `{ kind: "chosen", account, notes }`.
      4. If no account is clear, the answer is `{ kind: "held", why, until }`, carrying every
         account's reason and the earliest `until`.
+     - **Read the same two values the recovery resume pass already reads, so both launch paths
+       gate on one piece of evidence:**
+       - health: `accepted?.snapshot.health` (`daemon.ts` ~1123);
+       - account usage: the daemon's own `accountUsage` variable (`daemon.ts` ~896, refreshed by
+         the usage pass at ~1418).
+
+       Line numbers are as of a866b2e4, so re-read them. The usage pass belongs to another
+       session: read its result, never edit its code.
      5. Hand it to the planner and put its notes in the tick's log line.
    - A resume checks only its own stored account's gate: `run.account` from `view().fold()`.
    - At every checkpoint, next to the `writeSchedulePreview` call:
