@@ -702,22 +702,65 @@ async function refreshLoop(): Promise<void> {
 /**
  * Why this request's `Host` is refused, or null if it names this dashboard.
  *
- * `new URL` rather than splitting on `:`, so `[::1]:8787` and a `Host` smuggling
- * a userinfo (`127.0.0.1@evil.example`) come out as the name a browser would
- * have resolved. A missing `Host` is refused as well: HTTP/1.1 requires one and
- * Node refuses its absence before `handler` runs, but HTTP/1.0 does not.
+ * The raw value must first be exactly an HTTP authority. `new URL` alone is too
+ * accepting for that job: `new URL("http://localhost/path").hostname` is
+ * `localhost`, as is an authority carrying userinfo before `@`. URL syntax in
+ * a Host field is malformed, not another spelling of an allowed Host.
+ *
+ * A missing or duplicate `Host` is refused as well. HTTP/1.1 requires exactly
+ * one and Node refuses absence before `handler` runs, but HTTP/1.0 does not;
+ * duplicate fields do reach `rawHeaders`, even when Node exposes only one in
+ * `headers.host`.
  */
-function unaddressedHost(host: string | undefined): string | null {
+function unaddressedHost(hosts: readonly string[]): string | null {
   const why =
     "this dashboard answers only to an IP address, localhost, a *.ts.net name or a single-label name (origin.ts) — any other name is how a DNS-rebinding page reads it";
-  if (host === undefined || host === "") return `the request names no Host; ${why}\n`;
+  if (hosts.length === 0 || hosts[0] === "") return `the request names no Host; ${why}\n`;
+  if (hosts.length !== 1) return `the request carries ${hosts.length} Host fields; exactly one is required; ${why}\n`;
+  const host = hosts[0];
+  if (host === undefined) return `the request names no Host; ${why}\n`;
+  if (
+    host !== host.trim() ||
+    /[\s/@\\%?#]/u.test(host) ||
+    !authoritySuffixIsValid(host)
+  ) {
+    return `'${host.slice(0, 100)}' is not one HTTP authority; ${why}\n`;
+  }
   let hostname: string;
   try {
-    hostname = new URL(`http://${host}`).hostname;
+    const parsed = new URL(`http://${host}`);
+    if (parsed.username !== "" || parsed.password !== "" || parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "") {
+      return `'${host.slice(0, 100)}' is not one HTTP authority; ${why}\n`;
+    }
+    hostname = parsed.hostname;
   } catch {
     return `'${host.slice(0, 100)}' is not a host; ${why}\n`;
   }
   return addressableHost(hostname) ? null : `refused the name '${hostname.slice(0, 100)}': ${why}\n`;
+}
+
+/** A bracketed IPv6 literal, or a hostname, followed by no port or `:<digits>`. */
+function authoritySuffixIsValid(host: string): boolean {
+  if (host.startsWith("[")) {
+    const close = host.indexOf("]");
+    if (close < 0 || host.indexOf("]", close + 1) >= 0) return false;
+    const suffix = host.slice(close + 1);
+    return suffix === "" || /^:\d+$/u.test(suffix);
+  }
+  if (host.includes("[") || host.includes("]")) return false;
+  const firstColon = host.indexOf(":");
+  if (firstColon < 0) return true;
+  if (firstColon !== host.lastIndexOf(":")) return false;
+  return /^:\d+$/u.test(host.slice(firstColon));
+}
+
+/** All Host fields before Node's normalised header map discards duplicates. */
+function rawHosts(req: import("node:http").IncomingMessage): readonly string[] {
+  const values: string[] = [];
+  for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) {
+    if (req.rawHeaders[i]?.toLowerCase() === "host") values.push(req.rawHeaders[i + 1] ?? "");
+  }
+  return values;
 }
 
 /**
@@ -760,7 +803,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // transcript tail — and meet no Origin check at all. So the `Host` is checked
   // here, once, before any route, static included: a copy per route is how one
   // of them came to lack it. 421: the request reached a server it did not name.
-  const refusedHost = unaddressedHost(req.headers.host);
+  const refusedHost = unaddressedHost(rawHosts(req));
   if (refusedHost !== null) {
     res.writeHead(421, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
     res.end(refusedHost);

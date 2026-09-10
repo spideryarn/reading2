@@ -46,10 +46,14 @@
  * `web/dist/`, and so does this: a skipped security test reads as a passing one
  * in every summary that counts green.
  *
- * IT KILLS ONLY WHAT IT STARTED. `tsx` runs the script in a node grandchild, so
- * signalling the pid we hold would leave the grandchild holding the port. The
- * child is spawned `detached`, into a process group of its own, and `stop()`
- * signals that group — which contains nothing of anybody else's.
+ * IT KILLS ONLY WHAT IT STARTED, AND DIES WITH ITS OWNER. `tsx` runs the script
+ * in a node grandchild, so signalling the pid we hold would leave the
+ * grandchild holding the port. A tiny owner is spawned `detached`, into a
+ * process group of its own, and starts `tsx` inside that group. `stop()` signals
+ * the group — which contains nothing of anybody else's. More importantly, the
+ * owner watches its Node IPC pipe: if vitest itself is killed, the pipe closes and
+ * the owner terminates the whole group rather than leaving a random listener
+ * and startup loops behind.
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -66,12 +70,15 @@ export const FLEET_DIST = path.join(REPO, "tools", "fleet", "web", "dist");
 /* Resolved HERE, absolutely: the child's cwd is a temp dir, from which a bare
    `tsx` would not resolve and the harness would fail before the server did. */
 const TSX_CLI = path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs");
+const CHILD_OWNER = path.join(REPO, "tests", "helpers", "fleet-child-owner.mjs");
 
 export type Exit = { code: number | null; signal: NodeJS.Signals | null };
 
 export type FleetChild = {
   port: number;
   baseUrl: string;
+  /** PID of the isolated owner/process group; exposed for the parent-death test's emergency cleanup. */
+  ownerPid: number;
   /** stdout and stderr interleaved, as the child wrote them. */
   output: () => string;
   /** null while it runs. */
@@ -83,8 +90,8 @@ export type FleetChild = {
 export type FleetChildOptions = {
   /** Defaults to a free one. */
   port?: number;
-  /** Applied last, over the isolated environment — a test's own switches. */
-  env?: Record<string, string>;
+  /** Defaults to 127.0.0.1. The only safe startup refusal this harness needs to vary. */
+  bind?: "127.0.0.1" | "0.0.0.0";
 };
 
 /** A port nothing holds right now on any interface, so a refusal on another
@@ -100,7 +107,7 @@ export async function freePort(): Promise<number> {
   });
 }
 
-function isolatedEnv(root: string, port: number, over: Record<string, string>): NodeJS.ProcessEnv {
+function isolatedEnv(root: string, port: number, bind: string): NodeJS.ProcessEnv {
   const env = accountNeutralEnv();
   for (const name of Object.keys(env)) {
     if (name.startsWith("GJD_REMOTE_") || name.startsWith("FLEET_NEW_DIR")) delete env[name];
@@ -124,7 +131,7 @@ function isolatedEnv(root: string, port: number, over: Record<string, string>): 
     OVERSEER_DECISIONS_DIR: dir("decisions"),
     OVERSEER_QUEUE_DIR: dir("queue"),
     FLEET_PORT: String(port),
-    FLEET_BIND: "127.0.0.1",
+    FLEET_BIND: bind,
     FLEET_DESCRIBE_MAX_CALLS: "0",
     OPENROUTER_API_KEY: "not-a-real-key-fleet-child-server",
     FLEET_ACT_ENABLED: "0",
@@ -134,7 +141,6 @@ function isolatedEnv(root: string, port: number, over: Record<string, string>): 
     FLEET_REFRESH_MS: "3600000",
     FLEET_DESCRIBE_MS: "3600000",
     FLEET_READINESS_REFRESH_MS: "3600000",
-    ...over,
   };
 }
 
@@ -147,6 +153,7 @@ export async function spawnFleetChild(opts: FleetChildOptions = {}): Promise<Fle
   for (const [what, file] of [
     ["a built fleet client — run `npm run build:fleet` first", path.join(FLEET_DIST, "index.html")],
     ["tsx — run `npm install`", TSX_CLI],
+    ["fleet child owner", CHILD_OWNER],
   ] as const) {
     if (!existsSync(file)) throw new Error(`no ${what} (looked for ${file})`);
   }
@@ -154,12 +161,19 @@ export async function spawnFleetChild(opts: FleetChildOptions = {}): Promise<Fle
   const root = mkdtempSync(path.join(os.tmpdir(), "fleet-child-server-"));
   const cwd = path.join(root, "cwd");
   mkdirSync(cwd);
-  const proc: ChildProcess = spawn(process.execPath, [TSX_CLI, FLEET_SERVER], {
+  const proc: ChildProcess = spawn(process.execPath, [CHILD_OWNER, root, process.execPath, TSX_CLI, FLEET_SERVER], {
     cwd,
-    env: isolatedEnv(root, port, opts.env ?? {}),
+    env: isolatedEnv(root, port, opts.bind ?? "127.0.0.1"),
     detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
+    // Kept open for the process lifetime. The owner treats disconnect as the test
+    // runner's death and tears down its server process group.
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
+  const ownerPid = proc.pid;
+  if (ownerPid === undefined) {
+    rmSync(root, { recursive: true, force: true });
+    throw new Error("the fleet child owner started without a pid");
+  }
   let out = "";
   let exit: Exit | null = null;
   const append = (b: Buffer): void => {
@@ -190,7 +204,7 @@ export async function spawnFleetChild(opts: FleetChildOptions = {}): Promise<Fle
     rmSync(root, { recursive: true, force: true });
   }
 
-  return { port, baseUrl: `http://127.0.0.1:${port}`, output: () => out, exited: () => exit, stop };
+  return { port, baseUrl: `http://127.0.0.1:${port}`, ownerPid, output: () => out, exited: () => exit, stop };
 }
 
 /** The group, never the bare pid — see the header. Only our own group. */

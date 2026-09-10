@@ -347,7 +347,12 @@ describe("server.ts wiring", () => {
       const mounted = handler as unknown as (req: IncomingMessage, res: ServerResponse) => void;
       // A Host, because handler() refuses a request that names none (260910f).
       mounted(
-        { method: "GET", url: REPORTS_PATH, headers: { host: "127.0.0.1:8787" } } as IncomingMessage,
+        {
+          method: "GET",
+          url: REPORTS_PATH,
+          headers: { host: "127.0.0.1:8787" },
+          rawHeaders: ["Host", "127.0.0.1:8787"],
+        } as IncomingMessage,
         response as unknown as ServerResponse,
       );
 

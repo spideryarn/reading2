@@ -56,7 +56,14 @@ export function addressableHost(hostname: string): boolean {
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true;
   // IPv6 literal, with the brackets already stripped above.
   if (h.includes(":") && /^[0-9a-f:.]+$/.test(h)) return true;
-  if (h.endsWith(".ts.net")) return true;
+  if (h.endsWith(".ts.net")) {
+    const prefix = h.slice(0, -".ts.net".length);
+    return prefix.split(".").every(dnsLabel);
+  }
   // One DNS label — the MagicDNS short name. See the header for why it is safe.
-  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(h);
+  return dnsLabel(h);
+}
+
+function dnsLabel(label: string): boolean {
+  return label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label);
 }

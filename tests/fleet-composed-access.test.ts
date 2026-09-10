@@ -18,6 +18,7 @@
  * Every refusal below has a positive control beside it, so no property can
  * pass by the server refusing everything — or by it not being there.
  */
+import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -27,6 +28,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { SECURITY_HEADERS } from "../tools/fleet/headers.js";
 import { FLEET_DIST, type FleetChild, freePort, spawnFleetChild, startFleetChild } from "./helpers/fleet-child-server.js";
+
+// The safe harness deliberately has no arbitrary environment escape hatch.
+// This is compile-time evidence: before F14's fix the directive is unused and
+// `npm run typecheck` fails; after it, removing the restriction fails instead.
+function helperIsolationTypeWitness(): void {
+  // @ts-expect-error live-state isolation variables are not caller-overridable
+  void spawnFleetChild({ env: { HOME: "/home/greg", FLEET_ACT_ENABLED: "1" } });
+}
+void helperIsolationTypeWitness;
 
 /* ------------------------------------------------------------------ *
  * Requests
@@ -42,6 +52,11 @@ type Req = { method?: string; path: string; headers?: Record<string, string>; bo
  * false` so a test chooses the Host; it defaults to the one we listen on.
  */
 async function request(port: number, opts: Req): Promise<Reply> {
+  // An explicit Content-Length whenever there is a body. Node's client chunks a
+  // POST body by default but NOT a DELETE's: it writes the bytes after the head
+  // with no framing header at all, so the server rightly reads a bodyless
+  // DELETE followed by a malformed second request, and resets the socket.
+  const length = opts.body === undefined ? {} : { "content-length": String(Buffer.byteLength(opts.body)) };
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -50,7 +65,7 @@ async function request(port: number, opts: Req): Promise<Reply> {
         method: opts.method ?? "GET",
         path: opts.path,
         setHost: false,
-        headers: { host: opts.host ?? `127.0.0.1:${port}`, ...opts.headers },
+        headers: { host: opts.host ?? `127.0.0.1:${port}`, ...length, ...opts.headers },
       },
       (res) => {
         let body = "";
@@ -194,7 +209,7 @@ describe("bind: it listens on the configured address and nowhere else", () => {
   });
 
   it("FLEET_BIND=0.0.0.0 exits non-zero without ever listening", async () => {
-    const child = await spawnFleetChild({ env: { FLEET_BIND: "0.0.0.0" } });
+    const child = await spawnFleetChild({ bind: "0.0.0.0" });
     try {
       const deadline = Date.now() + 60_000;
       while (child.exited() === null && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
@@ -332,6 +347,53 @@ describe("host: a request addressed by a name this dashboard is never reached by
       expect(r.status, host).toBe(200);
     }
   });
+
+  for (const host of [
+    "localhost/path",
+    "localhost?query",
+    "localhost#fragment",
+    "evil.example@localhost",
+    "%6cocalhost",
+    "localhost.",
+    "evil.ts.net.",
+    "[::1%25lo]",
+  ]) {
+    it(`refuses a Host that is URL syntax rather than one authority: ${host}`, async () => {
+      const r = await rawHead(PORT, `GET /api/state HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
+      expect(r.status).toBe(421);
+      expectSecurityHeaders(r, `421 malformed Host ${host}`);
+    });
+  }
+
+  for (const hosts of [
+    ["localhost", "evil.example"],
+    ["evil.example", "localhost"],
+  ]) {
+    it(`refuses duplicate Host fields in this order: ${hosts.join(", ")}`, async () => {
+      const fields = hosts.map((host) => `Host: ${host}\r\n`).join("");
+      const r = await rawHead(PORT, `GET /api/state HTTP/1.1\r\n${fields}Connection: close\r\n\r\n`);
+      expect(r.status).toBe(421);
+      expectSecurityHeaders(r, `421 duplicate Host ${hosts.join(", ")}`);
+    });
+  }
+
+  it("does not route an absolute-form request target by its embedded path", async () => {
+    const r = await rawHead(
+      PORT,
+      `GET http://evil.example/api/state HTTP/1.1\r\nHost: localhost:${PORT}\r\nConnection: close\r\n\r\n`,
+    );
+    expect(r.status).toBe(404);
+    expectSecurityHeaders(r, "absolute-form request target");
+  });
+
+  it("still applies the hostile Host guard to an absolute-form request target", async () => {
+    const r = await rawHead(
+      PORT,
+      "GET http://evil.example/api/state HTTP/1.1\r\nHost: evil.example\r\nConnection: close\r\n\r\n",
+    );
+    expect(r.status).toBe(421);
+    expectSecurityHeaders(r, "hostile absolute-form request target");
+  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -344,47 +406,111 @@ describe("host: a request addressed by a name this dashboard is never reached by
  * this file does not know about, which is the gap a test like this has; the
  * list is short so it can be read.
  */
-const WRITE_ROUTES: readonly string[] = [
-  "/api/steer/message",
-  "/api/steer/answer",
-  "/api/sessions/new",
-  "/api/sessions/rename",
-  "/api/actions/session",
-  "/api/actions/box",
-  "/api/actions/cancel",
-  "/api/actions/clear",
-  "/api/actions/hold/release",
-  "/api/actions/revive",
-  "/api/actions/abandon",
-  "/api/broadcast",
-  "/api/transcribe",
+const WRITE_ROUTES: readonly { method: "POST" | "DELETE"; path: string }[] = [
+  { method: "POST", path: "/api/steer/message" },
+  { method: "POST", path: "/api/steer/answer" },
+  { method: "POST", path: "/api/sessions/new" },
+  { method: "POST", path: "/api/sessions/rename" },
+  { method: "POST", path: "/api/actions/session" },
+  { method: "POST", path: "/api/actions/box" },
+  { method: "POST", path: "/api/actions/cancel" },
+  { method: "DELETE", path: "/api/actions/cancel" },
+  { method: "POST", path: "/api/actions/clear" },
+  { method: "POST", path: "/api/actions/hold/release" },
+  { method: "POST", path: "/api/actions/revive" },
+  { method: "POST", path: "/api/actions/abandon" },
+  { method: "POST", path: "/api/broadcast" },
+  { method: "POST", path: "/api/transcribe" },
 ];
 
-function post(pathname: string, origin: string | null): Promise<Reply> {
+function write(method: "POST" | "DELETE", pathname: string, origin: string | null): Promise<Reply> {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (origin !== null) headers.origin = origin;
-  return request(PORT, { method: "POST", path: pathname, headers, body: INERT_BODY });
+  return request(PORT, { method, path: pathname, headers, body: INERT_BODY });
+}
+
+function post(pathname: string, origin: string | null): Promise<Reply> {
+  return write("POST", pathname, origin);
 }
 
 describe("origin: every write route refuses a cross-origin write over real HTTP", () => {
   // The Host stays legitimate throughout, so these get past handler()'s Host
   // check and exercise each route's OWN origin gate.
   for (const route of WRITE_ROUTES) {
-    it(`${route}: a foreign, missing and null Origin are 403; same-origin is not`, async () => {
-      const foreign = await post(route, "http://evil.example");
+    it(`${route.method} ${route.path}: a foreign, missing and null Origin are 403; same-origin is not`, async () => {
+      const foreign = await write(route.method, route.path, "http://evil.example");
       expect(foreign.status, `foreign: ${foreign.body}`).toBe(403);
-      const missing = await post(route, null);
+      const missing = await write(route.method, route.path, null);
       expect(missing.status, `missing: ${missing.body}`).toBe(403);
-      const literalNull = await post(route, "null");
+      const literalNull = await write(route.method, route.path, "null");
       expect(literalNull.status, `null: ${literalNull.body}`).toBe(403);
 
       // THE POSITIVE CONTROL. Past the origin gate, refused for the body — 400
       // in every route. Exactly 400 rather than "not 403", so a 404 (route not
       // mounted) or a 415 cannot stand in for it.
-      const same = await post(route, `http://127.0.0.1:${PORT}`);
+      const same = await write(route.method, route.path, `http://127.0.0.1:${PORT}`);
       expect(same.status, `same-origin: ${same.body}`).toBe(400);
     });
   }
+});
+
+/* ------------------------------------------------------------------ *
+ * Child ownership
+ * ------------------------------------------------------------------ */
+
+describe("child ownership: the server dies with the process that asked for it", () => {
+  it("closes the random listener when its helper parent is SIGKILLed", async () => {
+    const repo = path.resolve(import.meta.dirname, "..");
+    const fixture = path.join(import.meta.dirname, "helpers", "fleet-child-orphan-parent.ts");
+    // ONE process, loaded with `--import tsx`, never the tsx CLI: the CLI runs
+    // the script in a node grandchild, and that grandchild — not the pid we
+    // hold — is what calls startFleetChild() and holds the owner's IPC pipe.
+    // SIGKILLing the CLI would leave it alive and the listener with it, which
+    // proves nothing about the owner. The fixture checks this itself.
+    const parent = spawn(process.execPath, ["--import", "tsx", fixture], { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    parent.stdout.on("data", (b: Buffer) => {
+      output += b.toString("utf8");
+    });
+    parent.stderr.on("data", (b: Buffer) => {
+      output += b.toString("utf8");
+    });
+    const deadline = Date.now() + 60_000;
+    let match: RegExpMatchArray | null = null;
+    while (match === null && parent.exitCode === null && Date.now() < deadline) {
+      match = output.match(/fleet-orphan-parent port=(\d+) owner=(\d+) pid=(\d+)/);
+      if (match === null) await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(match, `fixture did not become ready:\n${output}`).not.toBeNull();
+    const port = Number(match?.[1]);
+    const owner = Number(match?.[2]);
+    try {
+      // The process we are about to kill is the one that asked for the server.
+      expect(Number(match?.[3]), "the fixture runs in a process other than the one this test kills").toBe(parent.pid);
+      expect(await connectOutcome("127.0.0.1", port)).toBe("connected");
+      // The fixture waited for the server to go quiet before saying ready, so
+      // nothing reaches the owner's stdout after this and its EPIPE fallback
+      // cannot fire: the IPC disconnect alone must close the listener. Without
+      // that wait, deleting the disconnect handler left this green.
+      parent.kill("SIGKILL");
+      await new Promise<void>((resolve) => parent.once("exit", () => resolve()));
+      let outcome = await connectOutcome("127.0.0.1", port);
+      const goneBy = Date.now() + 10_000;
+      while (outcome === "connected" && Date.now() < goneBy) {
+        await new Promise((r) => setTimeout(r, 50));
+        outcome = await connectOutcome("127.0.0.1", port);
+      }
+      expect(outcome).toBe("ECONNREFUSED");
+    } finally {
+      // Makes the deliberately failing, pre-fix run safe too.
+      try {
+        process.kill(-owner, "SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      if (parent.exitCode === null) parent.kill("SIGKILL");
+    }
+  }, 90_000);
 });
 
 /* ------------------------------------------------------------------ *

@@ -187,6 +187,47 @@ from rebinding. **It is deliberately not narrowed to the exact bind addresses**:
 deployment config and buy nothing. And the child harness is written up as a reusable helper,
 `tests/helpers/fleet-child-server.ts`, so the next composition test uses it rather than a second one.
 
+## Stage review (GPT Sol, fixer, 2026-09-10 19:20–19:44Z) and what was done with it
+
+Sol reviewed `3718fd6d` with write access, refused on two P1s, and fixed all six of its findings
+itself: [answer](260910f-fleet-access-review-composed-server-stage-review-answer.md),
+[findings](260910f-fleet-access-review-composed-server-stage-review-answer-findings.md).
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F11 P1 | A killed vitest orphaned the detached child and its listener | **Taken.** An owner process (`tests/helpers/fleet-child-owner.mjs`) holds the child's process group and kills it when its IPC pipe from the parent closes; a subprocess test SIGKILLs the caller and waits for the port to close. |
+| F12 P1 | `new URL("http://" + host).hostname` let `localhost/path`, `evil.example@localhost` and percent-encoded names through as `localhost` | **Taken.** The raw `Host` must be exactly one authority — no userinfo, path, query, fragment, backslash, `%` or whitespace; a bracketed IPv6 or a host, then at most `:<digits>` — before `URL` extracts the name. |
+| F13 P2 | Two `Host` fields were reduced by Node to one | **Taken.** Counted from `rawHeaders`; exactly one is required. |
+| F14 P2 | The helper's `env` option let a caller undo its own isolation | **Taken.** Replaced by a typed `bind` option; the isolation values cannot be overridden. |
+| F15 P2 | `DELETE /api/actions/cancel` was not in the Origin matrix | **Taken.** |
+| F16 P2 | `*.ts.net` accepted `.ts.net`, empty and edge-hyphen labels | **Taken.** One DNS-label validator (63 bytes, `[a-z0-9-]`, no edge hyphen) for every label. |
+
+**Sol's sandbox could not bind loopback, so it never ran the composed file.** Run for real, 154 of
+156 focused tests passed and two of Sol's new ones failed: the `DELETE` row (`ECONNRESET`) and the
+parent-death test (the listener survived). The fixes went to an Opus subagent. **Sol also reported
+that "an independent Sol review accepted" its fixes; that is not relied on here** — a nested run
+that cannot start reviews its own work and reads identically.
+
+**Both failures were the tests', not production's** (Opus subagent, 2026-09-10 ~20:05Z):
+
+- **`ECONNRESET` on `DELETE`**: Node's client chunks a `POST` body but sends a `DELETE` body with
+  neither `Content-Length` nor `Transfer-Encoding`, so the server rightly read a bodiless `DELETE`
+  followed by garbage, and reset. The test's `request()` now sets `Content-Length` whenever there is a
+  body. `routes-actions.ts` needed nothing.
+- **The listener survived its parent's death** because the test killed the `tsx` CLI while a node
+  *grandchild* held the owner's IPC channel. The fixture now runs as one process
+  (`node --import tsx`) and prints its own pid, which the test asserts is the one it kills. **And
+  the test was still not a witness once that was fixed**: with the owner's disconnect handler
+  deleted it stayed green, because the owner's EPIPE fallback fired on the server's next log line
+  (55 ms by disconnect, 568 ms by EPIPE). The fixture now reports ready only after the server has
+  been silent for 1.5 s, so only the disconnect handler can close the listener — mutated, and red.
+- **Mutations on Sol's F12/F13/F16 fix**: reading `req.headers.host` instead of `rawHeaders` goes
+  red on the `localhost, evil.example` order (the other order is refused either way); dropping the
+  character regex goes red only on `%6cocalhost`, because `new URL()`'s own checks still refuse
+  userinfo, path, query and fragment — so the regex is the percent-encoding guard; dropping the
+  `.ts.net` label check goes red in `tests/fleet-origin.test.ts`.
+- The composed file: 76 tests, three consecutive green runs.
+
 ## Status
 
 Plan written 2026-09-10 and revised after Sol's review. **Stages 1 and 2 built by an Opus subagent**

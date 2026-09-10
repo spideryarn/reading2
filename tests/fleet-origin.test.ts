@@ -63,6 +63,23 @@ describe("addressableHost", () => {
     for (const h of ["", "evil.", ".", "-box", "box-", "spideryarn_box", "box!", "b ox", "evil.example", "localhost.evil.example"]) {
       expect(addressableHost(h), JSON.stringify(h)).toBe(false);
     }
+    expect(addressableHost("a".repeat(63))).toBe(true);
+    expect(addressableHost("a".repeat(64))).toBe(false);
+  });
+
+  it("requires real DNS labels before the Tailscale suffix", () => {
+    expect(addressableHost("box.tailnet.ts.net")).toBe(true);
+    expect(addressableHost(`${"a".repeat(63)}.tailnet.ts.net`)).toBe(true);
+    for (const h of [
+      ".ts.net",
+      "box..tailnet.ts.net",
+      "-box.tailnet.ts.net",
+      "box-.tailnet.ts.net",
+      "box._tailnet.ts.net",
+      `${"a".repeat(64)}.tailnet.ts.net`,
+    ]) {
+      expect(addressableHost(h), JSON.stringify(h)).toBe(false);
+    }
   });
 
   it("is not fooled by case or by IPv6 brackets", () => {
