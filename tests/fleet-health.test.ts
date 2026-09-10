@@ -12,19 +12,28 @@
  * project's rule that an edge case that cannot be provoked live still needs a
  * declared-fabricated fixture rather than being skipped.
  *
- * WHAT THIS FILE IS FOR. The parsers are the whole testability story (see the
- * top of health.ts) — this exercises each one against real output, a command
- * that failed, output in an unexpected format, and a genuinely critical box,
- * then checks `computeVerdict` reads those readings the way the doc says to.
- * `collectHealth` itself (the shelling-out half) is exercised once, for real,
- * outside the test suite — see the report handed back with this change.
+ * WHAT THIS FILE IS FOR. The parsers and assembly are the testability seam
+ * (see the top of health.ts): this exercises each parser against real and
+ * deliberately malformed output, then proves the synchronous and owned-child
+ * gatherers produce the same report from the same captured bytes.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { execFileSyncMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn<(cmd: string, args: readonly string[]) => string>(),
+}));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, execFileSync: execFileSyncMock };
+});
 
 import {
+  collectHealth,
+  collectHealthAsync,
   computeVerdict,
   parseAttribution,
   parseDisk,
@@ -33,10 +42,520 @@ import {
   parseNproc,
   parseSwap,
   parseSwapActivity,
+  type HealthReport,
 } from "../tools/fleet/health.js";
+import type { OwnedOutcome, ProbeOwner, ProbeSpec } from "../tools/fleet/child.js";
+import { statePayload } from "../tools/fleet/state.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-health");
 const fx = (name: string) => readFileSync(path.join(FIXTURES, name), "utf8");
+
+const commandOutput = (cmd: string): string => {
+  const fixtures: Record<string, string> = {
+    uptime: fx("uptime-real.txt"),
+    nproc: fx("nproc-real.txt"),
+    free: fx("free-b-real.txt"),
+    swapon: fx("swapon-bytes-real.txt"),
+    df: fx("df-k-real.txt"),
+    vmstat: fx("vmstat-1-3-real.txt"),
+    ps: fx("ps-rss-args-mixed-real.txt"),
+  };
+  const out = fixtures[cmd];
+  if (out === undefined) throw new Error(`no fixture for ${cmd}`);
+  return out;
+};
+
+function successfulOwner(
+  outcomeFor: (spec: ProbeSpec) => OwnedOutcome = (spec) => ({
+    kind: "ok",
+    stdout: commandOutput(spec.cmd),
+    stderr: "",
+    tookMs: 1,
+  }),
+): ProbeOwner {
+  return {
+    run: async (spec) => outcomeFor(spec),
+    live: () => [],
+  };
+}
+
+function withoutClocks(report: ReturnType<typeof collectHealth>) {
+  const { collectedAt: _collectedAt, tookMs: _tookMs, ...readings } = report;
+  return readings;
+}
+
+describe("health gathering and assembly", () => {
+  it("keeps the synchronous and owned-child gatherers equivalent over identical command output", async () => {
+    /* The managed test sandbox refuses ad-hoc fixture executables with EPERM.
+       This mock is only the sync gatherer's transport: every returned byte is
+       still a captured fixture, and the parsers below independently pin what
+       those bytes mean. No parser or assembly function is mocked. */
+    execFileSyncMock.mockImplementation((cmd) => commandOutput(cmd));
+    const asyncSpecs: ProbeSpec[] = [];
+
+    const sync = collectHealth({ includeSwapActivity: true });
+    const asyncReport = await collectHealthAsync({
+      owner: successfulOwner((spec) => {
+        asyncSpecs.push(spec);
+        return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+      }),
+      includeSwapActivity: true,
+      nowMs: () => 1_000,
+    });
+
+    expect(withoutClocks(asyncReport)).toEqual(withoutClocks(sync));
+    expect(withoutClocks(asyncReport)).toEqual({
+      load: { kind: "value", load1: 14.32, load5: 25.29, load15: 66.78, cores: 16, ratio1: 0.895 },
+      memory: {
+        kind: "value",
+        totalBytes: 32_859_295_744,
+        availableBytes: 12_811_866_112,
+        availableFraction: 12_811_866_112 / 32_859_295_744,
+      },
+      swap: {
+        kind: "value",
+        totalBytes: 34_359_730_176,
+        usedBytes: 20_546_334_720,
+        usedFraction: 20_546_334_720 / 34_359_730_176,
+        areas: 2,
+      },
+      disk: {
+        kind: "value",
+        totalKiB: 314_660_132,
+        usedKiB: 148_893_952,
+        availableKiB: 152_949_524,
+        usePercent: 50,
+      },
+      swapActivity: { kind: "value", siKBs: 76, soKBs: 0, waPercent: 0, activelySwapping: true },
+      attribution: {
+        kind: "value",
+        groups: [
+          { kind: "vitest", procs: 2, rssKiB: 898_076 },
+          { kind: "other", procs: 7, rssKiB: 338_068 },
+          { kind: "node", procs: 4, rssKiB: 292_868 },
+          { kind: "vite", procs: 6, rssKiB: 134_388 },
+          { kind: "chrome", procs: 5, rssKiB: 11_744 },
+        ],
+      },
+      verdict: { level: "strained", reasons: ["actively swapping (si 76, so 0 KB/s)"] },
+    });
+    expect(execFileSyncMock.mock.calls.map(([cmd, args]) => [cmd, args])).toEqual([
+      ["uptime", []],
+      ["nproc", []],
+      ["free", ["-b"]],
+      ["swapon", ["--show", "--bytes"]],
+      ["df", ["-k", "/"]],
+      ["vmstat", ["1", "2"]],
+      ["ps", ["-eo", "rss,args", "--no-headers"]],
+    ]);
+    expect(asyncSpecs).toHaveLength(7);
+    expect(Object.fromEntries(asyncSpecs.map(({ key, cmd, args }) => [key, [cmd, args]]))).toEqual({
+      "health:uptime": ["uptime", []],
+      "health:nproc": ["nproc", []],
+      "health:free": ["free", ["-b"]],
+      "health:vmstat": ["vmstat", ["1", "2"]],
+      "health:swapon": ["swapon", ["--show", "--bytes"]],
+      "health:df": ["df", ["-k", "/"]],
+      "health:ps": ["ps", ["-eo", "rss,args", "--no-headers"]],
+    });
+  });
+
+  it("makes a refused vmstat visible without preventing the other six readings", async () => {
+    const called: string[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        called.push(spec.cmd);
+        if (spec.cmd === "vmstat") {
+          return {
+            kind: "refused",
+            why: "the previous vmstat child is still unaccounted for",
+            pid: 42_424,
+            liveForMs: 12_500,
+          };
+        }
+        return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+      },
+      live: () => [{
+        key: "health:vmstat",
+        pid: 42_424,
+        startedAtMs: 37_500,
+        signalled: ["SIGTERM", "SIGKILL"],
+        exitObserved: false,
+      }],
+    };
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 50_000 });
+
+    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(report.load.kind).toBe("value");
+    expect(report.memory.kind).toBe("value");
+    expect(report.swap.kind).toBe("value");
+    expect(report.disk.kind).toBe("value");
+    expect(report.attribution.kind).toBe("value");
+    expect(report.swapActivity.kind).toBe("unknown");
+    if (report.swapActivity.kind !== "unknown") throw new Error("expected refused vmstat to be unknown");
+    expect(report.swapActivity.why).toContain("the previous vmstat child is still unaccounted for");
+    expect(report.swapActivity.why).toContain("42424");
+    expect(report.swapActivity.why).toContain("12500ms");
+  });
+
+  it("makes a timed-out vmstat visible without preventing the other six readings", async () => {
+    const called: string[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        called.push(spec.cmd);
+        if (spec.cmd === "vmstat") {
+          return {
+            kind: "timed-out",
+            why: 'probe "health:vmstat" reached its 10000ms deadline; child exit has not been observed',
+            tookMs: 11_000,
+            pid: 42_425,
+            exitObserved: false,
+          };
+        }
+        return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+      },
+      live: () => [{
+        key: "health:vmstat",
+        pid: 42_425,
+        startedAtMs: 39_000,
+        signalled: ["SIGTERM", "SIGKILL"],
+        exitObserved: false,
+      }],
+    };
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 50_000 });
+
+    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(report.load.kind).toBe("value");
+    expect(report.memory.kind).toBe("value");
+    expect(report.swap.kind).toBe("value");
+    expect(report.disk.kind).toBe("value");
+    expect(report.attribution.kind).toBe("value");
+    expect(report.swapActivity.kind).toBe("unknown");
+    if (report.swapActivity.kind !== "unknown") throw new Error("expected timed-out vmstat to be unknown");
+    expect(report.swapActivity.why).toContain('probe "health:vmstat" reached its 10000ms deadline');
+    expect(report.swapActivity.why).toContain("42425");
+    expect(report.swapActivity.why).toContain("11000ms");
+  });
+
+  it("puts a timed-out probe's pid and live duration into that field's reason", async () => {
+    const owner = successfulOwner((spec) =>
+      spec.cmd === "free"
+        ? {
+            kind: "timed-out",
+            why: "the free probe reached its deadline",
+            tookMs: 5_100,
+            pid: 42_525,
+            exitObserved: false,
+          }
+        : { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 },
+    );
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 55_000 });
+
+    expect(report.memory.kind).toBe("unknown");
+    if (report.memory.kind !== "unknown") throw new Error("expected timed-out free to be unknown");
+    expect(report.memory.why).toContain("the free probe reached its deadline");
+    expect(report.memory.why).toContain("42525");
+    expect(report.memory.why).toContain("5100ms");
+  });
+
+  it.each([
+    {
+      name: "failed",
+      outcome: {
+        kind: "failed",
+        why: "free exited with code 17: allocator unavailable",
+        tookMs: 321,
+        exitCode: 17,
+        signal: null,
+      } satisfies OwnedOutcome,
+    },
+    {
+      name: "overflowed",
+      outcome: {
+        kind: "overflowed",
+        why: 'probe "health:free" exceeded its capture cap',
+        tookMs: 654,
+        capturedBytes: 16 * 1024 * 1024 + 1,
+      } satisfies OwnedOutcome,
+    },
+  ])("keeps a $name probe's words and duration in that field's reason", async ({ outcome }) => {
+    const owner = successfulOwner((spec) =>
+      spec.cmd === "free"
+        ? outcome
+        : { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 },
+    );
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 55_000 });
+
+    expect(report.memory.kind).toBe("unknown");
+    if (report.memory.kind !== "unknown") throw new Error(`expected ${outcome.kind} free to be unknown`);
+    expect(report.memory.why).toContain(outcome.why);
+    expect(report.memory.why).toContain(`${outcome.tookMs}ms`);
+  });
+
+  it("does not claim a timed-out child is still alive when its exit was observed", async () => {
+    const owner = successfulOwner((spec) =>
+      spec.cmd === "free"
+        ? {
+            kind: "timed-out",
+            why: "the free deadline elapsed; child exit was observed",
+            tookMs: 5_100,
+            pid: 42_525,
+            exitObserved: true,
+          }
+        : { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 },
+    );
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 56_000 });
+    if (report.memory.kind !== "unknown") throw new Error("expected timed-out free to be unknown");
+    expect(report.memory.why).toContain("42525");
+    expect(report.memory.why).toContain("5100ms");
+    expect(report.memory.why).not.toContain("was alive");
+  });
+
+  it("does not invent pid zero when a timed-out child had no observable pid", async () => {
+    const owner = successfulOwner((spec) =>
+      spec.cmd === "free"
+        ? {
+            kind: "timed-out",
+            why: "the free deadline elapsed; the child had no pid",
+            tookMs: 5_100,
+            pid: null,
+            exitObserved: false,
+          }
+        : { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 },
+    );
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 57_000 });
+    if (report.memory.kind !== "unknown") throw new Error("expected timed-out free to be unknown");
+    expect(report.memory.why).toContain("5100ms");
+    expect(report.memory.why).toContain("no child pid was observable");
+    expect(report.memory.why).not.toContain("pid 0");
+  });
+
+  it("skips vmstat by choice without treating that choice as a failure", async () => {
+    const called: string[] = [];
+    const owner = successfulOwner((spec) => {
+      called.push(spec.cmd);
+      return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+    });
+
+    const report = await collectHealthAsync({
+      owner,
+      includeSwapActivity: false,
+      nowMs: () => 60_000,
+    });
+
+    expect(called).not.toContain("vmstat");
+    expect(report.swapActivity).toEqual({ kind: "skipped" });
+    expect(report.verdict.reasons.join(" ")).not.toContain("could not measure swap activity");
+  });
+
+  it("still excludes vmstat's plausible since-boot first sample after async gathering", async () => {
+    const vmstat =
+      "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------\n" +
+      " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu\n" +
+      "34  0 20608268 6819836 663664 7230244  999 888  5771  3231 19898   13 39  7  1 55  0  0\n" +
+      " 1  0 20608268 6819836 663664 7230244    7   6    12    18  100  200  2  1 90  3  0  0\n";
+    const owner = successfulOwner((spec) => ({
+      kind: "ok",
+      stdout: spec.cmd === "vmstat" ? vmstat : commandOutput(spec.cmd),
+      stderr: "",
+      tookMs: 1,
+    }));
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 70_000 });
+
+    expect(report.swapActivity).toEqual({
+      kind: "value",
+      siKBs: 7,
+      soKBs: 6,
+      waPercent: 3,
+      activelySwapping: true,
+    });
+  });
+
+  it("leaves cached state rendering open while a fake 30-second vmstat is pending", async () => {
+    let finishVmstat: (outcome: OwnedOutcome) => void = () => {};
+    const vmstatPending = new Promise<OwnedOutcome>((resolve) => {
+      finishVmstat = resolve;
+    });
+    const owner = successfulOwner();
+    // `successfulOwner` is deliberately immediate for most tests. Override
+    // this one method so vmstat models a child that has not answered yet.
+    owner.run = async (spec) =>
+      spec.cmd === "vmstat"
+        ? vmstatPending
+        : { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+
+    let collectionSettled = false;
+    const collection = collectHealthAsync({ owner, nowMs: () => 75_000 }).then((report) => {
+      collectionSettled = true;
+      return report;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(collectionSettled).toBe(false);
+
+    const cached = withoutClocks(await collectHealthAsync({
+      owner: successfulOwner(),
+      includeSwapActivity: false,
+      nowMs: () => 75_000,
+    }));
+    const payload = JSON.parse(statePayload({
+      snapshot: null,
+      error: "the new turn is still measuring",
+      health: { ...cached, collectedAt: "2026-09-10T07:00:00.000Z", tookMs: 125 },
+      refreshMs: 60_000,
+      answeringEnabled: true,
+      attemptedAt: null,
+      producer: { instance: "1a2b3c4d", publication: 1, inventory: null },
+      readCheckpoint: () => ({
+        attention: { kind: "checkpoint-absent" },
+        overseer: { kind: "checkpoint-absent" },
+        usage: { kind: "checkpoint-absent" },
+        work: { kind: "checkpoint-absent" },
+      }),
+    })) as { health: HealthReport | null };
+    expect(payload.health?.collectedAt).toBe("2026-09-10T07:00:00.000Z");
+    expect(collectionSettled).toBe(false);
+
+    finishVmstat({
+      kind: "timed-out",
+      why: 'probe "health:vmstat" reached its 10000ms deadline; child exit was observed',
+      tookMs: 11_000,
+      pid: 42_626,
+      exitObserved: true,
+    });
+    await collection;
+  });
+
+  it("runs no more than three cheap commands at once while still taking all seven readings", async () => {
+    let cheapInFlight = 0;
+    let mostCheapInFlight = 0;
+    let totalInFlight = 0;
+    let mostTotalInFlight = 0;
+    const called: string[] = [];
+    const specs: ProbeSpec[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        called.push(spec.cmd);
+        specs.push(spec);
+        totalInFlight += 1;
+        mostTotalInFlight = Math.max(mostTotalInFlight, totalInFlight);
+        if (spec.cmd !== "vmstat") {
+          cheapInFlight += 1;
+          mostCheapInFlight = Math.max(mostCheapInFlight, cheapInFlight);
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (spec.cmd !== "vmstat") cheapInFlight -= 1;
+        totalInFlight -= 1;
+        return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+      },
+      live: () => [],
+    };
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 80_000 });
+
+    expect(mostCheapInFlight).toBe(3);
+    expect(mostTotalInFlight).toBe(4);
+    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(new Set(specs.map((spec) => spec.key)).size).toBe(7);
+    const vmstatTimeout = specs.find((spec) => spec.cmd === "vmstat")?.timeoutMs;
+    const cheapTimeouts = specs.filter((spec) => spec.cmd !== "vmstat").map((spec) => spec.timeoutMs);
+    expect(vmstatTimeout).toBe(10_000);
+    expect(new Set(cheapTimeouts)).toEqual(new Set([5_000]));
+    expect([
+      report.load.kind,
+      report.memory.kind,
+      report.swap.kind,
+      report.disk.kind,
+      report.swapActivity.kind,
+      report.attribution.kind,
+    ]).toEqual(["value", "value", "value", "value", "value", "value"]);
+  });
+
+  it("never starts a fifth health child beneath timed-out survivors", async () => {
+    const liveChildren: Array<ReturnType<ProbeOwner["live"]>[number]> = [];
+    const started: ProbeSpec[] = [];
+    let nextPid = 50_000;
+    let mostLive = 0;
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        const pid = nextPid++;
+        started.push(spec);
+        liveChildren.push({
+          key: spec.key,
+          pid,
+          startedAtMs: 1_000,
+          signalled: ["SIGTERM", "SIGKILL"],
+          exitObserved: false,
+        });
+        mostLive = Math.max(mostLive, liveChildren.length);
+        return {
+          kind: "timed-out",
+          why: `probe "${spec.key}" reached its deadline; child exit has not been observed`,
+          tookMs: spec.timeoutMs + 1_000,
+          pid,
+          exitObserved: false,
+        };
+      },
+      live: () => liveChildren,
+    };
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 90_000 });
+
+    expect(mostLive).toBe(4);
+    expect(started).toHaveLength(4);
+    expect([
+      report.load.kind,
+      report.memory.kind,
+      report.swap.kind,
+      report.disk.kind,
+      report.swapActivity.kind,
+      report.attribution.kind,
+    ]).toEqual(["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"]);
+  });
+
+  it("still asks the owner to reap a same-key child when the health cap is full", async () => {
+    const liveChildren: Array<ReturnType<ProbeOwner["live"]>[number]> = [
+      "health:vmstat",
+      "health:uptime",
+      "health:nproc",
+      "health:free",
+    ].map((key, index) => ({
+      key,
+      pid: 60_000 + index,
+      startedAtMs: 1_000,
+      signalled: ["SIGTERM", "SIGKILL"],
+      exitObserved: false,
+    }));
+    const checked: string[] = [];
+    const owner: ProbeOwner = {
+      run: async (spec) => {
+        checked.push(spec.key);
+        const old = liveChildren.findIndex((child) => child.key === spec.key);
+        if (old !== -1) liveChildren.splice(old, 1);
+        return { kind: "ok", stdout: commandOutput(spec.cmd), stderr: "", tookMs: 1 };
+      },
+      live: () => liveChildren,
+    };
+
+    const report = await collectHealthAsync({ owner, nowMs: () => 95_000 });
+
+    expect(checked).toEqual(expect.arrayContaining([
+      "health:vmstat",
+      "health:uptime",
+      "health:nproc",
+      "health:free",
+    ]));
+    expect(report.swapActivity.kind).toBe("value");
+    expect(report.load.kind).toBe("value");
+    expect(report.memory.kind).toBe("value");
+  });
+});
 
 describe("parseLoad", () => {
   it("reads the real box's load average against its real core count", () => {

@@ -173,7 +173,7 @@ function refreshHarness(over: Partial<RefreshDeps> = {}) {
       kept.push(result);
       events.push("keep");
     },
-    refreshHealth: () => {
+    refreshHealth: async () => {
       events.push("health");
       return { kind: "reading", report: bareReport() };
     },
@@ -270,6 +270,30 @@ describe("one refresh turn", () => {
     expect(events).toContain("publish");
   });
 
+  it("awaits the vitals after a rejected collection before publishing — A17 with async health", async () => {
+    const { deps, events, retained } = refreshHarness({
+      collect: () => Promise.reject(new Error("tmux timed out")),
+      refreshHealth: async () => {
+        events.push("health-started");
+        await Promise.resolve();
+        events.push("health-finished");
+        return { kind: "reading", report: bareReport() };
+      },
+    });
+
+    await refreshOnce(deps);
+
+    expect(events).toEqual([
+      "keep",
+      "logError",
+      "health-started",
+      "health-finished",
+      "publish",
+      "retain",
+    ]);
+    expect(retained[0]?.turn).toEqual({ kind: "reading", report: bareReport() });
+  });
+
   it("does not let a drain that throws report the collection as failed", async () => {
     const { deps, events, logs } = refreshHarness({
       drain: () => {
@@ -344,7 +368,7 @@ describe("one refresh turn, retaining box health", () => {
 
   it("appends a collector failure as its own arm rather than as a reading", async () => {
     const { deps, retained } = refreshHarness({
-      refreshHealth: () => ({ kind: "collector-failed", why: "collectHealth threw: out of memory" }),
+      refreshHealth: async () => ({ kind: "collector-failed", why: "collectHealth threw: out of memory" }),
     });
     await refreshOnce(deps);
     expect(retained[0]?.turn).toEqual({ kind: "collector-failed", why: "collectHealth threw: out of memory" });

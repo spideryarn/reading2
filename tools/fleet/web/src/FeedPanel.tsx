@@ -30,12 +30,30 @@
  *     can hold all of the newest messages — so the qualification belongs to the
  *     whole list, never to a row inside it.
  *
- * ## NOT POLLED
+ * ## NOT POLLED — READ ON EVIDENCE, AND SAYS HOW OLD IT IS
  *
  * A refresh costs the box ~250 ms and about 10 MB of transcript reads; the
  * answer itself is only 40 kB (8 kB gzipped). **The disk is what decides the
- * cadence, not the wire.** Fetched when the tab opens and when the reader asks,
- * never on a timer — routes-recent-feed.ts § cadence.
+ * cadence, not the wire.** So there is no timer. It reads when the tab opens visibly,
+ * when the reader asks, and when the session list — which *is* polled, and
+ * costs this tab nothing extra — shows something that could make the list out
+ * of date: a session appearing or going, changing status, getting or losing a
+ * dialog, claiming a different conversation, having its run replaced, or the
+ * tmux server restarting (feed-client.ts § `feedEvidence`). A row that merely
+ * fails to verify its run is not evidence. At most once per
+ * `FEED_REREAD_FLOOR_MS`, except that a change between two named tmux servers
+ * discards the old-world read and starts again at once; never from a hidden
+ * tab. Docs/plans/260910c Stage 3.
+ *
+ * **That is not "current", and the page does not say it is.** An agent that
+ * writes ten turns without changing status produces no evidence at all. So the
+ * last-read clock is the load-bearing half: it is what keeps every other claim
+ * on this panel honest when the list is old, and its tooltip says what the
+ * re-read can and cannot notice.
+ *
+ * **A failed read does not empty the list** — the `useFleetState` rule. A feed
+ * this page cannot currently read is not an empty feed, so the failure is drawn
+ * above the last good answer rather than instead of it.
  *
  * ## UNTRUSTED, ALL OF IT
  *
@@ -56,11 +74,16 @@ import { Explain, TipCard, Tooltip, TooltipGroup } from "./Tooltip";
 import { instantTip } from "./instant";
 import {
   NO_FILTERS,
+  EMPTY_FEED_EVIDENCE_MEMORY,
   applyFilters,
+  feedEvidence,
   httpFeedApi,
+  rememberVerified,
   sessionStatusOf,
   turnAge,
   type FeedApi,
+  type FeedEvidence,
+  type FeedEvidenceMemory,
   type FeedFilters,
   type FeedRow,
   type FeedSessionStatus,
@@ -68,6 +91,7 @@ import {
   type SessionListReading,
 } from "./feed-client";
 import type { MessageSpeaker } from "./messages-client";
+import { singleFlightReader } from "./single-flight-reader";
 import type { ClockSkew } from "./types";
 import { Button, Card, Mono, SectionHeading, cx, toneClasses } from "./ui";
 import { formatDuration, statusLabel } from "./view";
@@ -89,44 +113,322 @@ const FILTERABLE: MessageSpeaker[] = [
  * The reading.
  * ------------------------------------------------------------------ */
 
-export type FeedReading =
-  | { kind: "loading" }
-  | { kind: "ready"; view: FeedView };
+/**
+ * **THE LEAST TIME BETWEEN THE START OF ONE READ AND A READ THE PAGE STARTS ON
+ * ITS OWN.** Evidence inside it is held to one trailing read at the earliest
+ * permitted moment, however much of it arrives.
+ *
+ * Twenty seconds: the session list's own collections land every 55–60 s
+ * (useFleetState.ts § `cadenceMs`), so on a quiet box this is never the
+ * binding limit; it binds on a busy one, where several sessions change status
+ * inside one collection and each would otherwise cost the box its own ~10 MB
+ * read. Person-driven reads — the button, the size control — are not held to
+ * it: a person pressing a button is asking for it now.
+ */
+export const FEED_REREAD_FLOOR_MS = 20_000;
 
 /**
- * Fetch once on mount, and again when asked.
+ * **HOW LONG ONE READ MAY TAKE BEFORE THIS PAGE STOPS WAITING FOR IT** — enforced
+ * by the hook's own timer, not by trusting the api to honour abort.
  *
- * **A ref guards against a late answer overwriting a newer one.** Two refreshes
- * in flight can land out of order, and the older one arriving second would put
- * a stale feed on screen with no way to tell — the same hazard `useRecentMessages`
- * handles, and it matters more here because there is no per-session identity to
- * notice the swap.
+ * The server gives up on any one session's transcript after five seconds
+ * (routes-recent-feed.ts § `READ_DEADLINE_MS`) and answers with a hole it
+ * admits to, so a whole answer that has not come in fifteen is not slow, it is
+ * lost. Without this, a read that never settled left "Reading…" on a disabled
+ * button for the life of the tab.
  */
-export function useFeed(api: FeedApi, limit: number): { reading: FeedReading; refresh: () => void; busy: boolean } {
-  const [reading, setReading] = useState<FeedReading>({ kind: "loading" });
-  const [busy, setBusy] = useState(false);
-  const generation = useRef(0);
+export const FEED_READ_DEADLINE_MS = 15_000;
 
-  const load = useCallback(() => {
-    const mine = ++generation.current;
-    setBusy(true);
-    void api.recent(limit).then((view) => {
-      if (mine !== generation.current) return;
-      setReading({ kind: "ready", view });
-      setBusy(false);
-    });
-  }, [api, limit]);
+type GoodFeed = Extract<FeedView, { kind: "feed" }>;
+/** The two ways a read can fail: the server's own refusal, or this page's lack of an answer. */
+export type FeedFailure = Exclude<FeedView, { kind: "feed" }>;
+
+export type FeedReading = {
+  /** The last good feed, or null before the first. **Never cleared by a failure.** */
+  feed: GoodFeed | null;
+  /** When `feed` arrived, by this browser's clock. Null before the first good read. */
+  lastReadAt: number | null;
+  /** The most recent failure, drawn above `feed`; null once a read works again. */
+  error: FeedFailure | null;
+  /** A read is in flight. */
+  busy: boolean;
+  /** A person asking. During a read this becomes exactly one more read, after it. */
+  refresh: () => void;
+};
+
+type ReaderSink = {
+  onFeed: (feed: GoodFeed, at: number) => void;
+  onFailure: (failure: FeedFailure) => void;
+  onBusy: (busy: boolean) => void;
+};
+
+type FeedReader = {
+  refresh: () => void;
+  /** The session list's latest evidence. Idempotent: the same digest twice is nothing. */
+  observe: (evidence: FeedEvidence | null) => void;
+  stop: () => void;
+};
+
+function tabHidden(): boolean {
+  return typeof document !== "undefined" && document.visibilityState === "hidden";
+}
+
+/**
+ * **THE READS, AS ONE SMALL MACHINE OUTSIDE REACT** — transport.ts's shape, and
+ * its manners, for a resource that must not be polled.
+ *
+ * Its rules, each of which has a test in tests/fleet-feed-freshness.test.tsx.
+ * The first three are single-flight-reader.ts, the core this reader shares
+ * with useActions.ts's `actionsReader`; the rest are this feed's own:
+ *
+ *  - **One live read slot.** A read asked for during one becomes exactly one
+ *    more, after it — neither overlapping nor vanishing, however many times it
+ *    is asked for. A timed-out API promise may remain unresolved if that API
+ *    ignores abort, but it no longer owns the slot and its answer is unwelcome.
+ *  - **Its own deadline.** Each read is raced against `FEED_READ_DEADLINE_MS`
+ *    on this machine's timer; on expiry the signal is aborted, a `no-answer` is
+ *    recorded and the slot is released. Nothing here waits on an api honouring
+ *    the abort, so a client (or a test double, or a browser) that ignores it
+ *    cannot stop the reads for ever.
+ *  - **Every answer is generation-checked.** An answer from a read that was
+ *    timed out, superseded or stopped is dropped on arrival.
+ *  - **Evidence schedules, and does not read.** A digest different from the one
+ *    the last read started under schedules one trailing read at that read's
+ *    start plus the floor; more evidence before then joins it. If the tab is
+ *    hidden when it comes due, it waits for the tab to be shown and then reads
+ *    once. Every read that starts takes the current digest as its own, so a
+ *    button press satisfies evidence that arrived before it.
+ *  - **A different tmux server discards and reads at once**, floor or no
+ *    floor: every handle in a read begun against the old server now names
+ *    somebody else's session, so it is not worth waiting for. It is only a
+ *    *change* between two named servers; a pid going to or from `null` is the
+ *    collector failing to say, and counts for nothing.
+ *
+ * The first digest seen is the baseline and reads nothing — whether it arrived
+ * with the first read or after it. A session list arriving is not news about
+ * the transcripts.
+ */
+function feedReader(
+  api: FeedApi,
+  limit: number,
+  sink: ReaderSink,
+  evidenceNow: () => FeedEvidence | null,
+): FeedReader {
+  let stopped = false;
+  let lastStartedAt = Number.NEGATIVE_INFINITY;
+  /* The digest the last read to start was known to reflect. Null until the
+     first evidence arrives, which is then the baseline. */
+  let readDigest: string | null = null;
+  /* The last tmux server a session list named. */
+  let world: number | null = null;
+  let trailing: ReturnType<typeof setTimeout> | null = null;
+  let dueWhileHidden = false;
+
+  const cancelTrailing = (): void => {
+    if (trailing !== null) clearTimeout(trailing);
+    trailing = null;
+    dueWhileHidden = false;
+  };
+
+  /* One read in flight, one pending, the deadline and the generation check —
+     single-flight-reader.ts. What stays here is what starts a read and the
+     hidden-tab rule: `admit` holds EVERY read while hidden (F52) — a person's
+     refresh, the pending read coming due, a new world — and it runs once when
+     the tab is shown. */
+  const core = singleFlightReader<FeedView>({
+    read: (signal) => api.recent(limit, signal),
+    deadlineMs: FEED_READ_DEADLINE_MS,
+    noAnswer: (why) => ({ kind: "no-answer", why }),
+    onSettle: (view) => {
+      if (view.kind === "feed") sink.onFeed(view, Date.now());
+      else sink.onFailure(view);
+    },
+    admit: () => {
+      if (!tabHidden()) return true;
+      cancelTrailing();
+      dueWhileHidden = true;
+      sink.onBusy(false);
+      return false;
+    },
+    /* Every read that starts takes the current digest as its own. */
+    onStart: () => {
+      cancelTrailing();
+      const evidence = evidenceNow();
+      if (evidence !== null) {
+        readDigest = evidence.digest;
+        if (evidence.tmuxServerPid !== null) world = evidence.tmuxServerPid;
+      }
+      lastStartedAt = Date.now();
+      sink.onBusy(true);
+    },
+    onIdle: () => sink.onBusy(false),
+  });
+  const read = (): void => core.request();
+
+  const fireTrailing = (): void => {
+    trailing = null;
+    if (tabHidden()) {
+      dueWhileHidden = true;
+      return;
+    }
+    read();
+  };
+
+  const scheduleTrailing = (): void => {
+    if (trailing !== null || dueWhileHidden) return;
+    const wait = lastStartedAt + FEED_REREAD_FLOOR_MS - Date.now();
+    if (wait <= 0) fireTrailing();
+    else trailing = setTimeout(fireTrailing, wait);
+  };
+
+  const onVisibility = (): void => {
+    if (!dueWhileHidden || tabHidden()) return;
+    dueWhileHidden = false;
+    read();
+  };
+
+  const observe = (evidence: FeedEvidence | null): void => {
+    if (stopped || evidence === null) return;
+    const pid = evidence.tmuxServerPid;
+    if (world !== null && pid !== null && pid !== world) {
+      world = pid;
+      // Drop the old world's read; a hidden tab holds the new one (`admit`).
+      core.discard();
+      read();
+      return;
+    }
+    if (pid !== null) world = pid;
+    if (readDigest === null) {
+      readDigest = evidence.digest;
+      return;
+    }
+    if (evidence.digest !== readDigest) scheduleTrailing();
+  };
+
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
+  read();
+
+  return {
+    refresh: read,
+    observe,
+    stop: () => {
+      if (stopped) return;
+      core.stop();
+      cancelTrailing();
+      stopped = true;
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
+    },
+  };
+}
+
+/**
+ * The feed, read once on mount, again when asked, and again on evidence from
+ * the session list — `feedReader` above has the rules.
+ *
+ * `sessions` defaults to `not-arrived`, which is no evidence of anything: a
+ * caller that passes no session list gets a feed that reads on mount and on the
+ * button, exactly as before this stage.
+ *
+ * **Changing `api` or `limit` starts a fresh reader**, and tearing the old one
+ * down aborts and discards whatever it had in flight — which is what makes a
+ * second limit chosen during a read supersede the first rather than race it.
+ * The last good feed survives that, as it survives a failure.
+ */
+export function useFeed(
+  api: FeedApi,
+  limit: number,
+  sessions: SessionListReading = { kind: "not-arrived" },
+): FeedReading {
+  const [feed, setFeed] = useState<GoodFeed | null>(null);
+  const [lastReadAt, setLastReadAt] = useState<number | null>(null);
+  const [error, setError] = useState<FeedFailure | null>(null);
+  const [busy, setBusy] = useState(true);
+
+  /* **THE LAST VERIFIED TOKEN AND EPOCH PER ROW, COMMITTED IN AN EFFECT.**
+     feed-client.ts § `feedEvidence` explains the epoch. The ref is not written
+     during render: React may discard a render, and letting one mutate the
+     baseline can make a later unverifiable snapshot look like a replacement.
+     `rememberVerified` returns the old object when nothing changed, so an
+     identical snapshot does not retrigger the effect. */
+  const evidenceMemory = useRef<FeedEvidenceMemory>(EMPTY_FEED_EVIDENCE_MEMORY);
+  /* Computed every render rather than memoised: App builds `sessions` afresh on
+     every render, so a memo keyed on it would never hit — and what the effects
+     below compare is the digest string, which is a value. */
+  const evidence = feedEvidence(sessions, evidenceMemory.current);
+  const nextEvidenceMemory = rememberVerified(sessions, evidenceMemory.current);
+  const digest = evidence?.digest ?? null;
+  const pid = evidence?.tmuxServerPid ?? null;
+  /* The latest evidence, for a read to take as its own when it starts. Seeded
+     on the first render so the first read has it, and updated by the effect
+     below rather than during render. */
+  const latest = useRef<FeedEvidence | null>(evidence);
+  const reader = useRef<FeedReader | null>(null);
+
+  /* **DECLARED BEFORE THE READER'S EFFECT, ON PURPOSE.** React runs effects in
+     order, so when the limit and the evidence change in one render, `latest` is
+     already current by the time the new reader starts its first read — which
+     then takes the new digest as its own rather than scheduling a second read
+     for evidence it has already seen. */
+  useEffect(() => {
+    evidenceMemory.current = nextEvidenceMemory;
+    const next = digest === null ? null : { digest, tmuxServerPid: pid };
+    latest.current = next;
+    reader.current?.observe(next);
+  }, [digest, pid, nextEvidenceMemory]);
 
   useEffect(() => {
-    load();
-    /* On unmount, bump the generation so an answer still in flight is ignored
-       rather than setting state on a component that is gone. */
+    const running = feedReader(
+      api,
+      limit,
+      {
+        onFeed: (view, at) => {
+          setFeed(view);
+          setLastReadAt(at);
+          setError(null);
+        },
+        // The feed is deliberately untouched. See the header.
+        onFailure: setError,
+        onBusy: setBusy,
+      },
+      () => latest.current,
+    );
+    reader.current = running;
     return () => {
-      generation.current += 1;
+      reader.current = null;
+      running.stop();
     };
-  }, [load]);
+  }, [api, limit]);
 
-  return { reading, refresh: load, busy };
+  const refresh = useCallback(() => reader.current?.refresh(), []);
+  return useMemo(
+    () => ({ feed, lastReadAt, error, busy, refresh }),
+    [feed, lastReadAt, error, busy, refresh],
+  );
+}
+
+/**
+ * **"READ 2M AGO", AND ON ITS CARD THE LIMITS OF THAT.** The page's own
+ * `now` against this browser's own `lastReadAt` — one clock, so no skew.
+ *
+ * The caveat lives on the clock rather than in a paragraph on the panel: it
+ * changes what you would believe about the list, not what you would do in the
+ * next ten seconds, and SessionDetail.tsx's rule puts that kind one tap away,
+ * attached to the fact it qualifies.
+ */
+const LAST_READ_TIP = {
+  head: "When this list was read",
+  what: "How long ago this page last read the transcripts behind this list, by this device's clock. A read that fails does not move it: the list and this age are both from the last read that worked.",
+  how: `It reads again by itself when the session list shows a change it can see — a session appearing or going, changing status, getting or losing a dialog, claiming a different conversation, or having its run replaced by a new process — at most once every ${FEED_REREAD_FLOOR_MS / 1000} seconds, and not while this tab is hidden. A tmux server restart reads at once. What it cannot see is an agent that goes on working without changing status: ten new messages from a busy session change nothing here, so the list stays as old as this says until you press Read again.`,
+};
+
+function LastRead({ at, now }: { at: number; now: number }): ReactNode {
+  return (
+    <Explain tip={LAST_READ_TIP} placement="bottom">
+      {/* Clamped: `now` ticks once a second and `at` is stamped between ticks,
+          so the page clock can trail an answer by up to a second. */}
+      <span className="tw:text-[12px] tw:text-ink-faint">read {formatDuration(Math.max(0, now - at))} ago</span>
+    </Explain>
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -615,16 +917,15 @@ export function FeedPanel({
    */
   skew: ClockSkew;
 }): ReactNode {
-  const { reading, refresh, busy } = useFeed(api, limit);
+  const { feed: view, lastReadAt, error, refresh, busy } = useFeed(api, limit, sessions);
 
-  const view = reading.kind === "ready" ? reading.view : null;
-  const rows = view?.kind === "feed" ? view.messages : [];
+  const rows = view?.messages ?? [];
   /* **THE UNDATED GROUP IS FILTERED AND COUNTED LIKE EVERY OTHER MESSAGE.**
      It was neither until GPT Sol's P2: filters applied to the dated list only,
      so a speaker filter left the undated rows on screen underneath it, and the
      tally said "0 messages" over a panel visibly showing some. Three claims,
      none of them agreeing with the other two. */
-  const undatedRows = view?.kind === "feed" ? view.undated : [];
+  const undatedRows = view?.undated ?? [];
   const shown = useMemo(() => applyFilters(rows, filters), [rows, filters]);
   const shownUndated = useMemo(() => applyFilters(undatedRows, filters), [undatedRows, filters]);
   const total = rows.length + undatedRows.length;
@@ -679,6 +980,7 @@ export function FeedPanel({
         <Button onClick={refresh} disabled={busy} aria-label="Read the transcripts again">
           {busy ? "Reading…" : "Read again"}
         </Button>
+        {lastReadAt === null ? null : <LastRead at={lastReadAt} now={now} />}
         {/* **A WAY OUT THAT DOES NOT DEPEND ON SEEING THE FILTER.** The session
             chips are drawn only for sessions present in this window, so a
             bookmarked filter — or one whose session has since gone quiet — can
@@ -746,25 +1048,31 @@ export function FeedPanel({
         </div>
       ) : null}
 
-      {reading.kind === "loading" ? (
+      {view === null && error === null ? (
         <p className="tw:mt-3 tw:text-[13px] tw:text-ink-faint">Reading every session's transcript…</p>
       ) : null}
 
-      {view?.kind === "unreadable" ? (
+      {/* **THE FAILURE GOES ABOVE THE LAST GOOD LIST, NOT INSTEAD OF IT.** Two
+          voices, as before — the server saying it could not look, and this page
+          saying it heard nothing it could read — and when there is a list
+          underneath, one line saying which read it came from. */}
+      {error === null ? null : (
         <Card className="tw:mt-3 tw:px-3 tw:py-2">
-          <p className="tw:text-[13px] tw:text-alarm-ink">The dashboard could not build this feed.</p>
-          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">{view.why}</p>
+          <p className="tw:text-[13px] tw:text-alarm-ink">
+            {error.kind === "unreadable"
+              ? "The dashboard could not build this feed."
+              : "This page did not get an answer it could read."}
+          </p>
+          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">{error.why}</p>
+          {view === null ? null : (
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              The messages below are from the last read that worked.
+            </p>
+          )}
         </Card>
-      ) : null}
+      )}
 
-      {view?.kind === "no-answer" ? (
-        <Card className="tw:mt-3 tw:px-3 tw:py-2">
-          <p className="tw:text-[13px] tw:text-alarm-ink">This page did not get an answer it could read.</p>
-          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">{view.why}</p>
-        </Card>
-      ) : null}
-
-      {view?.kind === "feed" ? (
+      {view !== null ? (
         <>
           <Caveats view={view} />
           {totalShown === 0 ? (

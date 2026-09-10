@@ -83,9 +83,15 @@
  *    ruled it, 2026-09-08. If the server one day lets a shell be typed at, this
  *    is one condition to delete, not a rule to unpick.
  *
- * The one thing checked locally beyond that is whether the row has the
+ * Two things are checked locally beyond that. Whether the row has the
  * identifiers at all (`unaddressable`), because that is a fact about the
- * payload on screen rather than a claim about the box.
+ * payload on screen rather than a claim about the box. And what the execution
+ * reading already shows about the pane (`composerStance`): a reading that
+ * shows it running something this row does not address turns Send and Queue
+ * off — the shell rule's reasoning one step on, a control the page knows will
+ * be refused is not offered — and a reading that cannot tell leaves them live,
+ * with one line. Fable's table, docs/plans/260910c § Withhold, caveat or
+ * relabel.
  *
  * ## The clutter pass, and the rule it left behind
  *
@@ -105,6 +111,9 @@
  * caveat, and `Explain` is how it wears it.
  */
 import { useCallback, useRef, useState, type ReactNode } from "react";
+
+import { identityWriteGate, isAddressableHarness } from "../../execution-token.js";
+import type { ExecutionReading } from "../../wire.js";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { DictationControl, useFleetDictation } from "./DictationControl";
@@ -127,7 +136,10 @@ import {
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
+import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
+import { useExecutionEpoch } from "./continuity";
+import { draftAddressOf, draftNoticeSentence, useDraft } from "./drafts";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
@@ -247,8 +259,9 @@ function Outcome({
  * being wrong is expensive. GPT Sol's M1.
  *
  * The comparison is against the row **as it was when the send was requested**
- * (`SentTarget`), not the row on screen now. The detail pane is keyed by session
- * id, so an outcome outlives the payload it was made against; comparing with the
+ * (`SentTarget`), not the row on screen now. The detail pane is keyed by the
+ * session and its execution, so an outcome outlives every payload that does not
+ * change either — which is all of them, sixty seconds apart; comparing with the
  * live row asks a question nobody asked and can answer it wrongly in both
  * directions.
  *
@@ -609,10 +622,107 @@ function LastWrote({ view, status, now }: { view: MessagesView | null; status: F
   );
 }
 
+/**
+ * **WHAT SEND AND QUEUE MAY DO UNDER THE EXECUTION READING ON SCREEN** — the
+ * composer's rows of Fable's table, docs/plans/260910c § Withhold, caveat or
+ * relabel. Typing is on in every arm; only the two send buttons change.
+ *
+ *  - `known` — the process is verified and so is its conversation, on a harness
+ *    that can be addressed. Live, and nothing said.
+ *  - `cannot-tell` — no new fact has arrived: `unknown`, `claimed-only`, or a
+ *    conversation that could not be checked. **Live**, with one line beside
+ *    Send. On this box that is the weather, and a page that goes dark in the
+ *    weather is one you cannot use when you most need it. The line claims only
+ *    what is true: `verifyTarget` in steer.ts re-reads the live process's
+ *    `--session-id` at the moment it types, for a Send and for a queued message
+ *    alike (the queue's drain types through the same `sendMessage`).
+ *  - `refused` — a fact has arrived saying this pane is not what the row
+ *    addresses: `conflicting`, `not-claimed`, or a harness
+ *    `isAddressableHarness` rejects. Off, with the sentence `identityWriteGate`
+ *    gives for that reading.
+ *
+ * **Classified here; the gate supplies only the sentence.** Its own header says
+ * a cached verdict is not authority, and it refuses the *cannot tell* arms too —
+ * exactly the ones Fable ruled must not disable anything.
+ */
+type ComposerStance = { kind: "known" } | { kind: "cannot-tell" } | { kind: "refused"; why: string };
+
+const STANCE_KNOWN: ComposerStance = { kind: "known" };
+const STANCE_CANNOT_TELL: ComposerStance = { kind: "cannot-tell" };
+
+function composerStance(reading: ExecutionReading): ComposerStance {
+  switch (reading.kind) {
+    case "unknown":
+    case "claimed-only":
+      return STANCE_CANNOT_TELL;
+    case "verified": {
+      if (!isAddressableHarness(reading.harness)) return refusedBy(reading);
+      const conversation = reading.conversation;
+      switch (conversation.kind) {
+        case "verified":
+          return STANCE_KNOWN;
+        case "unverifiable":
+          return STANCE_CANNOT_TELL;
+        case "conflicting":
+        case "not-claimed":
+          return refusedBy(reading);
+        default: {
+          const never: never = conversation;
+          return never;
+        }
+      }
+    }
+    default: {
+      const never: never = reading;
+      return never;
+    }
+  }
+}
+
+function refusedBy(reading: ExecutionReading): ComposerStance {
+  const gate = identityWriteGate(reading);
+  /* Every reading routed here is one the gate refuses. Were it ever to allow
+     one, that would still not be permission — the classification above decides
+     — so the arm stays off and says why in its own words. */
+  return {
+    kind: "refused",
+    why: gate.allowed ? "the page's reading of this pane contradicts itself, so it will not send from here" : gate.why,
+  };
+}
+
+/**
+ * **THE READING THE COMPOSER ACTS ON: THE ROW'S, EXCEPT THAT AN UNKNOWN DOES
+ * NOT END A REFUSAL.** Once this mount has seen a fact saying the pane is not
+ * what the row addresses, a later collection that simply could not look is not
+ * evidence that it changed back — the rule the transcript's relabel already
+ * follows (`lastConflict` in RecentMessages.tsx). Without it, a conflict
+ * followed by one loaded collection would light Send again, with the claimed
+ * conversation's draft in the box in front of it. A verified conversation
+ * ends it, as it ends the relabel.
+ *
+ * Render-phase state rather than an effect, for continuity.ts's reason: the
+ * refusal has to be in the first frame that shows the reading.
+ */
+function useSettledExecution(reading: ExecutionReading): ExecutionReading {
+  const [refusal, setRefusal] = useState<ExecutionReading | null>(null);
+  const stance = composerStance(reading);
+  if (stance.kind === "refused") {
+    if (refusal === null || JSON.stringify(refusal) !== JSON.stringify(reading)) setRefusal(reading);
+    return reading;
+  }
+  if (stance.kind === "known") {
+    if (refusal !== null) setRefusal(null);
+    return reading;
+  }
+  return refusal ?? reading;
+}
+
 export function SessionDetail({
   row,
   now,
   answeringEnabled,
+  answeringRefusal,
+  onAnsweringRefused,
   tmuxServerPid,
   steer,
   rename,
@@ -632,6 +742,20 @@ export function SessionDetail({
    * of. `HeldBack` says what each of the four answers looks like.
    */
   answeringEnabled: AnsweringReading;
+  /**
+   * **The server's own sentence, once it has answered a tap with
+   * `answering-disabled`** — or null while it has not.
+   *
+   * A PROP rather than state here, and the owner is `App`. The refusal is a
+   * claim about the whole box: it has nothing to do with which session is open
+   * or which dialog is on screen, and it must still be true after a trip to
+   * another tab. `App` unmounts the entire Sessions panel on a mode change, so
+   * a latch held anywhere below `App` is lost by pressing a tab and pressing
+   * back — which is exactly the gesture somebody makes after being refused.
+   */
+  answeringRefusal: string | null;
+  /** Tell that owner the server has just refused, so it can latch it. */
+  onAnsweringRefused: (why: string) => void;
   /**
    * **Which tmux server the handles below belong to**, or null when it could
    * not be read. Drawn in "Where it is", beside the handles it qualifies —
@@ -654,7 +778,29 @@ export function SessionDetail({
   /** Non-null only when the list is not on screen beside this, i.e. one pane. */
   onBack: (() => void) | null;
 }): ReactNode {
-  const [text, setText] = useState("");
+  /**
+   * **THE BOX'S WORDS ARE KEPT THROUGH A RELOAD, UNDER THE CONVERSATION THEY
+   * WERE WRITTEN TO** — drafts.ts, docs/plans/260910c § Stage 2. No `scope`:
+   * SessionsPanel remounts this pane whenever its process, its conversation
+   * claim or its tmux server changes (continuity.ts, `useDetailTargetKey`), so
+   * a mount never outlives its recipient. Under a conflict the address is
+   * `hold(claimed)`: the claimed conversation's draft comes back into the box,
+   * in front of disabled buttons, and nothing typed there is stored.
+   */
+  const execution = useSettledExecution(row.execution);
+  const stance = composerStance(execution);
+  const draft = useDraft({ purpose: "session-composer", address: draftAddressOf(execution) });
+  const text = draft.text;
+  /* **Through refs, like `blocked` below.** The hook hands back new `setText`
+     and `clear` functions on every render; a `useCallback` that listed them
+     would rebuild on every render, and this component renders on every
+     keystroke and while somebody talks. `useFleetDictation` keeps its
+     `onChange` in a ref of its own, so handing it `draft.setText` re-runs
+     nothing. */
+  const drafted = useRef(draft);
+  drafted.current = draft;
+  const refused = useRef(stance.kind === "refused");
+  refused.current = stance.kind === "refused";
   const [busy, setBusy] = useState(false);
   /** The composer, so the dictation knows where the caret is. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -664,7 +810,7 @@ export function SessionDetail({
      named session to the front of the term list for exactly that. */
   const dictate = useFleetDictation({
     value: text,
-    onChange: setText,
+    onChange: draft.setText,
     box,
     context: { kind: "session", sessionId: row.id },
   });
@@ -678,21 +824,71 @@ export function SessionDetail({
    * **THE LAST SEND, WITH THE TARGET IT WAS MADE AGAINST**, held as one value
    * because they are one fact.
    *
-   * The outcome outlives the payload: this component is keyed by session id
-   * alone, so the row underneath is replaced at every refresh while the card
-   * stays on screen. Keeping only the outcome and comparing it with whatever
+   * The outcome outlives the payload: this component is keyed by the session
+   * and its execution, so the row underneath is replaced at every refresh —
+   * sixty seconds apart, none of it a change of key — while the card stays on
+   * screen. Keeping only the outcome and comparing it with whatever
    * `row` is by then answers a different question from the one that was asked —
    * see `SentTarget` for both ways that goes wrong. GPT Sol's M1.
    */
   const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
   /**
-   * The server's own sentence, once it has told us answering is switched off.
+   * **THE DIALOG A `grants-permission` REFUSAL WAS ABOUT**, held with the
+   * refusal because they are one fact.
    *
-   * Held rather than shown once and forgotten: after a refusal the options stop
-   * being buttons, because a control that refuses every time you press it is
-   * worse than one that says why it is not a control.
+   * The server refuses a tap when answering the dialog would grant a capability
+   * rather than take a turn, and after that the options stop being buttons —
+   * a control that refuses every time you press it is worse than one that says
+   * why it is not a control. But that refusal is about **one dialog**, and the
+   * previous version of this was a bare `string | null` under a comment saying
+   * it "can only change when the dialog does — at which point the row is
+   * replaced and this state with it". That was false in both directions: this
+   * component is keyed by session and execution, so the row object underneath is
+   * replaced every sixty seconds without remounting it, and a session that
+   * answers one dialog and is asked a completely different one keeps its
+   * buttons withheld for ever.
+   *
+   * So the refusal carries the dialog it was made against, and is handed out
+   * only while that dialog is still the one on screen. `questionSafetyKey`
+   * decides what "still the same" means — it mirrors the server's own
+   * `sameQuestion` fields, so identical prompt text over different material is
+   * a different dialog, which object identity and prompt text alone both miss —
+   * and `"no-question"` is one of its answers, so a transition through *no
+   * dialog at all* clears this too. GPT Sol's F7, docs/plans/260910c.
+   *
+   * **The run is in the tuple as `useExecutionEpoch`'s key, never as the raw
+   * token.** The token is absent on every collection the box is too loaded to
+   * verify, so a key built from it changed with the weather — and each time
+   * it did, the refusal stopped matching and the option buttons the server
+   * had just refused came back, until the token returned and took them away
+   * again. The epoch holds the last VERIFIED run and moves only on a
+   * replacement, which is the one change of run that should clear this. It is
+   * the same machinery that keys this component, and it is here as well
+   * because that is what makes this value correct on its own terms rather than
+   * correct because a caller happens to remount it. The epoch key carries
+   * `row.id`, so the session is in the tuple too.
    */
-  const [answeringOff, setAnsweringOff] = useState<string | null>(null);
+  const epochKey = useExecutionEpoch(row);
+  const dialogKey = JSON.stringify([epochKey, questionSafetyKey(row.rawQuestion)]);
+  const [permissionRefusal, setPermissionRefusal] = useState<{ dialog: string; why: string } | null>(null);
+  /* **CHECKED WHERE IT IS DRAWN, not cleared by an effect one commit later.**
+     Same argument as `Held` in RecentMessages.tsx: an effect runs after React
+     has committed and possibly painted, so the frame in which a new dialog is
+     on screen under the old dialog's refusal would exist. The state update is
+     also what makes a transition through `no-question` final: merely hiding a
+     mismatched refusal would let an identical later dialog resurrect it. It is
+     guarded by the key mismatch, so the immediate retry observes null. */
+  if (permissionRefusal !== null && permissionRefusal.dialog !== dialogKey) {
+    setPermissionRefusal(null);
+  }
+  const grantsPermission =
+    permissionRefusal !== null && permissionRefusal.dialog === dialogKey ? permissionRefusal.why : null;
+  /**
+   * **THE TWO REFUSALS DRAWN IN ONE CARD, and the server-wide one goes first.**
+   * `answeringRefusal` is a claim about the whole box and outlives everything
+   * this component owns; it is latched in `App` and arrives as a prop.
+   */
+  const answeringOff = answeringRefusal ?? grantsPermission;
 
   const label = statusLabel(row.status);
   const where = whereLine(row);
@@ -710,7 +906,8 @@ export function SessionDetail({
   const reading = useRecentMessages(messages, row);
 
   /**
-   * **The only local refusal.** `paneId` is the address and `claudeSessionId`
+   * **The local refusal about the payload itself** — the other, about the
+   * execution reading, is `composerStance`. `paneId` is the address and `claudeSessionId`
    * is the conversation; without either the server has nothing to check the
    * pane against and will refuse. Saying so here costs nothing and is a fact
    * about the payload on screen, not a guess about the box.
@@ -729,17 +926,24 @@ export function SessionDetail({
          read the render that resolved the promise, which is the bug. */
       const result = await run();
       setOutcome({ result, target });
-      // Both are sticky, and for the same reason: neither will come right by
-      // pressing again. `answering-disabled` is the whole server switched off;
-      // `grants-permission` is this dialog, and it can only change when the
-      // dialog does — at which point the row is replaced and this state with it.
-      if (!result.ok && (result.code === "answering-disabled" || result.code === "grants-permission")) {
-        setAnsweringOff(result.why);
+      /* **BOTH ARE STICKY AND THEY STICK TO DIFFERENT THINGS**, which is why
+         they are no longer one piece of state. Neither will come right by
+         pressing again, but `answering-disabled` is a claim about the whole
+         server and must survive a tab change, a different session and a
+         different dialog — so it is latched in `App`, which is the only owner
+         above the panel `App` unmounts on a mode change. `grants-permission` is
+         a claim about the dialog on screen and must come off the moment that
+         dialog is not the one on screen. GPT Sol's F7. */
+      if (!result.ok && result.code === "answering-disabled") onAnsweringRefused(result.why);
+      if (!result.ok && result.code === "grants-permission") {
+        setPermissionRefusal({ dialog: dialogKey, why: result.why });
       }
-      if (result.ok && clear) setText("");
+      /* Only a send the server accepted takes the draft with it, stored copy
+         and all. A refusal leaves both, so the words are there to try again. */
+      if (result.ok && clear) drafted.current.clear();
       setBusy(false);
     },
-    [],
+    [dialogKey, onAnsweringRefused],
   );
 
   const onAnswer = useCallback(
@@ -757,7 +961,9 @@ export function SessionDetail({
      said until the transcript lands. GPT Sol's review of the built code,
      finding 6. */
   const onSend = useCallback(() => {
-    if (blocked.current) return;
+    /* The same boundary holds the execution rule: under a reading that shows
+       this pane is not what the row addresses, nothing leaves from here. */
+    if (blocked.current || refused.current) return;
     void send(() => steer.message(row, text), sentTarget(row), true);
   }, [row, send, steer, text]);
 
@@ -822,11 +1028,11 @@ export function SessionDetail({
 
   const onQueue = useCallback(async (): Promise<void> => {
     /* Same guard, same reason. See `onSend`. */
-    if (blocked.current) return;
+    if (blocked.current || refused.current) return;
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
     setQueueOutcome(result);
-    if (result.ok) setText("");
+    if (result.ok) drafted.current.clear();
     setBusy(false);
     actions.refresh();
   }, [actions, row, text]);
@@ -969,7 +1175,7 @@ export function SessionDetail({
                  in flight: `disabled` drops the selection, and the selection is
                  the caret the words are about to be spliced at. */
               readOnly={dictate.readOnly}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => draft.setText(e.target.value)}
               placeholder="e.g. pull the latest dev and carry on"
               className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
             />
@@ -989,7 +1195,13 @@ export function SessionDetail({
               <Button
                 variant="loud"
                 onClick={onSend}
-                disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                disabled={
+                  busy ||
+                  text.trim() === "" ||
+                  unaddressable !== null ||
+                  dictate.sendBlocked ||
+                  stance.kind === "refused"
+                }
               >
                 {busy ? "Sending…" : "Send now"}
               </Button>
@@ -1007,11 +1219,28 @@ export function SessionDetail({
                 >
                   <Button
                     onClick={() => void onQueue()}
-                    disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                    disabled={
+                      busy ||
+                      text.trim() === "" ||
+                      unaddressable !== null ||
+                      dictate.sendBlocked ||
+                      stance.kind === "refused"
+                    }
                   >
                     Queue (~73s)
                   </Button>
                 </Explain>
+              ) : null}
+              {/* Empties the box and takes the stored copy with it (drafts.ts). */}
+              <Button onClick={draft.clear} disabled={busy || text === ""}>
+                Clear
+              </Button>
+              {/* CANNOT TELL: live, and this one line. It claims only what
+                  `verifyTarget` does — see `composerStance`. */}
+              {stance.kind === "cannot-tell" ? (
+                <span className="tw:text-[12px] tw:text-unknown-ink">
+                  The page cannot confirm which Claude is in this pane right now; the box checks before it types.
+                </span>
               ) : null}
               {/* The newline rule is the server's and is checked there. It stays
                   VISIBLE, unlike the rest: it changes what a thumb does in the
@@ -1019,6 +1248,16 @@ export function SessionDetail({
                   a two-line message arrives as two, the first half a sentence. */}
               <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
             </div>
+            {/* CAN TELL: off, in the gate's own words. */}
+            {stance.kind === "refused" ? (
+              <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+                {offerQueue ? "Send and Queue are off: " : "Send is off: "}
+                {stance.why}
+              </p>
+            ) : null}
+            {draft.notice === null ? null : (
+              <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
+            )}
             {/* On its own row rather than in with the send buttons: it grows a
                 status line, a level meter and sometimes a failure sentence, and
                 a control that changes width should not be pushing Send now

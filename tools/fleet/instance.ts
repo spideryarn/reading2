@@ -36,6 +36,8 @@
  */
 import { randomBytes } from "node:crypto";
 
+import type { ProducerStamp } from "./wire.js";
+
 /** How many hex characters. See the header on why not a uuid. */
 const TOKEN_BYTES = 4;
 
@@ -75,4 +77,30 @@ let thisRun: string | null = null;
 export function serverInstanceId(): string {
   thisRun ??= newServerInstanceId();
   return thisRun;
+}
+
+/** The publication and successful-inventory ordinals for one server run. */
+export class PublicationLedger {
+  readonly #instance: string;
+  #publication = 0;
+  #inventory: number | null = null;
+
+  constructor(instance: string) {
+    if (!INSTANCE_TOKEN.test(instance)) throw new Error(`invalid server instance id: ${instance}`);
+    this.#instance = instance;
+  }
+
+  /** Record one kept refresh outcome; both counters move inside this synchronous call. */
+  record(outcome: "success" | "failure"): void {
+    this.#publication += 1;
+    if (outcome === "success") this.#inventory = (this.#inventory ?? 0) + 1;
+  }
+
+  stamp(): ProducerStamp {
+    return {
+      instance: this.#instance,
+      publication: this.#publication,
+      inventory: this.#inventory,
+    };
+  }
 }

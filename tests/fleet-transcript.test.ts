@@ -28,6 +28,7 @@
  * of this file is therefore about who said a thing, not whether it was returned.
  */
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -422,6 +423,72 @@ describe("finding the file", () => {
     });
     expect(res.kind).toBe("not-found");
     if (res.kind === "not-found") expect(res.reason).toBe("malformed-claude-session-id");
+  });
+});
+
+/**
+ * **EVERY READING SAYS WHICH CONVERSATION IT IS OF.** The route hands this
+ * module the claim off the server's *current* row, and the browser labels the
+ * answer with the claim it asked under. If the two moved apart between them,
+ * only a stamp on the answer lets the browser notice — so every arm carries
+ * one, the failures included: a `not-found` for conversation D is no more this
+ * row's answer than D's turns are. docs/plans/260910c, F10.
+ */
+describe("every reading names the conversation it was asked to read", () => {
+  it("stamps a found reading", async () => {
+    /* Not through `readFixture`, whose declared `RecentMessages` is the
+       unstamped shape: the stamp is on `RecentMessagesOf`. */
+    const res = await readRecentMessages({
+      claudeSessionId: UUID,
+      dir: DIR,
+      projectsDir: stage(fixtureBytes("real-conversation.jsonl")),
+    });
+    expect(res.kind).toBe("found");
+    expect(res.claudeSessionId).toBe(UUID);
+  });
+
+  it("stamps a not-found reading, including the one that was asked for no conversation at all", async () => {
+    const noClaim = await readRecentMessages({ claudeSessionId: null, dir: DIR, projectsDir: stage("") });
+    expect(noClaim.kind).toBe("not-found");
+    expect(noClaim.claudeSessionId).toBeNull();
+
+    const other = "00000000-0000-4000-8000-000000000000";
+    const missing = await readRecentMessages({
+      claudeSessionId: other,
+      dir: DIR,
+      projectsDir: stage(fixtureBytes("real-conversation.jsonl")),
+    });
+    expect(missing.kind).toBe("not-found");
+    expect(missing.claudeSessionId).toBe(other);
+  });
+
+  it("stamps an unreadable reading", async () => {
+    const projects = stage(fixtureBytes("real-conversation.jsonl"));
+    const file = path.join(projects, slugifyDir(DIR), `${UUID}.jsonl`);
+    /* Found by the lookup, refused by `open`: the one route to `unreadable`
+       that needs no fault injection. */
+    chmodSync(file, 0o000);
+    try {
+      const res = await readRecentMessages({ claudeSessionId: UUID, dir: DIR, projectsDir: projects });
+      expect(res.kind).toBe("unreadable");
+      expect(res.claudeSessionId).toBe(UUID);
+    } finally {
+      chmodSync(file, 0o600);
+    }
+  });
+
+  it("stamps the claim captured when the read began even if a caller mutates its options", async () => {
+    const options: {
+      claudeSessionId: string | null;
+      dir: string | null;
+      projectsDir: string;
+    } = { claudeSessionId: null, dir: DIR, projectsDir: stage("") };
+    const pending = readRecentMessages(options);
+    options.claudeSessionId = UUID;
+
+    const res = await pending;
+    expect(res.kind).toBe("not-found");
+    expect(res.claudeSessionId).toBeNull();
   });
 });
 
