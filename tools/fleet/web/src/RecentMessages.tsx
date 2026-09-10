@@ -35,8 +35,13 @@
  *     session creation and never updated, so a re-used pane resolves to the
  *     PREVIOUS conversation — real messages, well formed, correctly attributed,
  *     and not the conversation on screen. The reader cannot detect that from
- *     inside; this comparison is the only thing that can, and it is the single
- *     most valuable line in the section.
+ *     inside, and until 2026-09-09 this age comparison was the only thing that
+ *     could: a question in violet, and the single most valuable line in the
+ *     section. **The execution reading can now answer it outright**, so
+ *     `StaleNote` reports rather than guesses — it withdraws on a verified
+ *     conversation, and a `conflicting` one is drawn as the settled fact it is
+ *     by `PreviousConversation`. The age comparison stands wherever the box
+ *     could not tell, which on a loaded box is most of the time.
  *  3. **What was skipped.** `toolResultsSkipped` is sent *"so the client can say
  *     'and 40 tool results' rather than implying the agent sat silent between
  *     two messages"*.
@@ -47,8 +52,15 @@
  * fetched when the detail pane opens for a row, and again when somebody presses
  * *Read again*. **It is not on the sixty-second refresh loop and it is not
  * fetched for the rows in the list** — the component only exists while one
- * session is open, and `SessionDetail` is keyed by the row, so switching
- * sessions is a fresh mount and exactly one more read.
+ * session is open, and `SessionDetail` is keyed by the session and its
+ * execution (continuity.ts), so switching sessions is a fresh mount and exactly
+ * one more read.
+ *
+ * **THE READER DOES NOT RELY ON THAT, and `identityOf` below is why.** This
+ * hook is exported, and its identity is *the* answer to "which agent is this a
+ * reading about". Leaving that answer wrong because one caller happens to
+ * remount would be a correct page resting on a caller's good manners — the
+ * shape § F18 further down already refused once.
  *
  * ## UNTRUSTED, ALL OF IT
  *
@@ -64,9 +76,10 @@
  * answer this module could give"*. Rounding a speaker this build cannot name to
  * "agent" would misattribute a message, so it is labelled as unknown instead.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
+  ofTheClaimAsked,
   transcriptAge,
   type MessageTurn,
   type MessagesApi,
@@ -74,7 +87,10 @@ import {
 } from "./messages-client";
 import { Explain } from "./Tooltip";
 import { Turn } from "./Turn";
+import { useExecutionEpoch } from "./continuity";
+import { singleFlightReader, type SingleFlightReader } from "./single-flight-reader";
 import type { FleetRow } from "./types";
+import type { ExecutionReading } from "../../wire.js";
 import { Button, Mono } from "./ui";
 import { formatDuration } from "./view";
 
@@ -117,15 +133,35 @@ function HowFarBack({ reached, turns }: { reached: boolean | null; turns: number
 }
 
 /**
- * **The one check on the hazard the reader cannot see from inside.**
+ * **The one check on the hazard the reader cannot see from inside — and it now
+ * REPORTS rather than guesses.**
  *
  * Drawn in the violet this tool reserves for *nobody could tell*, not in the
  * alarm red, because it is a question rather than a verdict: a working session
  * can be silent for half an hour on one long tool call. What it does is make
  * the wrong answer visible, and the wrong answer here is a real conversation
  * that is not this one.
+ *
+ * **IT WITHDRAWS ON A VERIFIED CONVERSATION, because its hazard has then been
+ * disproved rather than merely not observed.** The question it asks in violet —
+ * *is this pane still running the conversation the row names?* — is exactly the
+ * question the execution pass answers, and when the answer is `verified` the
+ * live harness's own `--session-id` matched the claim. Everything the note goes
+ * on to say about `CLAUDE_SESSION_ID` being written once and never rewritten is
+ * still true and no longer bears on this pane, so saying it would be crying
+ * wolf on the rows we can actually vouch for. Anything short of `verified`
+ * leaves it standing exactly as it was written: on this box *nobody could tell*
+ * is the weather, not evidence, and a note that only appeared when we had proof
+ * of trouble would never appear at all. Fable's ruling, docs/plans/260910c §
+ * Withhold, caveat or relabel.
+ *
+ * **The `conflicting` arm does NOT come out here.** That is not this note's
+ * hazard being confirmed; it is a different, established fact, and it is drawn
+ * once at the top of the panel by `PreviousConversation` rather than as a
+ * caveat beside one turn.
  */
-function StaleNote({ ms }: { ms: number }): ReactNode {
+function StaleNote({ ms, execution }: { ms: number; execution: ExecutionReading }): ReactNode {
+  if (execution.kind === "verified" && execution.conversation.kind === "verified") return null;
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-unknown/40 tw:bg-unknown-wash tw:p-3 tw:text-[13px]">
       <p className="tw:font-medium tw:text-unknown-ink">
@@ -141,6 +177,62 @@ function StaleNote({ ms }: { ms: number }): ReactNode {
       <p className="tw:mt-1 tw:text-ink-faint">
         The other explanation is an agent on one very long tool call, which is common on this box. The
         terminal settles it.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * **THE TURNS BELOW ARE THE PREVIOUS CONVERSATION IN THIS PANE — relabelled,
+ * not hidden.**
+ *
+ * `conflicting` is the arm the execution stage was built for: the tmux
+ * environment claims one uuid and the live process's argv carries another, so a
+ * fresh Claude has been started under an unchanged pane. The transcript route
+ * resolves the row from its handle and hands the reader that row's
+ * `claudeSessionId` (server.ts), so it reads the CLAIMED conversation's file:
+ * the turns are real, well formed and correctly attributed — to the agent that
+ * has gone. That is also why the reading's identity names the claim; see
+ * `identityOf`.
+ *
+ * **So what is withheld is the implication, not the content.** A cross-family
+ * review wanted the whole panel blanked on any reading that was not verified;
+ * Fable arbitrated and set the rule this follows: *withhold what you would be
+ * inventing, caveat what you have but cannot place, relabel what you have and
+ * can place somewhere else.* These turns can be placed exactly — we know whose
+ * they are and we know they are not the pane's current state — and *"what did
+ * the old one say before it died"* is a question people ask. Hiding them would
+ * destroy the only surviving account of it to avoid a misunderstanding a
+ * heading fixes. docs/plans/260910c § Withhold, caveat or relabel.
+ *
+ * Alarm tone rather than the violet, and that is the whole difference from
+ * `StaleNote`: this is not *nobody could tell*, it is a fact that arrived.
+ */
+function PreviousConversation({
+  claimed,
+  observed,
+  current,
+}: {
+  claimed: string;
+  observed: string;
+  /** Whether this payload re-established the conflict, rather than merely failing to refute it. */
+  current: boolean;
+}): ReactNode {
+  return (
+    <div className="tw:mb-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
+      <p className="tw:font-medium tw:text-alarm-ink">
+        {current
+          ? "These are the previous conversation in this pane, not what is running now."
+          : "These are the previous conversation in this pane; the latest pass could not re-check what is running now."}
+      </p>
+      <p className="tw:mt-1 tw:break-words tw:text-ink-soft">
+        Every address on this row still names <Mono>{claimed}</Mono>, and {current ? "the box can see" : "the last verified reading found"} that the pane is
+        running <Mono>{observed}</Mono> — a different Claude was started here since this session was launched.
+        The turns below come from {claimed === "" ? "that conversation" : <Mono>{claimed}</Mono>}: real, well
+        formed and correctly attributed
+        {current
+          ? ", and not what is on that screen."
+          : ". The latest pass did not establish whether that is still what is on screen."}
       </p>
     </div>
   );
@@ -190,7 +282,7 @@ function Latest({ view, row, now }: { view: MessagesView & { kind: "found" }; ro
      reading was the one shown with the fewest qualifications. */
   const caveats = (
     <>
-      {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
+      {age.kind === "suspect" ? <StaleNote ms={age.ms} execution={row.execution} /> : null}
 
 
       {/* PROMOTED OUT OF THE PROVENANCE (F15). Which file is live changes what
@@ -453,28 +545,56 @@ function Found({
 export type MessagesReading = { view: MessagesView | null; busy: boolean; read: () => void };
 
 /**
- * **WHICH AGENT A READING IS ABOUT — the handle AND the conversation.**
+ * **WHICH READING THIS IS — the run it was fetched for, and the file it is
+ * actually of.**
  *
- * `row.id` is tmux's `$1643`, and a pane keeps it across a respawn: a
- * `gjd-remote resume`, a relaunch, a second `claude` started in the same
- * window. `types.ts` § `claudeSessionId` says what the other half is for in as
- * many words — *"the only one of the three identifiers that survives a
- * `gjd-remote resume`, so it is what distinguishes this agent from the one that
- * replaced it in the same pane."* A transcript belongs to the conversation, not
- * to the window it happens to be running in, so anything asking *is this
- * reading still the right one?* has to ask about the pair.
+ * Two halves, and each answers a question the other cannot:
+ *
+ *  - **The run** — `useExecutionEpoch`'s key, which carries `row.id` and
+ *    advances only when the process in the pane is *verifiably replaced*. A pane
+ *    keeps its handle across a `gjd-remote resume`, a relaunch, a second
+ *    `claude` in the same window, and the handle alone agreed with itself
+ *    through all of them (roadmap finding E-session). The same machinery that
+ *    keys the detail pane, deliberately rather than a second definition of
+ *    "the same run" — and held here as well as there because this hook is
+ *    exported, so its answer must not rest on a caller happening to remount it.
+ *  - **The file** — `row.claudeSessionId`, the launch CLAIM. Not because the
+ *    claim is the truth about the pane (it often is not) but because it is
+ *    **what is fetched**: `/api/messages` resolves the row from its handle and
+ *    hands `readRecentMessages` the row's `claudeSessionId` (server.ts). An
+ *    identity naming anything else would be a label on a file it is not of.
+ *
+ * **THE FIRST VERSION OF THIS NAMED THE OBSERVED CONVERSATION, and it was
+ * wrong in exactly the arm it was written for.** On a `conflicting` reading it
+ * returned the observed id D while the server went on returning the claimed
+ * conversation C's file, so it held *C's turns under D's name*. Then the claim
+ * caught up — claim D, verified D, same run — the identity did not move,
+ * nothing was re-read, and C's turns sat on screen with neither the relabel
+ * (nothing conflicting any more) nor the stale note (now verified): the
+ * previous conversation shown as the current one, uncaveated. The coordinator's
+ * review of Stage 1, 2026-09-10; a test in fleet-web.test.tsx walks that exact
+ * sequence.
+ *
+ * **THE READING'S KIND IS NOT IN THE VALUE, and that is the design rather than
+ * an omission.** Folding it in would make `verified → unknown → verified` three
+ * identities, and on a loaded box that flicker is a collection or two apart —
+ * so a disk read of a multi-megabyte transcript would land on the sixty-second
+ * refresh loop, the one thing this section must not do. The epoch already
+ * survives the flicker; what the kind changes is how the turns are LABELLED,
+ * and that is decided where they are drawn, from the current reading
+ * (`PreviousConversation`, `StaleNote`).
  *
  * A string rather than an object because it is compared, not read, and because
  * both consumers below need a value a `useEffect` dependency array can compare
  * with `Object.is`. `\u0000` cannot occur in either half.
  *
- * `null` is a real value here and not a wildcard: a row with no conversation id
- * is a shell or a legacy session, and two of those under one handle are still
- * the same reading — there is nothing to tell them apart with, and inventing a
- * difference would re-read on every snapshot.
+ * An empty second half is a real value here and not a wildcard: a row with no
+ * conversation id is a shell or a legacy session, and two of those in one run
+ * are still the same reading — there is nothing to tell them apart with, and
+ * inventing a difference would re-read on every snapshot.
  */
-function identityOf(row: FleetRow): string {
-  return `${row.id}\u0000${row.claudeSessionId ?? ""}`;
+function identityOf(epochKey: string, row: FleetRow): string {
+  return `${epochKey}\u0000${row.claudeSessionId ?? ""}`;
 }
 
 /**
@@ -493,87 +613,124 @@ function identityOf(row: FleetRow): string {
  */
 type Held = { identity: string; view: MessagesView };
 
+/**
+ * **HOW LONG ONE TRANSCRIPT READ MAY TAKE BEFORE THIS PANE STOPS WAITING**,
+ * enforced by the shared reader's own timer (single-flight-reader.ts), not by
+ * trusting the read to finish.
+ *
+ * Before the reader was shared there was no clock at all, and a read that
+ * never settled left "Reading…" on a disabled button for the life of the tab.
+ *
+ * **Thirty seconds is a trade, not a fact.** `/api/messages` sets no deadline
+ * of its own (server.ts), and a multi-megabyte transcript on a box at load 391
+ * is slow to read, so this sits well past a slow read rather than at the feed's
+ * fifteen, which rests on that route's five-second server-side limit. Too short
+ * costs something real: the page gives up, the person taps again, and a read
+ * that was nearly done is thrown away. The abandoned read is cancelled — its
+ * signal reaches `fetch` — but the box has already spent the disk time.
+ */
+export const MESSAGES_READ_DEADLINE_MS = 30_000;
+
 export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesReading {
   const [held, setHeld] = useState<Held | null>(null);
   const [busy, setBusy] = useState(false);
-  const identity = identityOf(row);
+  /* Called unconditionally, before anything else can return — it is a hook. */
+  const epochKey = useExecutionEpoch(row);
+  const identity = identityOf(epochKey, row);
 
   /**
-   * WHICH READ IS THE NEWEST ONE ANYBODY STARTED. Only it may write.
+   * **ONE READER PER IDENTITY, BUILT BY THIS EFFECT AND STOPPED BY ITS CLEANUP.**
+   *
+   * The one-read-at-a-time machinery is single-flight-reader.ts, the core that
+   * `useActions` and the Recent messages feed already share. This hook was a
+   * third instance of the same problem, and it does not get a third copy (plan
+   * 260910c § Stage 5).
    *
    * **A read that lands after the reader has moved on must not be drawn.**
    * `Read again` on session A, then a tap on session B, and A's answer arrives
-   * to find B's panel on screen — so the turns of one agent render under the
-   * name and status of another. On a page whose entire job is telling you which
-   * session needs you, that is the worst thing it can get wrong, and it renders
-   * perfectly: real turns, well formed, correctly parsed, attached to the wrong
-   * row.
+   * to find B's panel on screen: real turns, well formed, correctly parsed,
+   * attached to the wrong row. On a page whose entire job is telling you which
+   * session needs you, that is the worst thing it can get wrong.
    *
-   * `fleet-health-history` flagged the general shape on 2026-09-08 (two
-   * overlapping polls of one endpoint resolving out of order); here it is not
-   * two polls of one thing but one poll of two different things, which is
-   * worse, because the stale answer is not merely old — it is about somebody
-   * else.
+   * **The identity rule is what shapes this.** A read for a different identity
+   * must REPLACE the one in flight, not queue behind it. The core's own
+   * one-pending rule would draw A's answer and only then read B, and A's answer
+   * is about somebody else. So the reader lives exactly as long as the identity
+   * does: a new identity runs this effect's cleanup, which `stop`s the old
+   * reader (the core's generation check makes its answer unwelcome), and builds
+   * a fresh reader for the new one. Unmounting runs the same cleanup, so closing
+   * the pane and picking another session need nothing of their own. The core's
+   * `discard()` would do the replacing too, but unmount would still need
+   * `stop()`; this way there is one teardown, not two.
    *
-   * **This was an identity comparison and identity is not an ordering**, which
-   * is the shape of the bug twice over. It began as `row.id`, and a pane that
-   * changed agent without changing handle compared `"$a"` with `"$a"`, agreed,
-   * and let the previous agent's turns through — the failure the guard existed
-   * to prevent, arriving down the one door it did not cover (roadmap finding
-   * E-session). Widening it to the full identity closes that door and leaves
-   * A→B→A open: hold a manual read of A, let the pane become B and then A
-   * again, and the held answer's identity equals the current one, so it
-   * overwrites a newer reading of the same conversation. Only a number that
-   * goes up can order two reads. **GPT Sol's fifth finding, 2026-09-08, and the
-   * general lesson is worth more than the fix: a freshness check written as an
-   * equality is a check that cannot tell two of the same thing apart.**
-   */
-  const newest = useRef(0);
-
-  /**
-   * Start one read and let only the newest answer land.
+   * **Built per effect run, not once per component**, because main.tsx turns
+   * StrictMode on. Its rehearsal mounts, cleans up and mounts again, and `stop`
+   * is final, so a reader built once and stopped in that cleanup would be dead
+   * by the real mount.
    *
-   * `identityOf(row)` rather than `identity`: this is called from a closure that
-   * may be older than the current render, and the identity that matters is the
-   * one the row being ASKED about had.
-   */
-  const begin = useCallback(
-    (asked: FleetRow): void => {
-      newest.current += 1;
-      const token = newest.current;
-      const askedFor = identityOf(asked);
-      setBusy(true);
-      void api.recent(asked).then((answer) => {
-        if (newest.current !== token) return;
-        setHeld({ identity: askedFor, view: answer });
-        setBusy(false);
-      });
-    },
-    [api],
-  );
-
-  /**
-   * **THE ROW'S IDENTITY IS THE DEPENDENCY, NOT THE ROW OBJECT, and that is the
+   * **Ordering is by lifetime, never by equality.** The guard began as a
+   * comparison of `row.id`, then of the full identity, and both were
+   * equalities. The second let A→B→A through: a manual read of A held across a
+   * round trip through B carries the same identity as the current one, so it
+   * overwrote a newer reading of the same conversation. GPT Sol's fifth finding,
+   * 2026-09-08: *a freshness check written as an equality cannot tell two of the
+   * same thing apart.* A stopped reader cannot settle, whatever its identity
+   * says, so that read is dropped because the reader that asked for it is gone.
+   *
+   * **The row is captured here, not looked up again at read time.** The run
+   * half of the identity comes out of a hook, which cannot be called from a
+   * closure, and the row this effect saw has this identity. That means it has
+   * this handle and this claim, the two things `/api/messages` and
+   * `ofTheClaimAsked` read.
+   *
+   * **The dependency is the identity, not the row object, and that is the
    * whole design of this section.** A new snapshot arrives every sixty seconds
-   * and replaces every row object on the page; depending on the object would
-   * re-run this effect on each one and put a disk read of a multi-megabyte
-   * transcript on the refresh loop — the one thing this section must not do.
-   * `identity` is a string built from two primitives, so an unchanged snapshot
-   * produces an equal value and re-reads nothing.
-   *
-   * **What changed on 2026-09-08 is which change counts as the session
-   * changing.** This read on `row.id` alone, and the sentence here used to say
-   * "the handle changing IS the session changing" — which is false in exactly
-   * the case `claudeSessionId` exists for. See `identityOf`.
+   * and replaces every row object on the page; depending on the object would put
+   * a disk read of a multi-megabyte transcript on the refresh loop, the one thing
+   * this section must not do. `identity` is a string built from the run's epoch
+   * and the claim, so an unchanged snapshot, or an execution reading that
+   * flickers unverifiable and back, produces an equal value and re-reads nothing.
+   * `identityOf` says which change counts as the session changing.
    *
    * There is no `setHeld(null)` here and that is deliberate: the old reading is
    * hidden by the identity check below, during the very render in which the row
    * changed, rather than cleared by this effect one commit later. See `Held`.
    */
+  const reader = useRef<SingleFlightReader | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: see above — depending on `row` rather than on `identity` would put the transcript read on the sixty-second refresh loop.
   useEffect(() => {
-    begin(row);
-  }, [begin, identity]);
+    const asked = row;
+    const askedFor = identity;
+    const core = singleFlightReader<MessagesView>({
+      /* The signal reaches `fetch`, so a read this page has given up on — at
+         the deadline, on unmount, or replaced by a newer identity — is
+         cancelled rather than left to finish on the server for nobody. Its
+         answer would be dropped either way, because the core never settles a
+         read it has stopped waiting for; the signal is what stops the box
+         paying for it. */
+      read: async (signal) =>
+        /* **COMPARED WITH THE CLAIM THIS REQUEST WAS ASKED UNDER**, which is
+           `asked`'s rather than the current row's: the server resolved the
+           conversation off its own row at request time, and the question is
+           whether that is the one this page meant. A mismatch becomes the
+           `moved` arm — a refusal on screen, never these turns under this
+           row's name and never nothing. GPT Sol's F10. */
+        ofTheClaimAsked(await api.recent(asked, signal), asked.claudeSessionId),
+      deadlineMs: MESSAGES_READ_DEADLINE_MS,
+      noAnswer: (why) => ({ kind: "no-answer", why }),
+      onStart: () => setBusy(true),
+      onSettle: (view) => {
+        setHeld({ identity: askedFor, view });
+        setBusy(false);
+      },
+    });
+    reader.current = core;
+    core.request();
+    return () => {
+      core.stop();
+      if (reader.current === core) reader.current = null;
+    };
+  }, [api, identity]);
 
   /**
    * **THE PAIRING IS CHECKED HERE, WHERE IT IS DRAWN.** A reading of somebody
@@ -583,7 +740,29 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
    */
   const view = held !== null && held.identity === identity ? held.view : null;
 
-  return { view, busy, read: () => begin(row) };
+  /**
+   * **A TAP DURING A READ IS DROPPED, NOT QUEUED.** The button is disabled
+   * while a read is out, so the only tap that can land during one is in the
+   * frame before that redraw: a duplicate of the tap that started it, or one in
+   * the instant the opening read began. Either way the read in flight started a
+   * moment ago on this person's behalf, so its answer is as current as the one
+   * the second tap asked for. Coalescing it into one read after this one, the
+   * core's default, would buy a second multi-megabyte disk read for a
+   * sub-second freshness gain, on a box that has hit load average 391. Someone
+   * who wants a newer reading taps again once this one lands, and the button
+   * says when that is.
+   *
+   * **The guard is the core's own slot, not `busy`**, because `busy` is React
+   * state and a double tap arrives before the render that would set it: the
+   * same class as Stage 5a's double Start (NewSessionPanel.tsx).
+   */
+  const read = (): void => {
+    const core = reader.current;
+    if (core === null || core.reading()) return;
+    core.request();
+  };
+
+  return { view, busy, read };
 }
 
 /**
@@ -625,9 +804,48 @@ export function Conversation({
   reading: MessagesReading;
 }): ReactNode {
   const { view, busy, read } = reading;
+  /* **ABOVE EVERY ARM, INCLUDING THE REFUSALS.** It is a statement about the
+     pane rather than about the turns, so it is as true of "there is no
+     transcript to read" as it is of twelve messages — and on a refusal it is
+     the only thing on screen that explains why. `conflicting` is reachable from
+     the `verified` arm and from nowhere else; wire.ts § `ExecutionReading` says
+     so, and a check on the `claimed-only` arm would be dead code. */
+  const observedConflict =
+    row.execution.kind === "verified" && row.execution.conversation.kind === "conflicting"
+      ? row.execution.conversation
+      : null;
+  /* A failed collection is not evidence that a previously established conflict
+     ended. Hold that fact through unverifiable weather, but clear it in the
+     render where a verified conversation positively re-establishes coherence.
+     The guarded render-phase updates keep the relabel and its evidence in the
+     same committed frame. */
+  const [lastConflict, setLastConflict] = useState(observedConflict);
+  let changedHands = observedConflict;
+  let conflictIsCurrent = observedConflict !== null;
+  if (observedConflict !== null) {
+    if (
+      lastConflict === null ||
+      lastConflict.claimed !== observedConflict.claimed ||
+      lastConflict.observed !== observedConflict.observed
+    ) {
+      setLastConflict(observedConflict);
+    }
+  } else if (row.execution.kind === "verified" && row.execution.conversation.kind === "verified") {
+    if (lastConflict !== null) setLastConflict(null);
+  } else {
+    changedHands = lastConflict;
+    conflictIsCurrent = false;
+  }
 
   return (
     <div>
+      {changedHands === null ? null : (
+        <PreviousConversation
+          claimed={changedHands.claimed}
+          observed={changedHands.observed}
+          current={conflictIsCurrent}
+        />
+      )}
       {view === null ? (
         <p className="tw:text-[13px] tw:text-ink-soft">
           {busy ? "Reading the tail of this session's transcript…" : "Not read yet."}
@@ -660,6 +878,17 @@ export function Conversation({
             )
           }
           said="said by the dashboard server"
+        />
+      ) : view.kind === "moved" ? (
+        <Refusal
+          head="The dashboard server answered under a different conversation claim than this page asked under."
+          why={`this page asked under ${view.asked ?? "no conversation"}, and the dashboard server's answer named ${view.read ?? "no conversation"} — those claims do not match, so its answer is not shown here as this session's transcript`}
+          detail={
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              Read again to ask about the session as it is now.
+            </p>
+          }
+          said="said by this browser, from the conversation claim the server's answer named"
         />
       ) : (
         <Refusal

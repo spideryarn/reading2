@@ -38,11 +38,13 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
 import { MessageOverseerCard } from "../tools/fleet/web/src/MessageOverseerCard";
 import type { SteerApi, SteerOutcome } from "../tools/fleet/web/src/steer-client";
 import type { FleetRow } from "../tools/fleet/web/src/types";
+import type { ExecutionReading } from "../tools/fleet/wire";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +52,11 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  /* **THE CARD KEEPS DRAFTS NOW**, so one test's typing would otherwise be
+     restored into the next test's box. Through `window`: under jsdom the bare
+     `sessionStorage` is Node's own. */
+  window.sessionStorage.clear();
+  resetDraftPageStateForTests();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -58,6 +65,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
 });
 
 /**
@@ -394,5 +402,184 @@ describe("the daemon and the session are not the same thing", () => {
 
     expect(text()).toContain("daemon");
     expect(text()).toContain("pane");
+  });
+});
+
+describe("the unsent line, kept under the Overseer's verified conversation", () => {
+  /**
+   * **THE STRONGEST CASE OF THE THREE BOXES.** The Overseer is the session
+   * relaunched most often, so a half-written line to one Overseer is the
+   * likeliest draft on this dashboard to meet a different one. The card resolves
+   * the Overseer's row from the claim (`overseerClaim`), and that row's
+   * `execution` carries the conversation — so the key is that, and never the
+   * pane, the tmux handle or the process.
+   *
+   * Conversation ids here are not uuids, deliberately: tests/fixture-ids.test.ts
+   * fails on a uuid shared between two test files.
+   */
+  const KEY = (conversation: string): string => draftKey("overseer-message", conversation);
+
+  function running(conversation: string, pid = 6100): ExecutionReading {
+    return {
+      kind: "verified",
+      token: { boot: "overseer-draft-boot", pid, startTicks: 55_000 + pid },
+      harness: "claude-code",
+      conversation: { kind: "verified", id: conversation },
+    };
+  }
+
+  /** What iOS does when it reclaims a tab: storage survives, the page's memory does not. */
+  function reload(node: Parameters<Root["render"]>[0]): void {
+    act(() => root.unmount());
+    resetDraftPageStateForTests();
+    root = createRoot(container);
+    render(node);
+  }
+
+  function box(): HTMLTextAreaElement {
+    const el = container.querySelector("textarea");
+    if (el === null) throw new Error(`no textarea on screen; card says: ${text()}`);
+    return el;
+  }
+
+  it("brings the line back after a reload, under the Overseer's conversation and nothing else", () => {
+    const { api } = fakeApi(SENT);
+    const rows = [overseerRow({ id: "$1643", execution: running("conv-overseer-1") })];
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
+    type("half a thought about the queue");
+    reload(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
+
+    expect(box().value).toBe("half a thought about the queue");
+    expect(window.sessionStorage.length).toBe(1);
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBe("half a thought about the queue");
+  });
+
+  it("restores it for a relaunch of the same conversation — a new process, the same recipient", () => {
+    const { api } = fakeApi(SENT);
+    render(
+      <MessageOverseerCard
+        rows={[overseerRow({ id: "$1643", execution: running("conv-overseer-1", 6100) })]}
+        unreadableRows={0}
+        steer={api}
+      />,
+    );
+    type("carry on from where you were");
+    reload(
+      <MessageOverseerCard
+        rows={[overseerRow({ id: "$1643", execution: running("conv-overseer-1", 6200) })]}
+        unreadableRows={0}
+        steer={api}
+      />,
+    );
+    expect(box().value).toBe("carry on from where you were");
+  });
+
+  it("does not restore one Overseer's line for a different Overseer conversation — and does for its own", () => {
+    /* The same row, the same pane, the same CLAUDE_SESSION_ID claim on both
+       sides (the fixture's default): only the verified conversation differs.
+       So a key built from the handle, the pane or the claim would restore here,
+       and only the conversation id tells the two apart. */
+    const { api } = fakeApi(SENT);
+    const on = (conversation: string, pid: number) => (
+      <MessageOverseerCard
+        rows={[overseerRow({ id: "$1643", execution: running(conversation, pid) })]}
+        unreadableRows={0}
+        steer={api}
+      />
+    );
+    render(on("conv-overseer-1", 6100));
+    type("meant for the old one");
+    reload(on("conv-overseer-2", 6200));
+    expect(box().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBe("meant for the old one");
+    reload(on("conv-overseer-1", 6300));
+    expect(box().value).toBe("meant for the old one");
+  });
+
+  it("stores nothing while the Overseer's conversation cannot be told", () => {
+    const { api } = fakeApi(SENT);
+    // The fixture's default reading: an old producer, nothing verified.
+    render(<MessageOverseerCard rows={[overseerRow({ id: "$1643" })]} unreadableRows={0} steer={api} />);
+    type("typed while nobody could tell");
+    expect(box().value).toBe("typed while nobody could tell");
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("keeps the words on screen and files none of them under the new Overseer when the claim moves mid-sentence", () => {
+    const { api } = fakeApi(SENT);
+    const before = [
+      overseerRow({ id: "$1", name: "first-overseer", execution: running("conv-overseer-1", 6100) }),
+      row({ id: "$2", name: "second-overseer", execution: running("conv-overseer-2", 6200) }),
+    ];
+    render(<MessageOverseerCard rows={before} unreadableRows={0} steer={api} />);
+    type("to the first");
+
+    const after = [
+      row({ id: "$1", name: "first-overseer", execution: running("conv-overseer-1", 6100) }),
+      overseerRow({ id: "$2", name: "second-overseer", execution: running("conv-overseer-2", 6200) }),
+    ];
+    render(<MessageOverseerCard rows={after} unreadableRows={0} steer={api} />);
+    expect(text()).toContain("second-overseer");
+    // Never destroyed: the words are the person's, and the card names who they now go to.
+    expect(box().value).toBe("to the first");
+    type("to the first, still");
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-2"))).toBeNull();
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBe("to the first");
+  });
+
+  it("removes the stored line after a send that went, and keeps it after a refusal", async () => {
+    const rows = [overseerRow({ id: "$1643", execution: running("conv-overseer-1") })];
+    const refusing = fakeApi({
+      ok: false,
+      code: "declared-not-steerable",
+      why: "it is a shell",
+      status: 409,
+      from: "server",
+      delivery: { kind: "none" },
+    });
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={refusing.api} />);
+    type("try this");
+    await act(async () => {
+      button("Send").click();
+    });
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBe("try this");
+
+    const sending = fakeApi(SENT);
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={sending.api} />);
+    await act(async () => {
+      button("Send").click();
+    });
+    expect(sending.calls).toHaveLength(1);
+    expect(box().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBeNull();
+  });
+
+  it("has a Clear that empties the box and removes the stored line", () => {
+    const { api, calls } = fakeApi(SENT);
+    const rows = [overseerRow({ id: "$1643", execution: running("conv-overseer-1") })];
+    render(<MessageOverseerCard rows={rows} unreadableRows={0} steer={api} />);
+    type("on second thoughts");
+    act(() => button("Clear").click());
+    expect(box().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY("conv-overseer-1"))).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("says in one line that the message will not survive a reload when storage refuses", () => {
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    const { api } = fakeApi(SENT);
+    render(
+      <MessageOverseerCard
+        rows={[overseerRow({ id: "$1643", execution: running("conv-overseer-1") })]}
+        unreadableRows={0}
+        steer={api}
+      />,
+    );
+    expect(text()).not.toContain(draftNoticeSentence("storage-refused"));
+    type("private mode");
+    expect(box().value).toBe("private mode");
+    expect(text()).toContain(draftNoticeSentence("storage-refused"));
   });
 });

@@ -176,11 +176,32 @@ export type MessagesView =
       recordsParsed: number | null;
       recordsUnparseable: number | null;
       toolResultsSkipped: number | null;
+      readOf: ReadOf;
     }
-  | { kind: "not-found"; reason: string; why: string }
-  | { kind: "unreadable"; path: string | null; why: string }
+  | { kind: "not-found"; reason: string; why: string; readOf: ReadOf }
+  | { kind: "unreadable"; path: string | null; why: string; readOf: ReadOf }
   /** This page never got an answer it could read. **Our sentence, not the server's.** */
-  | { kind: "no-answer"; why: string };
+  | { kind: "no-answer"; why: string }
+  /**
+   * **An answer, about a different conversation from the one this page asked
+   * about.** The server's stamp said so; `ofTheClaimAsked` noticed. Never drawn
+   * as this row's transcript — and never drawn as silence either.
+   */
+  | { kind: "moved"; asked: string | null; read: string | null };
+
+/**
+ * **WHICH CONVERSATION THE SERVER SAYS IT READ.** transcript.ts §
+ * `RecentMessagesOf` stamps every arm with the claim it was handed, because
+ * `/api/messages` resolves that claim off the server's current row and the row
+ * can have moved on since this page's snapshot.
+ *
+ * `unstamped` is a server from before the stamp, and it is **accepted exactly
+ * as before**: the page and the server ship together, and refusing an old
+ * server's every answer would blank the panel for the minutes of a partial
+ * deploy. A stamp of `null` is a real claim — *I read under no conversation id*
+ * — and is not the same as no stamp.
+ */
+export type ReadOf = { kind: "stamped"; claudeSessionId: string | null } | { kind: "unstamped" };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -251,9 +272,17 @@ export function parseRecentMessages(raw: unknown): MessagesView {
     return { kind: "no-answer", why: "the dashboard server answered something that is not this API" };
   }
   const kind = raw["kind"];
+  const readOf = readOfWire(raw);
+  if (readOf === null) {
+    return {
+      kind: "no-answer",
+      why: "the dashboard server's answer named the conversation it read in a form this page cannot read",
+    };
+  }
 
   if (kind === "not-found") {
     return {
+      readOf,
       kind: "not-found",
       /* The reason CODE, kept even when unfamiliar: it is what a person greps
          for in transcript.ts when the sentence is not enough. */
@@ -266,6 +295,7 @@ export function parseRecentMessages(raw: unknown): MessagesView {
 
   if (kind === "unreadable") {
     return {
+      readOf,
       kind: "unreadable",
       path: str(raw["path"]),
       why: str(raw["why"]) ?? "the server said it could not read the transcript and did not say why",
@@ -302,7 +332,41 @@ export function parseRecentMessages(raw: unknown): MessagesView {
     recordsParsed: num(raw["recordsParsed"]),
     recordsUnparseable: num(raw["recordsUnparseable"]),
     toolResultsSkipped: num(raw["toolResultsSkipped"]),
+    readOf,
   };
+}
+
+/**
+ * The stamp off the wire. Absent is `unstamped` — an old server, accepted as
+ * before. `null` and a string are real stamps (`""` is the reader's own "no
+ * id", so it reads as `null`). Anything else is not this API, and is `null`
+ * here so the caller can say so rather than guess.
+ */
+function readOfWire(raw: Record<string, unknown>): ReadOf | null {
+  if (!("claudeSessionId" in raw)) return { kind: "unstamped" };
+  const v = raw["claudeSessionId"];
+  if (v === null || v === "") return { kind: "stamped", claudeSessionId: null };
+  if (typeof v === "string") return { kind: "stamped", claudeSessionId: v };
+  return null;
+}
+
+/**
+ * **IS THIS ANSWER ABOUT THE CONVERSATION THE PAGE ASKED ABOUT?**
+ *
+ * `askedClaim` is the `claudeSessionId` of the row the request was made for —
+ * the claim as the page saw it when it asked. A stamp that names a different
+ * conversation turns the answer into the `moved` arm: the server's row had
+ * changed hands between this page's snapshot and the read, and the turns it
+ * read belong to the conversation it names, not to the one on screen. An
+ * unstamped answer passes through untouched; so do the two arms this page
+ * wrote itself.
+ */
+export function ofTheClaimAsked(view: MessagesView, askedClaim: string | null): MessagesView {
+  if (view.kind === "no-answer" || view.kind === "moved") return view;
+  if (view.readOf.kind === "unstamped") return view;
+  const asked = askedClaim === "" ? null : askedClaim;
+  if (view.readOf.claudeSessionId === asked) return view;
+  return { kind: "moved", asked, read: view.readOf.claudeSessionId };
 }
 
 /* ------------------------------------------------------------------ *
@@ -359,7 +423,14 @@ export function transcriptAge(lastModified: string | null, status: FleetStatus, 
  * ------------------------------------------------------------------ */
 
 /** The injection point, the same shape as `SteerApi` and `ActionsApi`. */
-export type MessagesApi = { recent: (row: FleetRow) => Promise<MessagesView> };
+export type MessagesApi = {
+  /**
+   * `signal` reaches `fetch` (plan 260910c, F5): a controller in the hook cannot
+   * abort a fetch it does not make, and an abandoned read here is a
+   * multi-megabyte transcript the box goes on reading for nobody.
+   */
+  recent: (row: FleetRow, signal?: AbortSignal) => Promise<MessagesView>;
+};
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
 function describe(cause: unknown): string {
@@ -379,10 +450,13 @@ function describe(cause: unknown): string {
  */
 export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
   return {
-    async recent(row): Promise<MessagesView> {
+    async recent(row, signal): Promise<MessagesView> {
       let response: Response;
       try {
-        response = await fetchImpl(messagesUrl(row), { cache: "no-store" });
+        response = await fetchImpl(messagesUrl(row), {
+          cache: "no-store",
+          ...(signal === undefined ? {} : { signal }),
+        });
       } catch (cause) {
         return { kind: "no-answer", why: `this browser could not reach the dashboard: ${describe(cause)}` };
       }
@@ -402,7 +476,7 @@ export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
 
 /** The default instance. Late-bound `fetch`, for the reason in steer-client.ts. */
 export const httpMessagesApi: MessagesApi = {
-  recent: (row) => makeMessagesApi().recent(row),
+  recent: (row, signal) => makeMessagesApi().recent(row, signal),
 };
 
 /**
@@ -434,8 +508,11 @@ export const httpMessagesApi: MessagesApi = {
  */
 export function withClockSkew(api: MessagesApi, skew: () => ClockSkew): MessagesApi {
   return {
-    async recent(row): Promise<MessagesView> {
-      const view = await api.recent(row);
+    async recent(row, signal): Promise<MessagesView> {
+      /* The signal passes straight through: App.tsx hands the page this
+         wrapper, not the api it was given, so dropping it here would leave the
+         production read uncancellable whatever the hook does. */
+      const view = await api.recent(row, signal);
       if (view.kind !== "found") return view;
       const at = skew();
       return {

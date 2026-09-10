@@ -32,6 +32,7 @@
  * been handling hostile input. Nothing here interprets it, and nothing that
  * renders it may add markup.
  */
+import { executionTokenText } from "../../execution-token.js";
 import type {
   FeedAttribution,
   FeedCoverage,
@@ -40,7 +41,7 @@ import type {
   FeedSessionRead,
 } from "../../wire.js";
 import type { MessageSpeaker, MessageTurn } from "./messages-client";
-import { shiftMsToBrowserClock, type ClockSkew, type FleetRow } from "./types";
+import { questionSafetyKey, shiftMsToBrowserClock, type ClockSkew, type FleetRow } from "./types";
 
 export const FEED_URL = "api/feed";
 
@@ -654,6 +655,148 @@ export type SessionListReading =
     };
 
 /**
+ * **WHAT THE SESSION LIST SAYS THAT COULD MEAN THE FEED IS OUT OF DATE** — the
+ * evidence `useFeed` re-reads on, as one comparable string. GPT Sol's F6 on
+ * docs/plans/260910c identified the fields the original digest omitted.
+ *
+ * Every row sorted by id, each as `[id, claudeSessionId, status.kind,
+ * questionSafetyKey(rawQuestion), execution epoch]`. A session
+ * appearing or going, changing status, getting or losing a dialog, claiming a
+ * different conversation, or having its run replaced changes the string;
+ * nothing else does.
+ *
+ * `tmuxServerPid` travels beside the digest rather than inside it. A change
+ * between two named servers is urgent evidence and `feedReader` handles it
+ * directly. A transition to or from `null` says only that one collection could
+ * not name the server; putting it in the digest would spend ~10 MB re-reading
+ * transcripts when the server had not changed.
+ *
+ * **NO DIAGNOSTIC `why`.** The unverifiable arms reword their sentence
+ * between collections on a loaded box, and a digest that carried one would
+ * change on every snapshot — the feed would become the poll it is designed not
+ * to be. The same goes for `waiting`'s countdown, which is why a status is its
+ * `kind` alone.
+ *
+ * **THE EXECUTION EPOCH IS DERIVED FROM THE LAST TOKEN THAT WAS VERIFIED —
+ * never from the reading's kind, cause or harness.** A row flips `verified` ↔
+ * `unknown` for a collection or two at a time as the box's ordinary weather
+ * (continuity.ts's header has the history), and no transcript moves when the
+ * box merely fails to name a process. Counting the flip re-read the feed about
+ * once a collection for nothing — the plan's own ruling, *absence of
+ * confirmation is not evidence*, applied here. A first verified token
+ * establishes the baseline at epoch zero; only a *different verified token* —
+ * a real replacement — advances it. An unverified reading preserves the epoch.
+ * The harness and the observed conversation are left out too: both are read
+ * off one process's command line, which that process cannot change, so neither
+ * can move without the token moving. The conversation *claim*
+ * (`claudeSessionId`) stays in, because a changed claim is a fact.
+ *
+ * `null` for the two arms with no census: there is nothing to compare, and a
+ * page that has not heard from the box has no evidence of anything.
+ *
+ * **It depends on `/api/state` and nothing else**, which is what stops the
+ * re-read from looping: a feed answer, and the time it arrived, cannot change it.
+ */
+export type FeedEvidence = { digest: string; tmuxServerPid: number | null };
+
+type ExecutionBaseline = Readonly<{ token: string | null; epoch: number }>;
+
+/**
+ * The committed evidence memory. The world belongs with the row tokens because
+ * a tmux restart permits handles to be reused for unrelated sessions.
+ */
+export type FeedEvidenceMemory = Readonly<{
+  tmuxServerPid: number | null;
+  rows: ReadonlyMap<string, ExecutionBaseline>;
+}>;
+
+export const EMPTY_FEED_EVIDENCE_MEMORY: FeedEvidenceMemory = {
+  tmuxServerPid: null,
+  rows: new Map(),
+};
+
+/** This reading's token as text, or null for every arm that names no run. */
+function verifiedToken(execution: FleetRow["execution"]): string | null {
+  return execution.kind === "verified" ? executionTokenText(execution.token) : null;
+}
+
+/**
+ * `memory` is row id → the last verified token and the replacement epoch, as
+ * {@link rememberVerified} keeps it. Defaulted to empty, which is right for a
+ * single snapshot on its own: every row begins at epoch zero.
+ */
+export function feedEvidence(
+  list: SessionListReading,
+  memory: FeedEvidenceMemory = EMPTY_FEED_EVIDENCE_MEMORY,
+): FeedEvidence | null {
+  if (list.kind !== "collected") return null;
+  const sameWorld =
+    memory.tmuxServerPid === null || list.tmuxServerPid === null || memory.tmuxServerPid === list.tmuxServerPid;
+  const previous = sameWorld ? memory.rows : EMPTY_FEED_EVIDENCE_MEMORY.rows;
+  const rows = [...list.rows]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((row) => {
+      const held = previous.get(row.id);
+      const current = verifiedToken(row.execution);
+      const epoch =
+        held !== undefined && held.token !== null && current !== null && current !== held.token
+          ? held.epoch + 1
+          : (held?.epoch ?? 0);
+      return [row.id, row.claudeSessionId, row.status.kind, questionSafetyKey(row.rawQuestion), epoch];
+    });
+  return { digest: JSON.stringify(rows), tmuxServerPid: list.tmuxServerPid };
+}
+
+/**
+ * The memory `feedEvidence` reads: each current row's newest verified token and
+ * replacement epoch, carried across collections in which it could not be
+ * verified.
+ *
+ * **Rebuilt from the current rows**, so a session that has gone takes its entry
+ * with it and the map stays the size of the fleet for the life of the tab. A
+ * row that went and came back has lost its memory — but its going and coming
+ * already changed the digest, so nothing is missed. A list with no census
+ * leaves the memory as it was: it is no news about any row.
+ */
+export function rememberVerified(
+  list: SessionListReading,
+  previous: FeedEvidenceMemory,
+): FeedEvidenceMemory {
+  if (list.kind !== "collected") return previous;
+  const sameWorld =
+    previous.tmuxServerPid === null ||
+    list.tmuxServerPid === null ||
+    previous.tmuxServerPid === list.tmuxServerPid;
+  const previousRows = sameWorld ? previous.rows : EMPTY_FEED_EVIDENCE_MEMORY.rows;
+  const next = new Map<string, ExecutionBaseline>();
+  for (const row of list.rows) {
+    const held = previousRows.get(row.id);
+    const current = verifiedToken(row.execution);
+    if (held === undefined) {
+      next.set(row.id, { token: current, epoch: 0 });
+    } else if (current === null || current === held.token) {
+      next.set(row.id, held);
+    } else if (held.token === null) {
+      next.set(row.id, { token: current, epoch: held.epoch });
+    } else {
+      next.set(row.id, { token: current, epoch: held.epoch + 1 });
+    }
+  }
+  const tmuxServerPid = list.tmuxServerPid ?? previous.tmuxServerPid;
+  if (
+    tmuxServerPid === previous.tmuxServerPid &&
+    next.size === previous.rows.size &&
+    [...next].every(([id, baseline]) => {
+      const held = previous.rows.get(id);
+      return held !== undefined && held.token === baseline.token && held.epoch === baseline.epoch;
+    })
+  ) {
+    return previous;
+  }
+  return { tmuxServerPid, rows: next };
+}
+
+/**
  * The status of the session a message came from.
  *
  * Pure, and it takes the feed's own `tmuxServerPid` beside the list's: the join
@@ -768,8 +911,17 @@ export function turnAge(at: string | null, now: number, skew: ClockSkew): TurnAg
  * The seam.
  * ------------------------------------------------------------------ */
 
-/** The injection point, the same shape as `MessagesApi` and `ActionsApi`. */
-export type FeedApi = { recent: (limit: number) => Promise<FeedView> };
+/**
+ * The injection point, the same shape as `MessagesApi` and `ActionsApi`.
+ *
+ * **THE SIGNAL IS PART OF THE SEAM** (GPT Sol's F5 on docs/plans/260910c): an
+ * `AbortController` in a hook that does not make the fetch aborts nothing, so
+ * the hook hands its signal through here and the client hands it to `fetch`.
+ * `useFeed` does not *depend* on an api honouring it — it keeps its own
+ * deadline and discards late answers — but a real read it has given up on
+ * should stop costing the box.
+ */
+export type FeedApi = { recent: (limit: number, signal?: AbortSignal) => Promise<FeedView> };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
 function describe(cause: unknown): string {
@@ -787,10 +939,10 @@ function describe(cause: unknown): string {
  */
 export function makeFeedApi(fetchImpl: typeof fetch = fetch): FeedApi {
   return {
-    async recent(limit): Promise<FeedView> {
+    async recent(limit, signal): Promise<FeedView> {
       let response: Response;
       try {
-        response = await fetchImpl(feedUrl(limit), { cache: "no-store" });
+        response = await fetchImpl(feedUrl(limit), { cache: "no-store", ...(signal === undefined ? {} : { signal }) });
       } catch (cause) {
         return { kind: "no-answer", why: `this browser could not reach the dashboard: ${describe(cause)}` };
       }
@@ -809,7 +961,7 @@ export function makeFeedApi(fetchImpl: typeof fetch = fetch): FeedApi {
 }
 
 /** The default instance. Late-bound `fetch`, for the reason steer-client.ts gives. */
-export const httpFeedApi: FeedApi = { recent: (limit) => makeFeedApi().recent(limit) };
+export const httpFeedApi: FeedApi = { recent: (limit, signal) => makeFeedApi().recent(limit, signal) };
 
 /** What `FeedMessage` looks like on the wire, re-exported so a test can build one. */
 export type { FeedMessage };
