@@ -1,7 +1,7 @@
 # 260910f — Bounded judgement: find prose questions and propose help
 
 The roadmap stage is
-[260908f § Stage: Bounded judgement](260908f-overseer-and-fleet-improvement-roadmap.md#stage-bounded-judgement--find-prose-questions-and-propose-help);
+[260908f § Stage: Bounded judgement](260908f-overseer-and-fleet-improvement-roadmap.md#stage-bounded-judgement-find-prose-questions-and-propose-help);
 its five checkboxes and acceptance paragraph are the spec. Dispatched by the Overseer on 2026-09-10 as
 queue item `qi-n5mt6p2a`. Owner of this plan: session `bounded-judgement`, worktree
 `.claude/worktrees/bounded-judgement`.
@@ -361,4 +361,16 @@ with F7–F8 (P2). Answer: [plan-review-sol](260910f-bounded-judgement-proposals
 
 ## Status
 
-Stage 1a committed (`ac02c4c9`). Plan revised after Sol's review; Stage 1b–1e next.
+**Stage 1 closed** at `44b9eb3c` (the budget and the `limited` arm, `f03d5571`; F11/F12 fixed,
+`2eccd2a6`; the narrow check and Fable, above). The Stage 3 evaluation machinery landed early, at
+`4380ff57`. `origin/dev` merged at `261b4759` — one conflict, in `store.ts`'s type import, where both
+sides had added one name; resolved as the union, and checked with `git diff MERGE_HEAD` for any of
+the other side's work going missing (none). **Stage 2 is being implemented.**
+
+**The first full-suite run is not evidence either way**, and is recorded so nobody quotes it: it ran
+on `f03d5571` while the F11 fixer and then the merge changed the tree underneath it. Six red: the four
+known environment files (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-decisions-route`,
+`fleet-reports-route`); the new F11 regression test, loaded before its fix landed — it passes 5 of 5
+run alone on the current tree; and `doc-links`, which was real — this plan linked to the roadmap
+heading as `…judgement--find…`, and the repo's slugger collapses the space run left by an em dash into
+ONE hyphen. Fixed. The full suite that counts runs once, on the final commit, before the push.

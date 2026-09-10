@@ -5,9 +5,9 @@ Repo: `/home/greg/code/spideryarn2/.claude/worktrees/bounded-judgement`, branch
 
 ## The candidate
 
-Committed: STAGE1_COMMIT (parent PARENT_COMMIT)
-  git diff PARENT_COMMIT..STAGE1_COMMIT
-  changed paths: `git diff --name-only PARENT_COMMIT..STAGE1_COMMIT`
+Committed: f03d5571 (parent 8e67960b)
+  git diff 8e67960b..f03d5571
+  changed paths: `git diff --name-only 8e67960b..f03d5571`
 
 Start with: `tools/overseer/model-budget.ts`, `tools/overseer/attention-pass.ts`,
 `tools/overseer/attention-cli.ts`, then the `limited` arm in `tools/fleet/wire.ts` and its three
@@ -16,7 +16,8 @@ parsers (`tools/overseer/store.ts`, `tools/fleet/attention.ts`, `tools/fleet/web
 
 The plan is `docs/plans/260910f-bounded-judgement-proposals-for-the-attention-inbox.md` — Stage 1,
 decisions D3–D6 and D12 — and your own plan-review findings are beside it
-(`…-plan-review-sol-findings.md`, F1–F3 bear on this stage). Raw gate output: RESULTS_PATH.
+(`…-plan-review-sol-findings.md`, F1–F3 bear on this stage). Raw gate output: `logs/tmux-jobs/bj-s1-gates-1831-7821.log` (focused suites 872/872, typecheck
+exit 0). Stage 1a, the labelled set, is the earlier commit `ac02c4c9` and is in scope too.
 
 ## What it is meant to do
 
