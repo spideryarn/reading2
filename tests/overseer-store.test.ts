@@ -18,12 +18,14 @@
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readSync,
   readdirSync,
   rmSync,
   statSync,
+  truncateSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -245,6 +247,20 @@ describe("where the store lives", () => {
 });
 
 describe("a cold start", () => {
+  test("a log that cannot be repaired is a named refusal and releases the store lock", () => {
+    const root = tempRoot();
+    const path = join(root, EVENTS_FILE);
+    mkdirSync(path);
+
+    const result = openStore({ root });
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { reason: "unusable-log", path },
+    });
+    expect(existsSync(join(root, LOCK_FILE))).toBe(false);
+  });
+
   test("a missing directory starts cold, says so, and creates the store", () => {
     const root = unmadeRoot();
     expect(existsSync(root)).toBe(false);
@@ -295,6 +311,16 @@ describe("the torn-write sequence", () => {
     expect(calls).toBeGreaterThan(1);
     expect(repair).toEqual({ torn: true, droppedBytes: Buffer.byteLength(torn), droppedText: torn });
     expect(readFileSync(path, "utf8")).toBe(complete);
+  });
+
+  test("repair stops without mutating the file when a read returns zero before the stated EOF", () => {
+    const root = tempRoot();
+    const path = join(root, EVENTS_FILE);
+    const contents = `${JSON.stringify(seenEvent(observedRow(), "2026-09-08T10:00:00.000Z"))}\n{"kind":"session-seen"`;
+    writeFileSync(path, contents);
+
+    expect(() => truncateToLastLine(path, () => 0)).toThrow(/read 0 .* remaining bytes/);
+    expect(readFileSync(path, "utf8")).toBe(contents);
   });
 
   test("tear, restart, append, append, read", () => {
@@ -452,6 +478,12 @@ describe("the torn-write sequence", () => {
     expect(read.unreadable).toEqual([]);
     expect(read.tornTail).toBe(torn);
     expect(read.nextByte).toBe(completeBytes);
+
+    truncateSync(path, completeBytes);
+    store.append([goneEvent(observedRow(), "2026-09-08T10:01:00.000Z")]);
+    const resumed = store.readEvents(read.nextByte);
+    expect(resumed.events.map((event) => event.kind)).toEqual(["tmux-session-gone"]);
+    expect(resumed.unreadable).toEqual([]);
   });
 });
 

@@ -182,6 +182,46 @@ describe("telling a dead daemon from a quiet one", () => {
 });
 
 describe("reading the event log without disturbing the daemon", () => {
+  test("an event log that cannot be read is reported by the reader, command and status", async () => {
+    const root = tempRoot();
+    const path = join(root, EVENTS_FILE);
+    mkdirSync(path);
+
+    expect(readEventTail(root, 40)).toMatchObject({ cause: expect.stringMatching(/EISDIR|directory/i) });
+    expect(statusLines(root, NOW).join("\n")).toMatch(/events\s+UNREADABLE/);
+
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "events", limit: 40 });
+      expect(code).toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringMatching(/events\.jsonl.*EISDIR|events\.jsonl.*directory/i));
+    } finally {
+      error.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
+  test("the events command fails visibly when every complete line is malformed", async () => {
+    const root = tempRoot();
+    writeFileSync(join(root, EVENTS_FILE), "{not an event}\n");
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "events", limit: 40 });
+      expect(code).toBe(1);
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/1 unreadable line/));
+      expect(log).not.toHaveBeenCalledWith(expect.stringMatching(/^no events/));
+    } finally {
+      log.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
   test("the tail is the last N events, and unreadable lines are counted", () => {
     const root = tempRoot();
     const events: SessionEvent[] = [1, 2, 3].map((n) => ({
@@ -246,7 +286,7 @@ describe("reading the event log without disturbing the daemon", () => {
   });
 
   test("no log at all reads as empty rather than throwing", () => {
-    expect(readEventTail(tempRoot(), 10)).toEqual({ events: [], unreadable: 0, tornTail: null, total: 0 });
+    expect(readEventTail(tempRoot(), 10)).toEqual({ events: [], unreadable: 0, tornTail: null, total: 0, cause: null });
   });
 
   test("every event kind renders as a sentence naming the session", () => {
@@ -317,6 +357,31 @@ describe("reading the event log without disturbing the daemon", () => {
 });
 
 describe("the status page a person actually reads", () => {
+  test("corrupt complete notes make standing and conditions unknown, and the notes command fails", async () => {
+    const root = tempRoot();
+    writeFileSync(join(root, NOTES_FILE), "{not a note}\n");
+
+    const lines = statusLines(root, NOW).join("\n");
+    expect(lines).toContain("CANNOT TELL");
+    expect(lines).toMatch(/notes\s+UNREADABLE/);
+    expect(lines).not.toContain("no checkpoint and no notes");
+    expect(lines).not.toContain("conditions  all clear");
+
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "notes", limit: 40 });
+      expect(code).toBe(1);
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/1 unreadable line/));
+      expect(log).not.toHaveBeenCalledWith("the Overseer has written nothing about itself yet");
+    } finally {
+      log.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
   test("unreadable daemon notes make standing unknown instead of looking like no notes", () => {
     const root = tempRoot();
     mkdirSync(join(root, NOTES_FILE));

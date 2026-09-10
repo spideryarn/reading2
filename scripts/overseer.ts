@@ -1077,13 +1077,19 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       return 0;
     case "events": {
       const tail = readEventTail(root, parsed.limit);
+      if (tail.cause !== null) {
+        console.error(`✗ ${tail.cause}`);
+        return 1;
+      }
       // "0 events" and "no store" are not the same sentence, and printing
       // nothing at all would be a third thing that looks like both.
-      if (tail.total === 0) console.log(`no events in ${join(root, EVENTS_FILE)}`);
+      if (tail.total === 0 && tail.unreadable === 0 && tail.tornTail === null) {
+        console.log(`no events in ${join(root, EVENTS_FILE)}`);
+      }
       for (const event of tail.events) console.log(describeEvent(event));
       if (tail.unreadable > 0) console.log(`(${tail.unreadable} unreadable lines)`);
       if (tail.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(tail.tornTail)})`);
-      return 0;
+      return tail.unreadable > 0 ? 1 : 0;
     }
     case "notes": {
       const read = readNotes(root, parsed.limit);
@@ -1091,11 +1097,13 @@ export async function runParsed(parsed: Parsed): Promise<number> {
         console.error(`✗ ${read.cause}`);
         return 1;
       }
-      if (read.notes.length === 0) console.log("the Overseer has written nothing about itself yet");
+      if (read.notes.length === 0 && read.unreadable === 0 && read.tornTail === null) {
+        console.log("the Overseer has written nothing about itself yet");
+      }
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
       if (read.unreadable > 0) console.log(`(${read.unreadable} unreadable lines)`);
       if (read.tornTail !== null) console.log(`(torn final line: ${JSON.stringify(read.tornTail)})`);
-      return 0;
+      return read.unreadable > 0 ? 1 : 0;
     }
     case "attention":
       return await runAttentionCommand({

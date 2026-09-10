@@ -204,12 +204,15 @@ const REPLAY_CEILING_BYTES = 64 * 1024 * 1024;
  * a sentence saying what a person should do, and an exception gives it nothing
  * to print that is not also a stack trace.
  *
- * **Four of the five arms are `LockRefusal`'s**, declared once in
+ * **Four of the six arms are `LockRefusal`'s**, declared once in
  * [`lock.ts`](./lock.js) rather than restated here — a superset by
  * construction, so `describeRefusal` below still has to be exhaustive and the
  * compiler still says so if the lock grows an arm.
  */
-export type StoreRefusal = LockRefusal | { reason: "relative-store-dir"; path: string };
+export type StoreRefusal =
+  | LockRefusal
+  | { reason: "relative-store-dir"; path: string }
+  | { reason: "unusable-log"; path: string; detail: string };
 
 /** Why there was no checkpoint to resume from. Seven arms because seven different things go wrong. */
 export type ColdReason =
@@ -2760,6 +2763,8 @@ export function describeRefusal(refusal: StoreRefusal): string {
       return `The store directory ${JSON.stringify(refusal.path)} is relative, so it names a different directory for every process that starts here. Give an absolute path.`;
     case "unusable-directory":
       return `The store directory is unusable: ${refusal.detail}`;
+    case "unusable-log":
+      return `The Overseer log ${refusal.path} could not be opened or repaired: ${refusal.detail}`;
     default: {
       const never: never = refusal;
       throw new Error(String(never));
@@ -3139,7 +3144,16 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     }
     // BEFORE the append handle is opened, so nothing can land after the torn
     // bytes. This is the whole of design call 1.
-    const repair = truncateToLastLine(eventsPath);
+    let repair: JsonlRepair;
+    try {
+      repair = truncateToLastLine(eventsPath);
+    } catch (cause) {
+      release();
+      return {
+        ok: false,
+        refusal: { reason: "unusable-log", path: eventsPath, detail: cause instanceof Error ? cause.message : String(cause) },
+      };
+    }
     if (!stillOurs(lock, lockPath)) {
       closeSync(lock.fd);
       return { ok: false, refusal: { reason: "lost-the-race", holder: null } };

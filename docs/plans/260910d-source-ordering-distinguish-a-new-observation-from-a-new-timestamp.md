@@ -292,14 +292,12 @@ their tests.
   check; `splitJsonl` in `jsonl.ts` is the one splitter.
 - [x] The live-log check (read-only): **1,918 events, 0 unreadable on the new parser**, the same
   frozen bytes as the baseline.
-- [ ] Focused suites and typecheck green on the manager's own runs (4 files / 156 tests, plus the
-  other suites that reach these readers); full suite via `tmux-job`; Sol review; commit; push.
+- [x] Focused suites and typecheck green on the manager's own runs, before and after the review's
+  fixes (after: typecheck exit 0; 31 files / 873 tests across the four focused suites and every
+  other suite that reaches these readers; live-log check still 1,918 events, 0 unreadable); Sol
+  review; commit. Full suite and push at the end of the plan.
 
-Status, 2026-09-10: implemented and committed; Sol stage review next. Two things for it: the
-frozen log proves only that no event *written so far* trips the new claim-agreement check, not
-that the differ can never write one, so every constructor in `diff.ts` needs tracing; and
-`readFully` now throws on a zero-byte read inside `truncateToLastLine`, which runs at
-`openStore`, where the old code carried on silently.
+Status, 2026-09-10: **done.** Sol's stage review passed it with three fixes; see Findings.
 
 ## What this deliberately does not do
 
@@ -369,8 +367,42 @@ stage, red first where a behaviour changed.
    it red before the class existed. Now plain static imports.
 4. **P3, `ProducerStamp` had displaced `FleetState`'s doc comment.** Moved above it.
 
+### Stage 3 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+The manager raised two points; Sol refuted one with a proof and confirmed the other.
+
+- **The frozen log is a survey, not a proof — refuted as a risk, by tracing.** Every constructor in
+  `diff.ts` that emits `session-seen`, `session-replaced` or `session-row-changed`, and
+  `goneWhileAway` in `daemon.ts`, derives `row`, `identity` and `key` from the same values; a claim
+  appearing or clearing takes the `session-replaced` branch, whose new side comes from the row and
+  whose previous side comes from the old one. So the new agreement checks cannot refuse anything the
+  differ legitimately writes, which is the proof the 1,918-line survey could not give.
+- **P1, a log that could not be repaired crashed daemon startup** (confirmed). `openStore` rethrew
+  after releasing its lock, and `openNoteLog` escaped without closing the store. **Fixed:** a new
+  `unusable-log` store refusal on both paths, locks released. This put a 13-line hunk in
+  `daemon.ts`'s startup, outside `take()`; the Overseer was told.
+- **P1, a corrupt note history still produced a reassuring status.** A log with only a corrupt
+  complete note made `overseer status` say *never run* and *all clear*, and `overseer notes` exit 0.
+  **Fixed:** corrupt complete lines make the daemon's standing and its conditions unknown, and both
+  `overseer notes` and `overseer events` exit 1 when a complete line is unreadable.
+- **P2, an unreadable event file crashed both event surfaces.** **Fixed:** `EventTail` carries a
+  named cause; status prints `events UNREADABLE`.
+
+**One behaviour kept rather than softened, and worth knowing.** A torn final line in the notes log
+also makes `overseer status` report the daemon's standing as *cannot tell* (labelled `INCOMPLETE`,
+apart from `UNREADABLE`). A status read that lands mid-append will therefore say so for that one
+read; it corrects itself on the next. Reporting from the last complete note instead was the
+alternative, and it could call a daemon *running* while its stopping note is half-written. Rare,
+transient, and on the safe side, so it was not worth a second paid review round.
+
+**Implementer for Stage 2 changed.** The Overseer's budget notice of 2026-09-10 (~09:35Z) moved
+implementation off Codex, whose weekly window was emptying under seven sessions; Codex is now for
+the obligatory Sol reviews only, capped at 30 minutes. Stage 2 is implemented by an Opus subagent in
+this worktree and reviewed by Sol.
+
 ## Status
 
 2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
-stamp committed, Sol stage review passed with four fixes. Stage 2 waits on another session's
-`daemon.ts` push; Stage 3 is independent of it.
+stamp, Sol stage review passed with four fixes, on `dev`. Stage 3 done ahead of Stage 2: store and
+CLI readers, Sol stage review passed with three fixes. Stage 2 waits on another session's
+`daemon.ts` push, which is held for Greg's approval of a merge conflict with Stage 1.

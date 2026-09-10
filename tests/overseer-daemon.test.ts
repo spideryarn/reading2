@@ -17,7 +17,7 @@
  * is where sockets are tested. Every store root is a temp directory: the real
  * `~/.overseer` is never touched.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -694,6 +694,26 @@ describe("a restart does not re-announce the fleet", () => {
 });
 
 describe("refusing to be the second daemon", () => {
+  test("an unreadable note log is a named startup refusal and leaves no store lock", async () => {
+    const root = tempRoot();
+    const path = join(root, NOTES_FILE);
+    mkdirSync(path);
+
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      log: () => undefined,
+      source: () => (async function* () {})(),
+    });
+
+    expect(outcome).toMatchObject({
+      kind: "refused",
+      refusal: { reason: "unusable-log", path },
+    });
+    expect(existsSync(join(root, "overseer.lock"))).toBe(false);
+  });
+
   test("a running daemon's lock stops a second one, and the second says who has it", async () => {
     const root = tempRoot();
     let release = (): void => undefined;
