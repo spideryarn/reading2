@@ -43,12 +43,12 @@ import {
 import { releaseLock, takeLock } from "../tools/overseer/lock.js";
 
 export type AuthStatusReading =
-  | { kind: "value"; loggedIn: boolean; email: string | null }
+  | { kind: "value"; loggedIn: boolean; email: string | null; authMethod: string | null; apiProvider: string | null }
   | { kind: "unknown"; why: string };
 
 type ProfileReading =
   | { kind: "value"; accountUuid: string; email: string; orgId: string; configDir: string; takenAt: string }
-  | { kind: "unknown"; why: string; configDir?: string; takenAt?: string };
+  | { kind: "unknown"; why: string; configDir?: string; takenAt?: string; status?: number };
 
 interface UsageLike {
   kind: string;
@@ -62,7 +62,7 @@ export interface ClaudeAccountsDeps {
   out: (line: string) => void;
   err: (line: string) => void;
   readRegistry: (registryPath: string) => Promise<RegistryReading>;
-  authStatus: (configDir: string) => AuthStatusReading;
+  authStatus: (configDir: string, cwd?: string) => AuthStatusReading;
   profile: (configDir: string) => Promise<ProfileReading>;
   usage: (configDir: string) => Promise<UsageLike>;
 }
@@ -76,7 +76,7 @@ const realDeps = (): ClaudeAccountsDeps => {
     out: (line) => console.log(line),
     err: (line) => console.error(line),
     readRegistry: readAccountRegistry,
-    authStatus: runAuthStatus,
+    authStatus: (configDir, cwd) => runAuthStatus(configDir, { ...(cwd === undefined ? {} : { cwd }) }),
     profile: async (configDir) => readProfile(configDir, { fetch }),
     usage: async (configDir) => readUsage(configDir, { fetch }),
   };
@@ -89,6 +89,16 @@ function depsWith(overrides: Partial<ClaudeAccountsDeps>): ClaudeAccountsDeps {
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function sameDirectory(left: string, right: string): boolean {
+  if (path.resolve(left) === path.resolve(right)) return true;
+  if (!existsSync(left) || !existsSync(right)) return false;
+  try {
+    return realpathSync(left) === realpathSync(right);
+  } catch {
+    return false;
+  }
 }
 
 function parseJsonObject(file: string, required: boolean): { ok: true; value: Record<string, unknown>; text: string | null } | { ok: false; why: string } {
@@ -111,17 +121,25 @@ export function runAuthStatus(
     env?: NodeJS.ProcessEnv;
     command?: string;
     commandArgsPrefix?: string[];
+    cwd?: string;
     runner?: (
       command: string,
       args: string[],
-      options: { encoding: "utf8"; env: NodeJS.ProcessEnv },
+      options: { encoding: "utf8"; env: NodeJS.ProcessEnv; cwd?: string },
     ) => { error?: Error; status: number | null; stdout: string };
   } = {},
 ): AuthStatusReading {
   const runner = options.runner ?? spawnSync;
+  const parentEnv = options.env ?? process.env;
+  const env = Object.fromEntries(Object.entries(parentEnv).filter(([name]) =>
+    !name.startsWith("ANTHROPIC_") &&
+    !name.startsWith("CLAUDE_") &&
+    name !== "CLAUDECODE"
+  ));
   const result = runner(options.command ?? "claude", [...(options.commandArgsPrefix ?? []), "auth", "status", "--json"], {
     encoding: "utf8",
-    env: { ...(options.env ?? process.env), CLAUDE_CONFIG_DIR: configDir },
+    env: { ...env, CLAUDE_CONFIG_DIR: configDir },
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   });
   if (result.error) return { kind: "unknown", why: `could not run claude auth status: ${result.error.message}` };
   if (result.status !== 0) return { kind: "unknown", why: `claude auth status exited ${result.status ?? "without a status"}` };
@@ -134,7 +152,15 @@ export function runAuthStatus(
     if (email !== undefined && email !== null && typeof email !== "string") {
       return { kind: "unknown", why: "claude auth status returned a non-string email" };
     }
-    return { kind: "value", loggedIn: parsed["loggedIn"], email: typeof email === "string" ? email : null };
+    const authMethod = parsed["authMethod"];
+    const apiProvider = parsed["apiProvider"];
+    return {
+      kind: "value",
+      loggedIn: parsed["loggedIn"],
+      email: typeof email === "string" ? email : null,
+      authMethod: typeof authMethod === "string" ? authMethod : null,
+      apiProvider: typeof apiProvider === "string" ? apiProvider : null,
+    };
   } catch {
     return { kind: "unknown", why: "claude auth status returned malformed JSON" };
   }
@@ -402,14 +428,14 @@ function seededSettings(source: Record<string, unknown>, target: Record<string, 
  * `~/.claude` yields `email: null` for an account that is plainly signed in.
  */
 export function defaultClaudeJsonPath(configDir: string, home = homedir()): string {
-  return path.resolve(configDir) === path.resolve(path.join(home, ".claude"))
+  return sameDirectory(configDir, path.join(home, ".claude"))
     ? path.join(home, ".claude.json")
     : path.join(configDir, ".claude.json");
 }
 
 function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | { why: string } {
   const defaultConfigDir = options.defaultConfigDir ?? path.join(homedir(), ".claude");
-  if (path.resolve(targetDir) === path.resolve(defaultConfigDir)) return { why: "refusing to seed the default config directory into itself" };
+  if (sameDirectory(targetDir, defaultConfigDir)) return { why: "refusing to seed the default config directory into itself" };
   if (!existsSync(targetDir)) return { why: `${targetDir} does not exist; log in under that config directory before seeding it` };
 
   const desiredProjects = path.join(defaultConfigDir, "projects");
@@ -575,10 +601,24 @@ function assertIdentity(entry: Pick<AccountEntry, "stateDir" | "displayEmail">, 
   const status = deps.authStatus(entry.stateDir);
   if (status.kind === "unknown") return { ok: false, why: `${entry.stateDir}: ${status.why}` };
   if (!status.loggedIn) return { ok: false, why: `${entry.stateDir}: claude auth status reports loggedIn: false` };
-  if (status.email !== entry.displayEmail) {
-    return { ok: false, why: `${entry.stateDir}: expected ${entry.displayEmail}, but claude auth status found ${status.email ?? "no email"}` };
+  if (status.email !== null && status.email !== entry.displayEmail) {
+    return { ok: false, why: `${entry.stateDir}: expected ${entry.displayEmail}, but claude auth status found ${status.email}` };
   }
-  return { ok: true, found: status.email };
+  return {
+    ok: true,
+    found: status.email ?? "no local email (live profile must establish identity)",
+  };
+}
+
+function profileIdentityFailure(account: AccountEntry, profile: ProfileReading): string | null {
+  if (profile.kind === "unknown") return `live profile is unknown: ${profile.why}`;
+  if (profile.accountUuid !== account.providerAccountId || profile.orgId !== account.providerTenantId) {
+    return "live profile does not match the registry pin";
+  }
+  if (account.displayEmail && profile.email !== account.displayEmail) {
+    return "live profile email does not match the registry";
+  }
+  return null;
 }
 
 interface ParsedArgs {
@@ -593,7 +633,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs | { why: string } {
   for (let i = 1; i < argv.length; i += 1) {
     const flag = argv[i];
     if (!flag?.startsWith("--")) return { why: `unexpected argument: ${flag ?? ""}` };
-    if (flag === "--seed") {
+    if (flag === "--seed" || flag === "--live-usage") {
       flags.set(flag, true);
       continue;
     }
@@ -630,8 +670,14 @@ export interface LaunchRecord {
   sessionUuid: string;
   launchName: string;
   createdAt: string;
+  /** A reservation must survive --wait, but an abandoned one must not count forever. */
+  activeUntil?: string;
   outcome: "reserved" | "started" | "completed" | "failed";
 }
+
+const RESERVATION_START_GRACE_MS = 15 * 60_000;
+const STARTED_EXPIRY_MS = 7 * 24 * 60 * 60_000;
+const LEGACY_ACTIVE_EXPIRY_MS = 31 * 24 * 60 * 60_000;
 
 function readLaunches(file: string): LaunchRecord[] {
   if (!existsSync(file)) return [];
@@ -647,6 +693,7 @@ function readLaunches(file: string): LaunchRecord[] {
         typeof value["sessionUuid"] === "string" &&
         typeof value["launchName"] === "string" &&
         typeof value["createdAt"] === "string" &&
+        (value["activeUntil"] === undefined || typeof value["activeUntil"] === "string") &&
         (value["outcome"] === "reserved" || value["outcome"] === "started" || value["outcome"] === "completed" || value["outcome"] === "failed")
       ) {
         records.push({
@@ -656,6 +703,7 @@ function readLaunches(file: string): LaunchRecord[] {
           sessionUuid: value["sessionUuid"],
           launchName: value["launchName"],
           createdAt: value["createdAt"],
+          ...(typeof value["activeUntil"] === "string" ? { activeUntil: value["activeUntil"] } : {}),
           outcome: value["outcome"],
         });
       }
@@ -667,48 +715,61 @@ function readLaunches(file: string): LaunchRecord[] {
   return records;
 }
 
-function weeklyPercent(reading: unknown): number | null {
+function windowPercent(reading: unknown, targetWindow: "five_hour" | "seven_day"): number | null {
   if (Array.isArray(reading)) {
     for (const value of reading) {
-      const found = weeklyPercent(value);
+      const found = windowPercent(value, targetWindow);
       if (found !== null) return found;
     }
     return null;
   }
   const value = object(reading);
   if (!value) return null;
-  if (value["window"] === "seven_day" && value["kind"] === "value" && typeof value["utilizationPercent"] === "number") {
+  if (value["window"] === targetWindow && value["kind"] === "value" && typeof value["utilizationPercent"] === "number") {
     return value["utilizationPercent"];
   }
-  const direct = object(value["seven_day"]);
+  const direct = object(value[targetWindow]);
   if (direct && (direct["kind"] === "value" || direct["kind"] === "current")) {
     const number = direct["utilizationPercent"] ?? direct["percentage"];
     if (typeof number === "number") return number;
   }
   for (const child of Object.values(value)) {
-    const found = weeklyPercent(child);
+    const found = windowPercent(child, targetWindow);
     if (found !== null) return found;
   }
   return null;
+}
+
+function weeklyPercent(reading: unknown): number | null {
+  return windowPercent(reading, "seven_day");
 }
 
 function chooseAuto(
   accounts: AccountEntry[],
   usage: Map<string, number | null>,
   launches: LaunchRecord[],
+  nowMs: number,
 ): { account: AccountEntry; reason: string } {
   const last = new Map<string, number>();
   const latestBySession = new Map<string, LaunchRecord>();
   for (const launch of launches) {
     const at = Date.parse(launch.createdAt);
-    if (Number.isFinite(at)) {
+    if (launch.outcome === "reserved" && Number.isFinite(at)) {
       last.set(launch.accountName, Math.max(last.get(launch.accountName) ?? 0, at));
     }
     latestBySession.set(launch.sessionUuid, launch);
   }
   const active = new Map<string, number>();
   for (const record of latestBySession.values()) {
-    if (record.outcome === "reserved" || record.outcome === "started") {
+    const createdAt = Date.parse(record.createdAt);
+    const activeUntil = record.activeUntil === undefined
+      ? createdAt + LEGACY_ACTIVE_EXPIRY_MS
+      : Date.parse(record.activeUntil);
+    if (
+      (record.outcome === "reserved" || record.outcome === "started") &&
+      Number.isFinite(activeUntil) &&
+      activeUntil > nowMs
+    ) {
       active.set(record.accountName, (active.get(record.accountName) ?? 0) + 1);
     }
   }
@@ -721,13 +782,12 @@ function chooseAuto(
     if (aUsage === null || bUsage === null) {
       const recency = (last.get(a.name) ?? 0) - (last.get(b.name) ?? 0);
       if (recency !== 0) return recency;
-      // Equal recency and only one unknown: sample the unknown account so it
-      // can acquire a reading. This is exploration, not pretending it is 0%.
-      if (aUsage === null && bUsage !== null) return -1;
-      if (aUsage !== null && bUsage === null) return 1;
+      // At equal recency an unknown reading sorts after a known one. It still
+      // cannot starve: once the known account is reserved, active load and
+      // least-recently-reserved both put the unknown account first.
+      if (aUsage === null && bUsage !== null) return 1;
+      if (aUsage !== null && bUsage === null) return -1;
     }
-    if (aUsage !== null && bUsage === null) return -1;
-    if (aUsage === null && bUsage !== null) return 1;
     if (aUsage !== null && bUsage !== null && aUsage !== bUsage) return aUsage - bUsage;
     const recent = (last.get(a.name) ?? 0) - (last.get(b.name) ?? 0);
     return recent !== 0 ? recent : a.name.localeCompare(b.name);
@@ -740,10 +800,10 @@ function chooseAuto(
     ? "; active reservations were balanced before usage"
     : "";
   const reason = allUnknown
-    ? `all pool seven-day readings were unknown; chose the least recently launched account${reservation}`
+    ? `all pool seven-day readings were unknown; chose the least recently reserved account${reservation}`
     : percent === null
-      ? `chose a never-reserved account whose live seven-day reading is unknown so it can be sampled${reservation}`
-      : `chose the lowest live seven-day utilization (${percent}%)${tied ? "; the tie was broken by least recently launched" : ""}${reservation}`;
+      ? `chose the least recently reserved account whose live seven-day reading is unknown so it can be sampled${reservation}`
+      : `chose the lowest live seven-day utilization (${percent}%)${tied ? "; the tie was broken by least recently reserved" : ""}${reservation}`;
   return { account, reason };
 }
 
@@ -773,7 +833,13 @@ export type LaunchResolution =
   | { ok: true; account: AccountEntry | null; resolvedName: string; reason: string }
   | { ok: false; why: string };
 
-function reservation(account: AccountEntry | null, sessionUuid: string, launchName: string, at: Date): LaunchRecord {
+function reservation(
+  account: AccountEntry | null,
+  sessionUuid: string,
+  launchName: string,
+  at: Date,
+  waitSeconds: number,
+): LaunchRecord {
   return {
     schema: 1,
     accountName: account?.name ?? "ambient",
@@ -781,6 +847,7 @@ function reservation(account: AccountEntry | null, sessionUuid: string, launchNa
     sessionUuid,
     launchName,
     createdAt: at.toISOString(),
+    activeUntil: new Date(at.getTime() + waitSeconds * 1000 + RESERVATION_START_GRACE_MS).toISOString(),
     outcome: "reserved",
   };
 }
@@ -800,7 +867,12 @@ export function recordLaunchOutcome(
   const ledgerPath = path.join(accountDir, "reservations.ndjson");
   const prior = readLaunches(ledgerPath).filter((record) => record.sessionUuid === sessionUuid).at(-1);
   if (!prior) return false;
-  appendReservation(accountDir, { ...prior, createdAt: at.toISOString(), outcome });
+  appendReservation(accountDir, {
+    ...prior,
+    createdAt: at.toISOString(),
+    activeUntil: new Date(at.getTime() + (outcome === "started" ? STARTED_EXPIRY_MS : 0)).toISOString(),
+    outcome,
+  });
   return true;
 }
 
@@ -810,16 +882,30 @@ export async function resolveForLaunch(
   sessionUuid: string,
   overrides: Partial<ClaudeAccountsDeps> = {},
   launchName = sessionUuid,
+  waitSeconds = 0,
 ): Promise<LaunchResolution> {
   const deps = depsWith(overrides);
   const reading = await deps.readRegistry(deps.registryPath);
   if (reading.kind === "error") return { ok: false, why: reading.why };
+  const defaultStateDir = path.resolve(deps.homeDir, ".claude");
   if (requested !== "auto") {
     const resolved = resolveAccount(reading, requested);
     if (resolved.kind === "refused") return { ok: false, why: resolved.why };
+    if (resolved.account.family !== "claude") {
+      return { ok: false, why: `${resolved.account.name} belongs to ${resolved.account.family}, not claude` };
+    }
+    if (resolved.account.role === "orchestrator") {
+      return {
+        ok: false,
+        why: `${resolved.account.name} is the orchestrator account; the ambient Claude login cannot be routed by setting CLAUDE_CONFIG_DIR`,
+      };
+    }
+    if (path.resolve(resolved.account.stateDir) === defaultStateDir) {
+      return { ok: false, why: `${resolved.account.name} points at the default .claude directory, which cannot be routed explicitly` };
+    }
     const dir = path.dirname(deps.registryPath);
     return withLaunchLock(dir, deps.now, async () => {
-      appendReservation(dir, reservation(resolved.account, sessionUuid, launchName, deps.now()));
+      appendReservation(dir, reservation(resolved.account, sessionUuid, launchName, deps.now(), waitSeconds));
       return {
         ok: true,
         account: resolved.account,
@@ -829,28 +915,32 @@ export async function resolveForLaunch(
     });
   }
   const accounts = poolAccounts(reading);
+  const defaultPool = accounts.find((account) => sameDirectory(account.stateDir, defaultStateDir));
+  if (defaultPool) {
+    return { ok: false, why: `${defaultPool.name} points at the default .claude directory, which cannot be routed explicitly` };
+  }
   if (accounts.length === 0) {
-    const ambient = reading.kind === "value"
-      ? reading.accounts.find((account) => account.family === "claude" && account.role === "orchestrator") ?? null
-      : null;
     const dir = path.dirname(deps.registryPath);
     return withLaunchLock(dir, deps.now, async () => {
-      appendReservation(dir, reservation(ambient, sessionUuid, launchName, deps.now()));
+      appendReservation(dir, reservation(null, sessionUuid, launchName, deps.now(), waitSeconds));
       return {
         ok: true,
-        account: ambient,
-        resolvedName: ambient?.name ?? "ambient",
+        account: null,
+        resolvedName: "ambient",
         reason: reading.kind === "ambient"
           ? "no account registry is configured; using the ambient Claude account"
           : "no Claude pool accounts are configured; using the ambient Claude account",
       };
     });
   }
-  const dir = path.dirname(deps.registryPath);
-  return withLaunchLock(dir, deps.now, async () => {
-    const usage = new Map<string, number | null>();
-    let identityFailure: string | null = null;
-    await Promise.all(accounts.map(async (account) => {
+  // Live reads do not belong under the reservation lock. They can take up to
+  // their transport timeout, while the lock's only atomic unit is the final
+  // read-ledger / choose / append-reservation sequence.
+  const usage = new Map<string, number | null>();
+  const exhausted = new Set<string>();
+  let identityFailure: string | null = null;
+  await Promise.all(accounts.map(async (account) => {
+    try {
       const reading = await deps.usage(account.stateDir);
       const value = object(reading);
       const identity = object(value?.["identity"]);
@@ -862,17 +952,37 @@ export async function resolveForLaunch(
         identityFailure = `${account.name} live identity does not match its registry pin`;
         return;
       }
-      usage.set(account.name, weeklyPercent(reading));
-    }));
-    if (identityFailure) return { ok: false, why: identityFailure };
+      const fiveHour = windowPercent(reading, "five_hour");
+      const sevenDay = weeklyPercent(reading);
+      if ((fiveHour !== null && fiveHour >= 100) || (sevenDay !== null && sevenDay >= 100)) {
+        exhausted.add(account.name);
+        return;
+      }
+      usage.set(account.name, sevenDay);
+    } catch {
+      usage.set(account.name, null);
+    }
+  }));
+  if (identityFailure) return { ok: false, why: identityFailure };
+  const eligibleAccounts = accounts.filter((account) => !exhausted.has(account.name));
+  if (eligibleAccounts.length === 0) {
+    return { ok: false, why: "all configured Claude pool accounts have a known exhausted five-hour or seven-day window" };
+  }
+  const dir = path.dirname(deps.registryPath);
+  return withLaunchLock(dir, deps.now, async () => {
     const ledgerPath = path.join(dir, "reservations.ndjson");
-    const chosen = chooseAuto([...accounts], usage, readLaunches(ledgerPath));
-    appendReservation(dir, reservation(chosen.account, sessionUuid, launchName, deps.now()));
+    const now = deps.now();
+    const chosen = chooseAuto([...eligibleAccounts], usage, readLaunches(ledgerPath), now.getTime());
+    appendReservation(dir, reservation(chosen.account, sessionUuid, launchName, now, waitSeconds));
     return { ok: true, ...chosen, resolvedName: chosen.account.name };
   });
 }
 
-async function listOrCheck(command: "list" | "check", deps: ClaudeAccountsDeps): Promise<number> {
+async function listOrCheck(
+  command: "list" | "check",
+  deps: ClaudeAccountsDeps,
+  checkLiveUsage = false,
+): Promise<number> {
   const reading = await deps.readRegistry(deps.registryPath);
   const parsed = registryAccounts(reading);
   if (!parsed.ok) {
@@ -885,23 +995,48 @@ async function listOrCheck(command: "list" | "check", deps: ClaudeAccountsDeps):
   }
   let failed = false;
   for (const account of parsed.accounts) {
-    const identity = assertIdentity(account, deps);
-    if (!identity.ok) failed = true;
+    const localIdentity = assertIdentity(account, deps);
+    const profile = localIdentity.ok ? await deps.profile(account.stateDir) : null;
+    const profileFailure = profile === null ? null : profileIdentityFailure(account, profile);
+    const identityFailure = localIdentity.ok ? profileFailure : localIdentity.why;
+    if (identityFailure !== null) failed = true;
     if (command === "check") {
-      deps.out(identity.ok ? `${account.name}: found ${identity.found}; identity matches` : `${account.name}: FAILED ${identity.why}`);
+      let usageFailure: string | null = null;
+      if (identityFailure === null && checkLiveUsage) {
+        const usage = await deps.usage(account.stateDir);
+        const value = object(usage);
+        const identity = object(value?.["identity"]);
+        if (value?.["kind"] !== "value") {
+          usageFailure = typeof value?.["why"] === "string" ? value["why"] : "live usage is unknown";
+        } else if (
+          identity?.["providerAccountId"] !== account.providerAccountId ||
+          identity["providerTenantId"] !== account.providerTenantId
+        ) {
+          usageFailure = "live usage identity does not match the registry pin";
+        }
+        if (usageFailure !== null) failed = true;
+      }
+      deps.out(identityFailure !== null
+        ? `${account.name}: FAILED ${identityFailure}`
+        : usageFailure !== null
+          ? `${account.name}: live usage FAILED ${usageFailure}`
+          : `${account.name}: live profile identity matches${checkLiveUsage ? "; live usage endpoint answered" : ""}`);
       continue;
     }
-    const usage = await deps.usage(account.stateDir);
-    const weekly = weeklyPercent(usage);
+    const weekly = identityFailure === null ? weeklyPercent(await deps.usage(account.stateDir)) : null;
     deps.out(
       `${account.name} family=${account.family} role=${account.role} stateDir=${account.stateDir} expected=${account.displayEmail ?? "(none)"} ` +
-        `${identity.ok ? `found=${identity.found}` : `FAILED=${identity.why}`} seven-day=${weekly === null ? "unknown" : `${weekly}%`}`,
+        `${identityFailure === null ? "live-profile=matches" : `FAILED=${identityFailure}`} seven-day=${weekly === null ? "unknown" : `${weekly}%`}`,
     );
   }
   return failed ? 1 : 0;
 }
 
-async function verifyForLaunch(name: string, deps: ClaudeAccountsDeps): Promise<{ ok: true } | { ok: false; why: string }> {
+async function verifyForLaunch(
+  name: string,
+  deps: ClaudeAccountsDeps,
+  cwd?: string,
+): Promise<{ ok: true; warning?: string } | { ok: false; why: string }> {
   const reading = await deps.readRegistry(deps.registryPath);
   const resolved = resolveAccount(reading, name);
   if (resolved.kind === "refused") return { ok: false, why: resolved.why };
@@ -909,25 +1044,59 @@ async function verifyForLaunch(name: string, deps: ClaudeAccountsDeps): Promise<
   if (account.family !== "claude") return { ok: false, why: `${name} belongs to ${account.family}, not claude` };
   if (!existsSync(account.stateDir)) return { ok: false, why: `${account.stateDir} does not exist` };
   const defaultStateDir = path.join(deps.homeDir, ".claude");
-  if (path.resolve(account.stateDir) !== path.resolve(defaultStateDir)) {
-    const projects = inspectProjectsShare(
-      path.join(account.stateDir, "projects"),
-      path.join(defaultStateDir, "projects"),
-      account.stateDir,
-      { isConfigDirInUse: () => false },
-    );
-    if (!projects.ok || projects.projects.kind !== "already") {
-      return { ok: false, why: projects.ok ? "projects is not linked to the shared tree" : projects.why };
-    }
+  if (sameDirectory(account.stateDir, defaultStateDir)) {
+    return { ok: false, why: "the default .claude directory cannot be a routed registry account" };
+  }
+  const projects = inspectProjectsShare(
+    path.join(account.stateDir, "projects"),
+    path.join(defaultStateDir, "projects"),
+    account.stateDir,
+    { isConfigDirInUse: () => false },
+  );
+  if (!projects.ok || projects.projects.kind !== "already") {
+    return { ok: false, why: projects.ok ? "projects is not linked to the shared tree" : projects.why };
+  }
+  const settings = parseJsonObject(path.join(account.stateDir, "settings.json"), false);
+  if (!settings.ok) return { ok: false, why: settings.why };
+  const settingsEnv = object(settings.value.env);
+  if (settings.value.env !== undefined && settingsEnv === null) {
+    return { ok: false, why: `${account.stateDir}/settings.json env is not an object` };
+  }
+  const providerOverride = Object.keys(settingsEnv ?? {}).find((variable) =>
+    variable.startsWith("ANTHROPIC_") ||
+    variable === "CLAUDE_CODE_OAUTH_TOKEN" ||
+    variable === "CLAUDE_CODE_USE_BEDROCK" ||
+    variable === "CLAUDE_CODE_USE_VERTEX" ||
+    variable === "CLAUDE_CODE_USE_FOUNDRY" ||
+    variable === "CLAUDE_CONFIG_DIR"
+  );
+  if (providerOverride) {
+    return { ok: false, why: `${account.stateDir}/settings.json env contains ${providerOverride}, which can override account routing` };
+  }
+  const status = deps.authStatus(account.stateDir, cwd);
+  if (status.kind === "unknown") return { ok: false, why: `effective auth status is unknown: ${status.why}` };
+  if (!status.loggedIn) return { ok: false, why: "effective auth status reports loggedIn: false" };
+  if (status.authMethod !== "claude.ai" || status.apiProvider !== "firstParty") {
+    return {
+      ok: false,
+      why: `effective auth is ${status.authMethod ?? "unknown"} via ${status.apiProvider ?? "unknown"}, not claude.ai via firstParty`,
+    };
   }
   const profile = await deps.profile(account.stateDir);
-  if (profile.kind === "unknown") return { ok: false, why: profile.why };
-  if (profile.accountUuid !== account.providerAccountId || profile.orgId !== account.providerTenantId) {
-    return { ok: false, why: "provider account or tenant identity does not match the registry pin" };
+  if (profile.kind === "unknown") {
+    // Access tokens expire within hours. When the CLI still sees the registered
+    // first-party login, let Claude perform its own normal refresh on startup;
+    // we never read or use the refresh token. Every other profile fault refuses.
+    if (profile.status === 401) {
+      return {
+        ok: true,
+        warning: `expired access token for ${name}; allowing Claude's first-party login to refresh it on startup (this verifier did not use the refresh token)`,
+      };
+    }
+    return { ok: false, why: profile.why };
   }
-  if (account.displayEmail && profile.email !== account.displayEmail) {
-    return { ok: false, why: "provider display email does not match the registry" };
-  }
+  const profileFailure = profileIdentityFailure(account, profile);
+  if (profileFailure !== null) return { ok: false, why: profileFailure };
   return { ok: true };
 }
 
@@ -956,8 +1125,16 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number
     deps.err(`FATAL: unknown role ${role}`);
     return 2;
   }
+  if (role === "orchestrator") {
+    deps.err("FATAL: the ambient Claude orchestrator cannot be registered with --config-dir; register pool accounts only");
+    return 2;
+  }
   if (!path.isAbsolute(configDir) || configDir.endsWith(path.sep)) {
     deps.err("FATAL: --config-dir must be an absolute path without a trailing slash");
+    return 2;
+  }
+  if (sameDirectory(configDir, path.join(deps.homeDir, ".claude"))) {
+    deps.err("FATAL: the default .claude directory cannot be registered as a routed account");
     return 2;
   }
   if (parsed.flags.has("--seed") && role !== "pool") {
@@ -1000,14 +1177,6 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number
   }
   deps.out(`found: profile accountUuid=${profile.accountUuid} orgId=${profile.orgId}`);
 
-  if (seedPlan) {
-    // Apply the already-preflighted plan. Do not call seedClaudeConfig here:
-    // re-reading between assertion and write would create two sources of truth.
-    const seeded = applySeed(seedPlan);
-    for (const message of seeded.messages) deps.out(`seed: ${message}`);
-    if (!seeded.changed) deps.out("seed: nothing to change");
-  }
-
   const priorIndex = existing.accounts.findIndex((account) => account.name === name);
   const prior = priorIndex >= 0 ? existing.accounts[priorIndex] : undefined;
   if (
@@ -1037,6 +1206,15 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number
     deps.err(`FATAL: the proposed registry is invalid: ${proposed.why}; registry was not changed`);
     return 1;
   }
+
+  if (seedPlan) {
+    // Apply only after every identity and registry refusal has passed. Seeding
+    // mutates a real config directory, so a request that can never be
+    // registered must be a complete no-op there.
+    const seeded = applySeed(seedPlan);
+    for (const message of seeded.messages) deps.out(`seed: ${message}`);
+    if (!seeded.changed) deps.out("seed: nothing to change");
+  }
   const changed = !prior || JSON.stringify(prior) !== JSON.stringify(next);
   if (changed) {
     writeRegistry(deps.registryPath, accounts);
@@ -1055,29 +1233,37 @@ export async function main(argv: readonly string[], overrides: Partial<ClaudeAcc
     return 2;
   }
   if (parsed.command === "list" || parsed.command === "check") {
-    if (parsed.flags.size > 0) {
-      deps.err(`FATAL: ${parsed.command} takes no flags`);
+    const liveUsage = parsed.flags.has("--live-usage");
+    if (parsed.command === "list" ? parsed.flags.size > 0 : parsed.flags.size > (liveUsage ? 1 : 0)) {
+      deps.err(`FATAL: ${parsed.command}${parsed.command === "check" ? " takes only --live-usage" : " takes no flags"}`);
       return 2;
     }
-    return listOrCheck(parsed.command, deps);
+    return listOrCheck(parsed.command, deps, liveUsage);
   }
   if (parsed.command === "add") return add(parsed, deps);
   if (parsed.command === "verify") {
-    if (parsed.flags.size !== 1 || !parsed.flags.has("--account")) {
-      deps.err("FATAL: verify requires only --account");
+    const allowed = new Set(["--account", "--cwd"]);
+    if ([...parsed.flags.keys()].some((key) => !allowed.has(key)) || !parsed.flags.has("--account")) {
+      deps.err("FATAL: verify requires --account and optionally --cwd");
       return 2;
     }
     const name = flag(parsed, "--account");
     if (!name) return 2;
-    const result = await verifyForLaunch(name, deps);
+    const cwd = flag(parsed, "--cwd");
+    if (cwd !== undefined && (!path.isAbsolute(cwd) || path.resolve(cwd) !== cwd)) {
+      deps.err("FATAL: verify --cwd must be an absolute, already-normalised path");
+      return 2;
+    }
+    const result = await verifyForLaunch(name, deps, cwd);
     if (!result.ok) {
       deps.err(`FATAL: ${result.why}`);
       return 1;
     }
+    if (result.warning) deps.err(`WARNING: ${result.warning}`);
     return 0;
   }
   if (parsed.command === "resolve") {
-    const allowed = new Set(["--account", "--launch-name", "--session-uuid"]);
+    const allowed = new Set(["--account", "--launch-name", "--session-uuid", "--wait-seconds"]);
     for (const key of parsed.flags.keys()) {
       if (!allowed.has(key)) {
         deps.err(`FATAL: unknown resolve flag ${key}`);
@@ -1091,7 +1277,13 @@ export async function main(argv: readonly string[], overrides: Partial<ClaudeAcc
       return 2;
     }
     const sessionUuid = flag(parsed, "--session-uuid") ?? launchName;
-    const resolved = await resolveForLaunch(account, sessionUuid, deps, launchName);
+    const waitSecondsText = flag(parsed, "--wait-seconds") ?? "0";
+    const waitSeconds = Number(waitSecondsText);
+    if (!Number.isSafeInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 30 * 24 * 60 * 60) {
+      deps.err("FATAL: --wait-seconds must be a whole number from 0 through 2592000");
+      return 2;
+    }
+    const resolved = await resolveForLaunch(account, sessionUuid, deps, launchName, waitSeconds);
     if (!resolved.ok) {
       deps.err(`FATAL: ${resolved.why}`);
       return 1;
@@ -1121,7 +1313,10 @@ export async function main(argv: readonly string[], overrides: Partial<ClaudeAcc
       deps.err("FATAL: outcome requires --session-uuid and --value started|completed|failed");
       return 2;
     }
-    const recorded = recordLaunchOutcome(path.dirname(deps.registryPath), sessionUuid, outcome, deps.now());
+    const accountDir = path.dirname(deps.registryPath);
+    const recorded = await withLaunchLock(accountDir, deps.now, async () =>
+      recordLaunchOutcome(accountDir, sessionUuid, outcome, deps.now())
+    );
     if (!recorded) {
       deps.err(`FATAL: no reservation exists for session ${sessionUuid}`);
       return 1;

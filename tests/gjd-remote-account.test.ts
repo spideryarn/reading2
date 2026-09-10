@@ -33,6 +33,7 @@ describe("the on-box account resolution boundary", () => {
     expect(accountResolveCommand("auto", "agent-one")).toContain(
       "scripts/claude-accounts.ts resolve --account 'auto' --launch-name 'agent-one'",
     );
+    expect(accountResolveCommand("auto", "agent-one", "session-one", 7200)).toContain("--wait-seconds '7200'");
   });
 
   it("accepts one complete machine-readable result", () => {
@@ -52,19 +53,18 @@ describe("the on-box account resolution boundary", () => {
 
 describe("the account-specific Claude job preflight", () => {
   it("does not export the selected config dir", () => {
-    const lines = accountJobLines(resolved, { missingConfig: "FAIL_CONFIG", wrongIdentity: "FAIL_IDENTITY" });
+    const lines = accountJobLines(resolved, { missingConfig: "FAIL_CONFIG", wrongIdentity: "FAIL_IDENTITY" }, undefined, "/repo/worktree");
     expect(lines).not.toContain("export CLAUDE_CONFIG_DIR");
     expect(lines).toContain("/tmp/claude-pool-two");
     expect(lines).toContain("FAIL_CONFIG");
     expect(lines).toContain("FAIL_IDENTITY");
+    expect(lines).toContain("--cwd '/repo/worktree'");
   });
 
   it("scopes routing to the Claude process and clears every competing credential", () => {
     const command = accountClaudeCommand(resolved, "claude --session-id abc");
-    expect(command).toBe(
-      "env -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL " +
-        "-u CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='/tmp/claude-pool-two' claude --session-id abc",
-    );
+    expect(command).toContain("CLAUDE_CONFIG_DIR='/tmp/claude-pool-two'");
+    expect(command).toContain("claude --session-id abc");
   });
 
   it("does not leave the selected config dir in the shell after Claude exits", () => {
@@ -72,7 +72,7 @@ describe("the account-specific Claude job preflight", () => {
     try {
       const bin = path.join(root, "bin");
       mkdirSync(bin);
-      writeFileSync(path.join(bin, "claude"), "#!/bin/sh\nprintf '%s|%s|%s|%s|%s\\n' \"$CLAUDE_CONFIG_DIR\" \"\${ANTHROPIC_AUTH_TOKEN-unset}\" \"\${ANTHROPIC_API_KEY-unset}\" \"\${ANTHROPIC_BASE_URL-unset}\" \"\${CLAUDE_CODE_OAUTH_TOKEN-unset}\"\n");
+      writeFileSync(path.join(bin, "claude"), "#!/bin/sh\nprintf '%s|%s|%s|%s|%s|%s|%s|%s\\n' \"$CLAUDE_CONFIG_DIR\" \"\${ANTHROPIC_AUTH_TOKEN-unset}\" \"\${ANTHROPIC_API_KEY-unset}\" \"\${ANTHROPIC_BASE_URL-unset}\" \"\${ANTHROPIC_CUSTOM_HEADERS-unset}\" \"\${CLAUDE_CODE_OAUTH_TOKEN-unset}\" \"\${CLAUDE_CODE_USE_BEDROCK-unset}\" \"\${CLAUDE_FUTURE_PROVIDER-unset}\"\n");
       chmodSync(path.join(bin, "claude"), 0o755);
       const run = spawnSync("bash", ["-c", `${accountClaudeCommand(resolved, "claude")}\nprintf 'after=%s\\n' \"\${CLAUDE_CONFIG_DIR-unset}\"`], {
         encoding: "utf8",
@@ -82,11 +82,14 @@ describe("the account-specific Claude job preflight", () => {
           ANTHROPIC_AUTH_TOKEN: "secret-a",
           ANTHROPIC_API_KEY: "secret-b",
           ANTHROPIC_BASE_URL: "https://wrong.invalid",
+          ANTHROPIC_CUSTOM_HEADERS: "Authorization: Bearer wrong-account",
           CLAUDE_CODE_OAUTH_TOKEN: "secret-c",
+          CLAUDE_CODE_USE_BEDROCK: "1",
+          CLAUDE_FUTURE_PROVIDER: "some-new-precedence-rung",
         },
       });
       expect(run.status).toBe(0);
-      expect(run.stdout).toContain("/tmp/claude-pool-two|unset|unset|unset|unset");
+      expect(run.stdout).toContain("/tmp/claude-pool-two|unset|unset|unset|unset|unset|unset|unset");
       expect(run.stdout).toContain("after=unset");
       expect(run.stdout).not.toContain("secret-");
     } finally {

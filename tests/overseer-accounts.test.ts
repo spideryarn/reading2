@@ -71,6 +71,20 @@ describe("account registry parsing", () => {
     expect(parseAccountRegistry(registry([main, { ...pool, name: main.name }]))).toMatchObject({ kind: "error", why: expect.stringContaining("duplicate") });
   });
 
+  it("rejects an account name that cannot safely cross the launcher shell boundary", () => {
+    expect(parseAccountRegistry(registry([{ ...pool, name: "pool one" }]))).toMatchObject({
+      kind: "error",
+      why: expect.stringContaining("name"),
+    });
+  });
+
+  it.each(["auto", "ambient"])("rejects the reserved launcher name %s", (name) => {
+    expect(parseAccountRegistry(registry([{ ...pool, name }]))).toMatchObject({
+      kind: "error",
+      why: expect.stringContaining("reserved"),
+    });
+  });
+
   it("rejects a relative stateDir", () => {
     expect(parseAccountRegistry(registry([{ ...main, stateDir: ".claude" }]))).toMatchObject({ kind: "error", why: expect.stringContaining("absolute") });
   });
@@ -236,7 +250,8 @@ describe("live account identity and usage", () => {
     const seen: string[] = [];
     const result = await readUsage(dir, {
       fetch: async (url, init) => {
-        seen.push(String((init?.headers as Record<string, string>).Authorization));
+        const headers = init?.headers as Record<string, string> | undefined;
+        seen.push(String(headers?.Authorization));
         if (String(url).endsWith("/profile")) {
           await writeFile(path.join(dir, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "token-b" } }));
           return new Response(JSON.stringify({
@@ -266,6 +281,35 @@ describe("live account identity and usage", () => {
     expect(result).toMatchObject({ kind: "unknown", configDir: dir, takenAt: "2026-09-09T20:00:00.000Z" });
     expect(JSON.stringify(result)).not.toContain(token);
     expect(JSON.stringify(result)).not.toContain("0%");
+  });
+
+  it("retries profile once when another Claude process rotated the access token after a 401", async () => {
+    const dir = await configDir("expired-token");
+    const seen: string[] = [];
+    const result = await readProfile(dir, {
+      fetch: async (_url, init) => {
+        const headers = init?.headers as Record<string, string> | undefined;
+        const authorization = String(headers?.Authorization);
+        seen.push(authorization);
+        if (authorization === "Bearer expired-token") {
+          await writeFile(path.join(dir, ".credentials.json"), JSON.stringify({
+            claudeAiOauth: { accessToken: "rotated-token", refreshToken: "must-stay-unused" },
+          }));
+          return new Response("expired", { status: 401 });
+        }
+        return new Response(JSON.stringify({
+          account: { uuid: "account-a", email_address: "a@example.test" },
+          organization: { uuid: "org-a" },
+        }), { status: 200 });
+      },
+      now: () => NOW,
+    });
+
+    expect(seen).toEqual(["Bearer expired-token", "Bearer rotated-token"]);
+    expect(result).toMatchObject({ kind: "value", accountUuid: "account-a" });
+    expect(JSON.stringify(result)).not.toContain("expired-token");
+    expect(JSON.stringify(result)).not.toContain("rotated-token");
+    expect(JSON.stringify(result)).not.toContain("must-stay-unused");
   });
 
   it.each(["profile", "usage"] as const)("treats a malformed %s body as unknown without leaking the token", async (endpoint) => {
