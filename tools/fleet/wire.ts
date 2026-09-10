@@ -3251,7 +3251,8 @@ export type HoldBasis =
  * ================================================================== */
 
 export type DecisionWireClass = "assumption" | "decision" | "decline";
-export type DecisionWireActor = "greg" | "overseer";
+/** Who recorded a line. `daemon` is the report drain, and only ever copies a session's decision. */
+export type DecisionWireRecorder = "greg" | "overseer" | "daemon";
 export type DecisionWireAdviser = "sol" | "fable" | "nobody";
 
 export type DecisionWireExecution =
@@ -3259,9 +3260,43 @@ export type DecisionWireExecution =
   | { kind: "not-found" }
   | { kind: "unavailable"; why: string };
 
+/** Who DECIDED. A schema-1 row is `legacy-unrecorded`, never the Overseer. */
+export type DecisionWireAuthor =
+  | { kind: "overseer" }
+  | { kind: "greg" }
+  | { kind: "session"; name: string; execution: DecisionWireExecution }
+  | { kind: "legacy-unrecorded" };
+
+/** What a schema-1 row carries for every schema-2 field. */
+export type DecisionWireNotRecorded = "not-recorded";
+export type DecisionWireRecorded<T> = { kind: "not-recorded" } | { kind: "recorded"; value: T };
+export type DecisionWireConsequence = "high" | "medium" | "low";
+export type DecisionWireReversibility = "easy" | "costly" | "one-way";
+export type DecisionWireDomain = "product" | "technical";
+/** The author's claim about Greg, shown as a claim — never as review. */
+export type DecisionWireGregAsked = "no" | "asked-answered" | "asked-awaiting";
+export type DecisionWireConfidence = "high" | "medium" | "low";
+
+/* Restated from `artefact-ref.ts`, because this file may import nothing. The
+   two must stay structurally equal: `routes-decisions.ts` assigns the owner's
+   type to this one and the panel hands this one to `artefactHref`, so a drift
+   in either direction is a compile error rather than a silent mismatch. */
+export type DecisionWireArtefactRef =
+  | { kind: "commit"; sha: string }
+  | { kind: "path"; path: string }
+  | { kind: "decision"; id: string }
+  | { kind: "queue-item"; id: string };
+export type DecisionWireArtefactCheck =
+  | { state: "on-dev" }
+  | { state: "found-locally" }
+  | { state: "found" }
+  | { state: "not-found" }
+  | { state: "unchecked"; why: string };
+export type DecisionWireEvidence = { ref: DecisionWireArtefactRef; check: DecisionWireArtefactCheck };
+
 export type DecisionWireRecord = {
   id: string;
-  recordedBy: DecisionWireActor;
+  recordedBy: DecisionWireRecorder;
   class: DecisionWireClass;
   question: string;
   options: { name: string; tradeoffs: string }[];
@@ -3284,9 +3319,17 @@ export type DecisionWireRecord = {
   touches: {
     kind: "decided" | "reviewed" | "reversed";
     at: string;
-    by: DecisionWireActor;
+    by: DecisionWireRecorder;
     what: string;
   }[];
+  author: DecisionWireAuthor;
+  consequence: DecisionWireConsequence | DecisionWireNotRecorded;
+  reversibility: DecisionWireReversibility | DecisionWireNotRecorded;
+  domain: DecisionWireDomain | DecisionWireNotRecorded;
+  recommendation: DecisionWireRecorded<string | null>;
+  evidence: DecisionWireRecorded<DecisionWireEvidence[]>;
+  gregAsked: DecisionWireGregAsked | DecisionWireNotRecorded;
+  confidence: DecisionWireConfidence | null | DecisionWireNotRecorded;
 };
 
 export type DecisionWireSessionState =
@@ -3336,12 +3379,16 @@ export type DecisionWireAggregates =
  * `GET /api/decisions`. Every arm carries the instant at which its claim was
  * composed. The route refuses loudly before either an input file or mandatory
  * context can exceed the synchronous work and response bounds respectively.
+ *
+ * **Schema 2 on every arm** (plan 260910e, WR-P2): schema 1's browser ignores
+ * fields it does not know, so it would have drawn a session's decision as
+ * "recorded by overseer". At 2 it says which version it can read instead.
  */
 export type DecisionsFeed =
-  | { schema: 1; kind: "never-written"; composedAt: string; why: string }
-  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 2; kind: "never-written"; composedAt: string; why: string }
+  | { schema: 2; kind: "unreadable"; composedAt: string; why: string }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-file";
       composedAt: string;
       why: string;
@@ -3349,7 +3396,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-unreviewed";
       composedAt: string;
       why: string;
@@ -3357,7 +3404,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "decisions";
       version: string;
       path: string;

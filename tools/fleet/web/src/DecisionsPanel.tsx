@@ -2,25 +2,44 @@
  * Decisions made in Greg's name, shown for review rather than approval.
  *
  * The headline is the number still unseen. The list keeps the server's order:
- * pending first, then newest `decidedAt` within each group. This component does
- * not sort, because a second ordering rule in the browser would let the CLI and
- * dashboard disagree about which decision matters next.
+ * pending first — ranked by consequence, then reversibility, then newest —
+ * and the rest newest first. This component does not sort, because a second
+ * ordering rule in the browser would let the CLI and dashboard disagree about
+ * which decision matters next. The search box only filters; it never reorders.
  *
  * Each row is a self-contained decision, so it is a card rather than a table.
- * The question, class, choice and review state stay visible; the alternatives,
- * trade-offs and provenance open on demand. The latter are never omitted — the
- * record exists so Greg can inspect the reasoning after work was unblocked.
+ * The question, class, choice, who decided and review state stay visible; the
+ * alternatives, trade-offs and provenance open on demand. The latter are never
+ * omitted — the record exists so Greg can inspect the reasoning after work was
+ * unblocked.
+ *
+ * **Who decided is not who recorded, and neither is a review.** A session's
+ * decision reaches this record through the report drain (`by: daemon`); a
+ * schema-1 row's author was never recorded and is not called the Overseer's.
+ * `gregAsked` is the AUTHOR'S claim about Greg, so it is written as that
+ * sentence, in prose, away from the review pill — never styled like review.
+ * Evidence links come only from `artefactHref`, over references the client's
+ * parser already validated. Plan 260910e.
  */
 import { useEffect, useState, type ReactNode } from "react";
 
-import { httpDecisionsApi, type DecisionsApi, type DecisionsView } from "./decisions-client";
+import { artefactHref, describeArtefactCheck, spellArtefactRef } from "../../artefact-ref";
+import {
+  decisionMatchesSearch,
+  httpDecisionsApi,
+  type DecisionsApi,
+  type DecisionsView,
+} from "./decisions-client";
 import { Card, Mono, Pill, cx, toneClasses } from "./ui";
 import { formatDuration, type Tone } from "./view";
 import type {
   DecisionRow,
   DecisionWireAdviser,
   DecisionWireClass,
+  DecisionWireGregAsked,
+  DecisionWireNotRecorded,
   DecisionWireProblem,
+  DecisionWireRecord,
   DecisionWireSessionState,
 } from "../../wire";
 
@@ -84,12 +103,120 @@ function sessionState(state: DecisionWireSessionState): { label: string; detail:
   }
 }
 
+function authorLine(record: DecisionWireRecord): string {
+  switch (record.author.kind) {
+    case "session":
+      return `decided by ${record.author.name} (session)`;
+    case "overseer":
+      return "decided by the Overseer";
+    case "greg":
+      return "decided by Greg";
+    case "legacy-unrecorded":
+      return "author not recorded";
+    default: {
+      const never: never = record.author;
+      return never;
+    }
+  }
+}
+
+function recorderLabel(record: DecisionWireRecord): string {
+  return record.recordedBy === "daemon" ? "the report drain" : record.recordedBy;
+}
+
+function consequenceText(value: DecisionWireRecord["consequence"]): string {
+  return value === "not-recorded" ? "consequence not recorded" : `${value} consequence`;
+}
+
+function reversibilityText(value: DecisionWireRecord["reversibility"]): string {
+  switch (value) {
+    case "not-recorded":
+      return "reversibility not recorded";
+    case "one-way":
+      return "one-way";
+    case "costly":
+      return "costly to reverse";
+    case "easy":
+      return "easy to reverse";
+    default: {
+      const never: never = value;
+      return never;
+    }
+  }
+}
+
+/** The author's words about Greg, as the author's — never Greg's own review. */
+function gregAskedClaim(value: DecisionWireGregAsked | DecisionWireNotRecorded): string {
+  switch (value) {
+    case "no":
+      return "the author says Greg was not asked";
+    case "asked-answered":
+      return "the author says Greg answered";
+    case "asked-awaiting":
+      return "the author says Greg has been asked and has not answered";
+    case "not-recorded":
+      return "whether Greg was asked was not recorded";
+    default: {
+      const never: never = value;
+      return never;
+    }
+  }
+}
+
+function confidenceText(value: DecisionWireRecord["confidence"]): string {
+  if (value === "not-recorded") return "confidence not recorded";
+  return value === null ? "no confidence given" : `author's confidence: ${value}`;
+}
+
+function recommendationText(value: DecisionWireRecord["recommendation"]): string {
+  if (value.kind === "not-recorded") return "not recorded";
+  return value.value ?? "none given";
+}
+
+function Evidence({ record }: { record: DecisionWireRecord }): ReactNode {
+  if (record.evidence.kind === "not-recorded") {
+    return <p className="tw:mt-1 tw:text-ink-soft">evidence not recorded (this decision predates the field)</p>;
+  }
+  if (record.evidence.value.length === 0) {
+    return <p className="tw:mt-1 tw:text-ink-soft">no evidence given</p>;
+  }
+  return (
+    <ul data-testid="decision-evidence" className="tw:mt-1 tw:space-y-1">
+      {record.evidence.value.map((item, index) => {
+        // The one place a link is built, from a reference the parser validated.
+        const href = artefactHref(item);
+        const label = spellArtefactRef(item.ref);
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a fixed server list that never reorders, and a reference may repeat.
+          <li key={`${label}-${index}`} className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
+            {href === null ? (
+              <Mono>{label}</Mono>
+            ) : (
+              <a
+                href={href}
+                rel="noreferrer"
+                target={href.startsWith("https://") ? "_blank" : undefined}
+                className="tw:font-mono tw:text-[12px] tw:break-all tw:text-ink tw:underline"
+              >
+                {label}
+              </a>
+            )}
+            <span className="tw:text-ink-soft">{describeArtefactCheck(item.check)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSinceReadMs: number }): ReactNode {
   const [open, setOpen] = useState(false);
   const status = reviewState(row);
   const record = row.record;
 
   return (
+    // The id is what `#decision-<id>` — `artefactHref` for a found decision — lands on.
+    <div id={`decision-${record.id}`} className="tw:scroll-mt-4">
     <Card className={cx("tw:mb-2 tw:border-l-4", toneClasses(status.tone).edge)}>
       <button
         type="button"
@@ -108,6 +235,11 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
         <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
           <Pill tone={status.tone}>{status.label}</Pill>
           <Pill tone={CLASS_TONE[record.class]}>{record.class}</Pill>
+          {/* Consequence and reversibility are what the pending order ranks by,
+              so they are on the closed card: the order explains itself. */}
+          <span className="tw:text-[11px] tw:text-ink-soft">
+            {consequenceText(record.consequence)} · {reversibilityText(record.reversibility)}
+          </span>
           <span className="tw:text-[11px] tw:text-ink-faint">
             {open ? "hide details" : "show details"} · {formatDuration(row.ageMs + elapsedSinceReadMs)} ago
           </span>
@@ -118,6 +250,10 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
         <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:break-words tw:text-ink-soft">
           Chose {record.chose.option}
           {record.chose.note === null ? "" : ` — ${record.chose.note}`}
+        </span>
+        <span className="tw:mt-0.5 tw:block tw:text-[11px] tw:break-words tw:text-ink-faint">
+          {authorLine(record)}
+          {record.recordedBy === "daemon" ? " · recorded by the report drain" : ""}
         </span>
       </button>
 
@@ -136,11 +272,24 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
               </li>
             ))}
           </ul>
+          <p data-testid="decision-confidence" className="tw:mt-1 tw:text-[11px] tw:text-ink-faint">
+            {confidenceText(record.confidence)}
+          </p>
 
           <dl className="tw:mt-3 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1">
             <div className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
               <dt className="tw:text-ink-faint">why</dt>
               <dd className="tw:min-w-0 tw:text-ink-soft">{record.why}</dd>
+            </div>
+            <div className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
+              <dt className="tw:text-ink-faint">recommends</dt>
+              <dd className="tw:min-w-0 tw:break-words tw:text-ink-soft">{recommendationText(record.recommendation)}</dd>
+            </div>
+            <div className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
+              <dt className="tw:text-ink-faint">domain</dt>
+              <dd className="tw:min-w-0 tw:text-ink-soft">
+                {record.domain === "not-recorded" ? "not recorded" : record.domain}
+              </dd>
             </div>
             <div className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
               <dt className="tw:text-ink-faint">advised by</dt>
@@ -151,7 +300,8 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
             <div className="tw:col-span-2 tw:grid tw:grid-cols-subgrid">
               <dt className="tw:text-ink-faint">decided</dt>
               <dd className="tw:min-w-0 tw:text-ink-soft">
-                <time dateTime={record.decidedAt}>{record.decidedAt}</time> · recorded by {record.recordedBy}
+                <time dateTime={record.decidedAt}>{record.decidedAt}</time> · {authorLine(record)} · recorded by{" "}
+                {recorderLabel(record)}
               </dd>
             </div>
             {record.bearsOn.plan === null ? null : (
@@ -176,6 +326,19 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
             )}
           </dl>
 
+          {/* **A CLAIM, IN PROSE, AWAY FROM THE REVIEW STATE.** Only Greg's own
+              `reviewed` event reviews; this is what the author SAYS about him,
+              so it is never a pill and never beside the review pill. */}
+          <p
+            data-testid="greg-asked-claim"
+            className="tw:mt-3 tw:border-l-2 tw:border-rule tw:pl-2 tw:text-[12px] tw:italic tw:text-ink-soft"
+          >
+            {gregAskedClaim(record.gregAsked)}
+          </p>
+
+          <h3 className="tw:mt-3 tw:font-semibold tw:text-ink">Evidence</h3>
+          <Evidence record={record} />
+
           <h3 className="tw:mt-3 tw:font-semibold tw:text-ink">Sessions</h3>
           {row.sessions.length === 0 ? (
             <p className="tw:mt-1 tw:text-ink-soft">No sessions were recorded against this decision.</p>
@@ -196,6 +359,7 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
         </div>
       ) : null}
     </Card>
+    </div>
   );
 }
 
@@ -239,6 +403,7 @@ export function DecisionsPanel({
 }): ReactNode {
   const [view, setView] = useState<PanelView>({ kind: "loading" });
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
   useEffect(() => {
@@ -326,6 +491,8 @@ export function DecisionsPanel({
      Adding only time elapsed in this browser keeps that clock boundary intact
      while preventing an overnight-open tab from freezing every “ago” label. */
   const elapsedSinceReadMs = receivedAt === null ? 0 : Math.max(0, nowMs - receivedAt);
+  // A filter over the server's order, never a sort: the rows keep their places.
+  const shown = view.rows.filter((row) => decisionMatchesSearch(row.record, query));
 
   return (
     <div>
@@ -360,6 +527,17 @@ export function DecisionsPanel({
         ) : null}
       </Card>
 
+      {view.rows.length > 0 ? (
+        <input
+          type="search"
+          aria-label="Search these decisions"
+          placeholder="Search questions, options, reasons, recommendations, sessions"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="tw:mb-2 tw:w-full tw:rounded-lg tw:border tw:border-rule tw:bg-panel tw:px-3 tw:py-1.5 tw:text-[13px] tw:text-ink"
+        />
+      ) : null}
+
       {view.rows.length === 0 && view.aggregates.kind === "counts" ? (
         <Card className="tw:p-3">
           <p className="tw:text-[13px] tw:text-ink">Nothing is waiting for review.</p>
@@ -374,10 +552,16 @@ export function DecisionsPanel({
             The record has unresolved problems, so this does not mean that everything has been reviewed.
           </p>
         </Card>
+      ) : shown.length === 0 ? (
+        <Card className="tw:p-3">
+          <p className="tw:text-[13px] tw:text-ink">No decision shown here matches “{query.trim()}”.</p>
+          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+            The search reads only the rows this page received. Clear it to see them all, or use{" "}
+            <Mono>overseer-decisions list --search</Mono> for the whole record.
+          </p>
+        </Card>
       ) : (
-        view.rows.map((row) => (
-          <DecisionCard key={row.record.id} row={row} elapsedSinceReadMs={elapsedSinceReadMs} />
-        ))
+        shown.map((row) => <DecisionCard key={row.record.id} row={row} elapsedSinceReadMs={elapsedSinceReadMs} />)
       )}
 
       {view.historyWithheld > 0 ? (

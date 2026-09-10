@@ -274,13 +274,36 @@ each pass to index event ids — fine at today's size.
 
 ### Stage 2 — decisions schema 2
 
-- [ ] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
-- [ ] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.
-- [ ] `decisions-view.ts`: the ranking above.
-- [ ] `/api/decisions` payload schema 2; `wire.ts` decision types, `routes-decisions.ts`,
+**Status: built, not yet Sol-reviewed.** Implemented by an Opus subagent from
+[the Stage 2 brief](260910e-work-reports-stage2-task.md). What it decided that the plan did not say,
+all accepted:
+
+- `recommendation` and `evidence` are `{kind:"not-recorded"} | {kind:"recorded", value}` — a
+  recommendation could literally read "not-recorded", and an empty evidence list is a recorded fact.
+  The enums are `X | "not-recorded"`; confidence is `Confidence | null | "not-recorded"`.
+- Every new event is schema 2, reviews and reversals included; a review cannot carry `by: "daemon"`
+  at the type level. `seed` still writes schema 1 on purpose — stamping schema 2 on a hand-copied V1
+  decision would invent its author and consequence.
+- Schema-2 bounds on the old text fields too (question 1000, why 4000, option 200/1000, notes 1000–2000,
+  ≤ 20 options and sessions); schema-1 lines keep the rules they were written under.
+- **`appendEvents` now refuses any event its own parser would refuse** — before, a note with a newline
+  was written and read back as an unreadable line. This also protects Stage 3's drain.
+- The CLI's `--evidence` checks decision ids against the record; commits, paths and queue items are
+  stored `unchecked` because the CLI holds no git checker (Stage 1's could be wired in later).
+- Search exists twice — the CLI's in `decisions-view.ts`, the browser's in `decisions-client.ts` — because
+  neither can import the other; one test runs both over the same record.
+- Each card sits in a wrapper with `id="decision-<id>"` (`Card` takes no id, and `ui.tsx` is not ours).
+
+Not seen in a real browser; jsdom only. The frozen old-event-parser test was never seen red (its first
+version passed for the wrong reason — an id outside the alphabet — and was corrected after the code).
+
+- [x] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
+- [x] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.
+- [x] `decisions-view.ts`: the ranking above.
+- [x] `/api/decisions` payload schema 2; `wire.ts` decision types, `routes-decisions.ts`,
   `decisions-client.ts`, `DecisionsPanel.tsx` (author, the new fields, evidence links via
   `artefact-ref.ts`, Greg-asked as the author's claim), a client-side search box.
-- [ ] Tests: v1 folds; v2 round-trips; each required field refused when missing; no author changes
+- [x] Tests: v1 folds; v2 round-trips; each required field refused when missing; no author changes
   review; frozen old event parser and frozen old client parser both refuse the new shapes; ranking with
   `not-recorded`; CLI search and filters; panel links built only from validated fields.
 

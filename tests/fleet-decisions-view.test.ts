@@ -53,6 +53,14 @@ function record(
     reversedAt: null,
     reversedWhy: null,
     touches: [],
+    author: { kind: "legacy-unrecorded" },
+    consequence: "not-recorded",
+    reversibility: "not-recorded",
+    domain: "not-recorded",
+    recommendation: { kind: "not-recorded" },
+    evidence: { kind: "not-recorded" },
+    gregAsked: "not-recorded",
+    confidence: "not-recorded",
     ...over,
   };
 }
@@ -372,6 +380,56 @@ describe("records and aggregates", () => {
       "dec-reviewed-old",
     ]);
     expect(projected.records.find((item) => item.record.id === "dec-reversed-new")?.pendingReview).toBe(false);
+  });
+
+  test("ranks pending by consequence, then reversibility, with not-recorded as its own bucket", () => {
+    /* WR-P8: unknown is shown as unknown, never promoted to `high`. It sorts
+       after a known high and before a known medium, so a V1 row cannot outrank
+       a decision somebody said was high-consequence. */
+    const known = (id: string, decidedAt: string, consequence: "high" | "medium" | "low", reversibility: "easy" | "costly" | "one-way") =>
+      record(id, decidedAt, { author: { kind: "overseer" }, consequence, reversibility });
+    const projected = projectDecisions(
+      view([
+        record("dec-legacy-newest", "2026-09-09T11:50:00.000Z"),
+        known("dec-medium-oneway", "2026-09-09T11:40:00.000Z", "medium", "one-way"),
+        known("dec-high-easy-old", "2026-09-09T08:00:00.000Z", "high", "easy"),
+        known("dec-high-oneway-old", "2026-09-09T07:00:00.000Z", "high", "one-way"),
+        known("dec-low-oneway", "2026-09-09T11:55:00.000Z", "low", "one-way"),
+        record("dec-legacy-costly", "2026-09-09T11:59:00.000Z", { consequence: "medium", reversibility: "not-recorded" }),
+        known("dec-medium-costly", "2026-09-09T11:58:00.000Z", "medium", "costly"),
+        known("dec-reviewed-high", "2026-09-09T11:59:30.000Z", "high", "one-way"),
+      ].map((item) =>
+        item.id === "dec-reviewed-high" ? { ...item, reviewed: true, reviewedAt: "2026-09-09T11:59:40.000Z" } : item,
+      )),
+      checkpoint(),
+      NOW,
+    );
+    expect(projected.records.map((item) => item.record.id)).toEqual([
+      "dec-high-oneway-old",
+      "dec-high-easy-old",
+      "dec-legacy-newest",
+      "dec-medium-oneway",
+      "dec-legacy-costly",
+      "dec-medium-costly",
+      "dec-low-oneway",
+      // The rest keep their existing order: not pending, so consequence does not move them.
+      "dec-reviewed-high",
+    ]);
+  });
+
+  test("confidence never affects the order", () => {
+    const ids = (first: "high" | "low" | null, second: "high" | "low" | null) =>
+      projectDecisions(
+        view([
+          record("dec-older-pending", "2026-09-09T09:00:00.000Z", { consequence: "medium", reversibility: "easy", confidence: first }),
+          record("dec-newer-pending", "2026-09-09T10:00:00.000Z", { consequence: "medium", reversibility: "easy", confidence: second }),
+        ]),
+        checkpoint(),
+        NOW,
+      ).records.map((item) => item.record.id);
+    expect(ids("high", "low")).toEqual(["dec-newer-pending", "dec-older-pending"]);
+    expect(ids("low", "high")).toEqual(["dec-newer-pending", "dec-older-pending"]);
+    expect(ids(null, "high")).toEqual(["dec-newer-pending", "dec-older-pending"]);
   });
 
   test("uses decidedAt for age and a trailing, bounded seven-day window for each event kind", () => {
