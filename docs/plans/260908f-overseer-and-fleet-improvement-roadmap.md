@@ -1299,6 +1299,24 @@ execution as the current one. Browser-check 390px and desktop, keyboard-only and
 stream moves to polling; closing the view leaves no active owned requests/listeners. See technical
 sources below for the stream semantics the current comments get wrong.
 
+**Status (2026-09-10, Overseer): landed on dev at def984a3, session `bounded-transport`, plan
+[260910c](260910c-bounded-transport-stalled-consumers-must-not-stall-supervision.md).** Most of
+checkboxes 1–3 were already met by the E-stream work of 2026-09-08; the real work was three narrow
+defects and the evidence in the form asked for. `live.ts`: a subscriber whose socket drains gets the
+newest snapshot it missed (one retained frame, pings dropped, listeners detached on teardown).
+`source.ts`: `readStream`'s `finally` no longer awaits `reader.cancel()`, which ran on every exit
+and could park the generator after `stream-closed` with the poll fallback unreachable; bare-CR line
+endings accepted. `transport.ts`: `stop()` aborts the in-flight fetch and a mid-flight refresh
+yields exactly one fresh attempt. Two new test files: the polling transport's first sixteen, and
+seven streams cut at every position against a whole-stream oracle. Corrections the branch had to
+make to itself: a false `res.write` return means the frame IS buffered (the loss is only snapshots
+published while blocked, a narrow race, and no browser reads `/api/live` today); a "no defect"
+probe that could not fail; a held-back trailing CR that lost the last frame of a CR-only stream.
+Both Sol rounds ran where the sandbox could not bind loopback, so the seventeen HTTP-backed
+`overseer-source` tests were run on the box, not by the reviewer. A third fresh-worktree red exists:
+`fleet-decisions-route` until `npm run build:fleet`. Checkbox 4's "both polling paths" was read as
+the transport's tick and its refresh; `useActions` is Session continuity's.
+
 ### Stage: Source ordering — distinguish a new observation from a new timestamp
 
 - [ ] Add producer instance id and monotonic sequence to fleet state, shared by poll and stream.
