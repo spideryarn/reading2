@@ -6,7 +6,8 @@ import type { Node } from "@babel/types";
 import { describe, expect, it } from "vitest";
 
 import { runUsageCommand, usageJson, usageLines } from "../scripts/overseer.js";
-import type { CodexUsageReading, UsageReport } from "../tools/fleet/wire.js";
+import type { CodexUsageReading, StoredAccountUsage, UsageReport } from "../tools/fleet/wire.js";
+import { collectAccountUsage } from "../tools/overseer/account-usage.js";
 import type {
   AccountEntry,
   AccountUsageReading,
@@ -87,11 +88,70 @@ function registeredAccount(
 const MINDSTONE = registeredAccount("mindstone", "pool", "greg@mindstone.com", "894bf540-aaaa-bbbb-cccc-000000000001");
 const ORCHESTRATOR = registeredAccount("greg", "orchestrator", "greg@example.test", "12345678-aaaa-bbbb-cccc-000000000002");
 const REGISTRY: RegistryReading = { kind: "value", schema: 1, accounts: [MINDSTONE, ORCHESTRATOR] };
+/**
+ * The CLI's `accounts` seam, driven through the REAL collector.
+ *
+ * `runUsageCommand` used to take a registry reader and a per-directory usage
+ * reader and do the identity pin itself, which was a second implementation of a
+ * rule the daemon also holds. It now takes one collector, shared with the
+ * daemon — so these tests build that collector out of the same injected leaves
+ * and exercise the production pin rather than a copy of it.
+ *
+ * The ambient directories are pointed at paths no fixture uses, so an ambient
+ * section is one more predictable row rather than a surprise: the tests that
+ * care assert on named accounts.
+ */
+function accountsFrom(
+  registry: () => Promise<RegistryReading>,
+  claudeUsage: (configDir: string) => Promise<AccountUsageReading>,
+): () => Promise<StoredAccountUsage> {
+  return () =>
+    collectAccountUsage({
+      registry,
+      /* THE AMBIENT DIRECTORY IS ANSWERED HERE, NOT BY THE TEST'S READER.
+         Every reader below is a catch-all — `configDir === MINDSTONE.stateDir ?
+         … : liveUsage(ORCHESTRATOR)` — so without this the ambient login would
+         answer with a REGISTERED account's identity, and the collector would
+         quite correctly collapse the two as one subscription. Which is the
+         dedup working, and a confusing thing to have every fixture do. */
+      claudeUsage: async (configDir) =>
+        configDir === AMBIENT_CLAUDE_DIR
+          ? {
+              kind: "unknown",
+              configDir,
+              takenAt: "2026-09-10T06:00:00.000Z",
+              why: "there is no ambient login in these tests",
+            }
+          : claudeUsage(configDir),
+      codexUsage: async () => {
+        throw new Error("these tests register no Codex accounts");
+      },
+      ambientClaudeDir: () => AMBIENT_CLAUDE_DIR,
+      ambientCodexHome: () => "/nowhere/.codex",
+      now: () => new Date("2026-09-10T06:00:00.000Z"),
+    });
+}
+
+/** The one section every fixture below gets for free, and which none of them is about. */
+const AMBIENT_CLAUDE_DIR = "/nowhere/.claude";
+const AMBIENT_SECTION = {
+  name: "ambient",
+  family: "claude",
+  role: "orchestrator",
+  origin: "ambient",
+  displayEmail: null,
+  providerAccountId: null,
+  takenAt: "2026-09-10T06:00:00.000Z",
+  reading: { kind: "unknown", why: "there is no ambient login in these tests" },
+};
+
 const NO_REGISTERED_ACCOUNTS = {
-  registry: async (): Promise<RegistryReading> => ({ kind: "ambient", accounts: [] }),
-  accountUsage: async (): Promise<AccountUsageReading> => {
-    throw new Error("account usage must not run without a registry");
-  },
+  accounts: accountsFrom(
+    async (): Promise<RegistryReading> => ({ kind: "ambient", accounts: [] }),
+    async (): Promise<AccountUsageReading> => {
+      throw new Error("no registered account should be read here");
+    },
+  ),
 };
 
 function liveUsage(
@@ -209,7 +269,14 @@ describe("overseer usage", () => {
   });
 
   it("adds Codex to --json rather than leaving the old Claude-only report", async () => {
-    expect(usageJson(CLAUDE, CODEX)).toEqual({ ...CLAUDE, codex: CODEX, accounts: [] });
+    /* No per-account pass was run for this call, and the JSON says so with a
+       reason rather than with an empty list — an empty list would read as "this
+       box has no account-subscriptions", which is a claim. */
+    expect(usageJson(CLAUDE, CODEX)).toEqual({
+      ...CLAUDE,
+      codex: CODEX,
+      accounts: { kind: "none", why: expect.stringContaining("no per-account pass"), at: expect.any(String) },
+    });
     const output: string[] = [];
     await runUsageCommand(
       { command: "usage", json: true },
@@ -220,7 +287,11 @@ describe("overseer usage", () => {
         out: (line) => output.push(line),
       },
     );
-    expect(JSON.parse(output.join("\n"))).toEqual({ ...CLAUDE, codex: CODEX, accounts: [] });
+    expect(JSON.parse(output.join("\n"))).toEqual({
+      ...CLAUDE,
+      codex: CODEX,
+      accounts: { kind: "reading", collectedAt: expect.any(String), problems: [], accounts: [AMBIENT_SECTION] },
+    });
   });
 
   it("prints every registered Claude account with identity, five-hour then seven-day usage, and reading time", async () => {
@@ -230,8 +301,7 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => REGISTRY,
-        accountUsage: async (configDir) => liveUsage(configDir === MINDSTONE.stateDir ? MINDSTONE : ORCHESTRATOR, configDir === MINDSTONE.stateDir ? 2 : 4, configDir === MINDSTONE.stateDir ? 3 : 5),
+        accounts: accountsFrom(async () => REGISTRY, async (configDir) => liveUsage(configDir === MINDSTONE.stateDir ? MINDSTONE : ORCHESTRATOR, configDir === MINDSTONE.stateDir ? 2 : 4, configDir === MINDSTONE.stateDir ? 3 : 5)),
         out: (line) => output.push(line),
       },
     );
@@ -252,11 +322,10 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => ({ kind: "ambient", accounts: [] }),
-        accountUsage: async () => {
+        accounts: accountsFrom(async () => ({ kind: "ambient", accounts: [] }), async () => {
           accountReads += 1;
           throw new Error("must not read an account without a registry");
-        },
+        }),
         out: (line) => output.push(line),
       },
     );
@@ -282,32 +351,49 @@ describe("overseer usage", () => {
     expect(accountReads).toBe(0);
   });
 
-  it("reports a malformed registry as an error rather than treating it as absent", async () => {
+  /**
+   * **A BROKEN REGISTRY IS LOUD AND STILL USEFUL**, which changed on 2026-09-10.
+   *
+   * This command used to throw before printing anything, so a person whose
+   * registry file had a stray comma got no usage reading at all — including the
+   * ambient account's, which needs no registry to read. Now everything readable
+   * is printed, the fault is printed beside it, and the exit code still says
+   * something is wrong. The test pins all three: printing the fault while
+   * exiting 0 would be the quiet failure this replaced the loud-but-useless one
+   * to avoid.
+   */
+  it("prints a malformed registry as a loud problem and exits non-zero", async () => {
     const output: string[] = [];
-    await expect(runUsageCommand(
+    const code = await runUsageCommand(
       { command: "usage", json: false },
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => ({ kind: "error", why: "registry.json is not valid JSON" }),
-        accountUsage: async () => liveUsage(MINDSTONE),
+        accounts: accountsFrom(async () => ({ kind: "error", why: "registry.json is not valid JSON" }), async () => liveUsage(MINDSTONE)),
         out: (line) => output.push(line),
       },
-    )).rejects.toThrow(/account registry is unusable.*not valid JSON/i);
-    expect(output).toEqual([]);
+    );
+    const text = output.join("\n");
+    expect(code).toBe(1);
+    expect(text).toMatch(/! .*registry\.json is not valid JSON/);
+    /* And the readings it COULD take are still there. */
+    expect(text).toContain("Claude subscription");
+    expect(text).toContain("Codex subscription");
   });
 
   it("does not mislabel an unreadable registry as malformed", async () => {
-    await expect(runUsageCommand(
+    const output: string[] = [];
+    const code = await runUsageCommand(
       { command: "usage", json: false },
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => ({ kind: "error", why: "could not read account registry at /accounts/registry.json" }),
-        accountUsage: async () => liveUsage(MINDSTONE),
-        out: () => undefined,
+        accounts: accountsFrom(async () => ({ kind: "error", why: "could not read account registry at /accounts/registry.json" }), async () => liveUsage(MINDSTONE)),
+        out: (line) => output.push(line),
       },
-    )).rejects.toThrow(/account registry is unusable.*could not read/i);
+    );
+    expect(code).toBe(1);
+    expect(output.join("\n")).toMatch(/! .*could not read account registry at \/accounts\/registry\.json/);
   });
 
   it("keeps reporting other accounts when one live reading is unknown", async () => {
@@ -317,16 +403,17 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => REGISTRY,
-        accountUsage: async (configDir) => configDir === MINDSTONE.stateDir
-          ? {
-              kind: "unknown",
-              configDir,
-              takenAt: TAKEN_AT,
-              why: "usage request failed with HTTP 401",
-              status: 401,
-            }
-          : liveUsage(ORCHESTRATOR, 6, 8),
+        accounts: accountsFrom(async () => REGISTRY, async (configDir) =>
+          configDir === MINDSTONE.stateDir
+            ? {
+                kind: "unknown",
+                configDir,
+                takenAt: TAKEN_AT,
+                why: "usage request failed with HTTP 401",
+                status: 401,
+              }
+            : liveUsage(ORCHESTRATOR, 6, 8),
+        ),
         out: (line) => output.push(line),
       },
     );
@@ -351,8 +438,7 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => ({ kind: "value", schema: 1, accounts: [MINDSTONE] }),
-        accountUsage: async () => mismatched,
+        accounts: accountsFrom(async () => ({ kind: "value", schema: 1, accounts: [MINDSTONE] }), async () => mismatched),
         out: (line) => output.push(line),
       },
     );
@@ -385,8 +471,7 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => ({ kind: "value", schema: 1, accounts: [MINDSTONE] }),
-        accountUsage: async () => expired,
+        accounts: accountsFrom(async () => ({ kind: "value", schema: 1, accounts: [MINDSTONE] }), async () => expired),
         out: (line) => output.push(line),
       },
     );
@@ -403,18 +488,29 @@ describe("overseer usage", () => {
       {
         claude: async () => CLAUDE,
         codex: async () => CODEX,
-        registry: async () => REGISTRY,
-        accountUsage: async (configDir) => liveUsage(configDir === MINDSTONE.stateDir ? MINDSTONE : ORCHESTRATOR),
+        accounts: accountsFrom(async () => REGISTRY, async (configDir) => liveUsage(configDir === MINDSTONE.stateDir ? MINDSTONE : ORCHESTRATOR)),
         out: (line) => output.push(line),
       },
     );
 
     const { accounts, ...existing } = JSON.parse(output.join("\n"));
     expect(existing).toEqual({ ...CLAUDE, codex: CODEX });
-    expect(accounts).toEqual([
-      { account: MINDSTONE, usage: liveUsage(MINDSTONE) },
-      { account: ORCHESTRATOR, usage: liveUsage(ORCHESTRATOR) },
+    /* The ambient section rides along in the JSON even though the printed block
+       filters it out: `--json` is the machine-readable form of everything the
+       pass read, and the duplication argument is about what a person reads. */
+    expect(accounts.accounts.map((section: { name: string }) => section.name)).toEqual([
+      "ambient",
+      "greg",
+      "mindstone",
     ]);
+    expect(accounts.accounts.find((section: { name: string }) => section.name === "mindstone")).toMatchObject({
+      family: "claude",
+      role: "pool",
+      origin: "registered",
+      displayEmail: MINDSTONE.displayEmail,
+      providerAccountId: MINDSTONE.providerAccountId,
+      reading: { kind: "windows" },
+    });
   });
 
   it("still prints Claude and its positive control when the Codex collector rejects", async () => {

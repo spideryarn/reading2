@@ -29,7 +29,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import type { ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
+import type { ScanCoverage, StoredAccountUsage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer, type UsagePassOutcome } from "../tools/overseer/daemon.js";
 import { readCheckpoint } from "../tools/overseer/store.js";
 
@@ -96,6 +96,18 @@ async function heldOpen(signal: AbortSignal): Promise<void> {
     if (signal.aborted) resolve();
     else signal.addEventListener("abort", () => resolve());
   });
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function pause(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 type Run = {
@@ -273,5 +285,183 @@ describe("a throwing callback cannot damage the daemon", () => {
     expect(read.kind).toBe("checkpoint");
     if (read.kind !== "checkpoint") return;
     expect(read.checkpoint.usage?.kind).toBe("none");
+  });
+});
+
+/**
+ * **THE PER-ACCOUNT PASS — DOES THE DAEMON ACTUALLY CALL IT?** Plan 260910c.
+ *
+ * The same join question as `onPass` above, and the same answer if nobody asks
+ * it: `collectAccountUsage` and its projection can both be perfectly green while
+ * nothing on the box ever calls the collector, and the page then draws no
+ * sections — which looks exactly like a box with one subscription.
+ *
+ * Two properties are load-bearing and neither is obvious:
+ *
+ *  1. **It runs even when the transcript scan THREW.** These are cheap provider
+ *     calls with nothing to do with that 2.9 GB walk; letting the walk take them
+ *     down is the *a publication decision is not an observation* mistake one
+ *     level up from where it was made before.
+ *  2. **A daemon with no collector publishes `none` with a reason**, never an
+ *     empty list and never silence. That is what makes the absence of this
+ *     wiring visible rather than indistinguishable from a quiet box.
+ */
+describe("the per-account pass is wired, and is independent of the scan", () => {
+  const reading = (collectedAt: string): StoredAccountUsage => ({
+    kind: "reading",
+    collectedAt,
+    problems: [],
+    accounts: [
+      {
+        name: "mindstone",
+        family: "claude",
+        role: "pool",
+        origin: "registered",
+        displayEmail: "greg@mindstone.com",
+        providerAccountId: "provider-mindstone",
+        takenAt: collectedAt,
+        reading: { kind: "windows", windows: [] },
+      },
+    ],
+  });
+
+  async function runWithAccounts(options: {
+    run: () => Promise<UsageReport>;
+    accounts?: () => Promise<StoredAccountUsage>;
+  }): Promise<{ root: string; calls: number }> {
+    const root = tempRoot();
+    const controller = abortAfter(400);
+    let calls = 0;
+    const collect = options.accounts;
+    await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:1",
+      signal: controller.signal,
+      tickMs: 40,
+      log: () => {},
+      source: async function* () {
+        await heldOpen(controller.signal);
+      },
+      usage: {
+        intervalMs: 120,
+        run: options.run,
+        ...(collect === undefined
+          ? {}
+          : {
+              accounts: async () => {
+                calls += 1;
+                return await collect();
+              },
+            }),
+      },
+    });
+    return { root, calls };
+  }
+
+  test("publishes every account the collector returned", async () => {
+    const { root, calls } = await runWithAccounts({
+      run: async () => report(),
+      accounts: async () => reading("2026-09-10T06:00:00.000Z"),
+    });
+    expect(calls).toBeGreaterThan(0);
+    const read = readCheckpoint(root);
+    expect(read.kind).toBe("checkpoint");
+    if (read.kind !== "checkpoint") return;
+    expect(read.checkpoint.accountUsage.kind).toBe("reading");
+    if (read.checkpoint.accountUsage.kind !== "reading") return;
+    expect(read.checkpoint.accountUsage.accounts.map((account) => account.name)).toEqual(["mindstone"]);
+  });
+
+  test("runs the account pass even when the transcript scan threw", async () => {
+    const { root, calls } = await runWithAccounts({
+      run: async () => {
+        throw new Error("the scan fell over");
+      },
+      accounts: async () => reading("2026-09-10T06:00:00.000Z"),
+    });
+    expect(calls).toBeGreaterThan(0);
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("no checkpoint");
+    /* The two readings disagree about the world, which is the point: the scan
+       failed and the accounts were read anyway. */
+    expect(read.checkpoint.usage.kind).toBe("none");
+    expect(read.checkpoint.accountUsage.kind).toBe("reading");
+  });
+
+  test("a rejecting account pass becomes `none` with a reason, never a held reading", async () => {
+    const { root } = await runWithAccounts({
+      run: async () => report(),
+      accounts: async () => {
+        throw new Error("every account 401'd");
+      },
+    });
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("no checkpoint");
+    expect(read.checkpoint.accountUsage.kind).toBe("none");
+    if (read.checkpoint.accountUsage.kind !== "none") return;
+    expect(read.checkpoint.accountUsage.why).toContain("every account 401'd");
+  });
+
+  test("keeps the single-flight guard and shutdown wait until the account pass settles", async () => {
+    const root = tempRoot();
+    const controller = new AbortController();
+    const accounts = deferred<StoredAccountUsage>();
+    const accountStarted = deferred<void>();
+    let usageCalls = 0;
+    let accountCalls = 0;
+    const running = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:1",
+      signal: controller.signal,
+      tickMs: 10,
+      log: () => {},
+      source: async function* () {
+        await heldOpen(controller.signal);
+      },
+      usage: {
+        intervalMs: 20,
+        run: async () => {
+          usageCalls += 1;
+          return report();
+        },
+        accounts: async () => {
+          accountCalls += 1;
+          accountStarted.resolve();
+          return accounts.promise;
+        },
+      },
+    });
+
+    await accountStarted.promise;
+    await pause(70);
+    expect(usageCalls).toBe(1);
+    expect(accountCalls).toBe(1);
+
+    let stopped = false;
+    void running.then(() => {
+      stopped = true;
+    });
+    controller.abort();
+    await pause(20);
+    expect(stopped, "shutdown returned while the account pass was still in flight").toBe(false);
+
+    accounts.resolve(reading("2026-09-10T06:00:00.000Z"));
+    await running;
+  });
+
+  /**
+   * **THE MUTATION CHECK.** Removing the collector from the composition root is
+   * exactly the regression a suite of unit tests with injected fakes cannot see.
+   * The checkpoint must then say *no pass has run* in words — not carry an empty
+   * list, and not carry nothing at all.
+   */
+  test("a daemon with no account collector says so, rather than saying nothing", async () => {
+    const { root, calls } = await runWithAccounts({ run: async () => report() });
+    expect(calls).toBe(0);
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("no checkpoint");
+    expect(read.checkpoint.accountUsage.kind).toBe("none");
+    if (read.checkpoint.accountUsage.kind !== "none") return;
+    expect(read.checkpoint.accountUsage.why).toContain("no per-account usage pass has run");
   });
 });

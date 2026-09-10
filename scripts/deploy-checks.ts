@@ -324,6 +324,26 @@ export function judgeDeployments(
   return { kind: "built-not-live", deployment: d };
 }
 
+/**
+ * How long a built-but-unpromoted deployment is given before we call it stuck.
+ *
+ * `STAGED` is the ordinary state between "the build finished" and "Vercel has
+ * moved the production aliases onto it", and that gap can outlive a poll. On
+ * 2026-09-10 it did: the deploy reported `promotion FAIL` for a deployment
+ * that was serving `www.spideryarn.com` a minute later, and the only reason
+ * the site was not left behind is that somebody checked by hand. The cost of
+ * being hasty here is not just a wrong line — the failure prints
+ * `vercel rollback` beside it, which turns *off* production-domain
+ * auto-assignment, so acting on the false alarm breaks the next deploy
+ * silently. Waiting costs at most this long on a deploy that really is stuck.
+ */
+export const STAGED_GRACE_MS = 4 * 60_000;
+
+/** Has a deployment sat built-but-unpromoted long enough to be stuck rather than mid-flight? */
+export function stagedTooLong(firstSeenStagedAt: number, now: number): boolean {
+  return now - firstSeenStagedAt >= STAGED_GRACE_MS;
+}
+
 /* ------------------------------------------------------------------ */
 /* Judging what the live site says                                     */
 /* ------------------------------------------------------------------ */

@@ -46,6 +46,15 @@
  * network, and it exercises the extension point rather than a stub of `fetch`.
  * `httpSteerApi` is what the browser gets.
  */
+import {
+  makeEnvelope,
+  postEnvelope,
+  readKeyedArms,
+  unreadableAnswer,
+  type KeyedOutcome,
+  type MintClock,
+  type RequestEnvelope,
+} from "./request-envelope";
 import type { FleetRow } from "./types";
 
 export const MESSAGE_URL = "api/steer/message";
@@ -102,6 +111,30 @@ export function steerAnswerBody(row: FleetRow, optionIndex: number): SteerAnswer
   // `row.rawQuestion` and NOT `{kind: "question", ...row.question}`. The whole
   // of the header's second argument is about this one line.
   return { ...steerTargetBody(row), question: row.rawQuestion, optionIndex };
+}
+
+/**
+ * **A MESSAGE AS AN ENVELOPE** — request-envelope.ts. The body is the same
+ * pure function of the row as `steerMessageBody`, built once; a Check resends
+ * the envelope's bytes rather than a body rebuilt from a row that has since
+ * been refreshed. `ticket` is the composer's `DraftSubmission`.
+ */
+export function messageEnvelope<T>(
+  row: FleetRow,
+  text: string,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<SteerMessageBody, T> {
+  return makeEnvelope(MESSAGE_URL, steerMessageBody(row, text), ticket, clock);
+}
+
+export function answerEnvelope<T>(
+  row: FleetRow,
+  optionIndex: number,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<SteerAnswerBody, T> {
+  return makeEnvelope(ANSWER_URL, steerAnswerBody(row, optionIndex), ticket, clock);
 }
 
 /**
@@ -379,11 +412,46 @@ export function parseDelivery(v: unknown): DeliveryReading {
   return { kind: "not-told" };
 }
 
-/** The seam. Two typed actions, so a coordinator has something to call that is not a click. */
+/**
+ * The keyed half of the seam: each posts an envelope's bytes to the envelope's
+ * route and reads every way it can end — request-envelope.ts.
+ */
+export type KeyedSteerApi = {
+  message: (envelope: RequestEnvelope<SteerMessageBody, unknown>) => Promise<KeyedOutcome<SteerOutcome>>;
+  answer: (envelope: RequestEnvelope<SteerAnswerBody, unknown>) => Promise<KeyedOutcome<SteerOutcome>>;
+};
+
+/**
+ * The seam. Two typed actions, so a coordinator has something to call that is not a click.
+ *
+ * **`message` and `answer` stay unkeyed**, byte for byte what they sent before
+ * Stage 4: their other callers (the dialog buttons, QuestionsPanel) keep no
+ * envelope, and a keyed request that cannot be given a durable receipt is
+ * refused `503` where an unkeyed one goes ahead. `keyed` is optional only so
+ * the many existing test fakes still satisfy the type; every instance this file
+ * makes has it, and tests/fleet-request-envelope.test.ts pins that, so the
+ * composer's fallback (`sendMessageEnvelope`) is reachable only from a fake.
+ */
 export type SteerApi = {
   message: (row: FleetRow, text: string) => Promise<SteerOutcome>;
   answer: (row: FleetRow, optionIndex: number) => Promise<SteerOutcome>;
+  keyed?: KeyedSteerApi;
 };
+
+/**
+ * Send a message envelope through whatever seam the composer was given. A seam
+ * with no keyed half (a test fake written before Stage 4) is sent the text the
+ * old way, and its answer is `answered` — it can never produce the arm that
+ * keeps an envelope.
+ */
+export async function sendMessageEnvelope(
+  api: SteerApi,
+  row: FleetRow,
+  envelope: RequestEnvelope<SteerMessageBody, unknown>,
+): Promise<KeyedOutcome<SteerOutcome>> {
+  if (api.keyed !== undefined) return api.keyed.message(envelope);
+  return { kind: "answered", outcome: await api.message(row, envelope.body.text) };
+}
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
 function describe(cause: unknown): string {
@@ -486,11 +554,60 @@ async function post(
   };
 }
 
+/**
+ * One keyed POST, and every way it can end. The route's own answer is read as
+ * `post` reads it — but only when it IS the route's answer: a success naming
+ * this op, or a refusal with the server's code and sentence. Anything else is
+ * `not-confirmed`, never a success with blanks filled in.
+ */
+async function postKeyed(
+  envelope: RequestEnvelope<SteerMessageBody | SteerAnswerBody, unknown>,
+  op: "message" | "answer",
+  fetchImpl: typeof fetch,
+): Promise<KeyedOutcome<SteerOutcome>> {
+  const heard = await postEnvelope(envelope, fetchImpl);
+  if (heard.kind === "not-confirmed") return heard;
+  const shared = readKeyedArms(heard.status, heard.parsed);
+  if (shared !== null) {
+    if (
+      shared.kind === "replay" &&
+      (shared.receipt.op !== (op === "message" ? "steer-message" : "steer-answer") ||
+        shared.receipt.origin !== "direct-steer" ||
+        shared.receipt.target?.sessionId !== envelope.body.sessionId)
+    ) {
+      return unreadableAnswer(heard.status);
+    }
+    return shared;
+  }
+  const p = heard.parsed;
+  if (heard.status === 200 && isRecord(p) && p["ok"] === true && p["op"] === op) {
+    return { kind: "answered", outcome: { ok: true, op, sent: parseSent(p["sent"]), verified: parseVerified(p["verified"]) } };
+  }
+  if (isRecord(p) && p["ok"] === false && typeof p["code"] === "string" && typeof p["why"] === "string") {
+    return {
+      kind: "answered",
+      outcome: {
+        ok: false,
+        code: p["code"],
+        why: p["why"],
+        status: heard.status,
+        from: "server",
+        delivery: parseDelivery(p["delivery"]),
+      },
+    };
+  }
+  return unreadableAnswer(heard.status);
+}
+
 /** What the browser uses. `fetchImpl` is for a test that wants the real body built. */
-export function makeSteerApi(fetchImpl: typeof fetch = fetch): SteerApi {
+export function makeSteerApi(fetchImpl: typeof fetch = fetch): SteerApi & { keyed: KeyedSteerApi } {
   return {
     message: (row, text) => post(MESSAGE_URL, "message", steerMessageBody(row, text), fetchImpl),
     answer: (row, optionIndex) => post(ANSWER_URL, "answer", steerAnswerBody(row, optionIndex), fetchImpl),
+    keyed: {
+      message: (envelope) => postKeyed(envelope, "message", fetchImpl),
+      answer: (envelope) => postKeyed(envelope, "answer", fetchImpl),
+    },
   };
 }
 
@@ -501,7 +618,11 @@ export function makeSteerApi(fetchImpl: typeof fetch = fetch): SteerApi {
  * `fetch` at import time makes it unstubable in a test that imports this module
  * first — and the failure looks like a network call in a suite that has none.
  */
-export const httpSteerApi: SteerApi = {
+export const httpSteerApi: SteerApi & { keyed: KeyedSteerApi } = {
   message: (row, text) => makeSteerApi().message(row, text),
   answer: (row, index) => makeSteerApi().answer(row, index),
+  keyed: {
+    message: (envelope) => makeSteerApi().keyed.message(envelope),
+    answer: (envelope) => makeSteerApi().keyed.answer(envelope),
+  },
 };

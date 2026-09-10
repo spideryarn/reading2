@@ -1,12 +1,21 @@
 /**
  * Interrupted work: what a reboot or a tmux restart left behind, as the
- * Overseer recorded it — shown, and **never acted on**.
+ * Overseer recorded it — shown, with **one** control.
  *
  * docs/plans/260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md
- * § 6. Resuming is the next roadmap stage; this page is the evidence that stage
- * will consume. So there are no buttons, no links that act, and no command text:
- * a directory is a path to read, a host is a name to read, and `manual` is drawn
- * as "on <host>, in <dir>" rather than as anything to paste into a terminal.
+ * § 6 built the evidence; plan 260910f (Stage 2) adds the one control. An
+ * `interrupted` record whose resume is `supported`, under a published resume
+ * section with a wired launcher and a preview with a pinned account, gets
+ * **Resume…**: an inline confirmation (no dialogs on this page) whose one button
+ * queues one request through `POST /api/recovery/resume`. Every other record
+ * gets manual instructions or nothing, and `unknown`, `present-but-unmatched`
+ * and `ended-before-reboot` get no control of any kind. There are still no
+ * links that act: manual instructions are display text in a code element, built
+ * only from a strict uuid and shell-quoted paths, and `manual` is still drawn as
+ * "on <host>, in <dir>".
+ *
+ * The resume section never touches the list: absent is one quiet line, and
+ * unreadable is an alarm banner above records drawn exactly as before.
  *
  * ## The states that must never become an empty list
  *
@@ -26,13 +35,26 @@
  * changes and does not sort, for DecisionsPanel's reason: a second ordering rule
  * in the browser would let two readers of one index disagree.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { httpRecoveryApi, type RecoveryApi, type RecoveryView } from "./recovery-client";
-import { Card, Mono, Pill, SectionHeading, cx, toneClasses } from "./ui";
+import {
+  httpRecoveryApi,
+  httpRecoveryResumeApi,
+  type RecoveryApi,
+  type RecoveryResumeApi,
+  type RecoveryView,
+  type ResumePostView,
+} from "./recovery-client";
+import { Button, Card, Mono, Pill, SectionHeading, cx, toneClasses } from "./ui";
 import { formatDuration, type Tone } from "./view";
 import type {
   RecoveryFeed,
+  RecoveryResumeAccount,
+  RecoveryResumePreview,
+  RecoveryResumeQuote,
+  RecoveryResumeRequestState,
+  RecoveryResumeSection,
+  RecoveryResumeVerification,
   RecoveryWireEvidence,
   RecoveryWireLiveRow,
   RecoveryWireRecord,
@@ -194,7 +216,7 @@ function EvidenceFacts({ evidence }: { evidence: RecoveryWireEvidence }): ReactN
       </Fact>
       <Fact label="resume">
         {resume.kind === "supported"
-          ? "supported by the next stage: its verified conversation's transcript was found. Nothing here starts it."
+          ? "supported: its verified conversation's transcript was found."
           : resume.kind === "not-supported"
             ? `not supported: ${resume.why}`
             : `manual: ${resume.why}`}
@@ -245,7 +267,418 @@ function LiveRowFacts({ row }: { row: RecoveryWireLiveRow }): ReactNode {
   );
 }
 
-function RecordCard({ record, untrusted }: { record: RecoveryWireRecord; untrusted: boolean }): ReactNode {
+/* ------------------------------------------------------------------ *
+ * Resume (plan 260910f, Stage 2): the page's one control.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A Claude conversation id, strictly: lowercase and hyphenated, with nothing
+ * before or after it. **The only id manual instructions are ever built from**;
+ * anything else — a claim, an uppercase copy, a uuid with a flag glued on — gets
+ * no instructions at all.
+ */
+export const STRICT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Characters a POSIX shell reads as one plain word, unquoted. */
+const SHELL_PLAIN = /^[A-Za-z0-9_./:@%+=,-]+$/;
+
+function hasControlCharacter(s: string): boolean {
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s.charCodeAt(i);
+    if (c < 32 || c === 127) return true;
+  }
+  return false;
+}
+
+/** One POSIX shell word: as it is when plain, otherwise single-quoted, each inner quote closed, escaped and reopened. */
+export function shellQuote(word: string): string {
+  return SHELL_PLAIN.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * The lines to type on the box, or null when any input fails its check —
+ * never a command built from something unchecked. With a pinned account the
+ * resume runs under that account's config directory (`--resume` finds only its
+ * own config directory's conversations, plan G4); without one it is the plain
+ * command, and the page says why beside it.
+ */
+export function manualResumeCommand(input: { conversationId: string; dir: string | null; configDir: string | null }): string | null {
+  const { conversationId, dir, configDir } = input;
+  if (!STRICT_UUID.test(conversationId)) return null;
+  for (const path of [dir, configDir]) {
+    if (path !== null && (!path.startsWith("/") || hasControlCharacter(path))) return null;
+  }
+  const lines = ["gjd-remote ssh"];
+  if (dir !== null) lines.push(`cd ${shellQuote(dir)}`);
+  lines.push(`${configDir === null ? "" : `CLAUDE_CONFIG_DIR=${shellQuote(configDir)} `}claude --resume ${conversationId}`);
+  return lines.join("\n");
+}
+
+/** The conversation the evidence verified, never a claim. */
+function verifiedConversation(t: RecoveryWireTranscript): string | null {
+  switch (t.kind) {
+    case "found":
+      return t.conversationId;
+    case "not-found":
+    case "cannot-tell":
+      return t.under === "verified" ? t.conversationId : null;
+    case "found-under-claim":
+    case "no-conversation":
+      return null;
+    default: {
+      const never: never = t;
+      return never;
+    }
+  }
+}
+
+function existingDir(evidence: Extract<RecoveryWireEvidence, { kind: "checked" }>): string | null {
+  return evidence.dir.kind === "exists" ? evidence.dir.path : null;
+}
+
+/** What the rows need from the resume section, handed down once. */
+type ResumeContext = {
+  section: RecoveryResumeSection;
+  /** The view's `checkedAt`: what "seen" means when the person taps. Null when the view is not checked. */
+  checkedAt: string | null;
+  api: RecoveryResumeApi;
+  /** Read the index again, so a queued request shows its state without waiting for the poll. */
+  onPosted(): void;
+};
+
+type Pinned = Extract<RecoveryResumeAccount, { kind: "pinned" }>;
+
+/** Whether this page can resume the record, and with what — or, in words, why not. */
+function resumability(ctx: ResumeContext, preview: RecoveryResumePreview | undefined): { kind: "yes"; preview: RecoveryResumePreview; account: Pinned; checkedAt: string } | { kind: "no"; why: string } {
+  switch (ctx.section.kind) {
+    case "absent":
+      return { kind: "no", why: "resume is not available from this dashboard yet" };
+    case "unreadable":
+    case "unsupported-schema":
+      return { kind: "no", why: "the resume data could not be read (see above)" };
+    case "published":
+      break;
+    default: {
+      const never: never = ctx.section;
+      return never;
+    }
+  }
+  if (ctx.section.projection.launcher.kind === "unwired") return { kind: "no", why: ctx.section.projection.launcher.why };
+  if (preview === undefined) return { kind: "no", why: "the Overseer has written no preview of it, so there is nothing to confirm against" };
+  if (preview.account.kind === "unknown") return { kind: "no", why: preview.account.why };
+  if (ctx.checkedAt === null) return { kind: "no", why: "the daemon's view has not checked it" };
+  return { kind: "yes", preview, account: preview.account, checkedAt: ctx.checkedAt };
+}
+
+function ManualInstructions({
+  conversationId,
+  dir,
+  account,
+  whyNot,
+}: {
+  conversationId: string;
+  dir: string | null;
+  account: RecoveryResumeAccount | null;
+  whyNot: string;
+}): ReactNode {
+  const command = manualResumeCommand({ conversationId, dir, configDir: account?.kind === "pinned" ? account.configDir : null });
+  if (command === null) return null;
+  return (
+    <div data-testid="recovery-resume-manual" className="tw:mt-2 tw:min-w-0 tw:text-[12px] tw:text-ink-soft">
+      <p data-testid="recovery-resume-why-not">This page cannot resume it: {whyNot}.</p>
+      <p className="tw:mt-1">To resume it by hand, on the box:</p>
+      <pre className="tw:mt-1 tw:rounded-md tw:border tw:border-rule tw:p-2 tw:whitespace-pre-wrap tw:break-all">
+        <code data-testid="recovery-resume-manual-command" className="tw:font-mono tw:text-[12px] tw:text-ink">
+          {command}
+        </code>
+      </pre>
+      {account === null ? (
+        <p className="tw:mt-1">
+          Run it under the account whose config directory holds this conversation's transcript: set <Mono>CLAUDE_CONFIG_DIR</Mono> to that directory, or
+          leave it unset for the default login. This page does not know which account that is.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const VERIFICATION_PARTS: [keyof RecoveryResumeVerification, string][] = [
+  ["inventoryResumed", "the inventory sees it resumed"],
+  ["observedRunning", "the launch was seen running"],
+  ["transcriptGrew", "its transcript has grown since the launch"],
+  ["sessionLineSeen", "a new line from this conversation was written"],
+];
+
+function RequestStateLine({ state }: { state: RecoveryResumeRequestState }): ReactNode {
+  let body: ReactNode;
+  switch (state.kind) {
+    case "pending":
+      body = (
+        <>
+          Queued{state.actor === "cli" ? " from the CLI" : ""}, position {state.position}, since <When at={state.requestedAt} />. Waiting: {state.why}
+          {state.until === null ? null : (
+            <>
+              {" "}
+              — until <When at={state.until} />
+            </>
+          )}
+          .
+        </>
+      );
+      break;
+    case "refused":
+      body = (
+        <>
+          Refused at <When at={state.refusedAt} />: {state.why}. You can ask again once that is fixed.
+        </>
+      );
+      break;
+    case "launched":
+      body = (
+        <>
+          Started as <Mono>{state.launch.occurrenceId}</Mono> ({state.launch.state}), not yet verified running: waiting for {state.waitingFor}.
+          <ul className="tw:mt-1">
+            {VERIFICATION_PARTS.map(([part, label]) => (
+              <li key={part} data-ok={String(state.verification[part])}>
+                {state.verification[part] ? "✓" : "✗"} {label}
+              </li>
+            ))}
+          </ul>
+        </>
+      );
+      break;
+    case "ended-unverified":
+      body = <>Ended before it was seen running: {state.how}.</>;
+      break;
+    case "needs-greg":
+      body = (
+        <>
+          Needs you: {state.why}. Only a dispose ends it:{" "}
+          <code className="tw:font-mono tw:text-[12px] tw:break-all tw:text-ink">{state.disposeCommand}</code>
+        </>
+      );
+      break;
+    case "disposed":
+      body = (
+        <>
+          Its launch, <Mono>{state.launch.occurrenceId}</Mono>, was disposed. Nothing more happens to this request.
+        </>
+      );
+      break;
+    case "resumed":
+      body = (
+        <>
+          Resumed, and verified running at <When at={state.verifiedAt} />
+          {state.launch === null ? null : (
+            <>
+              {" "}
+              (launch <Mono>{state.launch.occurrenceId}</Mono>)
+            </>
+          )}
+          .
+        </>
+      );
+      break;
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+  return (
+    <div data-testid="recovery-resume-state" data-kind={state.kind} className="tw:mt-2 tw:min-w-0 tw:break-words tw:text-[12px] tw:text-ink">
+      <span className="tw:font-semibold">Resume: </span>
+      {body}
+    </div>
+  );
+}
+
+function Quotation({ testId, label, quote }: { testId: string; label: string; quote: RecoveryResumeQuote }): ReactNode {
+  return (
+    <div data-testid={testId} className="tw:mt-2">
+      <p className="tw:text-ink-faint">
+        {label}
+        {quote.kind === "quoted" && quote.truncated ? " (truncated)" : ""}
+      </p>
+      {quote.kind === "quoted" ? (
+        <blockquote className="tw:mt-1 tw:border-l-2 tw:border-rule tw:pl-2 tw:break-words tw:whitespace-pre-wrap tw:text-ink-soft">{quote.text}</blockquote>
+      ) : (
+        <p className="tw:mt-1 tw:text-ink-soft">not available: {quote.why}</p>
+      )}
+    </div>
+  );
+}
+
+function outcomeText(view: ResumePostView): string {
+  if (view.kind === "no-answer") return `No answer from the dashboard (${view.why}). It may still have been queued: the next refresh shows whether it was.`;
+  const answer = view.answer;
+  if (!answer.ok) return `Not queued: ${answer.why}`;
+  switch (answer.outcome) {
+    case "queued":
+      return "Queued. The Overseer takes it on its next pass, after checking the box, the quota and this session's evidence; this card shows how it goes.";
+    case "already-requested":
+      return "Already requested: this session is already waiting in the queue, so nothing new was queued.";
+    case "already-launched":
+      return "Already launched: the Overseer has started this session once already, so nothing new was queued.";
+    default: {
+      const never: never = answer.outcome;
+      return never;
+    }
+  }
+}
+
+function ResumeConfirm({
+  recordId,
+  preview,
+  account,
+  checkedAt,
+  ctx,
+  onCancel,
+}: {
+  recordId: string;
+  preview: RecoveryResumePreview;
+  account: Pinned;
+  checkedAt: string;
+  ctx: ResumeContext;
+  onCancel(): void;
+}): ReactNode {
+  const [inFlight, setInFlight] = useState(false);
+  const [outcome, setOutcome] = useState<ResumePostView | null>(null);
+  // A ref as well as the state, so a second tap in the same frame cannot post twice.
+  const flying = useRef(false);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const submit = (): void => {
+    if (flying.current) return;
+    flying.current = true;
+    setInFlight(true);
+    const body = { candidateId: recordId, seen: { checkedAt, conversationId: preview.conversationId, dir: preview.dir } };
+    void Promise.resolve()
+      .then(() => ctx.api.post(body))
+      .catch((cause: unknown): ResumePostView => ({ kind: "no-answer", why: String(cause) }))
+      .then((view) => {
+        flying.current = false;
+        if (!live.current) return;
+        setOutcome(view);
+        setInFlight(false);
+        ctx.onPosted();
+      });
+  };
+  return (
+    <div data-testid="recovery-resume-confirm" className="tw:mt-2 tw:min-w-0 tw:rounded-md tw:border tw:border-rule tw:p-3 tw:text-[12px]">
+      <p className="tw:text-[13px] tw:font-semibold tw:break-words tw:text-ink">
+        Resume {preview.title === null ? "this session" : <>“{preview.title}”</>}?
+      </p>
+      <Quotation testId="recovery-resume-brief" label="What it was asked to do, quoted from its transcript" quote={preview.brief} />
+      <Quotation testId="recovery-resume-last-words" label="Where it got to, quoted from its transcript" quote={preview.lastWords} />
+      <div className="tw:mt-2">
+        <p className="tw:text-ink-faint">What we cannot be sure of</p>
+        <ul data-testid="recovery-resume-uncertainty" className="tw:mt-1 tw:list-disc tw:pl-4 tw:text-ink-soft">
+          {preview.uncertainty.map((sentence) => (
+            <li key={sentence} className="tw:break-words">
+              {sentence}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p data-testid="recovery-resume-account" className="tw:mt-2 tw:text-ink">
+        Runs under account <Mono>{account.name}</Mono>
+      </p>
+      <div className="tw:mt-2">
+        <p className="tw:text-ink-faint">The nudge that will be typed first, exactly</p>
+        <pre data-testid="recovery-resume-nudge" className="tw:mt-1 tw:rounded-md tw:border tw:border-rule tw:p-2 tw:font-mono tw:text-[12px] tw:break-words tw:whitespace-pre-wrap tw:text-ink">
+          {preview.nudge}
+        </pre>
+      </div>
+      <p data-testid="recovery-resume-dir" className="tw:mt-2 tw:text-ink-soft">
+        In <PathText path={preview.dir} />
+      </p>
+      <p className="tw:mt-2 tw:text-ink">Starts one session. Any others you pick wait until this one is verified running.</p>
+      <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
+        <Button variant="loud" data-testid="recovery-resume-submit" disabled={inFlight} onClick={submit}>
+          Resume this session
+        </Button>
+        <Button data-testid="recovery-resume-cancel" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {outcome === null ? null : (
+        <p data-testid="recovery-resume-outcome" role="status" className="tw:mt-2 tw:break-words tw:text-ink">
+          {outcomeText(outcome)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The resume part of one card: its request's state, and then Resume…, manual
+ * instructions, or nothing.
+ */
+function ResumeBlock({ record, ctx }: { record: RecoveryWireRecord; ctx: ResumeContext }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const projection = ctx.section.kind === "published" ? ctx.section.projection : null;
+  const request = projection?.requests.find((r) => r.candidateId === record.id);
+  const preview = projection?.previews.find((p) => p.candidateId === record.id);
+  const stateLine = request === undefined ? null : <RequestStateLine state={request.state} />;
+  const s = record.state;
+  // NO CONTROL OF ANY KIND on anything but interrupted: unknown,
+  // present-but-unmatched and ended-before-reboot stay visible and untouched.
+  if (s.kind !== "classified" || s.classification.kind !== "interrupted" || s.evidence.kind !== "checked") return stateLine;
+  const evidence = s.evidence;
+  const resume = evidence.resume;
+  switch (resume.kind) {
+    case "manual":
+      // Today's "on <host>, in <dir>", drawn with the evidence.
+      return stateLine;
+    case "not-supported": {
+      const conversation = verifiedConversation(evidence.transcript);
+      return (
+        <>
+          {stateLine}
+          {conversation === null ? null : <ManualInstructions conversationId={conversation} dir={existingDir(evidence)} account={null} whyNot={resume.why} />}
+        </>
+      );
+    }
+    case "supported":
+      break;
+    default: {
+      const never: never = resume;
+      return never;
+    }
+  }
+  // A request in flight or settled is shown, not offered again — except a refusal.
+  if (request !== undefined && request.state.kind !== "refused") return stateLine;
+  const can = resumability(ctx, preview);
+  if (can.kind === "no") {
+    return (
+      <>
+        {stateLine}
+        <ManualInstructions conversationId={resume.conversationId} dir={preview?.dir ?? existingDir(evidence)} account={preview?.account ?? null} whyNot={can.why} />
+      </>
+    );
+  }
+  return (
+    <>
+      {stateLine}
+      {open ? (
+        <ResumeConfirm recordId={record.id} preview={can.preview} account={can.account} checkedAt={can.checkedAt} ctx={ctx} onCancel={() => setOpen(false)} />
+      ) : (
+        <div className="tw:mt-2">
+          <Button data-testid="recovery-resume-open" onClick={() => setOpen(true)}>
+            Resume…
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RecordCard({ record, untrusted, resume }: { record: RecoveryWireRecord; untrusted: boolean; resume: ResumeContext }): ReactNode {
   const group = groupOf(record.state);
   const state = record.state;
   let why: string;
@@ -346,13 +779,70 @@ function RecordCard({ record, untrusted }: { record: RecoveryWireRecord; untrust
             </Fact>
           ) : null}
         </dl>
+        <ResumeBlock record={record} ctx={resume} />
       </div>
     </Card>
   );
 }
 
-function PublishedView({ feed, nowMs, receivedAtMs }: { feed: Published; nowMs: number; receivedAtMs: number }): ReactNode {
+/** Above the list: the resume section's own state, never folded into the rows. */
+function ResumeHead({ section }: { section: RecoveryResumeSection }): ReactNode {
+  switch (section.kind) {
+    case "absent":
+      return (
+        <p data-testid="recovery-resume-absent" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:text-ink-faint">
+          Resume is not available from this dashboard yet.
+        </p>
+      );
+    case "unreadable":
+    case "unsupported-schema":
+      return (
+        <Banner tone="alarm" head="The resume data in the index could not be read, so this page offers no Resume." testId="recovery-resume-banner">
+          {section.why}. The records below are shown as they are.
+        </Banner>
+      );
+    case "published": {
+      const pace = section.projection.pace;
+      if (pace.kind === "waiting-for-verification") {
+        return (
+          <p data-testid="recovery-pace" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:break-words tw:text-ink">
+            Waiting for <span className="tw:font-semibold">{pace.name}</span> to be verified running before the next resume starts (since{" "}
+            <When at={pace.since} />
+            ).
+          </p>
+        );
+      }
+      if (pace.kind === "spacing") {
+        return (
+          <p data-testid="recovery-pace" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:text-ink-soft">
+            The next resume waits until <When at={pace.until} />, so the last one's start-up load lands first.
+          </p>
+        );
+      }
+      return null;
+    }
+    default: {
+      const never: never = section;
+      return never;
+    }
+  }
+}
+
+function PublishedView({
+  feed,
+  nowMs,
+  receivedAtMs,
+  resumeApi,
+  onPosted,
+}: {
+  feed: Published;
+  nowMs: number;
+  receivedAtMs: number;
+  resumeApi: RecoveryResumeApi;
+  onPosted(): void;
+}): ReactNode {
   const view = feed.view;
+  const resume: ResumeContext = { section: feed.resume, checkedAt: view.kind === "checked" ? view.checkedAt : null, api: resumeApi, onPosted };
   const untrusted = view.kind === "checked" && view.inventory.kind === "untrusted";
   // THE AGE IS THE SERVER'S (Sol's F31). `checkedAt` is the box's clock; a
   // phone's can be minutes out, and measuring one against the other said
@@ -396,6 +886,7 @@ function PublishedView({ feed, nowMs, receivedAtMs }: { feed: Published; nowMs: 
           Those events survive only in <Mono>events.jsonl</Mono>; neither this page nor the CLI lists them.
         </Banner>
       ) : null}
+      <ResumeHead section={feed.resume} />
 
       <p data-testid="recovery-age" className="tw:mb-2 tw:px-1 tw:text-[12px] tw:text-ink-faint">
         {view.kind === "checked" ? (
@@ -450,7 +941,7 @@ function PublishedView({ feed, nowMs, receivedAtMs }: { feed: Published; nowMs: 
           return (
             <div key={record.id}>
               {heading}
-              <RecordCard record={record} untrusted={untrusted} />
+              <RecordCard record={record} untrusted={untrusted} resume={resume} />
             </div>
           );
         })
@@ -472,7 +963,19 @@ function PublishedView({ feed, nowMs, receivedAtMs }: { feed: Published; nowMs: 
   );
 }
 
-function Body({ view, nowMs, receivedAtMs }: { view: PanelView; nowMs: number; receivedAtMs: number }): ReactNode {
+function Body({
+  view,
+  nowMs,
+  receivedAtMs,
+  resumeApi,
+  onPosted,
+}: {
+  view: PanelView;
+  nowMs: number;
+  receivedAtMs: number;
+  resumeApi: RecoveryResumeApi;
+  onPosted(): void;
+}): ReactNode {
   switch (view.kind) {
     case "loading":
       return <p className="tw:p-3 tw:text-[13px] tw:text-ink-faint">Reading the recovery index…</p>;
@@ -508,7 +1011,7 @@ function Body({ view, nowMs, receivedAtMs }: { view: PanelView; nowMs: number; r
         </Banner>
       );
     case "published":
-      return <PublishedView feed={view} nowMs={nowMs} receivedAtMs={receivedAtMs} />;
+      return <PublishedView feed={view} nowMs={nowMs} receivedAtMs={receivedAtMs} resumeApi={resumeApi} onPosted={onPosted} />;
     default: {
       const never: never = view;
       return never;
@@ -518,15 +1021,21 @@ function Body({ view, nowMs, receivedAtMs }: { view: PanelView; nowMs: number; r
 
 export function RecoveryPanel({
   api = httpRecoveryApi,
+  resumeApi = httpRecoveryResumeApi,
   refreshNonce = 0,
   nowMs,
 }: {
   api?: RecoveryApi;
+  /** The one control's POST. */
+  resumeApi?: RecoveryResumeApi;
   /** Bumped by the dock's Refresh. */
   refreshNonce?: number;
   /** The page's ticking clock, for the view's age. */
   nowMs?: number;
 }): ReactNode {
+  // The current poll's loader, so a POST can read the index again at once.
+  const reload = useRef<() => void>(() => {});
+  const onPosted = useCallback(() => reload.current(), []);
   // The answer, and when this page got it on the page's own clock: the view's
   // age is the server's clock advanced by the interval since (F31).
   const [held, setHeld] = useState<{ view: PanelView; receivedAtMs: number }>({ view: { kind: "loading" }, receivedAtMs: 0 });
@@ -547,10 +1056,12 @@ export function RecoveryPanel({
         if (live && !request.signal.aborted) setHeld({ view: next, receivedAtMs: pageClock.current ?? Date.now() });
       });
     };
+    reload.current = load;
     load();
     const timer = setInterval(load, RECOVERY_POLL_MS);
     return () => {
       live = false;
+      reload.current = () => {};
       clearInterval(timer);
       current?.abort();
     };
@@ -559,9 +1070,11 @@ export function RecoveryPanel({
   return (
     <section aria-label="Interrupted work" data-testid="recovery-panel">
       <SectionHeading>Interrupted work</SectionHeading>
-      <Body view={held.view} nowMs={nowMs ?? Date.now()} receivedAtMs={held.receivedAtMs} />
-      <p className="tw:mt-3 tw:px-1 tw:text-[12px] tw:text-ink-faint">
-        Read-only. Nothing on this page starts, resumes or dismisses anything.
+      <Body view={held.view} nowMs={nowMs ?? Date.now()} receivedAtMs={held.receivedAtMs} resumeApi={resumeApi} onPosted={onPosted} />
+      {/* The plan's § 5 wording, exactly. */}
+      <p data-testid="recovery-footer" className="tw:mt-3 tw:px-1 tw:text-[12px] tw:text-ink-faint">
+        The one control here is <strong>Resume</strong>: it asks the Overseer to start that one interrupted Claude session again, after checking the
+        box, the quota and the session's evidence. Others you pick wait their turn. Nothing resumes on its own, and nothing here dismisses anything.
       </p>
     </section>
   );

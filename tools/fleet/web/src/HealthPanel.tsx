@@ -30,6 +30,7 @@ import type { ReactNode } from "react";
 import { LONG_RUN_MS } from "../../resource-policy.js";
 import { BoxActionsCard } from "./ActionButtons";
 import { AdmissionSection } from "./AdmissionSection";
+import { DiagnosticsSection } from "./DiagnosticsSection";
 import { HealthHistory } from "./HealthHistory";
 import { RawValue } from "./RawValue";
 import { httpAdmissionApi, type AdmissionApi } from "./admission-client";
@@ -249,6 +250,7 @@ export function HealthPanel({
       {/* Independent of the current health reading: the forecast has its own
           endpoint, and losing one source is not evidence about the other. */}
       <AdmissionSection api={admissionApi} skew={skew} />
+      <DiagnosticsSection nowMs={now} />
 
       {/* **The raw dump is a disclosure now, not the page.** It read as a debug
           view — load, memory, swap, disk and attribution as bare key-value

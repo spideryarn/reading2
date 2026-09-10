@@ -101,6 +101,8 @@ listed here; the names under each are files in `docs/project/`.
   checked by nothing) ·
   `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a
   claim it has to earn) ·
+  `usage-per-account.md` (one section per Claude and Codex account-subscription: which login still
+  has room, and why two rows for one subscription is worse than either alone) ·
   `usage-history.md` (the last 24 hours of Claude's limits, which exist only because we write them
   down, and the eight things that chart may not claim) ·
   `readiness.md` (whether the commit dev is on is known to pass its checks — and the one command

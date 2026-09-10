@@ -36,6 +36,7 @@ import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { probeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
 import { makeSchedule } from "./schedule-wiring.js";
+import { makeOccurrences } from "./occurrences-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealthAsync, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
@@ -49,6 +50,9 @@ import { applySecurityHeaders } from "./headers.js";
 import { addressableHost } from "./origin.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
+import { readModuleStartRevision } from "./revision.js";
+import { readBuildStamp } from "./build-stamp.js";
+import { makeDiagnosticsRoute } from "./routes-diagnostics.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
@@ -57,6 +61,7 @@ import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
 import { makeRecoveryRoute } from "./routes-recovery.js";
+import { makeRecoveryResumeRoute } from "./routes-recovery-resume.js";
 import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
@@ -79,8 +84,26 @@ import { claimFromSnapshot } from "./overseer-claim.js";
 import { initialFramePayload, statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
-/** Where the built React client lives. */
-const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
+/**
+ * Where the built React client lives: beside this file, unless `FLEET_DIST`
+ * names another directory.
+ *
+ * The override exists so a test can start this server as a real process
+ * against a missing or broken client build without touching the real one
+ * (tests/fleet-server-process.test.ts). It must be absolute, for the store
+ * roots' reason: a relative path resolves against whichever directory the
+ * command was typed in, which is a different client for systemd and for a
+ * person in a worktree. Empty counts as unset, as `FLEET_READINESS_DIR` does.
+ */
+const DIST_OVERRIDE = (process.env.FLEET_DIST ?? "").trim();
+if (DIST_OVERRIDE !== "" && !path.isAbsolute(DIST_OVERRIDE)) {
+  console.error(`✗ FLEET_DIST must be an absolute path; got ${JSON.stringify(DIST_OVERRIDE)}`);
+  process.exit(2);
+}
+const DIST =
+  DIST_OVERRIDE !== ""
+    ? path.resolve(DIST_OVERRIDE)
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
 
@@ -129,6 +152,22 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 const publicationLedger = new PublicationLedger(serverInstanceId());
+/** The revision this process started from — read once, here, never again: tools/fleet/revision.ts says why. */
+const startRevision = readModuleStartRevision(import.meta.url, "../..");
+/** The client bundle on disk as this process starts, before any listener opens — so the page can
+ *  tell "the bundle this server started with" from "the bundle on disk now" after a rebuild. */
+const bundleAtStart = readBuildStamp(DIST);
+/** Which code each service recorded at start, schema and clocks: routes-diagnostics.ts, plan 260910f. */
+const diagnosticsRoute = makeDiagnosticsRoute({
+  now: () => new Date(),
+  instance: serverInstanceId(),
+  start: startRevision,
+  bundleAtStart,
+  bundleOnDisk: () => readBuildStamp(DIST),
+  collector: () => ({ attemptedAt, collectedAt: snapshot?.collectedAt ?? null, lastError }),
+  healthCollectedAt: () => health?.collectedAt ?? null,
+  env: process.env,
+});
 
 /**
  * The box's own vital signs, refreshed alongside the fleet.
@@ -191,6 +230,9 @@ const admission = makeAdmission();
 // The scheduler's preview, as the Overseer daemon last wrote it. A store that
 // cannot be resolved answers `unreadable` rather than stopping the dashboard.
 const schedule = makeSchedule();
+// What the scheduler has launched, and each occurrence's answer. The same store
+// and the same trade as the preview's.
+const occurrences = makeOccurrences();
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
@@ -315,6 +357,7 @@ const queueRoute = ideaQueueRoute();
 /** Read fresh on request: this is the review record, not refresh-loop state. */
 const decisionsApiRoute = makeDecisionsRoute();
 const recoveryApiRoute = makeRecoveryRoute();
+const recoveryResumeApiRoute = makeRecoveryResumeRoute();
 
 /**
  * The Deploys tab's record and its probe.
@@ -847,6 +890,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // What the Overseer's scheduler would run next. Read-only: one bounded read of
   // the file the daemon writes each tick, and nothing computed here.
   if (schedule.route.handle(req, res)) return;
+  // What it has launched, and the answer link. Read-only; the answer's path is
+  // built from the validated id alone (routes-occurrences.ts).
+  if (occurrences.route.handle(req, res)) return;
 
   // Whether dev is green, and the day behind it. Read-only, and it serves the
   // snapshot the refresh loop built rather than computing anything here.
@@ -859,6 +905,10 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
      must be structurally incapable of claiming the store. See
      usage-history.ts § "No writer lock". */
   if (usageHistoryRouteHandler.handle(req, res)) return;
+
+  // Which revision each service recorded at start, and every store file's schema and age.
+  // Read-only: bounded lstat/tail reads of the Overseer's files, nothing written.
+  if (diagnosticsRoute.handle(req, res)) return;
 
   // The last N messages across EVERY session, for the Recent messages tab.
   // Read-only, and deliberately not on the collection loop: it is a fan-out of
@@ -999,6 +1049,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  // Resume (plan 260910f): a same-origin POST that writes one request file and
+  // never launches. Before /api/recovery's line, which 404s anything under it.
+  if (recoveryResumeApiRoute.handle(req, res)) return;
   if (recoveryApiRoute.handle(req, res)) return;
   if (reportsApiRoute.handle(req, res)) return;
 
