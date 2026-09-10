@@ -14,10 +14,20 @@ restart put live — all rare or cosmetic, none dangerous — and the Overseer w
 restarted again at 14:50Z on `67d28c58`** (decision log `2cf2b4c5`), which put live Stage 1's
 round-2 fixes and the shared single-flight reader, and logged its own lesson: *"restart on closed
 rounds, or say the code is one round short when restarting early."* **Stage 1 is closed** (two Sol
-rounds and an independent check of the round-2 fixes). **On `dev` since, not yet live:** Stage 2b
-(`0e3d92c0`). **Built, being committed:** 5c. **In flight:** 4b. **Still to do:** one combined Sol
-review of Stages 2 and 4, a small follow-up passing the abort signal through `messages-client.ts`,
-the Sessions-filter decision, the browser check, and Stage 5's review.
+rounds and an independent check of the round-2 fixes). **Stage 3 is closed** (two rounds).
+**Stage 5 is closed** (one round, accepted, no P0/P1). **On `dev` since the 14:50Z restart, not yet
+live:** Stage 2b (`0e3d92c0`), 4b (`cd35abac`), 5c (`c2d1c191`), the abort follow-up (`f5fe6fec`)
+and the Playwright traps doc (`7411ca37`, committed, awaiting its push). **The browser check passed
+every Stage 1–4 bullet.** **In flight:** an independent Opus verification of the four draft fixes
+GPT Sol wrote in its Stages 2+4 review before that review was killed at its timeout — if it comes
+back clean, those fixes and Stage 5's F80 fix are gated, committed and pushed, and Stages 2 and 4
+close without another Codex run. **Still to do:** that, the full suite, and the debrief. **For
+Greg:** the Sessions text filter and the page's touch targets, below.
+
+**One P3 note on Stage 5's F80 fix, left as it is:** its `rejectedStart` helper in
+`NewSessionPanel.tsx` repeats `describeError` from `transport.ts` almost word for word, so there are
+now two spellings of "a thrown thing, as a sentence". Not worth reopening a closed stage for; the
+next change to either should import the one from `transport.ts`.
 
 **Stage 5c — built.** An Opus subagent; eight tests in a new `tests/fleet-detail-reader.test.tsx`,
 the ones that could fail seen red, the rest proved by mutation. *Read again* now uses the shared
@@ -809,6 +819,79 @@ fixed in the test file only; production code unchanged.
 | F57 | Moving the evidence memory back into render, or disabling the unchanged-object reuse, left the suite green | P2 established | **Fixed by Sol, accepted** — abandoned-render and identity tests, proved by those mutations. |
 
 **Stage 3 is closed**: two rounds, the second a scoped check, no open P0 or P1.
+
+Stages 2 and 4 code review, GPT Sol, 2026-09-10, combined because both end in `SessionDetail.tsx`
+(`260910c-session-continuity-stage2-4-code-review-prompt.md`). **Killed at its 45-minute timeout
+before writing an answer** — dispatched before the Overseer's 30-minute rule — but it had found four
+defects, each by a red-first integration test, fixed them, and written the postmortem
+`docs/postmortems/260910c-a-mutable-text-hook-erased-the-submission-it-produced.md`. All four are one
+class, *provenance erased at a mutable boundary*: the drafts hook handed back a changing value and a
+`clear()` that acted on whatever was current, so an asynchronous success had authority over text it
+never sent. The fix gives each request a **submission ticket** carrying a generation; unfiled text
+keeps its target scope across a remount and is never stored.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F25 | A Send (and a Queue) finishing after a same-conversation relaunch left the already-sent draft restored | P1 established | **Fixed by Sol, verified.** |
+| F26 | The broadcast box's old success cleared newer text typed while it was in flight | P1 established | **Fixed by Sol, verified.** |
+| F27 | Text typed before the pane could be placed vanished when it remounted on a verified target — including when the delivery lands in the same instant as the typing | P1 established | **Fixed by Sol, verified.** |
+| F28 | The mounted Overseer card, moved between conversations, kept the first one's words beside a live Send | P1 established | **Fixed by Sol, verified.** |
+| F29 | The generation that decides whether a success may clear is kept per *box*, not per *conversation*: a Send to A, a remount onto B and typing there before A answers, and A's success is ignored — its sent draft stays in storage and returns with A, inviting a duplicate message | P2 established, found by the verifier | **Fixed next, without a Codex review** (below). Not a regression — the old code removed nothing in that case either. |
+
+**Why no Codex rerun.** A 30-minute rerun of work that had just overrun 45 minutes would likely time
+out again, and Codex is rationed. Instead an **independent Opus agent** — a different model from the
+author, which is what the house rule asks of a check of author-only P1 fixes — verified the work on a
+scratch copy of the tree with the committed source put back, so nothing was reverted under the Stage
+5 reviewer running at the same time: the six tests covering the four defects each failed on the
+committed code and pass now. Nothing needed finishing; every file matched the last version in the
+reviewer's own log. Its two other additions are coverage — the verified-relaunch test separating
+"outcome cards reset" from "the same conversation's draft returns", which Stage 1's changed fixtures
+had blurred, and a poll-tick test proved non-vacuous by a deliberate mutation. It corrected one
+overclaim in the postmortem and added F29's limit to it. **Stages 2 and 4 close on this**, with F29's
+fix — built by Opus, red-first, and read by me — the one part of them no cross-family reviewer saw.
+
+Stage 5 code review, GPT Sol, 2026-09-10, on `05990f06`, `c2d1c191` and `f5fe6fec`
+(`260910c-session-continuity-stage5-code-review-sol.md`), run under the Overseer's 30-minute budget
+rule. Verdict: **"Accept. No P0/P1 findings."** It walked every guarantee — same-frame taps, the
+exact four-minute boundary (accepted under `>`, `+1 ms` discarded), StrictMode's rehearsal mount, a
+claim discovered between two taps — and found them accurate.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F80 | A rejected `NewSessionApi.start()` released the posting guard but escaped the click handler as an unhandled rejection, with nothing on screen | P2 established | **Fixed by Sol, accepted** — caught, shown as a refusal, the `finally` release kept; a test that went red first. I had seen this path when reading 5a's diff and let it pass as older than the change; it was right to fix. |
+| F81 | The abort reaches `fetch` and stops there: `server.ts` starts `readRecentMessages()` without watching for the request closing, and the reader takes no signal, so an abandoned transcript read still finishes on the box | P2 reasoned, wider | **Not built — a named follow-up, and a correction.** The commit message of `f5fe6fec` says an abandoned read "now stops costing the box". **That overstates it**: the browser stops waiting and aborts its fetch, and the server finishes the read anyway. The accurate claim is Stage 5's 5d as its review prompt stated it — *the fetch is aborted, not merely ignored*. Making the server honour it means deriving a signal from the request closing and checking it in transcript discovery and between tail-read chunks, in the shared `server.ts` and `transcript.ts`; it saves a rare read (only on a 30 s deadline, an unmount or an identity change), so it is left for a later stage rather than built on shared server code here. |
+
+**Stage 5 is closed after one round.** Its one fix is a P2 — the rule that a fix nobody but its
+author has read gets a scoped check is written for P1s — and I read it before landing.
+
+**The browser check** (a Sonnet subagent, Playwright on the box, against a build of `03743ea3` with
+every `/api/*` answered from fixtures — never the live page): **Stages 1–4 passed every bullet**, at
+390 px and 1280 px, keyboard-only and through an offline return, and it confirmed 4b left the
+Overseer tab's queue wording unchanged. Two of the brief's bullets were wrong because I wrote it
+before later stages landed — a relaunch's draft "must be gone" (Stage 2 now restores it) and the
+feed "must refresh" on coming back online (Stage 3 re-reads only on evidence); the checker read the
+code, not the brief, and said so. Two Playwright traps it hit are now in
+`docs/project/browser-testing-playwright.md` (`7411ca37`).
+
+- **The Sessions text filter — not built; a one-line decision for Greg.** Measured: 25 rows at
+  390 px span about 4.5 screen-heights, and a known title mid-list took 6 scroll gestures to reach;
+  the titles are distinct, and none of the five existing orders helps match by topic. The checker's
+  verdict, "mildly cumbersome, not severe", is ambiguous against the roadmap's "only if
+  cumbersome", so it goes to Greg with the evidence and a recommendation to queue it as a small
+  follow-up.
+- **Touch targets — a named limit, not patched here.** Several controls are under ~44 px, among
+  them ones this stage touched: the composer's Clear (51×28), Start it and Read again, and the
+  actions age line's tooltip (70×17). None is out of line with the page — every `Button` is
+  `tw:h-7`, 28 px, and the age wears the same inline tooltip every other age does — so raising one
+  would break the page's one-height rule, and raising all is the design-system work the roadmap
+  excludes.
+
+**Two process lessons, both mine.** *A brief written ahead goes stale*: the browser brief was
+drafted before Stages 2–4 landed and asserted two behaviours they deliberately changed; re-read a
+drafted brief against what landed before dispatching it. *Two write-capable reviewers in one tree
+must each be told about the other*: I dispatched Stage 5's reviewer while Stages 2+4's was running
+under a prompt that said "nothing else is editing". Stage 5's prompt fenced off the other's files,
+but not the reverse; the only overlap turned out to be one line.
 
 ## Risks, and what would catch each
 

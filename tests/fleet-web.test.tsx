@@ -11000,6 +11000,28 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
+  it("restores the draft but clears both outcome cards on a verified same-conversation relaunch", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsRunning(ran({ pid: 5150, startTicks: 90_000_000 })),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
   it("commits no stale-key frame on replacement under StrictMode", async () => {
     const feed = manualTransport();
     let frames: string[] = [];
@@ -11083,7 +11105,7 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
   });
 
-  it("clears detail state when the claimed conversation changes inside one execution epoch", async () => {
+  it("keeps unfiled words but clears outcome cards when the claimed conversation changes", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
@@ -11116,12 +11138,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     );
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
-  it("clears detail state when the tmux world changes around the same unverifiable handle", async () => {
+  it("keeps unfiled words but clears outcome cards when the tmux world changes", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
@@ -11137,7 +11160,8 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
@@ -11225,7 +11249,7 @@ describe("the detail pane's state follows the execution, not the handle", () => 
    * version that let the null overwrite what it held would treat 132281 as a
    * first sighting and keep one server's draft under another's handle.
    */
-  it("still clears detail state when the world changes to a different known one across an unreadable snapshot", async () => {
+  it("still keeps unfiled words while clearing cards when the world changes across an unreadable snapshot", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
@@ -11239,12 +11263,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
-  it("still clears detail state when the claim changes to a different known one across an unreadable snapshot", async () => {
+  it("still keeps unfiled words while clearing cards when the claim changes across an unreadable snapshot", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
@@ -11261,7 +11286,8 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ rows: claiming("conv-B") })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
@@ -12169,6 +12195,55 @@ describe("the session composer keeps its draft for the conversation it was writt
     expect(composer().value).toBe("still for conversation A");
   });
 
+  it("does not resurrect a successfully sent draft when the same conversation relaunches before the answer", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+      answer: async () => ({ ok: true, op: "answer", sent: [], verified: { kind: "not-told" } }),
+    };
+    const feed = await start(running(), { steer: pending });
+    typeInto(composer(), "sent once, not a new draft");
+    act(() => pressed("Send now").click());
+
+    /* The process is new, but it resumes the same conversation. The new pane
+       correctly restores the stored draft while the old request is pending. */
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("sent once, not a new draft");
+
+    await act(async () => {
+      settle?.({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } });
+    });
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(composer().value).toBe("");
+  });
+
+  it("does not resurrect a successfully queued draft when same conversation relaunches before the answer", async () => {
+    let settle: ((outcome: Awaited<ReturnType<ActionsApi["queueMessage"]>>) => void) | null = null;
+    const base = recordingActions();
+    const pending: ActionsApi = {
+      ...base.api,
+      queueMessage: async () =>
+        await new Promise<Awaited<ReturnType<ActionsApi["queueMessage"]>>>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = await start(running(), { actionsApi: pending });
+    typeInto(composer(), "queue this once");
+    act(() => pressed("Queue (~73s)").click());
+
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("queue this once");
+
+    await act(async () => {
+      settle?.({ ok: true, kind: "queued", position: 1, why: null });
+    });
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(composer().value).toBe("");
+  });
+
   // 4
   it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
     await start(running());
@@ -12199,6 +12274,54 @@ describe("the session composer keeps its draft for the conversation it was writt
     await arrives(feed, rowsOf(running()));
     expect(draftKeys()).toEqual([KEY_A]);
     expect(window.sessionStorage.getItem(KEY_A)).toBe("nobody has been verified yet");
+  });
+
+  it("does not silently destroy blind typing when the first verified reading also changes the target", async () => {
+    const feed = await start(WEATHER);
+    typeInto(composer(), "typed before this pane could be placed");
+    expect(draftKeys()).toEqual([]);
+
+    await arrives(feed, [
+      steerable({
+        id: "$d",
+        title: "drafting",
+        status: { kind: "working" },
+        claudeSessionId: "conv-B",
+        execution: running({ pid: 7005, conversation: { kind: "verified", id: "conv-B" } }),
+      }),
+    ]);
+
+    expect(composer().value).toBe("typed before this pane could be placed");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(draftKeys()).toEqual([]);
+  });
+
+  it("keeps blind typing when a flushSync transport delivery remounts the pane in the same turn", async () => {
+    const feed = await start(WEATHER);
+    const input = composer();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(input, "typed immediately before the delivery");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$d",
+              title: "drafting",
+              status: { kind: "working" },
+              claudeSessionId: "conv-B",
+              execution: running({ pid: 7005, conversation: { kind: "verified", id: "conv-B" } }),
+            }),
+          ],
+        }),
+      );
+    });
+    await act(async () => {});
+
+    expect(composer().value).toBe("typed immediately before the delivery");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(draftKeys()).toEqual([]);
   });
 
   // 6

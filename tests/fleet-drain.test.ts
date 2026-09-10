@@ -28,6 +28,7 @@ import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import { createDrainCursor, DRAIN_BUDGET_MS, drainOnce, MAX_SENDS_PER_PASS, summariseDrain, type DrainDeps, type DrainOutcome } from "../tools/fleet/drain.js";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue, type UnsentFailure } from "../tools/fleet/queue.js";
+import { memoryReceiptJournal, type ReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { drainSharedQueues, handleActionRequest, makeActionRoutes, type ActionDeps } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
 import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
@@ -165,7 +166,12 @@ const GREG = "[Greg, via the fleet dashboard] ";
 /** The delivery module as a recorder, and optionally as a thing that fails. */
 function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) => SteerResult); queue?: SteeringQueue } = {}) {
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+  const queue = over.queue ?? new SteeringQueue({
+    now: () => clock,
+    serverInstanceId: "1a2b3c4d",
+    quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+    receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+  });
   const sent: Sent[] = [];
   const logs: string[] = [];
   const deps: DrainDeps = {
@@ -252,7 +258,7 @@ describe("the route and the drain share one queue", () => {
     // queue nothing asked. Only a test that crosses the seam can see that.
     const sent: Sent[] = [];
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
       queue,
       send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
@@ -301,7 +307,7 @@ describe("the route and the drain share one queue", () => {
     // would pass a route test and still be typed bare twenty minutes later.
     const sent: Sent[] = [];
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
       queue,
       send: sends(queue.quarantineBook(), (target, text, declaredStatus) => {
@@ -560,6 +566,75 @@ describe("drainOnce holds", () => {
  * ================================================================== */
 
 describe("drainOnce fails honestly", () => {
+  it("records attempted before the coordinator and records a throw without closing the lease", () => {
+    let clock = 1_000_000;
+    const receipts = memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+    const queue = new SteeringQueue({
+      now: () => clock,
+      serverInstanceId: "1a2b3c4d",
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      receipts,
+    });
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
+    const receipt = () => receipts.recent(1)[0];
+    const deps: DrainDeps = {
+      queue,
+      cursor: createDrainCursor(),
+      send: sends(queue.quarantineBook(), () => {
+        expect(receipt()?.last.kind).toBe("attempted");
+        throw new Error("tmux vanished");
+      }),
+      log: () => {},
+      now: () => clock,
+    };
+
+    const result = drainOnce(snap([row()]), deps);
+
+    expect(result.outcomes[0]?.kind).toBe("threw");
+    expect(receipt()?.last).toMatchObject({ kind: "outcome", state: "outcome-unknown", reason: "threw" });
+    expect(queue.snapshot(SESSION_A).items[0]?.leasedAt).not.toBeNull();
+  });
+
+  it("holds a non-durable attempt without typing or spending a send slot", () => {
+    let clock = 1_000_000;
+    const base = memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+    let attempts = 0;
+    const receipts: ReceiptJournal = {
+      ...base,
+      acceptedDurably: () => true,
+      attempted(receiptId) {
+        attempts += 1;
+        return attempts === 1 ? { landed: false } : base.attempted(receiptId);
+      },
+    };
+    const quarantine = new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine, receipts });
+    const sent: string[] = [];
+    const deps: DrainDeps = {
+      queue,
+      cursor: createDrainCursor(),
+      send: sends(quarantine, (_target, text) => {
+        sent.push(text);
+        return SENT_OK;
+      }),
+      log: () => {},
+      now: () => clock,
+    };
+    const rows = Array.from({ length: MAX_SENDS_PER_PASS + 1 }, (_, i) =>
+      row({ id: `$9940${i}`, paneId: `%9940${i}`, claudeSessionId: CONVO_A }),
+    );
+    for (const fixture of rows) {
+      queue.enqueueMessage({ sessionId: fixture.id, claudeSessionId: CONVO_A }, `for ${fixture.id}`, "greg");
+    }
+
+    const result = drainOnce(snap(rows), deps);
+
+    expect(sent).toHaveLength(MAX_SENDS_PER_PASS);
+    expect(result.outcomes[0]).toMatchObject({ kind: "held", reason: "not-durable" });
+    expect(queue.snapshot(rows[0]!.id).items[0]?.leasedAt).toBeNull();
+    expect(result.outcomes.some((outcome) => outcome.kind === "held" && outcome.reason === "out-of-time")).toBe(false);
+  });
+
   it("puts an item back when the transport says it sent nothing", () => {
     // **THE INSTRUCTION MUST SURVIVE THE COMMONEST REFUSAL ON THIS BOX.** The
     // row said idle; in the thirteen seconds since the collection the agent
@@ -822,7 +897,7 @@ describe("drainOnce is bounded", () => {
     // The clock is injected, so a slow transport is a fake that advances it —
     // no waiting, and the bound is measured rather than assumed.
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const sent: string[] = [];
     const deps: DrainDeps = {
       queue,
@@ -980,7 +1055,7 @@ describe("an enacted action cannot be queued", () => {
 
   it("is refused by the route with a code the page can act on", async () => {
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
       queue,
       send: sends(queue.quarantineBook(), () => SENT_OK),

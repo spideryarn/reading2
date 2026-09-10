@@ -39,14 +39,7 @@
  * NO CLOCK OF ITS OWN. `now` is injected, matching queue.ts and drain.ts, so
  * every test here moves time by assignment.
  */
-import {
-  holdLedgerDir,
-  openHoldLedger,
-  type AttemptRecord,
-  type HeldRecord,
-  type HoldLedger,
-  type HoldResolution,
-} from "./hold-ledger.js";
+import type { AttemptRecord, HeldRecord, HoldLedger, HoldResolution } from "./hold-ledger.js";
 import { INSTANCE_TOKEN, serverInstanceId } from "./instance.js";
 import type {
   HoldReleaseGesture,
@@ -192,9 +185,9 @@ export type QuarantineOptions = {
    * **OPTIONAL, AND NOT BECAUSE DURABILITY IS OPTIONAL.** Every test here
    * builds a book without one, because a test that wrote to a real directory
    * would be a test that could take the live dashboard's writer lock. The one
-   * composition that matters — `openSharedQuarantine()` at the bottom — always
-   * has one, and a source guard makes `server.ts` call it before it can be
-   * asked to type.
+   * production composition in `action-stores.ts` always installs one before
+   * the server can be asked to type, and `tests/fleet-hold-restart.test.ts`
+   * guards that ordering.
    */
   ledger?: HoldLedger | null;
 };
@@ -854,6 +847,41 @@ export class QuarantineBook {
 let shared: QuarantineBook | null = null;
 let sharedLedger: HoldLedger | null = null;
 
+/** Whether somebody has already been handed the process-wide book. */
+export function sharedQuarantineWasOpened(): boolean {
+  return shared !== null;
+}
+
+/**
+ * Install the ledger before constructing the process-wide book.
+ *
+ * The action-store composition takes the one writer claim shared by holds and
+ * receipts, then hands the already-opened ledger in here before any route can
+ * ask for the book.
+ */
+export function installSharedQuarantineLedger(
+  ledger: HoldLedger | null,
+  options: { now: () => number; serverInstanceId: string },
+): {
+  book: QuarantineBook;
+  rehydrated: { holds: number; attempts: number; skipped: number };
+} {
+  if (shared !== null) {
+    throw new Error("the shared quarantine book was built before its ledger was opened");
+  }
+  sharedLedger = ledger;
+  shared = new QuarantineBook({
+    now: options.now,
+    serverInstanceId: options.serverInstanceId,
+    ledger,
+  });
+  const book = shared;
+  return {
+    book,
+    rehydrated: ledger === null ? { holds: 0, attempts: 0, skipped: 0 } : book.rehydrate(),
+  };
+}
+
 export function sharedQuarantineBook(): QuarantineBook {
   shared ??= new QuarantineBook({
     now: () => Date.now(),
@@ -863,101 +891,8 @@ export function sharedQuarantineBook(): QuarantineBook {
   return shared;
 }
 
-/**
- * What a start found, in sentences a launcher can print.
- *
- * **THE COUNTS ARE THE POINT.** A dashboard that came back holding four
- * sessions and a dashboard that came back holding none look identical from the
- * outside, and only one of them means somebody has to go and look at four
- * terminals.
- */
-export type QuarantineStartup = {
-  book: QuarantineBook;
-  /** The ledger, or null when it would not open — durability off, everything else unchanged. */
-  ledger: HoldLedger | null;
-  rehydrated: { holds: number; attempts: number; skipped: number };
-  lines: { log: string[]; error: string[] };
-};
-
-/**
- * **OPEN THE LEDGER AND REBUILD THE HOLDS — BEFORE ANY SEND ROUTE IS MOUNTED.**
- *
- * Synchronous, and `server.ts` calls it above `createServer`, so there is no
- * window in which this process can be asked to type while it is still reading.
- * That ordering is not left to memory: tests/fleet-hold-wiring.test.ts reads
- * server.ts and fails if the call is missing or comes after the listener, which
- * is the same kind of source guard `tests/fleet-health-wiring.test.ts` uses for
- * the same reason — the file that composes the server cannot be imported by a
- * test without binding port 8787.
- *
- * **IDEMPOTENT, AND IT THROWS IN EXACTLY ONE CASE**: somebody has already been
- * handed the shared book without a ledger, which means a send could already
- * have gone out unrecorded and a hold could already have been missed. That is
- * the failure this whole stage exists to close, and it can only be reached by
- * calling `sharedQuarantineBook()` before this — a composition mistake, which
- * fails immediately and every time rather than lying dormant. Stage 4's
- * argument for `makeActionRoutes` throwing on a book mismatch, unchanged: a
- * dashboard that refuses to start is visible; a dashboard running with its
- * quarantine silently un-durable is not.
- */
-export function openSharedQuarantine(options: { dir?: string | undefined; log?: (line: string) => void } = {}): QuarantineStartup {
-  const log: string[] = [];
-  const error: string[] = [];
-  if (sharedLedger !== null) {
-    return { book: sharedQuarantineBook(), ledger: sharedLedger, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
-  }
-  if (shared !== null) {
-    throw new Error(
-      "the shared quarantine book was built before its ledger was opened, so a send could already have gone out " +
-        "with nothing written down. Call openSharedQuarantine() before anything that can type — server.ts does it " +
-        "above createServer, and tests/fleet-hold-wiring.test.ts is what keeps it there.",
-    );
-  }
-
-  const resolved = options.dir === undefined ? holdLedgerDir() : { ok: true as const, dir: options.dir };
-  if (!resolved.ok) {
-    error.push(`hold ledger: ${resolved.why}. Holds will not survive a restart.`);
-    return { book: sharedQuarantineBook(), ledger: null, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
-  }
-
-  const opened = openHoldLedger(resolved.dir, {
-    /* A ledger that has quietly stopped writing looks exactly like one that is
-       working, so every new trouble reaches the dashboard's log at the moment
-       it happens rather than only at the next start. */
-    onTrouble: (why) => (options.log ?? console.error)(`hold ledger: ${why}`),
-  });
-  if (opened.kind === "refused") {
-    error.push(`hold ledger: ${opened.why}. Holds will not survive a restart.`);
-    return { book: sharedQuarantineBook(), ledger: null, rehydrated: { holds: 0, attempts: 0, skipped: 0 }, lines: { log, error } };
-  }
-
-  sharedLedger = opened.ledger;
-  const book = sharedQuarantineBook();
-  const rehydrated = book.rehydrate();
-  const status = opened.ledger.status();
-  log.push(`hold ledger → ${status.dir}`);
-  if (status.repaired.torn) {
-    error.push(`hold ledger: repaired a torn last line (${status.repaired.droppedBytes} bytes dropped)`);
-  }
-  if (status.unreadableLines > 0) error.push(`hold ledger: ${status.unreadableLines} line(s) could not be read`);
-  if (status.lockedOutBy !== null) error.push(`hold ledger is read-only here: ${status.lockedOutBy}`);
-  if (rehydrated.holds + rehydrated.attempts > 0) {
-    error.push(
-      `hold ledger: ${rehydrated.holds + rehydrated.attempts} session(s) came back HELD from the previous run ` +
-        `(${rehydrated.holds} with an answer recorded, ${rehydrated.attempts} with none). Nothing has been re-sent; ` +
-        "somebody has to look at those terminals and release them.",
-    );
-  }
-  return { book, ledger: opened.ledger, rehydrated, lines: { log, error } };
-}
-
-/**
- * Forget the shared composition. **Tests only**, and the reason it exists at
- * all is that a module-level singleton and a temporary directory cannot both be
- * right otherwise: tests/fleet-hold-wiring.test.ts drives the real startup path
- * against a `mkdtemp` and has to be able to do it twice.
- */
-export function resetSharedQuarantineForTests(): void {
+/** Reset the quarantine half before the surrounding composition releases its shared lock. */
+export function resetSharedQuarantineStateForActionStores(): void {
   sharedLedger?.close();
   sharedLedger = null;
   shared = null;

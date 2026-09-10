@@ -80,6 +80,19 @@ export const POLL_MS = 3_000;
  */
 export const POLL_GIVE_UP_MS = 4 * 60_000;
 
+/** A rejected injected API is outside the normal HTTP adapter, but must still end as a sentence rather than an unhandled promise. */
+function rejectedStart(cause: unknown): string {
+  const why =
+    cause instanceof Error
+      ? cause.message === ""
+        ? cause.name
+        : cause.message
+      : typeof cause === "string" && cause !== ""
+        ? cause
+        : "the request failed, and gave no reason";
+  return `the request failed before it answered: ${why}`;
+}
+
 /**
  * Why the page stopped asking — and they are not the same sentence.
  *
@@ -279,7 +292,7 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
-  /** The server's refusal of the POST itself, verbatim. */
+  /** The server's refusal verbatim, or this boundary's sentence when an injected API rejects. */
   const [refusal, setRefusal] = useState<string | null>(null);
   const [launches, setLaunches] = useState<LaunchRecord[]>([]);
   const [pollingSince, setPollingSince] = useState<number | null>(null);
@@ -470,6 +483,13 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     let result: Awaited<ReturnType<NewSessionApi["start"]>>;
     try {
       result = await apiRef.current.start(prompt);
+    } catch (cause) {
+      /* The real HTTP adapter returns every ordinary failure as an outcome, but
+         this is an injected seam and its promise may still reject. Letting that
+         escape `void start()` reports nothing to the reader and becomes an
+         unhandled rejection even though the action guard is correctly released. */
+      setRefusal(rejectedStart(cause));
+      return;
     } finally {
       /* Released however the POST ends, so an api that throws cannot leave the
          button dead for the life of the page. `setBusy` moved in here with it:

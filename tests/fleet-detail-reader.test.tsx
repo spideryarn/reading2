@@ -356,6 +356,23 @@ describe("the detail pane's transcript reader, when its identity changes without
     expect(text).not.toContain("a turn from null");
     expect(messages.reads).toHaveLength(2);
   });
+
+  it("does not let a same-frame second tap swallow the newly discovered identity's read", async () => {
+    const messages = heldMessages();
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", null)} />));
+    await answer(messages.reads, 0);
+
+    const oldButton = readAgain();
+    act(() => {
+      oldButton.click();
+      root.render(<Pane api={messages.api} row={rowOf("$a", "conv-A")} />);
+      oldButton.click();
+    });
+
+    expect(messages.reads.map((r) => r.conversation)).toEqual([null, null, "conv-A"]);
+    expect(signalOf(messages.reads, 1).aborted).toBe(true);
+    expect(signalOf(messages.reads, 2).aborted).toBe(false);
+  });
 });
 
 describe("the detail pane's transcript reader, when a read never answers", () => {
