@@ -125,29 +125,39 @@
  * undecidable is what the CLI DOES with a value that is not an id: its help calls the value "a session
  * ID, or … optional search term" for the interactive picker, so `--resume foo` opens a picker on no
  * conversation anybody can name. A lowercase uuid is an id; nothing else is. So the rule is exactly
- * one shape, in `readResume`:
+ * one shape, on faithful argv only, in `readResume`:
  *
- *  - `--resume` followed by a lowercase uuid AS THE NEXT ELEMENT names that conversation. It is
+ *  - `--resume` followed by a lowercase uuid AS THE NEXT ELEMENT names that conversation, and it is
  *    reported in `sessionIds`, because it states the same fact `--session-id` does — which
- *    conversation this process writes — and every caller's duplicate policy then applies unchanged:
- *    `--resume A --session-id B` is two conversations. A real resumed process, captured 2026-09-10
- *    in the shape `gjd-remote --resume-conversation` emits (tests/fixtures/claude-argv/):
+ *    conversation this process writes. A real resumed process, captured 2026-09-10 in the shape
+ *    `gjd-remote --resume-conversation` emits (tests/fixtures/claude-argv/):
  *    `claude --resume <uuid> --permission-mode auto --model haiku -- <prompt>`.
  *  - A bare `--resume` — at the end of the line, or before a dash-led token, `--` included — is the
  *    picker, and `unreadable`. A non-uuid value, uppercase included, is `unreadable`. `--resume=<uuid>`
  *    and `-r` are `unreadable`, because nothing here produces them (the table's entry criterion).
+ *  - **`--resume` beside `--session-id` is `unreadable`**, in either order, equal ids included (GPT
+ *    Sol's G22, 2026-09-10). The CLI refuses the pair outright — measured: "Error: --session-id can
+ *    only be used with --continue or --resume if --fork-session is also specified" — so the process
+ *    enters no conversation at all. That is a fact about `claude`, not a caller's duplicate policy,
+ *    which is why the reader decides it: reported as `[A, A]`, `steer.ts`'s set of distinct ids
+ *    collapsed it to one and answered "yes" for a process that never started a conversation.
  *
- * **ON A `ps`-FLATTENED LINE IT IS READ WITH ONE MORE CONDITION.** The flattened arm already believes
- * that a flag's value is one element — `--session-id` rests on exactly that — and it accepts the
- * residual (a value with a space in it, which no producer here emits) for every one-value flag. But
- * `--resume` adds a hazard the others lack: a malformed `--session-id` makes the CLI refuse to start
- * (measured, above), while a malformed `--resume` value is a live picker. So `--resume "<uuid> carry
- * on"`, a search term, prints exactly like `--resume <uuid>` followed by a prompt. On a flattened line
- * the id is therefore read only when what follows it is nothing or a dash-led token; a bare word there
- * is `unreadable`. This reading is not optional: `tools/overseer/harness.ts` reads every claude off
- * `ps`, and the execution identity that verifies a resumed conversation comes from it. The shape
- * `gjd-remote` produces puts `--permission-mode` after the id, so it reads on both arms. The one
- * caller that presses Enter, `steer.ts`'s `isClaudeForSession`, takes faithful argv only.
+ * **ON A `ps`-FLATTENED LINE, `--resume` IN ANY FORM IS `unreadable`** — exactly as it was before
+ * Stage 3a (GPT Sol's G21, 2026-09-10). Flattening erases argument boundaries, and for this flag the
+ * boundary is the whole question: `--resume "<uuid> --permission-mode auto -- Reply…"`, ONE picker
+ * search term, prints byte-for-byte the same `ps` line as the real capture above, which is five
+ * elements. No rule over the flattened text can tell them apart — not "a dash-led token follows the
+ * id", which is what this arm used to require, because a dash-led token can be the inside of a
+ * search term. Other one-value flags accept that residual (a value with a space in it) because a
+ * malformed `--session-id` makes the CLI refuse to start, while a malformed `--resume` value is a live
+ * picker on a conversation nobody named.
+ *
+ * The cost: `tools/overseer/harness.ts` reads every claude off `ps`, so a resumed pane's execution
+ * identity is `claimed-only`, never a verified conversation. **Verifying a resumed pane needs a
+ * faithful `/proc/<pid>/cmdline` read of the harness process**, bracketed like the start-time read in
+ * `execution-identity.ts` — a named follow-up for plan 260910f's Stage 3b, not built here. The one
+ * caller that presses Enter, `steer.ts`'s `isClaudeForSession`, takes faithful argv only, so the
+ * faithful arm above is its whole reading.
  *
  * ══ MEASURED AGAINST `claude` 2.1.263, 2026-09-08 ══
  *
@@ -225,12 +235,13 @@ export type ClaudeReading =
    *  terminal flag for the flags that print and exit; see the header. */
   | { kind: "subcommand"; name: string }
   /** A session: interactive, or headless under `--print`. `sessionIds` is EVERY conversation id
-   *  named before the boundary, in order — each `--session-id` value, and a `--resume <uuid>` (see
-   *  the header) — so a caller can apply its own duplicate policy. */
+   *  named before the boundary, in order — each `--session-id` value, or the `--resume <uuid>` of a
+   *  faithful argv (never both: see the header) — so a caller can apply its own duplicate policy. */
   | { kind: "session"; headless: boolean; sessionIds: readonly string[] }
   /** We could not read it: an unknown flag, a flag missing its value, a variadic flag whose values
-   *  have no terminator, or a dash-led token that a `ps` flattening left indistinguishable from
-   *  prose. Grants nothing and delivers nothing — fail-closed and fail-loud. */
+   *  have no terminator, a dash-led token that a `ps` flattening left indistinguishable from
+   *  prose, any `--resume` off `ps`, or `--resume` beside `--session-id`, which the CLI refuses.
+   *  Grants nothing and delivers nothing — fail-closed and fail-loud. */
   | { kind: "unreadable"; why: string };
 
 /**
@@ -522,7 +533,12 @@ type FlagStep =
   | { step: "refuse"; why: string }
   /** A flag that prints and exits: the whole process is a command. */
   | { step: "command"; name: string }
-  | { step: "flag"; next: number; headless: boolean; sessionId: string | undefined };
+  /** `selector` is the conversation this flag names, and WHICH flag named it — kept because the two
+   *  selectors together are a refusal whatever their values (the header's G22). */
+  | { step: "flag"; next: number; headless: boolean; selector: Selector | undefined };
+
+/** A conversation id, and which of the two flags that can name one named it. */
+type Selector = { flag: "--session-id" | "--resume"; id: string };
 
 /**
  * A conversation id as `claude` mints them: a lowercase uuid, and nothing looser. Uppercase is
@@ -536,8 +552,8 @@ const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
  * right after it is decidable and every other shape of `--resume` is not.
  *
  * **FIDELITY REACHES IN HERE, and only here among the flags.** On faithful argv the element after
- * the id is its own element, so it can be anything. On a `ps`-flattened line a bare word after the id
- * may be the rest of a picker search term that happened to start with one, so there it refuses.
+ * `--resume` is exactly its value. On a `ps`-flattened line nothing says where the value ends, so
+ * every `--resume` there is refused, first and whatever follows it (G21).
  */
 function readResume(args: {
   token: string;
@@ -547,6 +563,15 @@ function readResume(args: {
   fidelity: ClaudeCommandLine["fidelity"];
 }): FlagStep {
   const { token, inline, rest, at, fidelity } = args;
+  if (fidelity === "ps-flattened") {
+    return {
+      step: "refuse",
+      why:
+        `\`${token}\` on a command line read from \`ps\`, which has erased the argument boundaries: a` +
+        ` resume id followed by more words prints exactly like one picker search term that begins` +
+        ` with that id, so which conversation it opens cannot be read`,
+    };
+  }
   if (inline !== undefined) {
     return {
       step: "refuse",
@@ -570,18 +595,7 @@ function readResume(args: {
         ` else as a picker search term, so which conversation it opens cannot be read`,
     };
   }
-  if (fidelity === "ps-flattened") {
-    const after = rest[at + 2];
-    if (after !== undefined && !after.startsWith("-")) {
-      return {
-        step: "refuse",
-        why:
-          `\`--resume ${value}\` is followed by the bare word \`${after}\` on a command line read from \`ps\`,` +
-          ` so whether the id was the whole value or the first word of a picker search term cannot be read`,
-      };
-    }
-  }
-  return { step: "flag", next: at + 2, headless: false, sessionId: value };
+  return { step: "flag", next: at + 2, headless: false, selector: { flag: "--resume", id: value } };
 }
 
 /**
@@ -643,8 +657,36 @@ function readFlagToken(args: {
     // added. The exactness that IS held by a test is the `FLAGS.get(name)` lookup — mutate that to a
     // prefix search and two tests go red. The line stays exact because it states the rule where the
     // rule is read.
-    sessionId: name === "--session-id" ? scanned.value : undefined,
+    selector:
+      name === "--session-id" && scanned.value !== undefined
+        ? { flag: "--session-id", id: scanned.value }
+        : undefined,
   };
+}
+
+/**
+ * Record the conversation one flag named — or, when the second KIND of selector flag arrives, the
+ * refusal (the header's G22). Either order, and whatever the two ids are: equal ids are the dangerous
+ * case, because a caller's set of distinct ids would collapse `[A, A]` to one conversation that the
+ * CLI never started.
+ */
+function recordSelector(
+  selector: Selector | undefined,
+  flags: Set<Selector["flag"]>,
+  ids: string[],
+): ClaudeReading | undefined {
+  if (selector === undefined) return undefined;
+  flags.add(selector.flag);
+  if (flags.size > 1) {
+    return {
+      kind: "unreadable",
+      why:
+        "`--resume` and `--session-id` are both given, which `claude` refuses without" +
+        " `--fork-session`, so this process enters no conversation that can be named",
+    };
+  }
+  ids.push(selector.id);
+  return undefined;
 }
 
 /** Read a command line. See the module header; the rules live there. */
@@ -662,6 +704,8 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
   const hasSeparator = rest.includes("--");
 
   const sessionIds: string[] = [];
+  // Which selector flags have named a conversation. Both together is a line the CLI refuses (G22).
+  const selectorFlags = new Set<Selector["flag"]>();
   let headless = false;
   // Has a bare word appeared that no flag claimed? On the faithful arm that is only the prompt or a
   // command word, and it changes nothing. On the flattened arm it is the moment we stop being able
@@ -704,7 +748,8 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
     if (step.step === "command") return { kind: "subcommand", name: step.name };
     i = step.next;
     if (step.headless) headless = true;
-    if (step.sessionId !== undefined) sessionIds.push(step.sessionId);
+    const refused = recordSelector(step.selector, selectorFlags, sessionIds);
+    if (refused !== undefined) return refused;
   }
 
   return { kind: "session", headless, sessionIds };

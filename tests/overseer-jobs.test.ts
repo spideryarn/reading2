@@ -49,7 +49,10 @@ import {
   type Occurrence,
   type OccurrenceId,
 } from "../tools/overseer/jobs.js";
-import type { JobSpawn, SpawnJob } from "../tools/overseer/jobs.js";
+import type { JobSpawn } from "../tools/overseer/jobs.js";
+import type { CorrelationId, LaunchOccurrenceId } from "../tools/overseer/launch-protocol.js";
+import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
+import type { RuleObservation } from "../tools/overseer/rules.js";
 import { describeReport, schedulerTick, type LostRecord, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
 import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import {
@@ -115,7 +118,8 @@ const JOB: JobDefinition = {
     id: "get-ready-to-deploy",
     what: "npm run get-ready-to-deploy",
     documents: [],
-    work: { kind: "session" }, dispatch: { kind: "live" },
+    work: { kind: "session", run: { timeoutMinutes: 30, access: "read-only" } },
+    dispatch: { kind: "live" },
   },
   // `initialDelayMs: 0`, TOGETHER WITH `ARMED` BELOW, IS WHAT REPRODUCES THE OLD
   // "a job that has never run is due" BEHAVIOUR. Since 2026-09-09 a never-run
@@ -152,6 +156,41 @@ function withBehaviour(overrides: Partial<JobBehaviour>): JobDefinition {
 }
 
 /**
+ * **THE JOB EVERY TICK IN THIS FILE RUNS: a rule, on JOB's clock.**
+ *
+ * Since plan 260910f (scheduled dispatch) a session job writes nothing to
+ * `events.jsonl` — it starts through the launch protocol, and its history is
+ * the launch journal — so the reservation, the crash windows, the lease and
+ * the lost appends below belong to a rule, the one kind of job that still
+ * dances here. Same sixty-second cadence and two-minute lease as `JOB`, so the
+ * arithmetic in every test reads the same as it did.
+ */
+const RULE_JOB: JobDefinition = {
+  behaviour: {
+    id: "wedged-work",
+    what: "propose kills for wedged work",
+    documents: [],
+    work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 60, policy: "safe-to-kill", disposition: "propose" } },
+    dispatch: { kind: "live" },
+  },
+  schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
+};
+
+function withRule(overrides: Partial<JobBehaviour>): JobDefinition {
+  return { ...RULE_JOB, behaviour: { ...RULE_JOB.behaviour, ...overrides } };
+}
+
+/** What `observe` answers when the test lets it: nothing is wedged, so the rule settles `nothing-to-do` and the occurrence finishes `exit 0`. */
+const NOTHING_WEDGED: RuleObservation = { kind: "wedged", candidates: [], scanned: 1 };
+
+/** A sighting the rule proposes on: one process in a deleted directory, long past the threshold. Shaped after the live specimen in overseer-rules.test.ts. */
+const WEDGED: RuleObservation = {
+  kind: "wedged",
+  candidates: [{ pid: 31337, rule: "cwd-deleted", why: "pid 31337 is running in a directory that has been deleted", comm: "node", args: "node wedged.js", rssKiB: 100, etimeSeconds: 7200 }],
+  scanned: 10,
+};
+
+/**
  * A job pinned to its own current fingerprint, which is what "authorised" means
  * for every test here that is not ABOUT the pin.
  *
@@ -164,34 +203,59 @@ function authorised(definition: JobDefinition): AuthorisedJob {
   return { definition, authorisedDocuments: [], authorisedHash: behaviourHash(definition.behaviour) };
 }
 
-/** A spawn that succeeds and whose work settles when the test says so. */
-function spawnRecorder(options: { pid?: number; settle?: "immediately" | "never" } = {}): {
-  spawn: SpawnJob;
-  calls: JobDefinition[];
-  finish(code: number): void;
+/**
+ * A rule runner whose looking settles when the test says so — the part the
+ * old session spawner played.
+ *
+ * `observe` is called synchronously inside `start`, after the reservation is
+ * durable and before `started` is appended, which is exactly where the spawn
+ * sat. `calls` counts the runs started; `finish` lets every one still looking
+ * see nothing wedged, so it settles and its occurrence finishes `exit 0`.
+ */
+function ruleRecorder(options: { pid?: number; settle?: "on-demand" | "never" } = {}): {
+  rules: ProposingRuleWork;
+  calls: number[];
+  finish(): void;
 } {
-  const calls: JobDefinition[] = [];
-  let resolve: ((code: number) => void) | null = null;
-  const spawn: SpawnJob = (definition) => {
-    calls.push(definition);
-    const done =
-      options.settle === "never"
-        ? new Promise<never>(() => undefined)
-        : new Promise<{ kind: "exited"; code: number }>((r) => {
-            resolve = (code) => r({ kind: "exited", code });
-          });
-    return { kind: "spawned", pid: options.pid ?? 4242, done };
+  const calls: number[] = [];
+  const finishers: (() => void)[] = [];
+  return {
+    calls,
+    finish: () => {
+      for (const finish of finishers.splice(0)) finish();
+    },
+    rules: {
+      selfPid: options.pid ?? 4242,
+      observe: () => {
+        calls.push(calls.length);
+        return options.settle === "never"
+          ? new Promise<never>(() => undefined)
+          : new Promise<RuleObservation>((resolve) => {
+              finishers.push(() => resolve(NOTHING_WEDGED));
+            });
+      },
+    },
   };
-  return { spawn, calls, finish: (code) => resolve?.(code) };
 }
 
-/** Let the `done` promise's `.then` run. The completion append is a microtask, not a timer. */
+/** Let the rule's promise chain and the completion append run. After `observe` answers, all of it is microtasks, not timers. */
 async function settle(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function tick(store: OccurrenceLog, spawn: SpawnJob, now: () => Date, definitions: readonly JobDefinition[] = [JOB]): readonly SchedulerReport[] {
-  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
+/** `rules` undefined is a process holding no rule runner, which refuses the rule at `start` — the refusal case. */
+function tick(store: OccurrenceLog, rules: ProposingRuleWork | undefined, now: () => Date, definitions: readonly JobDefinition[] = [RULE_JOB]): readonly SchedulerReport[] {
+  return schedulerTick({ definitions: definitions.map(authorised), store, rules, now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
+}
+
+/** A runner that breaks its own contract by throwing out of `start` — its pid cannot be read — rather than answering. */
+function brokenRunner(): ProposingRuleWork {
+  return {
+    get selfPid(): number {
+      throw new Error("the runner is broken");
+    },
+    observe: () => new Promise<never>(() => undefined),
+  };
 }
 
 function reportKinds(reports: readonly SchedulerReport[]): string[] {
@@ -268,9 +332,11 @@ describe("a behaviour's fingerprint", () => {
     // test has to be built out of the labels the canonical form actually emits,
     // or it stops being one. Checked by hand against the encoders: without the
     // `:${length}:` prefixes both sides canonicalise to the identical string
-    // `id:x\nwhat:y\nwhat:z\nwork:session\ndocuments:0`.
-    const a = behaviourHash({ id: "x\nwhat:y", what: "z", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } });
-    const b = behaviourHash({ id: "x", what: "y\nwhat:z", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } });
+    // `id:x\nwhat:y\nwhat:z\nwork:session\n…` (the run spec's lines follow
+    // `work:session` since plan 260910f, identically on both sides).
+    const run = { timeoutMinutes: 30, access: "read-only" } as const;
+    const a = behaviourHash({ id: "x\nwhat:y", what: "z", documents: [], work: { kind: "session", run }, dispatch: { kind: "live" } });
+    const b = behaviourHash({ id: "x", what: "y\nwhat:z", documents: [], work: { kind: "session", run }, dispatch: { kind: "live" } });
     expect(a).not.toBe(b);
   });
 
@@ -326,16 +392,22 @@ describe("a behaviour's fingerprint", () => {
 
     // THE GATE, and it is the half that matters. The pin still names the
     // behaviour that was authorised, so the edited one is refused, nothing is
-    // spawned and nothing is written down — and this would hold even if the
+    // started and nothing is written down — and this would hold even if the
     // cadence said the job were due.
+    //
+    // Asked of a RULE job at the tick: since plan 260910f a session job's
+    // history is the launch journal, so a tick holding no launch protocol holds
+    // it on that before it reaches the pin. The gate is the same function for
+    // both kinds (`authorisationUnder`).
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T10:00:10.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder();
+    const runner = ruleRecorder();
+    const editedRule = withRule({ what: "propose kills for everything" });
     const reports = schedulerTick({
-      definitions: [{ definition: edited, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [{ definition: editedRule, authorisedDocuments: [], authorisedHash: behaviourHash(RULE_JOB.behaviour) }],
       store,
-      spawn: runner.spawn,
+      rules: runner.rules,
       now: clock.now,
       arming: ARMED,
       launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
@@ -398,7 +470,9 @@ describe("due(), which is state-based on purpose", () => {
     // `JOB` carries `initialDelayMs: 0` and `ARMED` is hours in the past, so
     // this line is the OLD behaviour, deliberately reproduced — the tests below
     // that are not about arming all lean on it.
-    expect(due(JOB.schedule, { kind: "never" }, now, ARMED)).toEqual({ kind: "due", sinceMs: 0 });
+    // `dueAt` is the NOMINAL instant — the arming plus the delay — which is what
+    // a session job's occurrence key is made of (plan 260910f, M2).
+    expect(due(JOB.schedule, { kind: "never" }, now, ARMED)).toEqual({ kind: "due", sinceMs: 0, dueAt: ARMED.kind === "armed" ? ARMED.at : "" });
   });
 
   test("and NOT before it, which is what stops arming being an immediate launch", () => {
@@ -513,7 +587,7 @@ describe("failing closed", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder();
+    const runner = ruleRecorder();
 
     // A REAL REFUSAL, not a stub: another holder's claim in the lock file makes
     // `stillOurs` false, which is exactly what a second daemon does, and
@@ -523,7 +597,7 @@ describe("failing closed", () => {
       `${JSON.stringify({ pid: process.pid, instanceId: "somebody-else", hostname: "box", startedAt: "2026-09-08T11:00:00.000Z" })}\n`,
     );
 
-    const reports = tick(store, runner.spawn, clock.now);
+    const reports = tick(store, runner.rules, clock.now);
     expect(reportKinds(reports)).toEqual(["not-dispatched"]);
     expect(runner.calls).toEqual([]);
     expect(kindsIn(root)).toEqual([]);
@@ -533,7 +607,7 @@ describe("failing closed", () => {
     // The other shape of the same failure — a full disk, a closed fd — and it
     // has to be caught rather than propagated, or a scheduler tick would take
     // the daemon down instead of declining one job.
-    const runner = spawnRecorder();
+    const runner = ruleRecorder();
     const store: OccurrenceLog = {
       instanceId: "i1",
       occurrences: new Map(),
@@ -542,7 +616,7 @@ describe("failing closed", () => {
         throw new Error("ENOSPC: no space left on device");
       },
     };
-    const reports = tick(store, runner.spawn, fakeClock("2026-09-08T12:00:00.000Z").now);
+    const reports = tick(store, runner.rules, fakeClock("2026-09-08T12:00:00.000Z").now);
     expect(reportKinds(reports)).toEqual(["not-dispatched"]);
     expect(runner.calls).toEqual([]);
     const [only] = reports;
@@ -564,8 +638,8 @@ describe("failing closed", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
-    const reports = tick(store, runner.spawn, clock.now, [JOB, withBehaviour({ what: "something else entirely" })]);
+    const runner = ruleRecorder({ settle: "never" });
+    const reports = tick(store, runner.rules, clock.now, [RULE_JOB, withRule({ what: "something else entirely" })]);
     expect(reportKinds(reports)).toEqual(["duplicate-id", "duplicate-id"]);
     expect(runner.calls).toHaveLength(0);
     // AND NOTHING WAS WRITTEN: a reservation is a launch as far as the ledger is
@@ -573,20 +647,23 @@ describe("failing closed", () => {
     expect(kindsIn(root)).toEqual([]);
   });
 
-  test("the reservation is on the disk BEFORE the spawn is called, not after", () => {
+  test("the reservation is on the disk BEFORE the rule is started, not after", () => {
     // The ordering itself, asserted from inside the runner: by the time anything
-    // can be spawned, a reader opening the log must already be able to see that
+    // can be started, a reader opening the log must already be able to see that
     // we were about to.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    let seenAtSpawnTime: string[] = [];
-    const spawn: SpawnJob = () => {
-      seenAtSpawnTime = kindsIn(root);
-      return { kind: "spawned", pid: 4242, done: new Promise<never>(() => undefined) };
+    let seenAtStartTime: string[] = [];
+    const rules: ProposingRuleWork = {
+      selfPid: 4242,
+      observe: () => {
+        seenAtStartTime = kindsIn(root);
+        return new Promise<never>(() => undefined);
+      },
     };
-    tick(store, spawn, clock.now);
-    expect(seenAtSpawnTime).toEqual(["job-occurrence-reserved"]);
+    tick(store, rules, clock.now);
+    expect(seenAtStartTime).toEqual(["job-occurrence-reserved"]);
   });
 });
 
@@ -606,8 +683,8 @@ describe("the crash windows, one test per row of the review's table", () => {
     closeStore(first);
 
     const second = mustOpen(root, clock.now);
-    const runner = spawnRecorder();
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["dispatched"]);
+    const runner = ruleRecorder();
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["dispatched"]);
     expect(runner.calls).toHaveLength(1);
   });
 
@@ -645,7 +722,7 @@ describe("the crash windows, one test per row of the review's table", () => {
     // an acknowledgement that never lands — the crash in the window itself.
     const rootThree = tempRoot();
     const storeThree = mustOpen(rootThree, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
+    const runner = ruleRecorder({ settle: "never" });
     let appends = 0;
     const crashing: OccurrenceLog = {
       instanceId: storeThree.instanceId,
@@ -661,7 +738,7 @@ describe("the crash windows, one test per row of the review's table", () => {
         return { ok: false, reason: "lock-lost", holder: null };
       },
     };
-    const reports = tick(crashing, runner.spawn, clock.now);
+    const reports = tick(crashing, runner.rules, clock.now);
     expect(runner.calls).toHaveLength(1);
     expect(reportKinds(reports)).toEqual(["dispatched", "not-dispatched"]);
     closeStore(storeThree);
@@ -692,7 +769,8 @@ describe("the crash windows, one test per row of the review's table", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const key = { jobId: JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(JOB.behaviour) };
+    // THE RULE'S OWN LINEAGE, so the tick below reads this reservation as its job's last run.
+    const key = { jobId: RULE_JOB.behaviour.id, scheduledAt: "2026-09-08T12:00:00.000Z", behaviourHash: behaviourHash(RULE_JOB.behaviour) };
     const abandoned = occurrenceId(key);
     first.append([
       {
@@ -714,8 +792,8 @@ describe("the crash windows, one test per row of the review's table", () => {
     // it cannot account for.
     clock.advance(10_000);
     const second = mustOpen(root, clock.now);
-    const runner = spawnRecorder();
-    const reports = tick(second, runner.spawn, clock.now);
+    const runner = ruleRecorder();
+    const reports = tick(second, runner.rules, clock.now);
 
     expect(reportKinds(reports)).toEqual(["unaccounted", "waiting"]);
     expect(runner.calls).toEqual([]);
@@ -723,13 +801,13 @@ describe("the crash windows, one test per row of the review's table", () => {
 
     // AND IT IS SAID ONCE. A crash that put a line in the log every tick for
     // ever would be a different kind of blindness.
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["waiting"]);
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["waiting"]);
     expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-unknown"]);
 
     // Once the interval has passed, the job runs again — a NEW occurrence, at a
     // new instant. The abandoned one is never dispatched.
     clock.advance(120_000);
-    const later = tick(second, runner.spawn, clock.now);
+    const later = tick(second, runner.rules, clock.now);
     expect(reportKinds(later)).toEqual(["dispatched"]);
     const [dispatched] = later;
     expect(dispatched?.kind === "dispatched" && dispatched.occurrenceId).not.toBe(abandoned);
@@ -747,8 +825,8 @@ describe("the crash windows, one test per row of the review's table", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ pid: 9191, settle: "never" });
-    expect(reportKinds(tick(first, runner.spawn, clock.now))).toEqual(["dispatched"]);
+    const runner = ruleRecorder({ pid: 9191, settle: "never" });
+    expect(reportKinds(tick(first, runner.rules, clock.now))).toEqual(["dispatched"]);
     expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started"]);
     closeStore(first);
 
@@ -757,13 +835,13 @@ describe("the crash windows, one test per row of the review's table", () => {
     clock.advance(60_000);
     const second = mustOpen(root, clock.now);
     expect([...second.occurrences.values()][0]?.kind).toBe("started");
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["held"]);
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["held"]);
     closeStore(second);
 
     // Past it, it is stuck — reported, written down, and released.
     clock.advance(120_000);
     const third = mustOpen(root, clock.now);
-    const reports = tick(third, runner.spawn, clock.now);
+    const reports = tick(third, runner.rules, clock.now);
     const [stuck] = reports;
     expect(stuck?.kind).toBe("stuck");
     expect(stuck?.kind === "stuck" && stuck.overdueMs).toBe(60_000);
@@ -777,11 +855,11 @@ describe("the lease as the overlap guard", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
+    const runner = ruleRecorder({ settle: "never" });
 
-    expect(reportKinds(tick(store, runner.spawn, clock.now))).toEqual(["dispatched"]);
+    expect(reportKinds(tick(store, runner.rules, clock.now))).toEqual(["dispatched"]);
     clock.advance(90_000); // past the 60s interval, inside the 120s lease
-    expect(reportKinds(tick(store, runner.spawn, clock.now))).toEqual(["held"]);
+    expect(reportKinds(tick(store, runner.rules, clock.now))).toEqual(["held"]);
     expect(runner.calls).toHaveLength(1);
   });
 
@@ -793,11 +871,11 @@ describe("the lease as the overlap guard", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
-    tick(store, runner.spawn, clock.now);
+    const runner = ruleRecorder({ settle: "never" });
+    tick(store, runner.rules, clock.now);
 
     clock.advance(180_000); // past the 120s lease
-    const reports = tick(store, runner.spawn, clock.now);
+    const reports = tick(store, runner.rules, clock.now);
     // REPORTED FIRST, then dispatched: one tick both raises the alarm and
     // recovers, rather than costing a whole interval of silence.
     expect(reportKinds(reports)).toEqual(["stuck", "dispatched"]);
@@ -817,8 +895,8 @@ describe("the lease as the overlap guard", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
-    tick(store, runner.spawn, clock.now);
+    const runner = ruleRecorder({ settle: "never" });
+    tick(store, runner.rules, clock.now);
     store.checkpoint({ lastGoodSnapshotAt: null, tick: true });
 
     const read = readCheckpoint(root);
@@ -837,19 +915,19 @@ describe("catching up across a restart", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const first = mustOpen(root, clock.now);
-    const runner = spawnRecorder();
-    tick(first, runner.spawn, clock.now);
-    runner.finish(0);
+    const runner = ruleRecorder();
+    tick(first, runner.rules, clock.now);
+    runner.finish();
     await settle();
-    expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "job-occurrence-finished"]);
+    expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     closeStore(first);
 
     // Three hours down, with a sixty-second interval. Cron would have skipped
     // every one of those and said nothing.
     clock.advance(3 * 3600_000);
     const second = mustOpen(root, clock.now);
-    const after = spawnRecorder();
-    expect(reportKinds(tick(second, after.spawn, clock.now))).toEqual(["dispatched"]);
+    const after = ruleRecorder();
+    expect(reportKinds(tick(second, after.rules, clock.now))).toEqual(["dispatched"]);
     expect(after.calls).toHaveLength(1);
   });
 
@@ -859,53 +937,66 @@ describe("catching up across a restart", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const runner = spawnRecorder({ settle: "never" });
+    const runner = ruleRecorder({ settle: "never" });
     clock.advance(3 * 3600_000);
-    tick(store, runner.spawn, clock.now);
-    tick(store, runner.spawn, clock.now);
+    tick(store, runner.rules, clock.now);
+    tick(store, runner.rules, clock.now);
     expect(runner.calls).toHaveLength(1);
   });
 });
 
 describe("what the runner says", () => {
   test("a refusal is recorded as a fact: it did not run, and we know it", () => {
+    // A rule in a process holding no rule runner is refused at `start` — a
+    // precondition that failed, which is what a refusal means.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const spawn: SpawnJob = () => ({ kind: "refused", why: "the worktree is gone" });
-    const reports = tick(store, spawn, clock.now);
+    const reports = tick(store, undefined, clock.now);
     expect(reportKinds(reports)).toEqual(["refused"]);
     expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-refused"]);
     // A REFUSAL SETTLES THE OCCURRENCE, so the interval starts again from it —
     // a job whose precondition keeps failing must not spin.
-    expect(reportKinds(tick(store, spawn, clock.now))).toEqual(["waiting"]);
+    expect(reportKinds(tick(store, undefined, clock.now))).toEqual(["waiting"]);
   });
 
   test("a runner that THROWS is recorded as unknown, not as a refusal", () => {
     // The distinction the whole file is about. `refused` claims the job did not
     // start; a function that broke its own contract has told us nothing about
-    // whether a process exists, and guessing "it did not" is how a duplicate
+    // whether the work began, and guessing "it did not" is how a duplicate
     // gets started later.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const spawn: SpawnJob = () => {
-      throw new Error("spawn ENOENT");
-    };
-    expect(reportKinds(tick(store, spawn, clock.now))).toEqual(["unaccounted"]);
+    expect(reportKinds(tick(store, brokenRunner(), clock.now))).toEqual(["unaccounted"]);
     expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-unknown"]);
   });
 
-  test("a rejected promise is a finish, because the runner watched it and is telling us", async () => {
+  test("a run that FAILED is a finish, with its failure, because the runner watched it and is telling us", async () => {
+    // Was "a rejected promise is a finish". A session spawner's `done` could
+    // reject; the rule protocol never rejects — it turns every failure into a
+    // `failed` outcome — so the finish-with-a-failure is reached here through
+    // the one failure a proposing rule has: its intent could not be recorded.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
-    const store = mustOpen(root, clock.now);
-    const spawn: SpawnJob = () => ({ kind: "spawned", pid: 7, done: Promise.reject(new Error("the child was killed")) });
-    tick(store, spawn, clock.now);
+    const real = mustOpen(root, clock.now);
+    const store: OccurrenceLog = {
+      instanceId: real.instanceId,
+      get occurrences() {
+        return real.occurrences;
+      },
+      occurrenceHistory: { kind: "intact" },
+      append(events): AppendResult {
+        if (events.some((event) => event.kind === "rule-intended")) return { ok: false, reason: "lock-lost", holder: null };
+        return real.append(events);
+      },
+    };
+    tick(store, { selfPid: 7, observe: async () => WEDGED }, clock.now);
     await settle();
     const last = eventsIn(root).at(-1);
     expect(last?.kind).toBe("job-occurrence-finished");
-    expect(last?.kind === "job-occurrence-finished" && last.outcome).toEqual({ kind: "failed", why: "the child was killed" });
+    expect(last?.kind === "job-occurrence-finished" && last.outcome.kind).toBe("failed");
+    expect(last?.kind === "job-occurrence-finished" && last.outcome.kind === "failed" && last.outcome.why).toContain("intent could not be recorded");
   });
 });
 
@@ -1060,9 +1151,9 @@ describe("the log as a corruption boundary", () => {
     // immediately due, and a cold start would therefore RE-RUN whatever was in
     // the unreadable bytes. A cold start is not permission.
     expect(store.occurrenceHistory.kind).toBe("lost");
-    const runner = spawnRecorder();
+    const runner = ruleRecorder();
     const before = kindsIn(root);
-    const reports = tick(store, runner.spawn, clock.now);
+    const reports = tick(store, runner.rules, clock.now);
     expect(reportKinds(reports)).toEqual(["history-lost"]);
     expect(runner.calls).toEqual([]);
     // Nothing written either: a held job leaves no reservation behind. (The one
@@ -1105,8 +1196,8 @@ describe("the log as a corruption boundary", () => {
     expect(second.opening.start.kind).toBe("cold");
     expect(second.occurrences.size).toBe(0);
     expect(second.occurrenceHistory.kind).toBe("lost");
-    const runner = spawnRecorder();
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    const runner = ruleRecorder();
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["history-lost"]);
     expect(runner.calls).toEqual([]);
     second.close();
   });
@@ -1121,8 +1212,8 @@ describe("the log as a corruption boundary", () => {
     const store = mustOpen(root, clock.now);
     expect(store.opening.start.kind).toBe("cold");
     expect(store.occurrenceHistory).toEqual({ kind: "intact" });
-    const runner = spawnRecorder({ settle: "never" });
-    expect(reportKinds(tick(store, runner.spawn, clock.now))).toEqual(["dispatched"]);
+    const runner = ruleRecorder({ settle: "never" });
+    expect(reportKinds(tick(store, runner.rules, clock.now))).toEqual(["dispatched"]);
   });
 
   test("the hold SURVIVES A RESTART, or it would last exactly one daemon lifetime", async () => {
@@ -1143,8 +1234,8 @@ describe("the log as a corruption boundary", () => {
     const second = mustOpen(root, clock.now);
     expect(second.opening.start.kind).toBe("resumed");
     expect(second.occurrenceHistory.kind).toBe("lost");
-    const runner = spawnRecorder();
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    const runner = ruleRecorder();
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["history-lost"]);
     expect(runner.calls).toEqual([]);
     // And it is said out loud in the sentence the daemon writes into its start
     // note, rather than being a field only the scheduler ever reads.
@@ -1171,8 +1262,8 @@ describe("the log as a corruption boundary", () => {
     expect(describeOpening(second.opening)).toContain("reconciled by hand");
     // CONSUMED. The file is gone, so the next loss holds again.
     expect(existsSync(join(root, RECONCILE_FILE))).toBe(false);
-    const runner = spawnRecorder({ settle: "never" });
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["dispatched"]);
+    const runner = ruleRecorder({ settle: "never" });
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["dispatched"]);
   });
 
   test("a checkpoint pointing past the end of a shrunken log holds the jobs too", () => {
@@ -1203,8 +1294,8 @@ describe("the log as a corruption boundary", () => {
 
     const second = mustOpen(root, clock.now);
     expect(second.occurrenceHistory.kind).toBe("lost");
-    const runner = spawnRecorder();
-    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    const runner = ruleRecorder();
+    expect(reportKinds(tick(second, runner.rules, clock.now))).toEqual(["history-lost"]);
     expect(runner.calls).toEqual([]);
   });
 });
@@ -1241,7 +1332,8 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const real = mustOpen(root, clock.now);
     const { store } = failingAfter(real, 2);
-    const reports = tick(store, () => ({ kind: "refused", why: "the binary is missing" }), clock.now);
+    // No rule runner, so `start` refuses — and the refusal is the append the store will not take.
+    const reports = tick(store, undefined, clock.now);
     // BOTH facts, in this order: the runner refused, AND we could not write that
     // down. Reporting only the first is what made the report disagree with the
     // history; reporting only the second would lose the runner's answer.
@@ -1258,13 +1350,7 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const real = mustOpen(root, clock.now);
     const { store } = failingAfter(real, 2);
-    const reports = tick(
-      store,
-      () => {
-        throw new Error("the runner is broken");
-      },
-      clock.now,
-    );
+    const reports = tick(store, brokenRunner(), clock.now);
     expect(reportKinds(reports)).toEqual(["unaccounted", "unrecorded"]);
     const lost = reports[1];
     expect(lost?.kind === "unrecorded" && lost.fact).toBe("unknown");
@@ -1277,61 +1363,57 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const real = mustOpen(root, clock.now);
-    const { store } = failingAfter(real, 3);
-    const runner = spawnRecorder();
+    // Reserved, started and the rule's own settlement land; the completion — the
+    // fourth append — is the one the store will not take.
+    const { store } = failingAfter(real, 4);
+    const runner = ruleRecorder();
     const lost: LostRecord[] = [];
     const reports = schedulerTick({
-      definitions: [{ definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [authorised(RULE_JOB)],
       store,
-      spawn: runner.spawn,
+      rules: runner.rules,
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
+      launchSeparationMs: NO_SPACING,
+      readDocument: NO_DOCUMENTS,
       onLostRecord: (record) => lost.push(record),
     });
     expect(reportKinds(reports)).toEqual(["dispatched"]);
     expect(lost).toEqual([]);
-    runner.finish(0);
+    runner.finish();
     await settle();
     expect(lost).toHaveLength(1);
     expect(lost[0]?.fact).toBe("finished");
     expect(lost[0]?.why).toContain("exit 0");
     // AND IT DID NOT THROW: an unhandled rejection here would take the daemon
     // down and lose the outcome as well as the record.
-    expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started"]);
+    expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled"]);
   });
 
-  test("a run that BROKE, whose failure cannot be written down, is not silently a success either", async () => {
+  test("a run that FAILED, whose failure cannot be written down, is not silently a success either", async () => {
+    // Was "a run that BROKE" — a session spawner's rejected `done`. The rule
+    // protocol's failure is a `failed` outcome: here its intent (the third
+    // append) is refused, and so is the completion that would have said so.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const real = mustOpen(root, clock.now);
     const { store } = failingAfter(real, 3);
-    // An array rather than a `let`, because the assignment happens inside a
-    // promise executor and TypeScript's flow analysis cannot see it — it would
-    // narrow the later read to `null` and refuse the call.
-    const rejecters: ((cause: Error) => void)[] = [];
-    const spawn: SpawnJob = () => ({
-      kind: "spawned",
-      pid: 77,
-      done: new Promise<never>((_resolve, r) => {
-        rejecters.push(r);
-      }),
-    });
     const lost: LostRecord[] = [];
     schedulerTick({
-      definitions: [{ definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [authorised(RULE_JOB)],
       store,
-      spawn,
+      rules: { selfPid: 77, observe: async () => WEDGED },
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
+      launchSeparationMs: NO_SPACING,
+      readDocument: NO_DOCUMENTS,
       onLostRecord: (record) => lost.push(record),
     });
-    rejecters[0]?.(new Error("the child exploded"));
     await settle();
     expect(lost).toHaveLength(1);
     expect(lost[0]?.fact).toBe("finished");
-    expect(lost[0]?.why).toContain("the child exploded");
+    expect(lost[0]?.why).toContain("intent could not be recorded");
+    expect(lost[0]?.why).not.toContain("exit 0");
   });
 
   test("a scheduler given no onLostRecord loses it rather than throwing, which is its own choice", () => {
@@ -1342,9 +1424,9 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const real = mustOpen(root, clock.now);
     const { store } = failingAfter(real, 3);
-    const runner = spawnRecorder();
-    tick(store, runner.spawn, clock.now);
-    runner.finish(1);
+    const runner = ruleRecorder();
+    tick(store, runner.rules, clock.now);
+    runner.finish();
     return settle();
   });
 });
@@ -1375,6 +1457,18 @@ describe("the log a person reads", () => {
       // The two plan 260910e added — the record's key type made them compulsory.
       "dry-run": { kind: "dry-run", jobId: JOB.behaviour.id, why: "a fixture nobody has made live" },
       "duplicate-id": { kind: "duplicate-id", jobId: JOB.behaviour.id, why: "two definitions share it" },
+      // The four plan 260910f (scheduled dispatch) added: a session job's launch,
+      // and the three ways one does not happen.
+      launch: {
+        kind: "launch",
+        jobId: JOB.behaviour.id,
+        via: "new",
+        account: "pool-a",
+        outcome: { kind: "invoked", occurrenceId: LAUNCH_ID, correlationId: `${LAUNCH_ID}-a1` as CorrelationId, launcher: "started", detail: "a tmux session" },
+      },
+      "material-moved": { kind: "material-moved", jobId: JOB.behaviour.id, why: "a document moved between the gate and the material" },
+      superseded: { kind: "superseded", jobId: JOB.behaviour.id, launchId: LAUNCH_ID, why: "superseded by a later revision", reservation: { kind: "released" } },
+      "usage-held": { kind: "usage-held", jobId: JOB.behaviour.id, why: "the pool account is held", until: null },
     };
     const lines = Object.values(each).map(describeReport);
     for (const line of lines) expect(line).toContain(JOB.behaviour.id);
@@ -1391,8 +1485,14 @@ describe("the log a person reads", () => {
     expect(describeReport(each.unrecorded)).toContain("finished");
     expect(describeReport(each["dry-run"])).toContain("DRY RUN");
     expect(describeReport(each["duplicate-id"])).toContain("DUPLICATE ID");
+    // AN INVOCATION IS NOT A RESULT, and its line never claims one.
+    expect(describeReport(each.launch)).toContain("LAUNCHER INVOKED");
+    expect(describeReport(each.launch)).not.toMatch(/succeed|complete|finished/i);
   });
 });
+
+/** A launch id for the report table: the protocol's shape, not a real occurrence. */
+const LAUNCH_ID = `lo-${"0a".repeat(10)}` as LaunchOccurrenceId;
 
 /** A `JobSpawn` value, so the type is exercised rather than only inferred. */
 const _typeCheck: JobSpawn = { kind: "refused", why: "unused" };

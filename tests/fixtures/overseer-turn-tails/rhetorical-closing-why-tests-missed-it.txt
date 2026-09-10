@@ -1,0 +1,17 @@
+
+❯ why did the cache miss every tick
+
+● Found and fixed. The fingerprint was computed over the tail and the status line, and the status line carries a wall
+  clock, so every tick produced a new key and a new model call.
+
+  So why did the tests never catch it? Because every fixture had the same frozen clock. Fixed in turn-tail.ts, with a
+  test that feeds two captures a minute apart; committed and pushed to dev, suite green.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

@@ -1,0 +1,19 @@
+
+❯ finish up and remove the worktree
+
+● Done. The glossary search fix is on dev as two commits: the failing test first, then the fix, which trims the query
+  before matching so a trailing space no longer returns nothing.
+
+  Gates: typecheck exit 0, the full suite green on the merged tree (run in tmux, 2,321 passed), lint clean on the
+  three files I touched. The GPT Sol review found one naming nit, which is fixed in the second commit.
+
+  worktree:check came back clean, so the worktree is removed. Nothing is waiting on anyone.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

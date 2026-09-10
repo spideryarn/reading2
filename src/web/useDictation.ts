@@ -1496,9 +1496,18 @@ const overloads = new WeakMap<RecognitionCtor, boolean>();
  * press and never concurrent with ours — the track below is not requested until
  * after this returns.
  *
+ * **That argument is about the device, and it missed the permission request.**
+ * On WebKit the `start()` can reach the UI process's microphone-permission path
+ * before the abort lands, and the abort has no path that cancels the UI
+ * request. That source trace explains the reported second prompt; the fix has
+ * not yet been run on an iPhone. So since 2026-09-10 the question is only asked
+ * on Chromium — see `probeIsSafe`. Everywhere else the answer is taken to be
+ * no without asking.
+ *
  * @param r a recogniser that must not be used afterwards if this returns false.
  */
 async function probeTrackOverload(Ctor: RecognitionCtor, r: Recognition): Promise<boolean> {
+  if (!probeIsSafe()) return false;
   const known = overloads.get(Ctor);
   if (known !== undefined) return known;
   let takes = false;
@@ -1540,6 +1549,43 @@ async function probeTrackOverload(Ctor: RecognitionCtor, r: Recognition): Promis
     r.onend = done;
   });
   return false;
+}
+
+/**
+ * Whether asking the probe's question can cost the reader anything.
+ *
+ * **On WebKit it can cost a permission prompt, and the abort has no path that
+ * takes the UI request back.** The argument above — `abort()` in the same turn
+ * beats the task that asks for audio — is true of the *capture* and incomplete
+ * for the *permission*. WebKit's `start()` hands the request to the UI process,
+ * whose permission manager uses the same per-site user-media decision path as
+ * `getUserMedia`; the abort removes the speech request and fires `end`, but the
+ * source contains no cancellation of a permission UI already requested. That
+ * is the source-traced explanation for the reported second prompt. No iPhone
+ * has run the fix yet. SPIDERYARN-READING2-2R; docs/plans/260910g.
+ *
+ * **Current Chromium is where the probe is free**: a browser with the overload
+ * throws `TypeError` before anything starts. Chromium before 135 instead
+ * starts and aborts its recogniser as before this fix; its permission is shared
+ * with `getUserMedia`, but that old-browser path has not been re-measured here.
+ * The `Chromium` brand in `navigator.userAgentData` is how we tell. Presence of
+ * the property alone is not enough: WebKit has implemented it behind an
+ * internal setting and a site-specific quirk.
+ *
+ * **This is an engine check, and on purpose not a behaviour check**, because
+ * behaviour is exactly what cannot be observed here without paying for it. The
+ * failure it permits is the cheap one: an engine that one day ships the
+ * overload without the `Chromium` brand gets the Safari row — a recording, a
+ * meter and the transcript, no live words — until this line learns about it.
+ */
+function probeIsSafe(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const data = (
+    navigator as Navigator & {
+      userAgentData?: { brands?: ReadonlyArray<{ brand: string }> };
+    }
+  ).userAgentData;
+  return data?.brands?.some(({ brand }) => brand === "Chromium") ?? false;
 }
 
 /**

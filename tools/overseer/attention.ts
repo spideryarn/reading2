@@ -52,8 +52,10 @@ import type {
   AttentionAnswerability,
   AttentionEvidence,
   AttentionItem,
+  AttentionJudgementStopped,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
 } from "../fleet/wire.js";
 
 /**
@@ -93,6 +95,12 @@ export type AttentionObservation = {
   answerability: AttentionAnswerability;
   /** Canonical, for grouping. Producer-internal; never crosses the wire. */
   topic: string;
+  /**
+   * Who the model proposes holds the answer, or why there is no proposal
+   * (plan 260910f Stage 2). Worked out by the pass; carried onto the item from
+   * the group's PRIMARY observation, the one whose tail the card quotes.
+   */
+  proposal: AttentionProposal;
 };
 
 /**
@@ -212,6 +220,14 @@ export type BuildAttentionInput = {
    */
   readonly sessionsUnreadable: number;
   readonly scannedAt: string;
+  /**
+   * Set when the day budget or a quota cooldown REFUSED a paid call this pass
+   * (plan 260910f D4–D6), and the list is then `limited`. Absent or null means
+   * the model was never refused — which is not the same as every tail having
+   * been judged: the per-pass `maxCalls` catch-up is ordinary operation and
+   * stays a `list` with `sessionsUnreadable`.
+   */
+  readonly stopped?: AttentionJudgementStopped | null;
 };
 
 /**
@@ -276,6 +292,9 @@ export function buildAttentionList(input: BuildAttentionInput): AttentionList {
       kind: primary.o.kind,
       evidence: primary.o.evidence,
       answerability: primary.o.answerability,
+      // The PRIMARY's, like the evidence it sits beside: the proposal is about
+      // the sentence in this card's tail, and its id is that tail's.
+      proposal: primary.o.proposal,
       duplicates: members.slice(1).map((m) => ({
         sessionId: m.o.sessionId,
         sessionName: m.o.sessionName,
@@ -304,6 +323,15 @@ export function buildAttentionList(input: BuildAttentionInput): AttentionList {
   // quiet panes and one pane that would not parse used to publish "nothing needs
   // you" with a caveat under it retracting the claim. A sentence and its
   // retraction in the same block is worse than either.
+  //
+  // A STOPPED JUDGE IS `limited`, EMPTY OR NOT — plan 260910f D6. It says what
+  // `unknown` would and also why, and until when, in fields a reader can act on;
+  // and an older reader rejects the kind loudly, which is the point of it being
+  // a kind. The two broken-probe cases above stay `unknown`: nothing was read,
+  // so there is nothing for the stop to qualify.
+  if (input.stopped !== undefined && input.stopped !== null) {
+    return { kind: "limited", items, sessionsScanned, sessionsUnreadable, scannedAt, stopped: input.stopped };
+  }
   if (items.length === 0 && sessionsUnreadable > 0) {
     const why =
       unclassified.length > 0
@@ -347,7 +375,8 @@ export function compareItems(a: AttentionItem, b: AttentionItem): number {
  * was made, or who made it.
  */
 export function policyGaps(list: AttentionList): readonly string[] {
-  if (list.kind !== "list") return [];
+  // A `limited` list's duplicates are as real as a `list`'s; only `unknown` has none.
+  if (list.kind === "unknown") return [];
   return list.items
     .filter((i) => i.duplicates.length > 0)
     .map(

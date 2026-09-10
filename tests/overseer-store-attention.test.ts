@@ -23,6 +23,7 @@ import { inboxLines } from "../scripts/overseer.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
 
 import type { AttentionList } from "../tools/fleet/wire.js";
+import { MAX_ASKS_CHARS, MIN_ASKS_CHARS } from "../tools/overseer/attention-classify.js";
 import {
   CHECKPOINT_FILE,
   attentionNotYetRun,
@@ -46,6 +47,16 @@ function tempRoot(): string {
   return root;
 }
 
+/**
+ * A quote of exactly `n` characters, words joined by single spaces — already in
+ * the producer's normalised form, with several words at every length used here,
+ * so the character bound is what a case tests.
+ */
+function quoteOf(n: number): string {
+  const s = "shall I ship it to dev now ".repeat(Math.ceil(n / 27) + 1).slice(0, n);
+  return s.endsWith(" ") ? `${s.slice(0, -1)}x` : s;
+}
+
 function mustOpen(root: string, now?: () => Date): OverseerStore {
   const result = openStore({ root, ...(now === undefined ? {} : { now }) });
   if (!result.ok) throw new Error(`expected to open the store, got: ${describeRefusal(result.refusal)}`);
@@ -65,11 +76,30 @@ const LIST: AttentionList = {
       evidence: { kind: "prose", excerpt: "Say the word and I'll shut it down.", why: "it named an action and stopped" },
       answerability: { kind: "phone" },
       duplicates: [],
+      proposal: {
+        kind: "proposed",
+        id: "fp-1:v2",
+        recipient: "fable",
+        reason: "it is a question of wording",
+        asks: "Say the word and I'll shut it down.",
+        by: { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" },
+        reach: { kind: "unavailable", why: "the last usage pass found the account limited" },
+      },
     },
   ],
   sessionsScanned: 32,
   sessionsUnreadable: 0,
   scannedAt: "2026-09-08T12:40:00.000Z",
+};
+
+/** The same pass, with the model refused by the day budget part-way through. */
+const LIMITED: AttentionList = {
+  kind: "limited",
+  items: LIST.kind === "list" ? LIST.items : [],
+  sessionsScanned: 32,
+  sessionsUnreadable: 4,
+  scannedAt: "2026-09-08T12:40:00.000Z",
+  stopped: { kind: "exhausted", why: "the day's ceiling of $1.50 would be crossed", until: "2026-09-09T00:00:00.000Z" },
 };
 
 describe("the attention list on the checkpoint", () => {
@@ -84,6 +114,55 @@ describe("the attention list on the checkpoint", () => {
     expect(read.kind).toBe("checkpoint");
     if (read.kind !== "checkpoint") return;
     expect(read.checkpoint.attention).toEqual(LIST);
+  });
+
+  test("a `limited` list — the model was refused — goes out and comes back whole", () => {
+    // Plan 260910f D6: a stopped model pass is its own arm, so this parser has to
+    // know it, every field, strictly, the way it knows `list`.
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIMITED });
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("unreachable");
+    expect(read.checkpoint.attention).toEqual(LIMITED);
+    // …and the status line says the judge was stopped rather than that the
+    // fleet is calm.
+    expect(inboxLines(read.checkpoint.attention, Date.parse("2026-09-08T12:41:00.000Z")).join("\n")).toContain(
+      "NOT EVERY SESSION IS BEING JUDGED",
+    );
+  });
+
+  test("a `limited` list with a malformed `stopped` degrades to `unknown`, never to a list", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    for (const stopped of [undefined, { kind: "exhausted", why: "spent" }, { kind: "tired", why: "x", until: LIST.scannedAt }, { kind: "exhausted", why: "", until: LIST.scannedAt }]) {
+      const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      raw["attention"] = { ...LIMITED, stopped };
+      writeFileSync(path, JSON.stringify(raw, null, 2));
+      const read = readCheckpoint(root);
+      if (read.kind !== "checkpoint") throw new Error("unreachable");
+      expect(read.checkpoint.attention.kind, JSON.stringify(stopped)).toBe("unknown");
+    }
+  });
+
+  test("an arm this reader does not know is rejected into `unknown` — which is how an OLDER reader meets `limited`", () => {
+    // The compatibility half of D6. We cannot run the old build, so this pins
+    // the behaviour it had and still has: an unknown kind is a loud `unknown`,
+    // never read as the `list` fields it happens to carry. That is the whole
+    // reason `limited` is a new kind rather than a field on `list` — a field
+    // would have been dropped and the empty list drawn as calm.
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    raw["attention"] = { ...LIMITED, kind: "limited-v2", items: [] };
+    writeFileSync(path, JSON.stringify(raw, null, 2));
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("unreachable");
+    expect(read.checkpoint.attention.kind).toBe("unknown");
   });
 
   test("a write that carries no new list keeps the one already published", () => {
@@ -182,6 +261,103 @@ describe("the attention list on the checkpoint", () => {
     const written = second.checkpoint({ lastGoodSnapshotAt: null, tick: true });
     if (!written.ok) throw new Error("unreachable");
     expect(written.checkpoint.attention.kind).toBe("unknown");
+  });
+});
+
+describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
+  const BY = { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" };
+  /** LIST's own quote: in its excerpt, and inside the length bounds. */
+  const QUOTE = "Say the word and I'll shut it down.";
+
+  /**
+   * The checkpoint with its one item's `proposal` replaced by `proposal`, or
+   * removed when `undefined` — and, when given, its `evidence` replaced too.
+   */
+  function readWithProposal(proposal: unknown, evidence?: unknown): AttentionList {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const list = raw["attention"] as { items: Record<string, unknown>[] };
+    if (proposal === undefined) delete list.items[0]!["proposal"];
+    else list.items[0]!["proposal"] = proposal;
+    if (evidence !== undefined) list.items[0]!["evidence"] = evidence;
+    writeFileSync(path, JSON.stringify(raw, null, 2));
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("the checkpoint must survive");
+    return read.checkpoint.attention;
+  }
+
+  const PROPOSED = { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } };
+
+  /** A prose excerpt and a quote, together. */
+  function readWithQuote(excerpt: string, asks: string): AttentionList {
+    return readWithProposal({ ...PROPOSED, asks }, { kind: "prose", excerpt, why: "it named an action and stopped" });
+  }
+
+  test("refuses a quote that is not in the same item's excerpt — the card would call it the sentence the proposal is about (F15)", () => {
+    expect(readWithQuote("Tell me which one.", "This text is not in the excerpt.").kind).toBe("unknown");
+  });
+
+  test("finds the quote under the producer's whitespace normalisation, so a pane's wrapped line still matches (F15)", () => {
+    expect(readWithQuote("Say the word and I'll\n   shut it down.", QUOTE).kind).toBe("list");
+  });
+
+  test("refuses a proposed quote on a dialog item, which has no excerpt to hold it (F15)", () => {
+    expect(readWithProposal(PROPOSED, { kind: "dialog", question: "Say the word?", options: ["Yes", "No"] }).kind).toBe("unknown");
+  });
+
+  test.each([
+    ["the longest accepted", MAX_ASKS_CHARS, "list"],
+    ["one over the longest", MAX_ASKS_CHARS + 1, "unknown"],
+    ["the shortest accepted", MIN_ASKS_CHARS, "list"],
+    ["one under the shortest", MIN_ASKS_CHARS - 1, "unknown"],
+  ])("bounds the quote's length — %s (F17)", (_name, length, kind) => {
+    const asks = quoteOf(length);
+    expect(asks).toHaveLength(length);
+    expect(readWithQuote(`It named an action.\n${asks}`, asks).kind).toBe(kind);
+  });
+
+  test("refuses a one-word quote even when it is long enough (F17)", () => {
+    expect(readWithQuote("Unbelievably so.", "Unbelievably").kind).toBe("unknown");
+  });
+
+  test("an item from an older producer, with no proposal at all, reads as `not-reported` — not a failure", () => {
+    const list = readWithProposal(undefined);
+    if (list.kind !== "list") throw new Error(`expected a list, got ${list.kind}`);
+    expect(list.items[0]?.proposal).toEqual({ kind: "not-reported" });
+  });
+
+  test.each([
+    ["proposed", LIST.kind === "list" ? LIST.items[0]?.proposal : null],
+    ["unplaced", { kind: "unplaced", id: "fp:v2", why: "could be either", by: BY }],
+    ["off", { kind: "off", why: "proposals are off" }],
+    ["not-reached", { kind: "not-reached", why: "the budget refused the re-read" }],
+    ["not-applicable", { kind: "not-applicable" }],
+    ["not-reported", { kind: "not-reported" }],
+    ["proposed, reach available", { kind: "proposed", id: "i", recipient: "greg", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } }],
+    ["proposed, reach not checked", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY, reach: { kind: "not-checked", why: "no Codex reading" } }],
+  ])("reads the %s arm back whole", (_name, proposal) => {
+    const list = readWithProposal(proposal);
+    if (list.kind !== "list") throw new Error(`expected a list, got ${list.kind}`);
+    expect(list.items[0]?.proposal).toEqual(proposal);
+  });
+
+  test.each([
+    ["an unknown kind", { kind: "sent", why: "x" }],
+    // A quote that is valid in every other way, so each case refuses for its own reason.
+    ["an unknown recipient", { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: QUOTE, by: BY, reach: { kind: "available" } }],
+    ["no reach", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: BY }],
+    ["a blank quote", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "", by: BY, reach: { kind: "available" } }],
+    ["an author that is not the model", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } }],
+    ["an author via somebody else", { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } }],
+    ["an unplaced answer with no why", { kind: "unplaced", id: "i", by: BY }],
+    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "fable", reason: "r", asks: QUOTE, by: BY, reach: { kind: "unavailable" } }],
+    ["an off with no why", { kind: "off" }],
+    ["a proposal that is not an object", "fable"],
+  ])("refuses %s — the list degrades to `unknown`, never a proposal half-read", (_name, proposal) => {
+    expect(readWithProposal(proposal).kind).toBe("unknown");
   });
 });
 

@@ -73,7 +73,7 @@ const BASE: ScheduledOccurrence = {
   updatedAt: "2026-09-10T11:05:02.000Z",
   attempts: 1,
   state: "completed",
-  run: { timeoutMinutes: 5, access: "read-only" },
+  run: { timeoutMinutes: 5, access: "read-only", account: "pool-a" },
   result: { kind: "timed-out", why: "the wrapper stopped it at its 5-minute limit", at: "2026-09-10T11:05:02.000Z" },
   answer: { kind: "present", attempt: 1, bytes: 0, sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", usable: false },
   transcriptPath: "/scratch/launches/o/lo-1111111111111111111a/a1/transcript.ndjson",
@@ -302,6 +302,35 @@ describe("the last occurrence", () => {
     expect(visible('[data-slot="command"]', last("section-occ-unknown"))).toContain("npx tsx scripts/overseer-launches.ts dispose lo-4444444444444444444d");
   });
 
+  it("SUPERSEDED is neither danger nor success: its own label, a neutral tone, and the abandon's reason (M13)", async () => {
+    const superseded: ScheduledOccurrencesJob = {
+      ...SUCCEEDED_JOB,
+      jobId: "section-occ-superseded",
+      occurrences: [
+        {
+          ...BASE,
+          launchOccurrenceId: "lo-6666666666666666666f",
+          state: "failed-before-launch",
+          attempts: 0,
+          result: { kind: "superseded", why: "superseded by fedcba987654", at: "2026-09-10T11:04:00.000Z" },
+          answer: { kind: "absent" },
+          transcriptPath: null,
+        },
+      ],
+    };
+    await draw(occurrencesView({ ...FILE, jobs: [superseded, SUCCEEDED_JOB] }));
+    const result = last("section-occ-superseded").querySelector('[data-slot="result"]');
+    expect(result?.getAttribute("data-result")).toBe("superseded");
+    const tone = result?.getAttribute("data-tone");
+    expect(tone).not.toBe("alarm");
+    /* NOT THE SUCCEEDED TONE EITHER — read off the real succeeded row, not a restated word. */
+    expect(tone).not.toBe(last("section-occ-good").querySelector('[data-slot="result"]')?.getAttribute("data-tone"));
+    expect(result?.querySelector('[data-slot="pill"]')?.className).not.toContain("tw:bg-alarm");
+    const text = visible('[data-slot="last-occurrence"]', job("section-occ-superseded"));
+    expect(text).toContain("SUPERSEDED");
+    expect(text).toContain("superseded by fedcba987654");
+  });
+
   it("a running one shows its cancel command", async () => {
     const running: ScheduledOccurrencesJob = {
       ...SUCCEEDED_JOB,
@@ -332,6 +361,22 @@ describe("each job", () => {
     const next = visible('[data-slot="next"]', job("section-occ-timeout"));
     expect(next).toContain("2026-09-11 00:30 London");
     expect(next).toContain("in 11h 29m");
+  });
+
+  it("each occurrence shows the pool account it ran on beside its timeout and access — and says when the record names none", async () => {
+    const tmux: ScheduledOccurrencesJob = {
+      ...SUCCEEDED_JOB,
+      jobId: "section-occ-no-account",
+      occurrences: [{ ...OLDER_SUCCEEDED, launchOccurrenceId: "lo-7777777777777777777a", run: { timeoutMinutes: 5, access: "read-only", account: null } }],
+    };
+    await draw(occurrencesView({ ...FILE, jobs: [TIMED_OUT_JOB, tmux] }));
+    const ran = visible('[data-slot="occurrence-run"]', last("section-occ-timeout"));
+    expect(ran).toContain("5 min");
+    expect(ran).toContain("read-only");
+    expect(ran).toContain("pool account pool-a");
+    expect(visible('[data-slot="occurrence-run"]', last("section-occ-no-account"))).toContain("no pool account recorded");
+    /* THE JOB'S OWN LINE NAMES NO ACCOUNT: which account runs it is chosen per occurrence. */
+    expect(visible('[data-slot="run"]', job("section-occ-timeout"))).not.toContain("account");
   });
 
   it("puts the older occurrences behind a disclosure, and states what the file left out as a count", async () => {

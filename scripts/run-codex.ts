@@ -57,6 +57,7 @@ import {
   answerIsUsable, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole,
   runChild, sameWriteTarget, sanitisedEnv, type RunResult,
 } from './subagent-cli.js';
+import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
 
 // Re-exported because tests/run-codex.test.ts asserts the truncation rules through this module,
 // and because a caller who has this file has the whole wrapper.
@@ -152,6 +153,8 @@ export function runCodex(opts: {
    * wants — the timeout and kill-tree tests, and anything probing the binary.
    */
   stdin?: ChildStdin;
+  /** Passed to runChild: told how the child ended if this process is hung up. */
+  onHangup?: ((result: RunResult) => void) | undefined;
 }): Promise<RunResult> {
   return runChild({
     bin: opts.bin ?? 'codex',
@@ -160,6 +163,7 @@ export function runCodex(opts: {
     stream: opts.stream,
     env: opts.env ?? childEnv(process.env),
     stdin: opts.stdin ?? { kind: 'closed' },
+    onHangup: opts.onHangup,
   });
 }
 
@@ -180,11 +184,23 @@ interface Args {
   passEnv: string[];
   maxPrintChars: number;
   dryRun: boolean;
+  /** An attempt directory of plan 260910f's launch protocol. See scripts/launch-dir.ts. */
+  launchDir?: string;
 }
 
-function fail(msg: string): never {
+/** Set under `--launch-dir`, so every refusal from then on reaches exit.json. See scripts/launch-dir.ts. */
+let launch: WrapperLaunch | undefined;
+
+/** `cause` is the wrapper's own classification, recorded in exit.json under `--launch-dir`; the console line is unchanged. */
+function fail(msg: string, cause: WrapperFailure['cause'] = 'wrapper'): never {
   console.error(`run-codex: ${msg}`);
+  launch?.noteFailure({ cause, why: msg });
   process.exit(1);
+}
+
+/** Every attempt's environment, with the launch id added under `--launch-dir` and nothing else moved (F6). */
+function withLaunchId(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return launch === undefined ? env : launch.childEnv(env);
 }
 
 export function parseArgs(argv: string[]): Args {
@@ -220,10 +236,14 @@ export function parseArgs(argv: string[]): Args {
       // Repeatable. Named, so every credential that reaches codex is visible in the command line.
       case '--pass-env': out.passEnv.push(value(flag)); break;
       case '--dry-run': out.dryRun = true; break;
+      case '--launch-dir': out.launchDir = value(flag); break;
       default: throw new Error(`unknown flag: ${flag}`);
     }
   }
   if (!out.prompt && !out.promptFile) throw new Error('provide --prompt or --prompt-file');
+  // A dry run launches nothing, so under a launch directory it would leave evidence of a run that
+  // never happened.
+  if (out.launchDir !== undefined && out.dryRun) throw new Error('--launch-dir cannot be combined with --dry-run');
   if (!SANDBOXES.includes(out.sandbox)) throw new Error(`--sandbox must be one of: ${SANDBOXES.join(', ')}`);
   if (!AUTH_MODES.includes(out.auth)) throw new Error(`--auth must be one of: ${AUTH_MODES.join(', ')}`);
   // --pass-env is applied *after* the denylist sweep, so this would hand the key to an attempt
@@ -498,8 +518,9 @@ async function runPlan(args: Args, promptPath: string, tmpDir: string, plan: boo
         argv: buildCodexArgs({ ...args, outFile }),
         timeoutMs: args.timeoutMinutes * 60_000,
         stream: args.stream,
-        env: childEnv(process.env, args.passEnv, withKey),
+        env: withLaunchId(childEnv(process.env, args.passEnv, withKey)),
         stdin: { kind: 'file', fd: promptFd },
+        onHangup: launch?.hangup,
       });
     } finally {
       // `finally`, because a throw here would otherwise leak one fd per attempt for the life of
@@ -556,9 +577,31 @@ async function main(): Promise<void> {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (e) { fail((e as Error).message); }
 
+  // `--launch-dir`: the directory checked and start.json written before anything is spawned. Loaded
+  // only here, so a run without the flag loads nothing new.
+  if (args.launchDir !== undefined) {
+    const { beginWrapperLaunch } = await import('./launch-dir.js');
+    const begun = beginWrapperLaunch(args.launchDir);
+    if (!begun.ok) fail(`--launch-dir: ${begun.why}`);
+    launch = begun.launch;
+    // After the final classification of the WHOLE invocation — every credential attempt — and
+    // reached by fail()'s process.exit too (F6).
+    process.on('exit', (code) => {
+      const wrote = launch?.finish(code);
+      if (wrote !== undefined && !wrote.wrote) console.error(`run-codex: WARNING: ${wrote.why}`);
+    });
+  }
+
   /* Read for the size check and the dry run only. The bytes that reach codex are the snapshot's,
      written below — see writePromptSnapshot. */
-  const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
+  let prompt: string;
+  try {
+    prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
+  } catch (e) {
+    // Without a launch this is exactly the old behaviour: main's catch reports it.
+    if (launch === undefined) throw e;
+    fail(`--launch-dir: the prompt could not be read, so it cannot be checked against the pin: ${(e as Error).message}`, 'prompt-unverified');
+  }
   if (args.sandbox === REVIEW_PROFILE && !reviewProfileDefined(args.repoDir)) {
     fail(`--sandbox review needs a [permissions.review] table in ${join(resolve(args.repoDir), '.codex/config.toml')}`
       + ' — see docs/reusable/codex-cli-as-subagent.md § The review profile, or pass --sandbox read-only.');
@@ -598,46 +641,80 @@ async function main(): Promise<void> {
 
   // Measured, so a timeout error can quote the clock rather than the flag it was given.
   const startedAt = Date.now();
-  const { run, outFile, logs, attempt } = await runPlan(args, writePromptSnapshot(args, tmpDir), tmpDir, plan);
+  let promptPath: string;
+  try {
+    promptPath = writePromptSnapshot(args, tmpDir);
+  } catch (e) {
+    if (launch === undefined) throw e;
+    fail(`--launch-dir: the prompt could not be read, so it cannot be checked against the pin: ${(e as Error).message}`, 'prompt-unverified');
+  }
+  // Under `--launch-dir`, the snapshot codex will read — immediately before it is spawned — is
+  // re-hashed against the launch's pin.
+  const promptMismatch = launch?.promptProblem(readFileSync(promptPath));
+  if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
+  const { run, outFile, logs, attempt } = await runPlan(args, promptPath, tmpDir, plan);
+  launch?.noteRun(run);
+  // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
+  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
+  /* **Under `--launch-dir` the answer is made durable BEFORE the failure ladder**, because every
+     branch of that ladder exits: a run refused as empty or non-zero still leaves what it wrote
+     where exit.json says, never in this run's temp directory (F21). Only a file the last attempt
+     actually wrote is copied — noting a target it did not write would describe a stale file.
+     Without a launch nothing moves here; --output is still honoured on success only, below. */
+  let answerPath = outFile;
+  let durableCopyFailed: string | undefined;
+  if (launch !== undefined && answerTarget !== undefined && existsSync(outFile)) {
+    try {
+      mkdirSync(dirname(answerTarget), { recursive: true });
+      copyFileSync(outFile, answerTarget);
+      answerPath = answerTarget;
+    } catch (e) {
+      durableCopyFailed = (e as Error).message;
+    }
+  }
+  launch?.notePaths({ answer: answerPath });
 
   let logPath: string | undefined;
   if (logs.length) {
+    // Under `--launch-dir` an unset --activity-log defaults into the attempt directory.
     logPath = args.activityLog
       ? resolve(args.activityLog)
-      : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+      : launch ? launch.defaults.transcript : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
     mkdirSync(dirname(logPath), { recursive: true });
     writeFileSync(logPath, logs.join('\n'));
+    launch?.notePaths({ transcript: logPath });
   }
   const hint = logPath ? `; activity log at ${logPath}` : '';
 
   // Fail closed, most-specific cause first. Every branch reports the *last* attempt: with a
   // fallback in play the earlier one failed on a credential we have already stopped using, and
   // sending somebody to top that up would point at the wrong account.
-  if (run.spawnError) fail(`could not run codex (${run.spawnError.message}) — is the Codex CLI on PATH?${hint}`);
-  if (run.overflowed) fail(`codex exec exceeded the 64 MiB capture cap and was killed${hint}`);
+  if (run.spawnError) fail(`could not run codex (${run.spawnError.message}) — is the Codex CLI on PATH?${hint}`, 'spawn');
+  if (run.overflowed) fail(`codex exec exceeded the 64 MiB capture cap and was killed${hint}`, 'overflow');
   // The elapsed time rather than the flag: the two are the same number only when the kill lands on
   // schedule, and the whole point of docs/postmortems/260906e-* is that it may not.
   if (run.timedOut) {
-    fail(`codex exec was killed after ${elapsedSeconds(startedAt)} (--timeout-minutes ${args.timeoutMinutes})${hint}`);
+    fail(`codex exec was killed after ${elapsedSeconds(startedAt)} (--timeout-minutes ${args.timeoutMinutes})${hint}`, 'timeout');
   }
   // Only here. A timeout or a capture overflow is not an account problem, and telling someone to
   // go and buy credits because a 30-minute run was killed sends them somewhere useless.
   if (run.status !== 0) {
     fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}`
       + `${hint}${accountNote(args, run, plan, attempt)}`
-      + untrustedCheckoutHint(args.stream ? '' : combinedLog(run), args.sandbox, args.repoDir));
+      + untrustedCheckoutHint(args.stream ? '' : combinedLog(run), args.sandbox, args.repoDir), 'nonzero');
   }
   // Exit 0 and nothing to show for it. Same note as the branch above, and this is the path that
   // most needs it: a run that died on a spent credential *and reported success* is the one place a
   // caller has nothing else to go on. Leaving it off here left it off the one documented case.
   if (!answerIsUsable(outFile)) {
     fail('codex exec exited 0 but wrote no answer — which is what running out of credit mid-run'
-      + ` looks like${hint}${accountNote(args, run, plan, attempt)}`);
+      + ` looks like${hint}${accountNote(args, run, plan, attempt)}`, 'empty-answer');
   }
 
-  let answerPath = outFile;
-  if (args.output) {
-    answerPath = resolve(args.output);
+  // A launched run's copy was made above; one that could not be made fails as the success path always did.
+  if (durableCopyFailed !== undefined) fail(`the answer could not be copied to ${answerTarget}: ${durableCopyFailed}`);
+  if (launch === undefined && answerTarget !== undefined) {
+    answerPath = answerTarget;
     mkdirSync(dirname(answerPath), { recursive: true });
     copyFileSync(outFile, answerPath);
   }

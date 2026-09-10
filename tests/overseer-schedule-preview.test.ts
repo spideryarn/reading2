@@ -30,14 +30,18 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDocument,
+  type JobRunSpec,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
 } from "../tools/overseer/jobs.js";
+import { emptyFold, occurrenceIdOf, plan, scheduleOrigin, type PlanRequest } from "../tools/overseer/launch-protocol.js";
+import type { LaunchJournalReading } from "../tools/overseer/launch-occurrences.js";
+import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 import { ruleJobs } from "../tools/overseer/rule-jobs.js";
-import { evidenceAsBuilt, planJobs, resolveEvidence, type DocumentEvidence } from "../tools/overseer/schedule-plan.js";
+import { evidenceAsBuilt, planJobs, resolveEvidence, type AccountChoice, type DocumentEvidence, type PlanPorts } from "../tools/overseer/schedule-plan.js";
 import {
   listRevision,
   MISSED_RUN_POLICY,
@@ -53,7 +57,9 @@ import { standingJobs } from "../tools/overseer/standing-jobs.js";
 import { EVENTS_FILE } from "../tools/overseer/store.js";
 
 const roots: string[] = [];
+const stores: LaunchStore[] = [];
 afterEach(() => {
+  for (const store of stores.splice(0)) store.close();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -71,12 +77,18 @@ const ALL: HeldCapabilities = { session: true, rules: true };
 const NONE: HeldCapabilities = { session: false, rules: false };
 
 const DOC: JobDocument = { path: "docs/fixture/preview-test-job.md", sha256: "a".repeat(64) };
+const RUN: JobRunSpec = { timeoutMinutes: 30, access: "read-only" };
+
+/** A launch journal that is whole and empty: every session job's history is known, and there is none yet. */
+const EMPTY_JOURNAL: LaunchJournalReading = { status: () => ({ kind: "whole" }), fold: () => emptyFold() };
+/** A pool account is chosen and every account is clear — for every test that is not ABOUT the account gate. */
+const CHOSEN: AccountChoice = { chosen: { kind: "chosen", account: "pool-preview", notes: [] }, standing: () => ({ kind: "clear" }) };
 
 function sessionJob(
   id: string,
   options: { dispatch?: JobBehaviour["dispatch"]; everyMs?: number; leaseMs?: number; initialDelayMs?: number } = {},
 ): AuthorisedJob {
-  const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [DOC], work: { kind: "session" }, dispatch: options.dispatch ?? { kind: "live" } };
+  const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [DOC], work: { kind: "session", run: RUN }, dispatch: options.dispatch ?? { kind: "live" } };
   return {
     definition: {
       behaviour,
@@ -147,6 +159,9 @@ function indexOf(...list: Occurrence[]): OccurrenceIndex {
 type PreviewOverrides = {
   occurrences?: OccurrenceIndex;
   history?: OccurrenceHistory;
+  /** Absent is an empty, whole journal; `undefined` is a process holding none. */
+  journal?: LaunchJournalReading | undefined;
+  accounts?: AccountChoice;
   arming?: Arming;
   launchSeparationMs?: number;
   capabilities?: HeldCapabilities;
@@ -161,6 +176,8 @@ function previewOf(definitions: readonly AuthorisedJob[], over: PreviewOverrides
     list: { kind: "given", definitions, listRevision: listRevision(definitions), evidence: over.evidence ?? evidenceAsBuilt(definitions) },
     occurrences: over.occurrences ?? new Map(),
     history: over.history ?? { kind: "intact" },
+    journal: "journal" in over ? over.journal : EMPTY_JOURNAL,
+    accounts: over.accounts ?? CHOSEN,
     arming: over.arming ?? ARMED_LONG_AGO,
     launchSeparationMs: over.launchSeparationMs ?? 0,
     capabilities: over.capabilities ?? ALL,
@@ -175,16 +192,63 @@ function only(preview: SchedulePreview, jobId: string): SchedulePreviewJob {
 }
 
 describe("each verdict the planner can give becomes a row that says so", () => {
-  test("history lost: every row held, the last attempt NOT KNOWN rather than `never`, and no next run", () => {
+  test("THE RULES' LEDGER lost: the rule row held, NOT KNOWN rather than `never`, and a session row still plans (F2)", () => {
+    // Since plan 260910f (scheduled dispatch) a session job's history is the
+    // launch journal, so a hole in `events.jsonl` says nothing about it.
     const preview = previewOf([sessionJob("a"), ruleJob("r")], { history: { kind: "lost", why: "the log has a hole" } });
-    for (const row of preview.jobs) {
+    const rule = only(preview, "r");
+    expect(rule.verdict.kind).toBe("history-lost");
+    expect(rule.verdict.sentence).toContain("the log has a hole");
+    expect(rule.verdict.next.kind).toBe("none");
+    // A LOST LEDGER READ AS "NEVER RUN" is C3 arriving through the preview.
+    expect(rule.lastAttempt.kind).toBe("not-known");
+    expect(only(preview, "a").verdict.kind).toBe("dispatch");
+    expect(preview.history).toEqual({ kind: "lost", why: "the log has a hole" });
+    expect(preview.sessionHistory).toEqual({ kind: "intact" });
+  });
+
+  test("THE LAUNCH JOURNAL lost: every session row held with the journal's reason, and the rule row still plans (F2)", () => {
+    const lost: LaunchJournalReading = { status: () => ({ kind: "history-lost", atLine: 3, why: "a torn line" }), fold: () => emptyFold() };
+    const preview = previewOf([sessionJob("a"), sessionJob("b"), ruleJob("r")], { journal: lost });
+    for (const id of ["a", "b"]) {
+      const row = only(preview, id);
       expect(row.verdict.kind).toBe("history-lost");
-      expect(row.verdict.sentence).toContain("the log has a hole");
-      expect(row.verdict.next.kind).toBe("none");
-      // A LOST LEDGER READ AS "NEVER RUN" is C3 arriving through the preview.
+      expect(row.verdict.sentence).toContain("launch journal");
+      expect(row.verdict.sentence).toContain("a torn line");
+      expect(row.verdict.next).toEqual({
+        kind: "none",
+        why: expect.stringContaining("launch journal history is resolved"),
+      });
+      if (row.verdict.next.kind === "none") expect(row.verdict.next.why).not.toContain("reconcile-jobs");
       expect(row.lastAttempt.kind).toBe("not-known");
     }
-    expect(preview.history).toEqual({ kind: "lost", why: "the log has a hole" });
+    expect(only(preview, "r").verdict.kind).toBe("dispatch");
+    expect(preview.history).toEqual({ kind: "intact" });
+    expect(preview.sessionHistory.kind).toBe("lost");
+  });
+
+  test("a process holding no launch protocol says history is unavailable, not lost, and holds every session row", () => {
+    const preview = previewOf([sessionJob("a"), ruleJob("r")], { journal: undefined });
+    expect(preview.sessionHistory).toEqual({ kind: "unavailable", why: expect.stringContaining("holds no launch protocol") });
+    expect(only(preview, "a").verdict.kind).toBe("held");
+    expect(only(preview, "a").verdict.sentence).toContain("holds no launch protocol");
+    expect(only(preview, "a").verdict.sentence).not.toContain("not whole");
+    expect(only(preview, "r").verdict.kind).toBe("dispatch");
+  });
+
+  test("no pool account may start a session: USAGE-HELD, until the hold is expected to lift, and a rule is not held", () => {
+    const accounts: AccountChoice = {
+      chosen: { kind: "held", why: "every pool account is at its limit", until: at(hours(2)) },
+      standing: () => ({ kind: "held", why: "at its limit", until: at(hours(2)) }),
+    };
+    const preview = previewOf([sessionJob("a"), ruleJob("r")], { accounts });
+    const row = only(preview, "a");
+    expect(row.verdict.kind).toBe("usage-held");
+    expect(row.verdict.sentence).toContain("every pool account is at its limit");
+    expect(row.verdict.next).toEqual({ kind: "next-due", at: at(hours(2)) });
+    expect(only(preview, "r").verdict.kind).toBe("dispatch");
+    const undated = only(previewOf([sessionJob("a")], { accounts: { ...accounts, chosen: { kind: "held", why: "no reading", until: null } } }), "a");
+    expect(undated.verdict).toMatchObject({ kind: "usage-held", next: { kind: "none" } });
   });
 
   test("a duplicate id: both definitions refused, with no next run", () => {
@@ -295,10 +359,11 @@ describe("each verdict the planner can give becomes a row that says so", () => {
     expect(preview.caveat).toContain("assume");
   });
 
-  test("dispatch on a daemon holding no session dispatcher says nothing will start it", () => {
+  test("dispatch on a daemon holding no launch protocol says nothing will start it, and names the account it would plan on", () => {
     const row = only(previewOf([sessionJob("due")], { capabilities: NONE }), "due");
     expect(row.verdict.kind).toBe("dispatch");
-    expect(row.verdict.sentence).toContain("no session dispatcher");
+    expect(row.verdict.sentence).toContain("no launch protocol");
+    expect(row.verdict.sentence).toContain("pool-preview");
   });
 
   test("a DISARMED preview still spaces later rows, because it forecasts what arming would do — and says it cannot launch now", () => {
@@ -313,20 +378,21 @@ describe("each verdict the planner can give becomes a row that says so", () => {
       launchSeparationMs: minutes(30),
     });
     expect(preview.jobs.map((row) => row.verdict.kind)).toEqual(["dispatch", "spacing-held"]);
-    expect(only(preview, "first").verdict.sentence).toContain("this daemon holds no session dispatcher");
+    expect(only(preview, "first").verdict.sentence).toContain("this daemon holds no launch protocol");
     expect(only(preview, "first").verdict.sentence).toContain("assume the launch");
   });
 
-  test("the fixed facts of every row: resource class, the lease labelled as the launcher's, and what is NOT built", () => {
+  test("the fixed facts of every row: resource class, the lease labelled as the launcher's, and the authorised run spec", () => {
     const preview = previewOf([sessionJob("s", { leaseMs: hours(6) }), ruleJob("r")]);
     expect(only(preview, "s")).toMatchObject({
       resourceClass: "claude-session",
       schedule: { everyMs: hours(3), launcherLeaseMs: hours(6), initialDelayMs: 0 },
-      sessionTimeout: "not built",
-      sessionNoOverlap: "not enforced",
+      sessionTimeout: { kind: "run-spec", timeoutMinutes: 30, access: "read-only" },
+      sessionNoOverlap: "enforced",
       prompt: "run s",
     });
     expect(only(preview, "r").resourceClass).toBe("in-process-rule");
+    expect(only(preview, "r").sessionTimeout).toEqual({ kind: "not-a-session" });
     // A rule's documents are the loaded code's digests, and the row says which reading it is.
     expect(only(preview, "r").documents).toEqual([]);
   });
@@ -364,7 +430,7 @@ describe("the last attempt, in every state the ledger can hold", () => {
     expect(lastOf(occurrences.started("j", at(-minutes(5)), at(minutes(55)), 4321))).toMatchObject({ kind: "started", pid: 4321, leaseUntil: at(minutes(55)) });
   });
 
-  test("the newest occurrence, by its scheduled instant — the same one the planner's clock reads", () => {
+  test("the newest occurrence, by its reservation instant — the same one the planner's clock reads", () => {
     // The older one first in the map on purpose: insertion order must not be what wins.
     const both = only(
       previewOf([sessionJob("j")], { occurrences: indexOf(occurrences.refused("j", at(-hours(5)), "old"), occurrences.finished("j", at(-hours(2)), at(-hours(2)))) }),
@@ -372,6 +438,74 @@ describe("the last attempt, in every state the ledger can hold", () => {
     );
     expect(both.lastAttempt.kind).toBe("finished");
     expect(both.verdict.next).toEqual({ kind: "next-due", at: at(hours(1)) });
+  });
+});
+
+describe("a session job's occurrence, read from a real launch journal", () => {
+  /** A launch store in a temp dir, with each request planned into it by the protocol's own `plan()`. */
+  function journalWith(...requests: PlanRequest[]): LaunchStore {
+    const opened = openLaunchStore({ root: tempRoot(), now: () => NOW });
+    if (!opened.ok) throw new Error(`the launch store would not open: ${JSON.stringify(opened.refusal)}`);
+    stores.push(opened.store);
+    for (const request of requests) {
+      const planned = plan({ journal: opened.store, now: () => NOW }, request);
+      if (planned.kind !== "planned") throw new Error(`not planned: ${JSON.stringify(planned)}`);
+    }
+    return opened.store;
+  }
+
+  function requestFor(job: AuthorisedJob, scheduledAt: string, hash: string = behaviourHash(job.definition.behaviour)): PlanRequest {
+    return {
+      origin: scheduleOrigin({ jobId: job.definition.behaviour.id, scheduledAt, behaviourHash: hash as BehaviourHash }),
+      material: `run ${job.definition.behaviour.id}\n`,
+      admissionClass: "claude-session",
+      launcherKind: "tmux-headless",
+      run: { ...RUN, account: "pool-a" },
+    };
+  }
+
+  test("A PLANNED OCCURRENCE OF THE AUTHORISED REVISION is resumed: the verdict says so, and the last attempt is the launch itself", () => {
+    const job = sessionJob("sweep");
+    const request = requestFor(job, at(-hours(1)));
+    const preview = previewOf([job], { journal: journalWith(request) });
+    const row = only(preview, "sweep");
+    expect(row.verdict.kind).toBe("resume");
+    expect(row.verdict.next).toEqual({ kind: "due-now" });
+    expect(row.verdict.sentence).toContain("resumes it");
+    expect(row.lastAttempt).toMatchObject({
+      kind: "launch",
+      launchId: occurrenceIdOf(request.origin),
+      plannedAt: NOW.toISOString(),
+      state: "planned",
+      standing: "resumable",
+      endedAt: null,
+    });
+    // THE ONE PARSER READS THE REAL ROW BACK AS A ROW, and the CLI prints it.
+    const parsed = parseSchedulePreview(JSON.parse(JSON.stringify(preview)));
+    if (parsed.kind !== "preview") throw new Error(`expected a preview, got ${parsed.kind}`);
+    expect(parsed.preview.jobs).toEqual([{ kind: "job", job: row }]);
+    const text = schedulePreviewLines(parsed, { built: { kind: "built", listRevision: listRevision([job]) } }, NOW.getTime()).join("\n");
+    expect(text).toContain("WOULD RESUME");
+    expect(text).toContain("PLANNED — planned");
+    expect(text).toContain(occurrenceIdOf(request.origin));
+  });
+
+  test("A WAITING OCCURRENCE OF ANOTHER REVISION is forecast superseded: the replacement is due now, and the waiting one is still the last attempt", () => {
+    const job = sessionJob("sweep");
+    const preview = previewOf([job], { journal: journalWith(requestFor(job, at(-hours(1)), "0123456789ab")) });
+    const row = only(preview, "sweep");
+    expect(row.verdict.kind).toBe("dispatch");
+    expect(row.verdict.next).toEqual({ kind: "due-now" });
+    // Nothing was written: the preview forecasts the abandonment the tick would make.
+    expect(row.lastAttempt).toMatchObject({ kind: "launch", state: "planned", standing: "resumable" });
+  });
+
+  test("a launch in the journal holds its job for a DIFFERENT job only if it is that job's", () => {
+    const sweep = sessionJob("sweep");
+    const other = sessionJob("other");
+    const preview = previewOf([sweep, other], { journal: journalWith(requestFor(sweep, at(-hours(1)))) });
+    expect(only(preview, "other").lastAttempt).toEqual({ kind: "never" });
+    expect(only(preview, "other").verdict.kind).toBe("dispatch");
   });
 });
 
@@ -421,26 +555,34 @@ describe("the missed-run policy is what the planner does", () => {
     const launched: string[] = [];
     const input = {
       definitions: [job],
-      history: { kind: "intact" } as const,
+      history: { rules: { kind: "intact" }, sessions: { kind: "intact" } } as const,
       arming: ARMED_LONG_AGO,
       launchSeparationMs: 0,
       evidence: evidenceAsBuilt([job]),
+      accounts: CHOSEN,
     };
-    const first = planJobs({ ...input, occurrences: indexOf(lastRun), nowMs: NOW.getTime() }, (one) => {
-      launched.push(one.definition.behaviour.id);
-      return true;
+    const ports = (onLaunch: () => void = () => undefined): PlanPorts => ({
+      launch: (one) => {
+        launched.push(one.definition.behaviour.id);
+        onLaunch();
+        return true;
+      },
+      supersede: () => {
+        throw new Error("nothing waits here, so nothing is superseded");
+      },
     });
+    const first = planJobs({ ...input, occurrences: indexOf(lastRun), nowMs: NOW.getTime() }, ports());
     expect(first.map((plan) => plan.kind)).toEqual(["dispatch"]);
     // What the tick would have written for that one dispatch. Twenty-four missed
     // intervals and no replay: every later tick inside the lease is held, and
     // after it settles the job waits a whole interval from THAT run.
     const reservation = occurrences.reserved("sweep", NOW.toISOString(), at(hours(1)));
     for (const later of [30_000, minutes(10), minutes(59)]) {
-      const plans = planJobs({ ...input, occurrences: indexOf(lastRun, reservation), nowMs: NOW.getTime() + later }, () => true);
+      const plans = planJobs({ ...input, occurrences: indexOf(lastRun, reservation), nowMs: NOW.getTime() + later }, ports());
       expect(plans.map((plan) => plan.kind)).toEqual(["held"]);
     }
     const settled = occurrences.finished("sweep", NOW.toISOString(), at(minutes(1)));
-    const after = planJobs({ ...input, occurrences: indexOf(lastRun, settled), nowMs: NOW.getTime() + minutes(2) }, () => true);
+    const after = planJobs({ ...input, occurrences: indexOf(lastRun, settled), nowMs: NOW.getTime() + minutes(2) }, ports());
     expect(after.map((plan) => plan.kind)).toEqual(["waiting"]);
     expect(launched).toEqual(["sweep"]);
     // And the file says which policy it is describing.
@@ -535,8 +677,11 @@ describe("the CLI block", () => {
     const nextLine = text.split("\n").find((line) => line.includes("next") && line.includes("London"));
     expect(nextLine, text).toBeDefined();
     expect(nextLine?.indexOf("London")).toBeLessThan(nextLine?.indexOf("UTC") ?? -1);
-    expect(text).toContain("not built");
-    expect(text).toContain("not enforced");
+    expect(text).toContain("session timeout 30 min, read-only access");
+    expect(text).toContain("session no-overlap enforced");
+    expect(text).toContain("session timeout not a session");
+    expect(text).toContain("the rules' ledger is whole");
+    expect(text).toContain("the launch journal is whole");
   });
 
   test("a daemon holding a different list says a restart loads the checkout's", () => {
@@ -633,14 +778,20 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     expect(outcome.kind).toBe("stopped");
   }
 
-  /** A job that would be DISPATCHED if this daemon were armed — so "nothing was dispatched" is not vacuous. */
+  /**
+   * A rule that would be DISPATCHED if this daemon were armed — so "nothing was
+   * dispatched" is not vacuous. It used to be a session job; until Stage C hands
+   * the daemon its launch journal, a session row on a daemon preview is held on
+   * that unread journal, so the would-be dispatch is a rule's.
+   */
   const due = sessionJob("would-dispatch");
   const fixture = sessionJob("dry", { dispatch: { kind: "dry-run", why: "a fixture" } });
+  const rule = ruleJob("would-run");
   const PREVIEW_OPTION = {
-    definitions: [due, fixture],
+    definitions: [due, fixture, rule],
     readDocument: (path: string) => ({ kind: "read" as const, path, sha256: DOC.sha256 }),
     capabilities: NONE,
-    listRevision: listRevision([due, fixture]),
+    listRevision: listRevision([due, fixture, rule]),
     arming: ARMED_LONG_AGO,
     launchSeparationMs: 0,
   };
@@ -655,7 +806,12 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     expect(read.preview.list).toEqual({ kind: "given", listRevision: PREVIEW_OPTION.listRevision });
     expect(read.preview.capabilities).toEqual(NONE);
     const rows = read.preview.jobs.map((row) => (row.kind === "job" ? `${row.job.jobId}:${row.job.verdict.kind}` : "unreadable"));
-    expect(rows).toEqual(["would-dispatch:dispatch", "dry:dry-run"]);
+    // THE DAEMON HANDS THE PREVIEW NO LAUNCH PROTOCOL YET (Stage C wires it),
+    // so every session row is held and says the history is unavailable rather
+    // than falsely claiming a journal was lost; the rule still previews a dispatch.
+    expect(rows).toEqual(["would-dispatch:held", "dry:held", "would-run:dispatch"]);
+    expect(read.preview.sessionHistory).toEqual({ kind: "unavailable", why: expect.stringContaining("no launch protocol") });
+    expect(read.preview.history).toEqual({ kind: "intact" });
     // THE ASSERTION THAT MATTERS: it previewed a dispatch and made none.
     expect(eventsIn(root).filter((event) => event.kind.startsWith("job-occurrence") || event.kind.startsWith("rule-"))).toEqual([]);
   });
@@ -686,7 +842,6 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
         })(),
       jobs: {
         definitions: [job],
-        spawn: () => ({ kind: "refused", why: "the test never starts a process" }),
         arming: ARMED_LONG_AGO,
         launchSeparationMs: 0,
         readDocument,
@@ -707,10 +862,18 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     if (read.kind !== "preview") throw new Error(`expected a preview, got ${read.kind}`);
     const row = read.preview.jobs[0];
     if (row?.kind !== "job") throw new Error("expected a readable job row");
+    // UNTIL STAGE C hands the daemon a launch protocol, the session job cannot
+    // earn ARMED and its row is held on an unread journal, so the two claims are
+    // compared where both still show the reading: the headline's reason, and the
+    // row's own document column. The pin read → the headline blames the missing
+    // capability and the document is as pinned; the edit read → the headline
+    // names the edit and the document is changed. Never one of each.
+    expect(read.preview.headline.kind).toBe("blocked");
+    const changed = row.job.documents[0]?.changed;
     expect([
-      ["armed", "dispatch"],
-      ["blocked", "unauthorised"],
-    ]).toContainEqual([read.preview.headline.kind, row.job.verdict.kind]);
+      ["no", true, false],
+      ["yes", false, true],
+    ]).toContainEqual([changed, read.preview.headline.why.includes("holds no launch protocol"), read.preview.headline.why.includes("edited since it was authorised")]);
   });
 
   test("an armed daemon previews the arming, capabilities, spacing and document reader its live scheduler actually uses", async () => {
@@ -730,7 +893,6 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
         })(),
       jobs: {
         definitions,
-        spawn: () => ({ kind: "refused", why: "the test never starts a process" }),
         arming: ARMED_LONG_AGO,
         launchSeparationMs: minutes(30),
         readDocument: (path) => ({ kind: "read", path, sha256: DOC.sha256 }),
@@ -741,7 +903,7 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
       preview: {
         definitions,
         readDocument: (path) => ({ kind: "read", path, sha256: "f".repeat(64) }),
-        capabilities: NONE,
+        capabilities: ALL,
         listRevision: listRevision(definitions),
         arming: DISARMED,
         launchSeparationMs: 0,
@@ -749,9 +911,16 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     });
     const read = readSchedulePreviewFile(root);
     if (read.kind !== "preview") throw new Error(`expected a preview, got ${read.kind}`);
-    expect(read.preview.capabilities).toEqual({ session: true, rules: false });
+    // THE LIVE TICKER'S: no launch protocol until Stage C, and no rule runner —
+    // not the contradictory copy's ALL.
+    expect(read.preview.capabilities).toEqual(NONE);
     expect(read.preview.arming).toEqual({ kind: "armed", at: ARMED_LONG_AGO.at });
-    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.verdict.kind : "unreadable"))).toEqual(["dispatch", "spacing-held"]);
+    // THE LIVE READER'S DIGEST, not the copy's.
+    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.documents[0]?.changed : "unreadable"))).toEqual(["no", "no"]);
+    // The live SPACING cannot show until Stage C hands the daemon its launch
+    // protocol: until then every session row is held. When it does, these
+    // read dispatch, spacing-held — which is what this line used to assert.
+    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.verdict.kind : "unreadable"))).toEqual(["held", "held"]);
   });
 
   test("a daemon handed no job list writes a file that says so, rather than no file", async () => {
@@ -800,6 +969,8 @@ describe("the wiring the shipped CLI does", () => {
 
   test("the capabilities follow the arming", () => {
     expect(schedulerWiring({ OVERSEER_RULES_ENABLED: "1" }, ARMED_LONG_AGO).preview.capabilities).toEqual({ session: false, rules: true });
-    expect(schedulerWiring({ OVERSEER_JOBS_ENABLED: "1" }, ARMED_LONG_AGO).preview.capabilities).toEqual(ALL);
+    // NO SESSION CAPABILITY UNDER ANY ARMING until Stage C composes the launch
+    // protocol: the old gjd-remote spawner is gone, and claiming it would be S8-7.
+    expect(schedulerWiring({ OVERSEER_JOBS_ENABLED: "1" }, ARMED_LONG_AGO).preview.capabilities).toEqual({ session: false, rules: true });
   });
 });

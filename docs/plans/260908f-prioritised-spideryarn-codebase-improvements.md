@@ -5,6 +5,9 @@ Status as of 2026-09-08: **researched umbrella plan; implementation not started*
 results are recorded at the end. This is a plan-only commission: completing this document does
 not authorise implementing every product decision below.
 
+**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
+prepared the same day — see § P. Each stage's own status line is the authority.
+
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
 > combination of ease and value), with enough research and detail that another less-capable agent
 > could follow it correctly.
@@ -271,14 +274,29 @@ under `src/web/modes/`. Read
 
 ### Stage: contain Debate, using the existing mechanism
 
-- [ ] Trace `DebateBand` in `modes/debate/DebateMode.tsx` and identify all render-time work. Wrap the
+**Built 2026-09-10** (worktree `contain-debate`, queue item qi-2wew3act). `Reader.tsx` § `case
+"debate"` wraps the whole of `DebateBand` — `useDebate`'s read, job poll and `useAutoRun`, and the
+panel — in `FeatureBoundary name="Debate"`, `target` `"debate"` for an owner. Eleven Debate cases
+at the end of the test file: ten were red against the unchanged `Reader` (every one the root
+`[render]` fallback taking the page), all green after. Mutation checks: `target={null}` turns the
+three money cases red, and the Back leg alone catches the spent press; **a constant reset key stays
+green**, because `ArticlePage` renders `OwnedArticle key={slug}` and drops to `loading` between
+articles, so a slug change destroys the boundary structurally — the test says so rather than
+claiming it proves the key. No browser pass: the wrapper adds no DOM, and the fallback cannot be
+reached in a real browser without injecting a throw. GPT Sol review: no production defect; it
+strengthened the owner → visitor case (the mode stays `debate` and the visitor's owners-only band is
+drawn, so a sign-out that fell back to Plain would now fail) and corrected `Reader`'s complexity
+figures, which I reworded so the history stays true. Full suite: five red files, all environment
+(two want `npm run build`, three fleet suites want `tools/fleet/web/dist`), nothing else.
+
+- [x] Trace `DebateBand` in `modes/debate/DebateMode.tsx` and identify all render-time work. Wrap the
   controller and panel together, not only the visible panel; leave shared article geometry outside.
-- [ ] Extend `tests/a-broken-mode-leaves-the-article-readable.test.tsx` with a Debate controller throw
+- [x] Extend `tests/a-broken-mode-leaves-the-article-readable.test.tsx` with a Debate controller throw
   under real StrictMode. Assert the throwing seam ran, prose/spine/dock remain, the fallback names
   Debate, and one scrubbed report is emitted without article/error-message text.
-- [ ] Exercise activation retirement: a throw before `useAutoRun`'s effect must not leave a token
+- [x] Exercise activation retirement: a throw before `useAutoRun`'s effect must not leave a token
   that later Back navigation spends. Successful activation is the positive one-POST control.
-- [ ] Test retry/reset identity, owner-to-visitor transition, different slug, and switch to Plain.
+- [x] Test retry/reset identity, owner-to-visitor transition, different slug, and switch to Plain.
   Complete common checks and commit this independently useful improvement.
 
 ### Stage: extend containment with an honest inventory
@@ -701,6 +719,14 @@ requirement. The outcome of interest is a reader reconstructing and interrogatin
 not time-in-app, clicks or articles completed.
 
 ### Stage: prepare a small reader study Greg can run
+
+**Status as of 2026-09-10: protocol prepared and Sol-reviewed; the study itself is not run** — no
+reader contacted. The protocol, consent text, recruiting message and Greg's checklist are
+[260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md).
+It departs from the bullets below in two reviewed ways: whole articles rather than passages (with a
+pilot of length and time), and the result read from article-by-article contrasts, since each reader's
+two conditions are different articles. The first three bullets and the approval half of the fourth
+are done by that document; the rest waits on Greg.
 
 - [ ] Write a short protocol using two comparable article passages and counterbalance which is read
   with Spideryarn versus ordinary prose. Start with a small formative set, for example 3–5 consenting

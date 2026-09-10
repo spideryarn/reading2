@@ -616,6 +616,61 @@ paragraph had not disclosed F21 or F23 — right, and now it does. All four acce
 `260910f-launch-protocol-stage2b-fixes-task.md`, which also carries F20 and the read-only
 `view()` for `scheduled-dispatch`.
 
+**Stage 2b (2026-09-10): built by an Opus subagent against `260910f-launch-protocol-stage2b-fixes-task.md`;
+every item red first.** 454 tests across the ten launch, wrapper and env suites pass, typecheck exit
+0; `subagent-cli.ts` and `gjd-remote.ts` untouched this round.
+
+- **F22 — premise confirmed, fixed.** `loadRepoEnv()` → `src/env.ts`'s `loadEnvLocal()`, which
+  skips only names in `SPIDERYARN_ENV_PINNED` and protects a value only if this process changed it
+  after starting — so a `PATH` handed to a spawned wrapper counts as inherited and `.env.local`
+  replaces it. The unit setup pinned only `DATABASE_URL,SUPABASE_URL`. New
+  `tests/helpers/wrapper-env.ts` pins `PATH` and the account-routing names for every spawned
+  wrapper, and the preflight resolves the CLI through the wrapper's own `.env.local` load
+  (`resolve-cli-as-wrapper.ts`); a test keeps both halves (unpinned resolves the wrong stand-in).
+- **F20** — `probeAuth` gets its own `hangupBeforeRun()` (the run's `hangup` would have recorded the
+  probe's ending as the paid run's), and `hangup` joined the not-run causes the reader accepts.
+  run-codex spawns nothing before codex, so it had no such gap.
+- **F21** — under `--launch-dir` only, the last attempt's output is copied to the durable answer
+  path before the failure ladder; only if that attempt wrote a file.
+- **F23** — `launchStartLines` arms an `EXIT` trap after the durable start write;
+  `launchExitLines` writes the real record and disarms it. The trap records `exited` with the
+  script's status and a `null` verdict (the reader refuses `not-run` without a failed verdict, and a
+  job shell judges nothing).
+- **F24** — a SIGHUP test of run-codex in its own process group, seen red by removing the hook.
+- **`view()`** — `LaunchJournalView = Pick<LaunchJournal, "status" | "fold" | "attemptDir">`; the
+  composed protocol has nine keys.
+- **`RunSpec.account`** — required, `^[a-z0-9][a-z0-9-]{0,40}$`, in F5's conflict check; both
+  adapters pass `--account`; the tmux-headless command unsets the session's account-routing
+  variables. **Trade-off taken:** the real-tmux run-claude test can no longer reach `ok` offline,
+  because a routed run reads the account's live profile over the network; it now asserts run-claude's
+  own refusal of an unregistered handle (not-run, no claude spawned). The unrouted `ok` path is still
+  covered by run-claude's `--launch-dir` tests.
+- **An incident, now closed in the test but not undone:** the first red run of the new
+  session-environment test diffed the vitest worker's **whole environment** into the fixer's tool
+  output — the subagent's context, so it went to the model API — including real keys loaded from
+  `.env.local`. The test now compares variable **names** only. Reported to the Overseer, who took
+  the rotation question to Greg (live exposures: OpenRouter, the Google API key, the Google OAuth
+  client secret, the Claude Code messaging token; the Supabase key is the local stack's and the
+  Stripe key is test-mode). Postmortem to follow; no value is recorded anywhere in this repo.
+
+**Sol's narrow check of the three Stage 2 P1 fixes (F20, F21, F23) at e3bcace3: all three closed**,
+each with the exact lines (`…-stage2-fixcheck-sol.md`). Stage 2 is done reviewing. Stages 1, 1b, 2
+and 2b go to dev once the full suite on the merged tree (79a55e94) is accounted for.
+
+**The full suite on the merged tree (79a55e94), 2026-09-10: 6 failed files of 1,063 (6 tests of
+22,991).** Four are the known fresh-worktree environment reds (`cold-start-lazy-imports`,
+`pdf-bundle-trace`: no `api-dist/`; `fleet-decisions-route`, `fleet-reports-route`: no built fleet
+client). One was another session's: a raw NUL byte in `gradual-recovery`'s
+`tests/overseer-recovery-resume.test.ts`, already fixed on dev at b9479b79 and merged in (9f976ba8;
+it passes). **One was mine: `no-undeclared-spend` flags `tools/overseer/launchers.ts` for naming
+`ANTHROPIC_API_KEY` and `OPENAI_API_KEY`** — only in `SESSION_UNSET_VARIABLES`, the list a
+`tmux-headless` session unsets so it never inherits the daemon's credentials. Not a
+`Declaration` (the declarations file refuses a second `tools/overseer` entry), and not names
+assembled at runtime to hide them from the scan; an `ALLOWED` reason like `run-claude.ts`'s own,
+asked of the Overseer because the test file is outside the set. Two background waiters on the suite
+were killed by the harness for low memory (18 GB available, 14 GB swapped) while the suite itself
+ran on in tmux; a Monitor held.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
@@ -630,9 +685,65 @@ applied once; a crash after `disposed` still releases (F7); `resolve-history` pr
 journal byte-for-byte and starts a fresh one with `history-reset` (F2); the projection's bound and
 overflow count (F10); the drill's exact counts, and its no-op negative control failing (F12).
 
+## Stage 3, not built — the handover
+
+**Greg moved Overseer and dashboard work to the bottom of the priorities on 2026-09-10 (relayed by
+the Overseer), so this session landed Stages 1, 1b, 2 and 2b and stopped.** A Stage 3 builder had
+been started minutes before the instruction arrived; it was stopped and left no file changed.
+
+What Stage 3 would do, in full, so it can be picked up as it stands — the brief is
+`260910f-launch-protocol-stage3-task.md`, updated to everything Stages 1–2b settled:
+
+1. **`tools/overseer/daemon.ts`** (small edits, outside the usage pass): open the launch store and
+   the admission owner under the store root at start (a refusal is logged and leaves launching
+   unavailable, never stops the daemon); **compose the protocol once**
+   (`composeLaunchProtocol` with the three launchers, their `env` the sanitised set — never the
+   daemon's own environment, checked by variable name only) and export it as one named value beside
+   the scheduler's tick site, for `scheduled-dispatch` to hand to `TickInput`; run `reconcile()` at
+   start and on every checkpoint tick; drain the launch inbox; write `launches.json`.
+2. **`tools/overseer/launch-inbox.ts`**: the drop-directory shape of `recovery-inbox.ts` — `dispose`
+   and `resolve-history` requests, validated against the fold, applied once by request id.
+3. **`scripts/overseer-launches.ts`**: `list`, `show <id>`, and the pinned
+   `dispose <lo-id> --as not-running|ended --why "<reason>"` (request id and actor filled by the
+   script), plus `resolve-history --why … --accept-hidden-launch-risk`.
+4. **`tools/overseer/launch-projection.ts`**: `launches.json`, bounded (200 non-terminal, most
+   actionable first; the newest 50 terminal; totals and omitted counts; each class's capacity and
+   holders; the journal's and the owner's replay status).
+5. **`tools/fleet/wire.ts`**: one appended block of the projection's types, for the page.
+6. **`scripts/launch-protocol-drill.ts`**: D11 as amended by F12 — the fixture job's real occurrence
+   on a scratch store, scratch owner and disposable tmux socket, killed and reopened at every
+   boundary of D4's table, exact counts per boundary with the external effects counted
+   independently, and a `--negative-control` no-op launcher that must fail. **This drill is the
+   roadmap stage's acceptance evidence; until it exists, the acceptance paragraph is met by the
+   fault-injection tests in `tests/overseer-launch-protocol.test.ts`, not by a drill.**
+7. **Then, not this stage:** the fleet route, client and panel, and the `server.ts`/`App.tsx` lines
+   (moved to Scheduled dispatch by F8); `scheduled-dispatch`'s one `TickInput` line; and
+   `gradual-recovery`'s `tmux-resume` launcher kind and `--resume-conversation`.
+
+**What that leaves true on dev today:** the launch protocol, its store, the admission owner, the
+three launchers and the wrapper and gjd-remote changes are all built, reviewed and tested, **and
+nothing calls them** — a test asserts it. No daemon opens the launch store, so there is no
+`~/.overseer/launches/` on the box, and **no restart is needed or useful** until Stage 3 lands.
+
+**Also left, and named:** the `run-codex` test redaction the Overseer approved as a follow-up
+(five assertions in `tests/run-codex.test.ts` that would print the real `CODEX_API_KEY` on failure —
+see the postmortem) is **not done**; the per-lane secret scrub is the Overseer's queue item
+`qi-xj735ng4`; and `docs/project/testing.md`'s ".env.local is loaded into tests" section still
+names `vite.config.ts` rather than the setup files.
+
 ## Status
 
-**2026-09-10 — Stage 0 done.** Plan d7f5f3c7 reviewed by Sol (read-only, one round): refused on
-three established P1s, all thirteen findings accepted and folded in above. No second plan round —
-the dispositions adopt Sol's own replacement wording, and the stage reviews will check the code
-built from it. Stage 1 next.
+**2026-09-10 — Stages 1, 1b, 2 and 2b landed on dev; Stage 3 not built (Greg's reprioritisation).
+Ending: important work left** — the daemon wiring, Greg's inbox and CLI, the projection, and the
+drill that is the roadmap's acceptance evidence (the handover above says exactly what). Leaving it
+costs little today: nothing calls the protocol, a test says so, and neither consumer can launch
+through it until Stage 3 composes it in the daemon.
+
+Reviews: the plan (Sol, 13 findings, 3 P1, all accepted); Stage 1 (Sol, one review in two runs —
+the first stopped by Codex's content filter — F14–F19, then a narrow check closing all five P1s);
+Stage 2 (Sol, one review in two runs — the first stopped at capacity — F20–F24, then a narrow check
+closing all three P1s). Implemented by Opus subagents throughout, no Codex implementation. One
+full suite on the merged tree, accounted for (above). Two out-of-set edits, both approved by the
+Overseer: `runChild`'s SIGHUP handling in `scripts/subagent-cli.ts` (an orphan fix) and one
+`ALLOWED` reason in `tests/no-undeclared-spend.test.ts`. One incident: a red-first env test printed
+real keys into a subagent's context — postmortem 260910d, rotation with Greg.

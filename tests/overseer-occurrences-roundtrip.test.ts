@@ -20,7 +20,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { parseOccurrencesFile } from "../tools/fleet/occurrences-parse.js";
 import { readOccurrencesFile } from "../tools/fleet/routes-occurrences.js";
 import type { ScheduledResultKind } from "../tools/fleet/wire.js";
-import { classifyOccurrence, type ObservedExitRecord, type ObservedLaunch, type ObservedState } from "../tools/overseer/occurrence-result.js";
+import { classifyOccurrence, type ObservedCompletion, type ObservedExitRecord, type ObservedLaunch, type ObservedState } from "../tools/overseer/occurrence-result.js";
 import { occurrencesProjection, writeOccurrencesFile } from "../tools/overseer/occurrences-projection.js";
 
 const roots: string[] = [];
@@ -31,15 +31,19 @@ afterEach(() => {
 const loId = (n: number): string => `lo-${"1".repeat(18)}${n.toString(16).padStart(2, "0")}`;
 const at = (n: number): string => new Date(Date.UTC(2026, 8, 1, 0, n)).toISOString();
 
+/** A good wrapper run, in the protocol's final `exit.json` shape. */
 const okExit: ObservedExitRecord = {
   kind: "exit-record",
   ending: { kind: "exited", code: 0 },
-  timedOut: false,
-  answerUsable: true,
   verdict: { kind: "ok" },
   usageLimit: false,
   permissionDenials: 0,
+  answer: { path: "/scratch/answer.md", bytes: 42, sha256: "0123456789abcdef".repeat(4), usable: true },
+  transcript: null,
 };
+
+const ENDED = "2026-09-01T00:30:00.000Z";
+const done = (evidence: ObservedCompletion): ObservedState => ({ kind: "completed", attempt: 1, evidence, endedAt: ENDED });
 
 /** One state per result kind the ladder can reach, plus a disposition. */
 const CASES: readonly { state: ObservedState; disposed?: boolean }[] = [
@@ -50,15 +54,19 @@ const CASES: readonly { state: ObservedState; disposed?: boolean }[] = [
   { state: { kind: "observed-running", attempt: 1 } },
   { state: { kind: "outcome-unknown", attempt: 1, why: "no start record and no session" } },
   { state: { kind: "outcome-unknown", attempt: 1, why: "no start record and no session" }, disposed: true },
-  { state: { kind: "failed-before-launch", attempt: null, proof: "launcher-refused", why: "no tmux server" } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, ending: { kind: "supervisor-failed", why: "spawn failed" } } } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, timedOut: true, ending: { kind: "signalled", signal: "SIGTERM" } } } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, usageLimit: true, ending: { kind: "exited", code: 1 } } } },
-  { state: { kind: "completed", attempt: 1, evidence: { kind: "rebooted" } } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, permissionDenials: 2 } } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, answerUsable: false } } },
-  { state: { kind: "completed", attempt: 1, evidence: { ...okExit, ending: { kind: "exited", code: 3 }, verdict: { kind: "failed", cause: "nonzero", why: "exit 3" } } } },
-  { state: { kind: "completed", attempt: 1, evidence: okExit } },
+  { state: { kind: "failed-before-launch", attempt: null, proof: "launcher-refused", why: "no tmux server", endedAt: ENDED } },
+  { state: { kind: "failed-before-launch", attempt: null, proof: "superseded", why: "superseded by fedcba987654", endedAt: ENDED } },
+  { state: done({ ...okExit, ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "spawn", why: "spawn failed" }, usageLimit: null, permissionDenials: null, answer: null }) },
+  { state: done({ ...okExit, ending: { kind: "signalled", signal: "SIGTERM" }, verdict: { kind: "failed", cause: "timeout", why: "ran past 5 minutes" } }) },
+  { state: done({ ...okExit, usageLimit: true, ending: { kind: "exited", code: 1 }, verdict: { kind: "failed", cause: "cli-error", why: "limit" } }) },
+  { state: done({ kind: "rebooted" }) },
+  { state: done({ ...okExit, ending: { kind: "signalled", signal: "SIGHUP" }, verdict: { kind: "failed", cause: "hangup", why: "tmux kill-session" } }) },
+  { state: done({ ...okExit, ending: { kind: "unobserved" }, verdict: { kind: "failed", cause: "wrapper", why: "forced settle" } }) },
+  { state: done({ ...okExit, permissionDenials: 2 }) },
+  { state: done({ ...okExit, answer: { path: "/scratch/answer.md", bytes: 2, sha256: "0123456789abcdef".repeat(4), usable: false } }) },
+  { state: done({ ...okExit, ending: { kind: "exited", code: 3 }, verdict: { kind: "failed", cause: "nonzero", why: "exit 3" } }) },
+  { state: done({ kind: "exit-unconfirmed", why: "exit.json is not JSON" }) },
+  { state: done(okExit) },
 ];
 
 function observed(n: number, state: ObservedState, disposed: boolean): ObservedLaunch {
@@ -72,7 +80,8 @@ function observed(n: number, state: ObservedState, disposed: boolean): ObservedL
     plannedAt: at(n),
     updatedAt: at(n + 1),
     attempts: open ? 1 : 0,
-    run: { timeoutMinutes: 5, access: "read-only" },
+    // A POOL ACCOUNT ON MOST, AND NONE ON SOME — both shapes an occurrence's run spec may have.
+    run: { timeoutMinutes: 5, access: "read-only", account: n % 3 === 0 ? null : "pool-a" },
     tmuxSession: state.kind === "observed-running" || state.kind === "launching" ? `job-${n}-0901-0000` : null,
     transcriptPath: state.kind === "completed" ? `/scratch/launches/o/${loId(n)}/a1/transcript.ndjson` : null,
     answer: state.kind === "completed" ? { kind: "present", attempt: 1, bytes: 42, sha256: "0123456789abcdef".repeat(4), usable: true } : { kind: "absent" },
@@ -92,6 +101,7 @@ describe("occurrences.json, written by the real writer and read by the real pars
       "admission-waiting",
       "running",
       "unknown",
+      "superseded",
       "launch-failed",
       "timed-out",
       "quota-refused",
@@ -110,7 +120,7 @@ describe("occurrences.json, written by the real writer and read by the real pars
       jobs: launches.map((launch) => ({
         jobId: launch.jobId,
         dispatch: { kind: "live" },
-        run: launch.run,
+        run: { timeoutMinutes: launch.run.timeoutMinutes, access: launch.run.access },
         next: { kind: "next-due", at: "2026-09-11T00:00:00.000Z" },
         observed: [launch],
       })),
