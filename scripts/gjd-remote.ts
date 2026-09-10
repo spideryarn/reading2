@@ -99,6 +99,7 @@ import {
   accountJobLines,
   accountOutcomeCommand,
   accountResolveCommand,
+  accountResolveFailure,
   accountTmuxPrefix,
   parseResolvedLaunchAccount,
   requestedClaudeAccount,
@@ -2676,7 +2677,7 @@ async function cmdNewClaude(
   const sessionId = randomUUID();
   const accountRequest = requestedClaudeAccount(opts.account);
   const resolved = sshRun(accountResolveCommand(accountRequest, name, sessionId));
-  if (resolved.status !== 0) die(`the box refused account '${accountRequest}': ${lastWords(resolved.stderr)}`);
+  if (resolved.status !== 0) die(accountResolveFailure(resolved.stderr, accountRequest));
   const parsedAccount = parseResolvedLaunchAccount(resolved.stdout);
   if (parsedAccount.kind === "refused") {
     die(`${parsedAccount.why} — refusing to start a session on an unverified account`);

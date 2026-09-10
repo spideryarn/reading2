@@ -392,6 +392,21 @@ function seededSettings(source: Record<string, unknown>, target: Record<string, 
   return result;
 }
 
+/**
+ * Where a config directory's `.claude.json` actually is.
+ *
+ * For the **default** account it is `~/.claude.json`, a sibling of `~/.claude`;
+ * for every routed account it is inside the directory. The CLI itself follows
+ * this rule — with `CLAUDE_CONFIG_DIR` unset it reads the sibling, and with it
+ * set it reads inside — which is why pointing `CLAUDE_CONFIG_DIR` at
+ * `~/.claude` yields `email: null` for an account that is plainly signed in.
+ */
+export function defaultClaudeJsonPath(configDir: string, home = homedir()): string {
+  return path.resolve(configDir) === path.resolve(path.join(home, ".claude"))
+    ? path.join(home, ".claude.json")
+    : path.join(configDir, ".claude.json");
+}
+
 function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | { why: string } {
   const defaultConfigDir = options.defaultConfigDir ?? path.join(homedir(), ".claude");
   if (path.resolve(targetDir) === path.resolve(defaultConfigDir)) return { why: "refusing to seed the default config directory into itself" };
@@ -402,7 +417,19 @@ function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | {
   const projects = inspectProjectsShare(projectsLink, desiredProjects, targetDir, options);
   if (!projects.ok) return { why: projects.why };
 
-  const sourceClaude = parseJsonObject(path.join(defaultConfigDir, ".claude.json"), true);
+  // NOT `<defaultConfigDir>/.claude.json`. **The default account's config file
+  // lives BESIDE its directory, not inside it** — `~/.claude.json`, while a
+  // routed account's lives at `<CLAUDE_CONFIG_DIR>/.claude.json`. Measured on
+  // the box 2026-09-10 against 2.1.267, and it is the same root cause as the
+  // identity asymmetry in `authStatusEnv` below: naming the default dir
+  // explicitly makes the CLI look *inside* it and find nothing.
+  //
+  // Reading the wrong path here does not fail loudly. A bare `claude auth
+  // status` under an explicit default dir CREATES a first-run stub there, so
+  // the seeder would find a real file holding eight boilerplate keys, no
+  // `mcpServers` and no identity — and seed a pool account with nothing while
+  // reporting success. `docs/reusable/silent-success.md` is the class.
+  const sourceClaude = parseJsonObject(defaultClaudeJsonPath(defaultConfigDir), true);
   if (!sourceClaude.ok) return { why: sourceClaude.why };
   const claudePath = path.join(targetDir, ".claude.json");
   const targetClaude = parseJsonObject(claudePath, false);

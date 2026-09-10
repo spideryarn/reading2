@@ -222,13 +222,54 @@ function profileFromJson(value: unknown): { accountUuid: string; email: string; 
   return accountUuid !== null && email !== null && orgId !== null ? { accountUuid, email, orgId } : null;
 }
 
+/**
+ * Is this value one of the utilization windows, rather than some other field?
+ *
+ * **Identified positively, and that matters.** The first version of this did the
+ * opposite — it named the known non-window keys (`limits`, `extra_usage`) and
+ * treated everything else as a window. Measured against the live endpoint on
+ * 2026-09-10, that response also carries `spend` (an object that is not a
+ * window), `seven_day_breakdown`, and `member_dashboard_available` — **a bool**.
+ * A single unrecognised scalar made the whole body "malformed", so every
+ * account read `unknown`, so `auto` fell back to least-recently-launched
+ * forever. The ranking was inert and nothing said so.
+ *
+ * An exclusion list has to be updated whenever the API grows a field; this asks
+ * what a window actually looks like, so a new field is ignored rather than
+ * fatal. Rotating codename windows still match, because they carry the same
+ * shape — which is what keeps rule 6 of usage-history.md ("an unrecognised
+ * window is a named row") working.
+ */
+/**
+ * `extra_usage` is the reason this needs BOTH a name exclusion and a shape
+ * test, rather than either alone. It carries a `utilization` field of its own —
+ * so it passes the shape test — but it is a credit balance, not a rolling
+ * window, and plotting it beside `seven_day` would be a category error. The
+ * shape test alone let it through; the name list alone let `spend` and
+ * `member_dashboard_available` break the whole read.
+ */
+const NON_WINDOW_KEYS = new Set(["limits", "extra_usage"]);
+
+function isUsageWindow(name: string, value: unknown): boolean {
+  if (NON_WINDOW_KEYS.has(name)) return false;
+  const window = object(value);
+  return window !== null && (Object.hasOwn(window, "utilization") || Object.hasOwn(window, "resets_at"));
+}
+
 function usageBodyIsStructurallyValid(body: Record<string, unknown>): boolean {
-  if (!Object.hasOwn(body, "five_hour") && !Object.hasOwn(body, "seven_day")) return false;
-  for (const [name, window] of Object.entries(body)) {
-    if (name === "limits" || name === "extra_usage" || window === null) continue;
-    if (object(window) === null) return false;
+  // At least one of the two windows every account has — their presence is what
+  // makes this a usage response rather than some other JSON. Not *both*: the
+  // API deciding to stop sending one should degrade that window to unknown, not
+  // discard the reading we did get. Anything else in the body is the API's
+  // business, per isUsageWindow.
+  let recognised = 0;
+  for (const name of ["five_hour", "seven_day"]) {
+    if (!Object.hasOwn(body, name)) continue;
+    const value = body[name];
+    if (value !== null && object(value) === null) return false;
+    recognised += 1;
   }
-  return true;
+  return recognised > 0;
 }
 
 export function parseLiveUsageResponse(
@@ -245,7 +286,11 @@ export function parseLiveUsageResponse(
   }
   const windows: UsageWindowReading[] = [];
   for (const [window, raw] of Object.entries(parsed)) {
-    if (window === "limits" || window === "extra_usage" || raw === null || raw === undefined) continue;
+    // A null window is "this account has no such limit", not a reading of zero
+    // — usage-history.md rule 1, absence is never a zero. Non-window fields
+    // (`limits`, `extra_usage`, `spend`, `member_dashboard_available`, …) are
+    // skipped by shape rather than by name; see isUsageWindow.
+    if (raw === null || raw === undefined || !isUsageWindow(window, raw)) continue;
     windows.push(parseUsageWindow(window, raw, nowMs));
   }
   return { kind: "value", takenAt: envelope.takenAt, identity: envelope.identity, windows };

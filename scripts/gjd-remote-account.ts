@@ -113,6 +113,31 @@ export function accountResolveCommand(requested: string, launchName: string, ses
   );
 }
 
+/**
+ * Why the on-box resolver failed, in words a person can act on.
+ *
+ * `lastWords()` takes the final two lines of stderr, which for a Node crash are
+ * a blank line and `Node.js v26.8.1` — so the first real failure here read
+ * "the box refused account 'mindstone': Node.js v26.8.1" and said nothing at
+ * all. The cause was two screens higher up.
+ *
+ * The common cause is worth naming outright: **accounts resolve from the
+ * PRIMARY checkout**, deliberately, because the registry and the reservation
+ * lock are box-global and must have one owner. So a launch from a worktree runs
+ * the primary's copy of this code, and a change that has not landed on `dev`
+ * and been pulled there is simply not present.
+ */
+export function accountResolveFailure(stderr: string, requested: string, boxCheckout = BOX_SPIDERYARN): string {
+  const lines = stderr.trim().split("\n").map((line) => line.trim()).filter(Boolean);
+  const cause = lines.find((line) => /Error:|ERR_[A-Z_]+|FATAL/.test(line)) ?? lines.at(-1) ?? "no output";
+  const missingModule = stderr.includes("ERR_MODULE_NOT_FOUND") && stderr.includes("claude-accounts.ts");
+  const hint = missingModule
+    ? ` — ${boxCheckout} has no scripts/claude-accounts.ts, so this change is not on the box's primary checkout yet;`
+      + " accounts resolve there, not from your worktree. Land it on dev and pull it there."
+    : "";
+  return `the box refused account '${requested}': ${cause}${hint}`;
+}
+
 export function accountOutcomeCommand(sessionUuid: string, outcome: "started" | "completed" | "failed"): string {
   return (
     `(cd ${shq(BOX_SPIDERYARN)} && ${shq("node_modules/.bin/tsx")} scripts/claude-accounts.ts outcome ` +

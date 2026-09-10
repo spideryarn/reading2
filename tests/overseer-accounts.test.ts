@@ -156,6 +156,46 @@ describe("live account identity and usage", () => {
     });
   });
 
+  // Red before the fix on 2026-09-10: the parser identified windows by
+  // EXCLUDING two known non-window keys, so `member_dashboard_available` — a
+  // bool the live endpoint really sends — made the whole body "malformed".
+  // Every account then read `unknown`, and `auto` silently fell back to
+  // least-recently-launched forever with the ranking inert. Shape copied from
+  // the real 20-key response.
+  it("reads a live body carrying non-window fields, including a scalar one", () => {
+    const result = parseLiveUsageResponse(
+      {
+        five_hour: { utilization: 0, resets_at: "2026-09-10T04:49:59.549914+00:00" },
+        seven_day: { utilization: 3, resets_at: "2026-09-15T01:59:59.549954+00:00" },
+        seven_day_opus: null,
+        nimbus_quill: { utilization: 0, resets_at: null },
+        extra_usage: { is_enabled: false },
+        limits: [{ kind: "session", percent: 0 }],
+        spend: { some: "object that is not a window" },
+        member_dashboard_available: true,
+        seven_day_breakdown: null,
+      },
+      {
+        takenAt: "2026-09-10T00:05:00.000Z",
+        identity: { providerAccountId: "account-a", providerTenantId: "org-a", displayEmail: "a@example.test" },
+      },
+    );
+    expect(result.kind).toBe("value");
+    if (result.kind !== "value") return;
+    const names = result.windows.map((w) => w.window);
+    // The real windows are read...
+    expect(names).toContain("five_hour");
+    expect(names).toContain("seven_day");
+    expect(names).toContain("nimbus_quill");
+    // ...and the non-windows are not mistaken for any, which the old
+    // exclusion-list approach would have done to `spend`.
+    expect(names).not.toContain("spend");
+    expect(names).not.toContain("member_dashboard_available");
+    expect(names).not.toContain("limits");
+    const sevenDay = result.windows.find((w) => w.window === "seven_day");
+    expect(sevenDay).toMatchObject({ kind: "value", utilizationPercent: 3 });
+  });
+
   it("treats an empty live usage body as unknown", () => {
     expect(parseLiveUsageResponse({}, {
       takenAt: "2026-09-09T20:00:00.000Z",
