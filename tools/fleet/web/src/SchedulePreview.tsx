@@ -71,8 +71,11 @@ const VERDICT_LABEL: Readonly<Record<SchedulePreviewVerdictKind, string>> = {
   dispatch: "WOULD DISPATCH",
 };
 
-/** The box's clock now, as best this page can tell: when the server read the file, plus how long we have held it. */
-function boxNowOf(view: { servedAt: string; receivedAtMs: number }, now: number): number {
+/**
+ * The box's clock now, as best this page can tell: when the server read the file, plus how long we have held it.
+ * Exported, with `At` and `NextRun`, for `ScheduledOccurrences.tsx`, which draws the same `next` and must draw it the same way.
+ */
+export function boxNowOf(view: { servedAt: string; receivedAtMs: number }, now: number): number {
   return Date.parse(view.servedAt) + Math.max(0, now - view.receivedAtMs);
 }
 
@@ -82,7 +85,7 @@ function relative(iso: string, boxNow: number): string {
 }
 
 /** One instant, London first, the three clocks behind it, and how far away it is. */
-function At({ iso, what, boxNow }: { iso: string; what: string; boxNow: number }): ReactNode {
+export function At({ iso, what, boxNow }: { iso: string; what: string; boxNow: number }): ReactNode {
   return (
     <>
       <Explain tip={instantTip(iso, what)} className="tw:max-w-full tw:whitespace-normal tw:text-left">
@@ -121,7 +124,7 @@ function Dispatch({ dispatch }: { dispatch: SchedulePreviewJob["dispatch"] }): R
   );
 }
 
-function NextRun({ next, boxNow }: { next: SchedulePreviewNext; boxNow: number }): ReactNode {
+export function NextRun({ next, boxNow }: { next: SchedulePreviewNext; boxNow: number }): ReactNode {
   switch (next.kind) {
     case "due-now":
       return <>due now</>;
