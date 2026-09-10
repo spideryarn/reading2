@@ -511,7 +511,7 @@ likely to go wrong silently, so it is enumerated rather than asserted:
 |---|---|
 | the config dir | create if absent; **never** delete or recreate |
 | `settings.json` | **merge** the keys we own, preserving hand edits; never overwrite the file |
-| the login | **skip entirely** if `auth status` already names the expected email — a re-login rotates a credential live sessions may be using |
+| the login | **skip entirely** if `/api/oauth/profile` already names the expected email — a re-login rotates a credential live sessions may be using |
 | `projects/` symlink | create only if absent; **refuse loudly if a real directory is there**, never replace it |
 | seeded `.claude.json` keys | merge named keys only; never copy the file wholesale (it carries identity, eligibility caches and live-session state) |
 | the registry entry | update in place, preserving fields it did not write |
@@ -529,6 +529,26 @@ re-run it" is the worst possible place for it.
 
 **I do not run the login step.** It is interactive, it is Greg's credential, and a wrong move rotates
 a live one. The login branch is tested with a fake `claude` on `PATH`; the real run is his.
+
+**The predicate is the profile, not `auth status`** — corrected 2026-09-10, and the plan said the
+wrong thing until then. A config dir can hold a valid credential and still report `email: null`,
+because identity comes from `.claude.json` rather than from the credential; so an `auth status` email
+is not evidence of who owns the credential. `/api/oauth/profile` is.
+
+**As built, the matrix fails closed in five directions** rather than the four specified, and the
+extra one is the important one:
+
+| state | what happens |
+|---|---|
+| profile matches the expected email | **skip** the login, and say so |
+| profile names someone else | **refuse**; the credential is not replaced |
+| profile unavailable **but a credential is present** | **refuse, and do not replace it** — names the recovery (`claude auth logout`, then re-run) |
+| `auth status` itself unreadable | **refuse** — it could not prove the account is logged out |
+| genuinely logged out, no credential | offer the login, then **re-verify the profile afterwards** |
+
+The third row is what stops an expired token (a 401, which is routine) from triggering a re-login
+that rotates a credential the fleet is using. The fourth is stricter than asked for and right: not
+being able to *prove* logged-out is not the same as being logged out.
 
 #### Designed so the Codex version is not a rewrite
 

@@ -1,10 +1,10 @@
 /**
  * Inspect, register, and seed the box's per-account Claude config directories.
  *
- * The public commands are deliberately non-interactive. A later UI/wizard can
- * collect answers, then call the same `main(argv, deps)` seam. Identity is
- * asserted before any write. Nothing here logs a credential, refreshes an OAuth
- * token, or invokes one of Claude's credential-changing commands.
+ * `add` is both the interactive wizard Greg runs and the flag-driven seam used
+ * by tests and the web UI. Identity comes from the live profile, never merely
+ * auth-status metadata. Nothing here logs or refreshes a credential; login is
+ * invoked only for a demonstrably logged-out config directory.
  */
 
 import { spawnSync } from "node:child_process";
@@ -28,6 +28,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 
 import { isMain } from "../src/is-main.js";
 import {
@@ -55,14 +56,19 @@ interface UsageLike {
   [key: string]: unknown;
 }
 
+type LoginResult = { ok: true } | { ok: false; why: string };
+
 export interface ClaudeAccountsDeps {
   homeDir: string;
   registryPath: string;
   now: () => Date;
   out: (line: string) => void;
   err: (line: string) => void;
+  prompt: (question: string, defaultValue: string) => Promise<string>;
+  stdinIsTTY: boolean;
   readRegistry: (registryPath: string) => Promise<RegistryReading>;
   authStatus: (configDir: string, cwd?: string) => AuthStatusReading;
+  login: (configDir: string, email: string) => LoginResult;
   profile: (configDir: string) => Promise<ProfileReading>;
   usage: (configDir: string) => Promise<UsageLike>;
 }
@@ -75,8 +81,19 @@ const realDeps = (): ClaudeAccountsDeps => {
     now: () => new Date(),
     out: (line) => console.log(line),
     err: (line) => console.error(line),
+    prompt: async (question, defaultValue) => {
+      const reader = createInterface({ input: process.stdin, output: process.stdout });
+      try {
+        const answer = (await reader.question(`${question}${defaultValue ? ` [${defaultValue}]` : ""}: `)).trim();
+        return answer || defaultValue;
+      } finally {
+        reader.close();
+      }
+    },
+    stdinIsTTY: process.stdin.isTTY === true,
     readRegistry: readAccountRegistry,
     authStatus: (configDir, cwd) => runAuthStatus(configDir, { ...(cwd === undefined ? {} : { cwd }) }),
+    login: (configDir, email) => runClaudeLogin(configDir, email),
     profile: async (configDir) => readProfile(configDir, { fetch }),
     usage: async (configDir) => readUsage(configDir, { fetch }),
   };
@@ -89,6 +106,15 @@ function depsWith(overrides: Partial<ClaudeAccountsDeps>): ClaudeAccountsDeps {
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function claudeEnvironment(configDir: string, parentEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env = Object.fromEntries(Object.entries(parentEnv).filter(([name]) =>
+    !name.startsWith("ANTHROPIC_") &&
+    !name.startsWith("CLAUDE_") &&
+    name !== "CLAUDECODE"
+  ));
+  return { ...env, CLAUDE_CONFIG_DIR: configDir };
 }
 
 function sameDirectory(left: string, right: string): boolean {
@@ -131,14 +157,9 @@ export function runAuthStatus(
 ): AuthStatusReading {
   const runner = options.runner ?? spawnSync;
   const parentEnv = options.env ?? process.env;
-  const env = Object.fromEntries(Object.entries(parentEnv).filter(([name]) =>
-    !name.startsWith("ANTHROPIC_") &&
-    !name.startsWith("CLAUDE_") &&
-    name !== "CLAUDECODE"
-  ));
   const result = runner(options.command ?? "claude", [...(options.commandArgsPrefix ?? []), "auth", "status", "--json"], {
     encoding: "utf8",
-    env: { ...env, CLAUDE_CONFIG_DIR: configDir },
+    env: claudeEnvironment(configDir, parentEnv),
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   });
   if (result.error) return { kind: "unknown", why: `could not run claude auth status: ${result.error.message}` };
@@ -164,6 +185,31 @@ export function runAuthStatus(
   } catch {
     return { kind: "unknown", why: "claude auth status returned malformed JSON" };
   }
+}
+
+/** Start Claude's own interactive browser login without passing through a shell. */
+export function runClaudeLogin(
+  configDir: string,
+  email: string,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    command?: string;
+    runner?: (
+      command: string,
+      args: string[],
+      options: { env: NodeJS.ProcessEnv; stdio: "inherit" },
+    ) => { error?: Error; status: number | null };
+  } = {},
+): LoginResult {
+  const runner = options.runner ?? spawnSync;
+  const result = runner(
+    options.command ?? "claude",
+    ["auth", "login", "--claudeai", "--email", email],
+    { env: claudeEnvironment(configDir, options.env ?? process.env), stdio: "inherit" },
+  );
+  if (result.error) return { ok: false, why: `could not run claude auth login: ${result.error.message}` };
+  if (result.status !== 0) return { ok: false, why: `claude auth login exited ${result.status ?? "without a status"}` };
+  return { ok: true };
 }
 
 type SeedResult =
@@ -365,15 +411,33 @@ function inspectProjectsShare(
     };
   }
   if (!info.isSymbolicLink()) {
-    return { ok: false, why: `${projectsLink} exists and is not the shared projects symlink; refusing before changing anything` };
+    return { ok: false, why: `${projectsLink} exists and is not the shared projects symlink` };
   }
   const current = path.resolve(path.dirname(projectsLink), readlinkSync(projectsLink));
   if (!existsSync(projectsLink)) {
-    return { ok: false, why: `${projectsLink} is a dangling symlink; refusing before changing anything` };
+    return { ok: false, why: `${projectsLink} is a dangling symlink` };
   }
   return current === path.resolve(desiredProjects)
     ? { ok: true, projects: { kind: "already" } }
-    : { ok: false, why: `${projectsLink} points to ${current}, not ${desiredProjects}; refusing before changing anything` };
+    : { ok: false, why: `${projectsLink} points to ${current}, not ${desiredProjects}` };
+}
+
+function inspectSessionsShare(link: string, desired: string): { ok: true } | { ok: false; why: string } {
+  let info: ReturnType<typeof lstatSync> | null = null;
+  try {
+    info = lstatSync(link);
+  } catch {
+    return { ok: true };
+  }
+  if (info.isDirectory() && !info.isSymbolicLink()) return { ok: true };
+  if (!info.isSymbolicLink()) return { ok: false, why: `${link} exists and is not a directory or symlink` };
+  const current = path.resolve(path.dirname(link), readlinkSync(link));
+  if (!existsSync(link)) {
+    return { ok: false, why: `${link} is a dangling sessions symlink to ${current}; expected ${desired}` };
+  }
+  return current === path.resolve(desired)
+    ? { ok: true }
+    : { ok: false, why: `${link} points to ${current}, not shared sessions ${desired}` };
 }
 
 function seededClaudeJson(source: Record<string, unknown>, target: Record<string, unknown>): Record<string, unknown> {
@@ -445,6 +509,9 @@ function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | {
   const projectsLink = path.join(targetDir, "projects");
   const projects = inspectProjectsShare(projectsLink, desiredProjects, targetDir, options);
   if (!projects.ok) return { why: projects.why };
+  const sessionsLink = path.join(targetDir, "sessions");
+  const sessions = inspectSessionsShare(sessionsLink, desiredSessions);
+  if (!sessions.ok) return { why: sessions.why };
 
   // NOT `<defaultConfigDir>/.claude.json`. **The default account's config file
   // lives BESIDE its directory, not inside it** — `~/.claude.json`, while a
@@ -478,15 +545,19 @@ function prepareSeed(targetDir: string, options: SeedOptions = {}): SeedPlan | {
   const claudeChanged = jsonText(claudeAfter) !== (targetClaude.text ?? "");
   const settingsChanged = jsonText(settingsAfter) !== (targetSettings.text ?? "");
   const messages = [
-    claudeChanged ? "merged named .claude.json seed keys" : ".claude.json already carries every seeded value",
-    settingsChanged ? "merged model, permissions, autoMode and env defaults" : "settings.json already carries every seeded value",
-    copyPlugins ? "copied plugins/ because it was absent" : "plugins/ already present (or absent in the source)",
+    claudeChanged ? `merged named seed keys into ${claudePath}` : `${claudePath} already carries every seeded value`,
+    settingsChanged ? `merged model, permissions, autoMode and env defaults into ${settingsPath}` : `${settingsPath} already carries every seeded value`,
+    copyPlugins
+      ? `copied ${pluginsSource} -> ${pluginsTarget} because the target was absent`
+      : existsSync(pluginsTarget)
+        ? `${pluginsTarget} already exists`
+        : `source ${pluginsSource} is absent; ${pluginsTarget} was skipped`,
     projects.projects.kind === "already"
-      ? `projects already links to ${desiredProjects}`
+      ? `${projectsLink} already links to ${desiredProjects}`
       : projects.projects.kind === "migrate"
-        ? `migrated projects, retained ${projects.projects.backup}, and linked projects -> ${desiredProjects}`
-        : `linked projects -> ${desiredProjects}`,
-    "sentry and vercel are not seeded; run /mcp under this account directory to log in if they are needed",
+        ? `migrated ${projectsLink}, retained ${projects.projects.backup}, and linked it -> ${desiredProjects}`
+        : `linked ${projectsLink} -> ${desiredProjects}`,
+    `sentry and vercel are not seeded in ${targetDir}; run /mcp under this account directory to log in if they are needed`,
   ];
   return {
     targetDir,
@@ -630,8 +701,9 @@ function applySessionsShare(plan: SeedPlan): boolean {
 
 function applySeed(plan: SeedPlan): Extract<SeedResult, { ok: true }> {
   const sessionsChanged = applySessionsShare(plan);
-  if (sessionsChanged) plan.messages.push(`shared sessions -> ${plan.desiredSessions} so this account's sessions are listed and reachable`);
-  else plan.messages.push("sessions already shared");
+  const sessionsLink = path.join(plan.targetDir, "sessions");
+  if (sessionsChanged) plan.messages.push(`shared ${sessionsLink} -> ${plan.desiredSessions} so this account's sessions are listed and reachable`);
+  else plan.messages.push(`${sessionsLink} already shares sessions -> ${plan.desiredSessions}`);
   const projectsChanged = applyProjects(plan.projects, plan.projectsLink, plan.desiredProjects);
   if (plan.claudeChanged && plan.claudeBefore !== null) {
     const backups = path.join(plan.targetDir, "backups");
@@ -662,12 +734,9 @@ function assertIdentity(entry: Pick<AccountEntry, "stateDir" | "displayEmail">, 
   const status = deps.authStatus(entry.stateDir);
   if (status.kind === "unknown") return { ok: false, why: `${entry.stateDir}: ${status.why}` };
   if (!status.loggedIn) return { ok: false, why: `${entry.stateDir}: claude auth status reports loggedIn: false` };
-  if (status.email !== null && status.email !== entry.displayEmail) {
-    return { ok: false, why: `${entry.stateDir}: expected ${entry.displayEmail}, but claude auth status found ${status.email}` };
-  }
   return {
     ok: true,
-    found: status.email ?? "no local email (live profile must establish identity)",
+    found: status.email ?? "no local email (live profile establishes identity)",
   };
 }
 
@@ -694,7 +763,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs | { why: string } {
   for (let i = 1; i < argv.length; i += 1) {
     const flag = argv[i];
     if (!flag?.startsWith("--")) return { why: `unexpected argument: ${flag ?? ""}` };
-    if (flag === "--seed" || flag === "--live-usage") {
+    if (flag === "--seed" || flag === "--live-usage" || flag === "--yes") {
       flags.set(flag, true);
       continue;
     }
@@ -1161,31 +1230,192 @@ async function verifyForLaunch(
   return { ok: true };
 }
 
-async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number> {
-  const allowed = new Set(["--name", "--config-dir", "--email", "--role", "--family", "--seed"]);
+interface AddAnswers {
+  name: string;
+  configDir: string;
+  email: string;
+  role: "pool" | "orchestrator";
+  family: "claude";
+  seed: boolean;
+}
+
+function nextPoolName(accounts: AccountEntry[]): string {
+  const names = new Set(accounts.map((account) => account.name));
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = `pool${suffix}`;
+    if (!names.has(candidate)) return candidate;
+  }
+}
+
+function validAccountName(name: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,40}$/.test(name) && name !== "auto" && name !== "ambient";
+}
+
+async function answer(
+  parsed: ParsedArgs,
+  deps: ClaudeAccountsDeps,
+  canPrompt: boolean,
+  flagName: string,
+  question: string,
+  defaultValue: string,
+): Promise<string> {
+  const supplied = flag(parsed, flagName);
+  if (supplied !== undefined) return supplied;
+  if (parsed.flags.has("--yes") || !canPrompt) return defaultValue;
+  const value = (await deps.prompt(question, defaultValue)).trim();
+  return value || defaultValue;
+}
+
+async function collectAddAnswers(
+  parsed: ParsedArgs,
+  deps: ClaudeAccountsDeps,
+  accounts: AccountEntry[],
+  canPrompt: boolean,
+): Promise<AddAnswers | { why: string }> {
+  const wizard = ["--name", "--email", "--role", "--config-dir"].some((name) => !parsed.flags.has(name));
+  const name = await answer(parsed, deps, canPrompt, "--name", "Account name", nextPoolName(accounts));
+  if (!validAccountName(name)) {
+    return { why: "--name must contain only lower-case letters, digits and hyphens (max 41), and cannot be auto or ambient" };
+  }
+  const prior = accounts.find((account) => account.name === name);
+  const email = await answer(parsed, deps, canPrompt, "--email", "Email", prior?.displayEmail ?? "");
+  if (!email) {
+    return { why: "--email has no default for a new account; supply --email or run add from a terminal" };
+  }
+  const role = await answer(parsed, deps, canPrompt, "--role", "Role", prior?.role ?? "pool");
+  const configDir = await answer(
+    parsed,
+    deps,
+    canPrompt,
+    "--config-dir",
+    "Config directory",
+    prior?.stateDir ?? path.join(deps.homeDir, `.claude-${name}`),
+  );
+  const family = flag(parsed, "--family") ?? "claude";
+  if (family !== "claude") {
+    return { why: `${family} is a registry family, but this slice implements Claude operations only` };
+  }
+  if (role !== "pool" && role !== "orchestrator") return { why: `unknown role ${role}` };
+  return {
+    name,
+    configDir,
+    email,
+    role,
+    family,
+    seed: parsed.flags.has("--seed") || wizard,
+  };
+}
+
+function ensureConfigDirectory(configDir: string, deps: ClaudeAccountsDeps): { ok: true } | { ok: false; why: string } {
+  if (existsSync(configDir)) {
+    const info = lstatSync(configDir);
+    if (!info.isDirectory()) return { ok: false, why: `${configDir} exists and is not a directory` };
+    deps.out(`found: config directory ${configDir}`);
+  } else {
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    deps.out(`changed: created config directory ${configDir}`);
+  }
+
+  const settingsPath = path.join(configDir, "settings.json");
+  const settings = parseJsonObject(settingsPath, false);
+  if (!settings.ok) return { ok: false, why: settings.why };
+  if (settings.value.forceLoginMethod === "claudeai") {
+    deps.out(`found: settings ${settingsPath} already has forceLoginMethod=claudeai`);
+    return { ok: true };
+  }
+  writeJsonAtomic(settingsPath, { ...settings.value, forceLoginMethod: "claudeai" });
+  deps.out(
+    `${settings.text === null ? "changed: created" : "changed: updated"} settings ${settingsPath} with forceLoginMethod=claudeai`,
+  );
+  return { ok: true };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function loginRecovery(configDir: string): string {
+  return `run env CLAUDE_CONFIG_DIR=${shellQuote(configDir)} claude auth logout, then rerun this command`;
+}
+
+async function establishProfile(
+  configDir: string,
+  email: string,
+  deps: ClaudeAccountsDeps,
+): Promise<Extract<ProfileReading, { kind: "value" }> | null> {
+  const before = await deps.profile(configDir);
+  if (before.kind === "value") {
+    if (before.email !== email) {
+      deps.err(`refused: login under ${configDir}; live profile is ${before.email}, not expected ${email}; credential was not replaced`);
+      return null;
+    }
+    deps.out(`skipped: login under ${configDir}; live profile already matches ${email}`);
+    return before;
+  }
+
+  const credentialPath = path.join(configDir, ".credentials.json");
+  const status = deps.authStatus(configDir);
+  if (existsSync(credentialPath) || (status.kind === "value" && status.loggedIn)) {
+    deps.err(
+      `refused: login under ${configDir}; a credential is present but its identity is unavailable (${before.why}); ` +
+        `it was not replaced — recovery: ${loginRecovery(configDir)}`,
+    );
+    return null;
+  }
+  if (status.kind === "unknown") {
+    deps.err(`refused: login under ${configDir}; could not prove the account is logged out (${status.why}); credential was not replaced`);
+    return null;
+  }
+  if (!deps.stdinIsTTY) {
+    deps.err(`refused: login under ${configDir} needs a terminal; rerun this command from a TTY`);
+    return null;
+  }
+
+  deps.out(`found: logged out under ${configDir} with no credential; offering login for ${email}`);
+  const login = deps.login(configDir, email);
+  if (!login.ok) {
+    deps.err(`refused: login under ${configDir} failed: ${login.why}`);
+    return null;
+  }
+  const after = await deps.profile(configDir);
+  if (after.kind === "unknown") {
+    deps.err(`refused: login completed but profile identity is unavailable (${after.why}); registry was not changed`);
+    return null;
+  }
+  if (after.email !== email) {
+    deps.err(`refused: login completed as ${after.email}, not expected ${email}; registry was not changed`);
+    return null;
+  }
+  deps.out(`changed: login established live profile ${email} under ${configDir}`);
+  return after;
+}
+
+function seedMessageKind(message: string): "changed" | "found" | "skipped" {
+  if (/^(merged|copied|linked|migrated|shared)/.test(message)) return "changed";
+  if (/^(sentry and vercel|source )/.test(message)) return "skipped";
+  return "found";
+}
+
+async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps, canPrompt: boolean): Promise<number> {
+  const allowed = new Set(["--name", "--config-dir", "--email", "--role", "--family", "--seed", "--yes"]);
   for (const key of parsed.flags.keys()) {
     if (!allowed.has(key)) {
       deps.err(`FATAL: unknown add flag ${key}`);
       return 2;
     }
   }
-  const name = flag(parsed, "--name");
-  const configDir = flag(parsed, "--config-dir");
-  const email = flag(parsed, "--email");
-  const role = flag(parsed, "--role");
-  const family = flag(parsed, "--family") ?? "claude";
-  if (!name || !configDir || !email || !role) {
-    deps.err("FATAL: add requires --name, --config-dir, --email and --role");
+  const reading = await deps.readRegistry(deps.registryPath);
+  const existing = registryAccounts(reading);
+  if (!existing.ok) {
+    deps.err(`refused: account registry is invalid: ${existing.why}`);
+    return 1;
+  }
+  const answers = await collectAddAnswers(parsed, deps, existing.accounts, canPrompt);
+  if ("why" in answers) {
+    deps.err(`FATAL: ${answers.why}`);
     return 2;
   }
-  if (family !== "claude") {
-    deps.err(`FATAL: ${family} is a registry family, but this slice implements Claude operations only`);
-    return 2;
-  }
-  if (role !== "pool" && role !== "orchestrator") {
-    deps.err(`FATAL: unknown role ${role}`);
-    return 2;
-  }
+  const { name, configDir, email, role } = answers;
   if (role === "orchestrator") {
     deps.err("FATAL: the ambient Claude orchestrator cannot be registered with --config-dir; register pool accounts only");
     return 2;
@@ -1198,44 +1428,18 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number
     deps.err("FATAL: the default .claude directory cannot be registered as a routed account");
     return 2;
   }
-  if (parsed.flags.has("--seed") && role !== "pool") {
+  if (answers.seed && role !== "pool") {
     deps.err("FATAL: --seed applies only to a pool config directory");
     return 2;
   }
 
-  // Seed preflight is before auth/profile and, critically, before registry or
-  // target writes. A real projects directory makes the whole add a no-op.
-  let seedPlan: SeedPlan | null = null;
-  if (parsed.flags.has("--seed")) {
-    const prepared = prepareSeed(configDir, { defaultConfigDir: path.join(deps.homeDir, ".claude"), now: deps.now });
-    if ("why" in prepared) {
-      deps.err(`FATAL: ${prepared.why}`);
-      return 1;
-    }
-    seedPlan = prepared;
-  }
-
-  const reading = await deps.readRegistry(deps.registryPath);
-  const existing = registryAccounts(reading);
-  if (!existing.ok) {
-    deps.err(`FATAL: ${existing.why}`);
+  const configured = ensureConfigDirectory(configDir, deps);
+  if (!configured.ok) {
+    deps.err(`refused: config setup failed: ${configured.why}`);
     return 1;
   }
-  const identity = assertIdentity({ stateDir: configDir, displayEmail: email }, deps);
-  if (!identity.ok) {
-    deps.err(`FATAL: ${identity.why}; registry was not changed`);
-    return 1;
-  }
-  deps.out(`found: already signed in as ${identity.found} under ${configDir}`);
-  const profile = await deps.profile(configDir);
-  if (profile.kind === "unknown") {
-    deps.err(`FATAL: profile identity is unknown: ${profile.why}; registry was not changed`);
-    return 1;
-  }
-  if (profile.email !== email) {
-    deps.err(`FATAL: profile found ${profile.email}, expected ${email}; registry was not changed`);
-    return 1;
-  }
+  const profile = await establishProfile(configDir, email, deps);
+  if (profile === null) return 1;
   deps.out(`found: profile accountUuid=${profile.accountUuid} orgId=${profile.orgId}`);
 
   const priorIndex = existing.accounts.findIndex((account) => account.name === name);
@@ -1264,26 +1468,36 @@ async function add(parsed: ParsedArgs, deps: ClaudeAccountsDeps): Promise<number
   else accounts.push(next);
   const proposed = parseAccountRegistry({ schema: 1, accounts });
   if (proposed.kind === "error") {
-    deps.err(`FATAL: the proposed registry is invalid: ${proposed.why}; registry was not changed`);
+    deps.err(`refused: the proposed registry is invalid: ${proposed.why}; registry was not changed`);
     return 1;
   }
 
+  let seedPlan: SeedPlan | null = null;
+  if (answers.seed) {
+    const prepared = prepareSeed(configDir, { defaultConfigDir: path.join(deps.homeDir, ".claude"), now: deps.now });
+    if ("why" in prepared) {
+      deps.err(`refused: seed preflight failed: ${prepared.why}; registry was not changed`);
+      return 1;
+    }
+    seedPlan = prepared;
+  }
   if (seedPlan) {
     // Apply only after every identity and registry refusal has passed. Seeding
-    // mutates a real config directory, so a request that can never be
-    // registered must be a complete no-op there.
+    // mutates transcript/plugin/seed state, so a request that cannot be
+    // registered must be refused before this point.
     const seeded = applySeed(seedPlan);
-    for (const message of seeded.messages) deps.out(`seed: ${message}`);
-    if (!seeded.changed) deps.out("seed: nothing to change");
+    for (const message of seeded.messages) deps.out(`${seedMessageKind(message)}: seed ${message}`);
+    if (!seeded.changed) deps.out("found: seed nothing to change");
   }
   const changed = !prior || JSON.stringify(prior) !== JSON.stringify(next);
   if (changed) {
     writeRegistry(deps.registryPath, accounts);
-    deps.out(`${prior ? "changed" : "added"}: registry entry ${name}`);
+    deps.out(`changed: ${prior ? "updated" : "added"} registry entry ${name} in ${deps.registryPath}`);
   } else {
-    deps.out(`found: registry entry ${name} already matches; nothing to change`);
+    deps.out(`found: registry entry ${name} in ${deps.registryPath} already matches; nothing to change`);
   }
-  return 0;
+  deps.out("found: final account list");
+  return listOrCheck("list", deps);
 }
 
 export async function main(argv: readonly string[], overrides: Partial<ClaudeAccountsDeps> = {}): Promise<number> {
@@ -1301,7 +1515,10 @@ export async function main(argv: readonly string[], overrides: Partial<ClaudeAcc
     }
     return listOrCheck(parsed.command, deps, liveUsage);
   }
-  if (parsed.command === "add") return add(parsed, deps);
+  if (parsed.command === "add") {
+    const canPrompt = overrides.stdinIsTTY ?? (overrides.prompt !== undefined || deps.stdinIsTTY);
+    return add(parsed, deps, canPrompt);
+  }
   if (parsed.command === "verify") {
     const allowed = new Set(["--account", "--cwd"]);
     if ([...parsed.flags.keys()].some((key) => !allowed.has(key)) || !parsed.flags.has("--account")) {
