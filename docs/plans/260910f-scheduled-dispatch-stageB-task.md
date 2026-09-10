@@ -45,7 +45,13 @@ journal, projected into the planner. Its material is pinned. Its run spec is aut
    - The `resume` verdict (F1).
    - `usage-held` from a `LaunchGate` value, after spacing, for live session jobs (M5).
 4. **`tools/overseer/scheduler.ts`**
-   - The session arm calls a `TickInput.launch?: LaunchProtocol["launchOccurrence"]`. It uses the
+   - `TickInput.launch?: Pick<LaunchProtocol, "launchOccurrence" | "resumeOccurrence" | "abandon" | "view">`.
+     This is the whole capability the scheduler holds. `view()` returns the read-only
+     `LaunchJournalView` (`status`, `fold`, `attemptDir`) over the same open store. The fold read
+     through it feeds `launchOccurrencesOf` and the history standing. Each attempt's exit.json is read
+     with `readArtefacts(view().attemptDir(id, attempt), correlationId)`. `AttemptRef` has no
+     `artefactDir` since the protocol's Stage 1b.
+   - The session arm calls that capability's `launchOccurrence` (or `resumeOccurrence` / `abandon`). It uses the
      existing origin for `resume`, and otherwise `scheduleOrigin({ jobId, scheduledAt: dueAt,
      behaviourHash })`, `launcherKind: "tmux-headless"`, the job's `run` and the pinned material.
    - `materialOf` (D3) reads every document once, re-hashes it against this tick's authorised
