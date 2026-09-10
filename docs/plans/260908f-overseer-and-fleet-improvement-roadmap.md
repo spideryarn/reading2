@@ -1327,6 +1327,25 @@ and `parseFleetState`, arriving as one row reading *30 conversations, 90 rejecti
 creation polling terminates under permanent failure; recent messages cannot display a previous
 execution as the current one. Browser-check 390px and desktop, keyboard-only and offline return.
 
+**Status (2026-09-10, Overseer): landed on dev at 7741259a, session `session-continuity`, plan
+[260910c](260910c-session-continuity-protect-drafts-and-keep-context-current.md); the stage is
+complete and the four acceptance sentences hold.** Everything the browser holds about a session now
+follows the run (and the verified conversation) rather than the tmux handle: a replaced Claude
+inherits no half-typed message, outcome card or refusal; drafts are keyed by conversation in
+sessionStorage with a generation ticket so a success clears only the exact text it sent; the
+recent-messages and actions feeds carry a last-read clock, keep their errors and re-read on
+evidence; one tap on Start is one launch. Fable's ruling replaced Sol's "withhold everything while
+unverified": cannot-tell keeps live controls behind a caveat, a conflicting conversation disables
+Send and Queue (dec-qbxkb4wt, pending Greg). Two postmortems: React batching erasing a transport
+event (every transition test had pushed payloads in separate acts), and a mutable text hook
+erasing the submission it produced. The Stage 2+4 Sol review died at its 45-minute wall having
+found and fixed four real defects; an independent Opus agent verified them red-first rather than
+a Codex rerun. Browser-checked at 390 and 1280 px, keyboard-only and offline return, against
+fixtures. Named, not built: F31 (a draft re-offered after an unmounted-mid-request send) and F81
+(an aborted transcript read still finishes on the box) — qi-9rzdddrn; the Sessions text filter,
+measured "mildly cumbersome" — qi-b42kp8rf, Greg's; localStorage for drafts and the touch-target
+heights, Greg's. Same-conversation relaunch remains qi-q7ckxxms at low priority.
+
 ### Stage: Bounded transport — stalled consumers must not stall supervision
 
 - [ ] Reproduce SSE backpressure with an actual Node Writable that delays callbacks and small
