@@ -861,6 +861,77 @@ describe("staleness", () => {
   });
 });
 
+/**
+ * The tab title, through the real page: the snapshot, the hash and the
+ * selection all reach `document.title`. The composition rules themselves are
+ * tests/fleet-page-title.test.ts; this is the wiring they cannot see.
+ */
+describe("the tab title", () => {
+  const blocked = (): FleetRow => row({ id: "$a", title: "fix the thing", status: { kind: "needs-you" } });
+
+  it("says only the app's name before anything has arrived", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    expect(document.title).toBe("Fleet");
+  });
+
+  it("leads with the count that needs you, and follows the mode", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked(), row({ id: "$b" })] })));
+    expect(document.title).toBe("(1) Fleet");
+    const health = [...container.querySelectorAll("button")].find((b) => b.textContent === "Box health");
+    act(() => health?.click());
+    expect(document.title).toBe("(1) Box health · Fleet");
+  });
+
+  it("names the selected session", () => {
+    window.location.hash = "#sessions?sel=%24a";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked()] })));
+    expect(document.title).toBe("(1) fix the thing · Fleet");
+  });
+
+  it("does not name a session the detail pane refused as another tmux server's", () => {
+    window.location.hash = "#sessions?sel=%24a&selpid=999";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [blocked()], tmuxServerPid: 111 })));
+    expect(document.title).toBe("(1) Fleet");
+  });
+
+  it("resolves the title against the same ordering as the detail pane", () => {
+    /* Tmux handles are unique in a real snapshot. A contradictory payload is
+       useful here because it is the only fixture that can expose one caller
+       searching raw rows while the other searches the sorted list. */
+    window.location.hash = "#sessions?sel=%24same&order=name";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$same", title: "Zulu" }),
+            row({ id: "$same", title: "Alpha" }),
+          ],
+        }),
+      ),
+    );
+    expect(document.title).toBe("Alpha · Fleet");
+    expect(container.querySelector('section[aria-label="The selected session"] h2')?.textContent).toBe("Alpha");
+  });
+
+  it("says STALE first when the masthead does", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    const old = new Date(Date.now() - 10 * 60_000).toISOString();
+    act(() => feed.push(state({ rows: [blocked()], collectedAt: old })));
+    expect(container.textContent).toContain("STALE");
+    expect(document.title).toBe("STALE (1) Fleet");
+  });
+});
+
 describe("the modes", () => {
   it("starts on Sessions, and an unknown hash falls back to it rather than rendering nothing", () => {
     window.location.hash = "#nonsense-from-an-old-bookmark";
