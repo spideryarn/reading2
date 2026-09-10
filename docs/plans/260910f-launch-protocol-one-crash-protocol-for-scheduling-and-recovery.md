@@ -497,7 +497,9 @@ set**: `scripts/subagent-cli.ts`'s `runChild` catches SIGHUP exactly as SIGTERM 
 child's group, wait within the grace), and under `--launch-dir` the finaliser writes `ending:
 signalled` before re-raising; nothing else in that file changes. Named in its commit as an orphan
 fix outside the stage. The alternative passed over: a protocol `cancel` request through the inbox —
-more machinery, and it would leave the orphan bug in every other wrapper run.
+more machinery, and it would leave the orphan bug in every other wrapper run. **The `tmux-headless`
+session is named exactly its correlation id**, so the cancel command is derivable after any restart
+with nothing stored; the adapter sets no `GJD_*` metadata, so `gjd-remote ls` never renames it.
 
 ### Stage 2: the launchers
 
