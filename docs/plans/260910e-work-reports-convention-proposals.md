@@ -40,8 +40,12 @@ once the prompt is edited):
 
 | job | pinned today | with the suffix |
 |---|---|---|
-| `get-ready-to-deploy` | `d37ae432708c` | `481a81083786` |
-| `feedback-sweep` | `eb76b675c2ce` | `8780d37d3a4c` |
+| `get-ready-to-deploy` | `c5c7f9f93886` | `c2ceaf3a3320` |
+| `feedback-sweep` | `c921a5c4b732` | `561541e1b3d1` |
+
+Recomputed after merging the schedule-preview work, which re-pinned both jobs (the first figures,
+`d37ae432708c` → `481a81083786` and `eb76b675c2ce` → `8780d37d3a4c`, are stale). The dry-run
+`schedule-fixture` job needs no suffix: it starts no session that could report.
 
 A different wording gives different hashes; re-run `overseer-pins.ts` after editing the prompt rather
 than copying these. Nothing is re-pinned by this session.

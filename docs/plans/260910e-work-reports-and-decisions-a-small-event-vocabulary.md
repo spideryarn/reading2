@@ -350,6 +350,25 @@ the record already names.
 
 ### Stage 3 — decision reports, the dashboard's claims, the convention
 
+**Split in two** so the dashboard work could run beside the second Stage 1 review
+([brief](260910e-work-reports-stage3-task.md)).
+
+**3a — built and committed (`c5242a04`), not yet Sol-reviewed.** Opus subagent. The projection keeps
+the register's availability in the *shape* of `sessions` — joined with the register, or
+register-unavailable with only the sessions that reported — so "everyone is unreported" and "the
+register could not be read" cannot look alike. `never-written` carries the inbox counts ("nothing
+recorded, 3 submitted" is what a daemon without the drain looks like). Latest and later are by log
+position, since the daemon is the only writer. Each claim carries `laterClaim`, the id of the next claim
+by the same reporter, shown with no inference. The Overseer and Greg appear in recent claims, not in the
+sessions list. One `ArtefactList` builds links for decision evidence and claim artefacts alike. The
+search box filters recent claims but never the session rows: hiding an unreported row would hide the one
+thing it says. `AGENTS.md`'s entry-point line gained `work-reports.md` — a signpost, which CLAUDE.md says
+needs no approval, and which `tests/doc-links.test.ts` reads doc ownership from. jsdom only; not seen in
+a real browser.
+
+**3b — building**: first the inbox-enumeration bound the Stage 1 review made its condition for landing,
+then a session's decision into `decisions.jsonl`.
+
 - [ ] Step [2] of the drain: a session's decision into `decisions.jsonl`, replay tests at each boundary,
   `OVERSEER_DECISIONS_DIR` honoured, a decisions-lock contention left pending.
 - [ ] `tools/fleet/reports-view.ts` (pure, joined with the register ⇒ unreported), `routes-reports.ts`
