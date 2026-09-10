@@ -34,13 +34,15 @@ type RecoveryCandidateEvent = {
   kind: "recovery-candidate";
   at: string;                    // the gone event's `at`
   id: RecoveryCandidateId;       // see "Idempotency" below
-  source: "live" | "replay";
   entry: RegisterEntry;          // the FINAL COMPLETE entry, from the register before this batch folds
   lastSeen: RecoveryLastSeen | null; // from the baseline row, when the daemon had one; null otherwise
   disappearance: {
     goneWhy: GoneReason;
-    /** The entry's generation against the snapshot that removed it. */
+    /** The accepted collection that removed it: `(instance, inventory)` when stamped, else its `collectedAt`. */
+    observation: string;
+    /** The entry's world against the snapshot that removed it. `changed` also when the host's boot id changed. */
     generation: "same" | "changed" | "unverifiable";
+    bootChanged: boolean;
     /** Whether the dashboard run changed between the baseline and this snapshot (the 260910d stamp). */
     producerRun: "same" | "changed" | "cannot-tell";
     /** False when this came from `goneWhileAway`: the daemon had no baseline, so nobody watched it go. */
@@ -75,8 +77,9 @@ the producer run is `same`; and the daemon had a baseline (`watched`). That rule
 | A session ends while the box carries on | same | same | yes | **no**: an ordinary close, recorded by its gone event as today |
 | The tmux server is replaced (a reboot with sessions already back) | changed | changed | yes | yes |
 | **The first empty snapshot after a reboot** (no tmux server yet) | unverifiable | changed | yes | yes |
-| `tmux kill-server` under a running dashboard | unverifiable | same | yes | yes |
-| The last session closes and tmux exits on its own | unverifiable | same | yes | yes (see classification: this is `unknown`, which it genuinely is) |
+| `tmux kill-server` under a running dashboard | unverifiable | same | yes | yes (`unknown`: indistinguishable from the next row — Sol F1) |
+| The last session closes and tmux exits on its own | unverifiable | same | yes | yes (`unknown`, which it genuinely is) |
+| A reboot where tmux happens to get the same pid | changed (boot id) | changed | yes | yes (see "The host's boot id" below — Sol F5) |
 | The dashboard restarts and a session happens to end meanwhile | same | changed | yes | yes (`unknown`, not `interrupted`) |
 | The daemon was down (`goneWhileAway`) | — | — | no | yes |
 
@@ -85,12 +88,32 @@ of the log's daily growth, so that option was passed over. Nobody would read any
 the daemon watched under a live tmux server and an unchanged dashboard run is not something
 recovery can act on.
 
-**Idempotency.** `id` is a hash of `(key, entry.tmuxServerPid, entry.startedAt,
-entry.verifiedExecution?.token ?? "none")`: the run that disappeared, and the world it disappeared
-from. It does not include `at`. After a crash between the append and the baseline write, the
-restarted daemon diffs the *next* collection against the older baseline, so the re-derived gone has
-a later `at` but the same id. The fold keeps the first candidate with a given id and ignores later
-ones, so a replayed duplicate is harmless in the log and invisible in the index.
+**Idempotency (revised on Sol's F3).** The id is a hash of two things. The first is the previous
+execution: `(key, entry.tmuxServerPid, entry.startedAt, entry.verifiedExecution?.token ?? "none")`.
+The second is the accepted collection that produced the disappearance: `disappearance.observation`.
+That is `(producer.instance, producer.inventory)` for a readable stamp, else the collection's
+`collectedAt`. The arrival-time `at` is excluded. So two distinct disappearances of one run get
+different ids. The first draft keyed on the run alone, which let a later real reboot hash onto an
+earlier dismissed `unknown` and vanish. Two crash paths re-derive a disappearance, and each is
+closed by a different rule:
+
+- **The append completed** (the process died before the baseline write). The gone is in the log, so
+  the register no longer holds the entry. **A candidate is only ever built from an entry the register
+  still holds**, so the re-derived gone brings no second candidate.
+- **The candidate line is complete and the gone line after it is torn.** `openStore` truncates the
+  torn line, and the register still holds the entry. The restart may re-derive the gone from a
+  *later* collection, and so under a different id. **The fold merges it:** a candidate for a session
+  key whose previous candidate has not yet been followed by its gone is the same disappearance, and
+  the first record, with its id, is kept.
+
+**The host's boot id (Sol's F5).** `tmuxServerPid` is only a pid, and a fresh boot can hand tmux the
+same number. The daemon runs on the box, so it reads `/proc/sys/kernel/random/boot_id` itself and
+keeps it in `recovery.json`. On the first accepted collection under a different boot id, before
+`diff()`, it closes **every** register entry as `tmux-session-gone` (`why: "tmux-server-changed"`,
+each with its candidate, `bootChanged: true`), and diffs that collection against no baseline, so
+every row is new. An unreadable boot id concludes nothing, and the pid rule applies as today. It is
+never taken as equal. Putting the boot id on the wire would be producer work, outside this plan;
+this is the smaller fix, and it is the daemon's own fact about its own host.
 
 ### 2. A daemon-owned recovery register, with its own checkpoint
 
@@ -115,11 +138,17 @@ It is persisted in its own file, **`~/.overseer/recovery.json`**, with its own b
 `{ id, disposition, at, evidence }`:
 
 - `unresolved`: the default, never written.
-- `resumed`: a verified execution in an accepted inventory whose conversation reading is
-  `verified`, with an id equal to the candidate's claim, or `conflicting` with `observed` equal to
-  it. Evidence: the new execution token. **Derived by the daemon.**
-- `superseded`: a newer candidate for the same conversation claim (the same work, interrupted
-  again). Evidence: the newer candidate's id. **Derived by the daemon.**
+- **A candidate's verified conversation** is `lastSeen.conversation.id` for `verified`,
+  `lastSeen.conversation.observed` for `conflicting`, and none otherwise. The stored
+  `claimedConversationId` is shown only as a claim: it outlives its conversation
+  (`observation.ts`), so it matches nothing (Sol's F2).
+- `resumed`: a live verified execution in an accepted inventory has the candidate's non-null
+  verified conversation, **and its token differs** from the candidate's last verified token. The
+  evidence records both tokens. The same conversation under the same token is `already-live`, but it
+  is not disposed as resumed. A candidate with no verified conversation can never become `resumed`.
+  **Derived by the daemon.**
+- `superseded`: a newer candidate has the same non-null verified conversation. A claim alone never
+  supersedes. The evidence is the newer candidate's id. **Derived by the daemon.**
 - `dismissed`: an operator's decision, with their sentence. **Written only from a request.** See §5.
 
 **Unresolved records never expire.** Resolved records older than 30 days are dropped from the
@@ -136,8 +165,9 @@ deletes no journal history.
   index counts them in `overflow` and does not hold them, and the page puts that count at the top.
   Evicting unresolved records to make room would be exactly the silent expiry the spec forbids.
 - **The first page** is 100 records: unresolved first, newest disappearance first, then resolved.
-  It carries `olderCount`. There is no pagination API in v1. The page says "and N more, in
-  `npx tsx scripts/overseer-recovery.ts list`".
+  It carries `olderCount`. There is no pagination API in v1. The CLI lists every record the index
+  retains. When `overflow > 0`, neither the page nor the CLI claims to list the omitted records:
+  both give the exact count, and say those events survive only in `events.jsonl` (Sol's F10).
 
 ### 3. Logs that predate the event: a one-time startup replay
 
@@ -149,16 +179,23 @@ register, so each `tmux-session-gone` can be joined to the entry it removed. The
 - **A legacy candidate is derived only where the log itself proves a world change.** That means:
   a `tmux-session-gone` with `why: "tmux-server-changed"`; or a run of `absent-from-snapshot`
   gones sharing one `at` that emptied the scratch register, where the next `session-seen` names a
-  different `tmuxServerPid`. That second pattern is the reboot signature in an old log. Derived
-  candidates get `source: "replay"`, `producerRun: "cannot-tell"`, `lastSeen: null`.
+  different `tmuxServerPid`. That second pattern is also exactly what `goneWhileAway` writes, so it
+  proves a world change and not an interruption. **Candidates derived from it are always
+  `watched: false`, and so classify `unknown`.** Only an explicit historical
+  `why: "tmux-server-changed"` means the daemon compared two baselines, and so may carry
+  `watched: true` (Sol's F6). Derived candidates get `producerRun: "cannot-tell"` and
+  `lastSeen: null`.
 - **Missing evidence becomes `unknown`, never a fabricated entry.** A gone whose key the scratch
   register never saw (the log began mid-life, or an earlier cold start lost the prefix) yields a
-  stub candidate with `entry: null`. It is classified `unknown`, with "no register entry survives
-  for this session".
-- Replay candidates **are appended to the journal** in one batch, ending with a
-  `recovery-replay-done` marker. A later rebuild finds the marker and does not replay again. A
-  crash mid-batch leaves a torn tail, which is truncated, and the replay runs again under the same
-  ids.
+  stub with `entry: null`. It is classified `unknown`, with "no register entry survives for this
+  session". So the in-memory record type is `entry: RegisterEntry | null`, null only for a legacy
+  stub. The live event's `entry` is never null (Sol's F7).
+- **Legacy candidates are derived straight into the fold and written only to `recovery.json`**, not
+  appended to `events.jsonl`. There is no replay-done event (Sol's F9: the original session events
+  are already the durable evidence). Their ids are deterministic, a hash of the original gone
+  event and its position within its same-`at` batch. So a rebuild after `recovery.json` is lost
+  derives the same records, and later disposition events reattach to them. A gone that already has
+  a live `recovery-candidate` before it is never derived a second time.
 - **Over the ceiling, or across a hole, the replay does not run.** The index then says
   `replay: { kind: "not-run", why }`, which the page shows. It does not show an empty list.
 
@@ -176,30 +213,39 @@ filesystem checks are async and bounded to the first page.
    this daemon's life; or the latest payload was refused, or failed, or was held since the last
    accept; or the record has no entry. *An empty list from a failed collection is not evidence of
    interruption*, and nothing in this arm looks at rows.
-2. **`already-live`**: a row in the accepted inventory with a verified execution whose conversation
-   matches, as in `resumed` above. The daemon also appends the `resumed` disposition, so this
-   state lasts one view.
+2. **`already-live`**: a row in the accepted inventory with a verified execution that has the
+   candidate's verified conversation. When the token differs, the daemon also appends `resumed`.
+   When the token is the same, the run was never gone, and the record stays `already-live`
+   (Sol's F2).
 3. **`present-but-unmatched`**: a row with the same `claimedConversationId`, or the same `name` and
    `meta.dir`, that is not proven to be the same conversation. It is shown with both rows' facts.
-4. **`ended-before-reboot`**: `lastSeen` or `entry` says the agent had already stopped. For a Claude
-   session that is `lastStatusKey` `no-claude`. A shell pane counts as `shell:false`, at its prompt
-   with nothing running.
-5. **`interrupted`**: `disappearance.generation` is `changed` or `unverifiable`, and `watched` is
-   true, and none of the above.
-6. **`unknown`**: everything else, including every `watched: false` record and the dashboard-restart
-   row in the table. The page shows the sentence saying why.
+4. **`ended-before-reboot`**: `watched` is true, `lastSeen` exists, and that last accepted
+   observation said `no-claude` or `shell:false`. The page phrases it as "last observed stopped
+   before the world change", with the observation's clock. `entry` alone, a replay record, or any
+   `watched: false` record cannot establish this (Sol's F4).
+5. **`interrupted`**: `watched` is true, and either `generation` is `changed`, or `generation` is
+   `unverifiable` and `producerRun` is `changed`. And none of the above matched (Sol's F1).
+6. **`unknown`**: everything else. That includes `unverifiable` with an unchanged or unreadable
+   producer run, which cannot be told apart from the last session closing normally; every
+   `watched: false` record; and the dashboard-restart row in the table. The page shows the sentence
+   saying why.
 
 **Evidence, per record on the first page, with one clock for the whole pass (`checkedAt`):**
 
 - `dir`: `entry.meta.dir`, `stat`ted. `exists` / `missing` / `not-recorded` (legacy meta).
-- `worktree`: the same, for `entry.worktree` when it is a path.
-- `transcript`: `findTranscript(~/.claude/projects, claimedConversationId, meta.dir)` from
+- `worktree`: `entry.worktree` is display text, never something to `stat`. A worktree is recorded
+  only when `meta.dir` itself is under `.claude/worktrees/<entry.worktree>`, and then `dir` above
+  already covers it. Otherwise it is `not-recorded`; a path is not reconstructed (Sol's F8).
+- `transcript`: `findTranscript(~/.claude/projects, <verified conversation>, meta.dir)` from
   `tools/fleet/transcript.ts`, reused rather than rewritten (it already handles the `EnterWorktree`
-  relocation). `found` with path and mtime / `not-found` with its reason / `no-claim`.
+  relocation). On `found`, the returned path is `stat`ted once for its mtime. `findTranscript`
+  itself does not return one. When only a claim survives, a transcript found under the claim is
+  shown, **labelled unverified**, and `resume` stays `not-supported`.
+  `found` / `found-under-claim` / `not-found` with its reason / `no-conversation`.
 - `lastActivity`: the later of `entry.lastSeenAlive` (a floor, and labelled as one) and the
   transcript's mtime.
-- `resume`: `supported` only when the harness is `claude-code`, the claim is a uuid, and the
-  transcript was found. Otherwise `not-supported` with the reason — `codex-*` ("resume not wired
+- `resume`: `supported` only when the harness is `claude-code`, there is a verified conversation,
+  and its transcript was found. Otherwise `not-supported` with the reason — `codex-*` ("resume not wired
   in v1"), `claude-headless`, `unknown`, missing transcript. Shells and manual jobs (`shell`, or
   meta kind not `claude`) get **`manual`**, with the SSH path: the host name and `cd <dir>`.
 - **No command is synthesised, from a title or from anything else.** The page shows facts. The next
@@ -254,15 +300,23 @@ review round.
 
 ### Stage 0: this plan, reviewed
 
-- [ ] Plan reviewed by GPT Sol (read-only).
+- [x] Plan reviewed by GPT Sol (read-only), 2026-09-10: *not ready*, four established P1s, two
+  reasoned P1s and four P2s, no P0. All ten were checked against the code and accepted, and folded
+  into the sections above. F3 and F5 take a different fix from the one proposed; see Findings.
+  **No second plan round:** Codex is the tighter budget, and the Stage 1 code review tests every
+  one of these against real code. [The review](260910e-recovery-inventory-plan-review-sol.md).
 
 ### Stage 1: the journal and the fold
 
 Files: `tools/overseer/recovery.ts` (new: event types, id, candidate rule, `withRecoveryCandidates`,
-`foldRecovery`, caps, legacy replay), `tools/overseer/diff.ts` (the two new arms in
-`OverseerEvent` only), `tools/overseer/store.ts` (`parseEvent` for the new kinds, the third fold,
-`recovery.json` write/restore/replay, `OverseerStore.recovery`), `tools/overseer/daemon.ts` (the
-candidate insertion before `store.append` in `take()`, and the startup replay append — **merge
+`foldRecovery` with the pending-merge rule, caps, legacy derivation), `tools/overseer/diff.ts` (the
+two new arms in `OverseerEvent` only), `tools/overseer/jobs.ts` and `tools/overseer/status-cli.ts`
+(each handles the two new arms explicitly in its exhaustive switch; one line each, outside the
+brief's file set by necessity — Sol's F7), `tools/overseer/store.ts` (`parseEvent` for the new kinds;
+the third fold; `recovery.json` write/restore; **two bounded replays after the single torn-tail
+repair** — one from `current.json`'s cursor, one from `recovery.json`'s, so the recovery fold never
+gets only the tail chosen for `current.json`; `OverseerStore.recovery`), `tools/overseer/daemon.ts`
+(the candidate insertion before `store.append` in `take()`, and the boot-id close-out — **merge
 first, re-read before editing; the usage pass is web-260910's**), and new tests
 `tests/overseer-recovery.test.ts` and `tests/overseer-daemon-recovery.test.ts`.
 
@@ -281,12 +335,20 @@ Tests, red first, through the real parser, gate, differ and store, driven by a s
 - **Crash between candidate and removal**: the log ends with a complete candidate line and a torn
   gone line. `openStore` truncates the tail. The restart re-derives both, and the index holds one
   record (a duplicate id is folded once).
-- **Crash before the recovery checkpoint**: `recovery.json` is one batch behind. `openStore` replays
-  its tail, and the index matches a fold from byte 0.
+- **Crash before the recovery checkpoint**: `recovery.json` is one batch behind while `current.json`
+  is up to date. `openStore` replays the recovery tail from its own cursor, and the index matches a
+  fold from byte 0.
+- **Distinct disappearances of one run (Sol's F3)**: a candidate is dismissed; the identical row
+  comes back; a later collection removes it again. That yields a new, unresolved id.
+- **A reboot that reuses the tmux pid (Sol's F5)**: a stored boot id B1, then a collection under B2
+  with the same `tmuxServerPid` and the same handle. Every old entry gets a candidate
+  (`bootChanged`), and its gone. An unreadable boot id changes nothing.
 - **Old schema**: a log and `current.json` from before this plan, with no `recovery.json`. The
-  replay runs once and appends its marker, and the second start does not replay again. A log with a
-  `tmux-server-changed` batch yields replay candidates. A gone with no surviving entry yields an
-  `entry: null` stub. A log with no world change yields none, and the index says so.
+  derivation runs, `recovery.json` is written, and the second start restores it rather than scanning.
+  Deleting `recovery.json` and restarting derives identical ids. A log with a `tmux-server-changed`
+  batch yields `watched: true` records. The `goneWhileAway`-shaped signature yields
+  `watched: false` records. A gone with no surviving entry yields an `entry: null` stub. A log with
+  no world change yields none, and the index says so.
 - **Caps**: a 17 KB candidate goes in as an `oversize` stub with the event intact, and 501
   unresolved records give `overflow: 1` with none evicted.
 - **The live-log check, read-only**: a frozen copy of `~/.overseer/events.jsonl` taken at stage
@@ -369,6 +431,37 @@ Files: `tools/fleet/wire.ts` (appended block), `tools/fleet/recovery-feed.ts` (n
   tell "the Overseer refused that collection" from "that collection was fine".
 - **A candidate on every gone.** About 280 records a day that nobody would read. See §1.
 
+## Findings
+
+### Stage 0: plan review, GPT Sol, 2026-09-10 (*not ready*)
+
+Each finding was checked against the code before it was accepted.
+
+- **F1, P1, established: an ordinary last-session close was classified `interrupted`.** Accepted:
+  `unverifiable` counts as interrupted only when the producer run also changed.
+- **F2, P1, established: `resumed` matched a stale claim, and did not require a new execution.**
+  Accepted: matching is on the verified conversation from `lastSeen`, and needs a different token.
+  A claim never resolves anything.
+- **F3, P1, established: the id conflated two disappearances of one run.** Accepted, with the
+  collection identity in the id. **Plus a rule Sol did not propose.** An id that names the removing
+  collection can be re-derived from a *later* collection after a crash that leaves a candidate line
+  in the log and tears the gone line after it. So the fold merges a candidate whose predecessor for
+  the same key never saw its gone, and a candidate is built only from an entry the register still
+  holds.
+- **F4, P1, established: `ended-before-reboot` trusted state from before an unwatched gap.**
+  Accepted: only a watched `lastSeen` establishes it.
+- **F5, P1, reasoned: a reboot can reuse the tmux pid.** Accepted, **with a different fix**: the
+  daemon reads its own host's boot id, rather than a new wire field (which would be producer work
+  outside this plan), and closes the whole old world on a change.
+- **F6, P1, reasoned: the legacy reboot signature is also `goneWhileAway`'s shape.** Accepted: those
+  records are `watched: false`, and so `unknown`.
+- **F7, P2: types and files that would not build.** Accepted: `entry` is nullable in the fold only;
+  `jobs.ts` and `status-cli.ts` join Stage 1; two independent replays.
+- **F8, P2: `worktree` is not a path, and `findTranscript` returns no mtime.** Accepted.
+- **F9, P2: synthetic replay events were unneeded.** Accepted: legacy records are derived into the
+  fold with deterministic ids, and there is no marker event.
+- **F10, P2: the overflow wording promised the CLI could list omitted records.** Accepted.
+
 ## Status
 
-2026-09-10: plan written, awaiting Sol's plan review.
+2026-09-10: plan reviewed (Stage 0 done), Stage 1 next.
