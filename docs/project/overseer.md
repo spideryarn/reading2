@@ -262,6 +262,14 @@ Every half hour or so, in this order — the first two need no model, the last o
    commit and push, then start nothing until the Overseer says resume.* An idle Claude session costs
    nothing. Log who is paused, resume oldest-first after the reset, and check they woke up (the third
    deterministic rule below).
+   **But the target is to use the limits, not to keep them.** Greg, 2026-09-10: *"I think you're being
+   too conservative with resource usage. Our goal should be to maximise progress, which means surfing
+   close to the edge of the limits, e.g. to use up most of the Usage Limits (even if that means the
+   Box Health is strained at times), and slow things down when needed."* So the default when a window
+   has room is to dispatch more, across every account that has room, and a strained box is a
+   reason to stagger, not to stop. Slow down when a window would not last to its reset, or when the
+   box is actually losing work — suites refusing to start, waiters OOM-killed — not when it is
+   merely busy.
 2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
    hour into building with no commit on its branch is told to commit now; the only copy of an
    evening's work was on one disk on 2026-09-09.
