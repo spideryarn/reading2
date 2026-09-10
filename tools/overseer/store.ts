@@ -164,6 +164,7 @@ import {
   emptyRecoveryFold,
   foldRecovery,
   LAST_SEEN_TITLE_MAX,
+  pruneResolved,
   recoveryCandidateId,
   recoveryIndexOf,
   type ProducerRunRelation,
@@ -179,6 +180,7 @@ import {
   type RecoveryReplayRan,
   type RecoveryResolution,
 } from "./recovery.js";
+import type { RecoveryView } from "./recovery-view.js";
 
 /**
  * Re-exported because this file was where they lived until 2026-09-08, and a
@@ -249,6 +251,20 @@ export const RECOVERY_SCHEMA = 1;
  * nothing having happened.
  */
 const RECOVERY_CURSOR_STRIDE_BYTES = 1024 * 1024;
+
+/**
+ * THE VIEW IS WRITTEN WHEN IT CHANGED — and at least this often while it has
+ * not, so its `checkedAt` never claims facts are older than they are by more
+ * than ten minutes. Without the refresh a quiet week would leave "checked at
+ * Monday" on facts re-confirmed every minute since; without the change test,
+ * `recovery.json` would be rewritten every minute to say nothing new.
+ */
+const RECOVERY_VIEW_REFRESH_MS = 10 * 60 * 1000;
+
+/** The view without its clock, for "did anything change". */
+function stableViewText(view: RecoveryView): string {
+  return JSON.stringify({ ...view, checkedAt: null });
+}
 
 /**
  * How many bytes of log a start is willing to replay before it gives up and
@@ -887,6 +903,12 @@ export type OverseerStore = {
    * close-out happens again rather than not at all.
    */
   recordBootId(bootId: string): void;
+  /**
+   * The daemon's latest recovery view, held for the next `recovery.json` write.
+   * Returns whether that write is now due. Only the daemon's view pass calls it;
+   * nothing on a request path does.
+   */
+  setRecoveryView(view: RecoveryView): boolean;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -2713,7 +2735,7 @@ export function readCheckpoint(root: string = storeRoot()): CheckpointRead {
 type RecoveryFileRead =
   | { kind: "absent" }
   | { kind: "unusable"; why: string }
-  | { kind: "file"; cursor: { events: number; bytes: number }; fold: RecoveryFold };
+  | { kind: "file"; cursor: { events: number; bytes: number }; fold: RecoveryFold; raw: Record<string, unknown> };
 
 /**
  * The recovery file, parsed strictly and **failing whole**, like the
@@ -2731,7 +2753,31 @@ function readRecoveryFile(root: string): RecoveryFileRead {
   }
   const parsed = parseRecoveryFile(json);
   if (!parsed.ok) return { kind: "unusable", why: parsed.reason };
-  return { kind: "file", ...parsed.value };
+  return { kind: "file", ...parsed.value, raw: json as Record<string, unknown> };
+}
+
+export type RecoveryFileReading =
+  | { kind: "absent" }
+  | { kind: "unusable"; why: string }
+  /** `view` is exactly what the file holds, unvalidated: a consumer that draws it parses it itself. */
+  | { kind: "file"; writtenAt: string | null; index: RecoveryIndex; view: unknown };
+
+/**
+ * `recovery.json` for a reader outside the daemon — the CLI's `list`. **Read-only
+ * and lock-free**, like `readCheckpoint`: one `readFileSync`, nothing written,
+ * so it cannot disturb the daemon that owns the file. The records go through the
+ * same strict parser the store restores from.
+ */
+export function readRecoveryIndexFile(root: string): RecoveryFileReading {
+  const read = readRecoveryFile(root);
+  if (read.kind !== "file") return read;
+  const writtenAt = read.raw["writtenAt"];
+  return {
+    kind: "file",
+    writtenAt: typeof writtenAt === "string" ? writtenAt : null,
+    index: recoveryIndexOf(read.fold),
+    view: read.raw["view"] ?? null,
+  };
 }
 
 function parseRecoveryFile(u: unknown): ParseResult<{ cursor: { events: number; bytes: number }; fold: RecoveryFold }> {
@@ -2881,7 +2927,20 @@ function parseRecoveryRecord(u: unknown): ParseResult<RecoveryRecord> {
   return { ok: true, value: { ...common, oversize: false, entry, lastSeen: lastSeen.value, disappearance: disappearance.value } };
 }
 
-function recoveryFileText(fold: RecoveryFold, cursor: { events: number; bytes: number }, writtenAt: string): string {
+/**
+ * **The view rides beside the fold and is not part of it.** It is derived (by
+ * the daemon's view pass, recovery-view.ts), it is not restored on open, and a
+ * reader that ignores it loses the classification and nothing else — so it
+ * needs no schema bump. `null` until this daemon's first pass: a view from a
+ * previous life was classified against an inventory that process trusted, and
+ * the new one has not accepted any yet.
+ */
+function recoveryFileText(
+  fold: RecoveryFold,
+  cursor: { events: number; bytes: number },
+  writtenAt: string,
+  view: RecoveryView | null,
+): string {
   return `${JSON.stringify(
     {
       schema: RECOVERY_SCHEMA,
@@ -2894,6 +2953,7 @@ function recoveryFileText(fold: RecoveryFold, cursor: { events: number; bytes: n
       overflowIds: [...fold.overflowIds],
       pending: [...fold.pending].map(([key, pending]) => ({ key, ...pending })),
       appliedRequests: [...fold.appliedRequests],
+      view,
     },
     null,
     2,
@@ -3365,6 +3425,9 @@ class Store implements OverseerStore {
   private recoveryDirty: boolean;
   /** The last log cursor the recovery fold proved it had accepted. */
   private recoveryWrittenAt: { events: number; bytes: number };
+  /** The daemon's latest view, and its text without the clock. See `setRecoveryView`. */
+  private recoveryView: RecoveryView | null = null;
+  private recoveryViewStable: string | null = null;
   private closed = false;
 
   constructor(input: {
@@ -3415,6 +3478,24 @@ class Store implements OverseerStore {
     if (this.recoveryFold.bootId === bootId) return;
     this.recoveryFold.bootId = bootId;
     this.recoveryDirty = true;
+  }
+
+  /**
+   * Hold the daemon's latest view for the next `recovery.json` write. Returns
+   * whether the file now needs writing: when anything but the clock changed, or
+   * when the held one is `RECOVERY_VIEW_REFRESH_MS` old.
+   */
+  setRecoveryView(view: RecoveryView): boolean {
+    this.assertOpen();
+    const stable = stableViewText(view);
+    const held = this.recoveryView;
+    if (held !== null && stable === this.recoveryViewStable && Date.parse(view.checkedAt) - Date.parse(held.checkedAt) < RECOVERY_VIEW_REFRESH_MS) {
+      return false;
+    }
+    this.recoveryView = view;
+    this.recoveryViewStable = stable;
+    this.recoveryDirty = true;
+    return true;
   }
 
   /**
@@ -3561,6 +3642,10 @@ class Store implements OverseerStore {
     // events, baseline, checkpoint, recovery. Ordinarily its cursor is the one
     // the checkpoint just wrote; after a refused replay it stays at the last
     // range the recovery fold actually accepted.
+    //
+    // Retention first (recovery.ts § `pruneResolved`), on this write's clock, so
+    // a record that leaves the index leaves it in the same write that says so.
+    if (pruneResolved(this.recoveryFold, Date.parse(at))) this.recoveryDirty = true;
     if (this.recoveryDue()) {
       // An all-or-nothing replay that refused a tail accepted NONE of that
       // range. Keep its previous cursor so a later version or a repaired log
@@ -3570,7 +3655,7 @@ class Store implements OverseerStore {
         this.recoveryFold.replay.kind === "not-run"
           ? this.recoveryWrittenAt
           : { events: this.events, bytes: this.bytes };
-      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, recoveryCursor, at));
+      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, recoveryCursor, at, this.recoveryView));
       this.recoveryDirty = false;
       this.recoveryWrittenAt = recoveryCursor;
     }

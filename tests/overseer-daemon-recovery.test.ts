@@ -11,15 +11,18 @@
  * after a reboot looks like before tmux is back. The run ids, boot ids and the
  * second tmux generation are minted for this file.
  */
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
+import { main as recoveryCli } from "../scripts/overseer-recovery.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import { BASELINE_FILE, runOverseer } from "../tools/overseer/daemon.js";
+import { BASELINE_FILE, runOverseer, type DaemonOptions } from "../tools/overseer/daemon.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
-import type { RecoveryCandidateEvent, RecoveryRecord } from "../tools/overseer/recovery.js";
+import { RECOVERY_INBOX_DIR } from "../tools/overseer/recovery-inbox.js";
+import type { RecoveryView } from "../tools/overseer/recovery-view.js";
+import type { RecoveryCandidateEvent, RecoveryDispositionEvent, RecoveryRecord } from "../tools/overseer/recovery.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { CHECKPOINT_FILE, EVENTS_FILE, openStore, readCheckpoint, type RegisterEntry } from "../tools/overseer/store.js";
 import { editableFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -78,10 +81,24 @@ function rebootedEmpty(instance: string, inventory: number, collectedAt: string)
   return stamped("session-new-before", { instance, publication: inventory, inventory }, { rows: [], tmuxServerPid: null, collectedAt });
 }
 
+/** The evidence pass's world: an empty projects directory, a fixed host, and a stat that sees only `dirs`. */
+function evidenceWorld(dirs: readonly string[] = []): NonNullable<DaemonOptions["recovery"]> {
+  return {
+    projectsDir: tempRoot(),
+    hostname: () => "ri-daemon-host",
+    stat: async (path: string) => {
+      if (dirs.includes(path)) return { isDirectory: () => true, mtimeMs: Date.parse("2026-09-08T02:00:00.000Z") };
+      const error = new Error(`ENOENT: no such file or directory, stat '${path}'`) as NodeJS.ErrnoException;
+      error.code = "ENOENT";
+      throw error;
+    },
+  };
+}
+
 async function run(
   root: string,
   script: () => AsyncGenerator<SourceMessage>,
-  options: { bootId?: () => string | null } = {},
+  options: { bootId?: () => string | null; recovery?: DaemonOptions["recovery"] } = {},
 ): Promise<OverseerEvent[]> {
   const clock = fakeClock("2026-09-08T02:48:40.000Z");
   const outcome = await runOverseer({
@@ -93,6 +110,7 @@ async function run(
     log: () => {},
     source: () => script(),
     bootId: options.bootId ?? (() => BOOT_ONE),
+    recovery: options.recovery ?? evidenceWorld(),
   });
   expect(outcome.kind).toBe("stopped");
   return eventsIn(root);
@@ -499,5 +517,268 @@ describe("the index survives the fleet being empty", () => {
     });
     expect(index(root)).toHaveLength(6);
     expect(register(root)).toHaveLength(6);
+  });
+});
+
+// ═══ Stage 2: the view, the dispositions and the inbox ═══════════════════════
+
+const PRIMARY = "/home/greg/code/spideryarn2";
+const SHELL_DIR = "/home/greg/code/spideryarn2/.claude/worktrees/overseer-o1-store";
+
+/** The view the daemon last wrote into recovery.json. */
+function viewIn(root: string): RecoveryView {
+  const parsed = JSON.parse(readFileSync(join(root, RECOVERY_FILE), "utf8")) as { view?: RecoveryView | null };
+  if (parsed.view === undefined || parsed.view === null) throw new Error("recovery.json carries no view");
+  return parsed.view;
+}
+
+function dispositions(events: readonly OverseerEvent[]): RecoveryDispositionEvent[] {
+  return events.flatMap((e) => (e.kind === "recovery-disposition" ? [e] : []));
+}
+
+/** `session-new-before` whose first row holds a verified run of its own claim under `token`. */
+function verifiedFirstRow(
+  stamp: { instance: string; publication: number; inventory: number | null },
+  token: { boot: string; pid: number; startTicks: number },
+  changes: Record<string, JsonValue> = {},
+): JsonValue {
+  const fixture = editableFixture("session-new-before");
+  const rows = rowsOf(fixture);
+  const first = rows[0];
+  if (first === undefined) throw new Error("the capture has rows");
+  first["execution"] = {
+    kind: "verified",
+    token,
+    harness: "claude-code",
+    conversation: { kind: "verified", id: first["claudeSessionId"] as string },
+  };
+  return { ...fixture, rows, producer: stamp, ...changes } as unknown as JsonValue;
+}
+
+/** `session-new-before` with its second row's Claude exited. */
+function withAnExitedClaude(stamp: { instance: string; publication: number; inventory: number | null }): JsonValue {
+  const fixture = editableFixture("session-new-before");
+  const rows = rowsOf(fixture);
+  const second = rows[1];
+  if (second === undefined) throw new Error("the capture has rows");
+  second["status"] = { kind: "no-claude" };
+  return { ...fixture, rows, producer: stamp } as unknown as JsonValue;
+}
+
+/** The first collection after a reboot with tmux already back: a readable new generation, and no sessions. */
+function rebootedEmptyG2(instance: string, inventory: number, collectedAt: string): JsonValue {
+  return stamped("session-new-before", { instance, publication: inventory, inventory }, { rows: [], tmuxServerPid: G2, collectedAt });
+}
+
+const TOKEN_ONE = { boot: "ri-daemon-exec-boot", pid: 6100, startTicks: 31 };
+const TOKEN_TWO = { boot: "ri-daemon-exec-boot", pid: 6200, startTicks: 47 };
+
+describe("the view after a reboot", () => {
+  test("an empty rebooted fleet with a readable new generation: every candidate interrupted, or ended-before-reboot where its Claude had exited", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(withAnExitedClaude({ instance: RUN_A, publication: 1, inventory: 1 }));
+    });
+    await run(
+      root,
+      async function* () {
+        yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+      },
+      { recovery: evidenceWorld([PRIMARY, SHELL_DIR]) },
+    );
+    const view = viewIn(root);
+    expect(view.inventory.kind).toBe("trusted");
+    expect(view.page).toHaveLength(6);
+    const kinds = view.page.map((item) => [item.name, item.classification?.kind]);
+    expect(kinds.filter(([, kind]) => kind === "ended-before-reboot").map(([name]) => name)).toEqual(["arch-a10-style-ownership"]);
+    expect(kinds.filter(([, kind]) => kind === "interrupted")).toHaveLength(5);
+    const shell = view.page.find((item) => item.name === "autoperm-fulltest2-0346-4123599");
+    expect(shell?.evidence).toMatchObject({ kind: "checked", resume: { kind: "manual", host: "ri-daemon-host", dir: SHELL_DIR } });
+  });
+
+  test("a missing directory: dir missing, and the record stays interrupted and unresolved", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+    });
+    await run(
+      root,
+      async function* () {
+        yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+      },
+      { recovery: evidenceWorld([PRIMARY]) },
+    );
+    const shell = viewIn(root).page.find((item) => item.name === "autoperm-fulltest2-0346-4123599");
+    expect(shell?.classification?.kind).toBe("interrupted");
+    expect(shell?.resolution).toEqual({ disposition: "unresolved" });
+    expect(shell?.evidence).toMatchObject({ kind: "checked", dir: { kind: "missing", path: SHELL_DIR } });
+    expect(index(root).every((r) => r.resolution.disposition === "unresolved")).toBe(true);
+  });
+
+  test("present-but-unmatched: the same sessions back without a verified matching conversation", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+    });
+    await run(root, async function* () {
+      yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+      yield payload(stamped("session-new-before", { instance: RUN_B, publication: 2, inventory: 2 }, { tmuxServerPid: G2, collectedAt: LATER_STILL }));
+    });
+    const view = viewIn(root);
+    expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("present-but-unmatched"));
+  });
+});
+
+describe("the inventory-trust rule: a refused, failed or held collection after the reboot makes every record unknown", () => {
+  async function rebootThen(messages: readonly SourceMessage[]): Promise<RecoveryView> {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+    });
+    await run(root, async function* () {
+      // A trusted inventory whose rows would classify every record — and then one that cannot be trusted.
+      yield payload(stamped("session-new-before", { instance: RUN_B, publication: 1, inventory: 1 }, { rows: [], tmuxServerPid: G2, collectedAt: LATER }));
+      yield payload(stamped("session-new-before", { instance: RUN_B, publication: 2, inventory: 2 }, { tmuxServerPid: G2, collectedAt: LATER_STILL }));
+      for (const message of messages) yield message;
+    });
+    return viewIn(root);
+  }
+
+  test("a refused payload", async () => {
+    const view = await rebootThen([
+      payload(stamped("session-new-before", { instance: RUN_B, publication: 3, inventory: 3 }, { tmuxServerPid: G2, collectedAt: LATEST, error: "tmux list-sessions failed" })),
+    ]);
+    expect(view.inventory.kind).toBe("untrusted");
+    expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("unknown"));
+  });
+
+  test("a failed collection", async () => {
+    const view = await rebootThen([{ kind: "poll-failed", atMs: 0, why: "connect ECONNREFUSED 127.0.0.1:8787" }]);
+    expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("unknown"));
+  });
+
+  test("a held collection", async () => {
+    const view = await rebootThen([
+      payload(stamped("session-new-before", { instance: RUN_B, publication: 3, inventory: 3 }, { tmuxServerPid: null, collectedAt: LATEST })),
+    ]);
+    expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("unknown"));
+  });
+
+  test("a daemon that has accepted nothing in its own life", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+      yield payload(rebootedEmptyG2(RUN_B, 1, LATER));
+    });
+    await run(root, async function* () {});
+    const view = viewIn(root);
+    expect(view.inventory.kind).toBe("untrusted");
+    expect(view.page.map((item) => item.classification?.kind)).toEqual(Array(6).fill("unknown"));
+  });
+});
+
+describe("already-live", () => {
+  test("the same conversation under a different token: resumed is appended once, with both tokens, and a second view appends nothing", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(verifiedFirstRow({ instance: RUN_A, publication: 1, inventory: 1 }, TOKEN_ONE));
+      yield payload(rebootedEmpty(RUN_B, 1, LATER));
+      yield payload(verifiedFirstRow({ instance: RUN_B, publication: 2, inventory: 2 }, TOKEN_TWO, { tmuxServerPid: G2, collectedAt: LATER_STILL }));
+    });
+    const resumed = dispositions(eventsIn(root));
+    expect(resumed).toHaveLength(1);
+    expect(resumed[0]).toMatchObject({
+      disposition: "resumed",
+      evidence: { previousToken: "ri-daemon-exec-boot:6100:31", token: "ri-daemon-exec-boot:6200:47" },
+    });
+    const record = index(root).find((r) => r.id === resumed[0]?.id);
+    expect(record?.resolution.disposition).toBe("resumed");
+
+    await run(root, async function* () {
+      yield payload(verifiedFirstRow({ instance: RUN_B, publication: 3, inventory: 3 }, TOKEN_TWO, { tmuxServerPid: G2, collectedAt: LATEST }));
+    });
+    expect(dispositions(eventsIn(root))).toHaveLength(1);
+  });
+
+  test("the same conversation under the same token: already-live, and no disposition", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(verifiedFirstRow({ instance: RUN_A, publication: 1, inventory: 1 }, TOKEN_ONE));
+      // The same dashboard run loses sight of tmux, then sees the same run again.
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 2, inventory: 2 }, { rows: [], tmuxServerPid: null, collectedAt: LATER }));
+      yield payload(verifiedFirstRow({ instance: RUN_A, publication: 3, inventory: 3 }, TOKEN_ONE, { collectedAt: LATER_STILL }));
+    });
+    expect(dispositions(eventsIn(root))).toEqual([]);
+    const first = viewIn(root).page.find((item) => item.name === "adversarial-fixtures-four-postmortems");
+    expect(first?.classification).toMatchObject({ kind: "already-live", sameRun: true });
+  });
+});
+
+describe("dismissal through the inbox", () => {
+  async function rebootedStore(): Promise<{ root: string; ids: string[] }> {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+      yield payload(rebootedEmpty(RUN_B, 1, LATER));
+    });
+    return { root, ids: index(root).map((r) => r.id) };
+  }
+
+  function refusals(root: string): { why: string; request: unknown }[] {
+    const dir = join(root, RECOVERY_INBOX_DIR, "refused");
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .sort()
+      .map((file) => JSON.parse(readFileSync(join(dir, file), "utf8")) as { why: string; request: unknown });
+  }
+
+  function pending(root: string): string[] {
+    return readdirSync(join(root, RECOVERY_INBOX_DIR)).filter((file) => file !== "refused");
+  }
+
+  test("a valid request yields one disposition event, carrying its request id and sentence, and the file is gone", async () => {
+    const { root, ids } = await rebootedStore();
+    const target = ids[0] as string;
+    expect(await recoveryCli(["dismiss", target, "--why", "checked the worktree by hand"], { root, out: () => {} })).toBe(0);
+    const [file] = pending(root);
+    await run(root, async function* () {});
+    const found = dispositions(eventsIn(root));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ id: target, disposition: "dismissed", evidence: { requestId: (file as string).slice(0, 36), why: "checked the worktree by hand" } });
+    expect(index(root).find((r) => r.id === target)?.resolution.disposition).toBe("dismissed");
+    expect(pending(root)).toEqual([]);
+    expect(refusals(root)).toEqual([]);
+  });
+
+  test("a duplicate request, a request for a resolved id and one for an unknown id are each refused with a reason, and none applied", async () => {
+    const { root, ids } = await rebootedStore();
+    const target = ids[0] as string;
+    await recoveryCli(["dismiss", target, "--why", "first"], { root, out: () => {} });
+    const [file] = pending(root);
+    const text = readFileSync(join(root, RECOVERY_INBOX_DIR, file as string), "utf8");
+    await run(root, async function* () {});
+    expect(dispositions(eventsIn(root))).toHaveLength(1);
+
+    // The same request again — a replay after a crash between append and delete, or a copy.
+    writeFileSync(join(root, RECOVERY_INBOX_DIR, file as string), text);
+    await recoveryCli(["dismiss", target, "--why", "second opinion"], { root, out: () => {} });
+    await recoveryCli(["dismiss", "rc-ffffffffffffffffffff", "--why", "no such thing"], { root, out: () => {} });
+    await run(root, async function* () {});
+
+    expect(dispositions(eventsIn(root))).toHaveLength(1);
+    const whys = refusals(root).map((r) => r.why);
+    expect(whys).toHaveLength(3);
+    expect(whys.some((why) => why.includes("already applied"))).toBe(true);
+    expect(whys.some((why) => why.includes("already resolved"))).toBe(true);
+    expect(whys.some((why) => why.includes("not in the recovery index"))).toBe(true);
+    expect(pending(root)).toEqual([]);
+  });
+
+  test("list prints every record the index retains", async () => {
+    const { root, ids } = await rebootedStore();
+    const lines: string[] = [];
+    expect(await recoveryCli(["list"], { root, out: (line) => lines.push(line) })).toBe(0);
+    const text = lines.join("\n");
+    for (const id of ids) expect(text).toContain(id);
   });
 });

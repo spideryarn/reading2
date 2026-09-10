@@ -262,6 +262,8 @@ export type RecoveryIndex = {
   readonly overflow: number;
   readonly bootId: string | null;
   readonly replay: RecoveryReplay;
+  /** Dismissal requests already applied — what the inbox drain checks a request id against. */
+  readonly appliedRequests: ReadonlySet<string>;
 };
 
 /** What the daemon knows about the batch it is about to append, for `withRecoveryCandidates`. */
@@ -447,7 +449,13 @@ export function emptyRecoveryFold(replay: RecoveryReplay, bootId: string | null)
 }
 
 export function recoveryIndexOf(fold: RecoveryFold): RecoveryIndex {
-  return { records: fold.records, overflow: fold.overflowIds.size, bootId: fold.bootId, replay: fold.replay };
+  return {
+    records: fold.records,
+    overflow: fold.overflowIds.size,
+    bootId: fold.bootId,
+    replay: fold.replay,
+    appliedRequests: fold.appliedRequests,
+  };
 }
 
 function byteLength(value: unknown): number {
@@ -706,4 +714,146 @@ export function deriveRecovery(
   // Folding the live candidates above moved it; see the comment at the top.
   fold.bootId = null;
   return fold;
+}
+
+// ═══ Stage 2: the derived dispositions, and retention ═════════════════════════
+
+/**
+ * A CANDIDATE'S VERIFIED CONVERSATION — the only conversation recovery matches on.
+ *
+ * `verified` gives its id and `conflicting` gives the one OBSERVED in the pane.
+ * Nothing else counts, and the stored `claimedConversationId` least of all: the
+ * tmux environment is written once and outlives its conversation
+ * (observation.ts), so a claim would match a pane that has long since moved on
+ * (Sol's F2). The view still SHOWS a claim, labelled as one.
+ */
+export function verifiedConversationOf(lastSeen: RecoveryLastSeen | null): string | null {
+  const conversation = lastSeen?.conversation ?? null;
+  if (conversation === null) return null;
+  switch (conversation.kind) {
+    case "verified":
+      return conversation.id;
+    case "conflicting":
+      return conversation.observed;
+    case "not-claimed":
+    case "unverifiable":
+      return null;
+    default: {
+      const never: never = conversation;
+      throw new Error(`no conversation rule for ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/** A live row's verified run, and the conversation it verifiably holds — or null when it proves neither. */
+export function liveExecutionOf(row: ObservedRow): { conversationId: string; token: string } | null {
+  if (row.execution.kind !== "verified") return null;
+  const conversationId = verifiedConversationOf({
+    statusKey: "",
+    title: null,
+    harness: row.execution.harness,
+    executionToken: null,
+    conversation: row.execution.conversation,
+    collectedAt: "",
+  });
+  return conversationId === null ? null : { conversationId, token: executionTokenText(row.execution.token) };
+}
+
+/**
+ * THE TWO DISPOSITIONS THE DAEMON DERIVES — the plan, § 2 as revised by Sol's F2.
+ *
+ *  - **`resumed`**: a live verified execution in an ACCEPTED, TRUSTED inventory
+ *    holds the candidate's verified conversation under a DIFFERENT token. The
+ *    same conversation under the same token is the same run, which was never
+ *    gone: the view calls that `already-live` and nothing is written. A
+ *    candidate with no verified conversation can never be resumed.
+ *  - **`superseded`**: a strictly newer candidate has the same verified
+ *    conversation. A claim alone never supersedes.
+ *
+ * `liveRows` is null when the inventory cannot be trusted, and then nothing is
+ * resumed: an empty list from a failed collection is not evidence either way.
+ *
+ * **Idempotent by construction, not by bookkeeping**: only unresolved records
+ * produce an event, and the fold resolves them — so a second pass after the
+ * append derives nothing. At most one event per record, `resumed` first,
+ * because it is the stronger evidence.
+ */
+export function deriveDispositions(
+  index: RecoveryIndex,
+  liveRows: readonly ObservedRow[] | null,
+  at: string,
+): RecoveryDispositionEvent[] {
+  type Full = Extract<RecoveryRecord, { oversize: false }>;
+  const full = [...index.records.values()].filter((record): record is Full => !record.oversize);
+  const newest = new Map<string, Full>();
+  for (const record of full) {
+    const conversation = verifiedConversationOf(record.lastSeen);
+    if (conversation === null) continue;
+    const held = newest.get(conversation);
+    if (held === undefined || Date.parse(record.at) > Date.parse(held.at)) newest.set(conversation, record);
+  }
+  const live = new Map<string, Set<string>>();
+  for (const row of liveRows ?? []) {
+    const execution = liveExecutionOf(row);
+    if (execution === null) continue;
+    const tokens = live.get(execution.conversationId) ?? new Set<string>();
+    tokens.add(execution.token);
+    live.set(execution.conversationId, tokens);
+  }
+  const events: RecoveryDispositionEvent[] = [];
+  for (const record of full) {
+    if (record.resolution.disposition !== "unresolved") continue;
+    const conversationId = verifiedConversationOf(record.lastSeen);
+    if (conversationId === null) continue;
+    const previousToken = record.lastSeen?.executionToken ?? null;
+    const tokens = live.get(conversationId);
+    // A row still holding the PREVIOUS token means the same run is live, which
+    // is not a resumption, whatever else is holding the conversation.
+    if (tokens !== undefined && previousToken !== null && !tokens.has(previousToken)) {
+      const [token] = [...tokens].sort();
+      if (token !== undefined) {
+        events.push({ kind: "recovery-disposition", at, id: record.id, disposition: "resumed", evidence: { previousToken, token, conversationId } });
+        continue;
+      }
+    }
+    const newer = newest.get(conversationId);
+    if (newer !== undefined && newer.id !== record.id && Date.parse(newer.at) > Date.parse(record.at)) {
+      events.push({ kind: "recovery-disposition", at, id: record.id, disposition: "superseded", evidence: { by: newer.id } });
+    }
+  }
+  return events;
+}
+
+/** How long a RESOLVED record stays in the index after it was resolved. */
+export const RECOVERY_RESOLVED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * THE RETENTION RULE Stage 1 deferred: resolved records whose resolution is
+ * older than 30 days leave the INDEX, and stay in the journal. Returns whether
+ * anything left.
+ *
+ * **Unresolved records never leave** — expiring one would be the silent expiry
+ * the spec forbids — and nothing in `overflowIds` is touched, for the same
+ * reason. **`pending` is not touched either**: it is the crash-merge rule's
+ * state, keyed by session, and a pruned record's pending entry still has to
+ * swallow the re-derived candidate of the disappearance it names.
+ *
+ * Measured from the RESOLUTION, not the disappearance, so a record resolved
+ * today is shown as resolved for a month whatever its age.
+ *
+ * A later replay from before the pruned candidate (a lost `recovery.json`, or
+ * a tail behind the cursor) folds it back in with its disposition, and the next
+ * checkpoint prunes it again: the journal is the authority, and the index
+ * only a view of it.
+ */
+export function pruneResolved(fold: RecoveryFold, nowMs: number): boolean {
+  let changed = false;
+  for (const [id, record] of fold.records) {
+    if (record.resolution.disposition === "unresolved") continue;
+    if (nowMs - Date.parse(record.resolution.at) > RECOVERY_RESOLVED_RETENTION_MS) {
+      fold.records.delete(id);
+      changed = true;
+    }
+  }
+  return changed;
 }

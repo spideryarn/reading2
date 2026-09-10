@@ -427,10 +427,39 @@ Tests, red first (the spec's list, plus the spec's failed-collection rule):
 - **A shell session**: `manual`, with the SSH path, and no resume claim.
 - **Dismissal**: a valid request yields one disposition event. A duplicate request, or one for an
   unknown or resolved id, is refused with a reason. The CLI never touches `events.jsonl`.
-- **Superseded**: two candidates for one conversation claim leave the older one `superseded`, naming
-  the newer.
+- **Superseded**: two candidates for one **verified** conversation leave the older one `superseded`,
+  naming the newer. Two that share only a claim do nothing. That is §2's rule after Sol's F2; this
+  line first said "claim" and contradicted §2, and the implementer followed §2.
 
-- [ ] Implementation, tests red → green, typecheck, focused suites; Sol review; commit.
+- [x] Implementation (**Opus subagent**). Tests red first: both new files failed at import before
+  the code existed, and five mutations afterwards (trust rule, same-token resumption, replayed
+  request, retention of unresolved, a refused payload in the daemon) each turned exactly their
+  tests red. Green: 53 of 53 on the two Stage 2 files; 26 focused files / 773 tests `EXIT=0`;
+  typecheck exit 0. On the manager's own run: typecheck exit 0, and the three recovery suites 89 of 89.
+- [ ] Sol review; commit.
+
+What landed, beyond the brief: `tools/overseer/recovery-inbox.ts` (new), one leaf that both the CLI
+and the daemon use, so the request format lives in one place. Decisions the implementer made:
+
+1. **Retention counts 30 days from resolution**, not from disappearance.
+2. **A replayed dismissal is refused** as "already applied", into `recovery-inbox/refused/`, not
+   dropped quietly.
+3. **The view is not carried over a daemon restart.** Its classification was made against an
+   inventory the previous process trusted, so `view` is `null` until the new daemon's first pass,
+   and every record is `unknown` until a collection is accepted.
+4. **`manual` records the host and the directory as two facts.** No `cd` string is built.
+5. **A departure from §5:** a refused request is recorded in `refused/<id>.json`, with its reason
+   and a log line, not in a daemon note. A note needs a new kind in `notes.ts`, which is outside
+   this stage. A named follow-up if the Overseer wants refusals in `overseer notes`.
+
+Status, 2026-09-10: implemented, awaiting its Sol review. **One merge conflict, which I
+resolved myself:** the `origin/dev` merge at the start of the stage (schedule preview's Stage 1,
+`18f64a04`) conflicted in one hunk of `daemon.ts`. The two sides were adjacent import lines,
+`./recovery.js` and `./schedule-plan.js`, importing different names from different modules. I kept
+both. There was nothing to weigh between them, so the house rule of showing Greg a merge conflict as
+a proposal first was not needed for it. Merge commit `d45cac60`. After it, typecheck exited 0 and
+the two recovery suites passed 49 of 49, before any Stage 2 edit. There is no shared inbox-drain
+helper on `dev` (`work-reports` has not landed one), so Stage 2 writes its own small drain.
 
 ### Stage 3: the fleet boundary and the page
 

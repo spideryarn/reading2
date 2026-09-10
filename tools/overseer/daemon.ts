@@ -70,7 +70,9 @@ import {
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
-import { observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
+import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
+import { drainRecoveryInbox } from "./recovery-inbox.js";
+import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust } from "./recovery-view.js";
 import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
@@ -370,6 +372,13 @@ export type DaemonOptions = {
    */
   bootId?: () => string | null;
   /**
+   * THE RECOVERY VIEW'S WORLD — where transcripts live, how a path is stat'ted,
+   * this host's name, and how often the view is re-checked when nothing
+   * prompts it. Each defaults to the real one (`evidenceDeps`), and is injected
+   * so a test needs no fake home. See the view pass in `runOverseer`.
+   */
+  recovery?: { projectsDir?: string; stat?: EvidenceDeps["stat"]; hostname?: () => string; viewIntervalMs?: number };
+  /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
    * `claude auth status`, and this file does neither.
@@ -559,6 +568,13 @@ export const JOBS_INTERVAL_MS = 30_000;
  * written-down abandoned run, never a daemon that will not die.
  */
 export const RULE_SETTLE_GRACE_MS = 15_000;
+
+/**
+ * The recovery view's floor: at most once a minute when nothing prompts it.
+ * A fold change and an accepted inventory prompt it at once; this is what
+ * catches a directory or a transcript that changed while nothing else did.
+ */
+export const RECOVERY_VIEW_INTERVAL_MS = 60_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -801,9 +817,86 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     ...(usage === null ? {} : { usage }),
   });
 
+  // ══ THE RECOVERY VIEW, THE DERIVED DISPOSITIONS AND THE INBOX
+  //
+  // docs/plans/260910e § 2, § 4 and § 5. Three things, one owner, and none of
+  // them on a request path: the route reads `recovery.json` and nothing else.
+  //
+  // THE INVENTORY-TRUST RULE is the first thing the view asks, and it is held
+  // here because only this loop sees the thing it is about: whether the LATEST
+  // payload was accepted. A refused payload, a failed collection or a held one
+  // since the last accept makes every record `unknown`, whatever rows the stale
+  // inventory before it carried — an empty list from a failed collection is not
+  // evidence of interruption. A daemon that has accepted nothing in its own life
+  // trusts nothing: a restored baseline is a cache of the previous process's
+  // bytes, not a current inventory.
+  const evidence = evidenceDeps(options.recovery ?? {});
+  const viewIntervalMs = options.recovery?.viewIntervalMs ?? RECOVERY_VIEW_INTERVAL_MS;
+  let inventory: InventoryTrust = { kind: "untrusted", why: "no inventory has been accepted in this daemon's life yet" };
+  // ONE VIEW PASS AT A TIME, and a request during one is remembered rather than
+  // dropped: `viewWanted` makes the pass run again when it finishes, against the
+  // state as it is then. Awaited on the way out, like the other passes.
+  let viewRunning: Promise<void> | null = null;
+  let viewWanted = false;
+  let lastViewAtMs = Number.NEGATIVE_INFINITY;
+  const startView = (): void => {
+    viewWanted = false;
+    viewRunning = buildRecoveryView(store.recovery, inventory, { ...evidence, now })
+      .then((view) => {
+        lastViewAtMs = now().getTime();
+        if (halted() !== null) return;
+        // Written when it changed — `setRecoveryView` decides — through the same
+        // checkpoint, so the write order stays events, baseline, current.json,
+        // recovery.json.
+        if (store.setRecoveryView(view)) guard(store.checkpoint({ ...checkpointUpdate(), tick: false }));
+      })
+      .catch((cause: unknown) => {
+        log(`recovery view pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        viewRunning = null;
+        if (viewWanted && halted() === null) startView();
+      });
+  };
+  const requestView = (): void => {
+    viewWanted = true;
+    if (viewRunning === null) startView();
+  };
+  const trustInventory = (next: InventoryTrust): void => {
+    const before = inventory;
+    inventory = next;
+    // A repeated failure with the same sentence changes nothing the view says.
+    if (before.kind === "untrusted" && next.kind === "untrusted" && before.why === next.why) return;
+    requestView();
+  };
+  // `resumed` and `superseded`, appended by the daemon and by nothing else.
+  // Idempotent by construction (recovery.ts § `deriveDispositions`), so running
+  // it every tick costs a map walk and writes nothing twice.
+  const appendDerived = (): boolean => {
+    const derived = deriveDispositions(store.recovery, inventory.kind === "trusted" ? inventory.rows : null, now().toISOString());
+    if (derived.length === 0) return true;
+    if (!guard(store.append(derived))) return false;
+    log(`${now().toISOString()} ${derived.length} recovery dispositions derived (${derived.map((e) => `${e.id} ${e.disposition}`).join(", ")})`);
+    requestView();
+    return true;
+  };
+  const recoveryTick = (): void => {
+    const drained = drainRecoveryInbox({ root, index: () => store.recovery, append: (events) => guard(store.append(events)), now, log });
+    if (drained.halted || halted() !== null) return;
+    if (drained.applied > 0) requestView();
+    if (!appendDerived()) return;
+    if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView();
+  };
+  // AT START, before the source: a request left while the daemon was down is
+  // applied now, and the first view is drawn — against no inventory, so every
+  // record is `unknown` until a collection is accepted, which says so.
+  recoveryTick();
+
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
+    recoveryTick();
+    if (halted() !== null) return;
     guard(store.checkpoint(checkpointUpdate()));
   }, tickMs);
   ticker.unref?.();
@@ -1080,6 +1173,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
     }
+    // THE VIEW PASS, in a loop: one that finishes with a request pending starts
+    // the next, and that one writes through the store too.
+    while (viewRunning !== null) await viewRunning;
     await settleRuleRuns();
   }
 
@@ -1142,11 +1238,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           break;
         case "poll-failed":
           write(conditions.degrade("poll", at, message.why));
+          trustInventory({ kind: "untrusted", why: `the latest collection failed: ${message.why}` });
           break;
         case "unreadable":
           // Bytes arrived and were not a payload. Same condition as a payload
           // the gate refuses: the Overseer is receiving and not learning.
           write(conditions.degrade("snapshots", at, `the ${message.via} delivered something that was not JSON: ${message.why}`));
+          trustInventory({ kind: "untrusted", why: `the latest payload was not JSON: ${message.why}` });
           break;
         case "payload":
           write(conditions.restore("poll", at, transportRestored(message.via)));
@@ -1268,6 +1366,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
+        trustInventory({ kind: "untrusted", why: `the latest payload was refused: ${verdict.reason}` });
         return true;
       case "duplicate":
         // THE ORDINARY CASE, and deliberately not a restoration of anything: a
@@ -1367,6 +1466,10 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       // Without this note the only trace would be a history that quietly
       // skipped a few minutes.
       write(conditions.degrade("baseline", at, outcome.reason));
+      // An admissible collection the differ could not place is not an
+      // inventory the view may classify against, whatever rows it carries.
+      trustInventory({ kind: "untrusted", why: `the latest collection was held: ${outcome.reason}` });
+      if (bootChanged) requestView();
       return true;
     }
     write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
@@ -1499,7 +1602,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     saveBaseline(root, json);
     if (!guard(store.checkpoint(checkpointUpdate()))) return false;
     checkFreshness();
-    return true;
+    // THE INVENTORY THE VIEW MAY TRUST, and only now: after the append, the
+    // baseline and the checkpoint, so nothing classifies against a collection
+    // whose events are not on the disk. Then the derived dispositions against
+    // it — `resumed` needs a live row in exactly this kind of inventory — after
+    // the durable writes above, so a crash before them re-derives them rather
+    // than losing them.
+    trustInventory({
+      kind: "trusted",
+      rows: observed.rows,
+      collectedAt: observed.clock.at,
+      observation: observationOf(observed.ordering, observed.clock.at),
+    });
+    return appendDerived();
   }
 
   // AWAIT THE PASS IN FLIGHT BEFORE RELEASING ANYTHING — GPT Sol's finding 5.
