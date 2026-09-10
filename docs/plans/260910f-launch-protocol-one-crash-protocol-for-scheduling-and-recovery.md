@@ -599,6 +599,23 @@ pass the launch's hangup hook into the probe's `runChild`, and a probe-phase rea
 stand-in `claude` whose `auth status` blocks). Queued for the Stage 2 fix round. Re-run of the review
 told F20 is known.
 
+**Sol's narrow check of the five Stage 1 P1 fixes (F14–F17, F19) at 807b4120 and 9662df2f: all five
+closed**, each with its regression test passing (177/177 in its run). Stage 1 is done reviewing.
+
+**Sol's Stage 2 re-run completed** (`…-stage2-review-sol-b.md`): request changes, excluding F20 —
+**F22 (P0, reasoned)** the tests put a fake CLI on `PATH` but the wrappers then reload `.env.local`,
+which could replace it unless `SPIDERYARN_ENV_PINNED` pins `PATH`, so a test could still run the real
+`claude`/`codex` (nothing did — today's `.env.local` sets no `PATH`); **F21 (P1)** a failed `run-codex`
+records its answer in a temporary directory and never writes `answer.md`; **F23 (P1)** the
+`gjd-remote` job's post-start failures (directory guard, missing CLI, account and identity checks)
+`failTo` out without writing `exit.json` — an `EXIT` trap after the start write closes it; **F24
+(P2)** `run-codex`'s pane-close hook has no test. Sol confirmed the correlation id is in the first
+effect, the no-`--launch-dir` path is unchanged, the prompt is exactly the pinned bytes, quoting
+holds across the layers, and the SIGHUP change touches nothing but SIGHUP. It also said the status
+paragraph had not disclosed F21 or F23 — right, and now it does. All four accepted; Stage 2b brief
+`260910f-launch-protocol-stage2b-fixes-task.md`, which also carries F20 and the read-only
+`view()` for `scheduled-dispatch`.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
