@@ -20,7 +20,7 @@
  * has watched reconnect is exactly the kind of change that looks finished —
  * see docs/reusable/silent-success.md.
  *
- * What a replacement must keep, because the UI depends on all four:
+ * What a replacement must keep, because the UI depends on all five:
  *
  *  - **`onState` means "this is fresh, and here it is"** — the hook stamps the
  *    arrival time from it, so a transport that replays a cached payload must
@@ -34,6 +34,15 @@
  *    settles, not a press that quietly evaporates and not two overlapping asks.
  *  - **`stop()` must be idempotent**, since React calls it on every effect
  *    teardown including the double one in StrictMode.
+ *  - **`onState` is never called synchronously from inside a React render or
+ *    effect** — always from a timer, a promise or an event, as this file's
+ *    `tick` is, after its `await`. `useFleetState` commits each delivery with
+ *    `flushSync`, because the detail pane derives facts from the *change*
+ *    between two payloads and React would otherwise batch two deliveries in
+ *    one turn into one render (docs/postmortems/260910b). Called from inside
+ *    a render or effect, `flushSync` warns and falls back to batching, and
+ *    that failure returns silently. An `EventSource` delivers from its own
+ *    event callbacks, which is fine.
  *  - **`stop()` must leave nothing owned that can keep working**: no timer, no
  *    window listener, and any request in flight has been aborted. A transport
  *    that lets a fetch finish after the page has gone is not visibly broken,

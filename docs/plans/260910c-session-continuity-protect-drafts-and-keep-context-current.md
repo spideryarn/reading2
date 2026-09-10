@@ -9,10 +9,12 @@ two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. **The Oversee
 dashboard on `536b1b68` at 12:45Z** (its decision log, `1209bc70`), so all of that is live —
 including one tap on Start launching one session — and it chose to restart before Stage 1's second
 Sol round closed, on the grounds that the round re-checks four fixed P1s rather than reopening the
-design. **Since then** the shared single-flight reader (`e942f57c`, a behaviour-preserving
-refactor) is on `dev` at `3764afb6` and not yet live. **In flight:** Sol's Stage 1 round 2. **Still
-to build:** 2b, 4b, the `role="region"` fix and the Read-again regressions (5c), the
-Sessions-filter decision and the browser check.
+design. **That premise did not hold**: round 2 found five new P1s (F17–F21) in the code the
+restart put live — all rare or cosmetic, none dangerous — and the Overseer was told so, with a
+recommendation to restart again at its convenience. **On `dev` since, not yet live:** the shared
+single-flight reader (`e942f57c`) and Stage 1's round-2 fixes (`bd528f2c`), at `67d28c58`. Stage 1
+discovery is closed; an independent read-only check of the F17/F18 fixes is running. **In flight:**
+2b, 5c, that check. **Still to build:** 4b, the Sessions-filter decision and the browser check.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -638,6 +640,26 @@ check because they change the one hook every panel uses.
 own `act`, forcing a commit between states, so the tests shared the implementation's assumption
 that one delivery meant one render — the postmortem's "why nothing went red". Discovery for Stage 1
 is now closed; the F17/F18 check is scoped to those fixes and does not reopen it.
+
+**The scoped check of F17/F18 — an independent Opus agent, read-only: all four questions hold.**
+Removing `flushSync` in memory turned exactly the two F18 tests red and left both F17 tests green,
+so each fix stands on its own; `onState` is reached only after an `await` on every transport path,
+never from inside a render or effect, so `flushSync` is always legal there; every interleaving of a
+refusal and a delivery, including both in one turn, leaves `under` naming a payload delivered no
+later than the refusal; and a delivery was already one render, so nothing re-renders more than
+before. **Stage 1 is closed**: two Sol rounds, then an independent check of the round-2 P1 fixes,
+no open P0 or P1.
+
+Two notes it raised outside its scope, recorded rather than built:
+
+- **A transport that ever delivered from inside a render or effect would break F18 again**, since
+  `flushSync` would warn and fall back to batching. Nothing guards against it, so the rule is now a
+  fifth promise in `transport.ts`'s list of what a replacement must keep — which is where whoever
+  writes the SSE transport will read it.
+- **A named limit on the answering latch:** its boundary is the order payloads *arrive*, not the
+  order the server *sent* them. A poll response sent before a 503 but arriving after it could clear
+  the latch. It needs the server restarted with a different `FLEET_ANSWER_ENABLED` at exactly that
+  moment; comparing `servedAt` would close it. Not built.
 
 **The Stage 1 follow-up — built**, an Opus subagent, from the three open rows above; every change
 seen red first, and every test that passed on the old code proved able to fail by a deliberate
