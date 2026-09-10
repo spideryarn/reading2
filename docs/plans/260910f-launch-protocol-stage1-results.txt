@@ -1,0 +1,19 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2/.claude/worktrees/launch-protocol
+
+
+ Test Files  5 passed (5)
+      Tests  128 passed (128)
+   Start at  18:39:46
+   Duration  2.92s (transform 1.53s, setup 566ms, import 1.42s, tests 2.12s, environment 1ms)
+
+
+> spideryarn@1.0.0 typecheck
+> tsx scripts/typecheck.ts
+
+✓ src/web/tsconfig.json  (344 files)
+✓ tests/tsconfig.json  (1921 files)
+✓ tools/fleet/web/tsconfig.json  (90 files)
+✓ tsconfig.json  (605 files)
+✓ all 2001 source files are covered by some project
+exit codes: vitest 0, typecheck 0

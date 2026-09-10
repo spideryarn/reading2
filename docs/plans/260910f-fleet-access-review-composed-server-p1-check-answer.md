@@ -1,0 +1,2 @@
+1. F11 — Accurate: owner death closes the listener and owned group; the disconnect mutation is red; it cannot signal another group.
+2. F12/F13 — Accurate: malformed/multiple Hosts get 421, while all listed legitimate authorities pass.

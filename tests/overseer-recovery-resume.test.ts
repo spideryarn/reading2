@@ -255,7 +255,7 @@ describe("the request leaf", () => {
   });
 
   test("the parser is strict and never throws", () => {
-    for (const text of ["", "{", "null", "[]", "42", '{"v":2}', '{"v":1,"candidateId":"rc-0123456789abcdef0123"}', " "]) {
+    for (const text of ["", "{", "null", "[]", "42", '{"v":2}', '{"v":1,"candidateId":"rc-0123456789abcdef0123"}', "\u0000\u0001"]) {
       expect(() => parseResumeRequest(text)).not.toThrow();
       expect(parseResumeRequest(text).ok).toBe(false);
     }

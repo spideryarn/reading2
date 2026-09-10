@@ -1,6 +1,6 @@
 # Scheduled dispatch: one durable occurrence, one reconciled launch
 
-Roadmap stage: [260908f § Stage: Scheduled dispatch](260908f-overseer-and-fleet-improvement-roadmap.md#stage-scheduled-dispatch--one-durable-occurrence-one-reconciled-launch)
+Roadmap stage: [260908f § Stage: Scheduled dispatch](260908f-overseer-and-fleet-improvement-roadmap.md#stage-scheduled-dispatch-one-durable-occurrence-one-reconciled-launch)
 — its five checkboxes and acceptance paragraph are the spec. Queue item `qi-qxw727jg`. Session
 `scheduled-dispatch`, worktree `.claude/worktrees/scheduled-dispatch`, dispatched by the Overseer
 2026-09-10.
@@ -34,7 +34,7 @@ socket.
 
 ## What the launch protocol gives us (agreed with its session, 2026-09-10)
 
-- `LaunchProtocol["launchOccurrence"](request) → LaunchOutcome`, handed over as a capability.
+- `LaunchProtocol.launchOccurrence`, which takes a request and answers a `LaunchOutcome`, handed over as a capability.
   Composed in `daemon.ts` by the protocol's Stage 3, which names the value; one line of mine passes
   it into `TickInput`. The scheduler never sees `LaunchParts` or a launcher (their F9).
 - `PlanRequest = { origin: scheduleOrigin(key), material, admissionClass: "claude-session" } &`

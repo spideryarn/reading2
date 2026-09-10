@@ -139,6 +139,26 @@ not that the request is harmless. Four ways it can go, and all four are legitima
 - **write it up and wait.** In doubt, this is the answer — and doubt is the ordinary state now the
   button is public. Do the research and the plan doc properly, and stop before implementing.
 
+## Into the Overseer's queue
+
+Greg, 2026-09-10:
+
+> bug reports get a higher priority than suggestions; bug reports from admins get a priority; use
+> your judgment a bit on how to prioritise them; it's ok to batch together or break the feedback
+> suggestions down as you see fit when adding them to the queue
+
+So from 2026-09-10 the sweep's first output is queue entries, not sessions: every report it reads
+goes into the Overseer's queue ([overseer-queue.md](overseer-queue.md);
+`npx tsx scripts/overseer-queue.ts add --by overseer --priority <0..1> --source <Sentry short id>
+--text …`), and the dispatch below happens **from the queue, in priority order**. Priority is a
+judgment, but the order of the bands is not: an admin's bug report sits above a reader's bug report,
+which sits above an admin's suggestion, which sits above a reader's suggestion; within a band, what
+it costs the reader who hit it. Two reports that are one bug are one entry; one report that asks for
+three things may be three. This doc is Greg's standing authorisation for that work, so the sweep
+runs `authorize --by greg` on each entry with this doc as the source — the four endings in § Who
+sent it still belong to the agent, and "write it up and wait" is still the ending a reader's
+suggestion usually gets. `done` when the report reaches one of its three endings.
+
 ## The run
 
 It is [engineering-manager.md](../reusable/engineering-manager.md), with the reports as the input:
