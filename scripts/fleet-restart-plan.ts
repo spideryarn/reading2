@@ -409,13 +409,34 @@ export type QueuedSummary = { id: string; sessionId: string; enqueuedAt: number;
  * `wire.ts` says the commonest hold has no items behind it: one message queued,
  * the send came back `partial`, the item settled `uncertain` and left. So a
  * check that counted `items` would read "nothing queued" over a session that
- * nothing may be sent to — and a restart erases the hold, silently re-opening
+ * nothing may be sent to — and a restart that lost the hold would silently re-open
  * delivery to a pane somebody deliberately stopped sending to. Found by GPT
  * Sol, 2026-09-09.
  */
 export type HoldSummary = { id: string; sessionId: string; why: string };
 
-export type QueueRead = { ok: true; items: QueuedSummary[]; holds: HoldSummary[] } | { ok: false; why: string };
+/**
+ * `durable` is true only when every queue on the wire said `volatile: false` —
+ * the dashboard's own word that it writes queued items down and restores them
+ * after a restart (plan 260910d, Stage 1). A missing or non-boolean field, which
+ * is what every build before that sends, reads as memory-only: the direction
+ * this check is wrong in on purpose.
+ */
+export type QueueRead =
+  | {
+      ok: true;
+      items: QueuedSummary[];
+      holds: HoldSummary[];
+      durable: boolean;
+      /**
+       * True only when the catalogue said `holdsDurable: true` — the dashboard's
+       * word that its hold ledger is writing, so a steering hold is rehydrated
+       * after a restart (260908j Stage 4b). Anything else reads as "a restart may
+       * lose it", which is what every build before 260910d sends.
+       */
+      holdsDurable: boolean;
+    }
+  | { ok: false; why: string };
 
 /**
  * What is in the steering queue, read defensively.
@@ -438,10 +459,14 @@ export function summariseQueues(body: unknown): QueueRead {
 
   const items: QueuedSummary[] = [];
   const holds: HoldSummary[] = [];
+  // Every queue must say so, literally `false`; one queue that does not makes
+  // the whole read memory-only. See `QueueRead`.
+  let everyQueueDurable = queues.length > 0;
   for (const queue of queues) {
-    const q = queue as { items?: unknown; quarantine?: unknown; sessionId?: unknown };
+    const q = queue as { items?: unknown; quarantine?: unknown; sessionId?: unknown; volatile?: unknown };
+    if (q?.volatile !== false) everyQueueDurable = false;
     if (!Array.isArray(q?.items)) return { ok: false, why: "a queue in GET /api/actions has no `items` array — cannot say what would be discarded" };
-    if (!("quarantine" in (q ?? {}))) return { ok: false, why: "a queue in GET /api/actions has no `quarantine` field — this build cannot see steering holds, and a restart erases them" };
+    if (!("quarantine" in (q ?? {}))) return { ok: false, why: "a queue in GET /api/actions has no `quarantine` field — this build cannot see steering holds, so it cannot say whether a restart would keep them" };
     for (const item of q.items) items.push(summariseItem(item));
     const hold = q.quarantine;
     // OBJECT OR NULL, and nothing else counts as "no hold". `quarantine: false`
@@ -449,11 +474,17 @@ export function summariseQueues(body: unknown): QueueRead {
     // an absence — the exact substitution this parser exists to refuse. GPT
     // Sol, 2026-09-09.
     if (hold !== null && (typeof hold !== "object" || Array.isArray(hold))) {
-      return { ok: false, why: `a queue's \`quarantine\` is ${JSON.stringify(hold)}, which is neither a hold nor null — this cannot say whether a steering hold would be erased` };
+      return { ok: false, why: `a queue's \`quarantine\` is ${JSON.stringify(hold)}, which is neither a hold nor null — this cannot say whether a steering hold would survive a restart` };
     }
     if (hold !== null) holds.push(summariseHold(hold, q.sessionId));
   }
-  return { ok: true, items, holds };
+  return {
+    ok: true,
+    items,
+    holds,
+    durable: everyQueueDurable,
+    holdsDurable: (body as { holdsDurable?: unknown }).holdsDurable === true,
+  };
 }
 
 function summariseItem(item: unknown): QueuedSummary {
@@ -517,10 +548,29 @@ export function judgeQueue(serviceUp: boolean, read: QueueRead, discard: boolean
   // Sol, 2026-09-09.
   if (!read.ok) return { name, verdict: "unknown", detail: `${read.why}. A restart discards the queue and records nothing, and --discard-queue deliberately does not cover a queue nobody has read.` };
 
+  // A DURABLE QUEUE'S ITEMS ARE NOT DISCARDED: the dashboard restores them at
+  // startup. Only a memory-only queue's items count against the restart, and
+  // holds count either way (unchanged here).
+  const discardedItems = read.durable ? 0 : read.items.length;
+  // AND THE SAME FOR HOLDS: the hold ledger rehydrates them at startup when the
+  // dashboard says it is writing.
+  const lostHolds = read.holdsDurable ? 0 : read.holds.length;
   const parts: string[] = [];
-  if (read.items.length > 0) parts.push(`${read.items.length} ${read.items.length === 1 ? "item" : "items"}`);
-  if (read.holds.length > 0) parts.push(`${read.holds.length} steering ${read.holds.length === 1 ? "hold" : "holds"}`);
-  if (parts.length === 0) return { name, verdict: "pass", detail: "empty, and no steering holds — nothing would be discarded" };
+  if (discardedItems > 0) parts.push(`${discardedItems} ${discardedItems === 1 ? "item" : "items"}`);
+  if (lostHolds > 0) parts.push(`${lostHolds} steering ${lostHolds === 1 ? "hold" : "holds"}`);
+  if (parts.length === 0) {
+    const kept: string[] = [];
+    if (read.items.length > 0) kept.push(`${read.items.length} queued ${read.items.length === 1 ? "item" : "items"}`);
+    if (read.holds.length > 0) kept.push(`${read.holds.length} steering ${read.holds.length === 1 ? "hold" : "holds"}`);
+    if (kept.length > 0) {
+      return {
+        name,
+        verdict: "pass",
+        detail: `${kept.join(" and ")} — the dashboard writes these down, so they are kept across a restart and restored`,
+      };
+    }
+    return { name, verdict: "pass", detail: "empty, and no steering holds — nothing would be discarded" };
+  }
 
   const what = parts.join(" and ");
   if (discard) return { name, verdict: "overridden", detail: `${what} will be DISCARDED and not recorded anywhere (listed above)` };
@@ -793,7 +843,13 @@ export function renderQueueItems(read: QueueRead, now: number): string[] {
     }
   }
   if (read.holds.length > 0) {
-    lines.push(`  ${read.holds.length} steering hold(s), which a restart erases:`);
+    lines.push(
+      `  ${read.holds.length} steering hold(s), ${
+        read.holdsDurable
+          ? "which the hold ledger keeps across a restart"
+          : "which a restart may lose — this dashboard did not say its hold ledger is writing"
+      }:`,
+    );
     for (const hold of read.holds) lines.push(`    ${hold.sessionId} ${hold.id}  ${hold.why}`);
   }
   return lines;

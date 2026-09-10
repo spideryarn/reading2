@@ -15,7 +15,7 @@
  * The one thing it cannot restart is the OS process. `mkdtemp` plus a full
  * teardown is the closest an in-process test gets, and the gap it leaves —
  * module-level state surviving where a real restart would clear it — is closed
- * by `resetSharedQuarantineForTests()` in the composition test at the bottom,
+ * by `resetFleetActionStoresForTests()` in the composition test at the bottom,
  * which drives the very function `server.ts` calls.
  *
  * **NOTHING HERE SENDS A KEYSTROKE.** Every transport is injected and every
@@ -35,13 +35,17 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { LEDGER_FILE, openHoldLedger, type HoldLedger } from "../tools/fleet/hold-ledger.js";
 import {
+  openFleetActionStores,
+  resetFleetActionStoresForTests,
+  sharedReceiptJournal,
+} from "../tools/fleet/action-stores.js";
+import {
   QuarantineBook,
-  openSharedQuarantine,
-  resetSharedQuarantineForTests,
   sharedQuarantineBook,
 } from "../tools/fleet/quarantine.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
-import { makeActionRoutes } from "../tools/fleet/routes-actions.js";
+import { makeActionRoutes, realActionDeps } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
 import { makeSendCoordinator, sharedSendCoordinator, type SendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
@@ -79,7 +83,7 @@ function tempRoot(): string {
 }
 
 /**
- * One whole composition, as `openSharedQuarantine` + `sharedSendCoordinator`
+ * One whole composition, as the action stores + `sharedSendCoordinator`
  * build one — a ledger, a book over it, and a coordinator over that.
  *
  * **THE TRANSPORT IS A COUNTER, AND IT IS THE ASSERTION THAT MATTERS.** A route
@@ -123,7 +127,7 @@ const PURPOSE = {
 afterEach(() => {
   while (ledgers.length > 0) ledgers.pop()?.close();
   while (roots.length > 0) rmSync(roots.pop() ?? "", { recursive: true, force: true });
-  resetSharedQuarantineForTests();
+  resetFleetActionStoresForTests();
 });
 
 describe("a hold survives the process that recorded it", () => {
@@ -368,16 +372,16 @@ describe("the composition the server actually runs", () => {
    *
    * `health-wiring.ts`'s lesson: a test that assembles its own composition
    * proves the parts work and stays green if the server mounts a different one.
-   * So this calls `openSharedQuarantine` itself, and the source guard below is
+   * So this calls `openFleetActionStores` itself, and the source guard below is
    * what says the server calls it, and calls it early enough.
    */
-  it("rehydrates through openSharedQuarantine, before anything can be asked to type", () => {
+  it("rehydrates through openFleetActionStores, before anything can be asked to type", () => {
     const dir = tempRoot();
     const seed = boot(dir, "1a2b3c4d", () => PARTIAL);
     seed.send.message(TARGET, "x".repeat(42), IDLE, PURPOSE);
     seed.down();
 
-    const started = openSharedQuarantine({ dir, log: () => {} });
+    const started = openFleetActionStores({ dir, log: () => {} });
     expect(started.rehydrated.holds).toBe(1);
     expect(started.book).toBe(sharedQuarantineBook());
     expect(sharedQuarantineBook().holding(SESSION)).not.toBeNull();
@@ -388,6 +392,8 @@ describe("the composition the server actually runs", () => {
        thing that can be joined to the wrong book, so it gets the same question.
        Nothing is sent: the coordinator is only asked which book it holds. */
     expect(sharedSendCoordinator().book()).toBe(started.book);
+    expect(realActionDeps().queue.receiptJournal()).toBe(started.receipts);
+    expect(sharedReceiptJournal()).toBe(started.receipts);
     // The operator is TOLD. A dashboard that came back holding a session and
     // said nothing is the same silence this stage is about.
     expect(started.lines.error.join(" ")).toContain("came back HELD");
@@ -396,23 +402,28 @@ describe("the composition the server actually runs", () => {
   it("refuses to start durably if the book was handed out first — the one case it throws in", () => {
     const dir = tempRoot();
     sharedQuarantineBook();
-    expect(() => openSharedQuarantine({ dir, log: () => {} })).toThrow(/before its ledger was opened/);
+    expect(() => openFleetActionStores({ dir, log: () => {} })).toThrow(/before its ledger was opened/);
   });
 
-  it("server.ts opens the quarantine above the listener, not below it", () => {
+  it("server.ts opens both action stores above the listener, not below it", () => {
     /* A SOURCE CHECK, because server.ts cannot be imported by a test without
        binding port 8787 — tests/fleet-health-wiring.test.ts makes the same move
        for the same reason. What it protects is an ORDER: a call that drifted
        below `createServer` would leave a window in which this process can be
        asked to type while it is still reading. */
     const source = readFileSync(fileURLToPath(new URL("../tools/fleet/server.ts", import.meta.url)), "utf8");
-    const call = source.indexOf("openSharedQuarantine(");
+    const call = source.indexOf("openFleetActionStores(");
     const listener = source.indexOf("createServer(handler)");
     expect(call).toBeGreaterThan(-1);
     expect(listener).toBeGreaterThan(-1);
     expect(call).toBeLessThan(listener);
     // And the lines it produces are printed rather than collected and dropped.
-    expect(source).toMatch(/quarantine\.lines\.error/);
+    expect(source.match(/openFleetActionStores\(/g)).toHaveLength(1);
+    expect(source).toMatch(/actionStores\.lines\.log/);
+    expect(source).toMatch(/actionStores\.lines\.error/);
+    expect(source).not.toContain("openSharedQuarantine(");
+    expect(source).not.toContain("openHoldLedger(");
+    expect(source).not.toContain("openReceiptJournal(");
   });
 });
 
@@ -472,7 +483,7 @@ async function releaseThrough(
 /** The action routes over a book that has just come back from the ledger. */
 function routesOver(book: QuarantineBook, send: SendCoordinator): ReturnType<typeof makeActionRoutes> {
   return makeActionRoutes({
-    queue: new SteeringQueue({ now: () => Date.now(), serverInstanceId: book.serverInstanceId, quarantine: book }),
+    queue: new SteeringQueue({ now: () => Date.now(), serverInstanceId: book.serverInstanceId, quarantine: book, receipts: memoryReceiptJournal({ now: () => Date.now(), serverInstanceId: book.serverInstanceId }) }),
     send,
     now: () => Date.now(),
     limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),

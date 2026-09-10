@@ -36,12 +36,11 @@
  * whole machine drivable from a test with a fake clock and no waiting, and it
  * is also what keeps the delivery decision in steer.ts where it belongs.
  *
- * NOTHING SURVIVES A RESTART, AND IT SAYS SO. Every snapshot carries
- * `volatile: true` and `PERSISTENCE_WARNING`, and a page that renders the queue
- * without showing that is a bug: the alternative is a queue that quietly loses
- * items when the dashboard is restarted, and quiet loss is exactly the failure
- * docs/reusable/silent-success.md is about. Persistence belongs to the
- * Overseer's store, which is somebody else's stage.
+ * DURABILITY IS A PROPERTY OF THE INJECTED RECEIPT JOURNAL, AND THE SNAPSHOT
+ * SAYS WHICH ONE IT HAS. A durable journal restores pinned work after a
+ * dashboard restart; the memory journal remains deliberately fail-open and
+ * carries `PERSISTENCE_WARNING`. A page that hides either warning is a bug:
+ * quiet loss is exactly the failure docs/reusable/silent-success.md is about.
  *
  * THERE IS NO AUTOMATIC RETRY, ANYWHERE. A lease that is never settled becomes
  * `stuck` and waits for a person; it does not go back to the head of the queue.
@@ -66,6 +65,7 @@
 import { actionById, renderMessage, type Speaker } from "./actions.js";
 import { INSTANCE_TOKEN } from "./instance.js";
 import type { HoldEvidence, QuarantineBook, QuarantineHoldView } from "./quarantine.js";
+import type { ReceiptActor, ReceiptJournal, ReceiptOrigin } from "./receipt-journal.js";
 import type { FleetStatus } from "./status.js";
 import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
 /* A queued item is on the wire verbatim (`{...i, stale, stuck}` in
@@ -117,6 +117,9 @@ export const DEFAULT_LIMITS: QueueLimits = {
 
 export const PERSISTENCE_WARNING =
   "Queued items live in the fleet server's memory. Restarting it discards every one of them; nothing here is written to disk.";
+
+export const DURABLE_PERSISTENCE_WARNING =
+  "Queued items are written down and survive a restart of the dashboard, unless the tmux server changes or they go stale.";
 
 /* ------------------------------------------------------------------ *
  * When may this queue drain?
@@ -258,10 +261,12 @@ export type EnqueueRefusalRule =
   | "session-queue-full"
   | "fleet-queue-full"
   /** The same thing, pressed again within the double-tap window. */
-  | "double-tap";
+  | "double-tap"
+  /** The journal's non-terminal admission cap was reached. */
+  | "receipt-capacity";
 
 export type EnqueueResult =
-  | { ok: true; item: QueuedItem; position: number }
+  | { ok: true; item: QueuedItem; position: number; durable: boolean }
   | { ok: false; rule: EnqueueRefusalRule; why: string };
 
 export type NextResult =
@@ -368,7 +373,16 @@ export function nothingWasSent(failure: SteerFailure): UnsentFailure | null {
 
 export type ReleaseResult = { ok: true; item: QueuedItem } | { ok: false; why: string };
 
-export type CancelResult = { ok: true; item: QueuedItem } | { ok: false; why: string };
+export type ReceiptMutationRefusal = { ok: false; rule: "receipt-unavailable"; why: string };
+export type CancelResult =
+  | { ok: true; item: QueuedItem }
+  | ReceiptMutationRefusal
+  | { ok: false; rule: "no-such-item" | "in-flight"; why: string };
+export type ClearResult =
+  | { ok: true; removed: QueuedItem[]; keptInFlight: QueuedItem | null }
+  | ReceiptMutationRefusal;
+export type BeginDeliveryResult = { ok: true } | ReceiptMutationRefusal | { ok: false; rule: "not-leased"; why: string };
+export type NoteThrewResult = { ok: true } | { ok: false; why: string };
 
 /**
  * Everything a page needs to render one queue — including the fact that it is
@@ -377,10 +391,10 @@ export type CancelResult = { ok: true; item: QueuedItem } | { ok: false; why: st
 export type QueueSnapshot = {
   sessionId: string;
   items: readonly QueuedItem[];
-  /** Always true today. Present so the day it is false, callers notice. */
-  volatile: true;
+  /** Whether accepted queue state is currently memory-only. */
+  volatile: boolean;
   warning: string;
-  /** When this queue's server process started. Items cannot predate it. */
+  /** When this queue's server process started; restored items may predate it. */
   since: number;
   /**
    * The hold stopping this session from being drained, or null.
@@ -443,6 +457,13 @@ export type QueueOptions = {
    * instead.
    */
   quarantine: QuarantineBook;
+  /**
+   * The journal which owns the durable identity and material for every item.
+   *
+   * Required for `quarantine`'s reason above: a private or implicit journal
+   * would let the queue acknowledge work which startup never opens again.
+   */
+  receipts: ReceiptJournal;
   limits?: Partial<QueueLimits>;
 };
 
@@ -470,6 +491,18 @@ export type IdOrigin = "this-instance" | "other-instance" | "not-instance-qualif
  */
 const ID_SEPARATOR = "-";
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Unsafe integer suffixes stay reserved but never poison the mint sequence. */
+function currentRunItemSuffix(itemId: string, runId: string): number | null {
+  const match = new RegExp(`^${escapeRegExp(runId)}-q([0-9]+)$`).exec(itemId);
+  if (match?.[1] === undefined) return null;
+  const suffix = Number(match[1]);
+  return Number.isSafeInteger(suffix) && suffix >= 0 && suffix < Number.MAX_SAFE_INTEGER ? suffix : null;
+}
+
 /**
  * One `SteeringQueue` per fleet server, holding one ordered list per session.
  *
@@ -494,7 +527,14 @@ export class SteeringQueue {
    * write to it and only one of them is anywhere near a queue.
    */
   private readonly quarantine: QuarantineBook;
+  private readonly receipts: ReceiptJournal;
   private readonly bySession = new Map<string, QueuedItem[]>();
+  /** Durable identity stays private; `QueuedItem` remains the established wire shape. */
+  private readonly receiptByItem = new Map<string, string>();
+  /** Only these items receive the first-observation restart generation guard. */
+  private readonly restoredGeneration = new Map<string, number | null>();
+  /** Every retained id, including terminal receipts, is unavailable for minting. */
+  private readonly reservedItemIds: Set<string>;
   private seq = 0;
   private readonly startedAt: number;
   /**
@@ -507,8 +547,14 @@ export class SteeringQueue {
     this.now = options.now;
     this.serverInstanceId = options.serverInstanceId;
     this.quarantine = options.quarantine;
+    this.receipts = options.receipts;
     this.limits = { ...DEFAULT_LIMITS, ...options.limits };
     this.startedAt = options.now();
+    this.reservedItemIds = new Set(options.receipts.reservedQueueItemIds());
+    for (const itemId of this.reservedItemIds) {
+      const suffix = currentRunItemSuffix(itemId, this.serverInstanceId);
+      if (suffix !== null) this.seq = Math.max(this.seq, suffix);
+    }
   }
 
   /** The book this queue consults, for whoever has to draw or release a hold. */
@@ -516,14 +562,20 @@ export class SteeringQueue {
     return this.quarantine;
   }
 
+  /** The journal this queue owns, for the receipt read route and composition checks. */
+  receiptJournal(): ReceiptJournal {
+    return this.receipts;
+  }
+
   /* ---------------- reading ---------------- */
 
   snapshot(sessionId: string): QueueSnapshot {
+    const volatile = !this.receipts.durable();
     return {
       sessionId,
       items: [...(this.bySession.get(sessionId) ?? [])],
-      volatile: true,
-      warning: PERSISTENCE_WARNING,
+      volatile,
+      warning: volatile ? PERSISTENCE_WARNING : DURABLE_PERSISTENCE_WARNING,
       since: this.startedAt,
       quarantine: this.quarantine.holding(sessionId),
     };
@@ -634,6 +686,57 @@ export class SteeringQueue {
 
   /* ---------------- writing ---------------- */
 
+  /** Rebuild every sendable receipt once, under the id it originally owned. */
+  restore(): number {
+    let restored = 0;
+    for (const saved of this.receipts.restorable()) {
+      if ([...this.receiptByItem.values()].includes(saved.receiptId)) continue;
+      if (this.findItem(saved.queue.itemId) !== null) continue;
+      const claudeSessionId = saved.target.claudeSessionId;
+      if (claudeSessionId === null) {
+        this.receipts.outcome(saved.receiptId, {
+          state: "not-sent",
+          reason: "lost-at-restart",
+          code: null,
+          why: "the restored queued receipt did not name a Claude conversation",
+        });
+        continue;
+      }
+      const payload: QueuedPayload =
+        saved.material.kind === "message"
+          ? { kind: "message", text: saved.material.text }
+          : { kind: "action", action: saved.material.action };
+      const item: QueuedItem = {
+        id: saved.queue.itemId,
+        sessionId: saved.target.sessionId,
+        claudeSessionId,
+        payload,
+        speaker: saved.material.speaker,
+        enqueuedAt: saved.queue.enqueuedAt,
+        leasedAt: null,
+        invalidated: null,
+      };
+      const items = this.bySession.get(item.sessionId) ?? [];
+      items.push(item);
+      items.sort((a, b) => a.enqueuedAt - b.enqueuedAt || a.id.localeCompare(b.id));
+      this.bySession.set(item.sessionId, items);
+      this.reservedItemIds.add(item.id);
+      this.receiptByItem.set(item.id, saved.receiptId);
+      this.restoredGeneration.set(item.id, saved.tmuxGeneration);
+      restored += 1;
+    }
+    return restored;
+  }
+
+  /** Exact live-item lookup; restored foreign-run ids remain valid gestures. */
+  findItem(itemId: string): QueuedItem | null {
+    for (const items of this.bySession.values()) {
+      const item = items.find((candidate) => candidate.id === itemId);
+      if (item !== undefined) return item;
+    }
+    return null;
+  }
+
   /**
    * Put an action at the back of a session's queue.
    *
@@ -641,7 +744,12 @@ export class SteeringQueue {
    * body from a browser lands: `actionById` is the only way in, so a caller
    * cannot invent an action with different words in it.
    */
-  enqueueAction(target: { sessionId: string; claudeSessionId: string }, actionId: string, speaker: Speaker): EnqueueResult {
+  enqueueAction(
+    target: { sessionId: string; claudeSessionId: string },
+    actionId: string,
+    speaker: Speaker,
+    origin: ReceiptOrigin = "enqueue",
+  ): EnqueueResult {
     const action = actionById(actionId);
     if (!action) return { ok: false, rule: "no-such-action", why: `there is no action called '${actionId}'` };
     if (action.scope !== "session") {
@@ -681,7 +789,7 @@ export class SteeringQueue {
         why: `'${action.id}' runs commands on the box rather than typing a sentence, and nothing delivers a queued one — dry-run it to see what it would do, then run it with a confirm`,
       };
     }
-    return this.push(target, { kind: "action", action }, speaker);
+    return this.push(target, { kind: "action", action }, speaker, origin);
   }
 
   /**
@@ -701,7 +809,12 @@ export class SteeringQueue {
    * accepted, queued, promised, and refused twenty minutes later for a length
    * nobody could see.
    */
-  enqueueMessage(target: { sessionId: string; claudeSessionId: string }, text: string, speaker: Speaker): EnqueueResult {
+  enqueueMessage(
+    target: { sessionId: string; claudeSessionId: string },
+    text: string,
+    speaker: Speaker,
+    origin: ReceiptOrigin = "enqueue",
+  ): EnqueueResult {
     const bad = checkText(text);
     if (bad) return { ok: false, rule: "bad-text", why: bad.why };
     // THE SAME FUNCTION THE DELIVERY WILL CALL, asked here so that a message
@@ -719,10 +832,15 @@ export class SteeringQueue {
         why: `${afterPrefix.why} — the line saying who is speaking is added when it goes out, and counts towards that`,
       };
     }
-    return this.push(target, { kind: "message", text }, speaker);
+    return this.push(target, { kind: "message", text }, speaker, origin);
   }
 
-  private push(target: { sessionId: string; claudeSessionId: string }, payload: QueuedPayload, speaker: Speaker): EnqueueResult {
+  private push(
+    target: { sessionId: string; claudeSessionId: string },
+    payload: QueuedPayload,
+    speaker: Speaker,
+    origin: ReceiptOrigin,
+  ): EnqueueResult {
     if (!SESSION_HANDLE.test(target.sessionId)) {
       return { ok: false, rule: "bad-target", why: `'${target.sessionId}' is not a tmux session handle` };
     }
@@ -759,9 +877,15 @@ export class SteeringQueue {
     // a phone actually meets. So the run is part of the id, `idOrigin` reads it
     // back, and the four routes that accept an id from a client refuse a
     // foreign one by name rather than reporting it as absent.
-    this.seq += 1;
+    let itemId: string;
+    do {
+      if (this.seq >= Number.MAX_SAFE_INTEGER) this.seq = 0;
+      this.seq += 1;
+      itemId = `${this.serverInstanceId}${ID_SEPARATOR}q${this.seq}`;
+    } while (this.reservedItemIds.has(itemId));
+    this.reservedItemIds.add(itemId);
     const item: QueuedItem = {
-      id: `${this.serverInstanceId}${ID_SEPARATOR}q${this.seq}`,
+      id: itemId,
       sessionId: target.sessionId,
       claudeSessionId: target.claudeSessionId,
       payload,
@@ -770,9 +894,33 @@ export class SteeringQueue {
       leasedAt: null,
       invalidated: null,
     };
+    const accepted = this.receipts.accept({
+      requestId: null,
+      fingerprint: null,
+      op: payload.kind === "message" ? "queued-message" : "queued-action",
+      origin,
+      actor: { kind: "client-claimed", id: speaker },
+      speaker,
+      target: {
+        sessionId: target.sessionId,
+        paneId: null,
+        claudeSessionId: target.claudeSessionId,
+        tmuxGeneration: this.generation ?? this.receipts.lastGeneration(),
+      },
+      queue: { itemId, enqueuedAt: at },
+      what: payload.kind === "message" ? `message (${payload.text.length} characters)` : `action ${payload.action.id}`,
+      material:
+        payload.kind === "message"
+          ? { kind: "message", text: payload.text, speaker }
+          : { kind: "action", action: payload.action, speaker },
+    });
+    if (!accepted.ok) {
+      return { ok: false, rule: "receipt-capacity", why: accepted.why };
+    }
+    this.receiptByItem.set(itemId, accepted.receiptId);
     items.push(item);
     this.bySession.set(target.sessionId, items);
-    return { ok: true, item, position: items.length };
+    return { ok: true, item, position: items.length, durable: accepted.durable };
   }
 
   /**
@@ -783,26 +931,66 @@ export class SteeringQueue {
    * removing the row would tell somebody it did not happen. They get a refusal
    * saying it is being delivered.
    */
-  cancel(sessionId: string, itemId: string): CancelResult {
+  cancel(
+    sessionId: string,
+    itemId: string,
+    actor: ReceiptActor = { kind: "unattributed-http", id: null },
+  ): CancelResult {
     const items = this.bySession.get(sessionId);
     const at = items?.findIndex((i) => i.id === itemId) ?? -1;
-    if (!items || at < 0) return { ok: false, why: `no queued item ${itemId} for ${sessionId}` };
+    if (!items || at < 0) return { ok: false, rule: "no-such-item", why: `no queued item ${itemId} for ${sessionId}` };
     const item = items[at];
-    if (!item) return { ok: false, why: `no queued item ${itemId} for ${sessionId}` };
+    if (!item) return { ok: false, rule: "no-such-item", why: `no queued item ${itemId} for ${sessionId}` };
     if (item.leasedAt !== null) {
-      return { ok: false, why: `${itemId} is being delivered right now and cannot be taken back` };
+      return { ok: false, rule: "in-flight", why: `${itemId} is being delivered right now and cannot be taken back` };
+    }
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined || !this.receipts.withdrawn([receiptId], "cancelled", actor)) {
+      return {
+        ok: false,
+        rule: "receipt-unavailable",
+        why: `${itemId} could not be cancelled because its durable withdrawal could not be written; it is still queued`,
+      };
     }
     items.splice(at, 1);
+    this.receiptByItem.delete(itemId);
+    this.restoredGeneration.delete(itemId);
     return { ok: true, item };
   }
 
   /** Drop everything waiting. A leased item survives, for the reason above. */
-  clear(sessionId: string): { removed: QueuedItem[]; keptInFlight: QueuedItem | null } {
+  clear(
+    sessionId: string,
+    actor: ReceiptActor = { kind: "unattributed-http", id: null },
+  ): ClearResult {
     const items = this.bySession.get(sessionId) ?? [];
     const kept = items.filter((i) => i.leasedAt !== null);
     const removed = items.filter((i) => i.leasedAt === null);
+    const receiptIds: string[] = [];
+    for (const item of removed) {
+      const receiptId = this.receiptByItem.get(item.id);
+      if (receiptId === undefined) {
+        return {
+          ok: false,
+          rule: "receipt-unavailable",
+          why: `${item.id} could not be cleared because its receipt is unavailable; the queue is unchanged`,
+        };
+      }
+      receiptIds.push(receiptId);
+    }
+    if (receiptIds.length > 0 && !this.receipts.withdrawn(receiptIds, "cleared", actor)) {
+      return {
+        ok: false,
+        rule: "receipt-unavailable",
+        why: `the queue for ${sessionId} could not be cleared because its durable withdrawal could not be written; it is unchanged`,
+      };
+    }
     this.bySession.set(sessionId, kept);
-    return { removed, keptInFlight: kept[0] ?? null };
+    for (const item of removed) {
+      this.receiptByItem.delete(item.id);
+      this.restoredGeneration.delete(item.id);
+    }
+    return { ok: true, removed, keptInFlight: kept[0] ?? null };
   }
 
   /**
@@ -814,8 +1002,8 @@ export class SteeringQueue {
    */
   revive(sessionId: string, itemId: string): CancelResult {
     const item = (this.bySession.get(sessionId) ?? []).find((i) => i.id === itemId);
-    if (!item) return { ok: false, why: `no queued item ${itemId} for ${sessionId}` };
-    if (item.leasedAt !== null) return { ok: false, why: `${itemId} is being delivered right now` };
+    if (!item) return { ok: false, rule: "no-such-item", why: `no queued item ${itemId} for ${sessionId}` };
+    if (item.leasedAt !== null) return { ok: false, rule: "in-flight", why: `${itemId} is being delivered right now` };
     item.enqueuedAt = this.now();
     return { ok: true, item };
   }
@@ -924,13 +1112,41 @@ export class SteeringQueue {
     return { kind: "ready", item: head };
   }
 
+  /** Persist the attempt boundary after leasing and before any transport call. */
+  beginDelivery(sessionId: string, itemId: string): BeginDeliveryResult {
+    const item = (this.bySession.get(sessionId) ?? []).find((candidate) => candidate.id === itemId);
+    if (item === undefined || item.leasedAt === null) {
+      return { ok: false, rule: "not-leased", why: `${itemId} is not leased for delivery in ${sessionId}` };
+    }
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined) {
+      item.leasedAt = null;
+      return { ok: false, rule: "receipt-unavailable", why: `${itemId} has no receipt, so no delivery was attempted` };
+    }
+    const attempted = this.receipts.attempted(receiptId);
+    if (!attempted.landed) {
+      item.leasedAt = null;
+      return {
+        ok: false,
+        rule: "receipt-unavailable",
+        why: `${itemId} is durably accepted but its attempted record could not be written, so nothing was sent`,
+      };
+    }
+    return { ok: true };
+  }
+
   /**
    * Say what happened to the leased item. It leaves the queue either way.
    *
    * There is no outcome that puts it back. See the module header: a retry
    * cannot know whether the first attempt's keys arrived.
    */
-  settle(sessionId: string, itemId: string, outcome: SettleOutcome): SettleResult {
+  settle(
+    sessionId: string,
+    itemId: string,
+    outcome: SettleOutcome,
+    actor: ReceiptActor = { kind: "unattributed-http", id: null },
+  ): SettleResult {
     const items = this.bySession.get(sessionId);
     const at = items?.findIndex((i) => i.id === itemId) ?? -1;
     if (!items || at < 0) return { ok: false, why: `no item ${itemId} for ${sessionId}` };
@@ -939,7 +1155,37 @@ export class SteeringQueue {
     if (item.leasedAt === null) {
       return { ok: false, why: `${itemId} was never handed out, so there is nothing to settle` };
     }
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined) return { ok: false, why: `${itemId} has no receipt, so it cannot be settled honestly` };
+    if (outcome === "delivered") {
+      this.receipts.outcome(receiptId, {
+        state: "keys-submitted",
+        reason: "transport-ok",
+        code: null,
+        why: "the transport submitted every key",
+      });
+    } else if (outcome === "refused") {
+      this.receipts.outcome(receiptId, {
+        state: "not-sent",
+        reason: "undeliverable",
+        code: null,
+        why: "the queued material could not be rendered into a sendable line",
+      });
+    } else if (outcome === "abandoned") {
+      const state = this.receipts.get(receiptId);
+      if (state !== null && state.last.kind !== "outcome" && state.last.kind !== "reconciled") {
+        this.receipts.outcome(receiptId, {
+          state: "outcome-unknown",
+          reason: "lease-abandoned",
+          code: null,
+          why: "a person abandoned a delivery lease whose outcome could not be established",
+        });
+      }
+      this.receipts.reconcile(receiptId, "lease-abandoned", actor);
+    }
     items.splice(at, 1);
+    this.receiptByItem.delete(itemId);
+    this.restoredGeneration.delete(itemId);
     return { ok: true, item, outcome };
   }
 
@@ -967,10 +1213,37 @@ export class SteeringQueue {
     itemId: string,
     evidence: Omit<HoldEvidence, "sessionId">,
   ): { ok: true; item: QueuedItem; outcome: SettleOutcome; hold: QuarantineHoldView } | { ok: false; why: string } {
+    const item = (this.bySession.get(sessionId) ?? []).find((candidate) => candidate.id === itemId);
+    if (item === undefined || item.leasedAt === null) {
+      return { ok: false, why: `${itemId} is not leased for delivery in ${sessionId}` };
+    }
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined) return { ok: false, why: `${itemId} has no receipt, so it cannot be quarantined honestly` };
+    this.receipts.outcome(receiptId, {
+      state: "outcome-unknown",
+      reason: evidence.reading,
+      code: null,
+      why: `the queued delivery ended with the transport reading '${evidence.reading}'`,
+    });
     const settled = this.settle(sessionId, itemId, "uncertain");
     if (!settled.ok) return { ok: false, why: settled.why };
     const hold = this.quarantine.hold({ ...evidence, sessionId });
     return { ok: true, item: settled.item, outcome: settled.outcome, hold };
+  }
+
+  /** Record an ambiguous throw without closing the lease which blocks retries. */
+  noteThrew(sessionId: string, itemId: string): NoteThrewResult {
+    const item = (this.bySession.get(sessionId) ?? []).find((candidate) => candidate.id === itemId);
+    if (item === undefined || item.leasedAt === null) return { ok: false, why: `${itemId} is not leased for delivery in ${sessionId}` };
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined) return { ok: false, why: `${itemId} has no receipt, so the throw cannot be recorded` };
+    this.receipts.outcome(receiptId, {
+      state: "outcome-unknown",
+      reason: "threw",
+      code: null,
+      why: "the delivery module threw and could not establish whether any keystroke was sent",
+    });
+    return { ok: true };
   }
 
   /**
@@ -1011,6 +1284,9 @@ export class SteeringQueue {
     if (evidence.delivery !== "none" || evidence.sent.length > 0) {
       return { ok: false, why: `${itemId} cannot be put back: the transport did not say that nothing was sent` };
     }
+    const receiptId = this.receiptByItem.get(itemId);
+    if (receiptId === undefined) return { ok: false, why: `${itemId} has no receipt, so it cannot be returned honestly` };
+    this.receipts.returned(receiptId, evidence.reason.code);
     item.leasedAt = null;
     // Back in front of every other DELIVERABLE item and behind the dead ones,
     // which is where `next()` found it: since that function skips invalidated
@@ -1022,6 +1298,34 @@ export class SteeringQueue {
     const firstDeliverable = items.findIndex((i) => i.invalidated === null);
     items.splice(firstDeliverable < 0 ? items.length : firstDeliverable, 0, item);
     return { ok: true, item };
+  }
+
+  /** Apply the one restart-only generation check, then forget that provenance. */
+  private concludeRestoredForGeneration(tmuxServerPid: number): number {
+    const generationUnproven = this.receipts.recovery().generationUnproven;
+    let concluded = 0;
+    for (const [itemId, recorded] of this.restoredGeneration) {
+      if (!generationUnproven && recorded !== null && recorded === tmuxServerPid) continue;
+      const item = this.findItem(itemId);
+      const receiptId = this.receiptByItem.get(itemId);
+      if (item === null || receiptId === undefined) continue;
+      const unproven = generationUnproven || recorded === null;
+      this.receipts.outcome(receiptId, {
+        state: "not-sent",
+        reason: unproven ? "tmux-generation-unproven" : "tmux-generation-changed",
+        code: null,
+        why: unproven
+          ? "the restored item had no trustworthy tmux generation, so its session handle could not be used"
+          : `the restored item belonged to tmux server ${recorded}, not ${tmuxServerPid}`,
+      });
+      const items = this.bySession.get(item.sessionId);
+      const at = items?.findIndex((candidate) => candidate.id === itemId) ?? -1;
+      if (items !== undefined && at >= 0) items.splice(at, 1);
+      this.receiptByItem.delete(itemId);
+      concluded += 1;
+    }
+    this.restoredGeneration.clear();
+    return concluded;
   }
 
   /**
@@ -1047,9 +1351,10 @@ export class SteeringQueue {
     // what the drain logs, and `quarantineBook().knownGeneration()` is there
     // for anybody who needs the other half.
     this.quarantine.noteGeneration(tmuxServerPid);
+    this.receipts.noteGeneration(tmuxServerPid);
     if (this.generation === null) {
       this.generation = tmuxServerPid;
-      return 0;
+      return this.concludeRestoredForGeneration(tmuxServerPid);
     }
     if (this.generation === tmuxServerPid) return 0;
     const was = this.generation;
