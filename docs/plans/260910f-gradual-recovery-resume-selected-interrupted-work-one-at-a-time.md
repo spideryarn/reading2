@@ -1,0 +1,463 @@
+# Gradual recovery: resume selected interrupted work, one at a time
+
+The roadmap stage is
+[260908f § Stage: Gradual recovery](260908f-overseer-and-fleet-improvement-roadmap.md#stage-gradual-recovery--resume-selected-valuable-work):
+its four checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
+Queue item `qi-pphwbz23`, session `gradual-recovery`, worktree `.claude/worktrees/recovery-resume`,
+dispatched by the Overseer on 2026-09-10. It consumes two things built today:
+
+- **[the recovery inventory](260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md)**
+  (on `dev` at `3dc65697`). After a reboot the Overseer tab lists interrupted sessions, with the
+  evidence for each: directory, transcript, classification, and whether resume is `supported`.
+  Nothing on it acts.
+- **the launch protocol** (plan `260910f-launch-protocol-…`, session `launch-protocol`, **not yet on
+  `dev`**). This is the one crash-safe way the daemon starts a session. It has an occurrence per
+  origin, attempts, an admission owner, and reconciliation after a crash.
+
+## What this is for, in plain words
+
+After a reboot, Greg opens the Overseer tab and sees, say, nine interrupted sessions. He wants to
+bring back the three that matter, **one at a time**, so the box is not flattened by nine Claude
+sessions starting at once. For each, he wants to see what it was doing and what we cannot be sure
+of before he taps. Tapping twice, or losing the page's answer and tapping again, must not start two
+copies. **Nothing resumes on its own.**
+
+```
+ Greg taps Resume ─▶ request file ─▶ daemon queue ─▶ gates ─▶ revalidate ─▶ launch protocol ─▶ tmux
+ (dashboard)        (pending/<id>)   (oldest first)  health   dir, transcript,  (one occurrence  claude
+                                                     usage    not already live   per candidate)   --resume
+                                                     pace     nothing changed
+                                      ◀──────────── the next one waits until this one is VERIFIED ───┘
+                                                    (the daemon's existing `resumed` disposition)
+```
+
+## Measured before designing
+
+- **The inventory already proves a resume happened.** Its `resumed` disposition is derived by the
+  daemon when a live, verified execution holds the candidate's verified conversation **under a new
+  run token** (`recovery.ts` `deriveDispositions`). That is exactly "metadata, pane and transcript
+  identity verified": the fleet read `CLAUDE_SESSION_ID` from tmux, the process's own
+  `--session-id`/`--resume` from `/proc`, and the pane. So the pace rule needs no new verifier. It
+  waits for that disposition.
+- **`gjd-remote new-claude` cannot resume today.** The job script always mints a new
+  `--session-id` (`scripts/gjd-remote.ts` ~2769). Resume needs a new mode on the session-creation
+  path, and that path is `launch-protocol`'s this week (see §6).
+- **`claude --resume` semantics** are being measured by a spike (same session id or a new one;
+  which directory it must run in; what a missing id does). The results go under "Spike" below,
+  before Stage 3 relies on them.
+- **The daemon holds both gate inputs.** Every accepted snapshot carries `health` (opaque JSON,
+  `tools/fleet/health.ts` `Verdict.level`: `ok | strained | critical | unknown`), and the daemon
+  keeps the latest `UsageReport` (`verdict.level`, `activeLimit.resetsAt`).
+- **The fleet side may not import the store's graph** (`tests/fleet-attention.test.ts`, "imports
+  only the Overseer modules that were argued for"). `recovery-inbox.ts` imports `diff.ts` and
+  `recovery.ts`, so the route cannot reuse it. The request format has to live in a leaf.
+
+## The design
+
+### 1. A resume request is a file named by its candidate
+
+The leaf is `tools/overseer/recovery-resume-request.ts`. It imports node builtins only, and both
+the fleet route and the CLI use it: one definition of the format, and one new argued-for entry in
+the fleet-attention allowlist. It works on `~/.overseer/recovery-resume/`:
+
+```
+recovery-resume/
+  pending/<candidateId>.json   written O_CREAT|O_EXCL: the FILE NAME is the request-layer idempotence key
+  done/<candidateId>.json      moved here by the daemon once the launch protocol has an answer
+  refused/<candidateId>-<ms>.json   moved here, with the reason, when revalidation or the protocol refuses
+```
+
+A request is `{ v: 1, candidateId, requestedAt, actor: "dashboard" | "cli", nonce, seen }`.
+`seen` is `{ checkedAt, conversationId, dir }`: what the person was looking at when they tapped.
+A second tap while the first is pending gets `EEXIST`, and the route answers 200 *already
+requested*, with the state. A tap after `done/` exists answers *already launched as `lo-…`*. It
+writes nothing, and even if it did, the launch protocol would answer `not-launchable` for the same
+occurrence. **Three layers stop a second copy: the file name, the occurrence id, and the pace
+gate.** A refused request frees the name, so Greg can tap again after fixing the cause.
+
+`scripts/overseer-recovery.ts` gains `resume <id>`, through the same leaf. It is the CLI twin of
+the button, and it is what the drill drives.
+
+### 2. The daemon's resume pass: one request per tick, gated, revalidated, launched
+
+`tools/overseer/recovery-resume.ts` holds a pure decision and a thin pass.
+
+```ts
+decideResume(input) →
+  | { kind: "defer";  why: string; until?: string }   // stays in pending/, the reason shown on the page
+  | { kind: "refuse"; why: string }                   // moved to refused/, the reason shown; a re-tap is allowed
+  | { kind: "launch"; spec: ResumeSpec }              // handed to the launch capability, same synchronous turn
+  | { kind: "settled"; occurrence: OccurrenceSummary } // the protocol already has it: moved to done/
+```
+
+The daemon calls `recoveryResumeTick()` beside the existing `recoveryTick()`. It looks at **the
+oldest pending request only** (`requestedAt`, then id). The checks run in this order, and the first
+that fails decides:
+
+1. **The capability**: the launch capability is not composed (before Stage 3), or the launch journal
+   is `history-lost` → `defer`. Pending requests are kept, not refused, so that nothing Greg asked
+   for is lost to a deploy order.
+2. **The occurrence already exists** in the launch fold for `recoveryOrigin(candidateId)`. Then
+   `settled` → `done/`. This is the lost-response and crash-after-launch path: the request is still
+   pending, but the launch happened.
+3. **Pace**, meaning one at a time. Another recovery occurrence is `launching`, `observed-running`
+   or `outcome-unknown`, and its candidate is not yet `resumed` → `defer` ("waiting for *X* to be
+   verified running"). There is no timeout that lets the next one through. An unverified launch
+   blocks until the daemon verifies it, or Greg dismisses the candidate or disposes the launch, and
+   the page says which. Also `defer` within `RESUME_SPACING_MS` (2 minutes) of the last
+   verification, so each session's startup load lands before the next starts.
+4–5. **Health and usage, through one shared gate.** `tools/overseer/launch-gate.ts` exports
+   `launchGate({ usage, health, nowMs, onUnknown }) → { kind: "clear"; notes } | { kind: "held";
+   why; until }`. It is a pure leaf: no I/O, no clock, types-only imports. It is agreed with
+   `scheduled-dispatch`, which imports it rather than writing a second one, and it is built in
+   Stage 1.
+   - **Positive evidence always holds**: usage `limited` holds until `activeLimit.resetsAt`; usage
+     `approaching` holds; health `critical` holds.
+   - `strained` is clear, with a note.
+   - **Unknown evidence goes to `onUnknown`.** That covers no usage pass yet, an unreadable report,
+     and `unknown` or unparseable health. **Recovery passes `"hold"`; the scheduler passes
+     `"clear"`.** For recovery this matches `routes-new.ts`'s rule for a hand-started session (Sol's
+     F12 there: `unknown` health is the symptom). Resuming everything onto an unknown quota is the
+     load spike the acceptance forbids. The scheduler's jobs run through `run-claude`, which records
+     a usage refusal in `exit.json` anyway.
+
+   See the question for Greg.
+6. **Revalidation at execution**, all against the current state, never the view the person saw:
+   - the record exists and is unresolved;
+   - `classifyRecord(record, currentInventory)` is `interrupted`, recomputed now rather than read
+     from the last view;
+   - the inventory is trusted;
+   - the harness is `claude-code` and there is a verified conversation;
+   - `seen.conversationId` and `seen.dir` still match. If not → `refuse` ("changed since you
+     looked");
+   - no live row holds the conversation. If one does → `refuse` "already resumed elsewhere"; the
+     existing derivation disposes it `resumed`;
+   - the directory exists;
+   - the transcript is found for the verified conversation. If not → `refuse` "the transcript is gone
+     since the preview".
+   The transcript search is async and bounded (the existing locator in `recovery-view.ts`). **The
+   last step is synchronous**: a `statSync` of the found transcript path and of the directory,
+   immediately before the launch call, with no `await` between them. So nothing can change between
+   "checked" and "launched" except what a single event-loop turn allows.
+7. `launch` → the launch capability, `LaunchProtocol["launchOccurrence"]`, from
+   `composeLaunchProtocol` (`launch-protocol`'s correction: no consumer sees `LaunchParts` or a
+   launcher). The request is `{ origin: recoveryOrigin(id), launcherKind: "tmux-resume",
+   resume: { conversationId, dir }, material: <the nudge>, admissionClass: "recovery-resume" }`.
+   The outcome maps onto the request:
+   - `invoked` and `not-launchable` → `done/`;
+   - `failed-before-launch`, `refused` and `conflict` → `refused/`, with the protocol's reason;
+   - `waiting` → stays pending, deferred with the owner's reason;
+   - `not-launched` → stays pending; reconciliation settles it, and the next tick sees case 2.
+
+**The nudge** (the material) is fixed text with two values in it. Greg sees it before he taps:
+*"This session was interrupted (the machine restarted at ‹time›). Re-read your plan and your last
+messages, check `git status` in your worktree, and carry on from where you stopped. If you cannot
+tell what you were doing, say so and stop."* It is the first thing typed. It grants nothing, and
+the agent's permissions are what its settings say.
+
+**Partial success across a list.** Greg taps three. The first launches and is verified. The second
+is refused, because its transcript is gone. Two minutes after the first verification, the third
+launches. Each request has its own state on the page, and one refusal never blocks the rest.
+
+### 3. The page is fed by a second projection, not a change to `recovery.json`
+
+The daemon writes `~/.overseer/recovery-resume.json` on each resume tick that changed something.
+It holds the queue in order, each request's state, the current gate verdict and its reason, the
+launch summary for each recovery occurrence, and a **preview** for each first-page record whose
+resume is `supported`. It is a separate file because `recovery.json`'s schema and its strict fleet
+parser are the inventory's contract, which shipped today. A new daemon with an old dashboard, or
+the reverse, then shows "no resume data" and not "index unreadable".
+
+**The preview is the previous objective and the uncertainty.** It holds:
+
+- **the brief**: the first user message of the verified transcript. It is read from a bounded head
+  (256 KiB) and capped at 600 characters;
+- **where it got to**: the last assistant text. It is read from a bounded tail (256 KiB) and capped
+  at 600 characters;
+- **the title** it last had;
+- **the uncertainty**: sentences derived from the record, never from prose, for example
+  "`lastActivity` is only a floor", "the transcript was found by scanning, not at the expected
+  slug", "the worktree name is display text, not a checked path", "the dashboard run could not be
+  compared", "resuming continues a conversation whose last turn may have been cut off mid-action:
+  it may redo or half-redo that step". Plus the fixed caveat that **a resume is not proof the work
+  will finish**.
+
+The transcript text is labelled as a quotation, and it is never a command and never a grant. The
+reads are cached on `(path, size, mtime)`, so an unchanged transcript costs a `stat`.
+
+### 4. The route
+
+`tools/fleet/routes-recovery-resume.ts` handles two requests:
+
+- **`GET /api/recovery/resume`**: the projection, parsed at the fleet boundary with its own
+  validator, in the `recovery-feed.ts` arms `published`, `absent`, `unreadable` and
+  `unsupported-schema`;
+- **`POST /api/recovery/resume`**: `{ candidateId, seen }`. It gets `routes-new.ts`'s
+  `checkRequest`: a same-origin `Origin` and a JSON content type, which is the CSRF defence on a
+  tailnet-only server. The candidate id is checked against the leaf's regex, and the request is
+  written through the leaf. The answer is 202 *queued*, or 200 *already requested / already
+  launched*, each with the projection's state for that id.
+
+The route **never launches, and never reads tmux or the launch store**. The daemon does both.
+`tools/fleet/server.ts` needs one dispatch branch, which is outside my file set and **asked of the
+Overseer** with the plan sha. `tools/fleet/wire.ts` gets one appended block of types, and no
+imports.
+
+The dashboard's action receipt journal (`action-receipts`) is not used. The request file is itself
+the durable receipt, and idempotence comes from the candidate id, not from a client key. Named so
+the reviewer can disagree.
+
+### 5. The panel's first control
+
+In `RecoveryPanel.tsx`, an `interrupted` record whose resume is `supported` gets **Resume…**. It
+opens an inline confirmation, not a dialog (house rule: no dialogs on this page). The confirmation
+shows the brief, where it got to, the uncertainty list, the nudge that will be typed, the directory,
+and one line: *"Starts one session. Any others you pick wait until this one is seen running."* Its
+button is **Resume this session**.
+
+After the tap, the card shows the request's state from the projection:
+
+- queued, with its position;
+- deferred, with the gate's reason and `until`;
+- launching;
+- running, unverified;
+- **resumed**, the existing disposition;
+- refused, with the reason and **Resume…** offered again.
+
+Records whose resume is `not-supported` or `manual` get **manual instructions** instead of a
+button. For a Claude conversation with a verified id, whose resume the harness path cannot take:
+`gjd-remote ssh`, then `cd ‹dir›`, then `claude --resume ‹uuid›`, built only from a uuid that
+matches the regex and a directory that is shell-quoted. For a shell or manual job: the host and the
+directory, as today. `unknown`, `present-but-unmatched` and `ended-before-reboot` records get
+neither. **Unchanged unknowns stay visible and untouched.**
+
+The footer changes from "Read-only. Nothing on this page starts, resumes or dismisses anything." to:
+
+> The one control here is **Resume**: it asks the Overseer to start that one interrupted Claude
+> session again, after checking the box, the quota and the session's evidence. Others you pick wait
+> their turn. Nothing resumes on its own, and nothing here dismisses anything.
+
+### 6. The launcher (Stage 3, after `launch-protocol` Stages 1–2 are on `dev`)
+
+This was agreed with `launch-protocol`, 2026-09-10:
+
+- **A launcher kind `tmux-resume`.** Its `PlanRequest` arm carries
+  `resume: { conversationId: uuid; dir: absolute }`. The arm is recorded in `planned` and in
+  `intent.json`, and it is part of F5's conflict check. Their Stage 2 makes `PlanRequest` a union
+  keyed on `launcherKind`, so I add one arm, and the compiler lists every switch to extend.
+- **The adapter** runs `gjd-remote new-claude … --resume-conversation <uuid> --dir <dir>
+  --launch-id … --launch-dir …`. The material is the nudge alone; the adapter never parses it.
+- **`scripts/gjd-remote.ts` gets `--resume-conversation <uuid>`**, a small targeted edit on the
+  session-creation path. It is mutually exclusive with minting a `--session-id`, and it still sets
+  `CLAUDE_SESSION_ID=<uuid>` in `-e` at creation. It keeps Stage 2's `start.json` first line and its
+  `exit.json` line after `claude`. The job runs `claude --resume <uuid> --permission-mode auto --
+  "$(cat prompt)"`, or whatever the spike shows is correct.
+- **An admission class `recovery-resume`**, capacity 1, **released on `observed-running`**. From
+  there it is an ordinary interactive session, and its hours of life must not block the scheduler's
+  `claude-session` class. `launch-protocol` is building this in its next fix round. My pace rule
+  (§2.3) governs everything after that point.
+
+### 7. Drills, in a disposable store and on an isolated tmux socket
+
+`scripts/overseer-recovery-drill.ts` is **extended, not forked**. After its existing
+G1 → empty → G2 run, a `--resume` phase runs against the drill's scratch store with a scratch
+launch store and a private tmux socket (`tmux -L <drill>`). A fake `claude` on that socket writes
+a transcript line and sets the session environment the collector reads. The phase:
+
+- requests two candidates;
+- asserts one launch, a defer until verification, then the second launch;
+- **kills the daemon between the launcher's invocation and the move to `done/`**, restarts it, and
+  asserts no second invocation;
+- taps a third twice and asserts one request;
+- deletes a transcript after the preview and asserts the refusal.
+
+Every count is independent of the protocol's own counter: the marker the fake writes on the
+socket. It never uses the default tmux server or `~/.overseer`, and it never reboots the box.
+
+## Deliberately not here
+
+- **Anything automatic.** No policy resumes on its own after a reboot. See the question for Greg.
+- **Codex resume, or headless resume.** These records stay `not-supported`, with manual
+  instructions.
+- **A bulk "resume all" button.** Greg can tap several, and they queue.
+- **Retrying an `outcome-unknown`.** Only Greg's dispose (the launch CLI) ends one.
+- **Per-account quota.** The usage verdict is the daemon's one report. A resumed session launches
+  `--account auto` like any fleet launch. Per-account admission is a later concern.
+- **A dismiss button.** Still the CLI.
+
+## The simpler options passed over
+
+- **Refuse instead of queue**: if a gate is closed, answer "try later" and hold nothing. That is
+  simpler, but the roadmap asks for *deferral*, and after a reboot the gates are closed exactly when
+  Greg is picking. He would have to come back and tap again at the right moment.
+- **The queue in the launch journal**: `plan()` at tap time, the owner's `wait` as the deferral.
+  That would put the queue inside a store that is not on `dev`, make revalidation a protocol
+  concern, and give a refusal at revalidation no record to land in. The request files use the
+  inventory's existing drop-directory shape.
+- **New arms in `events.jsonl`**, for requested and refused. Every request would then touch
+  `store.ts`, `diff.ts`, `jobs.ts` and `status-cli.ts`, which is what the inventory's Stage 1 had to
+  do. Files already hold the state, and the launch journal is the durable record of every launch.
+- **Adding the resume state to `recovery.json`**: that is a schema bump on a contract that shipped
+  today, and it would turn a version skew into "index unreadable" (§3).
+
+## A question for Greg, not built: should anything ever resume without a tap?
+
+Today, after a reboot, nothing comes back until you pick it. A broader policy could, for example,
+auto-queue every `interrupted` Claude session whose last work report was `progress` and less than
+an hour old, and still start them one at a time through the same gates. It would save you the
+tapping after an unattended reboot. It would also bring back sessions you might have let go, and
+spend quota while you are away. **This plan builds only the tap.** If you want a policy, it would
+reuse this whole path (the queue, the gates, the pace rule), and the question is only which records
+qualify. My recommendation is not yet: see how often a real reboot happens, and how many sessions
+you actually pick.
+
+A smaller question sits beside it. **Should an unknown usage reading hold resumes?** This plan
+says yes, failing closed (§2.5). The cost is that resumes wait whenever the usage pass has not run,
+for example for five minutes after a daemon restart.
+
+## Stages
+
+Implemented by **Opus subagents** in this worktree. Stages 1 and 2 run in parallel, because their
+file sets do not overlap: I write the `wire.ts` types first, as the contract both of them build
+against. Each stage ends with one GPT Sol review (`--effort high --timeout-minutes 90`,
+findings written first to `<answer>-findings.md`), then an Opus fixer, then a narrow 20-minute
+check of the P1 fixes, then Fable.
+
+### Stage 0: this plan, reviewed
+
+- [ ] Sol plan review, read-only.
+- [ ] Plan sha to the Overseer, with the one out-of-set ask (`server.ts`, one branch).
+
+### Stage 1: the request, the decision, the daemon pass, the projection (no protocol needed)
+
+Files:
+
+- `tools/overseer/recovery-resume-request.ts` (new leaf);
+- `tools/overseer/launch-gate.ts` (new leaf, shared with `scheduled-dispatch`: built and committed
+  first, and its sha sent to them);
+- `tools/overseer/recovery-resume.ts` (new: `decideResume`, the gates, the preview reader, the
+  projection writer, and the `ResumeLauncher` port that stands in for the launch capability until
+  Stage 3);
+- `tools/overseer/daemon.ts` (one `recoveryResumeTick()` beside `recoveryTick()`, and the
+  projection write; small targeted edits, merged first, away from the usage pass);
+- `scripts/overseer-recovery.ts` (`resume <id>`);
+- `tools/fleet/wire.ts` (the appended block, written by me first);
+- tests `tests/overseer-recovery-resume.test.ts` and `tests/overseer-daemon-recovery-resume.test.ts`.
+
+Red first, through the real leaf, the real `classifyRecord` and a fake `ResumeLauncher` that keeps
+the protocol's rule (one occurrence per candidate):
+
+- **Two taps**: the second `EEXIST` gives one pending request and one invocation.
+- **Launch succeeded, response lost**: the launcher is invoked and the daemon dies before the move
+  to `done/`. The restart sees the occurrence (`settled`), gives no second invocation, and moves the
+  request to `done/`.
+- **Already resumed elsewhere**: a live verified row holds the conversation. That gives `refuse`
+  and no invocation.
+- **Missing transcript after preview**: the preview was `found`, then the file is deleted. That
+  gives `refuse`, and a re-tap is allowed.
+- **Partial success across a list**: three requests. A is invoked; B is deferred until A is
+  `resumed`. B is then refused (its directory is missing). Two minutes after A's verification, C is
+  invoked. That is exactly two invocations.
+- **Gates**: `critical` and `unknown` health defer; `limited` defers until `resetsAt`;
+  `approaching`, and usage `unknown`, defer. `strained` and `ok` pass. A deferred request is never
+  refused.
+- **Changed since you looked**: `seen.dir` differs from the current entry. That gives `refuse`.
+- **Unknowns stay put**: an `unknown` or `ended-before-reboot` candidate requested through the CLI
+  is refused, and its record is unchanged.
+- **Unwired capability**: requests defer and stay pending. Nothing is refused, and nothing is
+  invoked.
+- **Preview bounds**: a 10 MiB transcript reads at most 512 KiB, and the text is capped.
+
+### Stage 2: the route and the panel (in parallel with Stage 1)
+
+Files:
+
+- `tools/fleet/routes-recovery-resume.ts`, `tools/fleet/recovery-resume-feed.ts`,
+  `tools/fleet/web/src/recovery-resume-client.ts` (all new);
+- `tools/fleet/web/src/RecoveryPanel.tsx`;
+- `tools/fleet/server.ts` (one branch, if the Overseer approves);
+- `tests/fleet-attention.test.ts` (one allowlist entry, argued);
+- tests `tests/fleet-recovery-resume-route.test.ts` and `tests/fleet-recovery-resume-panel.test.tsx`.
+
+Red first:
+
+- the POST refuses a missing `Origin`, a foreign `Origin` and a non-JSON body;
+- a second POST answers 200 and writes nothing new;
+- the feed's four arms, with no path from a failure to "nothing queued";
+- the confirmation shows the brief, the uncertainty and the nudge, and the button appears only for
+  `interrupted` with `supported`;
+- manual instructions are never built from an id that fails the regex;
+- the footer says what the control does;
+- a browser check at 1280 px and 400 px by an Opus subagent, on its own fixture server and never on
+  8787.
+
+### Stage 3: the launch, for real (after `launch-protocol` Stages 1–2 are on `dev`)
+
+Files:
+
+- the `tmux-resume` arm and adapter, in `launch-protocol`'s files and on the pattern its Stage 2
+  sets, as agreed with it;
+- `scripts/gjd-remote.ts` (`--resume-conversation`, including the check on the box that no tmux
+  session's environment already has that `CLAUDE_SESSION_ID`);
+- `tools/fleet/claude-argv.ts` and `tools/fleet/execution-identity.ts`: `--resume <uuid>` read as
+  a verified conversation (see "Spike"). This is outside the brief's file set, so I ask the
+  Overseer before starting the stage;
+- `tools/overseer/daemon.ts` (compose the capability, then hand it to the resume pass);
+- `scripts/overseer-recovery-drill.ts` (`--resume`);
+- tests.
+
+Red first:
+
+- the job text for `--resume-conversation` has no `--session-id <new>`, sets `CLAUDE_SESSION_ID` to
+  the resumed id, and keeps `start.json` and `exit.json`;
+- a non-uuid is refused before ssh;
+- the drill's counts (§7), including the kill between invocation and `done/`, and a no-op launcher
+  as a negative control that must make the drill fail.
+
+## Spike: `claude --resume`
+
+Measured 2026-09-10 against `claude` 2.1.267 on the box, with Haiku and five paid calls, in a
+scratch directory on a private tmux socket (scripts and outputs in the session scratchpad,
+`spike-resume/`):
+
+- **The same id, the same transcript.** `--resume <uuid>` appends to `<uuid>.jsonl`, keeps
+  `session_id`, and remembers the history. So the inventory's verified-conversation match holds
+  across a resume.
+- **A prompt after `--` is submitted automatically**, and the interactive session opens with its
+  history on screen. There was no trust dialog and no permission dialog. **But it came up in manual
+  mode**, so the job must pass `--permission-mode auto` explicitly, as `new-claude` already does.
+- **The CLI does not check the directory.** A resume from an unrelated directory succeeds, runs in
+  that directory, and keeps writing to the original project's transcript. **We set the cwd**
+  (gjd-remote's `cdGuard` on the recorded `dir`), and revalidation checks that the directory
+  exists.
+- **Nothing stops a double resume.** Two processes resumed one id at once, and both wrote to one
+  `.jsonl`. So §2's "not already live" check is load-bearing. It is also repeated at the last moment
+  on the box: `gjd-remote --resume-conversation` refuses when any tmux session's environment already
+  has `CLAUDE_SESSION_ID=<uuid>`.
+- **A missing id** prints `No conversation found with session ID: …` and exits 1. `exit.json` then
+  records it, and the protocol settles `completed`.
+- **`--resume` together with `--session-id` is refused** unless `--fork-session` is given, and a
+  fork would mint a new id that nothing could match. So the argv of a resumed session carries **no
+  `--session-id`**, only `--resume <uuid>`.
+
+**The consequence for Stage 3:** the fleet's verified conversation comes from the process argv
+(`tools/fleet/execution-identity.ts` through `claude-argv.ts`). If that reader does not recognise
+`--resume <uuid>`, a resumed session reads as `claimed-only`. The `resumed` disposition would then
+never be derived, and the pace gate would wait for ever. Stage 3 teaches the argv reader the one
+shape this repo produces (`--resume <uuid>`, with a uuid-shaped value), red first against a capture
+of a real resumed process.
+
+**Today the reader refuses it, by design.** `claude-argv.ts` lists `-r, --resume [value]` among the
+optional-value flags whose value "cannot be read from argv alone", because `--resume foo` could be
+"resume foo" or "resume, then the prompt foo". The spike answers that for the CLI:
+`claude -p --resume <uuid> "Reply…"` resumed `<uuid>` and took the next word as the prompt. So the
+value is the token right after `--resume`. The narrow extension is: a uuid-shaped token immediately
+after `--resume` on faithful argv is the conversation; anything else stays unreadable. The
+simpler option passed over was to verify by our own launch artefacts instead: the tmux session
+found by correlation id, `CLAUDE_SESSION_ID` at creation, and the transcript growing after launch.
+Then the inventory would never see a *verified* resumed conversation. The record would read
+`present-but-unmatched` for ever, and the page would contradict the launch.
+
+## Status
+
+2026-09-10: plan written; Stage 0 in progress.
