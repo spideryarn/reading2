@@ -3712,3 +3712,39 @@ export type FleetBoxActionRequest =
       preview: FleetActionPreviewClaim;
       material: Extract<FleetActionMaterial, { kind: "broadcast" }>;
     };
+
+/* ================================================================== *
+ * WORK HISTORY — WHAT THE ACCEPTED PROCESS-TABLE SCAN SAW
+ * ================================================================== */
+
+export type StoredWorkGroup = {
+  /** The Overseer's session key. Names a SESSION, never a command line. */
+  session: string;
+  /** The recogniser's id, as a plain string — the Overseer's vocabulary. */
+  recogniser: string;
+  /** Job processes with that recogniser under that pane, at the scanned instant. */
+  jobs: number;
+  /** The oldest of those jobs' starts, or null when the kernel could not say. */
+  oldestStartedAt: string | null;
+  /** How long the longest had run AS AT `scannedAt`, not as at now. Null when unknown. */
+  longestRanForMs: number | null;
+};
+
+export type StoredWork =
+  | { kind: "unavailable"; why: string }
+  | {
+      kind: "scan";
+      /** When the kernel was read. NOT the sample's own clock. */
+      scannedAt: string;
+      groups: StoredWorkGroup[];
+      /** How many groups the cap dropped. Zero is the ordinary case. */
+      groupsDropped: number;
+      /** The uncertainty, as counts. */
+      panes: { work: number; none: number; cannotTell: number };
+    };
+
+/** One checkpoint read's projection of its accepted work scan. */
+export type WorkFeed =
+  | { kind: "checkpoint-absent" }
+  | { kind: "checkpoint-unreadable"; why: string }
+  | { kind: "published"; work: StoredWork; coordinatorWrittenAt: string };

@@ -2536,6 +2536,7 @@ describe("the box's clock, read with the phone's", () => {
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
           usage: { kind: "not-asked" },
+          work: { kind: "checkpoint-absent" },
         }),
       }),
     );

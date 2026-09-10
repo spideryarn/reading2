@@ -69,6 +69,7 @@ import {
   projectAttention,
 } from "./attention.js";
 import { projectUsage } from "./usage-feed.js";
+import { projectStoredWork } from "./work-groups.js";
 import type {
   AttentionFeed,
   OverseerHeartbeat,
@@ -80,6 +81,7 @@ import type {
   PaneJob,
   PaneWork,
   UsageFeed,
+  WorkFeed,
 } from "./wire.js";
 
 /**
@@ -137,6 +139,13 @@ const MAX_SOURCE_STALE_MS = 60 * 60_000;
  * the disk, so there is nothing in it that can throw an `EIO`.
  */
 export function projectOverseerStatus(json: unknown): OverseerStatusFeed {
+  return projectCheckpoint(json).overseer;
+}
+
+type ProjectedCheckpoint = { overseer: OverseerStatusFeed; work: WorkFeed };
+
+/** The two projections that must share one resolved work reading. */
+function projectCheckpoint(json: unknown): ProjectedCheckpoint {
   try {
     return project(json);
   } catch (cause) {
@@ -147,25 +156,36 @@ export function projectOverseerStatus(json: unknown): OverseerStatusFeed {
        card. Production reaches this only through `JSON.parse`, so no real
        checkpoint can contain such a value; the contract still has to hold for
        the callers that do not know that. GPT Sol's P2, 2026-09-08. */
-    return { kind: "checkpoint-unreadable", why: `the checkpoint could not be projected: ${String(cause)}` };
+    const why = `the checkpoint could not be projected: ${String(cause)}`;
+    return {
+      overseer: { kind: "checkpoint-unreadable", why },
+      work: { kind: "checkpoint-unreadable", why },
+    };
   }
 }
 
-function project(json: unknown): OverseerStatusFeed {
+function unreadableProjection(overseer: OverseerStatusFeed, why: string): ProjectedCheckpoint {
+  return { overseer, work: { kind: "checkpoint-unreadable", why } };
+}
+
+function project(json: unknown): ProjectedCheckpoint {
   if (!isRecord(json)) {
-    return { kind: "checkpoint-unreadable", why: "the checkpoint is not a JSON object" };
+    const why = "the checkpoint is not a JSON object";
+    return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
   }
   if (json["schema"] !== KNOWN_SCHEMA) {
     /* THE VERSION IS NAMED, both halves of it, because this is the one failure
        with an action attached: somebody deploys the other end. */
-    return { kind: "unsupported-schema", saw: describe(json["schema"]), known: KNOWN_SCHEMA };
+    const saw = describe(json["schema"]);
+    return unreadableProjection(
+      { kind: "unsupported-schema", saw, known: KNOWN_SCHEMA },
+      `the checkpoint uses schema ${saw}, but this work reader knows schema ${KNOWN_SCHEMA}`,
+    );
   }
   const writtenAt = iso(json["writtenAt"]);
   if (writtenAt === null) {
-    return {
-      kind: "checkpoint-unreadable",
-      why: "the checkpoint has no readable `writtenAt`, so there is no clock on anything in it",
-    };
+    const why = "the checkpoint has no readable `writtenAt`, so there is no clock on anything in it";
+    return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
   }
 
   /* **`null` IS A READING AND ABSENT IS NOT.** `lastGoodSnapshotAt: null` means
@@ -181,10 +201,8 @@ function project(json: unknown): OverseerStatusFeed {
   } else {
     const at = iso(rawSource);
     if (at === null) {
-      return {
-        kind: "checkpoint-unreadable",
-        why: "the checkpoint's `lastGoodSnapshotAt` is neither a timestamp nor null, so the source clock cannot be read",
-      };
+      const why = "the checkpoint's `lastGoodSnapshotAt` is neither a timestamp nor null, so the source clock cannot be read";
+      return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
     }
     /* THE SOURCE CANNOT HAVE BEEN HEARD AFTER THE FILE THAT REPORTS IT WAS
        WRITTEN. Both come off one clock in one process — the Overseer stamps
@@ -194,10 +212,8 @@ function project(json: unknown): OverseerStatusFeed {
        stale-source warning this card exists to raise. The same check
        attention.ts makes on `scannedAt`. */
     if (Date.parse(at) > Date.parse(writtenAt)) {
-      return {
-        kind: "checkpoint-unreadable",
-        why: `the checkpoint says it last heard from the fleet at ${at}, after the ${writtenAt} checkpoint that reports it`,
-      };
+      const why = `the checkpoint says it last heard from the fleet at ${at}, after the ${writtenAt} checkpoint that reports it`;
+      return unreadableProjection({ kind: "checkpoint-unreadable", why }, why);
     }
     lastGoodSnapshotAt = at;
   }
@@ -206,44 +222,60 @@ function project(json: unknown): OverseerStatusFeed {
      reading: it is part of the health judgement, not a decoration on it. See
      `sourceDeadline`. */
   const deadline = sourceDeadline(json["snapshotStaleAfterMs"]);
-  if (deadline.kind === "bad") return { kind: "checkpoint-unreadable", why: deadline.why };
+  if (deadline.kind === "bad") {
+    return unreadableProjection({ kind: "checkpoint-unreadable", why: deadline.why }, deadline.why);
+  }
+  /* Resolve once, then give the SAME accepted-or-refused reading to the
+     register and the history feed. This is a correctness property: a later
+     change must not let history draw a scan whose inventory the register
+     rejected by resolving the two with independently chosen inputs. */
   const work = resolveWork(json["work"], lastGoodSnapshotAt, writtenAt);
 
   return {
-    kind: "published",
-    status: {
-      schema: KNOWN_SCHEMA,
-      writtenAt,
-      lastGoodSnapshotAt,
-      sourceStaleAfterMs: deadline.kind === "said" ? deadline.ms : null,
-      heartbeat: projectHeartbeat(json["heartbeat"], writtenAt),
-      scheduler: projectScheduler(json["scheduler"]),
-      register: projectRegister(json["register"], writtenAt, work),
+    overseer: {
+      kind: "published",
+      status: {
+        schema: KNOWN_SCHEMA,
+        writtenAt,
+        lastGoodSnapshotAt,
+        sourceStaleAfterMs: deadline.kind === "said" ? deadline.ms : null,
+        heartbeat: projectHeartbeat(json["heartbeat"], writtenAt),
+        scheduler: projectScheduler(json["scheduler"]),
+        register: projectRegister(json["register"], writtenAt, work),
+      },
     },
+    work: { kind: "published", work: projectStoredWork(work), coordinatorWrittenAt: writtenAt },
   };
 }
 
 /**
- * All three projections out of ONE read of the file.
+ * All four projections out of ONE read of the file.
  *
  * **The sharing is a correctness property, not a saving.** The checkpoint is
  * replaced by atomic rename, so two separate reads can land either side of a
  * write and the page would then print *the inbox was scanned at X* beside *the
  * Overseer last wrote at Y* out of two different versions of the file — and the
  * relationship between those two numbers is the whole of what the card claims.
- * One read, three projections, each with its own compatibility policy.
+ * One read, four projections, each with its own compatibility policy.
  *
  * **`usage` joined them on 2026-09-08 and made the argument stronger rather
  * than merely longer.** The usage card's central sentence is *the Overseer
  * wrote thirty seconds ago and this headroom reading is two hours old* — the
  * two clocks in one line, which cannot be assembled honestly out of two reads.
  * `tools/fleet/usage-feed.ts` § the edge that did not exist.
+ * The work feed strengthens it once more: its history projection and the
+ * register share not only these bytes but the exact `resolveWork` decision.
  *
  * `root` is for tests; production resolves it the way the Overseer does.
  * **Never throws**, because `loadCheckpoint` does not and no projection
  * touches anything but the value it is handed.
  */
-export type CheckpointFeeds = { attention: AttentionFeed; overseer: OverseerStatusFeed; usage: UsageFeed };
+export type CheckpointFeeds = {
+  attention: AttentionFeed;
+  overseer: OverseerStatusFeed;
+  usage: UsageFeed;
+  work: WorkFeed;
+};
 
 export function readCheckpointFeeds(root?: string): CheckpointFeeds {
   const load = loadCheckpoint(root);
@@ -253,19 +285,24 @@ export function readCheckpointFeeds(root?: string): CheckpointFeeds {
         attention: { kind: "checkpoint-absent" },
         overseer: { kind: "checkpoint-absent" },
         usage: { kind: "checkpoint-absent" },
+        work: { kind: "checkpoint-absent" },
       };
     case "unreadable":
       return {
         attention: { kind: "checkpoint-unreadable", why: load.why },
         overseer: { kind: "checkpoint-unreadable", why: load.why },
         usage: { kind: "checkpoint-unreadable", why: load.why },
+        work: { kind: "checkpoint-unreadable", why: load.why },
       };
-    case "json":
+    case "json": {
+      const projected = projectCheckpoint(load.json);
       return {
         attention: projectAttention(load.json),
-        overseer: projectOverseerStatus(load.json),
+        overseer: projected.overseer,
         usage: projectUsage(load.json),
+        work: projected.work,
       };
+    }
     default: {
       /* Unreachable; returns rather than throws, for the reason `readAttention`
          does. The assignment is what makes a fourth arm a compile error. */
@@ -275,6 +312,7 @@ export function readCheckpointFeeds(root?: string): CheckpointFeeds {
         attention: { kind: "checkpoint-unreadable", why },
         overseer: { kind: "checkpoint-unreadable", why },
         usage: { kind: "checkpoint-unreadable", why },
+        work: { kind: "checkpoint-unreadable", why },
       };
     }
   }
