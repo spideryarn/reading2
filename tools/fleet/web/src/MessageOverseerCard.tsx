@@ -93,10 +93,22 @@
  * address check, and this clause is carried by nothing else. Threading the
  * whole `ReadingCompleteness` through would be better and needs an export from
  * a file this session does not own. docs/plans/260909b-… § D2.
+ *
+ * ## The unsent line is kept under the Overseer's conversation
+ *
+ * A half-written line survives the reload iOS forces (drafts.ts), keyed by
+ * **the conversation of the row the claim resolves to** — never the pane, and
+ * never the role. Of the three boxes that keep drafts this is the strongest
+ * case, because the Overseer is the session relaunched most often: a line begun
+ * to one Overseer is the likeliest draft on the page to meet another. So it
+ * comes back only when that same conversation is verified in front of it.
+ * docs/plans/260910c-… § Stage 2.
  */
 import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 
+import { useExecutionEpoch } from "./continuity";
+import { draftAddressOf, draftNoticeSentence, useDraft, type DraftAddress } from "./drafts";
 import { httpSteerApi, sentTarget, type SentTarget, type SteerApi, type SteerOutcome } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
@@ -212,6 +224,24 @@ function addressee(claim: OverseerClaim, rows: readonly FleetRow[], unreadableRo
   }
 }
 
+/**
+ * Where this card's draft may be kept: the resolved Overseer row's
+ * conversation, by the same mapping the session composer uses — with one
+ * difference, stated rather than hidden.
+ *
+ * **Under `conflicting` this card restores nothing.** The session composer
+ * puts the claimed conversation's draft back because its Send is disabled in
+ * that state; this card's Send is not, so restoring would put a draft written
+ * for one conversation in front of a live button aimed at a pane running
+ * another. The draft stays in storage under its own key and comes back when
+ * that conversation does.
+ */
+function overseerDraftAddress(row: FleetRow | null): DraftAddress {
+  if (row === null) return { kind: "cannot-tell" };
+  const address = draftAddressOf(row.execution);
+  return address.kind === "hold" ? { kind: "hold", restoreFrom: null } : address;
+}
+
 export function MessageOverseerCard({
   rows,
   unreadableRows,
@@ -227,7 +257,6 @@ export function MessageOverseerCard({
   /** The seam. A test drives this card without a network; the browser gets the default. */
   steer?: SteerApi;
 }): ReactNode {
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   /**
    * **The outcome and the target it was made against, as one value.**
@@ -241,6 +270,22 @@ export function MessageOverseerCard({
   const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
 
   const to = addressee(overseerClaim(rows), rows, unreadableRows);
+
+  /* **THE DRAFT'S SCOPE IS THE OVERSEER'S ROW AND PROCESS.** This card is not
+     remounted when the claim moves to another row or the Overseer is
+     relaunched, unlike the session composer, so it tells the hook itself:
+     `useExecutionEpoch`'s key changes exactly then. Words begun for one
+     Overseer stay on screen when another appears, and are never filed under
+     the new one's conversation. `null` while nobody can be spoken to — an
+     unreadable collection is weather, not a new recipient. */
+  const holder = to.kind === "found" ? to.row : null;
+  const epoch = useExecutionEpoch(holder);
+  const draft = useDraft({
+    purpose: "overseer-message",
+    address: overseerDraftAddress(holder),
+    scope: holder === null ? null : epoch,
+  });
+  const text = draft.text;
 
   const onSend = useCallback(async () => {
     if (to.kind !== "found") return;
@@ -256,9 +301,12 @@ export function MessageOverseerCard({
     const target = sentTarget(to.row);
     const result = await steer.message(to.row, words);
     setOutcome({ result, target });
-    if (result.ok) setText("");
+    /* Only a send the server accepted takes the draft with it. A refusal
+       leaves both the box and the stored copy, so the words are there to try
+       again or to take elsewhere. */
+    if (result.ok) draft.clear();
     setBusy(false);
-  }, [steer, text, to]);
+  }, [draft, steer, text, to]);
 
   return (
     <Card className="tw:mt-3 tw:p-4">
@@ -306,14 +354,20 @@ export function MessageOverseerCard({
             rows={2}
             value={text}
             placeholder="one line to the Overseer"
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => draft.setText(e.target.value)}
             aria-label="Message the Overseer"
           />
-          <p className="tw:mt-2">
+          <p className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button variant="loud" disabled={busy || text.trim() === ""} onClick={() => void onSend()}>
               {busy ? "Sending…" : "Send"}
             </Button>
+            <Button disabled={busy || text === ""} onClick={draft.clear}>
+              Clear
+            </Button>
           </p>
+          {draft.notice === null ? null : (
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
+          )}
         </>
       )}
 

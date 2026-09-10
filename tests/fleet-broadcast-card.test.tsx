@@ -31,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BroadcastCard } from "../tools/fleet/web/src/BroadcastCard";
 import { makeBroadcastApi } from "../tools/fleet/web/src/broadcast-client";
 import type { BroadcastApi, BroadcastOutcome, RecipientOutcome } from "../tools/fleet/web/src/broadcast-client";
+import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
 import type { FleetRow } from "../tools/fleet/web/src/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,6 +40,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  /* **THE CARD KEEPS ITS DRAFT NOW**, keyed by purpose alone — so without this
+     every test would open with the previous test's sentence already typed. */
+  window.sessionStorage.clear();
+  resetDraftPageStateForTests();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -557,5 +562,88 @@ describe("a session that was HELD is said so, not folded into something else", (
     expect(held?.kind).toBe("held");
     expect(held?.kind === "held" && held.why).toContain("this session is held");
     expect(outcome.kind === "ran" && outcome.result.counts.held).toBe(1);
+  });
+});
+
+describe("the unsent sentence, kept under the purpose alone", () => {
+  /**
+   * **NOT KEYED TO A CONVERSATION, AND THAT IS THE POINT.** A broadcast has no
+   * single recipient, so there is no execution for a replacement to inherit it
+   * from — the key is `sy.draft.v1:broadcast` and nothing else. What it shares
+   * with the other two boxes is everything else: sessionStorage only, the cap,
+   * Clear, and removal once it has actually gone out.
+   */
+  const KEY = draftKey("broadcast");
+
+  /** What iOS does when it reclaims a tab: storage survives, the page's memory does not. */
+  function reload(node: Parameters<Root["render"]>[0]): void {
+    act(() => root.unmount());
+    resetDraftPageStateForTests();
+    root = createRoot(container);
+    render(node);
+  }
+
+  function box(): HTMLTextAreaElement {
+    const el = container.querySelector("textarea");
+    if (el === null) throw new Error(`no textarea; card says: ${text()}`);
+    return el;
+  }
+
+  it("brings the sentence back after a reload, under the purpose and nothing else", () => {
+    const { api } = fakeApi([]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("everybody hold off for ten minutes");
+    reload(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+
+    expect(box().value).toBe("everybody hold off for ten minutes");
+    expect(window.sessionStorage.length).toBe(1);
+    expect(window.sessionStorage.getItem(KEY)).toBe("everybody hold off for ten minutes");
+  });
+
+  it("keeps it through a preview, and removes it once the broadcast has run", async () => {
+    const { api } = fakeApi([
+      ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }]),
+      ran("broadcast", [{ sessionId: "$1", paneId: "%1", kind: "queued", position: 1 }], { queued: 1 }),
+    ]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("ease off");
+    await press("Preview");
+    expect(window.sessionStorage.getItem(KEY)).toBe("ease off");
+    await press("Send it");
+    expect(box().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("keeps it when the broadcast was refused", async () => {
+    const { api } = fakeApi([
+      ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }]),
+      { kind: "refused", code: "cooldown", why: "the fleet was last broadcast to 2 minutes ago", status: 429, result: null },
+    ]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("ease off");
+    await press("Preview");
+    await press("Send it");
+    expect(box().value).toBe("ease off");
+    expect(window.sessionStorage.getItem(KEY)).toBe("ease off");
+  });
+
+  it("has a Clear that empties the box, removes the draft, and takes the preview with it", async () => {
+    const { api } = fakeApi([ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }])]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("ease off");
+    await press("Preview");
+    expect(button("Send it")).not.toBeNull();
+    await press("Clear");
+    expect(box().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+    expect(button("Send it")).toBeNull();
+  });
+
+  it("says in one line that a sentence over the cap will not survive a reload, and stores none of it", () => {
+    const { api } = fakeApi([]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("z".repeat(DRAFT_CAP + 1));
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+    expect(text()).toContain(draftNoticeSentence("too-long"));
   });
 });

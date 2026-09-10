@@ -283,16 +283,44 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, `MessageOvers
 (below) changed what it is blocked on. The composer half needs `SessionDetail.tsx` and
 `tests/fleet-web.test.tsx`, where Sol's Stage 1 reviewer has write access; the rest does not. So:
 
-- **2a — in flight**, an Opus subagent: `drafts.ts` and its one hook, the Overseer message card,
+- **2a — built**, an Opus subagent: `drafts.ts` and its one hook, the Overseer message card,
   the broadcast box, and tests in a new `tests/fleet-drafts.test.tsx` plus the two cards' own test
-  files. Disjoint from both reviewers' write scopes.
+  files. Disjoint from both reviewers' write scopes. Every new test seen red against a stub with the
+  final signature; twelve deliberate mutations, each red on exactly its target test. What it taught
+  the plan:
+  - **A vacuous-test class, found and fixed.** `vi.spyOn(Storage.prototype, …)` under jsdom spies
+    on *Node's* `Storage`, not the one behind `window.sessionStorage`, so a "never reads the old
+    draft" test passed with a spy that never fired and the storage-refusal tests could not have
+    worked. Spies now go through `Object.getPrototypeOf(window.sessionStorage)`, and the test also
+    asserts the spy saw the key. The same shape as the `localStorage` shadowing note in
+    `src/web/install-hint.ts`, one layer down.
+  - **"One conversation per mount" is true of the composer and false of the Overseer card.** The
+    composer remounts per process; the Overseer card stays mounted while the Overseer moves between
+    rows and processes. So the hook takes an optional `scope` — the card passes
+    `useExecutionEpoch`'s key for the Overseer's row — and the fail-safe belongs to the **text**
+    rather than the mount: words that may be meant for another conversation stay on screen and are
+    never stored until the box is empty, after which persistence resumes. Taken literally, revision
+    3's "stop persisting for the rest of the mount" would have switched drafts off on that card for
+    the life of the tab after one Overseer change.
+  - **The Overseer card restores no draft under `conflicting`**, because its Send is not gated by
+    execution (the server's `verifyTarget` protects that send), and a draft written for one
+    conversation should not appear in front of a live button aimed at another.
+  - The shape the composer adopts in 2b: `useDraft({ purpose, address: draftAddressOf(reading) })`,
+    where `draftAddressOf` maps verified-and-verified → `verified`, `conflicting` → `hold(claimed)`,
+    `not-claimed` or a non-addressable harness → `hold(null)`, and everything else → `cannot-tell`.
+    `hold(claimed)` is already §3's "restore the claimed draft, never persist edits".
+  - Copy, one shown near Clear when it applies: *"This browser will not let the page keep a copy, so
+    a reload would lose this message."* / *"Too long to keep a copy of, so a reload would lose this
+    message."*
 - **2b — after Sol's Stage 1 round closes and 2a lands**: the session composer's wiring, the
   composer under each reading (Fable's table), and the `conflicting` restore.
 
-**Stage 4 is held rather than started alongside**, although its hook-and-client half is disjoint
-too. With two reviewers and 2a running, three things in this worktree are running tests, and
-`docs/project/overseer.md` caps test-running work at three: *"beyond three the suites go red for
-reasons that are nobody's bug."* It starts when a reviewer finishes.
+**Stage 4 was held rather than started alongside 2a.** With two reviewers and 2a running, three
+things in this worktree were running tests, and `docs/project/overseer.md` caps test-running work at
+three: *"beyond three the suites go red for reasons that are nobody's bug."* When 2a finished it was
+split the same way as this stage — **4a** (the hook, the client seam, and a new test file) started
+at once, disjoint from everything running; **4b** (drawing the age and error beside the queue in
+`SessionDetail`) waits for 2b.
 
 - [ ] `drafts.ts`: `useDraft(purpose, key)` over **sessionStorage** — per tab, dies with the tab,
       survives the reload iOS forces. Key `sy.draft.v1:<purpose>:<verified conversation id>`;
