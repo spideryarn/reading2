@@ -51,7 +51,15 @@ stage is either running or blocked on Greg — and the box and usage window have
 dispatched, with the session name. Items are grouped by the plan that holds their detail; this file
 holds the one-line reason and the product question each one is waiting on, not the stages.
 
-## Deferred on 2026-09-08: the Spideryarn product plan
+## Deferred on 2026-09-08, picked up on 2026-09-10: the Spideryarn product plan
+
+**Un-deferred 2026-09-10 21:10 UTC.** Greg: *"deprioritise further Overseer/web dashboard stuff to
+the very bottom priority, and now push up the priority of all the Spideryarn product stuff. Keep
+within 5h usage limits."* So the order below is reversed: the product plan's first batch goes out
+first (B's first stage, D and P dispatched that evening as qi-2wew3act, qi-qsjab879, qi-t2eptdgs;
+A and C still wait on their product answers), and every Overseer or dashboard item in this queue,
+whatever its stored priority, waits until Greg says otherwise. The stored priorities were left as set,
+so the audit trail holds; the reversal is this paragraph and the decision log.
 
 All sixteen clusters of
 [260908f-prioritised-spideryarn-codebase-improvements.md](../plans/260908f-prioritised-spideryarn-codebase-improvements.md),
