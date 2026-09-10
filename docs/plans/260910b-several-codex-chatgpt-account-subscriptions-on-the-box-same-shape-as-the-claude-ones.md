@@ -641,6 +641,34 @@ Sol's remaining answers to the manager's own suspicions, all negative: `smol-tom
 is stable across the second run so the idempotency comparison holds; the multi-workspace refusal is
 actionable; and nothing downstream trusts `familyData.workspaces` without re-reading `auth.json`.
 
+#### The full suite caught what neither the focused gate nor the review did
+
+`npm test`, run with `CLAUDE_CONFIG_DIR` unset for the reason above: **968 files passed, 4 failed.**
+Every one of the four was then run to ground rather than waved through as noise:
+
+| file | cause | proof |
+|---|---|---|
+| `tests/no-undeclared-spend.test.ts` | **this stage** | 36/36 after the fix below |
+| `tests/fleet-decisions-route.test.ts` | environment — `no built client at tools/fleet/web/dist` | 15/15 after `npm run build:fleet` |
+| `tests/cold-start-lazy-imports.test.ts` | environment — a fresh worktree has no `api-dist/` | 4/4 with the next row, after `npm run build` |
+| `tests/pdf-bundle-trace.test.ts` | environment — same | as above |
+
+**The first one is the finding.** The repo's spend guard scans every source file for a string naming
+a paid provider's host, and `tools/overseer/codex-auth.ts` contains `https://api.openai.com/auth` —
+not a URL it requests, but the **namespace of a JWT claim**, a JSON object key. The guard cannot
+tell the difference by reading, and it is right not to try: *"names a paid host"* is the thing it
+is for. The focused gate could not have seen this, because the guard lives in a file nobody would
+think to name when changing an account registry — the shape the house calls a scoped gate missing a
+route's other callers.
+
+The answer was a line in the guard's **`MAY_NAME`** map, not its broader **`ALLOWED`** one, and the
+difference is the point. `MAY_NAME` licenses naming a host *and nothing more*: a `fetch` added to
+that file later is still an offence. `ALLOWED` would have covered that future fetch too — the hole
+GPT Sol found in this same guard on 2026-09-02. A file whose whole job is reading a local credential
+has no business acquiring a transport, so the licence it gets is the narrow one. Its reason states
+the checkable facts: the string is a claim key, and the module's only imports are
+`node:fs/promises` and `node:path`.
+
 Stage 0 settled the unknowns this stage was told not to guess,
 so the seeding row in the table below is now answered rather than open. Three things Stage 0 found
 change what this stage builds:
