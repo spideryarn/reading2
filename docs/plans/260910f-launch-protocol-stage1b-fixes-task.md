@@ -43,6 +43,16 @@ that entered that state, never moved by `released` or anything after it (`update
 `endedAt` is the completion's instant and differs from `updatedAt`; the same for a
 `failed-before-launch` followed by `released`.
 
+## Two more from `scheduled-dispatch` (its plan review's F3 and F2)
+
+- **`launchingAt` on `AttemptRef`** — the `at` of that attempt's `launching` event, never moved
+  afterwards (scheduled-dispatch times launch spacing from it, not from the nominal due instant).
+  Test: it survives `observed-running`, `completed` and `released` unchanged.
+- **`CarriedEntry` keeps `origin` and `plannedAt`** where the salvage can read them (a parseable
+  `planned` line before the hole), and both are `null` where it cannot (an occurrence known only from
+  its artefact directory or the owner). Parser and replay updated; tests for both cases, and that a
+  reset line carrying an origin replays.
+
 ## Three from `gradual-recovery`'s plan review (G6, G7, G1), checked and accepted
 
 - **G7 — tmux probing must be exhaustive by launcher family.** `evidenceDecision` probes tmux only
