@@ -978,6 +978,15 @@ describe("one answering-disabled latch for the whole page", () => {
     expect(optionButtons()).toHaveLength(0);
   });
 
+  it("does not claim the refusal withheld buttons for a dialog whose row cannot be read", () => {
+    const current = read();
+    drawPanel(current.questions, [], { answeringRefusal: REFUSED });
+
+    expect(host.textContent).toContain("its row could not be read");
+    expect(optionButtons()).toHaveLength(0);
+    expect(host.textContent).not.toContain("option buttons are withheld until");
+  });
+
   it("gives both their buttons back when a later payload reports answering enabled", async () => {
     window.location.hash = "#sessions?sel=%241";
     const feed = manualTransport();

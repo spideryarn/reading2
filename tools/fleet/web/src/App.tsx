@@ -15,7 +15,7 @@
  * Codex observation feeds cards on two different tabs. Each seam is injectable,
  * so tests drive the page without a clock or network.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
 import { DecisionsPanel } from "./DecisionsPanel";
@@ -229,18 +229,11 @@ export function App({
    * question it is asked.
    */
   const [answeringRefusal, setAnsweringRefusal] = useState<{ why: string; under: FleetState | null } | null>(null);
-  /* The refusal arrives after an await in SessionDetail. The callback which
-     began that request was made under the tap-time payload, but the latch's
-     boundary is the moment the REFUSAL arrives: a payload received while the
-     request was pending is not evidence received after the refusal.
-
-     Update this in a layout effect so it names the latest COMMITTED payload.
-     Assigning a ref during render would let a render React later discards move
-     the boundary to state the page never presented. */
-  const latestCommittedState = useRef<FleetState | null>(feed.state);
-  useLayoutEffect(() => {
-    latestCommittedState.current = feed.state;
-  }, [feed.state]);
+  /* The refusal arrives after an await. Its boundary is the newest payload the
+     transport DELIVERED before that answer, not the payload at tap time and not
+     merely the latest one React had time to commit. React may batch an onState
+     and the promise resolution in one turn; useFleetState records their order
+     synchronously at the transport boundary. */
   /* An EFFECT here, unlike the render-phase checks in `SessionDetail` and
      `continuity.ts`, and the difference is which way a late frame errs. Holding
      a spent refusal for one more commit withholds a control that would have
@@ -253,8 +246,8 @@ export function App({
     setAnsweringRefusal(null);
   }, [answeringRefusal, feed.state, answeringEnabled]);
   const onAnsweringRefused = useCallback(
-    (why: string) => setAnsweringRefusal({ why, under: latestCommittedState.current }),
-    [],
+    (why: string) => setAnsweringRefusal({ why, under: feed.latestDeliveredState() }),
+    [feed.latestDeliveredState],
   );
 
   const fresh = freshness({

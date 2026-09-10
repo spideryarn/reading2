@@ -1,7 +1,7 @@
 # Source ordering: distinguish a new observation from a new timestamp
 
 The roadmap stage is
-[260908f § Stage: Source ordering](260908f-overseer-and-fleet-improvement-roadmap.md#stage-source-ordering--distinguish-a-new-observation-from-a-new-timestamp);
+[260908f § Stage: Source ordering](260908f-overseer-and-fleet-improvement-roadmap.md#stage-source-ordering-distinguish-a-new-observation-from-a-new-timestamp);
 its four checkboxes and its acceptance paragraph are the spec, and this plan does not restate them.
 Queue item `qi-pxwfpa4q`, dispatched by the Overseer on 2026-09-10.
 

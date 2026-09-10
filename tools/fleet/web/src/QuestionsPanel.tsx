@@ -29,6 +29,18 @@ type DialogItem = Extract<QuestionItem, { kind: "dialog" }>;
 type UnaddressableDialogItem = Extract<QuestionItem, { kind: "dialog-unaddressable" }>;
 type ProseItem = Extract<QuestionItem, { kind: "prose" | "prose-unaddressable" }>;
 
+/** The row/item facts that would let a dialog card offer option buttons. */
+function hasAnswerableTarget(item: DialogItem, row: FleetRow | undefined): row is FleetRow {
+  return (
+    row !== undefined &&
+    isLocallyAnswerableDialog(row) &&
+    row.paneId !== null &&
+    row.claudeSessionId !== null &&
+    item.target.sessionId === row.id &&
+    item.target.sessionName === row.name
+  );
+}
+
 function executionKey(row: FleetRow | undefined): string {
   if (row?.execution.kind !== "verified") return "unverified";
   const { boot, pid, startTicks } = row.execution.token;
@@ -195,11 +207,7 @@ function AnswerableDialog({ item, row, question, answeringEnabled, answeringRefu
     answeringRefusal === null &&
     stickyRefusal === null &&
     !repeatUnsafe &&
-    isLocallyAnswerableDialog(row) &&
-    row.paneId !== null &&
-    row.claudeSessionId !== null &&
-    item.target.sessionId === row.id &&
-    item.target.sessionName === row.name;
+    hasAnswerableTarget(item, row);
 
   const onAnswer = useCallback((index: number) => {
     if (!canAnswer) return;
@@ -540,6 +548,11 @@ export function QuestionsPanel({
   const sessionsQuiet = view?.kind === "complete" && view.items.length === 0;
   const hasDialogItem =
     view !== null && view.kind !== "not-observed" && view.items.some((item) => item.kind === "dialog");
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const hasAnswerableDialog =
+    view !== null &&
+    view.kind !== "not-observed" &&
+    view.items.some((item) => item.kind === "dialog" && hasAnswerableTarget(item, rowsById.get(item.rowId)));
   let body: ReactNode;
   if (view === null) {
     body = (
@@ -602,7 +615,7 @@ export function QuestionsPanel({
           Session detail, where its receipt is; on this tab the buttons would
           otherwise simply be missing, which reads as a bug rather than as the
           server having said no. */}
-      {hasDialogItem && answeringRefusal !== null ? (
+      {hasAnswerableDialog && answeringRefusal !== null ? (
         <p className="tw:mt-3 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px] tw:text-alarm-ink">
           The server refused an answer from this page, so option buttons are withheld until a later reading says
           answering is on: {answeringRefusal}

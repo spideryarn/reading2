@@ -831,14 +831,14 @@ export function Conversation({
         />
       ) : view.kind === "moved" ? (
         <Refusal
-          head="By the time the box read this session's transcript, it had already moved to a different conversation."
-          why={`this page asked about ${view.asked ?? "no conversation"}, and the dashboard server read ${view.read ?? "no conversation"} — its own view of this session changed in between, so what it read is not shown here as this session's transcript`}
+          head="The dashboard server answered under a different conversation claim than this page asked under."
+          why={`this page asked under ${view.asked ?? "no conversation"}, and the dashboard server's answer named ${view.read ?? "no conversation"} — those claims do not match, so its answer is not shown here as this session's transcript`}
           detail={
             <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
-              Read again once this page has caught up with the box.
+              Read again to ask about the session as it is now.
             </p>
           }
-          said="said by this browser, from the conversation the server says it read"
+          said="said by this browser, from the conversation claim the server's answer named"
         />
       ) : (
         <Refusal

@@ -76,6 +76,7 @@ import {
   STALE_TRANSCRIPT_MS,
   makeMessagesApi,
   messagesUrl,
+  ofTheClaimAsked,
   parseRecentMessages,
   transcriptAge,
   withClockSkew,
@@ -4669,7 +4670,7 @@ describe("the transcript reply, as this page reads it", () => {
 
   it("reads the server's 404 body rather than inventing a sentence for it", async () => {
     const api = makeMessagesApi(async () =>
-      new Response(JSON.stringify({ kind: "not-found", reason: "no-such-session", why: "no session with that handle in the current snapshot" }), {
+      new Response(JSON.stringify({ kind: "not-found", reason: "no-such-session", why: "no session with that handle in the current snapshot", claudeSessionId: null }), {
         status: 404,
         headers: { "content-type": "application/json" },
       }),
@@ -4678,6 +4679,35 @@ describe("the transcript reply, as this page reads it", () => {
     expect(view.kind).toBe("not-found");
     if (view.kind !== "not-found") throw new Error("unreachable");
     expect(view.why).toBe("no session with that handle in the current snapshot");
+    expect(ofTheClaimAsked(view, "conversation-C").kind).toBe("moved");
+  });
+
+  it("stamps the two /api/messages refusals synthesized outside the transcript reader", () => {
+    const source = readFileSync(join(process.cwd(), "tools", "fleet", "server.ts"), "utf8");
+    expect(source).toMatch(/reason:\s*"no-such-session"[\s\S]{0,240}claudeSessionId:\s*null/);
+    expect(source).toMatch(/claudeSessionId:\s*row\.claudeSessionId[\s\S]{0,240}reading the transcript threw/);
+  });
+
+  it("refuses unreadable mismatches and malformed present provenance rather than treating either as old-server", () => {
+    const unreadable = parseRecentMessages({
+      kind: "unreadable",
+      path: "/tmp/d.jsonl",
+      why: "EACCES",
+      claudeSessionId: "conversation-D",
+    });
+    expect(ofTheClaimAsked(unreadable, "conversation-C")).toEqual({
+      kind: "moved",
+      asked: "conversation-C",
+      read: "conversation-D",
+    });
+
+    const malformed = parseRecentMessages({
+      kind: "unreadable",
+      path: null,
+      why: "failed",
+      claudeSessionId: 17,
+    });
+    expect(malformed.kind).toBe("no-answer");
   });
 });
 
@@ -10919,6 +10949,35 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
   });
 
+  it("keeps a draft when the tmux world and claim become known for the first time", async () => {
+    const feed = manualTransport();
+    const withClaim = (claim: string | null): FleetState["rows"] => [
+      steerable({
+        id: "$a",
+        title: "a session",
+        status: { kind: "working" },
+        claudeSessionId: claim,
+        execution: CANNOT_TELL,
+      }),
+    ];
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: null, rows: withClaim(null) })));
+    openSession("a session");
+    typeInto(composer(), "written before either fact was readable");
+
+    /* A first known value establishes a baseline; it is not evidence that the
+       target changed while the fact was unknown. Exercise the two independent
+       memories separately so either one counting first sight as a change makes
+       this test lose the draft. */
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: withClaim(null) })));
+    await act(async () => {});
+    expect(composer().value).toBe("written before either fact was readable");
+
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: withClaim("conv-A") })));
+    await act(async () => {});
+    expect(composer().value).toBe("written before either fact was readable");
+  });
+
   /**
    * **AN UNKNOWN IN THE MIDDLE DOES NOT LAUNDER A CHANGE.** Known 132280, then
    * nothing, then known 132281: two known values that differ, and so a
@@ -11098,7 +11157,7 @@ describe("recent messages, when the execution reading contradicts the row's clai
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("a turn the server read");
-    expect(text).toContain("had already moved to a different conversation");
+    expect(text).toContain("answered under a different conversation claim");
     expect(text).toContain("conv-D");
     /* Not a dead end: the next read, once the page's snapshot has caught up, is
        one tap away. */
@@ -11122,7 +11181,10 @@ describe("recent messages, when the execution reading contradicts the row's clai
     await act(async () => {});
 
     const text = container.textContent ?? "";
-    expect(text).toContain("had already moved to a different conversation");
+    expect(text).toContain("answered under a different conversation claim");
+    expect(text).toContain("answer named no conversation");
+    expect(text).toContain("Read again to ask about the session as it is now");
+    expect(text).not.toContain("server read no conversation");
     expect(text).not.toContain("There is no transcript to read for this session.");
   });
 
@@ -11135,7 +11197,7 @@ describe("recent messages, when the execution reading contradicts the row's clai
 
     const text = container.textContent ?? "";
     expect(text).toContain("a turn the server read");
-    expect(text).not.toContain("had already moved to a different conversation");
+    expect(text).not.toContain("answered under a different conversation claim");
   });
 
   /**
@@ -11152,7 +11214,7 @@ describe("recent messages, when the execution reading contradicts the row's clai
 
     const text = container.textContent ?? "";
     expect(text).toContain("a turn the server read");
-    expect(text).not.toContain("had already moved to a different conversation");
+    expect(text).not.toContain("answered under a different conversation claim");
   });
 
   it("re-reads when the observed conversation changes under one handle, and not on an unchanged snapshot", async () => {
@@ -11334,6 +11396,32 @@ describe("recent messages, when the execution reading contradicts the row's clai
     expect(messages.asked).toHaveLength(1);
   });
 
+  it("does not let React batching erase a delivered conflict before an unknown reading", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    /* The browser receives evidence of the conflict, then a reading unable to
+       re-check it. Both deliveries may share one React turn (an SSE transport
+       is allowed to call its sink any number of times), but the second must not
+       erase what the first established. */
+    act(() => {
+      feed.push(state({ rows: rowsWith(CONFLICTING) }));
+      feed.push(
+        state({
+          rows: rowsWith({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      );
+    });
+    await act(async () => {});
+
+    expect(container.textContent ?? "").toContain("previous conversation");
+    expect(container.textContent ?? "").toContain("latest pass could not re-check");
+  });
+
   /**
    * `StaleNote` asks, in violet, whether these turns belong to this session at
    * all — from an inference about transcript age. A verified conversation
@@ -11461,6 +11549,38 @@ describe("the two answering refusals, and who owns each", () => {
 
     act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
     await act(async () => {});
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not let React batching erase the delivered end of a dialog", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    await act(async () => container.querySelector<HTMLButtonElement>("button.answer")?.click());
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    act(() => {
+      feed.push(
+        state({
+          answeringEnabled: { kind: "enabled" },
+          rows: [steerable({ id: "$a", title: "asking", status: { kind: "working" }, question: null })],
+        }),
+      );
+      feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") }));
+    });
+    await act(async () => {});
+
     expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
   });
 
@@ -11614,5 +11734,40 @@ describe("the two answering refusals, and who owns each", () => {
        buttons returning is the observable fact that the page-level latch came
        off. */
     expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not let React batching reorder a delivered payload after the refusal", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () => ({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } }),
+      answer: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: pending });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    act(() => container.querySelector<HTMLButtonElement>("button.answer")?.click());
+
+    /* Delivery order is payload, then refusal. Keep both in one async `act` so
+       React batches the payload's render: a commit-time ref still points at the
+       older payload when the refusal callback runs and reverses that order. */
+    await act(async () => {
+      feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") }));
+      settle?.({
+        ok: false,
+        code: "answering-disabled",
+        why: REFUSED_SERVER,
+        status: 503,
+        from: "server",
+        delivery: { kind: "none" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
   });
 });
