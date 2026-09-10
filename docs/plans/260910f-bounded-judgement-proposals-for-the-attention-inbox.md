@@ -93,6 +93,10 @@ only way to a paid attention call, daemon or CLI:
   backwards) refuses too. A reservation records its day and settles into it across midnight.
 - **`--no-write` controls attention memory only**, never budget accounting: a hand run of
   `overseer attention` spends against the same ceiling as the daemon.
+- **One named exception: the evaluation** (`scripts/attention-eval.ts`) reserves against a day
+  budget of its own in a fresh temp directory, so scoring the labelled set can never spend the
+  daemon's day — and so is outside the daemon's ceiling. It is bounded by its own ledger and by the
+  labelled set's size (25 items, cents), and it runs only when a person runs it.
 - **One call in flight** within a process (the pass is already sequential); the lock covers two.
 - **Starting ceilings, proposed rather than known:** global 1,500 calls / 3,000,000 tokens / $1.50 a
   UTC day, from the measured $0.50–1.00/day in `src/spend-declarations.ts`; per pass the existing
@@ -263,6 +267,22 @@ stopped, both confirmed by reading the code:
 | F12b | (the fixer's sweep, same class) a stale re-read that was made but came back unusable — unparseable, a 429 — kept its card and did not count the session | **fixed** by the same change, seen red; this **reverses a test expectation** recorded in 1b–1e, and D3 now says so |
 
 Opus subagent. Scoped suites 266/266, typecheck clean.
+
+**Fable, on the two properties Sol's stopped review never reached** (read-only, of `2eccd2a6`):
+**the cooldown holds** — it starts only on 402/429, ends when `until` passes (pinned 15m → 30m → 1h
+→ 2h → 2h → grant), carries across a new day and a second process, and cannot run away, because a
+cooldown refuses every reserve and so admits no further strike; and **the verdict cache holds** — no
+failure reaches it by any route (the pass writes only under `isCacheable`, the type excludes both
+failure arms, the memory parser refuses a file holding one), and a stale verdict is always re-read
+ahead of fresh tails and stays stale when the re-read fails. Two P2s, recorded rather than fixed,
+since neither shows a reader anything false:
+
+- **A 429 on the pass's last tail** publishes a `list` with that session unjudged (*at least N*),
+  not `limited`; the next pass, two minutes on, says `cooling-down`. Fix if it matters: `strike`
+  returns the cooldown it wrote and the pass sets `stopped` from it.
+- **A tail that always fails** takes a re-read slot every pass, and twelve of them would starve fresh
+  tails until their panes change — the price of *failures are re-asked*, bounded by the day ceiling
+  and counted in `overBudget`. A per-fingerprint backoff if it ever bites.
 
 **Not reviewed by Sol, because of the stop:** attack items 4 (a cooldown that never starts or never
 ends) and 5 (a stale verdict never re-read, or a failure cached). The narrow P1 check covers the two
