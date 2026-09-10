@@ -24,7 +24,7 @@
  * launcher must fail the first post-invocation row, and a test below shows it
  * does.
  */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,16 +32,21 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import type { BootIdentity } from "../tools/fleet/execution-identity.js";
 import type { BehaviourHash } from "../tools/overseer/jobs.js";
-import { ADMISSION_DIR, ADMISSION_JOURNAL, openLocalAdmission, type AdmissionOwner, type LocalAdmission } from "../tools/overseer/launch-admission.js";
+import { ADMISSION_DIR, ADMISSION_JOURNAL, openLocalAdmission, type AdmissionClass, type AdmissionOwner, type LocalAdmission } from "../tools/overseer/launch-admission.js";
 import { EXIT_FILE, INTENT_FILE, START_FILE, artefactText, identityOf, readArtefacts, type ProcessProbe } from "../tools/overseer/launch-artefacts.js";
 import {
   CORRELATION_ID_PATTERN,
   composeLaunchProtocol,
+  correlationIdOf,
   occurrenceIdOf,
+  pinOf,
+  reconcile,
   recoveryOrigin,
+  replayJournal,
   reservationKeyOf,
   resolveHistory,
   scheduleOrigin,
+  usesTmux,
   type CorrelationId,
   type LaunchEvent,
   type LaunchJournal,
@@ -154,7 +159,13 @@ function probeOf(shared: Shared, pid: number): ProcessProbe {
   return ticks === undefined ? { kind: "no-such-process" } : { kind: "ticks", ticks };
 }
 
-type WorldOptions = { readonly crash?: CrashPoint; readonly refuseAppend?: LaunchEvent["kind"]; readonly launchers?: readonly LauncherKind[] };
+type WorldOptions = {
+  readonly crash?: CrashPoint;
+  readonly refuseAppend?: LaunchEvent["kind"];
+  readonly launchers?: readonly LauncherKind[];
+  /** The owner's release answers `unavailable` with this reason, and releases nothing. */
+  readonly ownerReleaseFails?: string;
+};
 
 type World = {
   readonly parts: LaunchParts;
@@ -226,6 +237,7 @@ function world(shared: Shared, options: WorldOptions = {}): World {
     },
     release(key, because) {
       alive();
+      if (options.ownerReleaseFails !== undefined) return { kind: "unavailable", why: options.ownerReleaseFails };
       const answer = realOwner.release(key, because);
       if (crash?.at === "owner-after-release") die("owner after release");
       return answer;
@@ -318,8 +330,14 @@ function restart(shared: Shared, old: World, options: WorldOptions = {}): World 
 const RUN: RunSpec = { timeoutMinutes: 30, access: "review" };
 
 /** A tmux plan carries no run spec; a wrapper plan must (Stage 2 — the union makes the pairing a type error). */
-function request(candidate = "cand-a", material = "Summarise the plan, then stop.\n", launcherKind: LauncherKind = "tmux", run: RunSpec = RUN): PlanRequest {
-  const common = { origin: recoveryOrigin(candidate), material, admissionClass: "claude-session" as const };
+function request(
+  candidate = "cand-a",
+  material = "Summarise the plan, then stop.\n",
+  launcherKind: LauncherKind = "tmux",
+  run: RunSpec = RUN,
+  admissionClass: AdmissionClass = "claude-session",
+): PlanRequest {
+  const common = { origin: recoveryOrigin(candidate), material, admissionClass };
   return launcherKind === "tmux" ? { ...common, launcherKind } : { ...common, launcherKind, run };
 }
 
@@ -1062,8 +1080,8 @@ describe("F2: history-lost refuses to plan, and Greg's attributed resolution is 
     if (!resolved.ok) return;
     expect(readFileSync(join(shared.root, LAUNCHES_DIR, resolved.reset.preservedAs)).equals(before)).toBe(true);
     const carried = new Map(resolved.reset.carried.map((entry) => [entry.occurrenceId, entry]));
-    expect(carried.get(idOf(hidden))).toEqual({ occurrenceId: idOf(hidden), lastSeen: null, ownerHeld: { slot: "claude-session#1" } });
-    expect(carried.get(idOf(visible))?.lastSeen).toBe("planned");
+    expect(carried.get(idOf(hidden))).toEqual({ occurrenceId: idOf(hidden), lastSeen: null, ownerHeld: { slot: "claude-session#1" }, origin: null, plannedAt: null });
+    expect(carried.get(idOf(visible))).toMatchObject({ lastSeen: "planned", origin: visible.origin });
 
     // Neither carried occurrence is ever planned again; a new one waits behind the hidden slot.
     expect(w.protocol.plan(hidden).kind).toBe("refused");
@@ -1101,7 +1119,7 @@ describe("F2: history-lost refuses to plan, and Greg's attributed resolution is 
     const resolved = resolveHistory({ journal: w.store, owner: w.owner, now }, resolution);
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
-    expect(resolved.reset.carried).toEqual([{ occurrenceId: idOf(gone), lastSeen: null, ownerHeld: null }]);
+    expect(resolved.reset.carried).toEqual([{ occurrenceId: idOf(gone), lastSeen: null, ownerHeld: null, origin: null, plannedAt: null }]);
     expect(w.store.fold().carried.has(idOf(gone))).toBe(true);
 
     // Not a fresh occurrence restarting at a1, where the old exit.json could release the new slot.
@@ -1124,6 +1142,646 @@ describe("F2: history-lost refuses to plan, and Greg's attributed resolution is 
     const resolved = resolveHistory({ journal: w.store, owner: w.owner, now }, { actor: "greg", requestId: "resolve-early", why: "both broke", acceptHiddenLaunchRisk: true });
     expect(resolved.ok).toBe(false);
     if (!resolved.ok) expect(resolved.why).toMatch(/admission owner's history first/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Stage 1b: Sol's F16–F19, the fields and operations the two consumers
+ * asked for, and the per-class hold condition.
+ * ------------------------------------------------------------------ */
+
+type DiskLine = { readonly kind: string; readonly at: string } & Record<string, unknown>;
+
+function linesOnDisk(shared: Shared): DiskLine[] {
+  return readFileSync(journalPath(shared), "utf8")
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => JSON.parse(line) as DiskLine);
+}
+
+function atOf(shared: Shared, kind: string): string {
+  const line = linesOnDisk(shared).find((one) => one.kind === kind);
+  if (line === undefined) throw new Error(`no ${kind} line on the disk`);
+  return line.at;
+}
+
+/** The launched side's exit.json for attempt 1, as a job shell writes it. */
+function endAttempt(shared: Shared, id: LaunchOccurrenceId, code = 0): void {
+  writeFileSync(
+    join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, id, "a1", EXIT_FILE),
+    artefactText({ v: 1, kind: "exit", correlationId: `${id}-a1` as CorrelationId, ...shellExit(code), at: now().toISOString() }),
+  );
+}
+
+function scheduleRequest(jobId: string): PlanRequest {
+  return {
+    origin: scheduleOrigin({ jobId, scheduledAt: "2026-09-10T12:00:00.000Z", behaviourHash: "abcdef012345" as BehaviourHash }),
+    material: "the scheduled prompt\n",
+    admissionClass: "claude-session",
+    launcherKind: "tmux",
+  };
+}
+
+describe("F16: evidence is read from this store's own attempt directory, never from a path in the journal", () => {
+  test("a journal carried to another root does not read the first root's exit.json, and keeps its slot", () => {
+    const first = newShared();
+    const req = request("cand-f16-carried-journal");
+    const dying = world(first, { crash: { at: "after-append", kind: "launching" } });
+    dying.protocol.launchOccurrence(req);
+    dying.kill();
+    const second = newShared();
+    cpSync(join(first.root, LAUNCHES_DIR), join(second.root, LAUNCHES_DIR), { recursive: true });
+    cpSync(join(first.root, ADMISSION_DIR), join(second.root, ADMISSION_DIR), { recursive: true });
+    // The FIRST root's attempt ends; the second root's copy of it does not.
+    endAttempt(first, idOf(req));
+    const w = world(second);
+    reconcileOk(w);
+    expectRow(second, w, idOf(req), { invocations: 0, effects: 0, held: 1, state: "outcome-unknown" });
+  });
+});
+
+describe("F19: an other-boot identity reading is conclusive on its own", () => {
+  test("it completes the attempt (rebooted) even when the separate boot read fails, using the reading's own boot ids", () => {
+    const req = request("cand-f19-other-boot");
+    const id = idOf(req);
+    const correlationId = correlationIdOf(id, 1);
+    const at = "2026-09-10T00:00:00.000Z";
+    const replayed = replayJournal(
+      [
+        { v: 1, kind: "planned", occurrenceId: id, at, origin: req.origin, material: pinOf(Buffer.from("x")), launcherKind: "tmux", run: null, admissionClass: "claude-session" },
+        { v: 1, kind: "reserved", occurrenceId: id, at, reservationKey: reservationKeyOf(id), slot: "claude-session#1", ownerId: "local-admission", how: "granted" },
+        { v: 1, kind: "launching", occurrenceId: id, at, attempt: 1, correlationId },
+      ].map((line) => JSON.stringify(line)),
+    );
+    expect(replayed.status).toEqual({ kind: "whole" });
+    const decisions = reconcile(
+      replayed.fold,
+      {
+        attemptDir: (occurrence, attempt) => `/a-store/launches/o/${occurrence}/a${attempt}`,
+        artefacts: () => ({
+          intent: { kind: "absent" },
+          start: { kind: "present", record: { v: 1, kind: "start", correlationId, pid: 42, startTicks: 7, bootId: "boot-recorded", tmuxPane: null, at } },
+          exit: { kind: "absent" },
+        }),
+        identity: () => ({ kind: "other-boot", recorded: "boot-recorded", current: "boot-now" }),
+        boot: () => ({ read: false, cause: "boot-identity-unreadable", why: "one transient read failed (test)" }),
+        tmux: () => ({ kind: "absent" }),
+        lookup: () => ({ kind: "reserved", slot: "claude-session#1", ownerId: "local-admission" }),
+      },
+      at,
+    );
+    expect(decisions).toMatchObject([{ kind: "record", event: { kind: "completed", evidence: { kind: "rebooted", recordedBootId: "boot-recorded", currentBootId: "boot-now" } } }]);
+  });
+});
+
+describe("F17: a released record still answers to the owner's truth", () => {
+  test("an owner journal repaired to show a released key as reserved is released again, under the record's own licence, with no new journal line", () => {
+    const shared = newShared("exits-at-once");
+    const req = request("cand-f17-resurrected");
+    const w0 = world(shared);
+    w0.protocol.launchOccurrence(req);
+    reconcileOk(w0);
+    expectRow(shared, w0, idOf(req), { invocations: 1, effects: 1, held: 0, state: "completed" });
+    w0.kill();
+    // The owner's release line is the hole; resolving the owner's history carries the salvaged key as held.
+    const ownerPath = join(shared.root, ADMISSION_DIR, ADMISSION_JOURNAL);
+    const ownerText = readFileSync(ownerPath, "utf8").split("\n").filter((line) => line !== "");
+    expect(ownerText.map((line) => (JSON.parse(line) as { kind: string }).kind)).toEqual(["reserved", "released"]);
+    writeFileSync(ownerPath, `${ownerText[0]}\n{the release line, lost\n`);
+    const w = world(shared);
+    expect(w.owner.resolveHistory({ actor: "greg", requestId: "resolve-owner-f17", why: "a disk fault in the owner's journal", acceptHiddenLaunchRisk: true }).ok).toBe(true);
+    expect(heldOf(w, idOf(req))).toBe(1);
+    const journalBefore = readFileSync(journalPath(shared), "utf8");
+    reconcileOk(w);
+    expect(heldOf(w, idOf(req))).toBe(0);
+    expect(readFileSync(journalPath(shared), "utf8")).toBe(journalBefore);
+    expect(ownerLines(shared).at(-1)).toMatchObject({ kind: "released", because: { kind: "terminal", state: "completed" } });
+    // The class is free again.
+    expect(w.protocol.launchOccurrence(request("cand-f17-next")).kind).toBe("invoked");
+  });
+});
+
+describe("endedAt: the instant the occurrence ended, never moved by the release after it", () => {
+  test("completed, then released later", () => {
+    const shared = newShared("exits-at-once");
+    const req = request("cand-ended-completed");
+    const w = world(shared);
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    const record = recordOf(w, idOf(req));
+    expect(record.reservation.kind).toBe("released");
+    expect(record.state === "completed" ? record.endedAt : null).toBe(atOf(shared, "completed"));
+    expect(record.updatedAt).toBe(atOf(shared, "released"));
+    expect(atOf(shared, "completed")).not.toBe(atOf(shared, "released"));
+    // And the same after a replay.
+    const again = recordOf(restart(shared, w), idOf(req));
+    expect(again.state === "completed" ? again.endedAt : null).toBe(atOf(shared, "completed"));
+  });
+
+  test("failed-before-launch, then released", () => {
+    const shared = newShared("refuses");
+    const req = request("cand-ended-failed");
+    const w = world(shared);
+    w.protocol.launchOccurrence(req);
+    const record = recordOf(w, idOf(req));
+    expect(record.reservation.kind).toBe("released");
+    expect(record.state === "failed-before-launch" ? record.endedAt : null).toBe(atOf(shared, "failed-before-launch"));
+    expect(record.updatedAt).toBe(atOf(shared, "released"));
+    expect(atOf(shared, "failed-before-launch")).not.toBe(atOf(shared, "released"));
+  });
+});
+
+describe("launchingAt: the launching line's instant, carried by its attempt", () => {
+  test("survives observed-running, completed and released unchanged", () => {
+    const shared = newShared();
+    const req = request("cand-launching-at");
+    const w = world(shared);
+    w.protocol.launchOccurrence(req);
+    const launchingAt = atOf(shared, "launching");
+    const currentOf = (record: LaunchRecord) => ("current" in record ? record.current : null);
+    expect(currentOf(recordOf(w, idOf(req)))?.launchingAt).toBe(launchingAt);
+    reconcileOk(w);
+    expect(recordOf(w, idOf(req)).state).toBe("observed-running");
+    expect(currentOf(recordOf(w, idOf(req)))?.launchingAt).toBe(launchingAt);
+    endAttempt(shared, idOf(req));
+    reconcileOk(w);
+    const ended = recordOf(w, idOf(req));
+    expect(ended.state).toBe("completed");
+    expect(ended.reservation.kind).toBe("released");
+    expect(currentOf(ended)?.launchingAt).toBe(launchingAt);
+    expect(ended.attempts.map((one) => one.launchingAt)).toEqual([launchingAt]);
+    expect(ended.updatedAt).not.toBe(launchingAt);
+  });
+});
+
+describe("resumeOccurrence: drive the stored, pinned record — no re-plan, no request", () => {
+  test("a waiting occurrence resumes to invoked without its caller re-supplying the material", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const first = request("cand-resume-first");
+    const second = request("cand-resume-second", "the pinned prompt, and only this\n");
+    expect(w.protocol.launchOccurrence(first).kind).toBe("invoked");
+    expect(w.protocol.launchOccurrence(second).kind).toBe("waiting");
+    endAttempt(shared, idOf(first));
+    reconcileOk(w);
+    const resumed = w.protocol.resumeOccurrence(idOf(second));
+    expect(resumed.kind).toBe("invoked");
+    expect(shared.invocations).toBe(2);
+    expect(shared.received.at(-1)?.equals(Buffer.from("the pinned prompt, and only this\n", "utf8"))).toBe(true);
+  });
+
+  test("a planned occurrence resumes too", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const req = request("cand-resume-planned");
+    w.protocol.plan(req);
+    expect(w.protocol.resumeOccurrence(idOf(req)).kind).toBe("invoked");
+  });
+
+  test.each([
+    [
+      "launching",
+      (shared: Shared, req: PlanRequest): World => {
+        shared.mode = "effect-only";
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+    [
+      "completed",
+      (shared: Shared, req: PlanRequest): World => {
+        shared.mode = "exits-at-once";
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        reconcileOk(w);
+        return w;
+      },
+    ],
+    [
+      "outcome-unknown",
+      (shared: Shared, req: PlanRequest): World => {
+        const first = world(shared, { crash: { at: "after-append", kind: "launching" } });
+        first.protocol.launchOccurrence(req);
+        const w = restart(shared, first);
+        reconcileOk(w);
+        return w;
+      },
+    ],
+  ] as const)("a %s occurrence is refused, and nothing is invoked", (state, build) => {
+    const shared = newShared();
+    const req = request(`cand-resume-refused-${state}`);
+    const w = build(shared, req);
+    expect(recordOf(w, idOf(req)).state).toBe(state);
+    const invocations = shared.invocations;
+    const bytes = readFileSync(journalPath(shared), "utf8");
+    const outcome = w.protocol.resumeOccurrence(idOf(req));
+    expect(outcome.kind === "not-launchable" ? outcome.state : outcome.kind).toBe(state);
+    expect(shared.invocations).toBe(invocations);
+    expect(readFileSync(journalPath(shared), "utf8")).toBe(bytes);
+  });
+
+  test("an unknown id, and a lost history, are refused", () => {
+    const shared = newShared();
+    const w0 = world(shared);
+    expect(w0.protocol.resumeOccurrence(idOf(request("cand-never-planned"))).kind).toBe("refused");
+    const req = request("cand-resume-lost");
+    w0.protocol.plan(req);
+    w0.kill();
+    appendFileSync(journalPath(shared), "{a hole}\n");
+    const w = world(shared);
+    expect(w.protocol.resumeOccurrence(idOf(req)).kind).toBe("refused");
+    expect(shared.invocations).toBe(0);
+  });
+});
+
+describe("abandon: superseded, from planned or waiting only — and a superseded occurrence never launches", () => {
+  test("from planned with a lost reply the owner still holds: the slot is released, and a new origin plans normally", () => {
+    const shared = newShared();
+    const req = request("cand-abandon-lost-reply");
+    const first = world(shared, { crash: { at: "owner-after-reserve" } });
+    first.protocol.launchOccurrence(req);
+    const w = restart(shared, first);
+    expectRow(shared, w, idOf(req), { invocations: 0, effects: 0, held: 1, state: "planned" });
+    expect(w.protocol.abandon(idOf(req), "its next due instant arrived")).toEqual({ kind: "abandoned", reservation: { kind: "released" } });
+    expectRow(shared, w, idOf(req), { invocations: 0, effects: 0, held: 0, state: "failed-before-launch" });
+    const record = recordOf(w, idOf(req));
+    expect(record.state === "failed-before-launch" ? [record.proof, record.why, record.attempt] : null).toEqual(["superseded", "its next due instant arrived", null]);
+    const next = request("cand-abandon-next-due");
+    expect(w.protocol.launchOccurrence(next).kind).toBe("invoked");
+    expectRow(shared, w, idOf(next), { invocations: 1, effects: 1, held: 1, state: "launching" });
+  });
+
+  test("from waiting-admission", () => {
+    const shared = newShared();
+    const w = world(shared);
+    w.protocol.launchOccurrence(request("cand-abandon-holder"));
+    const req = request("cand-abandon-waiting");
+    expect(w.protocol.launchOccurrence(req).kind).toBe("waiting");
+    expect(w.protocol.abandon(idOf(req), "superseded while it waited")).toEqual({ kind: "abandoned", reservation: { kind: "released" } });
+    expect(recordOf(w, idOf(req)).state).toBe("failed-before-launch");
+  });
+
+  test("the new proof parses and replays", () => {
+    const shared = newShared();
+    const w0 = world(shared);
+    const req = request("cand-abandon-replays");
+    w0.protocol.plan(req);
+    w0.protocol.abandon(idOf(req), "no longer wanted");
+    const w = restart(shared, w0);
+    expect(w.store.status()).toEqual({ kind: "whole" });
+    const record = recordOf(w, idOf(req));
+    expect(record.state === "failed-before-launch" ? record.proof : null).toBe("superseded");
+  });
+
+  test("after abandon, neither launchOccurrence nor resumeOccurrence launches it", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const req = request("cand-abandon-never-again");
+    w.protocol.plan(req);
+    w.protocol.abandon(idOf(req), "superseded");
+    const bytes = readFileSync(journalPath(shared), "utf8");
+    const launched = w.protocol.launchOccurrence(req);
+    const resumed = w.protocol.resumeOccurrence(idOf(req));
+    expect(launched.kind === "not-launchable" ? launched.state : launched.kind).toBe("failed-before-launch");
+    expect(resumed.kind === "not-launchable" ? resumed.state : resumed.kind).toBe("failed-before-launch");
+    reconcileOk(w);
+    expect(readFileSync(journalPath(shared), "utf8")).toBe(bytes);
+    expectRow(shared, w, idOf(req), { invocations: 0, effects: 0, held: 0, state: "failed-before-launch" });
+  });
+
+  test("from launching is refused, and writes nothing", () => {
+    const shared = newShared("effect-only");
+    const w = world(shared);
+    const req = request("cand-abandon-launching");
+    w.protocol.launchOccurrence(req);
+    const bytes = readFileSync(journalPath(shared), "utf8");
+    expect(w.protocol.abandon(idOf(req), "too late").kind).toBe("refused");
+    expect(readFileSync(journalPath(shared), "utf8")).toBe(bytes);
+    expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 1, state: "launching" });
+  });
+
+  test("an owner that cannot release answers held with its reason, and reconciliation releases the slot later (F7)", () => {
+    const shared = newShared();
+    const req = request("cand-abandon-owner-down");
+    const first = world(shared, { crash: { at: "owner-after-reserve" } });
+    first.protocol.launchOccurrence(req);
+    const w = restart(shared, first, { ownerReleaseFails: "the owner's disk is full (test)" });
+    const result = w.protocol.abandon(idOf(req), "superseded");
+    expect(result).toEqual({ kind: "abandoned", reservation: { kind: "held", why: expect.stringMatching(/disk is full/) } });
+    expect(heldOf(w, idOf(req))).toBe(1);
+    const later = restart(shared, w);
+    reconcileOk(later);
+    expect(heldOf(later, idOf(req))).toBe(0);
+    expect(ownerLines(shared).at(-1)).toMatchObject({ kind: "released", because: { kind: "terminal", state: "failed-before-launch" } });
+  });
+
+  test("an unknown id is refused", () => {
+    const w = world(newShared());
+    expect(w.protocol.abandon(idOf(request("cand-abandon-unknown")), "x").kind).toBe("refused");
+  });
+});
+
+describe("G7: tmux is probed for every launcher that lives in tmux, and only those", () => {
+  test("usesTmux", () => {
+    expect(usesTmux("tmux")).toBe(true);
+    expect(usesTmux("tmux-headless")).toBe(true);
+    expect(usesTmux("headless")).toBe(false);
+  });
+
+  test.each(["tmux", "tmux-headless"] as const)("%s: a session carrying the id and no start.json → observed-running", (kind) => {
+    const shared = newShared("effect-only");
+    const w = world(shared, { launchers: ["tmux", "headless", "tmux-headless"] });
+    const req = request(`cand-g7-${kind}`, "m\n", kind);
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    const record = recordOf(w, idOf(req));
+    expect(record.state === "observed-running" ? record.evidence : record.state).toEqual({ kind: "tmux-session", sessionId: "$7" });
+  });
+
+  test("headless: a session file the fake would report is never asked about", () => {
+    const shared = newShared("effect-only");
+    const w = world(shared, { launchers: ["headless"] });
+    const req = request("cand-g7-headless", "m\n", "headless");
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    expect(recordOf(w, idOf(req)).state).toBe("outcome-unknown");
+  });
+});
+
+describe("G1: the failed-before-launch outcome says whether its slot was released", () => {
+  test("launcher-refused, owner releases: released", () => {
+    const shared = newShared("refuses");
+    const w = world(shared);
+    const outcome = w.protocol.launchOccurrence(request("cand-g1-released"));
+    expect(outcome).toMatchObject({ kind: "failed-before-launch", proof: "launcher-refused", reservation: { kind: "released" } });
+  });
+
+  test("launcher-refused, owner's release fails: held with its reason, and inspect says the slot is held", () => {
+    const shared = newShared("refuses");
+    const w = world(shared, { ownerReleaseFails: "the owner's disk is full (test)" });
+    const req = request("cand-g1-held");
+    const outcome = w.protocol.launchOccurrence(req);
+    expect(outcome).toMatchObject({ kind: "failed-before-launch", proof: "launcher-refused", reservation: { kind: "held", why: expect.stringMatching(/disk is full/) } });
+    expect(w.protocol.inspect(req.origin)?.reservationHeld).toBe(true);
+  });
+
+  test("material-mismatch, owner's release fails: held", () => {
+    const shared = newShared();
+    const w = world(shared, { ownerReleaseFails: "the owner's disk is full (test)" });
+    const req = request("cand-g1-material");
+    w.protocol.plan(req);
+    writeFileSync(join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(req), MATERIAL_FILE), "not the pinned bytes\n");
+    const outcome = w.protocol.launchOccurrence(req);
+    expect(outcome).toMatchObject({ kind: "failed-before-launch", proof: "material-mismatch", reservation: { kind: "held" } });
+  });
+
+  test("admission-refused holds nothing: released", () => {
+    const shared = newShared();
+    const first = world(shared);
+    first.protocol.plan(request("cand-g1-admission"));
+    first.kill();
+    // An owner that lost its history refuses to reserve.
+    mkdirSync(join(shared.root, ADMISSION_DIR), { recursive: true });
+    appendFileSync(join(shared.root, ADMISSION_DIR, ADMISSION_JOURNAL), "{an owner hole}\n");
+    const w = world(shared);
+    const outcome = w.protocol.launchOccurrence(request("cand-g1-admission"));
+    expect(outcome).toMatchObject({ kind: "failed-before-launch", proof: "admission-refused", reservation: { kind: "released" } });
+  });
+});
+
+describe("G6: inspect and inFlight hand out frozen copies", () => {
+  test("a summary is a frozen copy: mutating it reaches neither the fold nor the next answer", () => {
+    const shared = newShared("exits-at-once");
+    const w = world(shared);
+    const req = request("cand-g6-frozen");
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    const summary = w.protocol.inspect(req.origin);
+    expect(summary).toEqual({
+      occurrenceId: idOf(req),
+      state: "completed",
+      attempt: 1,
+      reservationHeld: false,
+      disposed: false,
+      endedAt: atOf(shared, "completed"),
+      completion: { kind: "exit", code: 0 },
+    });
+    expect(() => {
+      (summary as { state: string }).state = "planned";
+    }).toThrow(TypeError);
+    expect(() => {
+      (summary?.completion as { code: number }).code = 9;
+    }).toThrow(TypeError);
+    const list = w.protocol.inFlight("recovery");
+    expect(() => (list as unknown[]).push(summary)).toThrow(TypeError);
+    expect(recordOf(w, idOf(req)).state).toBe("completed");
+    expect(w.protocol.inspect(req.origin)?.completion).toEqual({ kind: "exit", code: 0 });
+  });
+
+  test("inspect of an origin never planned is null; a reboot's completion says so", () => {
+    const shared = newShared();
+    const w0 = world(shared);
+    expect(w0.protocol.inspect(recoveryOrigin("cand-g6-never"))).toBeNull();
+    const req = request("cand-g6-rebooted");
+    const first = restart(shared, w0, { crash: { at: "after-append", kind: "launching" } });
+    first.protocol.launchOccurrence(req);
+    shared.bootId = "boot-two";
+    const w = restart(shared, first);
+    reconcileOk(w);
+    expect(w.protocol.inspect(req.origin)).toMatchObject({ state: "completed", completion: { kind: "rebooted" }, reservationHeld: false });
+  });
+
+  const builders: readonly [string, boolean, (shared: Shared, req: PlanRequest) => World][] = [
+    [
+      "planned",
+      true,
+      (shared, req) => {
+        const w = world(shared);
+        w.protocol.plan(req);
+        return w;
+      },
+    ],
+    [
+      "waiting-admission",
+      true,
+      (shared, req) => {
+        const w = world(shared);
+        w.protocol.launchOccurrence(request("cand-g6-holder"));
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+    [
+      "reserved",
+      true,
+      (shared, req) => {
+        const w = world(shared, { refuseAppend: "launching" });
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+    [
+      "launching",
+      true,
+      (shared, req) => {
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+    [
+      "observed-running",
+      true,
+      (shared, req) => {
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        reconcileOk(w);
+        return w;
+      },
+    ],
+    [
+      "outcome-unknown",
+      true,
+      (shared, req) => {
+        const first = world(shared, { crash: { at: "after-append", kind: "launching" } });
+        first.protocol.launchOccurrence(req);
+        const w = restart(shared, first);
+        reconcileOk(w);
+        return w;
+      },
+    ],
+    [
+      "completed, released",
+      false,
+      (shared, req) => {
+        shared.mode = "exits-at-once";
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        reconcileOk(w);
+        return w;
+      },
+    ],
+    [
+      "completed, still held",
+      true,
+      (shared, req) => {
+        shared.mode = "exits-at-once";
+        const first = world(shared, { crash: { at: "after-append", kind: "completed" } });
+        first.protocol.launchOccurrence(req);
+        first.protocol.reconcile();
+        return restart(shared, first);
+      },
+    ],
+    [
+      "failed-before-launch, released",
+      false,
+      (shared, req) => {
+        shared.mode = "refuses";
+        const w = world(shared);
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+    [
+      "failed-before-launch, still held",
+      true,
+      (shared, req) => {
+        shared.mode = "refuses";
+        const w = world(shared, { ownerReleaseFails: "the owner's disk is full (test)" });
+        w.protocol.launchOccurrence(req);
+        return w;
+      },
+    ],
+  ];
+  test.each(builders)("%s: in flight is %s", (name, expected, build) => {
+    const shared = newShared();
+    const req = request(`cand-g6-${name.replace(/[^a-z]+/g, "-")}`);
+    const w = build(shared, req);
+    const state = recordOf(w, idOf(req)).state;
+    expect(name.startsWith(state)).toBe(true);
+    expect(w.protocol.inFlight("recovery").some((one) => one.occurrenceId === idOf(req))).toBe(expected);
+    expect(w.protocol.inFlight("schedule").some((one) => one.occurrenceId === idOf(req))).toBe(false);
+  });
+
+  test("inFlight is by origin kind", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const scheduled = scheduleRequest("fixture-dry-run");
+    w.protocol.plan(scheduled);
+    w.protocol.plan(request("cand-g6-recovery"));
+    expect(w.protocol.inFlight("schedule").map((one) => one.occurrenceId)).toEqual([occurrenceIdOf(scheduled.origin)]);
+    expect(w.protocol.inFlight("recovery").map((one) => one.occurrenceId)).toEqual([idOf(request("cand-g6-recovery"))]);
+  });
+});
+
+describe("(Q2) the per-class hold condition", () => {
+  test("a recovery-resume reservation is released on observed-running, and the slot is then free for a second resume", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const first = request("cand-q2-resume-a", "m\n", "tmux", RUN, "recovery-resume");
+    const second = request("cand-q2-resume-b", "m\n", "tmux", RUN, "recovery-resume");
+    expect(w.protocol.launchOccurrence(first).kind).toBe("invoked");
+    expect(w.protocol.launchOccurrence(second).kind).toBe("waiting");
+    reconcileOk(w);
+    expectRow(shared, w, idOf(first), { invocations: 1, effects: 1, held: 0, state: "observed-running" });
+    const reservation = recordOf(w, idOf(first)).reservation;
+    expect(reservation.kind === "released" ? reservation.licence : null).toEqual({ kind: "observed-running" });
+    expect(w.protocol.launchOccurrence(second).kind).toBe("invoked");
+    expect(heldOf(w, idOf(second))).toBe(1);
+  });
+
+  test("a claude-session reservation is not: it is held until exit evidence", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const first = request("cand-q2-session-a");
+    const second = request("cand-q2-session-b");
+    w.protocol.launchOccurrence(first);
+    reconcileOk(w);
+    expectRow(shared, w, idOf(first), { invocations: 1, effects: 1, held: 1, state: "observed-running" });
+    expect(w.protocol.launchOccurrence(second).kind).toBe("waiting");
+  });
+
+  test("the two classes do not share a slot", () => {
+    const shared = newShared();
+    const w = world(shared);
+    expect(w.protocol.launchOccurrence(request("cand-q2-mixed-session")).kind).toBe("invoked");
+    expect(w.protocol.launchOccurrence(request("cand-q2-mixed-resume", "m\n", "tmux", RUN, "recovery-resume")).kind).toBe("invoked");
+  });
+
+  test("a crash between recording observed-running and the owner's release still releases on the next reconcile", () => {
+    const shared = newShared();
+    const req = request("cand-q2-crash", "m\n", "tmux", RUN, "recovery-resume");
+    const first = world(shared, { crash: { at: "after-append", kind: "observed-running" } });
+    first.protocol.launchOccurrence(req);
+    first.protocol.reconcile();
+    const w = restart(shared, first);
+    expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 1, state: "observed-running" });
+    reconcileOk(w);
+    expectRow(shared, w, idOf(req), { invocations: 1, effects: 1, held: 0, state: "observed-running" });
+  });
+
+  test("outcome-unknown holds a recovery-resume reservation too", () => {
+    const shared = newShared();
+    const req = request("cand-q2-unknown", "m\n", "tmux", RUN, "recovery-resume");
+    const first = world(shared, { crash: { at: "after-append", kind: "launching" } });
+    first.protocol.launchOccurrence(req);
+    const w = restart(shared, first);
+    reconcileOk(w);
+    reconcileOk(w);
+    expectRow(shared, w, idOf(req), { invocations: 0, effects: 0, held: 1, state: "outcome-unknown" });
+  });
+
+  test("a released recovery-resume that later completes is not released twice", () => {
+    const shared = newShared();
+    const w = world(shared);
+    const req = request("cand-q2-completes", "m\n", "tmux", RUN, "recovery-resume");
+    w.protocol.launchOccurrence(req);
+    reconcileOk(w);
+    endAttempt(shared, idOf(req));
+    reconcileOk(w);
+    expect(recordOf(w, idOf(req)).state).toBe("completed");
+    expect(ownerLines(shared).map((line) => line.kind)).toEqual(["reserved", "released"]);
   });
 });
 
@@ -1172,6 +1830,12 @@ describe("suspicion 3: built, and deliberately not called yet", () => {
     expect(importers.filter((file) => !LAUNCH_FILES.has(file) && !ARTEFACT_WRITERS.has(file))).toEqual([]);
     // A writer reaches the artefact module and nothing past it, so it cannot reach launchOccurrence.
     for (const writer of ARTEFACT_WRITERS) expect(IMPORTS_BEYOND_ARTEFACTS.test(readFileSync(join(REPO, writer), "utf8")), writer).toBe(false);
+  });
+
+  test("the composed protocol is functions only, and exactly these: no launcher, journal or owner is reachable from it", () => {
+    const w = world(newShared());
+    expect(Object.keys(w.protocol).sort()).toEqual(["abandon", "dispose", "inFlight", "inspect", "launchOccurrence", "plan", "reconcile", "resumeOccurrence"]);
+    for (const value of Object.values(w.protocol)) expect(typeof value).toBe("function");
   });
 
   test("nothing outside the protocol's composition calls a launcher adapter — no production file imports launchers.ts", () => {

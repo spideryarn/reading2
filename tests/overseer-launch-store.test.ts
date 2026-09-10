@@ -14,10 +14,13 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { readArtefacts } from "../tools/overseer/launch-artefacts.js";
 import {
+  HIDDEN_LAUNCH_ACKNOWLEDGEMENT,
   correlationIdOf,
   occurrenceIdOf,
+  parseJournalLine,
   pinOf,
   recoveryOrigin,
+  replayJournal,
   reservationKeyOf,
   type LaunchEvent,
   type LaunchOccurrenceId,
@@ -70,10 +73,34 @@ function reserved(id: LaunchOccurrenceId): LaunchEvent {
   return { v: 1, kind: "reserved", occurrenceId: id, at: T0, reservationKey: reservationKeyOf(id), slot: "claude-session#1", ownerId: "local-admission", how: "granted" };
 }
 function launching(id: LaunchOccurrenceId, attempt = 1, correlationId = correlationIdOf(id, attempt)): LaunchEvent {
-  return { v: 1, kind: "launching", occurrenceId: id, at: T0, attempt, correlationId, artefactDir: `/srv/overseer/launches/o/${id}/a${attempt}` };
+  return { v: 1, kind: "launching", occurrenceId: id, at: T0, attempt, correlationId } as LaunchEvent;
 }
 function disposed(id: LaunchOccurrenceId, requestId: string): LaunchEvent {
   return { v: 1, kind: "disposed", occurrenceId: id, at: T0, actor: "greg", requestId, decision: "not-running", why: "checked by hand" };
+}
+function waiting(id: LaunchOccurrenceId, why: string): object {
+  return { v: 1, kind: "waiting-admission", occurrenceId: id, at: T0, why };
+}
+function failed(id: LaunchOccurrenceId, attempt: number | null, proof: string): object {
+  return { v: 1, kind: "failed-before-launch", occurrenceId: id, at: T0, attempt, proof, why: "because" };
+}
+function releasedAfterFailure(id: LaunchOccurrenceId): object {
+  return { v: 1, kind: "released", occurrenceId: id, at: T0, licence: { kind: "terminal", state: "failed-before-launch" }, ownerSaid: "released" };
+}
+/** A reset line that is well-formed on its own, so the only thing that can make it illegal is where it stands. */
+function resetLine(carried: readonly object[] = []): object {
+  return {
+    v: 1,
+    kind: "history-reset",
+    at: T0,
+    actor: "greg",
+    requestId: "resolve-for-the-test",
+    why: "a hole in the journal",
+    preservedAs: `${LAUNCH_JOURNAL}.lost-test`,
+    lostAt: { line: 1, why: "not JSON" },
+    acknowledgement: HIDDEN_LAUNCH_ACKNOWLEDGEMENT,
+    carried,
+  };
 }
 
 function seed(root: string, lines: readonly (string | object)[]): void {
@@ -170,8 +197,33 @@ describe("a journal that cannot be replayed whole is history-lost, with nothing 
       [planned("cand-a"), reserved(A), launching(A), disposed(A, "req-dup"), planned("cand-b"), reserved(B), launching(B), disposed(B, "req-dup")],
       8,
     ],
-    ["a history reset after the first line", [planned("cand-a"), { v: 1, kind: "history-reset", at: T0, actor: "greg", requestId: "r", why: "w", preservedAs: "p", lostAt: { line: 1, why: "x" }, acknowledgement: "x", carried: [] }], 2],
+    ["a history reset after the first line", [planned("cand-a"), resetLine()], 2],
+    // F18: once per distinct reason.
+    ["the same waiting reason twice", [planned("cand-a"), waiting(A, "full"), waiting(A, "full")], 3],
+    // A superseded occurrence: only from planned or waiting, with no attempt ever made, and nothing after it but a release.
+    ["superseded from reserved", [planned("cand-a"), reserved(A), failed(A, null, "superseded")], 3],
+    ["superseded naming an attempt", [planned("cand-a"), reserved(A), launching(A), failed(A, 1, "superseded")], 4],
+    ["superseded after an attempt was made", [planned("cand-a"), reserved(A), launching(A), failed(A, 1, "launcher-refused"), releasedAfterFailure(A), failed(A, null, "superseded")], 6],
+    ["a reservation after superseded", [planned("cand-a"), failed(A, null, "superseded"), reserved(A)], 3],
+    ["waiting after superseded", [planned("cand-a"), failed(A, null, "superseded"), waiting(A, "full")], 3],
+    // Stage 1b: a carried entry's origin must be the origin of its id, and comes with its plannedAt.
+    ["a carried origin that is not the id's", [resetLine([{ occurrenceId: A, lastSeen: "planned", ownerHeld: null, origin: recoveryOrigin("cand-b"), plannedAt: T0 }])], 1],
+    ["a carried origin without its plannedAt", [resetLine([{ occurrenceId: A, lastSeen: "planned", ownerHeld: null, origin: recoveryOrigin("cand-a"), plannedAt: null }])], 1],
+    ["a carried entry without the origin fields", [resetLine([{ occurrenceId: A, lastSeen: "planned", ownerHeld: null }])], 1],
+    // F16: the launching line names no path; the store derives it.
+    ["a launching line naming an artefact path", [planned("cand-a"), reserved(A), { ...launching(A), artefactDir: `/elsewhere/launches/o/${A}/a1` }], 3],
   ];
+  test("the reset row's line is well-formed, so its position is the only thing wrong with it", () => {
+    expect(parseJournalLine(JSON.stringify(resetLine())).ok).toBe(true);
+    expect(replayJournal([JSON.stringify(resetLine())]).status).toEqual({ kind: "whole" });
+  });
+  test("distinct waiting reasons are each legal", () => {
+    expect(replayJournal([planned("cand-a"), waiting(A, "full"), waiting(A, "fuller"), waiting(A, "full")].map((line) => JSON.stringify(line))).status).toEqual({ kind: "whole" });
+  });
+  test("a superseded occurrence from planned or waiting, then nothing but a replay", () => {
+    expect(replayJournal([planned("cand-a"), failed(A, null, "superseded")].map((line) => JSON.stringify(line))).status).toEqual({ kind: "whole" });
+    expect(replayJournal([planned("cand-a"), waiting(A, "full"), failed(A, null, "superseded")].map((line) => JSON.stringify(line))).status).toEqual({ kind: "whole" });
+  });
   test.each(cases)("%s", (_name, lines, atLine) => {
     const root = tempRoot();
     const after = planned("cand-after-the-hole");
@@ -239,12 +291,13 @@ describe("resetHistory (F2)", () => {
     expect(reset.ok).toBe(true);
     if (!reset.ok) return;
     expect(readFileSync(join(root, LAUNCHES_DIR, reset.reset.preservedAs)).equals(before)).toBe(true);
+    // A parseable `planned` line gives the origin and when it was planned; the owner and the directories cannot.
     expect(reset.reset.carried).toEqual(
       [
-        { occurrenceId: A, lastSeen: "planned", ownerHeld: null },
-        { occurrenceId: B, lastSeen: "planned", ownerHeld: null },
-        { occurrenceId: hidden, lastSeen: null, ownerHeld: { slot: "claude-session#1" } },
-        { occurrenceId: artefactsOnly, lastSeen: null, ownerHeld: null },
+        { occurrenceId: A, lastSeen: "planned", ownerHeld: null, origin: recoveryOrigin("cand-a"), plannedAt: T0 },
+        { occurrenceId: B, lastSeen: "planned", ownerHeld: null, origin: recoveryOrigin("cand-b"), plannedAt: T0 },
+        { occurrenceId: hidden, lastSeen: null, ownerHeld: { slot: "claude-session#1" }, origin: null, plannedAt: null },
+        { occurrenceId: artefactsOnly, lastSeen: null, ownerHeld: null, origin: null, plannedAt: null },
       ].sort((x, y) => x.occurrenceId.localeCompare(y.occurrenceId)),
     );
     expect(reset.reset.lostAt.line).toBe(2);
@@ -259,6 +312,23 @@ describe("resetHistory (F2)", () => {
     const reopened = open(root);
     expect(reopened.status()).toEqual({ kind: "whole" });
     expect([...reopened.fold().carried.keys()].sort()).toEqual([A, B, hidden, artefactsOnly].sort());
+    // The reset line carrying an origin replays, and the origin comes back.
+    expect(reopened.fold().carried.get(A)).toMatchObject({ origin: recoveryOrigin("cand-a"), plannedAt: T0 });
+    expect(reopened.fold().carried.get(hidden)).toMatchObject({ origin: null, plannedAt: null });
+  });
+
+  test("a second reset carries forward the origin the first one carried", () => {
+    const root = tempRoot();
+    seed(root, [planned("cand-a"), "{a hole"]);
+    const store = open(root);
+    expect(store.resetHistory({ request, at: "2026-09-10T15:00:00.000Z", ownerReservations: [] }).ok).toBe(true);
+    close(store);
+    appendFileSync(journalOf(root), "{another hole\n");
+    const again = open(root);
+    const reset = again.resetHistory({ request: { ...request, requestId: "resolve-store-again" }, at: "2026-09-10T16:00:00.000Z", ownerReservations: [] });
+    expect(reset.ok).toBe(true);
+    if (!reset.ok) return;
+    expect(reset.reset.carried).toEqual([{ occurrenceId: A, lastSeen: "planned", ownerHeld: null, origin: recoveryOrigin("cand-a"), plannedAt: T0 }]);
   });
 
   test("a retry after dying between the link and the replace finds its own link and finishes", () => {

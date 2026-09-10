@@ -30,8 +30,8 @@
  * ## What it is not, named
  *
  * **Not a box-wide admission owner.** It bounds only launches made through the
- * launch protocol, it knows nothing about memory or load, and it has one class
- * with a capacity of one. The *Enforced launch admission* stage decides whether
+ * launch protocol, it knows nothing about memory or load, and it has two
+ * classes with a capacity of one each ({@link admissionPolicy}). The *Enforced launch admission* stage decides whether
  * the box needs more; if it builds a host-local owner, that owner implements
  * {@link AdmissionOwner} and this file goes.
  *
@@ -65,10 +65,40 @@ export function journalRecords(text: string): string[] {
  * The interface every owner implements.
  * ------------------------------------------------------------------ */
 
-/** The one class v1 knows. A union so a second one is a compile error everywhere it matters. */
-export type AdmissionClass = "claude-session";
+/**
+ * The classes, closed: a third is a compile error wherever {@link admissionPolicy}
+ * is switched on. `claude-session` is a scheduled or headless run, bounded by its
+ * timeout; `recovery-resume` is Greg bringing an interrupted session back.
+ */
+export type AdmissionClass = "claude-session" | "recovery-resume";
 
-const ADMISSION_CLASSES: readonly AdmissionClass[] = ["claude-session"];
+const ADMISSION_CLASSES: readonly AdmissionClass[] = ["claude-session", "recovery-resume"];
+
+/**
+ * What must be seen before a class's reservation may be released on evidence
+ * (plan (Q2)). `exit-evidence`: a correlation-bound `exit.json` or a reboot —
+ * a terminal record. `observed-running`: the child seen running is enough,
+ * because what the class paces is the launch itself; one resumed interactive
+ * session holding a slot until it exits would block every other resume for
+ * hours. `outcome-unknown` ends no hold, in any class.
+ */
+export type HoldCondition = "exit-evidence" | "observed-running";
+
+export type AdmissionPolicy = { readonly capacity: number; readonly holdUntil: HoldCondition };
+
+/** Each class's policy. EXHAUSTIVE, so a new class says what it holds until. */
+export function admissionPolicy(cls: AdmissionClass): AdmissionPolicy {
+  switch (cls) {
+    case "claude-session":
+      return { capacity: 1, holdUntil: "exit-evidence" };
+    case "recovery-resume":
+      return { capacity: 1, holdUntil: "observed-running" };
+    default: {
+      const never: never = cls;
+      throw new Error(`no admission policy for ${JSON.stringify(never)}`);
+    }
+  }
+}
 
 export function isAdmissionClass(u: unknown): u is AdmissionClass {
   return typeof u === "string" && (ADMISSION_CLASSES as readonly string[]).includes(u);
@@ -100,7 +130,9 @@ export type ReleaseAnswer = { readonly kind: "released" } | { readonly kind: "wa
  */
 export type ReleaseEvidence =
   | { readonly kind: "terminal"; readonly state: "completed" | "failed-before-launch" }
-  | { readonly kind: "disposed"; readonly requestId: string };
+  | { readonly kind: "disposed"; readonly requestId: string }
+  /** The child was seen running, and its class is held only until then ({@link HoldCondition}). */
+  | { readonly kind: "observed-running" };
 
 export type HeldReservation = { readonly key: ReservationKey; readonly cls: AdmissionClass; readonly slot: string };
 
@@ -199,6 +231,11 @@ function parseEvidence(u: unknown): Parsed<ReleaseEvidence> {
     const requestId = u["requestId"];
     if (!isText(requestId)) return { ok: false, why: "because.requestId is not a request id" };
     return { ok: true, value: { kind: "disposed", requestId } };
+  }
+  if (u["kind"] === "observed-running") {
+    const extra = unexpectedField(u, ["kind"]);
+    if (extra !== null) return { ok: false, why: `because: ${extra}` };
+    return { ok: true, value: { kind: "observed-running" } };
   }
   return { ok: false, why: `because.kind ${JSON.stringify(u["kind"])} is not one this version knows` };
 }
@@ -340,7 +377,7 @@ export type LocalAdmissionOptions = {
   /** The store root — `~/.overseer` or `OVERSEER_STORE_DIR`. Absolute, for the reason store.ts gives. */
   readonly root: string;
   readonly now: () => Date;
-  /** Slots per class. One in v1; a test may ask for more. */
+  /** Slots per class, overriding every class's {@link admissionPolicy} capacity. Only a test passes it. */
   readonly capacity?: number;
   readonly ownerId?: string;
 };
@@ -374,7 +411,7 @@ export function openLocalAdmission(options: LocalAdmissionOptions): { ok: true; 
     return { ok: false, refusal: { reason: "unusable-journal", path: journalPath, detail: String(cause) } };
   }
 
-  const capacity = options.capacity ?? 1;
+  const capacityOf = (cls: AdmissionClass): number => options.capacity ?? admissionPolicy(cls).capacity;
   const ownerId = options.ownerId ?? LOCAL_OWNER_ID;
   let table: Table = { held: new Map(), lines: 0 };
   let status: AdmissionStatus = { kind: "whole", lines: 0 };
@@ -436,7 +473,7 @@ export function openLocalAdmission(options: LocalAdmissionOptions): { ok: true; 
       if (existing !== undefined) return { kind: "reserved", slot: existing.slot, ownerId };
       const occupied = new Set([...table.held.values()].filter((one) => one.cls === cls).map((one) => one.slot));
       let slot: string | null = null;
-      for (let n = 1; n <= capacity; n += 1) {
+      for (let n = 1; n <= capacityOf(cls); n += 1) {
         const candidate = `${cls}#${n}`;
         if (!occupied.has(candidate)) {
           slot = candidate;

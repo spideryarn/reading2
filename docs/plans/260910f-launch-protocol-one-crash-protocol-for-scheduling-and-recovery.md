@@ -443,6 +443,37 @@ test passes on zero. Stage 1b (brief `260910f-launch-protocol-stage1b-fixes-task
 per-class hold condition below and firms up a weak store-test row; it runs once Stage 2 is in,
 because both edit `launch-protocol.ts`. Then one narrow check of the P1 fixes only.
 
+**Stage 1b (2026-09-10): built by an Opus subagent against brief
+`260910f-launch-protocol-stage1b-fixes-task.md`; every item red first, then green.** 267 tests in
+the six launch suites, typecheck exit 0; six files, all in the brief's set; Stage 2's work untouched.
+
+- **F16:** the journalled artefact path is **gone** — the `launching` line and `AttemptRef` no longer
+  carry `artefactDir`, and reconciliation reads evidence only from the open store's
+  `attemptDir(id, attempt)`. Chosen over "mismatch → history-lost" because nothing else read the
+  field and that option would have made moving `OVERSEER_STORE_DIR` corrupt the history; now the
+  evidence moves with the store (the Stage 1 open question, closed). The parser refuses an old line
+  that names a path.
+- **F17:** a new reconcile decision, `release-untracked`, releases a key the owner still holds under
+  the record's own durable licence and journals nothing — for terminal, disposed and carried
+  records, and an abandoned occurrence sitting on a lost reply. No new journal kind.
+- **F18:** a repeated wait with the same reason is illegal. **F19:** the `other-boot` arm uses the
+  identity reading's own boot ids. **The weak reset row** is a well-formed line now, with a guard
+  test that goes red if it is made malformed again.
+- **Consumer asks, all built to the promised shapes:** `endedAt`, `launchingAt`, a carried entry's
+  `origin`/`plannedAt` (taken from any `planned` line whose id is the hash of its origin, which makes
+  it trustworthy wherever it sits), `resumeOccurrence`, `abandon` with proof `superseded` (and the
+  fold refusing to relaunch one — a mutation check showed removing the exclusion makes it `invoked`
+  again), G7's exhaustive `usesTmux` (Stage 2 had already fixed the behaviour; this adds the switch
+  and the headless-negative test), G6's frozen `inspect`/`inFlight`, G1's `reservation` on
+  `failed-before-launch`, and the **per-class hold**: `admissionPolicy(cls)` — `claude-session` {1,
+  exit evidence}, `recovery-resume` {1, observed-running}, with a new `observed-running` release
+  licence both journals parse. A test pins the composed protocol's keys to exactly its eight
+  functions (F9).
+- **Shape changes the consumers were told:** `AttemptRef` loses `artefactDir` and gains
+  `launchingAt`; `inspect` answers `null` for an occurrence carried over a reset (its launch is still
+  refused); `abandon` of a lost reply with the owner down answers `held` while `inspect` says
+  `reservationHeld: false`, because the journal never recorded that reservation.
+
 **Learned 2026-09-10, from the seam talk with `scheduled-dispatch`: a daemon child does not survive
 a daemon restart.** `infra/hetzner/systemd/overseer.service` sets no `KillMode`, so systemd's default
 (`control-group`) kills every process in the unit's cgroup on stop or restart. A headless wrapper

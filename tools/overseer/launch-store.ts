@@ -51,6 +51,7 @@ import { writeIntentFile } from "./launch-artefacts.js";
 import {
   HIDDEN_LAUNCH_ACKNOWLEDGEMENT,
   isLaunchOccurrenceId,
+  occurrenceIdOf,
   parseJournalLine,
   replayJournal,
   stepLine,
@@ -60,6 +61,7 @@ import {
   type JournalStatus,
   type LaunchEvent,
   type LaunchOccurrenceId,
+  type LaunchOrigin,
   type ResettableJournal,
   type Written,
 } from "./launch-protocol.js";
@@ -122,8 +124,11 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
   let fold: FoldBuilder;
   let status: JournalStatus;
   // WHAT A LOST HISTORY CAN STILL SHOW: the last kind any parseable line said
-  // for each occurrence, legal or not. Only a history reset reads it.
-  const salvage = new Map<LaunchOccurrenceId, LaunchEvent["kind"] | null>();
+  // for each occurrence, legal or not, and its origin and plan time from a
+  // `planned` line whose id is the hash of its origin (so the line vouches for
+  // itself, wherever it stands) or from an earlier reset. Only a history reset reads it.
+  type Salvaged = { readonly lastSeen: LaunchEvent["kind"] | null; readonly origin: LaunchOrigin | null; readonly plannedAt: string | null };
+  const salvage = new Map<LaunchOccurrenceId, Salvaged>();
   const load = (lines: readonly string[]): void => {
     const replayed = replayJournal(lines);
     fold = replayed.fold;
@@ -132,8 +137,18 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
     for (const text of lines) {
       const parsed = parseJournalLine(text);
       if (!parsed.ok) continue;
-      if (parsed.value.kind === "history-reset") for (const entry of parsed.value.carried) salvage.set(entry.occurrenceId, entry.lastSeen);
-      else salvage.set(parsed.value.occurrenceId, parsed.value.kind);
+      const line = parsed.value;
+      if (line.kind === "history-reset") {
+        for (const entry of line.carried) salvage.set(entry.occurrenceId, { lastSeen: entry.lastSeen, origin: entry.origin, plannedAt: entry.plannedAt });
+        continue;
+      }
+      const prior = salvage.get(line.occurrenceId);
+      const plannedHere = line.kind === "planned" && (prior?.origin ?? null) === null && occurrenceIdOf(line.origin) === line.occurrenceId;
+      salvage.set(line.occurrenceId, {
+        lastSeen: line.kind,
+        origin: plannedHere ? line.origin : (prior?.origin ?? null),
+        plannedAt: plannedHere ? line.at : (prior?.plannedAt ?? null),
+      });
     }
   };
   load(texts);
@@ -216,7 +231,14 @@ export function openLaunchStore(options: { readonly root: string; readonly now: 
       for (const key of [...held.keys(), ...artefactIds]) if (isLaunchOccurrenceId(key)) ids.add(key);
       const carried: CarriedEntry[] = [...ids].sort().map((occurrenceId) => {
         const slot = held.get(occurrenceId);
-        return { occurrenceId, lastSeen: salvage.get(occurrenceId) ?? null, ownerHeld: slot === undefined ? null : { slot } };
+        const seen = salvage.get(occurrenceId);
+        return {
+          occurrenceId,
+          lastSeen: seen?.lastSeen ?? null,
+          ownerHeld: slot === undefined ? null : { slot },
+          origin: seen?.origin ?? null,
+          plannedAt: seen?.plannedAt ?? null,
+        };
       });
       const reset: HistoryResetEvent = {
         v: 1,

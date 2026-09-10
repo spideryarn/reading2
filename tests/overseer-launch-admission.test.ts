@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   ADMISSION_DIR,
   ADMISSION_JOURNAL,
+  admissionPolicy,
   asReservationKey,
   openLocalAdmission,
   type LocalAdmission,
@@ -125,6 +126,22 @@ describe("reserve, lookup, release", () => {
     const one = owner.lookup(B);
     // @ts-expect-error — `wait` is not a Lookup arm, so this comparison cannot compile.
     expect(one.kind === "wait").toBe(false);
+  });
+
+  test("two classes, each with its own capacity and its own hold condition", () => {
+    expect(admissionPolicy("claude-session")).toEqual({ capacity: 1, holdUntil: "exit-evidence" });
+    expect(admissionPolicy("recovery-resume")).toEqual({ capacity: 1, holdUntil: "observed-running" });
+    const root = tempRoot();
+    const owner = open(root);
+    expect(owner.reserve(A, "claude-session")).toEqual({ kind: "reserved", slot: "claude-session#1", ownerId: "local-admission" });
+    expect(owner.reserve(B, "recovery-resume")).toEqual({ kind: "reserved", slot: "recovery-resume#1", ownerId: "local-admission" });
+    expect(owner.reserve(C, "recovery-resume").kind).toBe("wait");
+    // Its release names the licence that ended the hold, and a reopened owner reads it back.
+    expect(owner.release(B, { kind: "observed-running" })).toEqual({ kind: "released" });
+    close(owner);
+    const reopened = open(root);
+    expect(reopened.status()).toEqual({ kind: "whole", lines: 3 });
+    expect(reopened.reserve(C, "recovery-resume").kind).toBe("reserved");
   });
 
   test("a key that is not a reservation key is refused, not reserved", () => {

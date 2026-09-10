@@ -77,6 +77,7 @@ import { createHash } from "node:crypto";
 import type { BootIdentity } from "../fleet/execution-identity.js";
 import type { OccurrenceKey } from "./jobs.js";
 import {
+  admissionPolicy,
   asReservationKey,
   checkResolutionRequest,
   isAdmissionClass,
@@ -217,9 +218,23 @@ export function isLauncherKind(u: unknown): u is LauncherKind {
   return u === "tmux" || u === "headless" || u === "tmux-headless";
 }
 
-/** Whether a launch of this kind lives in a tmux session, so the tmux probe is evidence about it. */
-export function runsInTmux(kind: LauncherKind): boolean {
-  return kind === "tmux" || kind === "tmux-headless";
+/**
+ * Whether a launch of this kind lives in a tmux session, so the tmux probe is
+ * evidence about it (G7). EXHAUSTIVE: a new launcher kind is a compile error
+ * here until it says which family it is, rather than silently not probed.
+ */
+export function usesTmux(kind: LauncherKind): boolean {
+  switch (kind) {
+    case "tmux":
+    case "tmux-headless":
+      return true;
+    case "headless":
+      return false;
+    default: {
+      const never: never = kind;
+      throw new Error(`no launcher family for ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /**
@@ -269,7 +284,19 @@ export function pinOf(bytes: Buffer): MaterialPin {
 /** The bytes the launcher is handed — read back off the disk and checked against the pin, never the caller's copy. */
 export type VerifiedMaterial = { readonly bytes: Buffer; readonly pin: MaterialPin };
 
-export type AttemptRef = { readonly attempt: number; readonly correlationId: CorrelationId; readonly artefactDir: string };
+/**
+ * One attempt. **Its directory is not here** (review F16): it is the open
+ * store's `attemptDir(id, attempt)`, derived wherever it is needed, so a
+ * journal from another root — or a hand edit — cannot point reconciliation at
+ * another store's `exit.json`, and moving `OVERSEER_STORE_DIR` moves every
+ * attempt's evidence with it.
+ */
+export type AttemptRef = {
+  readonly attempt: number;
+  readonly correlationId: CorrelationId;
+  /** The `at` of this attempt's `launching` line, never moved afterwards. Launch spacing is timed from it. */
+  readonly launchingAt: string;
+};
 
 /**
  * How the supervised CHILD ended, as the supervisor observed it — a fact about a
@@ -358,7 +385,13 @@ export type FailedProof =
   /** `intent.json` could not be written, so `launching` was not, so the launcher was not reached. */
   | "intent-not-written"
   /** The launcher answered that it refused before any effect. */
-  | "launcher-refused";
+  | "launcher-refused"
+  /**
+   * Its caller abandoned it before any attempt was made — a later occurrence
+   * took its place. **It never launches afterwards**: the fold, not the
+   * caller, says so, because a superseded record is never retryable.
+   */
+  | "superseded";
 
 export type OwnerAnswer = "released" | "was-not-held" | "none-on-lookup";
 
@@ -399,7 +432,8 @@ export type LaunchEvent =
       /** `granted` by a reserve this process made; `found-on-lookup` when reconciliation recovered a lost reply. */
       readonly how: "granted" | "found-on-lookup";
     })
-  | (Common & { readonly kind: "launching"; readonly attempt: number; readonly correlationId: CorrelationId; readonly artefactDir: string })
+  /** No artefact path: the store derives it (F16). */
+  | (Common & { readonly kind: "launching"; readonly attempt: number; readonly correlationId: CorrelationId })
   | (Common & { readonly kind: "observed-running"; readonly attempt: number; readonly evidence: RunningEvidence })
   | (Common & { readonly kind: "completed"; readonly attempt: number; readonly evidence: CompletionEvidence })
   | (Common & { readonly kind: "failed-before-launch"; readonly attempt: number | null; readonly proof: FailedProof; readonly why: string })
@@ -419,6 +453,14 @@ export type CarriedEntry = {
   /** The last kind any parseable line said for it, or null when only the owner or the artefacts know it. */
   readonly lastSeen: LaunchEvent["kind"] | null;
   readonly ownerHeld: { readonly slot: string } | null;
+  /**
+   * Where it came from, and when it was planned — from a parseable `planned`
+   * line whose id is the hash of its origin, or from an earlier reset that
+   * carried them. BOTH null when only the owner or an artefact directory knows
+   * the occurrence; never one without the other.
+   */
+  readonly origin: LaunchOrigin | null;
+  readonly plannedAt: string | null;
 };
 
 /** F2's fresh start. Only ever the first line of a journal. */
@@ -481,8 +523,9 @@ export type LaunchState =
   | { readonly state: "reserved" }
   | { readonly state: "launching"; readonly current: AttemptRef }
   | { readonly state: "observed-running"; readonly current: AttemptRef; readonly evidence: RunningEvidence }
-  | { readonly state: "completed"; readonly current: AttemptRef; readonly evidence: CompletionEvidence }
-  | { readonly state: "failed-before-launch"; readonly attempt: AttemptRef | null; readonly proof: FailedProof; readonly why: string }
+  /** `endedAt` is the `at` of the line that entered this state; a later release moves `updatedAt`, never this. */
+  | { readonly state: "completed"; readonly current: AttemptRef; readonly evidence: CompletionEvidence; readonly endedAt: string }
+  | { readonly state: "failed-before-launch"; readonly attempt: AttemptRef | null; readonly proof: FailedProof; readonly why: string; readonly endedAt: string }
   | { readonly state: "outcome-unknown"; readonly current: AttemptRef; readonly why: string; readonly looked: readonly string[] };
 
 export type LaunchRecord = RecordCommon & LaunchState;
@@ -519,9 +562,15 @@ export function isTerminal(record: LaunchRecord): boolean {
   return record.state === "completed" || record.state === "failed-before-launch";
 }
 
-/** A `failed-before-launch` that may try again: nothing held, nobody disposed it, and an attempt number left to spell. */
+/** A `failed-before-launch` that may try again: not superseded, nothing held, nobody disposed it, and an attempt number left to spell. */
 function retryable(record: LaunchRecord): boolean {
-  return record.state === "failed-before-launch" && record.reservation.kind !== "held" && record.disposition === null && record.attempts.length < MAX_ATTEMPTS;
+  return (
+    record.state === "failed-before-launch" &&
+    record.proof !== "superseded" &&
+    record.reservation.kind !== "held" &&
+    record.disposition === null &&
+    record.attempts.length < MAX_ATTEMPTS
+  );
 }
 
 /** States from which a reservation may be asked for. */
@@ -529,15 +578,32 @@ function admissible(record: LaunchRecord): boolean {
   return record.state === "planned" || record.state === "waiting-admission" || retryable(record);
 }
 
-/** What licenses a release of this record's held reservation, or null. F7: a terminal record, or a disposition. */
+/**
+ * What licenses a release of this record's reservation, or null. **Never
+ * release a reservation without evidence that its class's hold condition has
+ * ended, or an attributed disposition** (plan (Q2)): a disposition (F7); a
+ * terminal record (F7); or `observed-running` for a class held only until then.
+ * `outcome-unknown` licenses nothing in any class.
+ */
 export function licenceOf(record: LaunchRecord): ReleaseEvidence | null {
   if (record.disposition !== null) return { kind: "disposed", requestId: record.disposition.requestId };
   if (record.state === "completed" || record.state === "failed-before-launch") return { kind: "terminal", state: record.state };
+  if (record.state === "observed-running" && holdEndsWhenSeenRunning(record.admissionClass)) return { kind: "observed-running" };
   return null;
 }
 
-function artefactDirFits(dir: string, id: LaunchOccurrenceId, attempt: number): boolean {
-  return dir.startsWith("/") && dir.endsWith(`/o/${id}/a${attempt}`);
+function holdEndsWhenSeenRunning(cls: AdmissionClass): boolean {
+  const { holdUntil } = admissionPolicy(cls);
+  switch (holdUntil) {
+    case "exit-evidence":
+      return false;
+    case "observed-running":
+      return true;
+    default: {
+      const never: never = holdUntil;
+      throw new Error(`no hold rule for ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 type Step = { ok: true; record: LaunchRecord } | { ok: false; why: string };
@@ -606,6 +672,8 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
   switch (event.kind) {
     case "waiting-admission":
       if (!admissible(prev)) return illegal(`${prev.id} is ${prev.state} and cannot wait for admission`);
+      // D3: ONCE PER DISTINCT REASON (review F18) — the rule drive() keeps, kept by the fold too.
+      if (prev.state === "waiting-admission" && prev.why === event.why) return illegal(`${prev.id} is already waiting for admission for the same reason`);
       return { ok: true, record: { ...base, state: "waiting-admission", why: event.why } };
     case "reserved":
       if (!admissible(prev)) return illegal(`${prev.id} is ${prev.state} and cannot be reserved`);
@@ -619,8 +687,7 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
       const attempt = prev.attempts.length + 1;
       if (event.attempt !== attempt) return illegal(`attempt ${event.attempt} is not ${prev.id}'s next attempt ${attempt}`);
       if (attempt > MAX_ATTEMPTS || event.correlationId !== correlationIdOf(prev.id, attempt)) return illegal(`correlation id ${event.correlationId} is not ${prev.id}'s attempt ${attempt}`);
-      if (!artefactDirFits(event.artefactDir, prev.id, attempt)) return illegal(`artefact dir ${event.artefactDir} is not ${prev.id}'s attempt ${attempt}`);
-      const current: AttemptRef = { attempt, correlationId: event.correlationId, artefactDir: event.artefactDir };
+      const current: AttemptRef = { attempt, correlationId: event.correlationId, launchingAt: event.at };
       return { ok: true, record: { ...base, attempts: [...prev.attempts, current], state: "launching", current } };
     }
     case "observed-running": {
@@ -631,7 +698,7 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
     case "completed": {
       const current = liveAttempt(prev, event.attempt, ["launching", "observed-running", "outcome-unknown"]);
       if (typeof current === "string") return illegal(current);
-      return { ok: true, record: { ...base, state: "completed", current, evidence: event.evidence } };
+      return { ok: true, record: { ...base, state: "completed", current, evidence: event.evidence, endedAt: event.at } };
     }
     case "outcome-unknown": {
       const current = liveAttempt(prev, event.attempt, ["launching", "observed-running"]);
@@ -641,18 +708,21 @@ function nextRecord(prev: LaunchRecord | undefined, event: LaunchEvent): Step {
     case "failed-before-launch": {
       if (prev.disposition !== null) return illegal(`${prev.id} was disposed; only a release may follow`);
       if (event.attempt === null) {
-        if (event.proof === "admission-refused") {
+        if (event.proof === "superseded") {
+          // ONLY AN OCCURRENCE THAT NEVER LAUNCHED, still asking for admission.
+          if (!admissible(prev) || prev.attempts.length !== 0) return illegal(`${prev.id} is ${prev.state} with ${prev.attempts.length} attempt(s); only one that never launched can be superseded`);
+        } else if (event.proof === "admission-refused") {
           if (!admissible(prev)) return illegal(`${prev.id} is ${prev.state}; an admission refusal needs a record asking for admission`);
         } else if (event.proof === "launcher-refused") {
           return illegal("a launcher refusal must name its attempt");
         } else if (prev.state !== "reserved") {
           return illegal(`${prev.id} is ${prev.state}; ${event.proof} needs reserved`);
         }
-        return { ok: true, record: { ...base, state: "failed-before-launch", attempt: null, proof: event.proof, why: event.why } };
+        return { ok: true, record: { ...base, state: "failed-before-launch", attempt: null, proof: event.proof, why: event.why, endedAt: event.at } };
       }
       if (event.proof !== "launcher-refused") return illegal(`${event.proof} cannot name an attempt: the launcher was never reached`);
       if (prev.state !== "launching" || prev.current.attempt !== event.attempt) return illegal(`${prev.id} is not launching attempt ${event.attempt}`);
-      return { ok: true, record: { ...base, state: "failed-before-launch", attempt: prev.current, proof: event.proof, why: event.why } };
+      return { ok: true, record: { ...base, state: "failed-before-launch", attempt: prev.current, proof: event.proof, why: event.why, endedAt: event.at } };
     }
     case "released": {
       if (prev.reservation.kind !== "held") return illegal(`${prev.id} holds no reservation to release`);
@@ -953,10 +1023,15 @@ function parseLicence(u: unknown): Parsed<ReleaseEvidence> {
     if (!isText(requestId)) return { ok: false, why: "licence.requestId is not a request id" };
     return { ok: true, value: { kind: "disposed", requestId } };
   }
+  if (u["kind"] === "observed-running") {
+    const o = object(u, "licence", ["kind"]);
+    if (!o.ok) return o;
+    return { ok: true, value: { kind: "observed-running" } };
+  }
   return { ok: false, why: `licence kind ${JSON.stringify(u["kind"])} is not one this version knows` };
 }
 
-const FAILED_PROOFS: readonly FailedProof[] = ["admission-refused", "restarted-before-launching", "material-mismatch", "intent-not-written", "launcher-refused"];
+const FAILED_PROOFS: readonly FailedProof[] = ["admission-refused", "restarted-before-launching", "material-mismatch", "intent-not-written", "launcher-refused", "superseded"];
 const OWNER_ANSWERS: readonly OwnerAnswer[] = ["released", "was-not-held", "none-on-lookup"];
 const EVENT_KINDS: readonly LaunchEvent["kind"][] = [
   "planned",
@@ -972,7 +1047,7 @@ const EVENT_KINDS: readonly LaunchEvent["kind"][] = [
 ];
 
 function parseCarried(u: unknown): Parsed<CarriedEntry> {
-  const o = object(u, "carried entry", ["occurrenceId", "lastSeen", "ownerHeld"]);
+  const o = object(u, "carried entry", ["occurrenceId", "lastSeen", "ownerHeld", "origin", "plannedAt"]);
   if (!o.ok) return o;
   const { occurrenceId, lastSeen, ownerHeld } = o.value;
   if (!isLaunchOccurrenceId(occurrenceId)) return { ok: false, why: "carried occurrenceId is not an occurrence id" };
@@ -984,7 +1059,18 @@ function parseCarried(u: unknown): Parsed<CarriedEntry> {
     if (!isText(h.value["slot"])) return { ok: false, why: "ownerHeld.slot is not a slot" };
     held = { slot: h.value["slot"] };
   }
-  return { ok: true, value: { occurrenceId, lastSeen: lastSeen as LaunchEvent["kind"] | null, ownerHeld: held } };
+  if (!("origin" in o.value) || !("plannedAt" in o.value)) return { ok: false, why: "a carried entry names its origin and plannedAt, or null for both" };
+  const rawOrigin = o.value["origin"];
+  const plannedAt = o.value["plannedAt"];
+  if (rawOrigin === null || plannedAt === null) {
+    if (rawOrigin !== plannedAt) return { ok: false, why: "a carried entry's origin and plannedAt are both known or both null" };
+    return { ok: true, value: { occurrenceId, lastSeen: lastSeen as LaunchEvent["kind"] | null, ownerHeld: held, origin: null, plannedAt: null } };
+  }
+  const origin = parseOrigin(rawOrigin);
+  if (!origin.ok) return { ok: false, why: `carried ${origin.why}` };
+  if (occurrenceIdOf(origin.value) !== occurrenceId) return { ok: false, why: `carried origin is not ${occurrenceId}'s` };
+  if (!isIsoTimestamp(plannedAt)) return { ok: false, why: "carried plannedAt is not an ISO timestamp" };
+  return { ok: true, value: { occurrenceId, lastSeen: lastSeen as LaunchEvent["kind"] | null, ownerHeld: held, origin: origin.value, plannedAt } };
 }
 
 function parseReset(u: Record<string, unknown>, at: string): Parsed<HistoryResetEvent> {
@@ -1064,13 +1150,12 @@ export function parseJournalLine(text: string): Parsed<JournalLine> {
       return { ok: true, value: { ...common, kind, reservationKey, slot, ownerId, how } };
     }
     case "launching": {
-      const extra = fields("attempt", "correlationId", "artefactDir");
+      const extra = fields("attempt", "correlationId");
       if (extra !== null) return { ok: false, why: extra };
-      const { attempt, correlationId, artefactDir } = u;
+      const { attempt, correlationId } = u;
       if (!isPositiveInteger(attempt)) return { ok: false, why: "attempt is not an attempt number" };
       if (!isCorrelationId(correlationId)) return { ok: false, why: "correlationId is not a correlation id" };
-      if (!isText(artefactDir)) return { ok: false, why: "artefactDir is not a path" };
-      return { ok: true, value: { ...common, kind, attempt, correlationId, artefactDir } };
+      return { ok: true, value: { ...common, kind, attempt, correlationId } };
     }
     case "observed-running": {
       const extra = fields("attempt", "evidence");
@@ -1199,7 +1284,7 @@ export type EvidencePorts = {
   readonly artefacts: (dir: string, correlationId: CorrelationId) => ArtefactReadings;
   readonly identity: (start: StartRecord) => IdentityReading;
   readonly boot: () => BootIdentity;
-  /** Asked only about launches that live in tmux: `tmux` and `tmux-headless` ({@link runsInTmux}). */
+  /** Asked only about launches that live in tmux: `tmux` and `tmux-headless` ({@link usesTmux}). */
   readonly tmux: (correlationId: CorrelationId) => TmuxReading;
 };
 
@@ -1319,7 +1404,8 @@ export type LaunchOutcome =
   /** Already in flight or ended; nothing was asked of anybody. */
   | { readonly kind: "not-launchable"; readonly occurrenceId: LaunchOccurrenceId; readonly state: LaunchRecord["state"]; readonly why: string }
   | { readonly kind: "waiting"; readonly occurrenceId: LaunchOccurrenceId; readonly why: string }
-  | { readonly kind: "failed-before-launch"; readonly occurrenceId: LaunchOccurrenceId; readonly proof: FailedProof; readonly why: string }
+  /** `reservation` is the owner's ACTUAL answer to the release that followed (G1), not what should have happened. */
+  | { readonly kind: "failed-before-launch"; readonly occurrenceId: LaunchOccurrenceId; readonly proof: FailedProof; readonly why: string; readonly reservation: SlotAnswer }
   /** A write before the invocation did not land. **Nothing was invoked**; reconciliation settles what the journal shows. */
   | { readonly kind: "not-launched"; readonly occurrenceId: LaunchOccurrenceId; readonly why: string }
   /** The launcher was invoked. `threw` means it may or may not have had its effect; the attempt stays `launching`. */
@@ -1392,7 +1478,8 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
       if (record.state === "reserved") return { kind: "not-launched", occurrenceId: id, why: `the owner refused a key the journal says is reserved: ${grant.why}` };
       const wrote = appendGuarded(journal, { v: 1, kind: "failed-before-launch", occurrenceId: id, at: at(), attempt: null, proof: "admission-refused", why: grant.why });
       if (!wrote.ok) return { kind: "not-launched", occurrenceId: id, why: `the owner refused (${grant.why}) and that could not be recorded: ${wrote.why}` };
-      return { kind: "failed-before-launch", occurrenceId: id, proof: "admission-refused", why: grant.why };
+      // A refusal took no slot, so there is none to hold.
+      return { kind: "failed-before-launch", occurrenceId: id, proof: "admission-refused", why: grant.why, reservation: { kind: "released" } };
     }
     case "reserved": {
       if (record.state !== "reserved") {
@@ -1411,8 +1498,7 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
   const failBeforeLaunch = (proof: FailedProof, why: string): LaunchOutcome => {
     const wrote = appendGuarded(journal, { v: 1, kind: "failed-before-launch", occurrenceId: id, at: at(), attempt: null, proof, why });
     if (!wrote.ok) return { kind: "not-launched", occurrenceId: id, why: `${why}, and that could not be recorded: ${wrote.why}` };
-    releaseIfLicensed(parts, id);
-    return { kind: "failed-before-launch", occurrenceId: id, proof, why };
+    return { kind: "failed-before-launch", occurrenceId: id, proof, why, reservation: slotAfterRelease(parts, id) };
   };
   const read = guarded("reading the material", () => journal.readMaterial(id), (why) => ({ ok: false as const, why }));
   if (!read.ok) return failBeforeLaunch("material-mismatch", `material.txt could not be read back: ${read.why}`);
@@ -1440,7 +1526,7 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
   };
   const intended = guarded("writing intent.json", () => journal.writeIntent(id, attempt, intent), (why): Written => ({ ok: false, why }));
   if (!intended.ok) return failBeforeLaunch("intent-not-written", `intent.json could not be written: ${intended.why}`);
-  const launching = appendGuarded(journal, { v: 1, kind: "launching", occurrenceId: id, at: at(), attempt, correlationId, artefactDir });
+  const launching = appendGuarded(journal, { v: 1, kind: "launching", occurrenceId: id, at: at(), attempt, correlationId });
   // A FAILED `launching` APPEND INVOKES NOTHING. The journal says `reserved`,
   // which reconciliation reads as "never launched" — true, because of this line.
   if (!launching.ok) return { kind: "not-launched", occurrenceId: id, why: `launching could not be recorded, so the launcher was not invoked: ${launching.why}` };
@@ -1455,8 +1541,7 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
   if (answer.kind === "refused-before-effect") {
     const wrote = appendGuarded(journal, { v: 1, kind: "failed-before-launch", occurrenceId: id, at: at(), attempt, proof: "launcher-refused", why: answer.why });
     if (!wrote.ok) return { kind: "invoked", occurrenceId: id, correlationId, launcher: "started", detail: `the launcher refused (${answer.why}) and that could not be recorded: ${wrote.why}` };
-    releaseIfLicensed(parts, id);
-    return { kind: "failed-before-launch", occurrenceId: id, proof: "launcher-refused", why: answer.why };
+    return { kind: "failed-before-launch", occurrenceId: id, proof: "launcher-refused", why: answer.why, reservation: slotAfterRelease(parts, id) };
   }
   return { kind: "invoked", occurrenceId: id, correlationId, launcher: "started", detail: answer.detail };
 }
@@ -1465,11 +1550,23 @@ function drive(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
  * D7. Reconciliation.
  * ------------------------------------------------------------------ */
 
-export type ReconcilePorts = EvidencePorts & { readonly lookup: (key: ReservationKey) => Lookup };
+export type ReconcilePorts = EvidencePorts & {
+  readonly lookup: (key: ReservationKey) => Lookup;
+  /** The OPEN store's directory for an attempt — the only place evidence is read from (F16). */
+  readonly attemptDir: (id: LaunchOccurrenceId, attempt: number) => string;
+};
 
 export type ReconcileDecision =
   | { readonly kind: "record"; readonly occurrenceId: LaunchOccurrenceId; readonly event: LaunchEvent }
   | { readonly kind: "release"; readonly occurrenceId: LaunchOccurrenceId; readonly key: ReservationKey; readonly licence: ReleaseEvidence }
+  /**
+   * F17: the journal says this slot is not held — released, or never recorded
+   * (a lost reply under an abandoned occurrence) — and the owner holds the key
+   * anyway. Released at the owner under the record's own durable licence;
+   * NOTHING is journalled, because the journal already says what is now true,
+   * and the owner's own line carries the licence.
+   */
+  | { readonly kind: "release-untracked"; readonly occurrenceId: LaunchOccurrenceId; readonly key: ReservationKey; readonly licence: ReleaseEvidence }
   /** Looked, and could not conclude. Reported; nothing written. */
   | { readonly kind: "hold"; readonly occurrenceId: LaunchOccurrenceId; readonly why: string };
 
@@ -1513,7 +1610,7 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
   const unavailable: string[] = [];
   const art = guarded(
     "reading the artefacts",
-    () => ports.artefacts(current.artefactDir, current.correlationId),
+    () => ports.artefacts(ports.attemptDir(record.id, current.attempt), current.correlationId),
     (why): ArtefactReadings => ({ intent: { kind: "unreadable", why }, start: { kind: "unreadable", why }, exit: { kind: "unreadable", why } }),
   );
 
@@ -1553,11 +1650,9 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
         running = { kind: "start-artefact", pid: start.pid, startTicks: start.startTicks, bootId: start.bootId };
         break;
       case "other-boot":
-        if (boot.read) {
-          return { kind: "record", occurrenceId: record.id, event: { ...common, kind: "completed", evidence: { kind: "rebooted", recordedBootId: start.bootId, currentBootId: boot.id } } };
-        }
-        unavailable.push("the process check says another boot and the current boot id is unreadable");
-        break;
+        // CONCLUSIVE ON ITS OWN (review F19): the reading carries both boot ids,
+        // so a separate boot read that failed has nothing to add (F4's precedence).
+        return { kind: "record", occurrenceId: record.id, event: { ...common, kind: "completed", evidence: { kind: "rebooted", recordedBootId: identity.recorded, currentBootId: identity.current } } };
       case "gone":
         looked.push(`supervisor pid ${start.pid} is gone on this boot (${identity.why}) and wrote no exit.json`);
         break;
@@ -1574,7 +1669,7 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
   } else {
     looked.push("no start.json");
   }
-  if (running === null && runsInTmux(record.launcherKind)) {
+  if (running === null && usesTmux(record.launcherKind)) {
     const tmux = guarded("probing tmux", () => ports.tmux(current.correlationId), (why): TmuxReading => ({ kind: "cannot-tell", why }));
     if (tmux.kind === "found") running = { kind: "tmux-session", sessionId: tmux.sessionId };
     else if (tmux.kind === "cannot-tell") unavailable.push(`tmux: ${tmux.why}`);
@@ -1597,11 +1692,24 @@ function evidenceDecision(record: LaunchRecord & { readonly current: AttemptRef 
   };
 }
 
+/**
+ * F17: a record whose journal says its slot is not held, and whose record
+ * licenses a release — is the owner holding the key anyway? An owner journal
+ * repaired or restored can resurrect a released key, and an abandoned
+ * occurrence may sit on a lost reply; either would block its class for ever.
+ * An owner that cannot answer changes nothing: the journal's fact stands.
+ */
+function untrackedRelease(id: LaunchOccurrenceId, licence: ReleaseEvidence, ports: ReconcilePorts): ReconcileDecision | null {
+  const key = reservationKeyOf(id);
+  const found = lookupGuarded(ports, key);
+  return found.kind === "reserved" ? { kind: "release-untracked", occurrenceId: id, key, licence } : null;
+}
+
 function decide(record: LaunchRecord, ports: ReconcilePorts, at: string): ReconcileDecision | null {
   // F7 FIRST: a terminal or disposed record whose reservation is still held.
   const licence = licenceOf(record);
   if (record.reservation.kind === "held" && licence !== null) return releaseDecision(record.id, licence, ports, at);
-  if (record.disposition !== null) return null;
+  if (record.disposition !== null) return licence === null ? null : untrackedRelease(record.id, licence, ports);
   // THE LOST REPLY: a record that was asking for admission may hold a slot the
   // journal never heard about. Found → recorded, and no second slot is taken.
   if (admissible(record)) {
@@ -1634,13 +1742,19 @@ function decide(record: LaunchRecord, ports: ReconcilePorts, at: string): Reconc
         },
       };
     case "launching":
-    case "observed-running":
     case "outcome-unknown":
       return evidenceDecision(record, ports, at);
-    case "planned":
-    case "waiting-admission":
+    case "observed-running": {
+      // A class released at observed-running (Q2) may have had its key resurrected too — asked once the evidence has nothing to change.
+      const moved = evidenceDecision(record, ports, at);
+      return moved ?? (licence === null || record.reservation.kind === "held" ? null : untrackedRelease(record.id, licence, ports));
+    }
     case "completed":
     case "failed-before-launch":
+      // Not held (that was F7, above) and not retryable (that was the lost reply): only F17 is left to ask.
+      return licence === null ? null : untrackedRelease(record.id, licence, ports);
+    case "planned":
+    case "waiting-admission":
       return null;
     default: {
       const never: never = record;
@@ -1650,8 +1764,11 @@ function decide(record: LaunchRecord, ports: ReconcilePorts, at: string): Reconc
 }
 
 function decideCarried(carried: CarriedOccurrence, ports: ReconcilePorts, at: string): ReconcileDecision | null {
-  if (carried.disposition === null || carried.ownerHeld === null || carried.released !== null) return null;
-  return releaseDecision(carried.occurrenceId, { kind: "disposed", requestId: carried.disposition.requestId }, ports, at);
+  if (carried.disposition === null) return null;
+  const licence: ReleaseEvidence = { kind: "disposed", requestId: carried.disposition.requestId };
+  if (carried.ownerHeld !== null && carried.released === null) return releaseDecision(carried.occurrenceId, licence, ports, at);
+  // Released, or never held as far as the reset could see — F17 asks whether the owner holds it anyway.
+  return untrackedRelease(carried.occurrenceId, licence, ports);
 }
 
 /**
@@ -1697,6 +1814,11 @@ function applyDecision(parts: LaunchParts, decision: ReconcileDecision): Reconci
     }
     case "release":
       return applyRelease(parts, decision.occurrenceId, decision.key, decision.licence);
+    case "release-untracked": {
+      const answer = guarded("the owner's release", () => parts.owner.release(decision.key, decision.licence), (why) => ({ kind: "unavailable" as const, why }));
+      if (answer.kind === "unavailable") return { occurrenceId: decision.occurrenceId, did: "failed", what: `the owner holds ${decision.key}, which the journal says is not held, and could not release it: ${answer.why}` };
+      return { occurrenceId: decision.occurrenceId, did: "released", what: `the owner held ${decision.key}, which the journal says is not held; owner said ${answer.kind}` };
+    }
     case "hold":
       return { occurrenceId: decision.occurrenceId, did: "held", what: decision.why };
     default: {
@@ -1707,7 +1829,7 @@ function applyDecision(parts: LaunchParts, decision: ReconcileDecision): Reconci
 }
 
 function portsOf(parts: LaunchParts): ReconcilePorts {
-  return { ...parts.evidence, lookup: (key) => parts.owner.lookup(key) };
+  return { ...parts.evidence, lookup: (key) => parts.owner.lookup(key), attemptDir: (id, attempt) => parts.journal.attemptDir(id, attempt) };
 }
 
 /** Settle one occurrence's licensed release now, rather than on the next pass. Used after a `failed-before-launch` and a `disposed`. */
@@ -1724,6 +1846,20 @@ function releaseIfLicensed(parts: LaunchParts, id: LaunchOccurrenceId): Reconcil
     decision = decideCarried(carried, portsOf(parts), at);
   }
   return decision === null ? null : applyDecision(parts, decision);
+}
+
+/**
+ * Whether the slot is free after a licensed release was tried (G1) — from the
+ * owner's actual answer, so a caller is never told "released" over a slot the
+ * owner still holds.
+ */
+function slotAfterRelease(parts: LaunchParts, id: LaunchOccurrenceId): SlotAnswer {
+  const report = releaseIfLicensed(parts, id);
+  if (report === null) {
+    const record = parts.journal.fold().occurrences.get(id);
+    return record?.reservation.kind === "held" ? { kind: "held", why: `${id}'s reservation is held and nothing licenses its release` } : { kind: "released" };
+  }
+  return report.did === "released" || report.did === "recorded" ? { kind: "released" } : { kind: "held", why: report.what };
 }
 
 export type ReconcileRun =
@@ -1817,25 +1953,174 @@ export function resolveHistory(
 }
 
 /* ------------------------------------------------------------------ *
+ * The consumers' operations: resume, abandon, and a read-only look.
+ * ------------------------------------------------------------------ */
+
+/** Whether a slot is free after a release was asked for: the owner's actual answer. */
+export type SlotAnswer = { readonly kind: "released" } | { readonly kind: "held"; readonly why: string };
+
+/** The record a consumer may act on by id: a live, unmoved history, and an occurrence in it. */
+function recordFor(parts: Pick<LaunchParts, "journal">, id: LaunchOccurrenceId): { ok: true; record: LaunchRecord } | { ok: false; why: string } {
+  const lost = lostWhy(guarded("reading the journal status", () => parts.journal.status(), (why): JournalStatus => ({ kind: "history-lost", atLine: 0, why })));
+  if (lost !== null) return { ok: false, why: lost };
+  if (!isLaunchOccurrenceId(id)) return { ok: false, why: `${JSON.stringify(id)} is not an occurrence id` };
+  const fold = parts.journal.fold();
+  if (fold.carried.has(id)) return { ok: false, why: `${id} was carried over a history reset; only Greg's disposition moves it` };
+  const record = fold.occurrences.get(id);
+  return record === undefined ? { ok: false, why: `${id} is not in the journal` } : { ok: true, record };
+}
+
+/**
+ * **`drive()` ON THE STORED, PINNED RECORD** (scheduled-dispatch's F1): no
+ * re-plan and no request comparison — the material, launcher, class and run
+ * spec are the ones `planned` pinned. Only a `planned` or `waiting-admission`
+ * record; anything else is `not-launchable` with its state, and nothing is
+ * asked of the owner or the launcher.
+ */
+export function resumeOccurrence(parts: LaunchParts, id: LaunchOccurrenceId): LaunchOutcome {
+  const found = recordFor(parts, id);
+  if (!found.ok) return { kind: "refused", why: found.why };
+  const { record } = found;
+  if (record.state !== "planned" && record.state !== "waiting-admission") {
+    return { kind: "not-launchable", occurrenceId: id, state: record.state, why: `${id} is ${record.state}; only a planned or waiting occurrence is resumed` };
+  }
+  return drive(parts, id);
+}
+
+export type AbandonResult = { readonly kind: "abandoned"; readonly reservation: SlotAnswer } | { readonly kind: "refused"; readonly why: string };
+
+/**
+ * **A CALLER'S "NOT THIS ONE ANY MORE"**, for an occurrence that never
+ * launched: `failed-before-launch`, proof `superseded`, the caller's reason.
+ * Only from `planned` or `waiting-admission` with no attempt ever made — so no
+ * `launching` was ever written, and nothing external can have happened. The
+ * fold then refuses every further reservation of it.
+ *
+ * A `planned` record may hold a slot the journal never heard about (the lost
+ * reply), so the key is looked up and released under the new record's own
+ * licence. An owner that cannot answer leaves it `held`, with the reason, for
+ * reconciliation's F17 release to settle once it can.
+ */
+export function abandon(parts: LaunchParts, id: LaunchOccurrenceId, why: string): AbandonResult {
+  const found = recordFor(parts, id);
+  if (!found.ok) return { kind: "refused", why: found.why };
+  const { record } = found;
+  if (!isText(why)) return { kind: "refused", why: "an abandonment gives its reason" };
+  if (record.state !== "planned" && record.state !== "waiting-admission") return { kind: "refused", why: `${id} is ${record.state}; only a planned or waiting occurrence is abandoned` };
+  if (record.attempts.length !== 0) return { kind: "refused", why: `${id} has launched before (${record.attempts.length} attempt(s)); only one that never launched is abandoned` };
+  const wrote = appendGuarded(parts.journal, { v: 1, kind: "failed-before-launch", occurrenceId: id, at: parts.now().toISOString(), attempt: null, proof: "superseded", why });
+  if (!wrote.ok) return { kind: "refused", why: `the abandonment could not be recorded: ${wrote.why}` };
+  const key = reservationKeyOf(id);
+  const licence: ReleaseEvidence = { kind: "terminal", state: "failed-before-launch" };
+  const lookedUp = guarded("the owner's lookup", () => parts.owner.lookup(key), (reason): Lookup => ({ kind: "unavailable", why: reason }));
+  switch (lookedUp.kind) {
+    case "none":
+      return { kind: "abandoned", reservation: { kind: "released" } };
+    case "unavailable":
+      return { kind: "abandoned", reservation: { kind: "held", why: `the owner cannot say whether it holds a slot for ${id} (${lookedUp.why}); reconciliation releases it when it can` } };
+    case "reserved": {
+      const released = guarded("the owner's release", () => parts.owner.release(key, licence), (reason) => ({ kind: "unavailable" as const, why: reason }));
+      return released.kind === "unavailable"
+        ? { kind: "abandoned", reservation: { kind: "held", why: `the owner holds ${lookedUp.slot} for ${id} and could not release it (${released.why}); reconciliation releases it when it can` } }
+        : { kind: "abandoned", reservation: { kind: "released" } };
+    }
+    default: {
+      const never: never = lookedUp;
+      throw new Error(`no step for lookup ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/**
+ * **A READ-ONLY LOOK AT ONE OCCURRENCE** (gradual-recovery's G6): a frozen
+ * copy, never the fold, the journal or the parts.
+ */
+export type OccurrenceSummary = {
+  readonly occurrenceId: LaunchOccurrenceId;
+  readonly state: LaunchRecord["state"];
+  /** The number of the latest attempt made; null before any. */
+  readonly attempt: number | null;
+  readonly reservationHeld: boolean;
+  readonly disposed: boolean;
+  /** `completed`'s and `failed-before-launch`'s `endedAt`; null in every other state. */
+  readonly endedAt: string | null;
+  /** How a `completed` occurrence ended: its exit code (null when it did not exit with one), or a reboot. Null in every other state. */
+  readonly completion: { readonly kind: "exit"; readonly code: number | null } | { readonly kind: "rebooted" } | null;
+};
+
+/** The states that are "in flight". A record in any other state is in flight too while its reservation is held. */
+const IN_FLIGHT_STATES: ReadonlySet<LaunchRecord["state"]> = new Set(["planned", "waiting-admission", "reserved", "launching", "observed-running", "outcome-unknown"]);
+
+function completionOf(record: LaunchRecord): OccurrenceSummary["completion"] {
+  if (record.state !== "completed") return null;
+  const { evidence } = record;
+  switch (evidence.kind) {
+    case "exit-record":
+      return Object.freeze({ kind: "exit" as const, code: evidence.ending.kind === "exited" ? evidence.ending.code : null });
+    case "rebooted":
+      return Object.freeze({ kind: "rebooted" as const });
+    default: {
+      const never: never = evidence;
+      throw new Error(`no completion for ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+export function summaryOf(record: LaunchRecord): OccurrenceSummary {
+  return Object.freeze({
+    occurrenceId: record.id,
+    state: record.state,
+    attempt: record.attempts.at(-1)?.attempt ?? null,
+    reservationHeld: record.reservation.kind === "held",
+    disposed: record.disposition !== null,
+    endedAt: record.state === "completed" || record.state === "failed-before-launch" ? record.endedAt : null,
+    completion: completionOf(record),
+  });
+}
+
+/** One origin's occurrence, or null when it was never planned (or was carried over a history reset, which only Greg moves). */
+export function inspect(journal: Pick<LaunchJournal, "fold">, origin: LaunchOrigin): OccurrenceSummary | null {
+  const record = journal.fold().occurrences.get(occurrenceIdOf(origin));
+  return record === undefined ? null : summaryOf(record);
+}
+
+/** Every occurrence of one origin kind that is in flight: an {@link IN_FLIGHT_STATES} state, or a reservation still held. */
+export function inFlight(journal: Pick<LaunchJournal, "fold">, originKind: LaunchOrigin["kind"]): readonly OccurrenceSummary[] {
+  const found: OccurrenceSummary[] = [];
+  for (const record of journal.fold().occurrences.values()) {
+    if (record.origin.kind === originKind && (IN_FLIGHT_STATES.has(record.state) || record.reservation.kind === "held")) found.push(summaryOf(record));
+  }
+  return Object.freeze(found);
+}
+
+/* ------------------------------------------------------------------ *
  * The composition: the only place a launcher is handed over.
  * ------------------------------------------------------------------ */
 
 export type LaunchProtocol = {
   readonly plan: (request: PlanRequest) => PlanResult;
   readonly launchOccurrence: (request: PlanRequest) => LaunchOutcome;
+  readonly resumeOccurrence: (id: LaunchOccurrenceId) => LaunchOutcome;
+  readonly abandon: (id: LaunchOccurrenceId, why: string) => AbandonResult;
+  readonly inspect: (origin: LaunchOrigin) => OccurrenceSummary | null;
+  readonly inFlight: (originKind: LaunchOrigin["kind"]) => readonly OccurrenceSummary[];
   readonly reconcile: () => ReconcileRun;
   readonly dispose: (request: DisposeRequest) => DisposeResult;
 };
 
 /**
  * Close over the parts, so a consumer is handed functions and never a
- * launcher. The scheduler and recovery get `launchOccurrence` from this, and
- * nothing else (F9).
+ * launcher, a journal or an owner. The scheduler and recovery get
+ * `launchOccurrence` and the operations above from this, and nothing else (F9).
  */
 export function composeLaunchProtocol(parts: LaunchParts): LaunchProtocol {
   return {
     plan: (request) => plan(parts, request),
     launchOccurrence: (request) => launchOccurrence(parts, request),
+    resumeOccurrence: (id) => resumeOccurrence(parts, id),
+    abandon: (id, why) => abandon(parts, id, why),
+    inspect: (origin) => inspect(parts.journal, origin),
+    inFlight: (originKind) => inFlight(parts.journal, originKind),
     reconcile: () => reconcileAll(parts),
     dispose: (request) => dispose(parts, request),
   };
