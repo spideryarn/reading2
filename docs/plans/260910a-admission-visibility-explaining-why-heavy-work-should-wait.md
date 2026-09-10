@@ -302,8 +302,10 @@ properly — a silence that reads as a finding, which is
 > written to a small dedicated file the panel reads, not a scan of tmux-job logs; that widening of
 > your file set is authorised, name the two files in your plan and keep each edit to the append.
 
-So the roadmap's "last refusal" is met properly rather than approximated, by a **refusal journal**
-— §6b.
+**So the roadmap checkbox *"Show active heavy tests/reviews/browser jobs and the last refusal"* is
+met by the journal**, not by an inference and not by a scan: §6b. It is the only part of this
+feature that reads a record of something that actually happened, and it is the reason the replay
+below could be cut without leaving the checkbox open.
 
 #### The would-refuse replay, cut from this stage
 
@@ -360,8 +362,10 @@ that imported `tools/fleet/` would drag the dashboard into every suite's startup
 
 That third file is a readiness file and outside the original file set. It is named here rather than
 slipped in: without it the second writer is a string match on prose, which is the kind of check that
-goes quietly wrong when somebody rewords a sentence. **If the Overseer would rather not widen that
-far, the readiness writer drops and only `vitest.config.ts` writes** — and then the panel says the
+goes quietly wrong when somebody rewords a sentence. **The Overseer authorised it on 2026-09-10** —
+no behaviour change — and noted that the readiness loop picks up `dev` on its own tick, so the new
+writer starts working without anybody restarting it. **If GPT Sol objects to the third file at
+review, the readiness writer drops and only `vitest.config.ts` writes**, and the panel then says the
 journal sees test runs only, which is still the answer an agent needs.
 
 **The first rule of this writer is that it may not break what it observes.** A refusal is already a
@@ -439,6 +443,25 @@ api defaulted there and injectable from `App.tsx`.
 **Three kinds of nothing, kept apart**: *the machine has no admission policy* (`not-applicable`),
 *the server could not ask its own gate* (`unknown`), and *this browser never got an answer* — a
 client-side arm, in the browser's voice, never in the server's.
+
+**The panel already has rules, set by the Box health rework that landed at `6e8e28e3` and is already
+in this worktree's base.** Session `spideryarn2-8d`, which wrote it, handed them over on 2026-09-10
+and a reviewer will hold this section to them:
+
+- **Nothing may be drawn that a reader could take for a healthy zero.** `health-view.ts` now refuses
+  to build a progress bar at all when there is no number behind it. So a forecast that is
+  unavailable is a *sentence*, never an empty or zeroed shape.
+- **The order inside the history card is now** record prose → four charts → verdict strip and its
+  time axis → legend. The strip moved from top to bottom at Greg's request; a section placed near
+  `HealthHistory` should read as part of that order rather than interrupting it.
+
+**And the merge hazard here is duplication, not conflict.** That session's edits to `HealthPanel.tsx`
+(a `StatBar` import, a line in `StatTile`, a `Bar` component at the end) are in different parts of
+the file from this section's (a mount line beside `<HealthHistory …/>` and one optional prop), so a
+merge will not raise a marker — which is precisely the shape that can silently duplicate or drop a
+block instead. After every `origin/dev` merge: grep `HealthPanel.tsx` for `function Bar(` and for
+this section's own component and check each appears **exactly once**, and run
+`npx vitest run tests/fleet-web.test.tsx`, which now pins the bars and the tile copy.
 
 ---
 
