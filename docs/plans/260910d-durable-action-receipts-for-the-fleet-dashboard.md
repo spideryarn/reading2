@@ -1,8 +1,10 @@
 # Durable action receipts for the fleet dashboard
 
-**Status, 2026-09-10 11:40: Stage 1 is on `dev` (`afbfcf2c`) — queued work writes receipts and
-survives a restart; live after the next dashboard restart. Stage 2 is being implemented by an Opus
-subagent.** The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
+**Status, 2026-09-10 12:25: Stages 1 and 2 are on `dev`** — Stage 1 (`afbfcf2c`, live since the
+Overseer's restart): queued work writes receipts and survives a restart. Stage 2 (`d85b487f`, live
+after the next restart): request ids and replay on the steer and enqueue routes, receipts for direct
+steer and answer, and the catalogue's `holdsDurable` for the restart check. **Stage 3 is being
+implemented by an Opus subagent; Stage 4's brief is written and its web files are authorised.** The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
 arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
 
 **Learned in Stage 1, for Stages 2 and 4:** a memory-only or locked-out journal refuses every
@@ -10,8 +12,8 @@ arbitration on the one contested call — F10 withdrawn, so F15 falls with it (�
 stores cannot open, every keyed request answers `503 receipt-unavailable`. That is the design; whether
 a client should then offer to resend without an id is a product question for Stage 4. Queue item
 `qi-zabqe99q`, dispatched by the Overseer. This is the roadmap stage
-[260908f § Durable action receipts — restart without guessing or repeating a write](260908f-overseer-and-fleet-improvement-roadmap.md#stage-durable-action-receipts--restart-without-guessing-or-repeating-a-write),
-and it absorbs [260908j § Stage 5 — request ids and receipts](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md#stage-5--request-ids-and-receipts),
+[260908f § Durable action receipts — restart without guessing or repeating a write](260908f-overseer-and-fleet-improvement-roadmap.md#stage-durable-action-receipts-restart-without-guessing-or-repeating-a-write),
+and it absorbs [260908j § Stage 5 — request ids and receipts](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md#stage-5-request-ids-and-receipts),
 which was specified as instance-scoped and never built. This plan makes it durable.
 
 ## What the job is for
