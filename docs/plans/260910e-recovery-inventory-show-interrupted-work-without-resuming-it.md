@@ -773,8 +773,34 @@ exception included), F31, F32 and F33. Not closed: F28 and F30.**
     simulated and a step failing part way through;
   - Fable's words are recorded here.
 
-Status, 2026-09-10: implemented, reviewed (refused), fixed, merged and narrow-checked. F30 is being
-fixed, and F28's overrule goes to Fable. The shared-file hunks:
+**Fable's settle, 2026-09-10 (not cross-family): "F30: closed. F28: overrule sound."** In its words:
+
+- **On F30:** the page makes exactly two kinds of claim about the live inventory, the "(N sessions)"
+  count and the live-row facts, and *"`contradiction()` now bounds distinct `tmuxId`s by N and pins
+  each `tmuxId` to one set of facts."* A `rows: 0` plus live-row payload is refused. Two records
+  citing one row are accepted and consistent. A reused tmux id across generations is not a
+  contradiction.
+- **On F28:** *"the drill imports no removal function … The comment is accurate … The test beats
+  the guard."* A cleanup `rm` added later is caught *"by filesystem state, not only the mock"*. And:
+  *"the racing process must be same-user with write access to the target's parent at that instant
+  — it can already write the store directly. The drill adds nothing to its power, and reaches no
+  store file or reader data. Overrule sound."*
+- **It also named a wider window, the same class of harm:** a swap *after* the real-path check can
+  still land the drill's new `store/`, `projects/` and `work/` directories inside a live store
+  directory. They carry drill-specific names, and nothing in `tools/overseer` scans the store root.
+
+**Named follow-ups from the settle, not blockers:**
+
+1. The browser's `classification()` accepts `already-live` with a null live conversation, or
+   `sameRun` with a null token. The server never emits either, and closing it is two lines.
+2. A resolved card's "is live under a different run" is present tense about a dated fact.
+
+- [x] Sol review (refuse, F27–F35), fixes, the final merge from `dev` (`0a684ebb`), Sol's narrow
+  check (five of seven closed), the F30 fix and the F28 no-delete test (`3cd88642`), Fable's
+  settle; commit.
+
+Status, 2026-09-10: **Stage 3 done.** What remains is the push, after the full suite on the final
+tree. The shared-file hunks:
 
 - `server.ts`: the three approved lines.
 - `App.tsx`: the approved mount line, **plus its import line**. The mount cannot exist without it,

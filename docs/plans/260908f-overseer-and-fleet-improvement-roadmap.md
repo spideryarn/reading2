@@ -1577,7 +1577,9 @@ the plan did not know:
   not on the gone reason.
 - **tmux can get the same pid after a reboot.** So the daemon reads the host's boot id itself.
 
-The page (Stage 3) is in progress. The fourth and fifth boxes, and the acceptance, wait for it.
+**Stage 3, the page, is done as well**: `GET /api/recovery`, and the *Interrupted work* section below
+the Overseer panel. It was reviewed by Sol, narrow-checked, and settled by Fable. The acceptance is
+shown below. Nothing is live until the daemon and the dashboard are restarted on this code.
 
 - [x] Preserve recovery candidates from the pre-restart register and retained disappearance events
   when tmux generation changes. The current register removes gone sessions, so reading only
@@ -1597,10 +1599,10 @@ The page (Stage 3) is in progress. The fourth and fifth boxes, and the acceptanc
 - [x] For logs predating recovery events, perform a one-time offline/startup replay to recover last
   complete entries where evidence suffices. Missing evidence becomes unknown, not a fabricated
   candidate. Test crash before candidate append, between candidate/removal, and before checkpoint.
-- [ ] Show transcript existence, recorded working directory/worktree, last observed activity,
+- [x] Show transcript existence, recorded working directory/worktree, last observed activity,
   latest available evidence and whether the harness supports resume. Paths come from the register,
   checked for existence; never synthesize a resume command from a display title.
-- [ ] Keep shells/manual jobs as manual recovery with an SSH path; do not pretend they have resumable
+- [x] Keep shells/manual jobs as manual recovery with an SSH path; do not pretend they have resumable
   agent state. Provide a bounded checklist/report first, no execute button.
 - [x] Test a missing directory, transcript absent, valid Claude transcript, already-live matching
   execution, empty rebooted fleet, and old schema. Include the first accepted empty post-reboot snapshot and prove candidates survive register removal.
@@ -1609,6 +1611,20 @@ The page (Stage 3) is in progress. The fourth and fifth boxes, and the acceptanc
 **Acceptance:** after a simulated reboot Greg sees recoverable work and missing evidence, with zero
 sessions automatically started. This stage can land earlier alongside the status projection.
 
+**Shown, 2026-09-10.** `scripts/overseer-recovery-drill.ts` drives the real daemon into a disposable
+store:
+- boot B1, generation G1, with four sessions;
+- an empty snapshot after the reboot, under B2;
+- G2, with one session back under a new run.
+
+The page then shows:
+- *interrupted*: the session whose directory is **missing**, and the shell job (manual, "on <host>,
+  in <dir>");
+- *stopped before the world change*: the Claude that had already exited;
+- *resolved*: the session that came back, marked *resumed*, with both run tokens.
+
+There are no buttons, no links and no command text, and nothing was started. It was checked at
+1280 px and 400 px.
 ### Stage: Gradual recovery — resume selected valuable work
 
 - [ ] Offer user-selected resume from Recovery inventory through existing launcher/resume support.
