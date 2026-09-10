@@ -186,6 +186,8 @@ export const TMP_DEBRIS_AGE_MS = 60 * 60 * 1000;
 /** Lower-case only: one spelling per id, because ids are compared as strings. */
 const UUID_RULE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INBOX_NAME_RULE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/;
+/** The first refusal keeps the old `<eventId>.json` name; another attempt under that id gets a unique suffix so neither record is destroyed. */
+const REFUSED_NAME_RULE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\.json$/;
 /** The only other name `submitReport` ever puts in the inbox. */
 const TMP_NAME_RULE = /^\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** A quarantined entry keeps its old name after a sortable prefix, when that name is plain enough to put in a path. */
@@ -1270,7 +1272,13 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
    */
   const refuseItem = (eventId: string, why: string, original: string, inputs: readonly string[]): void => {
     const body = { eventId, refusedAt: now().toISOString(), why, original: original.slice(0, MAX_SUBMISSION_BYTES) };
-    writeAtomically(path.join(refusedDir, `${eventId}.json`), refusedDir, `${JSON.stringify(body)}\n`);
+    const first = path.join(refusedDir, `${eventId}.json`);
+    // A re-used event id is another refused attempt, not permission to destroy
+    // the earlier diagnostic. The UUID suffix keeps both without listing the
+    // directory; collisions are negligible under the documented same-user
+    // (rather than hostile-OS-process) boundary.
+    const refusalFile = existsSync(first) ? path.join(refusedDir, `${eventId}-${randomUUID()}.json`) : first;
+    writeAtomically(refusalFile, refusedDir, `${JSON.stringify(body)}\n`);
     for (const input of inputs) unlinkQuietly(input);
     outcome.refused += 1;
     outcome.notes.push(`refused ${eventId}: ${why}`);
@@ -1777,14 +1785,14 @@ export function readInbox(root: string, limits: Partial<InboxReadLimits> = {}): 
       return { eventId, event: null, why: `could not read its prepared report: ${String(cause)}` };
     }
   });
-  const refusals: string[] = [];
+  const refusals: { readonly name: string; readonly eventId: string }[] = [];
   const refusedScan = scanDirectory(path.join(root, REFUSED_DIR), scanEntries, (name) => {
-    if (INBOX_NAME_RULE.test(name)) refusals.push(name);
+    const match = REFUSED_NAME_RULE.exec(name);
+    if (match !== null) refusals.push({ name, eventId: match[1] ?? "" });
   });
   const refused: RefusedItem[] = [];
   let refusalsGone = 0;
-  for (const name of refusals.sort().slice(0, parseFiles)) {
-    const eventId = name.slice(0, -".json".length);
+  for (const { name, eventId } of refusals.sort((a, b) => a.name.localeCompare(b.name)).slice(0, parseFiles)) {
     try {
       const read = readBounded(path.join(root, REFUSED_DIR, name), MAX_REFUSAL_BYTES);
       if (read.kind === "gone") {

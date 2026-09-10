@@ -66,9 +66,10 @@ overseer reports                                 [3] append the prepared report 
   same bytes, and does. A report already in `reports.jsonl` with identical bytes is skipped.
 - **Refused vs pending.** Invalid input (shape, unknown kind, oversized, name ≠ id, a conflicting
   duplicate) is refused: one atomically written `refused/<id>.json` holding the reason and the original
-  text, then the inbox file is removed; refused records are never deleted by the daemon (Stage 3c —
-each replaces the inbox file it came from, and pruning under a listing was unbounded work in the
-daemon's loop), and their count shows, capped, beside the quarantine's. **Transient failure**
+  text, then the inbox file is removed. A later refused attempt under the same id gets a UUID suffix, so
+  it cannot replace the first. Refused records are never deleted by the daemon (Stage 3c — each replaces
+  the inbox file it came from, and pruning under a listing was unbounded work in the daemon's loop), and
+  their count shows, capped, beside the quarantine's. **Transient failure**
   (decisions lock held, a checker that could not run) leaves the item pending for the next pass.
 - **Bounds per pass**: 50 files, 1 MiB read, 200 artefact probes, 5 s wall clock; the rest waits. The
   pass is synchronous, so two cannot overlap and shutdown cannot interrupt one mid-step.
@@ -451,4 +452,29 @@ detail rather than a wrong direction, and Sol called the ownership design sound.
 
 ## Status
 
-Plan reviewed by Sol 2026-09-10 and revised. Stages 1 and 2 next, in parallel.
+**2026-09-10, end of day: reporting machinery complete; convention not activated.** All three stages are
+on `dev` (last at `c68a7e25`): the reports log, inbox, daemon drain and CLI; decisions schema 2; the
+Claims section, `GET /api/reports`, decision reports into `decisions.jsonl`, and the bounds three reviews
+asked for. Implemented by Opus subagents throughout; no Codex implementation.
+
+Reviews, six Sol runs in all: the plan (revise, nine findings, all accepted); Stage 1 twice (the first
+timed out and its findings were recovered from its log; the second fixed three P1s and made the inbox bound
+a condition for landing, built in 3b); Stage 2 once (one P0 and two P1s fixed, ready to land); Stage 3 once
+(three fixed, one P0 and one P1 left open, both fixed in 3c); and one narrow check of 3c —
+**verdict: approved to land** ([findings](260910e-work-reports-stage3c-check-sol-findings.md)) — both
+fixes approved, and one more found and fixed red-first (WR-S3C-1, P1: a second refusal under the same
+event id replaced the first refusal record, contradicting "never deleted"; a later refusal now gets a
+UUID suffix, without listing the directory).
+
+What makes the convention active is not in this plan's file set:
+[the proposals](260910e-work-reports-convention-proposals.md) — a paragraph in the Overseer's dispatch
+briefs, a one-sentence suffix on both standing-job prompts (a re-pin, Greg's), and no AGENTS.md rule for
+now. The schema-2 decision fields and their enums are a stored shape, and my defaults; they go to Greg
+with the proposals.
+
+Left, named and small: a pass that only quarantined logs nothing; more than 1 000 of the daemon's own
+processing records that each fail to replay could fill every pass's window (the analogue of the inbox
+starvation the quarantine solved, needing repeated failures of the daemon's own files); `runReports` in
+`scripts/overseer.ts` is over biome's complexity threshold. Not seen in a real browser (jsdom only).
+`tests/fleet-reports-route.test.ts` joins `fleet-decisions-route` as red in any worktree without a built
+fleet client.

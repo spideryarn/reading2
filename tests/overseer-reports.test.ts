@@ -1133,6 +1133,22 @@ describe("the drain's own directories are bounded too", () => {
     expect(readFileSync(join(refusedDir, names.find((name) => name !== `${id}.json`) ?? ""), "utf8")).toMatch(/an old refusal/);
   });
 
+  test("a second refusal under the same event id does not replace the first refusal record", () => {
+    const root = tempRoot();
+    const s = submission();
+    drop(root, `${s.eventId}.json`, JSON.stringify({ ...s, kind: "ready" }));
+    expect(drainReports(options(root)).refused).toBe(1);
+    const first = readFileSync(join(root, REFUSED_DIR, `${s.eventId}.json`), "utf8");
+
+    drop(root, `${s.eventId}.json`, JSON.stringify({ ...s, kind: "also-ready" }));
+    expect(drainReports(options(root, { now: () => LATER_NOW })).refused).toBe(1);
+
+    const names = listed(root, REFUSED_DIR).filter((name) => !name.includes(".tmp-"));
+    expect(names).toHaveLength(2);
+    expect(readFileSync(join(root, REFUSED_DIR, `${s.eventId}.json`), "utf8")).toBe(first);
+    expect(readInbox(root).refused.items.map((item) => item.eventId)).toEqual([s.eventId, s.eventId]);
+  });
+
   test("a refusal never lists report-refused/: one the daemon may enter but not read still takes it, and nothing is left pending", () => {
     if (process.getuid?.() === 0) return; // root reads whatever the mode says, so the control below could not fail
     const root = tempRoot();

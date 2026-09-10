@@ -10,7 +10,7 @@ anything else.
 This is the sixth and last Sol run for this plan. Discovery is closed: do not re-review Stages 1, 2, 3a or
 3b. Your earlier Stage 3 findings are `docs/plans/260910e-work-reports-stage3-review-sol-findings.md`.
 
-## The two fixes (commit `53ee5bcb`, and its follow-up FOLLOWUP_SHA — `git show` both)
+## The two fixes (commit `53ee5bcb`, and its follow-up `c18e2764` — `git show` both)
 
 The follow-up applies the same rule to the two places 3c's builder flagged: the daemon never deletes from
 `report-refused/` either (its prune-to-200 listed and sorted the whole directory on every refusal), and
