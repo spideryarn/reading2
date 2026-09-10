@@ -222,15 +222,32 @@ the tighter budget. Sol reviews each stage once.
 
 ### Stage 1 — the scheduler core
 
-- [ ] `schedule-plan.ts` `planJobs`; `schedulerTick` refactored onto it; duplicate preflight (red
+**Done.** `18f64a04` (built by an Opus subagent from
+[the task](260910e-schedule-preview-stage1-task.md); the activation fix by the manager) and Sol's
+stage-review fixes F1–F3 on top
+([review](260910e-schedule-preview-stage1-review-sol.md)). Focused overseer suites 9 files / 322
+tests, typecheck exit 0. What the plan did not know:
+
+- **A dry-run job needs its own eligibility arm, not `ineligible`**, or the activation preflight —
+  which stops on any `ineligible` — could never arm a box carrying the fixture. `overseer-activate`
+  now names it as never dispatching.
+- **Duplicates had to reach the headline too** (Sol's F1): the planner refused them and
+  `eligibilityOf` still counted them, so `ARMED` could stand over a tick that launched nothing.
+- **Rule document pins had to be literals** (F2): load-time digests compared a moved source with
+  itself.
+- New pins: get-ready-to-deploy `c5c7f9f93886`, feedback-sweep `c921a5c4b732`, schedule-fixture
+  `465648545712`, wedged-work `28d1f83b8a42`, launch-mode `4de4439f7848`. The D3b sentence is one
+  constant, `OVERSEER_OWNS_THE_RECURRENCE`, and the fixture's prompt carries it too.
+
+- [x] `schedule-plan.ts` `planJobs`; `schedulerTick` refactored onto it; duplicate preflight (red
   first); the planner and characterisation tests of D2.
-- [ ] `JobBehaviour.dispatch` (hashed), the `dry-run` report arm, `eligibilityOf` treating dry-run as
-  ineligible.
-- [ ] Required `readDocument`; session evidence per tick; the `standingJobs()` comment corrected;
+- [x] `JobBehaviour.dispatch` (hashed), the `dry-run` report arm, and a `dry-run` eligibility arm
+  (not `ineligible` — see above).
+- [x] Required `readDocument`; session evidence per tick; the `standingJobs()` comment corrected;
   wired through `schedulerWiring` and `daemon.ts`; the headline recomputed per checkpoint.
-- [ ] D3b's sentence in both prompts.
-- [ ] `authorisedDocuments`; the pins-agree test, shown red.
-- [ ] `schedule-fixture` job, its document, its pins; all four jobs re-pinned; shipped-job tests
+- [x] D3b's sentence in both prompts.
+- [x] `authorisedDocuments`; the pins-agree test, shown red.
+- [x] `schedule-fixture` job, its document, its pins; all four jobs re-pinned; shipped-job tests
   updated.
 
 ### Stage 2 — the preview file and the CLI

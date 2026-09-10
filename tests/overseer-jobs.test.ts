@@ -51,6 +51,7 @@ import {
 } from "../tools/overseer/jobs.js";
 import type { JobSpawn, SpawnJob } from "../tools/overseer/jobs.js";
 import { describeReport, schedulerTick, type LostRecord, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
+import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import {
   EVENTS_FILE,
   LOCK_FILE,
@@ -114,7 +115,7 @@ const JOB: JobDefinition = {
     id: "get-ready-to-deploy",
     what: "npm run get-ready-to-deploy",
     documents: [],
-    work: { kind: "session" },
+    work: { kind: "session" }, dispatch: { kind: "live" },
   },
   // `initialDelayMs: 0`, TOGETHER WITH `ARMED` BELOW, IS WHAT REPRODUCES THE OLD
   // "a job that has never run is due" BEHAVIOUR. Since 2026-09-09 a never-run
@@ -142,6 +143,8 @@ const ARMED: Arming = { kind: "armed", at: "2026-09-08T08:00:00.000Z" };
  * live gate would hold the second dispatch in every test that has two.
  */
 const NO_SPACING = 0;
+/** Every session job in this file leans on no document, so a tick that asked for one would be a bug — it says so rather than inventing a digest. */
+const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
 
 /** The same job with one behaviour field moved. Two levels of spread is what the behaviour/schedule split costs a call site, so it lives here once. */
 function withBehaviour(overrides: Partial<JobBehaviour>): JobDefinition {
@@ -158,7 +161,7 @@ function withBehaviour(overrides: Partial<JobBehaviour>): JobDefinition {
  * there rather than being hidden here.
  */
 function authorised(definition: JobDefinition): AuthorisedJob {
-  return { definition, authorisedHash: behaviourHash(definition.behaviour) };
+  return { definition, authorisedDocuments: [], authorisedHash: behaviourHash(definition.behaviour) };
 }
 
 /** A spawn that succeeds and whose work settles when the test says so. */
@@ -188,7 +191,7 @@ async function settle(): Promise<void> {
 }
 
 function tick(store: OccurrenceLog, spawn: SpawnJob, now: () => Date, definitions: readonly JobDefinition[] = [JOB]): readonly SchedulerReport[] {
-  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now, arming: ARMED, launchSeparationMs: NO_SPACING });
+  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
 }
 
 function reportKinds(reports: readonly SchedulerReport[]): string[] {
@@ -215,7 +218,7 @@ describe("a behaviour's fingerprint", () => {
     );
     expect(
       behaviourHash(
-        withBehaviour({ work: { kind: "rule", rule: { kind: "launch-mode", minSessions: 1, maxCollectionAgeSeconds: 300, disposition: "propose" } } })
+        withBehaviour({ work: { kind: "rule", rule: { kind: "launch-mode", minSessions: 1, maxCollectionAgeSeconds: 300, disposition: "propose" } }, dispatch: { kind: "live" } })
           .behaviour,
       ),
     ).not.toBe(behaviourHash(JOB.behaviour));
@@ -227,7 +230,7 @@ describe("a behaviour's fingerprint", () => {
     const rescheduled: JobDefinition = { ...JOB, schedule: { everyMs: 61_000, leaseMs: 1_000, initialDelayMs: 90_000 } };
     expect(behaviourHash(rescheduled.behaviour)).toBe(behaviourHash(JOB.behaviour));
     // The consequence a person actually meets: the pin still authorises it.
-    expect(authorisationOf({ definition: rescheduled, authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
+    expect(authorisationOf({ definition: rescheduled, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
   });
 
   test("THE FIELD LIST IS THE TYPE'S OWN, so a field added later cannot sit outside the fingerprint", () => {
@@ -266,8 +269,8 @@ describe("a behaviour's fingerprint", () => {
     // or it stops being one. Checked by hand against the encoders: without the
     // `:${length}:` prefixes both sides canonicalise to the identical string
     // `id:x\nwhat:y\nwhat:z\nwork:session\ndocuments:0`.
-    const a = behaviourHash({ id: "x\nwhat:y", what: "z", documents: [], work: { kind: "session" } });
-    const b = behaviourHash({ id: "x", what: "y\nwhat:z", documents: [], work: { kind: "session" } });
+    const a = behaviourHash({ id: "x\nwhat:y", what: "z", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } });
+    const b = behaviourHash({ id: "x", what: "y\nwhat:z", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } });
     expect(a).not.toBe(b);
   });
 
@@ -330,12 +333,12 @@ describe("a behaviour's fingerprint", () => {
     const store = mustOpen(root, clock.now);
     const runner = spawnRecorder();
     const reports = schedulerTick({
-      definitions: [{ definition: edited, authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [{ definition: edited, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn: runner.spawn,
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING,
+      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
     });
     expect(reportKinds(reports)).toEqual(["unauthorised"]);
     expect(runner.calls).toEqual([]);
@@ -346,13 +349,13 @@ describe("a behaviour's fingerprint", () => {
 
   test("the pin says both hashes, because re-authorising means copying the second one", () => {
     const edited: JobDefinition = withBehaviour({ what: "rm -rf /" });
-    const verdict = authorisationOf({ definition: edited, authorisedHash: behaviourHash(JOB.behaviour) });
+    const verdict = authorisationOf({ definition: edited, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) });
     expect(verdict.kind).toBe("unauthorised");
     if (verdict.kind !== "unauthorised") return;
     expect(verdict.authorised).toBe(behaviourHash(JOB.behaviour));
     expect(verdict.found).toBe(behaviourHash(edited.behaviour));
     expect(verdict.why).toContain(behaviourHash(edited.behaviour));
-    expect(authorisationOf({ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
+    expect(authorisationOf({ definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }).kind).toBe("authorised");
   });
 
   test("editing the DOCUMENT a job points at moves the fingerprint, even though the instruction is unchanged", () => {
@@ -364,7 +367,7 @@ describe("a behaviour's fingerprint", () => {
     const after: JobDefinition = withBehaviour({ documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "bbbb" }] });
     expect(before.behaviour.what).toBe(after.behaviour.what);
     expect(behaviourHash(before.behaviour)).not.toBe(behaviourHash(after.behaviour));
-    expect(authorisationOf({ definition: after, authorisedHash: behaviourHash(before.behaviour) }).kind).toBe("unauthorised");
+    expect(authorisationOf({ definition: after, authorisedDocuments: [], authorisedHash: behaviourHash(before.behaviour) }).kind).toBe("unauthorised");
     // And the count is in the canonical form, so a second document is a
     // different job rather than a longer string that happens to concatenate.
     expect(behaviourHash(withBehaviour({ documents: [] }).behaviour)).not.toBe(behaviourHash(before.behaviour));
@@ -546,17 +549,28 @@ describe("failing closed", () => {
     expect(only?.kind === "not-dispatched" && only.why).toContain("ENOSPC");
   });
 
-  test("two definitions sharing an id dispatch once and say so, rather than twice in silence", () => {
+  test("two definitions sharing an id: NEITHER is dispatched, and both say so", () => {
     // They would mint the same key at the same instant, so the second run's
     // acknowledgement overwrites the first's: one occurrence in the log, two
     // children on the box, and nothing anywhere saying there were two.
+    //
+    // **THIS TEST USED TO ASSERT `["dispatched", "not-dispatched"]` AND ONE
+    // SPAWN**, and that was the defect written down as the specification: the
+    // loop refused an id only on meeting it the SECOND time, so the first
+    // definition had already been reserved and spawned while the report said
+    // "neither can be addressed unambiguously". Sol's P1-5 on plan 260910e. The
+    // preflight in `schedule-plan.ts` counts the whole list before planning
+    // anything, so every definition sharing an id is refused and nothing starts.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T12:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const runner = spawnRecorder({ settle: "never" });
     const reports = tick(store, runner.spawn, clock.now, [JOB, withBehaviour({ what: "something else entirely" })]);
-    expect(reportKinds(reports)).toEqual(["dispatched", "not-dispatched"]);
-    expect(runner.calls).toHaveLength(1);
+    expect(reportKinds(reports)).toEqual(["duplicate-id", "duplicate-id"]);
+    expect(runner.calls).toHaveLength(0);
+    // AND NOTHING WAS WRITTEN: a reservation is a launch as far as the ledger is
+    // concerned.
+    expect(kindsIn(root)).toEqual([]);
   });
 
   test("the reservation is on the disk BEFORE the spawn is called, not after", () => {
@@ -1267,12 +1281,12 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     const runner = spawnRecorder();
     const lost: LostRecord[] = [];
     const reports = schedulerTick({
-      definitions: [{ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [{ definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn: runner.spawn,
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING,
+      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
       onLostRecord: (record) => lost.push(record),
     });
     expect(reportKinds(reports)).toEqual(["dispatched"]);
@@ -1305,12 +1319,12 @@ describe("the appends AFTER the reservation, which used to be silent", () => {
     });
     const lost: LostRecord[] = [];
     schedulerTick({
-      definitions: [{ definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) }],
+      definitions: [{ definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) }],
       store,
       spawn,
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING,
+      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
       onLostRecord: (record) => lost.push(record),
     });
     rejecters[0]?.(new Error("the child exploded"));
@@ -1358,6 +1372,9 @@ describe("the log a person reads", () => {
       unrecorded: { kind: "unrecorded", jobId: JOB.behaviour.id, occurrenceId: id, fact: "finished", why: "no" },
       stuck: { kind: "stuck", jobId: JOB.behaviour.id, occurrenceId: id, overdueMs: 1000, why: "no" },
       unaccounted: { kind: "unaccounted", jobId: JOB.behaviour.id, occurrenceId: id, why: "no" },
+      // The two plan 260910e added — the record's key type made them compulsory.
+      "dry-run": { kind: "dry-run", jobId: JOB.behaviour.id, why: "a fixture nobody has made live" },
+      "duplicate-id": { kind: "duplicate-id", jobId: JOB.behaviour.id, why: "two definitions share it" },
     };
     const lines = Object.values(each).map(describeReport);
     for (const line of lines) expect(line).toContain(JOB.behaviour.id);
@@ -1372,6 +1389,8 @@ describe("the log a person reads", () => {
     expect(describeReport(each["history-lost"])).toContain("HELD");
     expect(describeReport(each.unrecorded)).toContain("NOT RECORDED");
     expect(describeReport(each.unrecorded)).toContain("finished");
+    expect(describeReport(each["dry-run"])).toContain("DRY RUN");
+    expect(describeReport(each["duplicate-id"])).toContain("DUPLICATE ID");
   });
 });
 

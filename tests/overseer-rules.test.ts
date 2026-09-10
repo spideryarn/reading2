@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import { behaviourHash, type Arming, type AuthorisedJob, type JobBehaviour, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
+import { authorisationOf, behaviourHash, type Arming, type AuthorisedJob, type JobBehaviour, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
 import {
   AUTHORISED_RULE_HASHES,
   LAUNCH_MODE_SPEC,
@@ -61,6 +61,7 @@ import {
 } from "../tools/overseer/rules.js";
 import type { ActingRuleWork, ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
 import { schedulerTick, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
+import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import { EVENTS_FILE, openStore, type AppendResult, type OverseerStore } from "../tools/overseer/store.js";
 import { SPECIMEN_SESSION, listingVerdict } from "../scripts/overseer-launch-mode-specimen.js";
 import { schedulerWiring } from "../scripts/overseer.js";
@@ -135,14 +136,14 @@ function ruleJob(spec: RuleSpec = SPEC, everyMs = 60_000): AuthorisedJob {
       id: "wedged-work",
       what: "propose kills for wedged work",
       documents: [],
-      work: { kind: "rule", rule: spec },
+      work: { kind: "rule", rule: spec }, dispatch: { kind: "live" },
     },
     // `initialDelayMs: 0` so a job with no history is due at once, which is what
     // `due` did unconditionally before 2026-09-09 and what every test here
     // assumes. Nothing in this file is about the first-run delay.
     schedule: { everyMs, leaseMs: 120_000, initialDelayMs: 0 },
   };
-  return { definition, authorisedHash: behaviourHash(definition.behaviour) };
+  return { definition, authorisedDocuments: [], authorisedHash: behaviourHash(definition.behaviour) };
 }
 
 /**
@@ -155,6 +156,8 @@ function ruleJob(spec: RuleSpec = SPEC, everyMs = 60_000): AuthorisedJob {
  */
 const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
 const NO_SPACING = 0;
+/** Every session job in this file leans on no document, so a tick that asked for one would be a bug — it says so rather than inventing a digest. */
+const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
 
 /**
  * An ACTING capability whose observation the test decides, and which records
@@ -319,7 +322,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [SPECIMEN, YOUNG], scanned: 750 });
-    const reports = schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    const reports = schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     expect(reports.map((r) => r.kind)).toEqual(["dispatched"]);
     await settle();
 
@@ -379,7 +382,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [YOUNG], scanned: 750 });
-    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
@@ -391,7 +394,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const stub = ruleWorkStub({ kind: "cannot-see", why: "could not reach the fleet API at http://127.0.0.1:8787/api/actions/box: ECONNREFUSED" });
-    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     if (settled?.kind !== "rule-settled") throw new Error("expected a settled event");
@@ -409,7 +412,7 @@ describe("the two-phase protocol, under the scheduler", () => {
       selfPid: 1,
       observe: () => Promise.reject(new Error("socket hang up")),
     };
-    schedulerTick({ definitions: [ruleJob()], store, rules: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob()], store, rules: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("refused");
@@ -423,7 +426,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const real = mustOpen(root, clock.now);
     const refuseFrom = failingAfter(real, 3);
     const stub = ruleWorkStub({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }, { kind: "sent", what: "killed it" });
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, acting: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, acting: stub.work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     expect(stub.acted).toEqual([]);
     // And the run is visibly a failure rather than a quiet success: a rule that
@@ -458,7 +461,7 @@ describe("the two-phase protocol, under the scheduler", () => {
         return { kind: "sent", what: "killed 1 process" };
       },
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     expect(whenActed).toHaveLength(1);
     expect(whenActed[0]).toContain("rule-intended");
@@ -475,7 +478,7 @@ describe("the two-phase protocol, under the scheduler", () => {
       observe: async () => ({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }),
       act: () => Promise.reject(new Error("the route exploded")),
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("failed");
@@ -485,7 +488,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const reports = schedulerTick({ definitions: [ruleJob()], store, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    const reports = schedulerTick({ definitions: [ruleJob()], store, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
   });
 
@@ -500,7 +503,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const look: ProposingRuleWork = { selfPid: 7, observe: async () => ({ kind: "wedged", candidates: [SPECIMEN], scanned: 750 }) };
-    const reports = schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    const reports = schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
     const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
     expect(refusal.why).toContain("no actor");
@@ -513,16 +516,16 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const session: JobDefinition = {
-      behaviour: { id: "get-ready-to-deploy", what: "start a session", documents: [], work: { kind: "session" } },
+      behaviour: { id: "get-ready-to-deploy", what: "start a session", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } },
       schedule: { everyMs: 1, leaseMs: 1000, initialDelayMs: 0 },
     };
     const reports = schedulerTick({
-      definitions: [{ definition: session, authorisedHash: behaviourHash(session.behaviour) }],
+      definitions: [{ definition: session, authorisedDocuments: [], authorisedHash: behaviourHash(session.behaviour) }],
       store,
       rules: ruleWorkStub({ kind: "wedged", candidates: [], scanned: 1 }).work,
       now: clock.now,
       arming: ARMED,
-      launchSeparationMs: NO_SPACING,
+      launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
     });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
     const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
@@ -554,11 +557,11 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
         id: "launch-mode",
         what: "watch for sessions that did not come up in auto mode",
         documents: [],
-        work: { kind: "rule", rule: LAUNCH_SPEC },
+        work: { kind: "rule", rule: LAUNCH_SPEC }, dispatch: { kind: "live" },
       },
       schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
     };
-    return { definition, authorisedHash: behaviourHash(definition.behaviour) };
+    return { definition, authorisedDocuments: [], authorisedHash: behaviourHash(definition.behaviour) };
   }
 
   function looking(observation: RuleObservation): ProposingRuleWork {
@@ -579,7 +582,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
         { id: "$4", name: "worktree-gamma", mode: { kind: "cannot-tell", why: "the status bar is not on this screenful" } },
       ],
     });
-    const reports = schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    const reports = schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     expect(reports.map((r) => r.kind)).toEqual(["dispatched"]);
     await settle();
 
@@ -636,7 +639,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 10 },
       sessions: [{ id: "$1", name: "worktree-beta", mode: { kind: "not-auto", mode: "manual mode" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     // Rewrite the finding to another rule's, ON THE DISK, which is the only
     // place this can be got wrong — nothing in the process can produce it.
@@ -665,7 +668,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 10 },
       sessions: [{ id: "$1", name: "worktree-alpha", mode: { kind: "auto" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
@@ -685,7 +688,7 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
       collection: { collected: true, ageSeconds: 4000 },
       sessions: [{ id: "$1", name: "worktree-alpha", mode: { kind: "not-auto", mode: "manual mode" } }],
     });
-    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now, arming: ARMED, launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS });
     await settle();
     const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     if (settled?.kind !== "rule-settled") throw new Error("no rule-settled");
@@ -806,6 +809,23 @@ describe("the shipped rule job, and its pin", () => {
       documents: job.definition.behaviour.documents.map((d, i) => (i === 0 ? { ...d, sha256: flip(d.sha256) } : d)),
     };
     expect(behaviourHash(tampered)).not.toBe(behaviourHash(job.definition.behaviour));
+  });
+
+  test("authorised document digests preserve the pinned revision, so a moved rule source is named", () => {
+    const root = tempRoot();
+    for (const path of RULE_SOURCES) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      copyFileSync(join(REPO, path), join(root, path));
+    }
+    appendFileSync(join(root, RULE_SOURCES[0]), "\n// an implementation edit not present in the authorised revision\n");
+
+    const job = ruleJobs(root).jobs[0];
+    if (job === undefined) throw new Error("expected the wedged-work rule");
+    expect(job.authorisedDocuments).not.toEqual(job.definition.behaviour.documents);
+    const authorisation = authorisationOf(job);
+    expect(authorisation.kind).toBe("unauthorised");
+    expect(authorisation.kind === "unauthorised" && authorisation.why).toContain(`${RULE_SOURCES[0]}: pinned`);
+    expect(authorisation.kind === "unauthorised" && authorisation.why).toContain("edited since it was authorised");
   });
 
   test("OFF and ARMED read differently, and OFF still says what it would have run", () => {
@@ -1193,6 +1213,7 @@ describe("the deterministic-only arming, as the shipped CLI does it", () => {
     expect(wiring.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual([
       "get-ready-to-deploy",
       "feedback-sweep",
+      "schedule-fixture",
       "wedged-work",
       "launch-mode",
     ]);
@@ -1205,6 +1226,7 @@ describe("the deterministic-only arming, as the shipped CLI does it", () => {
     expect(wiring.definitions.map((job) => job.definition.behaviour.id)).toEqual([
       "get-ready-to-deploy",
       "feedback-sweep",
+      "schedule-fixture",
       "wedged-work",
       "launch-mode",
     ]);
