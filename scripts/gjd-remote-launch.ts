@@ -77,19 +77,43 @@ export function launchBoxCheck(launch: LaunchFlags | undefined, quote: Quote): s
   return ` && { { test -d ${quote(launch.dir)} && grep -qF -- ${quote(needle)} ${quote(intent)}; } || { printf '%s\\n' ${quote(refusal)} >&2; exit 1; }; }`;
 }
 
-/** The job's first command: `start.json`, or `onFailure` (gjd-remote's `failTo`) and no Claude. */
+/** The exit trap saves the job script's own status here before writing it. */
+const GJD_TRAP_STATUS_VAR = "_gjd_launch_exit_status";
+
+const exitWarning = (launch: LaunchFlags): string =>
+  `WARNING: could not write ${launch.dir}/exit.json — the launch protocol will hold ${launch.correlationId} as unknown until Greg disposes of it`;
+
+/**
+ * The job's first command — `start.json`, or `onFailure` (gjd-remote's `failTo`)
+ * and no Claude — and, once `start.json` is written, an `EXIT` trap that writes
+ * `exit.json` from the script's own status (F23).
+ *
+ * Every guard between the two — the directory, the missing CLI, the account
+ * checks, the "started" bookkeeping — ends the job through `failTo`'s `exit 1`,
+ * and until the trap the only exit writer came after Claude: those endings left
+ * a start and no exit, and reconciliation held a run the shell knew had ended.
+ * The trap records `exited` with that status and `verdict: null`, as the job
+ * shell records every ending — not `not-run`, which the reader accepts only
+ * with a supervisor's verdict, and which a job shell does not have.
+ * {@link launchExitLines} writes the real result after Claude and disarms the
+ * trap, so exactly one `exit.json` is written.
+ */
 export function launchStartLines(launch: LaunchFlags | undefined, onFailure: string, quote: Quote): string[] {
   if (launch === undefined) return [];
-  return [startArtefactLine({ correlationId: launch.correlationId, dir: launch.dir, onFailure, quote })];
+  const trapWrite = exitArtefactLine({ correlationId: launch.correlationId, dir: launch.dir, statusVar: GJD_TRAP_STATUS_VAR, onFailure: `printf '%s\\n' ${quote(exitWarning(launch))} >&2`, quote });
+  return [startArtefactLine({ correlationId: launch.correlationId, dir: launch.dir, onFailure, quote }), `trap ${quote(`${GJD_TRAP_STATUS_VAR}=$?; ${trapWrite}`)} EXIT`];
 }
 
 /**
- * `exit.json` from `$_gjd_claude_status`. Its failure is a sentence on the pane
- * — which `exec bash -l` keeps — and no evidence: the protocol then holds the
- * launch as `outcome-unknown` rather than guess how it ended.
+ * `exit.json` from `$_gjd_claude_status`, then the exit trap disarmed so it
+ * cannot overwrite that record at the end of the job. Its failure is a sentence
+ * on the pane — which `exec bash -l` keeps — and no evidence: the protocol then
+ * holds the launch as `outcome-unknown` rather than guess how it ended.
  */
 export function launchExitLines(launch: LaunchFlags | undefined, quote: Quote): string[] {
   if (launch === undefined) return [];
-  const note = `WARNING: could not write ${launch.dir}/exit.json — the launch protocol will hold ${launch.correlationId} as unknown until Greg disposes of it`;
-  return [exitArtefactLine({ correlationId: launch.correlationId, dir: launch.dir, statusVar: GJD_CLAUDE_STATUS_VAR, onFailure: `printf '%s\\n' ${quote(note)} >&2`, quote })];
+  return [
+    exitArtefactLine({ correlationId: launch.correlationId, dir: launch.dir, statusVar: GJD_CLAUDE_STATUS_VAR, onFailure: `printf '%s\\n' ${quote(exitWarning(launch))} >&2`, quote }),
+    "trap - EXIT",
+  ];
 }

@@ -46,6 +46,7 @@ import {
 import { pinOf, type LaunchInput } from "../tools/overseer/launch-protocol.js";
 import {
   GJD_REMOTE_MAX_PROMPT_BYTES,
+  SESSION_UNSET_VARIABLES,
   gjdRemoteLauncher,
   headlessLauncher,
   socketTmuxLauncher,
@@ -53,7 +54,8 @@ import {
   tmuxHeadlessLauncher,
   type TmuxRun,
 } from "../tools/overseer/launchers.js";
-import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
+import { ACCOUNT_ROUTING_VARIABLES } from "./helpers/account-neutral-env.js";
+import { resolveAsWrapper, wrapperEnv } from "./helpers/wrapper-env.js";
 import { hostileParent, makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -457,21 +459,23 @@ describe("the gjd-remote tmux adapter", () => {
 
 describe("the headless adapter", () => {
   it("runs run-claude on an attempt-private copy of the verified bytes, with the run spec's timeout and access and nothing else", () => {
-    const f = makeLaunchDir({ parent: hostileParent(), run: { timeoutMinutes: 45, access: "write" } });
+    const f = makeLaunchDir({ parent: hostileParent(), run: { timeoutMinutes: 45, access: "write", account: "pool-d" } });
     const calls: Spawned[] = [];
     const repo = repoWithTsx();
     const launcher = headlessLauncher({ repoRoot: repo, wrapper: "run-claude", spawnProcess: fakeSpawner(calls) });
     expect(launcher.kind).toBe("headless");
     expect(launcher.launch(inputOf(f)).kind).toBe("started");
     const call = calls[0]!;
-    expect(call.args).toEqual(["scripts/run-claude.ts", "--prompt-file", join(f.dir, "prompt.md"), "--launch-dir", f.dir, "--timeout-minutes", "45", "--access", "write"]);
+    // The run spec's pool account, as run-claude's own --account: without it the run bills the daemon's account.
+    expect(call.args).toEqual(["scripts/run-claude.ts", "--prompt-file", join(f.dir, "prompt.md"), "--launch-dir", f.dir, "--timeout-minutes", "45", "--access", "write", "--account", "pool-d"]);
     expect(Array.isArray(call.options.stdio) && call.options.stdio[0]).toBe("ignore");
   });
 
   it("maps access onto run-codex's own sandbox word", () => {
-    const f = makeLaunchDir({ run: { timeoutMinutes: 5, access: "write" } });
+    const f = makeLaunchDir({ run: { timeoutMinutes: 5, access: "write", account: "pool-d" } });
     const calls: Spawned[] = [];
     expect(headlessLauncher({ repoRoot: repoWithTsx(), wrapper: "run-codex", spawnProcess: fakeSpawner(calls) }).launch(inputOf(f)).kind).toBe("started");
+    // No --account: run-codex has no account flag, and the handle names a Claude pool account.
     expect(calls[0]!.args).toEqual(["scripts/run-codex.ts", "--prompt-file", join(f.dir, "prompt.md"), "--launch-dir", f.dir, "--timeout-minutes", "5", "--sandbox", "workspace-write"]);
   });
 
@@ -514,7 +518,7 @@ describe("the tmux-headless adapter, with a stand-in tmux", () => {
   });
 
   it("puts the id and the directory in the session at creation, and runs run-claude on the pinned material with the run spec", () => {
-    const f = makeLaunchDir({ parent: hostileParent(), launcherKind: "tmux-headless", run: { timeoutMinutes: 20, access: "read-only" } });
+    const f = makeLaunchDir({ parent: hostileParent(), launcherKind: "tmux-headless", run: { timeoutMinutes: 20, access: "read-only", account: "pool-c" } });
     const calls: Call[] = [];
     const repo = repoWithTsx();
     // A stand-in node that writes down the argv it was given, so the shell command is checked by running it.
@@ -539,12 +543,18 @@ describe("the tmux-headless adapter, with a stand-in tmux", () => {
       "20",
       "--access",
       "read-only",
+      "--account",
+      "pool-c",
     ]);
     // The prompt is the verified bytes, in a file only this attempt writes — not the shared material.txt.
     expect(readFileSync(join(f.dir, "prompt.md"))).toEqual(inputOf(f).material.bytes);
     // Nothing that would let `gjd-remote ls` rename the session, which the scheduler finds by its name.
     expect(created!.join(" ")).not.toContain("GJD_");
     expect(existsSync(join(f.root, "pwned"))).toBe(false);
+  });
+
+  it("drops at least every variable the suite treats as account routing", () => {
+    for (const name of ACCOUNT_ROUTING_VARIABLES) expect(SESSION_UNSET_VARIABLES).toContain(name);
   });
 
   it("a duplicate session name is not a refusal: a session with this id exists, so it throws and reconciliation looks", () => {
@@ -693,51 +703,70 @@ describe.runIf(tmuxUsable())("against a real tmux on a disposable socket", () =>
     expect(existsSync(lonely)).toBe(false);
   });
 
-  it("tmux-headless runs the real run-claude in a session on the running server; exit.json has its verdict and paths", async () => {
+  it("tmux-headless runs the real run-claude in a session on the running server, on the run's pool account — one it cannot route is refused before any CLI, and exit.json says so", async () => {
     const serverSock = join(base, "h");
     sockets.push(serverSock);
     /* A stand-in claude — given to the adapter's OWN tmux client, because a session takes the
-       creating client's environment, not the server's (measured, tmux 3.4). The first version of
-       this test put it only on the server's PATH, and the wrapper found the real claude: a paid run. */
+       creating client's PATH, not the server's (measured, tmux 3.4). The first version of this
+       test put it only on the server's PATH, and the wrapper found the real claude: a paid run.
+       It leaves a mark on ANY call, the auth probe included, and succeeds at none. */
     const bin = mkdtempSync(join(tmpdir(), "launch-tmux-claude-"));
     const seen = join(bin, "seen");
-    writeFileSync(
-      join(bin, "claude"),
-      `#!/usr/bin/env bash\nif [ "$1" = "auth" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai"}'; exit 0; fi\n`
-        + `printf '%s' "$SPIDERYARN_LAUNCH_ID" > ${shellQuote(seen)}\nsleep 2\n`
-        + `printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"HEADLESS-IN-TMUX","num_turns":1,"permission_denials":[]}'\n`,
-    );
+    writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${shellQuote(seen)}\nexit 1\n`);
     chmodSync(join(bin, "claude"), 0o755);
-    const env = accountNeutralEnv({ PATH: `${bin}:${process.env["PATH"] ?? ""}` });
+    /* A HOME with no account registry in it. The adapter now always passes `--account` (a registry
+       handle), and a routed run checks the account's live profile over the network before it
+       spends, which no test may do — so the far end this test can reach offline is run-claude's
+       own refusal. Until the account arrived it ran a stand-in claude to an `ok` exit.json; that
+       path is still exercised, unrouted, by tests/run-claude.test.ts's --launch-dir tests. */
+    const home = mkdtempSync(join(tmpdir(), "launch-tmux-home-"));
+    // PATH pinned, so the wrapper's own .env.local load cannot put another claude first (F22).
+    const env = wrapperEnv({ PATH: `${bin}:${process.env["PATH"] ?? ""}`, HOME: home });
     execFileSync("tmux", ["-S", serverSock, "-f", "/dev/null", "new-session", "-d", "-s", "keeper", "sleep 300"], { env });
-    // Before anything can spend: the environment the session will get resolves `claude` to the stand-in.
-    expect(execFileSync("bash", ["-c", "command -v claude"], { env, encoding: "utf8" }).trim()).toBe(join(bin, "claude"));
+    // Before anything can spend: `claude` resolves to the stand-in AFTER the wrapper's environment load…
+    expect(resolveAsWrapper("claude", env)).toBe(join(bin, "claude"));
+    // …and the pin is in the server's environment, which a session's variables other than PATH come from.
+    expect(execFileSync("tmux", ["-S", serverSock, "show-environment", "-g", "SPIDERYARN_ENV_PINNED"], { encoding: "utf8" })).toMatch(/[=,]PATH(,|\n)/);
 
-    const f = makeLaunchDir({ parent: base, launcherKind: "tmux-headless", run: { timeoutMinutes: 2, access: "read-only" } });
+    const f = makeLaunchDir({ parent: base, launcherKind: "tmux-headless", run: { timeoutMinutes: 2, access: "read-only", account: "pool-nowhere" } });
     expect(tmuxHeadlessLauncher({ repoRoot: REPO, socket: serverSock, env }).launch(inputOf(f)).kind).toBe("started");
-    // If the wrapper never reaches claude, say why: its console is in the attempt's launcher.log.
-    await until(() => existsSync(seen), 60_000).catch((cause: unknown) => {
-      const log = join(f.dir, "launcher.log");
+    const log = join(f.dir, "launcher.log");
+    // If the wrapper never gets as far as exit.json, say why: its console is in the attempt's launcher.log.
+    await until(() => existsSync(join(f.dir, EXIT_FILE)), 60_000).catch((cause: unknown) => {
       throw new Error(`${String(cause)}; launcher.log: ${existsSync(log) ? readFileSync(log, "utf8").slice(-2000) : "(none)"}`);
     });
-    expect(readFileSync(seen, "utf8")).toBe(f.correlationId);
-    expect(tmuxEvidence({ socket: serverSock })(f.correlationId).kind).toBe("found");
-    // Named exactly the correlation id, so `tmux kill-session -t '=<id>'` needs nothing stored.
-    expect(execFileSync("tmux", ["-S", serverSock, "list-sessions", "-F", "#{session_name}"], { encoding: "utf8" }).split("\n")).toContain(f.correlationId);
-    await until(() => existsSync(join(f.dir, EXIT_FILE)), 60_000);
     const read = readArtefacts(f.dir, f.correlationId);
     expect(read.start.kind).toBe("present");
-    expect(read.exit).toMatchObject({
-      kind: "present",
-      record: {
-        ending: { kind: "exited", code: 0 },
-        verdict: { kind: "ok" },
-        usageLimit: false,
-        permissionDenials: 0,
-        answer: { path: join(f.dir, "answer.md"), usable: true },
-        transcript: join(f.dir, "transcript.ndjson"),
-      },
-    });
-    expect(readFileSync(join(f.dir, "answer.md"), "utf8")).toBe("HEADLESS-IN-TMUX");
+    expect(read.exit).toMatchObject({ kind: "present", record: { ending: { kind: "not-run" }, verdict: { kind: "failed", cause: "wrapper" }, answer: null } });
+    // The refusal is run-claude's, about the account the session handed it — and no claude ran, not even the probe.
+    expect(readFileSync(log, "utf8")).toContain('run-claude: account "pool-nowhere" is not registered');
+    expect(existsSync(seen)).toBe(false);
   }, 90_000);
+
+  it("a tmux-headless session carries no account-routing variable into the wrapper — not from the creating client, and not from the server", async () => {
+    const serverSock = join(base, "r");
+    sockets.push(serverSock);
+    const repo = repoWithTsx();
+    const envFile = join(repo, "env");
+    // A stand-in node where the wrapper would run: it writes down the environment it was given. No wrapper, no CLI.
+    const node = join(repo, "node");
+    writeFileSync(node, `#!/usr/bin/env bash\nenv > ${shellQuote(join(repo, "env.tmp"))} && mv ${shellQuote(join(repo, "env.tmp"))} ${shellQuote(envFile)}\n`);
+    chmodSync(node, 0o755);
+    const routed = { CLAUDE_CONFIG_DIR: "/somewhere", CLAUDE_CODE_OAUTH_TOKEN: "sentinel-oauth", ANTHROPIC_API_KEY: "sentinel-anthropic", CODEX_HOME: "/somewhere-codex" };
+    const env = { ...wrapperEnv({ PATH: process.env["PATH"] ?? "" }), ...routed };
+    // The server has them too, as a long-running server started by a routed daemon would: only the session's own command can drop them.
+    execFileSync("tmux", ["-S", serverSock, "-f", "/dev/null", "new-session", "-d", "-s", "keeper", "sleep 300"], { env });
+    expect(execFileSync("tmux", ["-S", serverSock, "show-environment", "-g", "CLAUDE_CONFIG_DIR"], { encoding: "utf8" }).trim()).toBe("CLAUDE_CONFIG_DIR=/somewhere");
+    const f = makeLaunchDir({ parent: base, launcherKind: "tmux-headless" });
+    expect(tmuxHeadlessLauncher({ repoRoot: repo, node, socket: serverSock, env }).launch(inputOf(f)).kind).toBe("started");
+    await until(() => existsSync(envFile), 30_000);
+    const seen = readFileSync(envFile, "utf8");
+    /* Compared as NAMES, never as the dump: a failure message holding the environment would print
+       every secret the worker loaded from .env.local — which the first red run of this test did. */
+    const present = (name: string): boolean => new RegExp(`^${name}=`, "m").test(seen);
+    // It is the session's own environment: the id is there…
+    expect(present("SPIDERYARN_LAUNCH_ID") && seen.includes(`SPIDERYARN_LAUNCH_ID=${f.correlationId}\n`)).toBe(true);
+    // …and not one of the routing variables is.
+    expect(Object.keys(routed).filter(present)).toEqual([]);
+  });
 });

@@ -238,25 +238,32 @@ export function usesTmux(kind: LauncherKind): boolean {
 }
 
 /**
- * What a wrapper launch may be, pinned with the plan: its timeout and its
- * access profile — the adapter's only source for both. A `tmux` launch has
- * none, because the session is interactive; the pairing is a type in
- * {@link PlanRequest} and a parse rule everywhere else.
+ * What a wrapper launch may be, pinned with the plan: its timeout, its access
+ * profile, and the Claude pool account it runs on — the adapter's only source
+ * for all three. A `tmux` launch has none, because the session is interactive;
+ * the pairing is a type in {@link PlanRequest} and a parse rule everywhere else.
+ *
+ * `account` is a registry handle, required: run-claude's `--account` takes a
+ * named handle only (there is no `auto`), and without one the run would bill
+ * whichever account the daemon itself is on. Dispatch runs on pool accounts.
  */
 export type RunAccess = "read-only" | "review" | "write";
-export type RunSpec = { readonly timeoutMinutes: number; readonly access: RunAccess };
+export type RunSpec = { readonly timeoutMinutes: number; readonly access: RunAccess; readonly account: string };
 
 export const RUN_ACCESS: readonly RunAccess[] = ["read-only", "review", "write"];
 /** A day. A run that needs longer is not one this protocol should start unattended. */
 export const MAX_RUN_TIMEOUT_MINUTES = 24 * 60;
+/** A registry handle, spelt as tools/overseer/accounts.ts's `ACCOUNT_NAME` and run-claude's `--account` check spell it. */
+const ACCOUNT_HANDLE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 export function parseRunSpec(u: unknown): Parsed<RunSpec> {
-  const o = object(u, "run", ["timeoutMinutes", "access"]);
+  const o = object(u, "run", ["timeoutMinutes", "access", "account"]);
   if (!o.ok) return o;
-  const { timeoutMinutes, access } = o.value;
+  const { timeoutMinutes, access, account } = o.value;
   if (!isPositiveInteger(timeoutMinutes) || timeoutMinutes > MAX_RUN_TIMEOUT_MINUTES) return { ok: false, why: `run.timeoutMinutes is not a whole number of minutes in 1..${MAX_RUN_TIMEOUT_MINUTES}` };
   if (!(RUN_ACCESS as readonly unknown[]).includes(access)) return { ok: false, why: `run.access is not one of ${RUN_ACCESS.join(", ")}` };
-  return { ok: true, value: { timeoutMinutes, access: access as RunAccess } };
+  if (typeof account !== "string" || !ACCOUNT_HANDLE.test(account)) return { ok: false, why: "run.account is not a registry account handle (lower-case letters, digits and dashes)" };
+  return { ok: true, value: { timeoutMinutes, access: access as RunAccess, account } };
 }
 
 /** THE PAIRING RULE, once: a `tmux` launch carries `null`, a wrapper launch a valid spec. Anything else is refused. */
@@ -268,7 +275,7 @@ export function runFor(kind: LauncherKind, u: unknown): Parsed<RunSpec | null> {
 
 function sameRun(a: RunSpec | null, b: RunSpec | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.timeoutMinutes === b.timeoutMinutes && a.access === b.access;
+  return a.timeoutMinutes === b.timeoutMinutes && a.access === b.access && a.account === b.account;
 }
 
 /** The pinned material: its size and hash, recorded before `planned`. */
@@ -323,8 +330,11 @@ export type ExitEnding =
 export const FAILURE_CAUSES = ["wrapper", "prompt-unverified", "spawn", "overflow", "timeout", "cli-error", "no-result", "nonzero", "empty-answer", "hangup"] as const;
 export type FailureCause = (typeof FAILURE_CAUSES)[number];
 
-/** The causes that can explain a child that never ran. */
-export const NOT_RUN_CAUSES: readonly FailureCause[] = ["wrapper", "prompt-unverified", "spawn"];
+/**
+ * The causes that can explain a child that never ran. `hangup` is one since F20: a pane closed
+ * during run-claude's auth probe ends the wrapper before the CLI is ever spawned.
+ */
+export const NOT_RUN_CAUSES: readonly FailureCause[] = ["wrapper", "prompt-unverified", "spawn", "hangup"];
 
 /** The supervisor's judgement of the run. A job shell makes none, and says so with `null`. */
 export type WrapperVerdict = { readonly kind: "ok" } | { readonly kind: "failed"; readonly cause: FailureCause; readonly why: string };
@@ -2097,6 +2107,9 @@ export function inFlight(journal: Pick<LaunchJournal, "fold">, originKind: Launc
  * The composition: the only place a launcher is handed over.
  * ------------------------------------------------------------------ */
 
+/** The journal's reads and nothing else: what `scheduled-dispatch` may hold. No append, material or intent write is reachable from it. */
+export type LaunchJournalView = Pick<LaunchJournal, "status" | "fold" | "attemptDir">;
+
 export type LaunchProtocol = {
   readonly plan: (request: PlanRequest) => PlanResult;
   readonly launchOccurrence: (request: PlanRequest) => LaunchOutcome;
@@ -2106,11 +2119,13 @@ export type LaunchProtocol = {
   readonly inFlight: (originKind: LaunchOrigin["kind"]) => readonly OccurrenceSummary[];
   readonly reconcile: () => ReconcileRun;
   readonly dispose: (request: DisposeRequest) => DisposeResult;
+  /** The journal, read-only — over the same open store, so its fold reflects every write the protocol makes. */
+  readonly view: () => LaunchJournalView;
 };
 
 /**
  * Close over the parts, so a consumer is handed functions and never a
- * launcher, a journal or an owner. The scheduler and recovery get
+ * launcher, a writable journal or an owner. The scheduler and recovery get
  * `launchOccurrence` and the operations above from this, and nothing else (F9).
  */
 export function composeLaunchProtocol(parts: LaunchParts): LaunchProtocol {
@@ -2123,5 +2138,11 @@ export function composeLaunchProtocol(parts: LaunchParts): LaunchProtocol {
     inFlight: (originKind) => inFlight(parts.journal, originKind),
     reconcile: () => reconcileAll(parts),
     dispose: (request) => dispose(parts, request),
+    // The store's own reads, forwarded — never the store, whose other methods write.
+    view: () => ({
+      status: () => parts.journal.status(),
+      fold: () => parts.journal.fold(),
+      attemptDir: (id, attempt) => parts.journal.attemptDir(id, attempt),
+    }),
   };
 }

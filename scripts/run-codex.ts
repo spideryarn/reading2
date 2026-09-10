@@ -654,7 +654,25 @@ async function main(): Promise<void> {
   if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
   const { run, outFile, logs, attempt } = await runPlan(args, promptPath, tmpDir, plan);
   launch?.noteRun(run);
-  launch?.notePaths({ answer: outFile });
+  // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
+  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
+  /* **Under `--launch-dir` the answer is made durable BEFORE the failure ladder**, because every
+     branch of that ladder exits: a run refused as empty or non-zero still leaves what it wrote
+     where exit.json says, never in this run's temp directory (F21). Only a file the last attempt
+     actually wrote is copied — noting a target it did not write would describe a stale file.
+     Without a launch nothing moves here; --output is still honoured on success only, below. */
+  let answerPath = outFile;
+  let durableCopyFailed: string | undefined;
+  if (launch !== undefined && answerTarget !== undefined && existsSync(outFile)) {
+    try {
+      mkdirSync(dirname(answerTarget), { recursive: true });
+      copyFileSync(outFile, answerTarget);
+      answerPath = answerTarget;
+    } catch (e) {
+      durableCopyFailed = (e as Error).message;
+    }
+  }
+  launch?.notePaths({ answer: answerPath });
 
   let logPath: string | undefined;
   if (logs.length) {
@@ -693,15 +711,13 @@ async function main(): Promise<void> {
       + ` looks like${hint}${accountNote(args, run, plan, attempt)}`, 'empty-answer');
   }
 
-  let answerPath = outFile;
-  // Under `--launch-dir` an unset --output defaults into the attempt directory; a given one wins.
-  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
-  if (answerTarget !== undefined) {
+  // A launched run's copy was made above; one that could not be made fails as the success path always did.
+  if (durableCopyFailed !== undefined) fail(`the answer could not be copied to ${answerTarget}: ${durableCopyFailed}`);
+  if (launch === undefined && answerTarget !== undefined) {
     answerPath = answerTarget;
     mkdirSync(dirname(answerPath), { recursive: true });
     copyFileSync(outFile, answerPath);
   }
-  launch?.notePaths({ answer: answerPath });
 
   console.log(`Done — codex exec (${args.model}, ${args.effort}, ${args.sandbox}, ${credentialName(plan[attempt]!)}).`);
   console.log(`Output: ${answerPath}`);

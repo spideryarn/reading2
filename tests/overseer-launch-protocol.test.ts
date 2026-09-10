@@ -327,7 +327,7 @@ function restart(shared: Shared, old: World, options: WorldOptions = {}): World 
   return world(shared, options);
 }
 
-const RUN: RunSpec = { timeoutMinutes: 30, access: "review" };
+const RUN: RunSpec = { timeoutMinutes: 30, access: "review", account: "pool-test" };
 
 /** A tmux plan carries no run spec; a wrapper plan must (Stage 2 — the union makes the pairing a type error). */
 function request(
@@ -773,13 +773,16 @@ describe("the run spec (Stage 2): pinned with the plan, part of F5, handed to th
   test("a wrapper launch hands the launcher its run spec, and intent.json and the planned line record it", () => {
     const shared = newShared();
     const w = world(shared, { launchers: all });
-    const req = request("cand-run", "m\n", "tmux-headless", { timeoutMinutes: 12, access: "read-only" });
+    const spec = { timeoutMinutes: 12, access: "read-only", account: "pool-b" } as const;
+    const req = request("cand-run", "m\n", "tmux-headless", spec);
     expect(w.protocol.launchOccurrence(req).kind).toBe("invoked");
-    expect(shared.runs).toEqual([{ timeoutMinutes: 12, access: "read-only" }]);
+    expect(shared.runs).toEqual([spec]);
     const intent = JSON.parse(readFileSync(join(shared.root, LAUNCHES_DIR, OCCURRENCES_DIR, idOf(req), "a1", INTENT_FILE), "utf8")) as { run: unknown; launcherKind: unknown };
-    expect(intent.run).toEqual({ timeoutMinutes: 12, access: "read-only" });
+    // The pool account is pinned with the plan: in intent.json, and in the planned line the fold reads back.
+    expect(intent.run).toEqual(spec);
     expect(intent.launcherKind).toBe("tmux-headless");
-    expect(recordOf(w, idOf(req)).run).toEqual({ timeoutMinutes: 12, access: "read-only" });
+    expect(recordOf(w, idOf(req)).run).toEqual(spec);
+    expect(readFileSync(journalPath(shared), "utf8")).toContain('"account":"pool-b"');
   });
 
   test("a tmux launch has no run spec, all the way down", () => {
@@ -797,11 +800,17 @@ describe("the run spec (Stage 2): pinned with the plan, part of F5, handed to th
     const bad: unknown[] = [
       { ...common, launcherKind: "tmux", run: RUN },
       { ...common, launcherKind: "headless" },
-      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 0, access: "review" } },
-      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 2.5, access: "review" } },
-      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 100_000, access: "review" } },
-      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "admin" } },
-      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", extra: true } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 0, access: "review", account: "pool-test" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 2.5, access: "review", account: "pool-test" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 100_000, access: "review", account: "pool-test" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "admin", account: "pool-test" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", account: "pool-test", extra: true } },
+      // A wrapper run names its pool account, as a registry handle: never absent, never `auto`-shaped prose.
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", account: "" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", account: "Pool B" } },
+      { ...common, launcherKind: "tmux-headless", run: { timeoutMinutes: 5, access: "review", account: "-pool" } },
+      { ...common, launcherKind: "headless", run: { timeoutMinutes: 5, access: "review", account: 7 } },
     ];
     for (const one of bad) expect(w.protocol.plan(one as PlanRequest).kind, JSON.stringify(one)).toBe("refused");
     expect(existsSync(journalPath(shared)) ? readFileSync(journalPath(shared), "utf8") : "").toBe("");
@@ -810,12 +819,14 @@ describe("the run spec (Stage 2): pinned with the plan, part of F5, handed to th
   test("F5: the same id with a different run spec is a conflict, and writes nothing", () => {
     const shared = newShared();
     const w = world(shared, { launchers: all });
-    w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review" }));
+    w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review", account: "pool-a" }));
     const lines = readFileSync(journalPath(shared), "utf8");
-    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 11, access: "review" })).kind).toBe("conflict");
-    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "write" })).kind).toBe("conflict");
-    expect(w.protocol.plan(request("cand-spec", "m\n", "headless", { timeoutMinutes: 10, access: "review" })).kind).toBe("conflict");
-    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review" })).kind).toBe("planned");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 11, access: "review", account: "pool-a" })).kind).toBe("conflict");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "write", account: "pool-a" })).kind).toBe("conflict");
+    expect(w.protocol.plan(request("cand-spec", "m\n", "headless", { timeoutMinutes: 10, access: "review", account: "pool-a" })).kind).toBe("conflict");
+    // Another pool account is another bill: the same id on a different account is a conflict too.
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review", account: "pool-b" }))).toMatchObject({ kind: "conflict", why: expect.stringMatching(/run spec/) });
+    expect(w.protocol.plan(request("cand-spec", "m\n", "tmux-headless", { timeoutMinutes: 10, access: "review", account: "pool-a" })).kind).toBe("planned");
     expect(readFileSync(journalPath(shared), "utf8")).toBe(lines);
   });
 
@@ -1834,8 +1845,24 @@ describe("suspicion 3: built, and deliberately not called yet", () => {
 
   test("the composed protocol is functions only, and exactly these: no launcher, journal or owner is reachable from it", () => {
     const w = world(newShared());
-    expect(Object.keys(w.protocol).sort()).toEqual(["abandon", "dispose", "inFlight", "inspect", "launchOccurrence", "plan", "reconcile", "resumeOccurrence"]);
+    // Nine, deliberately: `view` joined in Stage 2b, and it hands out reads only (the test below).
+    expect(Object.keys(w.protocol).sort()).toEqual(["abandon", "dispose", "inFlight", "inspect", "launchOccurrence", "plan", "reconcile", "resumeOccurrence", "view"]);
     for (const value of Object.values(w.protocol)) expect(typeof value).toBe("function");
+  });
+
+  test("view() is the journal read-only — status, fold and attemptDir, and no way to write — over the same open store", () => {
+    const w = world(newShared());
+    const view = w.protocol.view();
+    expect(Object.keys(view).sort()).toEqual(["attemptDir", "fold", "status"]);
+    for (const value of Object.values(view)) expect(typeof value).toBe("function");
+    for (const name of ["append", "writeMaterial", "writeIntent", "readMaterial", "resetHistory"]) expect(name in view, name).toBe(false);
+    // The same store, not a snapshot: a view taken BEFORE a write sees it.
+    const req = request("cand-view");
+    expect(view.fold().occurrences.has(idOf(req))).toBe(false);
+    expect(w.protocol.plan(req).kind).toBe("planned");
+    expect(view.fold().occurrences.has(idOf(req))).toBe(true);
+    expect(view.status()).toEqual({ kind: "whole" });
+    expect(view.attemptDir(idOf(req), 1).endsWith(join(idOf(req), "a1"))).toBe(true);
   });
 
   test("nothing outside the protocol's composition calls a launcher adapter — no production file imports launchers.ts", () => {

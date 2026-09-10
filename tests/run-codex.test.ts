@@ -31,6 +31,7 @@ import {
 } from "../scripts/run-codex.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
+import { pinForWrapper } from "./helpers/wrapper-env.js";
 
 /**
  * Build the noise line once, outside the loop. Doing it per line — `$(printf 'x%.0s' {1..200})` —
@@ -631,7 +632,7 @@ describe("the prompt reaches codex", () => {
     return new Promise<{ status: number | null; stdout: string; stderr: string }>((settle) => {
       const child = spawn("npx", ["tsx", join(REPO, "scripts/run-codex.ts"), ...argv], {
         cwd: REPO,
-        env: { ...process.env, ...env, PATH: `${dir}:${process.env["PATH"] ?? ""}` },
+        env: pinForWrapper({ ...process.env, ...env, PATH: `${dir}:${process.env["PATH"] ?? ""}` }),
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "";
@@ -827,7 +828,7 @@ describe("the CLI, end to end", () => {
       ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--output", answerPath, ...extraArgs],
       {
         encoding: "utf8",
-        env: { ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}`, ...extraEnv },
+        env: pinForWrapper({ ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}`, ...extraEnv }),
       },
     );
     return { ...r, answerPath };
@@ -1079,6 +1080,49 @@ describe("the CLI, end to end", () => {
 });
 
 /**
+ * **F22 (plan 260910f): which codex the wrapper runs is not the test's to decide unless `PATH` is pinned.**
+ *
+ * The wrapper's first act is `loadRepoEnv()`, and `.env.local` beats an inherited value
+ * (src/env.ts), so a `.env.local` that assigns `PATH` replaces the stand-in a test put first — after
+ * every check the test made. The loader finds `.env.local` from its own source's location, so the
+ * only way to hand it one without touching this checkout's is a copy of the wrapper and exactly what
+ * it imports. The `.env.local` here points at ANOTHER STAND-IN — never at a real CLI.
+ */
+describe("F22: a .env.local that assigns PATH", () => {
+  function tempRepo(envLocal: string): string {
+    const root = mkdtempSync(join(tmpdir(), "run-codex-envlocal-"));
+    for (const file of ["scripts/run-codex.ts", "scripts/subagent-cli.ts", "src/env.ts", "src/is-main.ts"]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      copyFileSync(join(REPO, file), join(root, file));
+    }
+    writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
+    writeFileSync(join(root, ".env.local"), envLocal);
+    return root;
+  }
+
+  it("cannot swap the stand-in the test put on PATH for the one it names", () => {
+    const marker = join(mkdtempSync(join(tmpdir(), "run-codex-marker-")), "marker");
+    const right = fakeCodex(`printf right > ${shellQuote(marker)}\nprintf 'A\\n' > "$out"`);
+    const wrong = fakeCodex(`printf wrong > ${shellQuote(marker)}\nprintf 'A\\n' > "$out"`);
+    const root = tempRepo(`PATH=${dirname(wrong)}:/usr/bin:/bin\n`);
+    const runIn = (env: NodeJS.ProcessEnv) => spawnSync(
+      process.execPath,
+      [join(REPO, "node_modules", "tsx", "dist", "cli.mjs"), join(root, "scripts", "run-codex.ts"), "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only"],
+      { cwd: root, encoding: "utf8", env },
+    );
+    const given = { ...process.env, PATH: `${dirname(right)}:${process.env.PATH}` };
+    // Unpinned, the file wins: the hazard is real, and this .env.local is the one being read.
+    const unpinned = runIn(given);
+    expect(unpinned.status, unpinned.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toBe("wrong");
+    // Pinned, the test's PATH stands.
+    const pinned = runIn(pinForWrapper(given));
+    expect(pinned.status, pinned.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toBe("right");
+  }, 60_000);
+});
+
+/**
  * `--launch-dir` — plan 260910f Stage 2, F6: the WHOLE invocation is instrumented, not one
  * credential attempt. A read-only fallback runs codex twice under one start.json and ends in one
  * exit.json; a write-capable run still never falls back. The stand-in records, per attempt, whether
@@ -1098,7 +1142,7 @@ describe("--launch-dir", () => {
     const fixture = f ?? makeLaunchDir();
     const bin = launchedCodex(fixture, body);
     const answerPath = join(mkdtempSync(join(tmpdir(), "run-codex-launch-")), "answer.md");
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin.dir}:${process.env.PATH}`, ...extraEnv };
+    const env: NodeJS.ProcessEnv = pinForWrapper({ ...process.env, PATH: `${bin.dir}:${process.env.PATH}`, ...extraEnv });
     delete env.SPIDERYARN_LAUNCH_ID;
     const launchArgs = f === null ? [] : ["--launch-dir", fixture.dir];
     const r = spawnSync(
@@ -1159,7 +1203,84 @@ describe("--launch-dir", () => {
   it("writes exit.json on an empty answer", () => {
     const r = run(makeLaunchDir(), `printf '\\n' > "$out"`);
     expect(r.status).toBe(1);
-    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 0 }, verdict: { kind: "failed", cause: "empty-answer" }, answer: { bytes: 1, usable: false } } });
+    // The durable path the flag named, never the wrapper's temporary -o file (F21).
+    expect(r.read().exit).toMatchObject({ kind: "present", record: { ending: { kind: "exited", code: 0 }, verdict: { kind: "failed", cause: "empty-answer" }, answer: { path: r.answerPath, bytes: 1, usable: false } } });
+    expect(readFileSync(r.answerPath, "utf8")).toBe("\n");
+  }, 60_000);
+
+  it("a failed run still leaves its answer in the attempt directory, and exit.json names it there (F21)", () => {
+    /* The failure ladder exits before the success path's copy, so until F21 exit.json named the
+       wrapper's own /tmp/run-codex-…/output-N.txt and the attempt directory had no answer.md. */
+    const cases = [
+      { what: "empty", body: `: > "$out"`, bytes: "", cause: "empty-answer", usable: false },
+      { what: "whitespace", body: `printf '\\n  \\n' > "$out"`, bytes: "\n  \n", cause: "empty-answer", usable: false },
+      { what: "non-zero, partial", body: `printf 'PARTIAL' > "$out"\nexit 3`, bytes: "PARTIAL", cause: "nonzero", usable: true },
+    ] as const;
+    for (const one of cases) {
+      const f = makeLaunchDir();
+      const bin = launchedCodex(f, one.body);
+      const r = spawnSync("npx", ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir], {
+        encoding: "utf8",
+        env: pinForWrapper({ ...process.env, PATH: `${bin.dir}:${process.env.PATH}` }),
+      });
+      expect(r.status, one.what).toBe(1);
+      const answer = join(f.dir, "answer.md");
+      expect(existsSync(answer), one.what).toBe(true);
+      expect(readFileSync(answer, "utf8"), one.what).toBe(one.bytes);
+      expect(readArtefacts(f.dir, f.correlationId).exit, one.what).toMatchObject({
+        kind: "present",
+        record: { verdict: { kind: "failed", cause: one.cause }, answer: { path: answer, bytes: Buffer.byteLength(one.bytes), usable: one.usable } },
+      });
+    }
+  }, 120_000);
+
+  it("a hangup is forwarded to codex, waited for, and recorded — the wrapper's pane closing (F24)", async () => {
+    const f = makeLaunchDir();
+    const pidFile = join(mkdtempSync(join(tmpdir(), "run-codex-hup-")), "child.pid");
+    const bin = launchedCodex(f, `printf '%s' "$$" > ${shellQuote(pidFile)}\nexec sleep 120`);
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const until = async (done: () => boolean, ms: number): Promise<boolean> => {
+      const deadline = Date.now() + ms;
+      while (!done()) {
+        if (Date.now() > deadline) return false;
+        await new Promise((settle) => setTimeout(settle, 100));
+      }
+      return true;
+    };
+    /* node and tsx by path, in a process group of their own: SIGHUP goes to that group, as a closed
+       pane delivers it — reaching the wrapper, and not codex, which runChild put in a group of its own. */
+    const wrapper = spawn(
+      process.execPath,
+      [join(REPO, "node_modules", "tsx", "dist", "cli.mjs"), "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
+      { cwd: REPO, env: pinForWrapper({ ...process.env, PATH: `${bin.dir}:${process.env.PATH}` }), stdio: "ignore", detached: true },
+    );
+    let child = 0;
+    try {
+      expect(await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8") !== "", 30_000)).toBe(true);
+      child = Number(readFileSync(pidFile, "utf8"));
+      expect(alive(child)).toBe(true);
+      process.kill(-wrapper.pid!, "SIGHUP");
+      expect(await until(() => !alive(child), 20_000)).toBe(true);
+      expect(await until(() => existsSync(join(f.dir, EXIT_FILE)), 10_000)).toBe(true);
+      expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+        kind: "present",
+        record: { ending: { kind: "signalled", signal: expect.stringMatching(/^SIG(HUP|KILL)$/) }, verdict: { kind: "failed", cause: "hangup" } },
+      });
+    } finally {
+      if (child > 0 && alive(child)) process.kill(child, "SIGKILL");
+      try {
+        process.kill(-wrapper.pid!, "SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }
   }, 60_000);
 
   it("writes exit.json when the capture overflows and the child is killed", () => {
@@ -1173,7 +1294,7 @@ describe("--launch-dir", () => {
     const bin = launchedCodex(f, `printf 'A\\n' > "$out"`);
     const r = spawnSync("npx", ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--launch-dir", f.dir], {
       encoding: "utf8",
-      env: { ...process.env, PATH: `${bin.dir}:${process.env.PATH}` },
+      env: pinForWrapper({ ...process.env, PATH: `${bin.dir}:${process.env.PATH}` }),
     });
     expect(r.status).toBe(0);
     expect(readFileSync(join(f.dir, "answer.md"), "utf8")).toBe("A\n");
@@ -1195,7 +1316,7 @@ describe("--launch-dir", () => {
     const r = spawnSync(
       process.execPath,
       [join(REPO, "node_modules", "tsx", "dist", "cli.mjs"), "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
-      { cwd: REPO, encoding: "utf8", env: { ...process.env, PATH: `${empty}:/usr/bin:/bin` } },
+      { cwd: REPO, encoding: "utf8", env: pinForWrapper({ ...process.env, PATH: `${empty}:/usr/bin:/bin` }) },
     );
     expect(r.status).toBe(1);
     const read = readArtefacts(f.dir, f.correlationId);

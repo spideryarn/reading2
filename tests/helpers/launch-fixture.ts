@@ -26,7 +26,7 @@ export type LaunchFixture = {
   readonly intent: LaunchIntent;
 };
 
-export const FIXTURE_RUN: RunSpec = { timeoutMinutes: 30, access: "review" };
+export const FIXTURE_RUN: RunSpec = { timeoutMinutes: 30, access: "review", account: "pool-test" };
 
 export function makeLaunchDir(
   options: { readonly parent?: string; readonly launcherKind?: LauncherKind; readonly attempt?: number; readonly material?: string; readonly run?: RunSpec } = {},

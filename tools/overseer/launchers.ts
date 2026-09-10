@@ -120,9 +120,15 @@ function writePrompt(input: LaunchInput): { readonly ok: true; readonly path: st
 
 const CODEX_SANDBOX: Readonly<Record<RunAccess, string>> = { "read-only": "read-only", review: "review", write: "workspace-write" };
 
-/** The run spec as a wrapper's own flags, and nothing else: `--timeout-minutes`, and `--access` (run-claude) or its `--sandbox` twin (run-codex). */
+/**
+ * The run spec as a wrapper's own flags, and nothing else: `--timeout-minutes`;
+ * then `--access` and `--account` (run-claude), or `--sandbox`, access's twin
+ * (run-codex). run-codex takes no account flag — the handle names a Claude pool
+ * account — so it gets none.
+ */
 export function wrapperRunArgs(wrapper: WrapperName, run: RunSpec): string[] {
-  return ["--timeout-minutes", String(run.timeoutMinutes), ...(wrapper === "run-claude" ? ["--access", run.access] : ["--sandbox", CODEX_SANDBOX[run.access]])];
+  const timeout = ["--timeout-minutes", String(run.timeoutMinutes)];
+  return wrapper === "run-claude" ? [...timeout, "--access", run.access, "--account", run.account] : [...timeout, "--sandbox", CODEX_SANDBOX[run.access]];
 }
 
 /** Spawn, with the fds closed in the parent however it goes. A throw from the spawn itself means no process: a refusal. */
@@ -337,11 +343,28 @@ export type TmuxHeadlessLauncherOptions = TmuxTarget & {
 };
 
 /**
+ * Unset at the top of a tmux-headless session's command: every variable that
+ * picks a Claude or Codex account, or a credential for one.
+ * tests/helpers/account-neutral-env.ts keeps the suite's own list, and a test
+ * holds this one to at least that.
+ */
+export const SESSION_UNSET_VARIABLES = ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY"] as const;
+
+/**
  * `tmux new-session -d -s <id> -e SPIDERYARN_LAUNCH_ID=… -e
- * SPIDERYARN_LAUNCH_DIR=… '<run-claude --prompt-file <material.txt>
- * --launch-dir <dir> --timeout-minutes N --access A>'` — the id in the
- * session's environment at creation, never set afterwards, and every word of
- * the command through {@link shellQuote}.
+ * SPIDERYARN_LAUNCH_DIR=… '<run-claude --prompt-file <dir>/prompt.md
+ * --launch-dir <dir> --timeout-minutes N --access A --account H>'` — the id in
+ * the session's environment at creation, never set afterwards, and every word
+ * of the command through {@link shellQuote}. The prompt is the attempt-private
+ * copy {@link writePrompt} makes of the verified bytes, never the shared
+ * `material.txt`.
+ *
+ * **Nothing that routes an account crosses into the session.** The command
+ * starts by unsetting {@link SESSION_UNSET_VARIABLES}: a session's variables
+ * come from the tmux server's environment as well as the client's, so a daemon
+ * routed by `CLAUDE_CONFIG_DIR` — or a server one started — would otherwise put
+ * the run on that account. run-claude sets `CLAUDE_CONFIG_DIR` itself, from
+ * the run spec's `--account`.
  *
  * **The session's environment is the CREATING CLIENT's — the daemon's own, or
  * `env` when given — not the tmux server's global one.** Measured, tmux 3.4:
@@ -370,7 +393,12 @@ export function tmuxHeadlessLauncher(options: TmuxHeadlessLauncherOptions): Laun
       const words = [options.node ?? process.execPath, tsx, join(options.repoRoot, "scripts", "run-claude.ts"), "--prompt-file", material.path, "--launch-dir", input.artefactDir, ...wrapperRunArgs("run-claude", input.run)];
       // The wrapper's console goes to the attempt's launcher.log: a session that exits takes its pane with it.
       const log = shellQuote(join(input.artefactDir, LAUNCHER_LOG_FILE));
-      const command = [`export PATH="$PATH:/usr/local/bin:/usr/bin:/bin"`, `cd ${shellQuote(options.repoRoot)} || exit 1`, `exec ${words.map(shellQuote).join(" ")} >> ${log} 2>&1`].join("; ");
+      const command = [
+        `unset ${SESSION_UNSET_VARIABLES.join(" ")}`,
+        `export PATH="$PATH:/usr/local/bin:/usr/bin:/bin"`,
+        `cd ${shellQuote(options.repoRoot)} || exit 1`,
+        `exec ${words.map(shellQuote).join(" ")} >> ${log} 2>&1`,
+      ].join("; ");
       return createSession(
         run,
         ["new-session", "-d", "-s", input.correlationId, "-e", `${LAUNCH_ID_VAR}=${input.correlationId}`, "-e", `${LAUNCH_DIR_VAR}=${input.artefactDir}`, command],
