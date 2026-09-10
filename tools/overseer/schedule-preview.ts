@@ -487,10 +487,10 @@ function relative(iso: string, nowMs: number): string {
  */
 export function schedulePreviewLines(
   read: SchedulePreviewRead,
-  checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null },
+  checkout: { readonly built: BuiltList; readonly runningInstanceId?: string | null },
   nowMs: number,
 ): string[] {
-  const builds = `${INDENT}this checkout builds list ${checkout.listRevision}`;
+  const builds = `${INDENT}${builtListText(checkout.built)}`;
   switch (read.kind) {
     case "absent":
       return [
@@ -521,7 +521,7 @@ export function schedulePreviewLines(
   }
 }
 
-function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null }, nowMs: number): string[] {
+function previewLines(preview: ParsedSchedulePreview, checkout: { readonly built: BuiltList; readonly runningInstanceId?: string | null }, nowMs: number): string[] {
   const fromAnotherInstance =
     checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== null && checkout.runningInstanceId !== preview.instanceId;
   const lines = [
@@ -545,21 +545,41 @@ function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listR
 
 function listLine(
   list: ParsedSchedulePreview["list"],
-  checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null },
+  checkout: { readonly built: BuiltList; readonly runningInstanceId?: string | null },
   previewInstanceId: string,
 ): string {
+  const builds = builtListText(checkout.built);
   if (checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== previewInstanceId) {
     return checkout.runningInstanceId === null
-      ? `this preview was written by daemon instance ${previewInstanceId}, and there is no readable current checkpoint, so it does not say which list the current daemon holds; ` +
-          `this checkout builds list ${checkout.listRevision}`
-      : `this preview was written by daemon instance ${previewInstanceId}, while the current checkpoint belongs to ${checkout.runningInstanceId}, so it does not say which list the current daemon holds; ` +
-          `this checkout builds list ${checkout.listRevision}`;
+      ? `this preview was written by daemon instance ${previewInstanceId}, and there is no readable current checkpoint, so it does not say which list the current daemon holds; ${builds}`
+      : `this preview was written by daemon instance ${previewInstanceId}, while the current checkpoint belongs to ${checkout.runningInstanceId}, so it does not say which list the current daemon holds; ${builds}`;
   }
   if (list.kind === "not-given") {
-    return `the running daemon was given no job list (${list.why}), so it previews nothing; this checkout builds list ${checkout.listRevision}`;
+    return `the running daemon was given no job list (${list.why}), so it previews nothing; ${builds}`;
   }
-  if (list.listRevision === checkout.listRevision) return `the running daemon holds list ${list.listRevision}, the same list this checkout builds`;
-  return `the running daemon holds list ${list.listRevision}; this checkout builds ${checkout.listRevision} — a restart loads it`;
+  // AN UNBUILT LIST IS NEVER COMPARED: the empty list a failed read leaves has a hash too (Sol's F40).
+  if (checkout.built.kind === "unbuildable") return `the running daemon holds list ${list.listRevision}; ${builds}, so the two are not compared`;
+  if (list.listRevision === checkout.built.listRevision) return `the running daemon holds list ${list.listRevision}, the same list this checkout builds`;
+  return `the running daemon holds list ${list.listRevision}; this checkout builds ${checkout.built.listRevision} — a restart loads it`;
+}
+
+/**
+ * The job list a checkout builds, or why it could not build it. When either
+ * builder reports a problem there is no revision at all — not the hash of
+ * whatever part was built — so nothing can compare against it and call the two
+ * "the same list" (Sol's F40 on plan 260910f stage 2).
+ */
+export type BuiltList = { kind: "built"; listRevision: string } | { kind: "unbuildable"; problems: readonly string[] };
+
+const SHOWN_PROBLEMS = 3;
+const PROBLEM_CHARS = 240;
+
+/** `this checkout builds list …`, or why it builds none, bounded to a few problems of a line each. */
+export function builtListText(built: BuiltList): string {
+  if (built.kind === "built") return `this checkout builds list ${built.listRevision}`;
+  const shown = built.problems.slice(0, SHOWN_PROBLEMS).map((problem) => (problem.length > PROBLEM_CHARS ? `${problem.slice(0, PROBLEM_CHARS - 1)}…` : problem));
+  const more = built.problems.length > SHOWN_PROBLEMS ? `; and ${built.problems.length - SHOWN_PROBLEMS} more` : "";
+  return `this checkout's job list could not be built: ${shown.length === 0 ? "(no reason given)" : shown.join("; ")}${more}`;
 }
 
 /** The word each verdict gets on the page. The compiler counts them. */

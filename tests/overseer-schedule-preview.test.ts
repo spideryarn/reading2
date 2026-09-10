@@ -496,11 +496,11 @@ describe("the CLI block", () => {
   function linesFor(preview: SchedulePreview, checkoutRevision: string): string[] {
     const root = tempRoot();
     writeSchedulePreview(root, preview);
-    return schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: checkoutRevision }, NOW.getTime() + 20_000);
+    return schedulePreviewLines(readSchedulePreviewFile(root), { built: { kind: "built", listRevision: checkoutRevision } }, NOW.getTime() + 20_000);
   }
 
   test("with no file and no checkpoint context: the possible pre-build daemon and the checkout's list are named", () => {
-    const lines = schedulePreviewLines({ kind: "absent" }, { listRevision: "0a1b2c3d4e5f" }, NOW.getTime()).join("\n");
+    const lines = schedulePreviewLines({ kind: "absent" }, { built: { kind: "built", listRevision: "0a1b2c3d4e5f" } }, NOW.getTime()).join("\n");
     expect(lines).toContain("predates this build");
     expect(lines).toContain("0a1b2c3d4e5f");
   });
@@ -508,7 +508,7 @@ describe("the CLI block", () => {
   test("no file beside a current checkpoint does not claim that current daemon predates this build", () => {
     const lines = schedulePreviewLines(
       { kind: "absent" },
-      { listRevision: "0a1b2c3d4e5f", runningInstanceId: "current-daemon" },
+      { built: { kind: "built", listRevision: "0a1b2c3d4e5f" }, runningInstanceId: "current-daemon" },
       NOW.getTime(),
     ).join("\n");
     expect(lines).toContain("current-daemon");
@@ -545,13 +545,24 @@ describe("the CLI block", () => {
     expect(text).toContain(`the running daemon holds list ${listRevision([sessionJob("a")])}; this checkout builds fedcba987654 — a restart loads it`);
   });
 
+  test("a checkout list that could not be built is never compared — even with a daemon holding the empty list (Sol's F40)", () => {
+    const preview = previewOf([]);
+    const root = tempRoot();
+    writeSchedulePreview(root, preview);
+    const built = { kind: "unbuildable", problems: ["docs/reusable/get-ready-to-deploy.md could not be read (ENOENT)"] } as const;
+    const text = schedulePreviewLines(readSchedulePreviewFile(root), { built }, NOW.getTime()).join("\n");
+    expect(text).toContain(`the running daemon holds list ${listRevision([])}; this checkout's job list could not be built: docs/reusable/get-ready-to-deploy.md could not be read (ENOENT), so the two are not compared`);
+    expect(text).not.toContain("the same list");
+    expect(text).not.toContain("this checkout builds list");
+  });
+
   test("a preview left by a previous daemon instance does not claim what the current daemon holds", () => {
     const preview = previewOf([sessionJob("a")]);
     const root = tempRoot();
     writeSchedulePreview(root, preview);
     const text = schedulePreviewLines(
       readSchedulePreviewFile(root),
-      { listRevision: listRevision([sessionJob("a")]), runningInstanceId: "a-new-daemon-instance" },
+      { built: { kind: "built", listRevision: listRevision([sessionJob("a")]) }, runningInstanceId: "a-new-daemon-instance" },
       NOW.getTime(),
     ).join("\n");
     expect(text).toContain("a-new-daemon-instance");
@@ -563,7 +574,7 @@ describe("the CLI block", () => {
     const preview = previewOf([sessionJob("a")]);
     const first = schedulePreviewLines(
       { kind: "preview", preview: { ...preview, jobs: preview.jobs.map((job) => ({ kind: "job" as const, job })) } },
-      { listRevision: listRevision([sessionJob("a")]), runningInstanceId: null },
+      { built: { kind: "built", listRevision: listRevision([sessionJob("a")]) }, runningInstanceId: null },
       NOW.getTime(),
     )[0];
     expect(first).not.toContain("FROM ANOTHER DAEMON INSTANCE");
@@ -573,7 +584,7 @@ describe("the CLI block", () => {
     const preview = previewOf([sessionJob("a"), sessionJob("b")]);
     const damaged = JSON.parse(JSON.stringify(preview)) as { jobs: Record<string, unknown>[] };
     (damaged.jobs[0] as Record<string, unknown>)["verdict"] = { kind: "from-the-future", sentence: "s", next: { kind: "due-now" } };
-    const lines = schedulePreviewLines(parseSchedulePreview(damaged), { listRevision: "x" }, NOW.getTime()).join("\n");
+    const lines = schedulePreviewLines(parseSchedulePreview(damaged), { built: { kind: "built", listRevision: "x" } }, NOW.getTime()).join("\n");
     expect(lines).toMatch(/a\s+UNREADABLE/);
     expect(lines).toContain("from-the-future");
     expect(lines).toMatch(/\bb\b/);
@@ -750,7 +761,7 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     if (read.kind !== "preview") throw new Error(`expected a preview, got ${read.kind}`);
     expect(read.preview.list.kind).toBe("not-given");
     expect(read.preview.jobs).toEqual([]);
-    expect(schedulePreviewLines(read, { listRevision: "x" }, NOW.getTime()).join("\n")).toContain("given no job list");
+    expect(schedulePreviewLines(read, { built: { kind: "built", listRevision: "x" } }, NOW.getTime()).join("\n")).toContain("given no job list");
   });
 
   test("a write that keeps failing is logged ONCE, its recovery once, and the daemon carries on", async () => {

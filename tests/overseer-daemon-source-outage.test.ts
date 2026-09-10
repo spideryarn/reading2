@@ -227,7 +227,13 @@ describe("a daemon over a dashboard that dies and comes back", () => {
 
     // ── WHAT `diagnose` SAYS AT THIS MOMENT, on the daemon's own clock: the
     // daemon running, its heartbeat fresh, and the last good snapshot t0 and old.
-    const input = readDiagnoseInput(root, { now });
+    // The daemon runs INSIDE this test process, so the process holding its pid is vitest's,
+    // started long before the daemon's elapsed-clock `startedAt`: the /proc identity check
+    // (Sol's F45) would rightly call it a stranger. That check is overseer-cli.test.ts's; this
+    // test is about the clocks, so it names the daemon's own process as the holder.
+    const own = readCheckpoint(root);
+    const startedAtMs = own.kind === "checkpoint" ? Date.parse(own.checkpoint.heartbeat.startedAt) : Number.NaN;
+    const input = readDiagnoseInput(root, { now, identify: () => ({ kind: "started", atMs: startedAtMs - 1_000 }) });
     if (!input.ok) throw new Error(input.why);
     const report = diagnose(input.input);
     expect(report.daemon.standing.state).toBe("running");

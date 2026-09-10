@@ -166,7 +166,21 @@ fails safely to unknown. All six accepted; an Opus subagent fixes them.
 
 ### Stage 3 — Web summary
 
-- [ ] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
+**Status, 2026-09-10: built (Opus subagent), with F2, F4 and F8 folded in; `server.ts` wired by hand
+because the agent held off while another was editing it. 70/70 across six fleet suites; `build:fleet`
+0. Browser check and stage review wait on the Overseer's pause (the account's five-hour window).**
+
+**What the plan did not know.** (1) The runtime parser cannot live in the client file: the node
+tsconfig would type-check any browser file `diagnose.ts` imports, so it sits in
+`diagnostics-parse.ts` and the client re-exports it. (2) A fixed allow-list that refuses every other
+name would contradict F42 (a row for every entry), so allow-listed names are read and any other
+plain name is only `lstat`ed. (3) **The old probe hung for ever on a FIFO** — `openSync` blocks; it
+now opens `O_NOFOLLOW | O_NONBLOCK` after an `lstat`. (4) The JSON ceiling is 1 MB, not 4; the
+largest live file is ~110 KB. (5) App-level panel tests now make one failing relative `fetch`,
+because `App` does not pass the section an api — harmless, and threading one through is a small
+follow-up.
+
+- [x] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
   boundary; `DiagnosticsSection.tsx` in Box health: each service's revision and verdict, the bundle
   this tab runs vs the bundle on disk vs the one the server started with, collector clocks, store
   files. Browser check at desktop and phone widths on a fixture-backed server (Sonnet subagent).

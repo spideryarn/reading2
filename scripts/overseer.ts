@@ -64,7 +64,7 @@ import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
 import { listRevision, readSchedulePreviewFile, schedulePreviewLines } from "../tools/overseer/schedule-preview.js";
-import { diagnose, diagnoseLines, readDiagnoseInput } from "../tools/overseer/diagnose.js";
+import { checkoutJobList, diagnose, diagnoseLines, readDashboardDiagnostics, readDiagnoseInput } from "../tools/overseer/diagnose.js";
 import { describeNote, readNotes } from "../tools/overseer/notes.js";
 import { describeArtefactCheck, parseArtefactSpec, spellArtefactRef, type ArtefactRef } from "../tools/fleet/artefact-ref.js";
 import { decisionsRoot } from "../tools/overseer/decisions.js";
@@ -1619,12 +1619,12 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       // would run, read from the file it writes each checkpoint — and the list
       // THIS checkout builds, so the block can say whether a restart would load
       // a different one (plan 260910e § D6). Built the way `schedulerWiring`
-      // builds it, so an unchanged checkout reads as the same list.
-      const checkout = repoRoot();
-      const builds = listRevision([...standingJobs(checkout).jobs, ...ruleJobs(checkout).jobs]);
+      // builds it, so an unchanged checkout reads as the same list — and a
+      // checkout whose builders report a problem has no revision to compare (Sol's F40).
+      const built = checkoutJobList(repoRoot());
       const checkpoint = readCheckpoint(root);
       const runningInstanceId = checkpoint.kind === "checkpoint" ? checkpoint.checkpoint.heartbeat.instanceId : null;
-      console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds, runningInstanceId }, Date.now())].join("\n"));
+      console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { built, runningInstanceId }, Date.now())].join("\n"));
       return 0;
     }
     case "diagnose": {
@@ -1634,7 +1634,10 @@ export async function runParsed(parsed: Parsed): Promise<number> {
         console.error(`✗ ${read.why}`);
         return 1;
       }
-      const report = diagnose(read.input);
+      // Asked only once the store is known readable, so a broken store never
+      // waits on the dashboard; bounded at 5 s and 256 KB, and never throws (F4).
+      const dashboard = await readDashboardDiagnostics(fleetUrl(process.env));
+      const report = diagnose({ ...read.input, dashboard });
       console.log(parsed.json ? JSON.stringify(report, null, 2) : diagnoseLines(report).join("\n"));
       return 0;
     }
