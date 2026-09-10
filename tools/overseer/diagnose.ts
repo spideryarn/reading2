@@ -1,9 +1,9 @@
 /**
  * **`overseer diagnose`** — one page that answers, for the two services that
- * carry the Overseer: which revision is each running, which checkpoint schema,
- * how old is each clock, which boot, what does every store file look like, and
- * does the daemon hold the job list this checkout builds.
- * docs/plans/260910f § Stage 2.
+ * carry the Overseer: what HEAD each recorded for its checkout when it started,
+ * which checkpoint schema, how old is each clock, which boot, what does every
+ * store file look like, and does the daemon hold the job list this checkout
+ * builds. docs/plans/260910f § Stage 2.
  *
  * ## A report, not a gate
  *
@@ -13,14 +13,18 @@
  *
  * ## The one inference it refuses
  *
- * A running process's revision is what it RECORDED when it started — the
+ * What a process is compared on is what it RECORDED when it started — the
  * `revision` on its `daemon-started` note (`tools/fleet/revision.ts`). It is
  * never read off this checkout's HEAD: on the box the primary moves under a
  * running service several times an hour. So a note without a stamp is
  * **not stamped**, a note from another instance does not stand in for the
- * running one's, a HEAD that cannot be read makes the comparison unknown, and
- * a start that was dirty is never "same" even when its sha is HEAD — the sha
- * does not name code nobody committed.
+ * running one's, a HEAD that cannot be read makes the comparison unknown.
+ *
+ * And even a stamp is a checkout observation, not a code identity (Sol's F1
+ * on plan 260910f): no line here says the running code "is", "matches" or
+ * "runs" a revision. A clean stamp is compared as *recorded start HEAD … matches
+ * / is N commits behind / is not an ancestor of this checkout's HEAD*; a dirty
+ * one is *code revision unknown*, with the sha only as a base.
  *
  * ## Reused, not re-derived
  *
@@ -55,7 +59,7 @@ import { REPORTS_FILE, REPORTS_SCHEMA } from "./reports.js";
 import { ruleJobs } from "./rule-jobs.js";
 import { listRevision, readSchedulePreviewFile, schedulePreviewLines, type SchedulePreviewRead } from "./schedule-preview.js";
 import { standingJobs } from "./standing-jobs.js";
-import { standingFromReads, type DaemonStanding } from "./status-cli.js";
+import { newerStartThanCheckpoint, standingFromReads, type DaemonStanding } from "./status-cli.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
@@ -131,8 +135,9 @@ export type DashboardReading =
   | { kind: "answered"; revision: StartRevision };
 
 /**
- * A service's revision against this checkout. `compared` carries `dirty`
- * beside the relation, and the renderer never says "same" for a dirty start.
+ * A service's recorded start HEAD against this checkout's. `compared` carries
+ * `dirty` beside the relation, and the renderer turns a dirty start into
+ * "code revision unknown" whatever the relation.
  */
 export type RevisionVerdict =
   | { kind: "compared"; sha: string; dirty: boolean; relation: RevisionRelation }
@@ -191,6 +196,12 @@ export type DiagnoseReport = {
     startedAt: string | null;
     start: StartNote;
     verdict: RevisionVerdict;
+    /**
+     * A start newer than the checkpoint's instance, which wrote no checkpoint
+     * (`newerStartThanCheckpoint`). Shown on its own line with its own start
+     * HEAD, so the checkpoint's instance never stands in for it.
+     */
+    newerStart: { instanceId: string; at: string; verdict: RevisionVerdict } | null;
   };
   dashboard: { reading: DashboardReading; verdict: RevisionVerdict | null };
   checkpoint: CheckpointSection;
@@ -228,6 +239,7 @@ export function diagnose(input: DiagnoseInput): DiagnoseReport {
   const files = input.files.map(fileRow);
   const probeOfCheckpoint = files.find((row) => row.probe.name === CHECKPOINT_FILE)?.probe;
   const ageOf = (iso: string | null): number | null => (iso === null ? null : nowMs - Date.parse(iso));
+  const newer = input.notes.kind === "read" ? newerStartThanCheckpoint(checkpoint, input.notes.notes) : null;
 
   return {
     root: input.root,
@@ -240,6 +252,15 @@ export function diagnose(input: DiagnoseInput): DiagnoseReport {
       startedAt: checkpoint?.heartbeat.startedAt ?? null,
       start,
       verdict: daemonVerdict(start, input),
+      newerStart:
+        newer === null
+          ? null
+          : {
+              instanceId: newer.instanceId,
+              at: newer.at,
+              verdict:
+                newer.revision === undefined ? { kind: "not-stamped", why: "started before revision stamps existed" } : revisionVerdict(newer.revision, input),
+            },
     },
     dashboard: {
       reading: input.dashboard,
@@ -353,8 +374,11 @@ function fileRow(probe: StoreFileProbe): FileRow {
 const LABEL = 12;
 const INDENT = " ".repeat(LABEL);
 const labelled = (label: string, text: string): string => `${label.padEnd(LABEL)}${text}`;
-const DIRTY = ", dirty at start — the sha does not name the running code";
 
+/**
+ * A verdict in words that claim only what was recorded: a checkout's HEAD at
+ * start, never the code the process loaded (Sol's F1 on plan 260910f).
+ */
 export function verdictText(verdict: RevisionVerdict): string {
   switch (verdict.kind) {
     case "not-stamped":
@@ -362,19 +386,20 @@ export function verdictText(verdict: RevisionVerdict): string {
     case "unknown":
       return `unknown: ${verdict.why}`;
     case "compared": {
-      const sha = verdict.sha.slice(0, 12);
-      const dirty = verdict.dirty ? DIRTY : "";
+      const sha = verdict.sha.slice(0, 8);
+      // A dirty start held edits no commit has, so its sha is only a base, whatever it relates to.
+      if (verdict.dirty) return `code revision unknown — base HEAD ${sha}, checkout dirty at start`;
+      const recorded = `recorded start HEAD ${sha}`;
       const relation = verdict.relation;
       switch (relation.kind) {
         case "same":
-          // Never "same" for a dirty start: its sha is HEAD's, and its code was not.
-          return verdict.dirty ? `${sha}, this checkout's HEAD sha${dirty}` : `${sha}, same as this checkout's HEAD`;
+          return `${recorded} matches this checkout's HEAD`;
         case "behind":
-          return `${sha}, ${relation.commits} ${relation.commits === 1 ? "commit" : "commits"} behind HEAD${dirty}`;
+          return `${recorded} is ${relation.commits} ${relation.commits === 1 ? "commit" : "commits"} behind this checkout's HEAD`;
         case "not-ancestor":
-          return `${sha}, not an ancestor of HEAD${dirty}`;
+          return `${recorded} is not an ancestor of this checkout's HEAD`;
         case "unknown":
-          return `${sha}, its relation to HEAD is unknown: ${relation.why}${dirty}`;
+          return `${recorded}; its relation to this checkout's HEAD is unknown: ${relation.why}`;
         default: {
           const never: never = relation;
           throw new Error(`no text for ${JSON.stringify(never)}`);
@@ -505,12 +530,17 @@ export function diagnoseLines(report: DiagnoseReport): string[] {
   lines.push(
     labelled(
       "instance",
-      daemon.instanceId === null ? "none named — there is no readable checkpoint" : `${daemon.instanceId}, pid ${daemon.pid ?? "?"}, started ${daemon.startedAt ?? "?"}`,
+      daemon.instanceId === null
+        ? "none named — there is no readable checkpoint"
+        : `${daemon.instanceId}, pid ${daemon.pid ?? "?"}, started ${daemon.startedAt ?? "?"}${daemon.newerStart === null ? "" : " — the checkpoint's instance, not the newest"}`,
     ),
   );
-  lines.push(labelled("revision", `daemon: ${verdictText(daemon.verdict)}`));
+  if (daemon.newerStart !== null) {
+    lines.push(`${INDENT}newest start: ${daemon.newerStart.instanceId} at ${daemon.newerStart.at}, which wrote no checkpoint; ${verdictText(daemon.newerStart.verdict)}`);
+  }
+  lines.push(labelled("revision", `daemon${daemon.newerStart === null ? "" : " (the checkpoint's instance)"}: ${verdictText(daemon.verdict)}`));
   lines.push(`${INDENT}dashboard: ${dashboardText(report.dashboard)}`);
-  lines.push(`${INDENT}(a revision is what the process recorded when it started, never this checkout's HEAD)`);
+  lines.push(`${INDENT}(a start HEAD is what the process's checkout was at when it started — never read off this checkout now, and not proof of the code it loaded)`);
   lines.push("");
 
   lines.push(...checkpointLines(report.checkpoint));

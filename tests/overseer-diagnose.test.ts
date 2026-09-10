@@ -21,10 +21,12 @@ import {
   diagnose,
   diagnoseLines,
   readDiagnoseInput,
+  verdictText,
   type DiagnoseDeps,
   type DiagnoseInput,
   type GitReads,
   type RevisionRelation,
+  type RevisionVerdict,
 } from "../tools/overseer/diagnose.js";
 import { NOTES_FILE } from "../tools/overseer/notes.js";
 import { CHECKPOINT_FILE, EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
@@ -134,7 +136,7 @@ describe("a store the real daemon wrote", () => {
 
     const page = diagnoseLines(report).join("\n");
     expect(page).toContain(checkpoint.heartbeat.instanceId);
-    expect(page).toContain("same as this checkout's HEAD");
+    expect(page).toContain("recorded start HEAD 5d0c1e9a matches this checkout's HEAD");
     expect(page).toContain("schema 2");
     expect(page).toContain("last good snapshot 2026-09-08T02:48:38.418Z");
     // The job-list block is `overseer status`'s own, and says what this checkout builds.
@@ -144,36 +146,50 @@ describe("a store the real daemon wrote", () => {
   test("a start that HEAD has moved past is N commits behind, not same", async () => {
     const { root, clock } = await daemonStore();
     const page = text(inputFor(root, clock.ms(), { git: fakeGit(HEAD_SHA, { [START_SHA]: { kind: "behind", commits: 3 } }) }));
-    expect(page).toContain("3 commits behind HEAD");
-    expect(page).not.toContain("same as");
+    expect(page).toContain("recorded start HEAD 5d0c1e9a is 3 commits behind this checkout's HEAD");
+    expect(page).not.toContain("matches this checkout");
   });
 
   test("a start that is not in HEAD's history says so", async () => {
     const { root, clock } = await daemonStore();
     const page = text(inputFor(root, clock.ms(), { git: fakeGit(HEAD_SHA, { [START_SHA]: { kind: "not-ancestor" } }) }));
-    expect(page).toContain("not an ancestor of HEAD");
+    expect(page).toContain("recorded start HEAD 5d0c1e9a is not an ancestor of this checkout's HEAD");
   });
 
-  test("a DIRTY start never renders as same, even when its sha is HEAD", async () => {
+  test("a DIRTY start is an unknown code revision, even when its sha is HEAD", async () => {
     const { root, clock } = await daemonStore({ ...CLEAN_START, dirty: true });
     const report = diagnose(inputFor(root, clock.ms()));
     const revisionLine = diagnoseLines(report).find((line) => line.startsWith("revision")) ?? "";
-    expect(revisionLine).toContain("dirty at start — the sha does not name the running code");
-    expect(revisionLine).not.toMatch(/same/i);
+    expect(revisionLine).toContain("code revision unknown — base HEAD 5d0c1e9a, checkout dirty at start");
+    expect(revisionLine).not.toMatch(/same|matches/i);
   });
 
   test("an unknown start revision is unknown, with the reason", async () => {
     const { root, clock } = await daemonStore({ kind: "unknown", why: "git rev-parse HEAD exited 128", readAt: "2026-09-08T02:48:39.000Z" });
     const page = text(inputFor(root, clock.ms()));
     expect(page).toContain("unknown: git rev-parse HEAD exited 128");
-    expect(page).not.toContain("same as");
+    expect(page).not.toContain("matches this checkout");
   });
 
-  test("a HEAD this checkout cannot read never lets a clean stamp read as same", async () => {
+  test("a HEAD this checkout cannot read never lets a clean stamp read as matching", async () => {
     const { root, clock } = await daemonStore();
     const page = text(inputFor(root, clock.ms(), { git: fakeGit({ why: "git is not installed" }) }));
     expect(page).toContain("git is not installed");
-    expect(page).not.toContain("same as");
+    expect(page).not.toContain("matches this checkout");
+  });
+
+  test("no verdict claims what the running code IS: a stamp is a checkout observation (Sol F1)", async () => {
+    const relations: RevisionRelation[] = [{ kind: "same" }, { kind: "behind", commits: 1 }, { kind: "not-ancestor" }, { kind: "unknown", why: "no such commit" }];
+    const verdicts: RevisionVerdict[] = [
+      ...relations.flatMap((relation) => [false, true].map((dirty): RevisionVerdict => ({ kind: "compared", sha: START_SHA, dirty, relation }))),
+      { kind: "not-stamped", why: "started before revision stamps existed" },
+      { kind: "unknown", why: "git rev-parse HEAD exited 128" },
+    ];
+    for (const verdict of verdicts) expect(verdictText(verdict)).not.toMatch(/same as|running code/i);
+    // And the page's own gloss under the revision lines says the same.
+    const { root, clock } = await daemonStore({ ...CLEAN_START, dirty: true });
+    const page = text(inputFor(root, clock.ms()));
+    expect(page).not.toMatch(/same as|running code/i);
   });
 
   test("a start note written before stamps existed reads as NOT STAMPED", async () => {
@@ -193,7 +209,7 @@ describe("a store the real daemon wrote", () => {
     rewriteLines(join(root, NOTES_FILE), (note) => (note["kind"] === "daemon-started" ? { ...note, instanceId: "some-earlier-instance" } : note));
     const page = text(inputFor(root, clock.ms()));
     expect(page).toContain("no start note for the running instance");
-    expect(page).not.toContain("same as");
+    expect(page).not.toContain("matches this checkout");
   });
 });
 
@@ -212,6 +228,32 @@ describe("the controls: what a careless page would get wrong", () => {
     expect(report.daemon.standing.state).toBe("killed");
     expect(report.daemon.standing.detail).toContain("3h old");
     expect(diagnoseLines(report).join("\n")).toContain("KILLED");
+  });
+
+  test("A checkpointed and was killed; B started and stopped before its first checkpoint (Sol F3)", async () => {
+    const { root, clock } = await daemonStore();
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("the daemon wrote no checkpoint");
+    const a = read.checkpoint.heartbeat.instanceId;
+    // A was killed: no stopping note. Then B came and went cleanly, never checkpointing.
+    rewriteLines(join(root, NOTES_FILE), (note) => (note["kind"] === "daemon-stopped" ? null : note));
+    const later = (ms: number): string => new Date(clock.ms() + ms).toISOString();
+    const bStart = { kind: "daemon-started", at: later(60_000), instanceId: "instance-b", pid: 2 ** 30, source: "http://127.0.0.1:0", opening: "Resumed", baseline: "restored", revision: CLEAN_START };
+    const bStop = { kind: "daemon-stopped", at: later(61_000), instanceId: "instance-b", why: "SIGTERM" };
+    appendFileSync(join(root, NOTES_FILE), `${JSON.stringify(bStart)}\n${JSON.stringify(bStop)}\n`);
+
+    const report = diagnose(inputFor(root, clock.ms() + 3 * 3_600_000, { alive: () => false }));
+    const detail = report.daemon.standing.detail;
+    expect(detail).not.toMatch(/stopped on purpose at [^;]*; the last checkpoint/);
+    expect(detail).toContain(`instance instance-b started at ${bStart.at}`);
+    expect(detail).toContain("without writing a checkpoint");
+    expect(detail).toContain(`the checkpoint on disk is instance ${a}'s`);
+    expect(detail).toContain(`${a} wrote no stopping note`);
+    // The page names B on a line of its own, with B's own start HEAD, rather than
+    // letting A's instance and revision stand for "the daemon".
+    const page = diagnoseLines(report).join("\n");
+    expect(page).toContain(`newest start: instance-b at ${bStart.at}, which wrote no checkpoint; recorded start HEAD 5d0c1e9a matches`);
+    expect(page).toMatch(new RegExp(`instance\\s+${a}.*the checkpoint's instance`));
   });
 
   test("a checkpoint of a schema this build does not read is CANNOT TELL, never absent", async () => {
@@ -263,7 +305,7 @@ describe("the controls: what a careless page would get wrong", () => {
     expect(report.files.every((f) => f.probe.state === "absent")).toBe(true);
     const page = diagnoseLines(report).join("\n");
     expect(page).toContain("NO PREVIEW");
-    expect(page).not.toContain("same as");
+    expect(page).not.toContain("matches this checkout");
   });
 });
 
@@ -287,7 +329,7 @@ describe("the dashboard's revision", () => {
         dashboard: { kind: "answered", revision: CLEAN_START },
       }),
     );
-    expect(page).toMatch(/dashboard: .*2 commits behind HEAD/);
+    expect(page).toMatch(/dashboard: recorded start HEAD 5d0c1e9a is 2 commits behind this checkout's HEAD/);
   });
 });
 

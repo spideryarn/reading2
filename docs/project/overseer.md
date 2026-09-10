@@ -256,6 +256,13 @@ the prompt, its fingerprint against its pin, and each document's pinned and curr
 `overseer status` prints it as a `schedule` block, saying whether the running daemon holds the job
 list this checkout builds. The Overseer tab draws the same file. Read it before arming anything.
 
+**Which code each service is running, in one command: `overseer diagnose`** (`--json` for a
+machine). It names the HEAD each service recorded when it started — never the checkout's current
+HEAD, which moves under running services — the checkpoint's schema and both clocks, recorded against
+host boot id, every store file's schema and age, and the same job-list comparison as `status`. A
+service started before revision stamps existed says *not stamped* until it is restarted
+([260910f](../plans/260910f-operational-finish-diagnose-restart-recovery-visibility.md)).
+
 **A job may be pinned `dry-run`**, which is inside the fingerprint: it passes every gate, reports
 *due now* when it would have run, and reserves, launches and records nothing. `schedule-fixture` is
 one — a harmless job that exists so the preview has something inert to show and the first real

@@ -25,6 +25,7 @@ import {
   isProcessAlive,
   readCheckpoint,
   parseEventLines,
+  type Checkpoint,
   type CheckpointRead,
   type RegisterEntry,
   type StatusSince,
@@ -51,13 +52,88 @@ export type DaemonStanding = {
 export type StandingInput = {
   /** `absent` and `unusable` must survive to the sentence a person reads. */
   read: CheckpointRead;
-  lastNote: DaemonNote | null;
+  /**
+   * The daemon's notes, in log order. The log spans restarts and the checkpoint
+   * names ONE instance, so a note is evidence only about its own instance: a
+   * stop closes only its matching start, and the log's last line is not a
+   * statement about the checkpoint (GPT Sol's F3 on plan 260910f).
+   */
+  notes: readonly DaemonNote[];
   nowMs: number;
   alive: (pid: number) => boolean;
 };
 
+type StartedNote = Extract<DaemonNote, { kind: "daemon-started" }>;
+type StoppedNote = Extract<DaemonNote, { kind: "daemon-stopped" }>;
+
+/** One instance as the notes record it: its last start, the stop that closes THAT start, and where its last note of any kind sits. */
+type Lifecycle = { start: StartedNote | null; stop: StoppedNote | null; lastIndex: number };
+
+function lifecycleOf(notes: readonly DaemonNote[], instanceId: string): Lifecycle | null {
+  let life: Lifecycle | null = null;
+  for (let index = 0; index < notes.length; index += 1) {
+    const note = notes[index];
+    if (note === undefined || note.instanceId !== instanceId) continue;
+    life ??= { start: null, stop: null, lastIndex: index };
+    life.lastIndex = index;
+    // A stop before a later start of the same id does not close that later start.
+    if (note.kind === "daemon-started") life = { ...life, start: note, stop: null };
+    else if (note.kind === "daemon-stopped") life.stop = note;
+  }
+  return life;
+}
+
+/**
+ * The newest `daemon-started` in the log when it began AFTER the checkpoint's
+ * instance — an instance that has written no checkpoint, whose state must never
+ * be read off an older instance's one. With no checkpoint at all, simply the
+ * newest start. Null when the checkpoint's own instance is the newest, or when
+ * there is no start note.
+ */
+export function newerStartThanCheckpoint(checkpoint: Checkpoint | null, notes: readonly DaemonNote[]): StartedNote | null {
+  let newestIndex = -1;
+  for (let index = notes.length - 1; index >= 0 && newestIndex < 0; index -= 1) if (notes[index]?.kind === "daemon-started") newestIndex = index;
+  const newest = notes[newestIndex];
+  if (newest?.kind !== "daemon-started") return null;
+  if (checkpoint === null) return newest;
+  const owner = checkpoint.heartbeat.instanceId;
+  if (newest.instanceId === owner) return null;
+  const life = lifecycleOf(notes, owner);
+  // The checkpoint's instance wrote a note after that start, so the start is not newer than it.
+  if (life !== null) return life.lastIndex < newestIndex ? newest : null;
+  // The checkpoint's instance left no note at all, so order by clock. A tie goes
+  // to the checkpoint's instance: its lock is taken before any start note is written.
+  return Date.parse(newest.at) > Date.parse(checkpoint.heartbeat.startedAt) ? newest : null;
+}
+
+/** The newest instance wrote no checkpoint: say what IT did, and whose the checkpoint on disk is, without mixing the two. */
+function standingWithoutCheckpoint(start: StartedNote, checkpoint: Checkpoint | null, input: StandingInput): DaemonStanding {
+  const { notes, nowMs } = input;
+  let disk = "there is no checkpoint on disk";
+  if (checkpoint !== null) {
+    const owner = checkpoint.heartbeat.instanceId;
+    const ownerStop = lifecycleOf(notes, owner)?.stop ?? null;
+    disk =
+      `the checkpoint on disk is instance ${owner}'s from ${checkpoint.writtenAt} (${describeAge(nowMs - Date.parse(checkpoint.writtenAt))} old), ` +
+      `and ${owner} ${ownerStop === null ? "wrote no stopping note" : `stopped on purpose at ${ownerStop.at}`}`;
+  }
+  const who = `the newest instance ${start.instanceId} started at ${start.at} (pid ${start.pid})`;
+  const stop = lifecycleOf(notes, start.instanceId)?.stop ?? null;
+  if (stop !== null) {
+    return { state: "stopped", detail: `${who} and stopped on purpose at ${stop.at} (${stop.why}) without writing a checkpoint; ${disk}` };
+  }
+  if (!input.alive(start.pid)) {
+    return { state: "killed", detail: `${who} and is gone without writing a checkpoint or a stopping note, so it was killed; ${disk}` };
+  }
+  const upMs = nowMs - Date.parse(start.at);
+  if (upMs > STALL_AFTER_MS) {
+    return { state: "stalled", detail: `${who}, is alive, and has run ${describeAge(upMs)} without writing a checkpoint (a tick is 30s); ${disk}` };
+  }
+  return { state: "running", detail: `${who}, ${describeAge(upMs)} ago, and has not written its first checkpoint yet; ${disk}` };
+}
+
 export function daemonStanding(input: StandingInput): DaemonStanding {
-  const { read, lastNote, nowMs } = input;
+  const { read, notes, nowMs } = input;
   if (read.kind === "unusable") {
     return {
       state: "cannot-tell",
@@ -68,20 +144,24 @@ export function daemonStanding(input: StandingInput): DaemonStanding {
     };
   }
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
+  const newer = newerStartThanCheckpoint(checkpoint, notes);
+  if (newer !== null) return standingWithoutCheckpoint(newer, checkpoint, input);
   if (checkpoint === null) {
     return {
       state: "never-run",
       detail:
-        lastNote === null
+        notes.length === 0
           ? "no checkpoint and no notes: the Overseer has never run against this store"
-          : "notes but no checkpoint: the Overseer started and never got as far as a first collection",
+          : "notes but no checkpoint and no start note among them: nothing here says an Overseer started against this store",
     };
   }
   const ageMs = nowMs - Date.parse(checkpoint.writtenAt);
   const age = describeAge(ageMs);
   const pid = checkpoint.heartbeat.pid;
-  if (lastNote?.kind === "daemon-stopped") {
-    return { state: "stopped", detail: `stopped on purpose at ${lastNote.at} (${lastNote.why}); the last checkpoint is ${age} old` };
+  // Only a stop of THIS checkpoint's instance, closing its own start, says it went on purpose.
+  const stop = lifecycleOf(notes, checkpoint.heartbeat.instanceId)?.stop ?? null;
+  if (stop !== null) {
+    return { state: "stopped", detail: `stopped on purpose at ${stop.at} (${stop.why}); the last checkpoint is ${age} old` };
   }
   if (!input.alive(pid)) {
     return { state: "killed", detail: `pid ${pid} is gone and it never wrote a stopping note, so it was killed; the last checkpoint is ${age} old` };
@@ -209,21 +289,19 @@ export async function readOverseerClaim(
  * so the two pages cannot disagree about what the same store means.
  */
 export function standingFromReads(read: CheckpointRead, notes: ReadNotes, nowMs: number, alive: (pid: number) => boolean): DaemonStanding {
-  return standingAndLastNote(read, notes, nowMs, alive).standing;
+  return standingAndNotesProblem(read, notes, nowMs, alive).standing;
 }
 
-function standingAndLastNote(
+function standingAndNotesProblem(
   read: CheckpointRead,
   notes: ReadNotes,
   nowMs: number,
   alive: (pid: number) => boolean,
-): { standing: DaemonStanding; lastNote: DaemonNote | null; notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null } {
-  let lastNote: DaemonNote | null = null;
+): { standing: DaemonStanding; notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null } {
   let notesProblem: { label: "UNREADABLE" | "INCOMPLETE"; detail: string } | null = null;
   if (notes.kind === "unreadable") {
     notesProblem = { label: "UNREADABLE", detail: notes.cause };
   } else {
-    lastNote = notes.notes.at(-1) ?? null;
     if (notes.unreadable > 0) {
       notesProblem = { label: "UNREADABLE", detail: `${notes.unreadable} complete line(s) could not be parsed` };
     } else if (notes.tornTail !== null) {
@@ -236,8 +314,8 @@ function standingAndLastNote(
           state: "cannot-tell",
           detail: `the daemon's notes are not complete (${notesProblem.detail}), so this reader will not infer whether it stopped cleanly`,
         }
-      : daemonStanding({ read, lastNote, nowMs, alive });
-  return { standing, lastNote, notesProblem };
+      : daemonStanding({ read, notes: notes.kind === "read" ? notes.notes : [], nowMs, alive });
+  return { standing, notesProblem };
 }
 
 export function statusLines(root: string, nowMs: number = Date.now(), claim?: OverseerClaim): string[] {
@@ -245,7 +323,7 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
   const read = readCheckpoint(root);
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
   const notes = readNotes(root);
-  const { standing, notesProblem } = standingAndLastNote(read, notes, nowMs, isProcessAlive);
+  const { standing, notesProblem } = standingAndNotesProblem(read, notes, nowMs, isProcessAlive);
   const lines: string[] = [`Overseer store: ${root}`, ""];
   lines.push(`daemon      ${standing.state.toUpperCase().replaceAll("-", " ")} — ${standing.detail}`);
 

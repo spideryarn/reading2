@@ -4682,16 +4682,23 @@ export type RecoveryResumePostAnswer =
 /**
  * The git revision a process's checkout was at WHEN THE PROCESS STARTED —
  * read once, by `tools/fleet/revision.ts`, which says what it can and cannot
- * claim. `dirty: true` means the sha does not name the running code. `unknown`
- * is its own arm so that absence can never be read as "same as HEAD".
+ * claim. `known` records a HEAD sha and a git status observation made during
+ * startup. `dirty: false` means that status reported no tracked changes;
+ * `dirty: true` means it reported at least one tracked change somewhere in the
+ * checkout. Neither proves which bytes the process or bundle loaded; `unknown`
+ * is never rendered as a match. (An untracked imported file or an
+ * `assume-unchanged` flag can run while it says clean; an unrelated tracked
+ * edit says dirty over code that matches the commit.) `unknown` is its own arm
+ * so that absence can never be read as "same as HEAD".
  */
 export type StartRevision =
   | { kind: "known"; sha: string; dirty: boolean; readAt: string }
   | { kind: "unknown"; why: string; readAt: string };
 
 /**
- * What the fleet client bundle was built from: the checkout's revision at
- * `vite build` time, plus when. Compiled into the bundle as `__FLEET_BUILD__`
+ * The checkout observed when `vite.fleet.config.ts` loaded, plus when — the
+ * same observation as `StartRevision`, with the same limits, so not proof of
+ * which bytes went into the bundle. Compiled into the bundle as `__FLEET_BUILD__`
  * and written beside it as `dist/build-stamp.json` (`vite.fleet.config.ts`).
  */
 export type BuildStamp = StartRevision & { builtAt: string };

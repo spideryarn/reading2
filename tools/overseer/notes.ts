@@ -133,7 +133,11 @@ export type DaemonNote =
       baseline: string;
       /**
        * The git revision this instance's checkout was at when it started, read
-       * once (`tools/fleet/revision.ts`). ABSENT on a note written before
+       * once (`tools/fleet/revision.ts`): a HEAD sha and a git status
+       * observation, not proof of the code loaded — `StartRevision` in
+       * `tools/fleet/wire.ts` says what `dirty` does and does not mean. A
+       * present field whose `readAt` is not an ISO instant is malformed, and
+       * reads as `unknown` like any other. ABSENT on a note written before
        * revision stamps existed (docs/plans/260910f D2) — which reads as "not
        * stamped", never as "same as HEAD".
        *
