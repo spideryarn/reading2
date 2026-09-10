@@ -94,6 +94,17 @@ import {
   waitPreamble,
 } from "./gjd-remote-run.js";
 import {
+  type ResolvedLaunchAccount,
+  accountClaudeCommand,
+  accountJobLines,
+  accountOutcomeCommand,
+  accountResolveCommand,
+  accountResolveFailure,
+  accountTmuxPrefix,
+  parseResolvedLaunchAccount,
+  requestedClaudeAccount,
+} from "./gjd-remote-account.js";
+import {
   LOG_SCHEMA,
   type LogRecord,
   buildFactsScript,
@@ -2555,6 +2566,34 @@ function promptStreams(): PromptIo | null {
   return promptIo(interactiveStdin());
 }
 
+function assertAccountRequest(requested: string | undefined): void {
+  if (requested !== undefined && !SLUG.test(requested)) {
+    die(`'${requested}' is not a valid account name (lower-case letters, digits, hyphens; max 41)`);
+  }
+}
+
+/** Nothing — not even a blank line — when there is no resolved account. */
+function accountJobParts(account: ResolvedLaunchAccount | undefined, name: string, sessionUuid: string): string[] {
+  if (account === undefined) return [];
+  const failureOutcome = accountOutcomeCommand(sessionUuid, "failed");
+  return [
+    accountJobLines(account, {
+      missingConfig: `{ ${failureOutcome}; ${failTo(
+        name,
+        `FATAL: Claude account ${account.name} state directory ${account.stateDir ?? "(ambient)"} does not exist — refusing to start on another account`,
+      )}; }`,
+      wrongIdentity: `{ ${failureOutcome}; ${failTo(
+        name,
+        `FATAL: Claude account ${account.name} failed its provider identity check — refusing to start on another account`,
+      )}; }`,
+    }),
+  ];
+}
+
+function accountLogField(account: ResolvedLaunchAccount | undefined): Pick<LogRecord, "account"> {
+  return account === undefined ? {} : { account: account.name };
+}
+
 /**
  * Create a session and start Claude Code in it.
  *
@@ -2578,8 +2617,11 @@ async function cmdNewClaude(
     transport?: string | undefined;
     /** `--wait 2h`: already parsed, because a bad duration must not reach the box. */
     wait?: { seconds: number; label: string } | undefined;
+    /** Registry handle or `auto`; absent means `auto`. */
+    account?: string | undefined;
   },
 ): Promise<void> {
+  assertAccountRequest(opts.account);
   // Checked before anything touches the network, because the failure it
   // prevents is a green tick over a Claude that never ran. The job runs
   // `claude "$(cat -- promptPath)"`, so the whole prompt becomes ONE argv
@@ -2625,9 +2667,23 @@ async function cmdNewClaude(
   const dir = sessionDir(target);
   console.log(bold(`gjd-remote new-claude ${name}`) + dim(` → ${HOST()}:${dir}`));
 
+  // Resolved BY THE BOX. gjd-remote is commonly running on Greg's Mac, where
+  // there is neither this registry nor the usage it ranks. The hidden registry
+  // command also owns the on-box choose-and-reserve lock, so concurrent `auto`
+  // launches cannot both observe the same least-recent account before either
+  // records its choice.
   // Pin the session id rather than discovering it: it is how we find this
   // conversation's transcript later, and so how we read back its title.
   const sessionId = randomUUID();
+  const accountRequest = requestedClaudeAccount(opts.account);
+  const resolved = sshRun(accountResolveCommand(accountRequest, name, sessionId));
+  if (resolved.status !== 0) die(accountResolveFailure(resolved.stderr, accountRequest));
+  const parsedAccount = parseResolvedLaunchAccount(resolved.stdout);
+  if (parsedAccount.kind === "refused") {
+    die(`${parsedAccount.why} — refusing to start a session on an unverified account`);
+  }
+  const account = parsedAccount.account;
+  console.log(`account: ${bold(account.name)}${dim(` — ${account.reason}`)}`);
 
   // Keyed by the session id, not by the name, and the name is only in there so
   // a human reading the directory can tell what is what.
@@ -2682,6 +2738,9 @@ async function cmdNewClaude(
     // output. Proved by reading the generated job back off the box, not by
     // trusting this comment: see docs/project/hetzner-remote-server-box.md.
     opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
+    // Identity is checked after the optional wait: a credential can rotate
+    // during those hours, and only the state immediately before spend counts.
+    ...accountJobParts(account, name, sessionId),
     // One line on the box, one instant before Claude starts, and it is the ONLY
     // trustworthy answer to "did this job ever run?". The laptop cannot know:
     // a session that a reboot ate mid-`sleep` and a session that finished
@@ -2690,6 +2749,8 @@ async function cmdNewClaude(
     // process was running, because the file is written from the first message.
     // See scripts/gjd-remote-log.ts.
     startMarkerCommand(REMOTE_WORK, sessionId, name),
+    `${accountOutcomeCommand(sessionId, "started")} || ` +
+      failTo(name, "FATAL: could not record the selected account before starting Claude"),
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
     //
@@ -2703,7 +2764,7 @@ async function cmdNewClaude(
     // single Sentry read. Sessions that launched in `auto` lost nothing this way.
     // This does not widen what an agent may do: the deny and ask rules in
     // .claude/settings.json still apply. It only settles whether it stops to ask.
-    [
+    accountClaudeCommand(account, [
       "claude",
       `--session-id ${sessionId}`,
       `--permission-mode auto`,
@@ -2718,7 +2779,11 @@ async function cmdNewClaude(
       opts.prompt ? `-- "$(cat -- ${promptPath})"` : "",
     ]
       .filter(Boolean)
-      .join(" "),
+      .join(" ")),
+    `_gjd_claude_status=$?`,
+    `if [ "$_gjd_claude_status" -eq 0 ]; then ${accountOutcomeCommand(sessionId, "completed")}; ` +
+      `else ${accountOutcomeCommand(sessionId, "failed")}; fi`,
+    `unset _gjd_claude_status`,
     `echo`,
     `echo "--- claude exited; shell follows, session stays alive ---"`,
     `exec bash -l`,
@@ -2738,7 +2803,8 @@ async function cmdNewClaude(
   startUnderAdmission(
     admit,
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
-      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${metaFlags(target, dir, "claude")} ` +
+      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ` +
+      `${accountTmuxPrefix(account)}${metaFlags(target, dir, "claude")} ` +
       shq(`bash ${jobPath}`),
     name,
   );
@@ -2760,6 +2826,7 @@ async function cmdNewClaude(
       // was — `dir` alone cannot answer it (see LogRecord.repo).
       repo: targetRepo(target),
       host: host(),
+      ...accountLogField(account),
       ...(opts.wait === undefined
         ? {}
         : { waitSeconds: opts.wait.seconds, waitUntilMs: Date.now() + opts.wait.seconds * 1000 }),
@@ -5314,6 +5381,7 @@ ${bold("SESSIONS")}
           --wait DURATION   create it now, start Claude later ${dim("— 45s, 15m, 2h, 1d")}
                             attaches too; the pane becomes Claude when it is over
           --no-attach       create it, but stay here ${dim("— what a long --wait wants")}
+          --account NAME    use this registered account; ${dim("auto picks the least-used pool account")}
   new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         a directory on the box
           --repo OWNER/NAME which repo, when you are not standing in it
@@ -5694,6 +5762,7 @@ async function main(): Promise<void> {
           dir: { type: "string", short: "d" },
           repo: { type: "string" },
           wait: { type: "string" },
+          account: { type: "string" },
           "no-attach": { type: "boolean", default: false },
           ssh: { type: "boolean", default: false },
         },
@@ -5714,6 +5783,7 @@ async function main(): Promise<void> {
         wait,
         attach: !values["no-attach"],
         transport: values.ssh ? "ssh" : undefined,
+        account: values.account,
       });
     }
 

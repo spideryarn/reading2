@@ -235,7 +235,16 @@ describe("what actually starts a session", () => {
     expect(outcome.pid).toBe(5150);
     const [call] = fake.calls;
     expect(call?.command).toBe(join(REPO, TSX_RELATIVE_PATH));
-    expect(call?.args).toEqual(["scripts/gjd-remote.ts", "new-claude", "get-ready-to-deploy-0908-1732", "--no-attach", "-p", "-"]);
+    expect(call?.args).toEqual([
+      "scripts/gjd-remote.ts",
+      "new-claude",
+      "get-ready-to-deploy-0908-1732",
+      "--account",
+      "auto",
+      "--no-attach",
+      "-p",
+      "-",
+    ]);
     expect(call?.cwd).toBe(REPO);
     // THE PROMPT, AND IT IS THE DEFINITION'S OWN `what` — the thing that was
     // fingerprinted and pinned. A dispatcher that composed its own prompt here

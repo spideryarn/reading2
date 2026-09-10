@@ -381,6 +381,7 @@ export function App({
             <HealthPanel
               health={feed.state?.health ?? null}
               actions={actions}
+              rows={rows}
               historyApi={historyApi}
               /* **THE CHART'S LABELS ARE WALL-CLOCK TIMES**, so they are the
                  reader's to read off their own watch — and the masthead above

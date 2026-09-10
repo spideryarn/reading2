@@ -109,6 +109,8 @@ export type LogRecord = {
   id?: string;
   /** Working directory on the box. */
   dir?: string;
+  /** Resolved registry handle, or `ambient` when no registry account exists. */
+  account?: string;
   /** `--wait`, in seconds, and when it was due to start. */
   waitSeconds?: number;
   waitUntilMs?: number;
@@ -217,6 +219,7 @@ const LAUNCH_FIELDS = [
   "name",
   "id",
   "dir",
+  "account",
   "waitSeconds",
   "waitUntilMs",
   "host",
@@ -260,6 +263,12 @@ export function formatLine(rec: LogRecord): string {
   // a repo and is not one.
   if (rec.repo !== undefined && !isRepoValue(rec.repo)) {
     throw new Error(`log: repo '${rec.repo}' is not an owner/name slug (nor 'unknown')`);
+  }
+  if (rec.account !== undefined && !/^[a-z0-9][a-z0-9-]{0,40}$/.test(rec.account)) {
+    throw new Error(`log: account '${rec.account}' is not a valid account name`);
+  }
+  if (rec.account !== undefined && rec.cmd !== "new-claude") {
+    throw new Error(`log: account belongs to a new-claude line, not to '${rec.cmd}'`);
   }
   if (rec.attempt !== undefined && !ATTEMPT_ID.test(rec.attempt)) {
     throw new Error(`log: attempt '${rec.attempt}' is not an attempt id`);
@@ -330,6 +339,8 @@ export function parseLine(line: string): LogRecord | null {
 
   const identity = readIdentity(o);
   if (identity === null) return null;
+  const account = readAccount(o);
+  if (account === null) return null;
 
   return {
     v: o.v,
@@ -337,6 +348,7 @@ export function parseLine(line: string): LogRecord | null {
     ms: o.ms,
     cmd: o.cmd,
     ...identity,
+    ...(account === undefined ? {} : { account }),
     ...(str("name") === undefined ? {} : { name: str("name") as string }),
     ...(str("id") === undefined ? {} : { id: str("id") as string }),
     ...(str("dir") === undefined ? {} : { dir: str("dir") as string }),
@@ -383,6 +395,14 @@ function readIdentity(o: Record<string, unknown>): Pick<LogRecord, "repo" | "att
     ...(attempt === undefined ? {} : { attempt }),
     ...(outcome === undefined ? {} : { outcome }),
   };
+}
+
+/** Account is launch identity too, kept separate so the older setup identity
+ * parser does not become a tangle each time a launch gains one field. */
+function readAccount(o: Record<string, unknown>): string | undefined | null {
+  if (o.account === undefined) return undefined;
+  if (typeof o.account !== "string" || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(o.account)) return null;
+  return o.cmd === "new-claude" ? o.account : null;
 }
 
 /** Every record in the file, and a count of the lines that were not records. */

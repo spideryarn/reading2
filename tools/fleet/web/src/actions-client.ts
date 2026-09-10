@@ -76,6 +76,8 @@ import type {
   ActionScope as ActionScopeWire,
   BroadcastAction as BroadcastActionWire,
   EnactedAction as EnactedActionWire,
+  FleetActionMaterial,
+  FleetActionPreview,
   HoldBasis,
   HoldOutcome,
   HoldReleaseGesture,
@@ -175,6 +177,25 @@ export function isEnacting(action: ClientAction): boolean {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Take the inert value an HTTP JSON body can actually carry.
+ *
+ * `Response.json()` normally already returns this shape, but the fetch seam is
+ * injectable and the parser accepts `unknown`. Keeping a caller-owned object
+ * here would let a getter or a later mutation change executable material after
+ * the preview had been accepted. The server compares by JSON value semantics,
+ * so this is also the exact normalization its receipt contract promises.
+ */
+function jsonSnapshot(value: unknown): unknown {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) return null;
+    return JSON.parse(encoded) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function str(v: unknown): string | null {
@@ -1015,23 +1036,10 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
 }
 
 /**
- * `mode`, WHICH IS THE FIELD THE ROUTE READS.
- *
- * This said `dryRun: boolean` until 2026-09-08 and the route has only ever
- * parsed `mode` — so every box action ever pressed on this page was a dry run,
- * including the one behind the second tap, and the panel then said "Done."
- * over it. `parseMode` defaults this route to `dry-run`, which is why the
- * mismatch was survivable rather than dangerous; it is still a button that has
- * never once done what it says.
- *
- * `confirm` is the second half of the same silence. The route refuses a `run`
- * of an action whose `needsConfirm` is true unless the body says so, and this
- * page never said so — so even a body that had reached the route as a run would
- * have been refused `confirm-required`. It is `!dryRun` rather than a parameter
- * because on this page the only thing that asks for a real run IS the second
- * tap: `commit` runs after the person has read the preview, which is exactly
- * the claim the field makes. A caller that wants to run without confirming
- * should not be calling this function.
+ * TWO REQUESTS, with no boolean that can turn one into the other accidentally.
+ * A preview carries the rows the page was showing. A confirmation cannot take
+ * rows at all: it carries the server's receipt and echoes that receipt's whole
+ * material, including fields this build has never learned to draw.
  *
  * `speaker` is sent for the same reason `sessionActionBody` sends one: a
  * broadcast is rendered with the sender's name in front of it, and an absent
@@ -1054,16 +1062,20 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * The status in particular must be `rawStatus` rather than the parsed
  * `row.status`: see steer-client.ts § `SteerTargetBody`.
  *
- * An enacted kill reads `pids` rather than this field and has the same gap;
- * that is the preview envelope's to close, not this function's.
+ * A kill preview needs no page rows. Its candidates are minted into the
+ * receipt by the server, and the confirmation returns those full identities
+ * rather than trying to rebuild them from a process list.
  */
-export type BoxActionBody = {
+type BoxPreviewBody = { actionId: string; mode: "dry-run"; confirm?: false; speaker?: "greg"; recipients?: SteerTargetBody[] };
+type BoxConfirmBody = {
   actionId: string;
-  mode: "dry-run" | "run";
-  confirm: boolean;
-  speaker: "greg";
-  recipients: SteerTargetBody[];
+  mode: "run";
+  confirm: true;
+  preview: Pick<FleetActionPreview, "previewId" | "serverInstanceId" | "actionId">;
+  material: FleetActionMaterial;
 };
+export type BoxActionBody = BoxPreviewBody | BoxConfirmBody;
+export type BoxPreviewAction = Pick<ClientEnactedAction | ClientBroadcastAction, "id" | "effect">;
 
 /**
  * The rows that are ADDRESSES, which is not all of them — and sending the rest
@@ -1094,14 +1106,34 @@ export function addressableRows(rows: readonly FleetRow[]): FleetRow[] {
   return rows.filter((row) => row.paneId !== null && row.claudeSessionId !== null);
 }
 
-export function boxActionBody(actionId: string, dryRun: boolean, rows: readonly FleetRow[]): BoxActionBody {
-  return {
-    actionId,
-    mode: dryRun ? "dry-run" : "run",
-    confirm: !dryRun,
-    speaker: GREG,
-    recipients: addressableRows(rows).map(steerTargetBody),
-  };
+export function boxActionBody(action: BoxPreviewAction, rows: readonly FleetRow[]): BoxPreviewBody;
+export function boxActionBody(preview: FleetActionPreview): BoxConfirmBody;
+export function boxActionBody(actionOrPreview: BoxPreviewAction | FleetActionPreview, rows: readonly FleetRow[] = []): BoxActionBody {
+  if (!("effect" in actionOrPreview)) {
+    return {
+      actionId: actionOrPreview.actionId,
+      mode: "run",
+      confirm: true,
+      preview: {
+        previewId: actionOrPreview.previewId,
+        serverInstanceId: actionOrPreview.serverInstanceId,
+        actionId: actionOrPreview.actionId,
+      },
+      // THE MATERIAL THE SERVER SENT, by reference. Reconstructing even one
+      // arm here would let an excluded process or a recipient's opaque status
+      // disappear between what was shown and what the equality check receives.
+      material: actionOrPreview.material,
+    };
+  }
+  if (actionOrPreview.effect === "broadcast") {
+    return {
+      actionId: actionOrPreview.id,
+      mode: "dry-run",
+      speaker: GREG,
+      recipients: addressableRows(rows).map(steerTargetBody),
+    };
+  }
+  return { actionId: actionOrPreview.id, mode: "dry-run" };
 }
 
 /**
@@ -1313,6 +1345,138 @@ export function parseBoxEffect(result: unknown): BoxEffectReading | null {
   return null;
 }
 
+function actionMaterialKind(effect: BoxPreviewAction["effect"]): FleetActionMaterial["kind"] {
+  return effect === "broadcast" ? "broadcast" : "kill";
+}
+
+/**
+ * The receipt is executable input, so it is parsed all-or-nothing. In
+ * particular, the returned value is the response's inert JSON snapshot:
+ * `boxActionBody` echoes its material whole instead of rebuilding the part
+ * this build knew how to draw and silently dropping the rest.
+ */
+function parseActionMaterial(raw: unknown, expected: FleetActionMaterial["kind"]): FleetActionMaterial | null {
+  if (!isRecord(raw) || raw["kind"] !== expected) return null;
+  if (expected === "kill") {
+    const confirmable = raw["confirmable"];
+    const excluded = raw["excluded"];
+    if (!Array.isArray(confirmable) || !Array.isArray(excluded)) return null;
+    for (const value of confirmable) {
+      if (!isRecord(value)) return null;
+      if (typeof value["pid"] !== "number" || !Number.isSafeInteger(value["pid"]) || value["pid"] <= 1) return null;
+      if (
+        typeof value["startTicks"] !== "number" ||
+        !Number.isSafeInteger(value["startTicks"]) ||
+        value["startTicks"] < 0
+      ) {
+        return null;
+      }
+      if (typeof value["bootId"] !== "string" || value["bootId"] === "") return null;
+    }
+    for (const value of excluded) {
+      if (!isRecord(value)) return null;
+      if (typeof value["pid"] !== "number" || !Number.isSafeInteger(value["pid"]) || value["pid"] <= 1) return null;
+      if (typeof value["why"] !== "string" || value["why"] === "") return null;
+    }
+    return raw as FleetActionMaterial;
+  }
+
+  if (raw["speaker"] !== "greg" && raw["speaker"] !== "overseer") return null;
+  const recipients = raw["recipients"];
+  if (!Array.isArray(recipients)) return null;
+  for (const value of recipients) {
+    if (!isRecord(value)) return null;
+    if (typeof value["paneId"] !== "string" || value["paneId"] === "") return null;
+    if (typeof value["sessionId"] !== "string" || value["sessionId"] === "") return null;
+    if (value["claudeSessionId"] !== null && (typeof value["claudeSessionId"] !== "string" || value["claudeSessionId"] === "")) {
+      return null;
+    }
+    if (
+      value["panePid"] !== null &&
+      (typeof value["panePid"] !== "number" || !Number.isSafeInteger(value["panePid"]) || value["panePid"] <= 1)
+    ) {
+      return null;
+    }
+    if (!Object.hasOwn(value, "status")) return null;
+    if (
+      value["minutes"] !== null &&
+      (typeof value["minutes"] !== "number" || !Number.isSafeInteger(value["minutes"]) || value["minutes"] < 0)
+    ) {
+      return null;
+    }
+  }
+  return raw as FleetActionMaterial;
+}
+
+/** The descriptive result and executable receipt are two views of one preview. */
+function previewResultAgrees(result: unknown, material: FleetActionMaterial): boolean {
+  if (!isRecord(result)) return false;
+  if (material.kind === "kill") {
+    const candidates = result["candidates"];
+    if (!Array.isArray(candidates)) return false;
+    const expected = [...material.confirmable, ...material.excluded].map((candidate) => candidate.pid).sort((a, b) => a - b);
+    const actual: number[] = [];
+    for (const candidate of candidates) {
+      if (!isRecord(candidate)) return false;
+      const pid = candidate["pid"];
+      if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 1) return false;
+      if (
+        typeof candidate["comm"] !== "string" ||
+        typeof candidate["args"] !== "string" ||
+        typeof candidate["rule"] !== "string" ||
+        typeof candidate["why"] !== "string"
+      ) {
+        return false;
+      }
+      actual.push(pid);
+    }
+    actual.sort((a, b) => a - b);
+    return expected.length === actual.length && expected.every((pid, index) => pid === actual[index]);
+  }
+
+  const recipients = result["recipients"];
+  const total = result["total"];
+  const sample = result["sample"];
+  const promised = material.recipients.filter((recipient) => recipient.minutes !== null).length;
+  if (!Array.isArray(recipients) || recipients.length !== material.recipients.length) return false;
+  if (typeof total !== "number" || !Number.isSafeInteger(total) || total !== promised) return false;
+  if (typeof sample !== "string" || sample === "") return false;
+  return recipients.every((recipient, index) => {
+    if (!isRecord(recipient)) return false;
+    const claim = material.recipients[index];
+    if (claim === undefined) return false;
+    const why = recipient["why"];
+    return (
+      recipient["paneId"] === claim.paneId &&
+      recipient["sessionId"] === claim.sessionId &&
+      recipient["minutes"] === claim.minutes &&
+      typeof recipient["outcome"] === "string" &&
+      (recipient["code"] === null || typeof recipient["code"] === "string") &&
+      (why === null || typeof why === "string") &&
+      (claim.minutes !== null || (typeof why === "string" && why !== ""))
+    );
+  });
+}
+
+function parseActionPreview(answer: Record<string, unknown>, pressedAction: BoxPreviewAction): FleetActionPreview | null {
+  const kind = actionMaterialKind(pressedAction.effect);
+  const expectedOp = kind === "broadcast" ? "broadcast-preview" : "dry-run";
+  if (
+    answer["dryRun"] !== true ||
+    answer["action"] !== pressedAction.id ||
+    answer["op"] !== expectedOp
+  ) {
+    return null;
+  }
+  const raw = answer["preview"];
+  if (!isRecord(raw) || raw["schema"] !== "fleet-action-preview/1" || raw["actionId"] !== pressedAction.id) return null;
+  if (typeof raw["previewId"] !== "string" || raw["previewId"] === "") return null;
+  if (typeof raw["serverInstanceId"] !== "string" || raw["serverInstanceId"] === "") return null;
+  if (typeof raw["expiresAt"] !== "number" || !Number.isSafeInteger(raw["expiresAt"]) || raw["expiresAt"] < 0) return null;
+  const material = parseActionMaterial(raw["material"], kind);
+  return material === null || !previewResultAgrees(answer["result"], material) ? null : (raw as FleetActionPreview);
+}
+
 export type ActionOutcome =
   | { ok: true; kind: "queued"; position: number | null; why: string | null }
   | { ok: true; kind: "delivered"; sent: string[][] }
@@ -1413,8 +1577,11 @@ function queueOp(v: unknown): QueueOp | null {
 export type BoxOutcome =
   | {
       ok: true;
+      op: string | null;
+      action: string | null;
       dryRun: boolean;
       dryRunStated: boolean;
+      preview: FleetActionPreview | null;
       /**
        * WHAT THE BOX DID, OR WOULD DO, in the server's own structure — the
        * steps, the candidate pids, the recipients, the sample sentence.
@@ -1477,13 +1644,10 @@ export type ActionsApi = {
    * `releaseHoldBody`. Safe to call twice with the same arguments.
    */
   releaseHold: (holdId: string, version: number, gesture: HoldReleaseGesture) => Promise<ActionOutcome>;
-  /**
-   * A box-wide action. **`rows` is required, and it is the fix for a button
-   * that could not reach anybody** — see `boxActionBody`. It is the list the
-   * page is showing, verbatim; a caller with nothing on screen passes an empty
-   * array and gets the server's refusal, which is the true answer.
-   */
-  box: (actionId: string, dryRun: boolean, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
+  /** Ask what this action would do, against exactly the rows now on screen. */
+  boxPreview: (action: BoxPreviewAction, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
+  /** Confirm exactly one parsed server receipt. There is no rows parameter by design. */
+  boxConfirm: (preview: FleetActionPreview) => Promise<BoxOutcome>;
 };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
@@ -1650,6 +1814,30 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     return readActionOutcome(posted.response, posted.parsed);
   };
 
+  const box = async (action: BoxPreviewAction | null, body: BoxActionBody, requestedDryRun: boolean): Promise<BoxOutcome> => {
+    const posted = await postJson(BOX_ACTION_URL, body, fetchImpl);
+    if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
+    const { response, parsed } = posted;
+    if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+    const snapshot = jsonSnapshot(parsed);
+    if (!isRecord(snapshot) || snapshot["ok"] !== true) return refusal(response, snapshot);
+    const stated = typeof snapshot["dryRun"] === "boolean";
+    return {
+      ok: true,
+      op: str(snapshot["op"]),
+      action: str(snapshot["action"]),
+      /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
+         server did not state one, `dryRunStated` is false and the panel says
+         it cannot tell — it does not fall back to what it asked for. */
+      dryRun: stated ? snapshot["dryRun"] === true : requestedDryRun,
+      dryRunStated: stated,
+      preview: action === null ? null : parseActionPreview(snapshot, action),
+      result: snapshot["result"] ?? null,
+      why: typeof snapshot["why"] === "string" ? snapshot["why"] : null,
+      effect: parseBoxEffect(snapshot["result"]),
+    };
+  };
+
   return {
     async feed(): Promise<FeedOutcome> {
       let response: Response;
@@ -1681,24 +1869,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
     releaseHold: (holdId, version, gesture) => send(RELEASE_HOLD_URL, releaseHoldBody(holdId, version, gesture)),
 
-    async box(actionId, dryRun, rows): Promise<BoxOutcome> {
-      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun, rows), fetchImpl);
-      if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
-      const { response, parsed } = posted;
-      if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
-      const stated = typeof parsed["dryRun"] === "boolean";
-      return {
-        ok: true,
-        /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
-           server did not state one, `dryRunStated` is false and the panel says
-           it cannot tell — it does not fall back to what it asked for. */
-        dryRun: stated ? parsed["dryRun"] === true : dryRun,
-        dryRunStated: stated,
-        result: parsed["result"] ?? null,
-        why: typeof parsed["why"] === "string" ? parsed["why"] : null,
-        effect: parseBoxEffect(parsed["result"]),
-      };
-    },
+    boxPreview: (action, rows) => box(action, boxActionBody(action, rows), true),
+    boxConfirm: (preview) => box(null, boxActionBody(preview), false),
   };
 }
 
@@ -1716,5 +1888,6 @@ export const httpActionsApi: ActionsApi = {
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
   releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
-  box: (actionId, dryRun, rows) => makeActionsApi().box(actionId, dryRun, rows),
+  boxPreview: (action, rows) => makeActionsApi().boxPreview(action, rows),
+  boxConfirm: (preview) => makeActionsApi().boxConfirm(preview),
 };

@@ -9,10 +9,11 @@
  * docs/project/feedback-reports.md § The run both name, and it is deliberately
  * the same one a person would type:
  *
- *     gjd-remote new-claude <name> --no-attach -p -      # the prompt on stdin
+ *     gjd-remote new-claude <name> --account auto --no-attach -p -
  *
- * `-p -` because the prompt then needs no shell quoting at all, `--no-attach`
- * because nothing here has a terminal to be handed.
+ * `-p -` because the prompt then needs no shell quoting at all, `--account
+ * auto` because dispatched work must draw only from pool accounts, and
+ * `--no-attach` because nothing here has a terminal to be handed.
  *
  * ## WHAT THE OCCURRENCE ACTUALLY MEASURES, said plainly
  *
@@ -123,7 +124,7 @@ export function gjdRemoteDispatch(options: DispatchOptions): SpawnJob {
       };
     }
     const name = sessionName(key);
-    const args = ["scripts/gjd-remote.ts", "new-claude", name, "--no-attach", "-p", "-"];
+    const args = ["scripts/gjd-remote.ts", "new-claude", name, "--account", "auto", "--no-attach", "-p", "-"];
 
     let child: ReturnType<ChildSpawner>;
     try {

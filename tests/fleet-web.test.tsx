@@ -69,6 +69,7 @@ import {
   sessionActionBody,
   sessionMessageBody,
   type ActionsApi,
+  type BoxOutcome,
 } from "../tools/fleet/web/src/actions-client";
 import {
   MESSAGES_URL,
@@ -106,6 +107,7 @@ import {
   type AttentionItem,
   type ClockSkew,
   type AttentionList,
+  type FleetRow,
   type FleetState,
   type FleetStatus,
 } from "../tools/fleet/web/src/types";
@@ -126,7 +128,7 @@ import { statePayload } from "../tools/fleet/state";
    payloads from an OLDER server; what the annotation buys is that every field
    they do name is a field the server really sends, spelled the way it spells
    it. A fixture that is deliberately malformed says so — see `malformed`. */
-import type { Action as ActionWire, FleetState as FleetStateWire } from "../tools/fleet/wire";
+import type { Action as ActionWire, FleetActionPreview, FleetState as FleetStateWire } from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -2989,6 +2991,67 @@ function actionsWire(over: { actions?: unknown[]; queues?: unknown[]; acting?: u
   };
 }
 
+function previewOutcome(actionId: string, rows: readonly FleetRow[], result?: unknown): Extract<BoxOutcome, { ok: true }> {
+  const material: FleetActionPreview["material"] =
+    actionId === "resource-broadcast"
+      ? {
+          kind: "broadcast",
+          speaker: "greg",
+          recipients: rows
+            .filter((row) => row.paneId !== null && row.claudeSessionId !== null)
+            .map((row, index) => ({
+              paneId: row.paneId as string,
+              sessionId: row.id,
+              claudeSessionId: row.claudeSessionId,
+              panePid: row.panePid,
+              status: row.rawStatus,
+              minutes: 5 + index,
+            })),
+        }
+      : { kind: "kill", confirmable: [{ pid: 5001, startTicks: 10, bootId: "fixture-boot" }], excluded: [] };
+  const preview: FleetActionPreview = {
+    schema: "fleet-action-preview/1",
+    previewId: `fixture-${actionId}`,
+    serverInstanceId: "fixture-server",
+    actionId,
+    expiresAt: Date.now() + 60_000,
+    material,
+  };
+  return {
+    ok: true,
+    op: actionId === "resource-broadcast" ? "broadcast-preview" : "dry-run",
+    action: actionId,
+    dryRun: true,
+    dryRunStated: true,
+    preview,
+    result:
+      result ??
+      (material.kind === "broadcast"
+        ? { sample: "Greg says: pause, then continue.", recipients: [] }
+        : { candidates: [{ pid: 5001, comm: "node", args: "node vitest", rule: "vitest-runner", why: "argv names vitest" }] }),
+    why: null,
+    effect: result === undefined ? null : parseBoxEffect(result),
+  };
+}
+
+function killPreviewWire(): Record<string, unknown> {
+  return {
+    ok: true,
+    op: "dry-run",
+    action: "kill-test-suites",
+    dryRun: true,
+    result: { candidates: [{ pid: 5001, comm: "node", args: "node vitest", rule: "vitest-runner", why: "argv names vitest" }] },
+    preview: {
+      schema: "fleet-action-preview/1",
+      previewId: "fixture-kill-test-suites",
+      serverInstanceId: "fixture-server",
+      actionId: "kill-test-suites",
+      expiresAt: Date.now() + 60_000,
+      material: { kind: "kill", confirmable: [{ pid: 5001, startTicks: 10, bootId: "fixture-boot" }], excluded: [] },
+    },
+  };
+}
+
 /**
  * An actions api that records every call and answers as the route does.
  *
@@ -3054,13 +3117,18 @@ function recordingActions(
       calls.push({ op: "releaseHold", arg: `${holdId}@${version}`, second: gesture });
       return { ok: true, kind: "hold-released", gesture, repeat: false };
     },
-    box: async (actionId, dryRun, rows) => {
-      calls.push({ op: "box", arg: actionId, second: dryRun, rows: rows.map((r) => r.id).join(",") });
+    boxPreview: async (action, rows) => {
+      calls.push({ op: "box", arg: action.id, second: true, rows: rows.map((r) => r.id).join(",") });
       /* `effect: null` is *this answer described no per-row effect*, which is
          what an empty `result` means. It is REQUIRED rather than optional for
          `delivery`'s reason: a fixture that could omit it would let the
          renderer pick a default, and picking a default is the defect. */
-      return { ok: true, dryRun, dryRunStated: true, result: [], why: null, effect: null };
+      return previewOutcome(action.id, rows);
+    },
+    boxConfirm: async (preview) => {
+      const rows = preview.material.kind === "broadcast" ? preview.material.recipients.map((recipient) => recipient.sessionId).join(",") : "";
+      calls.push({ op: "box", arg: preview.actionId, second: false, rows });
+      return { ok: true, op: "ran", action: preview.actionId, dryRun: false, dryRunStated: true, preview: null, result: [], why: null, effect: null };
     },
     ...over,
   };
@@ -6839,10 +6907,9 @@ describe("the box, which says what it would do before it does it", () => {
     await act(async () => {});
     await clickSaying("Kill test suites");
 
-    /* `rows: ""` is the Box Health tab having no fleet list to give — its
-       caller has none — and a kill reads `pids` rather than `recipients` in any
-       case. Asserted rather than allowed to be absent, so this stays a visible
-       fact about the panel instead of a silence. */
+    /* This fixture's fleet list is empty, and a kill preview needs no session
+       recipients in any case. Asserted rather than allowed to be absent, so
+       the request input stays visible instead of becoming a silence. */
     expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true, rows: "" }]);
     expect(container.textContent).toContain("What it would do");
     expect(container.textContent).toContain(KILL_SUITES_WIRE.gate);
@@ -6852,7 +6919,7 @@ describe("the box, which says what it would do before it does it", () => {
     const rec = openBox([KILL_SUITES_WIRE]);
     await act(async () => {});
     await clickSaying("Kill test suites");
-    await clickSaying("Yes — kill test suites");
+    await clickSaying("Yes — Kill test suites");
 
     expect(rec.calls.filter((c) => c.op === "box")).toEqual([
       { op: "box", arg: "kill-test-suites", second: true, rows: "" },
@@ -6885,10 +6952,13 @@ describe("the box, which says what it would do before it does it", () => {
       },
     };
     openBox([KILL_SUITES_WIRE], {
-      box: async (_id, dryRun) => ({
+      boxConfirm: async (preview) => ({
         ok: true,
-        dryRun,
+        op: "ran",
+        action: preview.actionId,
+        dryRun: false,
         dryRunStated: true,
+        preview: null,
         result,
         why: null,
         effect: parseBoxEffect(result),
@@ -6896,7 +6966,7 @@ describe("the box, which says what it would do before it does it", () => {
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
-    await clickSaying("Yes — kill test suites");
+    await clickSaying("Yes — Kill test suites");
 
     expect(container.textContent).toContain("Signal accepted for 1 of 3 pids.");
     // The ceiling on the strongest arm, on the DOM path a person actually uses.
@@ -6930,10 +7000,14 @@ describe("the box, which says what it would do before it does it", () => {
       ],
     };
     openBox([BROADCAST_WIRE], {
-      box: async (_id, dryRun) => ({
+      boxPreview: async (action) => previewOutcome(action.id, [steerable({ id: "$1" })]),
+      boxConfirm: async (preview) => ({
         ok: true,
-        dryRun,
+        op: "broadcast",
+        action: preview.actionId,
+        dryRun: false,
         dryRunStated: true,
+        preview: null,
         result,
         why: null,
         effect: parseBoxEffect(result),
@@ -6941,7 +7015,7 @@ describe("the box, which says what it would do before it does it", () => {
     });
     await act(async () => {});
     await clickSaying("Broadcast: ease off, staggered");
-    await clickSaying("Yes — broadcast: ease off, staggered");
+    await clickSaying("Yes — Broadcast: ease off, staggered");
 
     expect(container.textContent).toContain("Keys submitted to 1 of 3 rows.");
     // The row that is holding half a message, said in words rather than left
@@ -7022,9 +7096,24 @@ describe("the box, which says what it would do before it does it", () => {
     expect(container.textContent).toContain("1 of the 2 sessions on this page has no pane or no conversation id");
   });
 
+  it("hands the Health tab's broadcast the rows the tab is showing", async () => {
+    const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
+    window.location.hash = "#health";
+    const transport = manualTransport();
+    mountFull({ transport: transport.transport, actionsApi: rec.api });
+    const shown = [steerable({ id: "$1643" }), steerable({ id: "$1644", paneId: "%2109" })];
+    act(() => transport.push(state({ health: { verdict: { level: "strained", reasons: [] } }, rows: shown })));
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+
+    expect(rec.calls.filter((call) => call.op === "box")).toEqual([
+      { op: "box", arg: "resource-broadcast", second: true, rows: "$1643,$1644" },
+    ]);
+  });
+
   it("offers no Confirm at all when the dry run could not answer", async () => {
     const rec = openBox([KILL_SUITES_WIRE], {
-      box: async () => ({
+      boxPreview: async () => ({
         ok: false,
         code: "ps-failed",
         why: "ps exited 1 and said nothing",
@@ -7042,7 +7131,7 @@ describe("the box, which says what it would do before it does it", () => {
     expect(container.textContent).toContain("It could not tell you.");
     expect(container.textContent).toContain("ps exited 1 and said nothing");
     // The refusal, and the fallback that still works.
-    expect(buttonLabels()).not.toContain("Yes — kill test suites");
+    expect(buttonLabels()).not.toContain("Yes — Kill test suites");
     expect(buttonLabels()).toContain("Cancel");
     expect(rec.calls.filter((c) => c.op === "box" && c.second === false)).toHaveLength(0);
   });
@@ -7051,7 +7140,17 @@ describe("the box, which says what it would do before it does it", () => {
     /* The worst thing this panel could get wrong: believing our own request
        instead of the reply, and reporting a kill as a question. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null, effect: null }),
+      boxPreview: async () => ({
+        ok: true,
+        op: "ran",
+        action: "kill-test-suites",
+        dryRun: false,
+        dryRunStated: true,
+        preview: null,
+        result: ["killed 4"],
+        why: null,
+        effect: null,
+      }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -7067,14 +7166,24 @@ describe("the box, which says what it would do before it does it", () => {
        failure this panel exists to prevent is somebody pressing *kill* on the
        strength of an answer that said nothing. */
     const rec = openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null, effect: null }),
+      boxPreview: async () => ({
+        ok: true,
+        op: "dry-run",
+        action: "kill-test-suites",
+        dryRun: true,
+        dryRunStated: true,
+        preview: null,
+        result: null,
+        why: null,
+        effect: null,
+      }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
 
-    expect(container.textContent).toContain("did not say what it would destroy");
+    expect(container.textContent).toContain("did not carry a complete, matching preview receipt");
     expect(container.textContent).not.toContain("null");
-    expect(buttonLabels()).not.toContain("Yes — kill test suites");
+    expect(buttonLabels()).not.toContain("Yes — Kill test suites");
     expect(rec.calls.filter((c) => c.op === "box" && c.second === false)).toHaveLength(0);
   });
 
@@ -7084,11 +7193,21 @@ describe("the box, which says what it would do before it does it", () => {
        run and reported as "Done." — the reassuring half of a contradiction, and
        the page could tell, because the answer says which it was. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null, effect: null }),
+      boxConfirm: async (preview) => ({
+        ok: true,
+        op: "dry-run",
+        action: preview.actionId,
+        dryRun: true,
+        dryRunStated: true,
+        preview: null,
+        result: ["would kill 5001"],
+        why: null,
+        effect: null,
+      }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
-    await clickSaying("Yes — kill test suites");
+    await clickSaying("Yes — Kill test suites");
 
     expect(container.textContent).toContain("Nothing was done.");
     expect(container.textContent).toContain("Nothing on the box has changed.");
@@ -7097,7 +7216,17 @@ describe("the box, which says what it would do before it does it", () => {
 
   it("will not claim a dry run when the server never said it was one", async () => {
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null, effect: null }),
+      boxPreview: async () => ({
+        ok: true,
+        op: "dry-run",
+        action: "kill-test-suites",
+        dryRun: true,
+        dryRunStated: false,
+        preview: null,
+        result: [],
+        why: null,
+        effect: null,
+      }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -7430,13 +7559,11 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     act(() => feed.push(state({ rows: shown })));
     await act(async () => {});
     await clickSaying("Broadcast: ease off, staggered");
-    await clickSaying("Yes \u2014 broadcast: ease off, staggered");
+    await clickSaying("Yes \u2014 Broadcast: ease off, staggered");
 
-    /* BOTH PRESSES, AND THE SECOND ONE IS THE ONE THAT MATTERS. A preview that
-       named two sessions over a send that reached none would be this stage's own
-       defect wearing a receipt, so the confirmed request has to carry exactly
-       the list the preview described. A mutation that dropped the rows from the
-       commit alone survived every other test here. */
+    /* The first press reads the live rows. The second has no rows parameter: the
+       recorder reads these ids back from the receipt's frozen material, proving
+       the same pair crossed the confirmation seam without a fresh fleet read. */
     expect(rec.calls.filter((c) => c.op === "box")).toEqual([
       { op: "box", arg: "resource-broadcast", second: true, rows: "$1643,$1644" },
       { op: "box", arg: "resource-broadcast", second: false, rows: "$1643,$1644" },
@@ -7937,7 +8064,10 @@ describe("what became of an ACTION, which is also not two answers", () => {
   /** The box panel, same wiring. */
   function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
     const client = makeActionsApi(fetchImpl);
-    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun, rows) => client.box(actionId, dryRun, rows) });
+    const rec = recordingActions(() => actionsWire({ actions }), {
+      boxPreview: (action, rows) => client.boxPreview(action, rows),
+      boxConfirm: (preview) => client.boxConfirm(preview),
+    });
     window.location.hash = "#health";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
@@ -8057,12 +8187,12 @@ describe("what became of an ACTION, which is also not two answers", () => {
        would kill, pressed yes — and then nothing came back. Thirty processes
        may be gone. "Nothing happened." is the sentence that sends them to press
        it again. */
-    openActingBox(answersThenVanishes({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+    openActingBox(answersThenVanishes(killPreviewWire()), [
       KILL_SUITES_WIRE,
     ]);
     await act(async () => {});
     await clickSaying("Kill test suites");
-    await clickSaying("Yes — kill test suites");
+    await clickSaying("Yes — Kill test suites");
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
@@ -8103,12 +8233,12 @@ describe("what became of an ACTION, which is also not two answers", () => {
   it("does not say nothing happened on the box when the kill's answer would not parse", async () => {
     /* The second consumer of the same arm, so the box path is constrained too
        rather than inheriting the session page's guarantee. */
-    openActingBox(answersThenGarbles({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+    openActingBox(answersThenGarbles(killPreviewWire()), [
       KILL_SUITES_WIRE,
     ]);
     await act(async () => {});
     await clickSaying("Kill test suites");
-    await clickSaying("Yes — kill test suites");
+    await clickSaying("Yes — Kill test suites");
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
@@ -8121,7 +8251,7 @@ describe("what became of an ACTION, which is also not two answers", () => {
   });
 
   it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
-    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false, []);
+    const outcome = await makeActionsApi(unreadableBody()).boxPreview({ id: "kill-test-suites", effect: "enacted" }, []);
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
     expect(outcome.delivery.kind).toBe("unknown");

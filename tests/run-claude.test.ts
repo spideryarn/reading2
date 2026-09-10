@@ -23,8 +23,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   authConflict, authHint, buildClaudeArgs, claudeEnv, credentialLine, credentialsPassed, parseArgs,
-  parseAuthStatus, parseResultEvent, stderrTail,
+  parseAuthStatus, parseResultEvent, resolveRunClaudeAccount, stderrTail,
 } from "../scripts/run-claude.js";
+import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
@@ -60,6 +61,65 @@ describe("parseArgs", () => {
 
   it("needs a prompt", () => {
     expect(() => parseArgs([])).toThrow(/--prompt/);
+  });
+
+  it("accepts an explicit account name", () => {
+    expect(parseArgs(["--prompt", "x", "--account", "pool-a"]).account).toBe("pool-a");
+  });
+});
+
+describe("account routing", () => {
+  const registry: RegistryReading = {
+    kind: "value",
+    schema: 1,
+    accounts: [{
+      name: "pool-a",
+      family: "claude",
+      role: "pool",
+      stateDir: "/configs/pool-a",
+      providerAccountId: "account-a",
+      providerTenantId: "tenant-a",
+      displayEmail: "a@example.test",
+      addedAt: "2026-09-09T20:00:00.000Z",
+      familyData: {},
+    }],
+  };
+
+  it("routes an explicit child through the registered state directory", () => {
+    expect(resolveRunClaudeAccount(registry, "pool-a", undefined)).toMatchObject({
+      kind: "value",
+      account: { stateDir: "/configs/pool-a" },
+    });
+  });
+
+  it("carries a routed parent's account into an unrouted child", () => {
+    expect(resolveRunClaudeAccount(registry, undefined, "/configs/pool-a")).toMatchObject({
+      kind: "value",
+      account: { name: "pool-a" },
+    });
+  });
+
+  it("refuses when a routed parent cannot be resolved", () => {
+    expect(resolveRunClaudeAccount({ kind: "ambient", accounts: [] }, undefined, "/configs/pool-a"))
+      .toMatchObject({ kind: "refused" });
+    expect(resolveRunClaudeAccount(registry, undefined, "/configs/missing"))
+      .toMatchObject({ kind: "refused" });
+  });
+
+  it("sets only the selected state directory after sanitising the child environment", () => {
+    const env = claudeEnv({
+      PATH: "/bin",
+      CLAUDE_CONFIG_DIR: "/configs/parent",
+      ANTHROPIC_AUTH_TOKEN: "secret-a",
+      ANTHROPIC_API_KEY: "secret-b",
+      ANTHROPIC_BASE_URL: "https://wrong.invalid",
+      CLAUDE_CODE_OAUTH_TOKEN: "secret-c",
+    }, "machine", [], "/configs/pool-a");
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/configs/pool-a");
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 });
 

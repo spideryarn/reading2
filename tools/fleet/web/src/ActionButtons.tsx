@@ -71,7 +71,7 @@
  * on screen rather than a claim about the box — and it is made once, in
  * SessionDetail, and passed in.
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { RawValue } from "./RawValue";
 import { Explain } from "./Tooltip";
@@ -96,7 +96,7 @@ import {
   type StepReading,
 } from "./actions-client";
 import type { DeliveryReading } from "./steer-client";
-import type { HoldReleaseGesture } from "../../wire.js";
+import type { FleetActionPreview, HoldReleaseGesture } from "../../wire.js";
 import type { FleetRow } from "./types";
 import { Button, Card, Mono, cx } from "./ui";
 
@@ -1718,17 +1718,143 @@ const NO_ROWS: readonly FleetRow[] = [];
  * 2026-09-09 this panel sent no list at all, so every press was refused before
  * recipient selection and the button had never reached a single session.
  *
- * So the rows go down verbatim — `boxActionBody` maps them through
- * `steerTargetBody`, unmodified and un-refreshed — and both presses send the
- * same list, so the confirmed request speaks to exactly what the preview
- * described.
+ * So the rows go down verbatim on the preview press — `boxActionBody` maps
+ * them through `steerTargetBody`, unmodified and un-refreshed. The confirm
+ * press has no rows parameter at all; it echoes the material the server froze
+ * into that preview.
  *
  * **Optional, and the absence is not silent.** A panel that does not know the
- * fleet — Box Health is one; its own caller has no rows to give it — passes
- * none, and the server answers `a broadcast needs recipients: send the rows the
- * page is showing`, which is the true state of that panel rather than a false
- * success. Give it rows and the same button works; the Overseer tab does.
+ * fleet passes none, and the server answers `a broadcast needs recipients:
+ * send the rows the page is showing`, which is the true state of that caller
+ * rather than a false success. Both dashboard panels pass the fleet rows.
  */
+type BoxConfirmation = {
+  generation: number;
+  action: ClientAction;
+  outcome: BoxOutcome | null;
+  rows: { total: number; unaddressable: number };
+};
+
+function resultRecord(outcome: Extract<BoxOutcome, { ok: true }>): Record<string, unknown> | null {
+  return typeof outcome.result === "object" && outcome.result !== null && !Array.isArray(outcome.result)
+    ? (outcome.result as Record<string, unknown>)
+    : null;
+}
+
+function clippedArgv(value: unknown): string {
+  if (typeof value !== "string" || value === "") return "argv not stated";
+  return value.length <= 120 ? value : `${value.slice(0, 119)}…`;
+}
+
+function PreviewMaterial({ outcome }: { outcome: Extract<BoxOutcome, { ok: true }> }): ReactNode {
+  const envelope = outcome.preview;
+  if (envelope === null) return null;
+  const result = resultRecord(outcome);
+  if (envelope.material.kind === "kill") {
+    const rawCandidates = result?.["candidates"];
+    const candidates = Array.isArray(rawCandidates)
+      ? rawCandidates.filter((candidate): candidate is Record<string, unknown> => typeof candidate === "object" && candidate !== null)
+      : [];
+    const detailFor = (pid: number): Record<string, unknown> | null =>
+      candidates.find((candidate) => candidate["pid"] === pid) ?? null;
+    return (
+      <>
+        <p className="tw:mt-2 tw:font-medium tw:text-ink">
+          {envelope.material.confirmable.length} confirmable {envelope.material.confirmable.length === 1 ? "process" : "processes"}
+        </p>
+        {envelope.material.confirmable.length === 0 ? (
+          <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">Nothing in this preview can be confirmed, so there is no Confirm below.</p>
+        ) : (
+          <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink">
+            {envelope.material.confirmable.map((candidate) => {
+              const detail = detailFor(candidate.pid);
+              const comm = typeof detail?.["comm"] === "string" && detail["comm"] !== "" ? detail["comm"] : "command not stated";
+              const rule = typeof detail?.["rule"] === "string" && detail["rule"] !== "" ? detail["rule"] : "rule not stated";
+              const matched = typeof detail?.["why"] === "string" && detail["why"] !== "" ? ` — ${detail["why"]}` : "";
+              return (
+                <li key={candidate.pid} className="tw:rounded tw:border tw:border-rule tw:p-2">
+                  <span className="tw:font-medium">pid {candidate.pid}</span>
+                  <span className="tw:px-1">·</span>
+                  <Mono>{comm}</Mono>
+                  <div className="tw:mt-0.5 tw:break-words tw:text-ink-soft">argv: {clippedArgv(detail?.["args"])}</div>
+                  <div className="tw:mt-0.5 tw:text-ink-faint">matched rule: {rule}{matched}</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="tw:mt-2 tw:font-medium tw:text-ink">
+          {envelope.material.excluded.length} excluded {envelope.material.excluded.length === 1 ? "process" : "processes"}
+        </p>
+        {envelope.material.excluded.length === 0 ? null : (
+          <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink-soft">
+            {envelope.material.excluded.map((candidate) => (
+              <li key={`${candidate.pid}-${candidate.why}`}>
+                pid {candidate.pid} — {candidate.why}
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  }
+
+  const rawOutcomes = result?.["recipients"];
+  const outcomes = Array.isArray(rawOutcomes) ? rawOutcomes : [];
+  const recipientRows = envelope.material.recipients.map((recipient, index) => ({
+    recipient,
+    outcome: typeof outcomes[index] === "object" && outcomes[index] !== null ? outcomes[index] as Record<string, unknown> : null,
+  }));
+  const recipients = recipientRows.filter(({ recipient }) => recipient.minutes !== null);
+  const excluded = recipientRows.filter(({ recipient }) => recipient.minutes === null);
+  const sample = typeof result?.["sample"] === "string" && result["sample"] !== "" ? result["sample"] : null;
+  return (
+    <>
+      <p className="tw:mt-2 tw:font-medium tw:text-ink">
+        {recipients.length} {recipients.length === 1 ? "recipient" : "recipients"}
+      </p>
+      <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink">
+        {recipients.map(({ recipient }) => (
+          <li key={recipient.paneId} className="tw:rounded tw:border tw:border-rule tw:p-2">
+            <Mono>{recipient.sessionId}</Mono>
+            <span className="tw:px-1">·</span>
+            <Mono>{recipient.paneId}</Mono>
+            <span className="tw:px-1">—</span>
+            pause for {recipient.minutes} {recipient.minutes === 1 ? "minute" : "minutes"}
+          </li>
+        ))}
+      </ul>
+      <p className="tw:mt-2 tw:font-medium tw:text-ink">
+        {excluded.length} excluded {excluded.length === 1 ? "recipient" : "recipients"}
+      </p>
+      {excluded.length === 0 ? null : (
+        <ul className="tw:mt-1 tw:space-y-1 tw:text-[12px] tw:text-ink-soft">
+          {excluded.map(({ recipient, outcome }) => (
+            <li key={recipient.paneId}>
+              <Mono>{recipient.sessionId}</Mono>
+              <span className="tw:px-1">·</span>
+              <Mono>{recipient.paneId}</Mono>
+              {` — ${typeof outcome?.["why"] === "string" ? outcome["why"] : "the server did not state why it was left out"}`}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="tw:mt-2 tw:text-[12px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">Exact sentence sampled by the server</p>
+      {sample === null ? (
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">The server did not state the sentence, so there is no Confirm below.</p>
+      ) : (
+        <p className="tw:mt-1 tw:break-words tw:rounded tw:border tw:border-rule tw:p-2 tw:text-ink">{sample}</p>
+      )}
+    </>
+  );
+}
+
+function canConfirm(preview: FleetActionPreview, outcome: Extract<BoxOutcome, { ok: true }>): boolean {
+  if (preview.material.kind === "kill") return preview.material.confirmable.length > 0;
+  const sample = resultRecord(outcome)?.["sample"];
+  return preview.material.recipients.some((recipient) => recipient.minutes !== null) && typeof sample === "string" && sample !== "";
+}
+
 export function BoxActions({
   feed,
   api,
@@ -1745,47 +1871,56 @@ export function BoxActions({
   /** The rows this page is showing, verbatim. See the header. */
   rows?: readonly FleetRow[];
 }): ReactNode {
-  const [pending, setPending] = useState<ClientAction | null>(null);
+  const generation = useRef(0);
+  const [pending, setPending] = useState<BoxConfirmation | null>(null);
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<BoxOutcome | null>(null);
   const [done, setDone] = useState<BoxOutcome | null>(null);
 
   const actions = boxActions(feed);
 
-  /* THE SAME LIST FOR BOTH PRESSES, and it is this page's snapshot rather than
-     a fresh reading — the discipline `cancelBody` and the tmux claims in
-     routes-steer.ts follow. `onScreen` rather than `recipients`, because not
-     all of them are: `addressableRows` drops the ones with nowhere to send to,
-     and the difference is the sentence below. */
+  /* READ ONCE, FOR THE PREVIEW PRESS. Confirm has no way to accept this value;
+     it takes only the frozen receipt. `onScreen` rather than `recipients`,
+     because not all of them are: `addressableRows` drops the ones with nowhere
+     to send to, and the difference is the sentence below. */
   const onScreen = rows ?? NO_ROWS;
-  /* Counted from the SAME function the body builder uses, so the sentence and
-     the request cannot disagree about who was left out. */
-  const unaddressable = onScreen.length - addressableRows(onScreen).length;
-
   const press = useCallback(
     async (action: ClientAction): Promise<void> => {
-      setPending(action);
-      setPreview(null);
+      if (action.effect !== "enacted" && action.effect !== "broadcast") return;
+      const mine = generation.current + 1;
+      generation.current = mine;
+      /* Frozen beside the action and receipt: a state poll while the preview is
+         open must not rewrite the denominator the person reviewed. */
+      const pressedRows = { total: onScreen.length, unaddressable: onScreen.length - addressableRows(onScreen).length };
+      setPending({ generation: mine, action, outcome: null, rows: pressedRows });
       setDone(null);
       setBusy(true);
-      setPreview(await api.box(action.id, true, onScreen));
+      const outcome = await api.boxPreview(action, onScreen);
+      if (generation.current !== mine) return;
+      setPending({ generation: mine, action, outcome, rows: pressedRows });
       setBusy(false);
     },
     [api, onScreen],
   );
 
   const commit = useCallback(
-    async (action: ClientAction): Promise<void> => {
+    async (selection: BoxConfirmation, envelope: FleetActionPreview): Promise<void> => {
+      if (selection.generation !== generation.current) return;
+      const mine = generation.current + 1;
+      generation.current = mine;
       setBusy(true);
-      const result = await api.box(action.id, false, onScreen);
+      const result = await api.boxConfirm(envelope);
+      if (generation.current !== mine) return;
       setDone(result);
       setPending(null);
-      setPreview(null);
       setBusy(false);
       onChanged();
     },
-    [api, onChanged, onScreen],
+    [api, onChanged],
   );
+
+  const pendingAction = pending?.action ?? null;
+  const preview = pending?.outcome ?? null;
+  const pressedRows = pending?.rows ?? { total: 0, unaddressable: 0 };
 
   if (actions.length === 0) {
     return (
@@ -1829,34 +1964,34 @@ export function BoxActions({
 
       <Unrecognised actions={actions} />
 
-      {pending === null ? null : (
+      {pendingAction === null || pending === null ? null : (
         <div
           role="group"
-          aria-label={`Confirm ${pending.label}`}
+          aria-label={`Confirm ${pendingAction.label}`}
           className={cx(
             "tw:mt-2 tw:rounded-lg tw:border tw:border-l-4 tw:p-3 tw:text-[13px]",
-            pending.effect === "enacted"
+            pendingAction.effect === "enacted"
               ? "tw:border-alarm/40 tw:border-l-alarm tw:bg-alarm-wash"
               : "tw:border-rule tw:border-l-rule-strong",
           )}
         >
-          <p className={cx("tw:font-medium", pending.effect === "enacted" && "tw:text-alarm-ink")}>
-            Confirm: {pending.label}
+          <p className={cx("tw:font-medium", pendingAction.effect === "enacted" && "tw:text-alarm-ink")}>
+            Confirm: {pendingAction.label}
           </p>
-          <p className="tw:mt-1 tw:text-ink-soft">{pending.summary}</p>
-          {pending.effect === "enacted" ? (
+          <p className="tw:mt-1 tw:text-ink-soft">{pendingAction.summary}</p>
+          {pendingAction.effect === "enacted" ? (
             <>
               <p className="tw:mt-1 tw:text-ink-faint">What is checked first:</p>
-              <p className="tw:mt-1 tw:break-words tw:text-ink">{pending.gate}</p>
+              <p className="tw:mt-1 tw:break-words tw:text-ink">{pendingAction.gate}</p>
             </>
           ) : null}
-          {pending.effect === "broadcast" ? (
+          {pendingAction.effect === "broadcast" ? (
             <>
               <p className="tw:mt-1 tw:text-ink-soft">
                 A sentence to every steerable session, each asked to pause for a different length of time
-                {pending.stagger === null
+                {pendingAction.stagger === null
                   ? ", though the server did not say how they are spread"
-                  : ` — between ${pending.stagger.minMinutes} and ${pending.stagger.windowMinutes} minutes`}
+                  : ` — between ${pendingAction.stagger.minMinutes} and ${pendingAction.stagger.windowMinutes} minutes`}
                 . Nothing here can prove an agent read it, let alone obeyed it.
               </p>
               {/* THE ROWS THAT ARE NOT ADDRESSES, SAID OUT LOUD. `boxActionBody`
@@ -1866,11 +2001,11 @@ export function BoxActions({
                   the page and the request is the defect this stage exists to
                   close, one layer up, so the count is on screen rather than
                   inferred from a preview that is short. */}
-              {unaddressable === 0 ? null : (
+              {pressedRows.unaddressable === 0 ? null : (
                 <p className="tw:mt-1 tw:text-ink-faint">
-                  {unaddressable} of the {onScreen.length} sessions on this page {unaddressable === 1 ? "has" : "have"} no
-                  pane or no conversation id, so there is nowhere to send to and {unaddressable === 1 ? "it is" : "they are"}{" "}
-                  left out of the {onScreen.length - unaddressable} below.
+                  {pressedRows.unaddressable} of the {pressedRows.total} sessions on this page {pressedRows.unaddressable === 1 ? "has" : "have"} no
+                  pane or no conversation id, so there is nowhere to send to and {pressedRows.unaddressable === 1 ? "it is" : "they are"}{" "}
+                  left out of the {pressedRows.total - pressedRows.unaddressable} below.
                 </p>
               )}
             </>
@@ -1908,20 +2043,24 @@ export function BoxActions({
                   missing, and it is deliberately NOT filled in from anything
                   this page could guess.
                 */}
-                {preview.result === null || preview.result === undefined ? (
+                {preview.preview === null ? (
                   <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
-                    This server did not say what it would destroy, so there is no Confirm below — the terminal and{" "}
-                    <Mono>gjd-remote</Mono> can still do it.
+                    This answer did not carry a complete, matching preview receipt, so there is no Confirm below — the
+                    terminal and <Mono>gjd-remote</Mono> can still do it.
                   </p>
                 ) : (
                   <>
-                    {/* The same counts as the answer card, so the two read
-                        alike and the promise can be compared with the receipt
-                        row for row. */}
-                    {preview.effect === null ? null : <BoxEffectSummary effect={preview.effect} />}
-                    <div className="tw:mt-1">
-                      <RawValue value={preview.result} depth={0} />
-                    </div>
+                    <PreviewMaterial outcome={preview} />
+                    {/* Diagnostic, not the confirmation itself. The whole
+                        parsed receipt sits beside the old result dump, so an
+                        added material field remains readable and is still
+                        echoed even before this build learns what it means. */}
+                    <details className="tw:mt-2">
+                      <summary className="tw:cursor-pointer tw:text-[12px] tw:text-ink-faint">Diagnostic detail</summary>
+                      <div className="tw:mt-1">
+                        <RawValue value={{ preview: preview.preview, result: preview.result }} depth={0} />
+                      </div>
+                    </details>
                   </>
                 )}
               </>
@@ -1948,20 +2087,21 @@ export function BoxActions({
               this is unreachable against a server of this vintage; it is the
               honest reading of an older one.
             */}
-            {preview !== null && preview.ok && preview.result !== null && preview.result !== undefined ? (
+            {preview?.ok && preview.preview !== null && canConfirm(preview.preview, preview) ? (
               <Button
-                variant={pending.effect === "enacted" ? "danger" : "loud"}
+                variant={pendingAction.effect === "enacted" ? "danger" : "loud"}
                 disabled={busy}
-                onClick={() => void commit(pending)}
+                onClick={() => void commit(pending, preview.preview as FleetActionPreview)}
               >
-                {busy ? "Working…" : `Yes — ${pending.label.toLowerCase()}`}
+                {busy ? "Working…" : `Yes — ${pendingAction.label}`}
               </Button>
             ) : null}
             <Button
               disabled={busy}
               onClick={() => {
+                generation.current += 1;
                 setPending(null);
-                setPreview(null);
+                setBusy(false);
               }}
             >
               Cancel
