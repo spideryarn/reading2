@@ -653,6 +653,10 @@ every item red first.** 454 tests across the ten launch, wrapper and env suites 
   client secret, the Claude Code messaging token; the Supabase key is the local stack's and the
   Stripe key is test-mode). Postmortem to follow; no value is recorded anywhere in this repo.
 
+**Sol's narrow check of the three Stage 2 P1 fixes (F20, F21, F23) at e3bcace3: all three closed**,
+each with the exact lines (`…-stage2-fixcheck-sol.md`). Stage 2 is done reviewing. Stages 1, 1b, 2
+and 2b go to dev once the full suite on the merged tree (79a55e94) is accounted for.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
