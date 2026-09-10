@@ -60,13 +60,18 @@ import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
+  broadcastEnvelope,
   httpBroadcastApi,
+  sendBroadcastEnvelope,
   type BroadcastApi,
+  type BroadcastBody,
   type BroadcastOutcome,
   type BroadcastResult,
   type RecipientOutcome,
 } from "./broadcast-client";
-import { draftNoticeSentence, useDraft } from "./drafts";
+import { draftNoticeSentence, useDraft, type DraftSubmission } from "./drafts";
+import { EnvelopeNoticeCard } from "./ReceiptList";
+import type { EnvelopeNotice, RequestEnvelope } from "./request-envelope";
 import { sentTarget, type SentTarget } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
@@ -91,6 +96,22 @@ function addressable(rows: readonly FleetRow[]): FleetRow[] {
 function isOverseer(row: FleetRow): boolean {
   return row.role.kind === "overseer";
 }
+
+/**
+ * **A BROADCAST THAT HAS NOT HEARD A DEFINITE ANSWER** — request-envelope.ts.
+ * Held only after `not-confirmed`, for Check, which resends this envelope —
+ * the same id, the same recipients as they were at the press, the ticket taken
+ * then. While it is held nothing new can be previewed or sent: a second
+ * fan-out under a new id is the one thing a lost answer must not invite.
+ *
+ * **Memory-only.** A reload keeps the sentence (drafts.ts) and loses this, so
+ * the next Send is a new broadcast with a new id.
+ */
+type PendingBroadcast = {
+  envelope: RequestEnvelope<BroadcastBody, DraftSubmission>;
+  rows: FleetRow[];
+  sent: Map<string, SentTarget>;
+};
 
 /**
  * **WHAT A PREVIEW WAS ABOUT, AS A STRING THAT CHANGES WHEN ANYTHING DOES.**
@@ -246,20 +267,93 @@ export function BroadcastCard({
   const current = preview !== null && preview.of === words && preview.to === now;
   const incomplete = unreadableRows === null || unreadableRows > 0;
 
+  const [pending, setPending] = useState<PendingBroadcast | null>(null);
+  /** What the card shows for a keyed answer that is not the route's own. */
+  const [notice, setNotice] = useState<EnvelopeNotice | null>(null);
+
+  /**
+   * **A REAL BROADCAST, FIRST OR CHECK** — keyed, and the seam agreed with
+   * `session-continuity` (plan 260910d § Stage 4). Only a definitive success
+   * accepts, always with the ticket in the envelope; `not-confirmed` keeps the
+   * sentence, its stored copy and the envelope; a 409 or 503 keeps the sentence
+   * and drops the envelope.
+   */
+  const run = useCallback(
+    async (sending: PendingBroadcast): Promise<void> => {
+      setBusy(true);
+      const result = await sendBroadcastEnvelope(api, sending.rows, sending.envelope);
+      setPreview(null);
+      switch (result.kind) {
+        case "answered": {
+          /* The operation is checked against the one asked for, for the reason
+             in `go` below: an injected seam can hand this card anything. */
+          const answer = result.outcome;
+          const outcome: BroadcastOutcome =
+            answer.kind === "ran" && answer.op !== "broadcast"
+              ? {
+                  kind: "unknown",
+                  why: `this was a real broadcast and the answer describes a ${answer.op}. The two do not match, so what reached the fleet cannot be read off it.`,
+                }
+              : answer;
+          setDone({ outcome, sent: sending.sent });
+          setNotice(null);
+          setPending(null);
+          /* Only a broadcast that RAN takes the draft with it — a refusal or an
+             unknown answer leaves the sentence, and its stored copy, where it is. */
+          if (outcome.kind === "ran") draft.accept(sending.envelope.ticket);
+          break;
+        }
+        case "replay":
+          setDone(null);
+          setNotice(result);
+          setPending(null);
+          draft.accept(sending.envelope.ticket);
+          break;
+        case "not-confirmed":
+          setDone(null);
+          setNotice(result);
+          setPending(sending);
+          break;
+        case "request-id-conflict":
+        case "request-id-expired":
+        case "receipt-unavailable":
+          setDone(null);
+          setNotice(result);
+          setPending(null);
+          break;
+        default: {
+          const never: never = result;
+          void never;
+        }
+      }
+      setBusy(false);
+    },
+    [api, draft],
+  );
+
+  const onCheck = useCallback(() => {
+    if (pending !== null) void run(pending);
+  }, [pending, run]);
+
   const go = useCallback(
     async (dryRun: boolean) => {
-      if (words === "" || targets.length === 0 || incomplete) return;
-      const submission = dryRun ? null : draft.submission();
-      if (!dryRun && submission === null) return;
-      const submittedWords = submission === null ? words : submission.text.trim();
-      setBusy(true);
+      if (words === "" || targets.length === 0 || incomplete || pending !== null) return;
       /* SNAPSHOTTED BEFORE THE AWAIT, and kept: `SteerReceipt` compares what
          the server verified against what was addressed, and the rows underneath
          are replaced at every collection while the receipts stay on screen.
          Passing `panePid: null` — which this did until GPT Sol's P2 — made every
          receipt say the pid "could not be compared" when it had been sent. */
       const sent = new Map<string, SentTarget>(targets.map((r) => [r.id, sentTarget(r)]));
-      const answer = await api.send(targets, submittedWords, dryRun);
+      if (!dryRun) {
+        /* The ticket is taken here, at Send, and travels in the envelope. */
+        const submission = draft.submission();
+        if (submission === null) return;
+        await run({ envelope: broadcastEnvelope(targets, submission.text.trim(), submission), rows: targets, sent });
+        return;
+      }
+      setBusy(true);
+      setNotice(null);
+      const answer = await api.send(targets, words, true);
       /**
        * **THE ANSWER'S OPERATION IS CHECKED HERE TOO, AND THAT IS NOT
        * BELT-AND-BRACES.**
@@ -275,35 +369,26 @@ export function BroadcastCard({
        * `unknown` rather than a refusal, for the same reason as on the wire: an
        * answer describing a broadcast is evidence that one happened.
        */
-      const wanted = dryRun ? "broadcast-preview" : "broadcast";
       const outcome: BroadcastOutcome =
-        answer.kind === "ran" && answer.op !== wanted
+        answer.kind === "ran" && answer.op !== "broadcast-preview"
           ? {
               kind: "unknown",
-              why: `this was a ${dryRun ? "dry run" : "real broadcast"} and the answer describes a ${answer.op}. The two do not match, so what reached the fleet cannot be read off it.`,
+              why: `this was a dry run and the answer describes a ${answer.op}. The two do not match, so what reached the fleet cannot be read off it.`,
             }
           : answer;
-      if (dryRun) {
-        setDone(null);
-        setPreview(
-          outcome.kind === "ran"
-            ? { result: outcome.result, of: words, to: signature(targets), sent }
-            : /* A refusal is not a preview. Showing the old one under a fresh
-                 refusal is how somebody confirms a count the server has just
-                 told them is wrong. */
-              null,
-        );
-        if (outcome.kind !== "ran") setDone({ outcome, sent });
-      } else {
-        setPreview(null);
-        setDone({ outcome, sent });
-        /* Only a broadcast that RAN takes the draft with it — a refusal or an
-           unknown answer leaves the sentence, and its stored copy, where it is. */
-        if (outcome.kind === "ran" && submission !== null) draft.accept(submission);
-      }
+      setDone(null);
+      setPreview(
+        outcome.kind === "ran"
+          ? { result: outcome.result, of: words, to: signature(targets), sent }
+          : /* A refusal is not a preview. Showing the old one under a fresh
+               refusal is how somebody confirms a count the server has just
+               told them is wrong. */
+            null,
+      );
+      if (outcome.kind !== "ran") setDone({ outcome, sent });
       setBusy(false);
     },
-    [api, draft, incomplete, targets, words],
+    [api, draft, incomplete, pending, run, targets, words],
   );
 
   const overseerRow = rows.find(isOverseer);
@@ -379,7 +464,10 @@ export function BroadcastCard({
       )}
 
       <p className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
-        <Button disabled={busy || words === "" || targets.length === 0 || incomplete} onClick={() => void go(true)}>
+        <Button
+          disabled={busy || words === "" || targets.length === 0 || incomplete || pending !== null}
+          onClick={() => void go(true)}
+        >
           {busy && !current ? "Checking…" : "Preview"}
         </Button>
         {/* **THE SEND IS ONLY OFFERED BEHIND A CURRENT PREVIEW.** Not disabled-
@@ -406,6 +494,12 @@ export function BroadcastCard({
       {draft.notice === null ? null : (
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
       )}
+      {pending === null ? null : (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">
+          Preview and Send are off until you Check the last broadcast — it may already have gone out.
+        </p>
+      )}
+      {notice === null ? null : <EnvelopeNoticeCard notice={notice} busy={busy} onCheck={onCheck} />}
 
       {current && preview !== null ? (
         <div className="tw:mt-3 tw:rounded-lg tw:border tw:border-rule tw:p-3 tw:text-[13px]">

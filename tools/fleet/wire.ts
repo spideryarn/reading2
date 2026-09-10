@@ -4022,6 +4022,18 @@ export type ReceiptSummary = {
   attemptedAt: number | null;
   outcomeAt: number | null;
   reconciled: boolean;
+  /**
+   * **A PERSON'S STATEMENT, OR THE ABANDON ROUTE'S — NEVER PROOF** (Stage 4).
+   * Who looked at an unknown receipt, what they said, and when. It never
+   * changes `state`: an unknown stays unknown with this beside it. `actor` is a
+   * claim (`client-claimed`); the dashboard has no authentication. Null when
+   * nobody has reconciled it.
+   */
+  reconciliation: {
+    disposition: "lease-abandoned" | "operator-confirmed" | "abandoned-unknown";
+    actor: { kind: "client-claimed" | "unattributed-http" | "system"; id: string | null };
+    at: number;
+  } | null;
   queueItemId: string | null;
   materialDeletionPending: boolean;
 };

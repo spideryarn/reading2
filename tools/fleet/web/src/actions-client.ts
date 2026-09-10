@@ -87,6 +87,7 @@ import type {
   QuarantineHoldView,
   QueuedItemView as QueuedItemViewWire,
   QueueView as QueueViewWire,
+  ReceiptSummary,
   SpokenAction as SpokenActionWire,
   UncertainSendOrigin,
   UncertainSendReading,
@@ -94,7 +95,18 @@ import type {
 /* `DeliveryReading` and `parseDelivery` come from steer-client.ts for the same
    reason `steerTargetBody` does: there is one vocabulary for what became of a
    send, and a second copy of it here would be the twin this whole plan is
-   about. No cycle — steer-client.ts imports `./types` and nothing else. */
+   about. No cycle — steer-client.ts imports `./types` and `./request-envelope`,
+   and neither of those imports this file. */
+import {
+  makeEnvelope,
+  parseReceiptSummary,
+  postEnvelope,
+  readKeyedArms,
+  unreadableAnswer,
+  type KeyedOutcome,
+  type MintClock,
+  type RequestEnvelope,
+} from "./request-envelope";
 import { parseDelivery, steerTargetBody, type DeliveryReading, type SteerTargetBody } from "./steer-client";
 import type { FleetRow } from "./types";
 
@@ -1036,6 +1048,30 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
 }
 
 /**
+ * **A QUEUED MESSAGE AS AN ENVELOPE** — request-envelope.ts. The same body as
+ * `sessionMessageBody`, built once, for the one route it belongs to. `ticket`
+ * is the composer's `DraftSubmission`.
+ */
+export function queueMessageEnvelope<T>(
+  row: FleetRow,
+  text: string,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<SessionMessageBody, T> {
+  return makeEnvelope(SESSION_ACTION_URL, sessionMessageBody(row, text), ticket, clock);
+}
+
+/** A session action button's press as an envelope. No caller keeps one yet — see `KeyedActionsApi`. */
+export function runEnvelope<T>(
+  row: FleetRow,
+  actionId: string,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<SessionActionBody, T> {
+  return makeEnvelope(SESSION_ACTION_URL, sessionActionBody(row, actionId), ticket, clock);
+}
+
+/**
  * TWO REQUESTS, with no boolean that can turn one into the other accidentally.
  * A preview carries the rows the page was showing. A confirmation cannot take
  * rows at all: it carries the server's receipt and echoes that receipt's whole
@@ -1067,7 +1103,7 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * rather than trying to rebuild them from a process list.
  */
 type BoxPreviewBody = { actionId: string; mode: "dry-run"; confirm?: false; speaker?: "greg"; recipients?: SteerTargetBody[] };
-type BoxConfirmBody = {
+export type BoxConfirmBody = {
   actionId: string;
   mode: "run";
   confirm: true;
@@ -1134,6 +1170,19 @@ export function boxActionBody(actionOrPreview: BoxPreviewAction | FleetActionPre
     };
   }
   return { actionId: actionOrPreview.id, mode: "dry-run" };
+}
+
+/**
+ * A confirmed box action as an envelope — the one write on the box route the
+ * server keys. The material is copied into the envelope's bytes whole, exactly
+ * as `boxActionBody` echoes it.
+ */
+export function boxConfirmEnvelope<T>(
+  preview: FleetActionPreview,
+  ticket: T,
+  clock?: MintClock,
+): RequestEnvelope<BoxConfirmBody, T> {
+  return makeEnvelope(BOX_ACTION_URL, boxActionBody(preview), ticket, clock);
 }
 
 /**
@@ -1624,8 +1673,44 @@ export type BoxOutcome =
 
 export type FeedOutcome = { ok: true; feed: ActionsFeed } | { ok: false; why: string };
 
-/** The seam, the same shape as `SteerApi` and for the same reason. */
+/**
+ * The keyed half of the seam — request-envelope.ts. Each posts an envelope's
+ * bytes to its route and reads every way it can end.
+ *
+ * **Only `queueMessage` has a caller that keeps an envelope** (the session
+ * composer). `run` and `boxConfirm` are here so a caller can send one; the
+ * buttons that press them (ActionButtons.tsx) were outside Stage 4's
+ * authorised files and still send unkeyed.
+ */
+export type KeyedActionsApi = {
+  queueMessage: (envelope: RequestEnvelope<SessionMessageBody, unknown>) => Promise<KeyedOutcome<ActionOutcome>>;
+  run: (envelope: RequestEnvelope<SessionActionBody, unknown>) => Promise<KeyedOutcome<ActionOutcome>>;
+  boxConfirm: (envelope: RequestEnvelope<BoxConfirmBody, unknown>) => Promise<KeyedOutcome<BoxOutcome>>;
+};
+
+/**
+ * Queue a message envelope through whatever seam the composer was given. A
+ * seam with no keyed half (a test fake written before Stage 4) is sent the text
+ * the old way, and its answer is `answered`.
+ */
+export async function sendQueueEnvelope(
+  api: ActionsApi,
+  row: FleetRow,
+  envelope: RequestEnvelope<SessionMessageBody, unknown>,
+): Promise<KeyedOutcome<ActionOutcome>> {
+  if (api.keyed !== undefined) return api.keyed.queueMessage(envelope);
+  return { kind: "answered", outcome: await api.queueMessage(row, envelope.body.text) };
+}
+
+/**
+ * The seam, the same shape as `SteerApi` and for the same reason.
+ *
+ * The unkeyed methods are unchanged — steer-client.ts § `SteerApi` says why —
+ * and `keyed` is optional only so existing test fakes still satisfy the type.
+ * Every instance this file makes has it.
+ */
 export type ActionsApi = {
+  keyed?: KeyedActionsApi;
   /** `signal` reaches `fetch` (plan 260910c, F5): a controller in the hook cannot abort a fetch it does not make. */
   feed: (signal?: AbortSignal) => Promise<FeedOutcome>;
   run: (row: FleetRow, actionId: string) => Promise<ActionOutcome>;
@@ -1726,7 +1811,7 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
 
 /** The server's own words when it gave any, and which of us wrote them. */
 function refusal(
-  response: Response,
+  response: { readonly status: number },
   parsed: unknown,
 ): {
   ok: false;
@@ -1758,7 +1843,7 @@ function refusal(
   };
 }
 
-function readActionOutcome(response: Response, parsed: unknown): ActionOutcome {
+function readActionOutcome(response: { readonly status: number }, parsed: unknown): ActionOutcome {
   if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
   /* BEFORE `queueOp` and before the `item` check, for the same reason `cleared`
      is: this response carries a `hold`, and a reading that fell through to the
@@ -1808,7 +1893,39 @@ function readActionOutcome(response: Response, parsed: unknown): ActionOutcome {
   return { ok: true, kind: "accepted" };
 }
 
-export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
+/** A box route's answer, read. Shared by the unkeyed post and the keyed one. */
+function readBox(
+  response: { readonly status: number },
+  parsed: unknown,
+  action: BoxPreviewAction | null,
+  requestedDryRun: boolean,
+): BoxOutcome {
+  if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+  const snapshot = jsonSnapshot(parsed);
+  if (!isRecord(snapshot) || snapshot["ok"] !== true) return refusal(response, snapshot);
+  const stated = typeof snapshot["dryRun"] === "boolean";
+  return {
+    ok: true,
+    op: str(snapshot["op"]),
+    action: str(snapshot["action"]),
+    /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
+       server did not state one, `dryRunStated` is false and the panel says
+       it cannot tell — it does not fall back to what it asked for. */
+    dryRun: stated ? snapshot["dryRun"] === true : requestedDryRun,
+    dryRunStated: stated,
+    preview: action === null ? null : parseActionPreview(snapshot, action),
+    result: snapshot["result"] ?? null,
+    why: typeof snapshot["why"] === "string" ? snapshot["why"] : null,
+    effect: parseBoxEffect(snapshot["result"]),
+  };
+}
+
+/** A refusal in the server's own shape: a code and a sentence. Anything less is not a definitive answer. */
+function isServerRefusal(parsed: unknown): boolean {
+  return isRecord(parsed) && parsed["ok"] === false && typeof parsed["code"] === "string" && typeof parsed["why"] === "string";
+}
+
+export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi & { keyed: KeyedActionsApi } {
   const send = async (url: string, body: unknown): Promise<ActionOutcome> => {
     const posted = await postJson(url, body, fetchImpl);
     if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
@@ -1818,25 +1935,38 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
   const box = async (action: BoxPreviewAction | null, body: BoxActionBody, requestedDryRun: boolean): Promise<BoxOutcome> => {
     const posted = await postJson(BOX_ACTION_URL, body, fetchImpl);
     if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
-    const { response, parsed } = posted;
-    if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
-    const snapshot = jsonSnapshot(parsed);
-    if (!isRecord(snapshot) || snapshot["ok"] !== true) return refusal(response, snapshot);
-    const stated = typeof snapshot["dryRun"] === "boolean";
-    return {
-      ok: true,
-      op: str(snapshot["op"]),
-      action: str(snapshot["action"]),
-      /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
-         server did not state one, `dryRunStated` is false and the panel says
-         it cannot tell — it does not fall back to what it asked for. */
-      dryRun: stated ? snapshot["dryRun"] === true : requestedDryRun,
-      dryRunStated: stated,
-      preview: action === null ? null : parseActionPreview(snapshot, action),
-      result: snapshot["result"] ?? null,
-      why: typeof snapshot["why"] === "string" ? snapshot["why"] : null,
-      effect: parseBoxEffect(snapshot["result"]),
-    };
+    return readBox(posted.response, posted.parsed, action, requestedDryRun);
+  };
+
+  /**
+   * A keyed session write. The route's answer is read as `send` reads it —
+   * but a success that says nothing about what was done (`accepted`, the arm
+   * for a body with no fields this build knows) is `not-confirmed` here: the
+   * keyed arm is the one that can offer a Check, and a shape nobody can read
+   * is never a success.
+   */
+  const keyedAction = async (envelope: RequestEnvelope<object, unknown>): Promise<KeyedOutcome<ActionOutcome>> => {
+    const heard = await postEnvelope(envelope, fetchImpl);
+    if (heard.kind === "not-confirmed") return heard;
+    const shared = readKeyedArms(heard.status, heard.parsed);
+    if (shared !== null) return shared;
+    if (isServerRefusal(heard.parsed)) return { kind: "answered", outcome: readActionOutcome(heard, heard.parsed) };
+    if (isRecord(heard.parsed) && heard.parsed["ok"] === true) {
+      const outcome = readActionOutcome(heard, heard.parsed);
+      if (outcome.ok && outcome.kind !== "accepted") return { kind: "answered", outcome };
+    }
+    return unreadableAnswer(heard.status);
+  };
+
+  const keyedBox = async (envelope: RequestEnvelope<BoxConfirmBody, unknown>): Promise<KeyedOutcome<BoxOutcome>> => {
+    const heard = await postEnvelope(envelope, fetchImpl);
+    if (heard.kind === "not-confirmed") return heard;
+    const shared = readKeyedArms(heard.status, heard.parsed);
+    if (shared !== null) return shared;
+    if (isServerRefusal(heard.parsed) || (isRecord(heard.parsed) && heard.parsed["ok"] === true)) {
+      return { kind: "answered", outcome: readBox(heard, heard.parsed, null, false) };
+    }
+    return unreadableAnswer(heard.status);
   };
 
   return {
@@ -1872,6 +2002,12 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
 
     boxPreview: (action, rows) => box(action, boxActionBody(action, rows), true),
     boxConfirm: (preview) => box(null, boxActionBody(preview), false),
+
+    keyed: {
+      queueMessage: (envelope) => keyedAction(envelope),
+      run: (envelope) => keyedAction(envelope),
+      boxConfirm: (envelope) => keyedBox(envelope),
+    },
   };
 }
 
@@ -1880,7 +2016,12 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
  * reason in steer-client.ts: binding `fetch` at import time makes it unstubbable
  * in a test that imports this module first.
  */
-export const httpActionsApi: ActionsApi = {
+export const httpActionsApi: ActionsApi & { keyed: KeyedActionsApi } = {
+  keyed: {
+    queueMessage: (envelope) => makeActionsApi().keyed.queueMessage(envelope),
+    run: (envelope) => makeActionsApi().keyed.run(envelope),
+    boxConfirm: (envelope) => makeActionsApi().keyed.boxConfirm(envelope),
+  },
   feed: (signal) => makeActionsApi().feed(signal),
   run: (row, actionId) => makeActionsApi().run(row, actionId),
   queueMessage: (row, text) => makeActionsApi().queueMessage(row, text),
@@ -1891,4 +2032,160 @@ export const httpActionsApi: ActionsApi = {
   releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
   boxPreview: (action, rows) => makeActionsApi().boxPreview(action, rows),
   boxConfirm: (preview) => makeActionsApi().boxConfirm(preview),
+};
+
+/* ------------------------------------------------------------------ *
+ * Receipts — plan 260910d, Stage 4. Read by ReceiptList.tsx.
+ * ------------------------------------------------------------------ */
+
+export const RECEIPTS_URL = "api/actions/receipts";
+export const RECONCILE_URL = "api/actions/receipts/reconcile";
+
+/** The two statements a person may record beside an unknown enacted plan. */
+export type OperatorDisposition = Exclude<NonNullable<ReceiptSummary["reconciliation"]>["disposition"], "lease-abandoned">;
+
+/**
+ * `GET /api/actions/receipts`, read. `receipts` is the recent list and every
+ * non-terminal receipt together — one receipt appears once — newest first.
+ * `unreadable` counts receipts this build could not read: they are not drawn,
+ * and the list says how many, because a shorter list reads as fewer actions.
+ */
+export type ReceiptsFeed = {
+  durable: boolean;
+  status: {
+    neverOpened: boolean;
+    lockedOutBy: string | null;
+    failure: string | null;
+    unreadableLines: number;
+    illegalTransitions: number;
+    materialDeletionPending: number;
+  };
+  recovery: { blocked: boolean; reason: string | null };
+  receipts: ReceiptSummary[];
+  unreadable: number;
+  unknownWithoutHold: { sessionId: string; receiptIds: string[] }[];
+};
+
+export function parseReceiptsFeed(v: unknown): ReceiptsFeed | null {
+  if (!isRecord(v) || v["ok"] !== true || v["op"] !== "receipts" || typeof v["durable"] !== "boolean") return null;
+  const status = v["status"];
+  if (!isRecord(status)) return null;
+  const recovery = isRecord(v["recovery"]) ? v["recovery"] : {};
+  const byId = new Map<string, ReceiptSummary>();
+  const unreadableIds = new Set<string>();
+  let unreadable = 0;
+  for (const list of [v["nonTerminal"], v["recent"]]) {
+    if (!Array.isArray(list)) return null;
+    for (const raw of list) {
+      const read = parseReceiptSummary(raw);
+      if (read !== null) {
+        byId.set(read.receiptId, read);
+        continue;
+      }
+      /* A receipt in both lists is counted once, when its id can be read. */
+      const id = isRecord(raw) && typeof raw["receiptId"] === "string" ? raw["receiptId"] : null;
+      if (id === null) unreadable += 1;
+      else if (!unreadableIds.has(id)) {
+        unreadableIds.add(id);
+        unreadable += 1;
+      }
+    }
+  }
+  const unknownWithoutHold: ReceiptsFeed["unknownWithoutHold"] = [];
+  const rows = v["unknownWithoutHold"];
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      /* KEPT, NOT DROPPED, when it cannot be read: this is the loudest thing on
+         the list, and a session missing from it reads as a session that is fine. */
+      if (isRecord(row) && typeof row["sessionId"] === "string" && Array.isArray(row["receiptIds"])) {
+        unknownWithoutHold.push({
+          sessionId: row["sessionId"],
+          receiptIds: row["receiptIds"].filter((id): id is string => typeof id === "string"),
+        });
+      } else {
+        unknownWithoutHold.push({ sessionId: "(a row this build could not read)", receiptIds: [] });
+      }
+    }
+  }
+  return {
+    durable: v["durable"],
+    status: {
+      neverOpened: status["neverOpened"] === true,
+      lockedOutBy: str(status["lockedOutBy"]),
+      failure: str(status["failure"]),
+      unreadableLines: num(status["unreadableLines"]) ?? 0,
+      illegalTransitions: num(status["illegalTransitions"]) ?? 0,
+      materialDeletionPending: Array.isArray(status["materialDeletionPending"]) ? status["materialDeletionPending"].length : 0,
+    },
+    recovery: { blocked: recovery["blocked"] === true, reason: str(recovery["reason"]) },
+    receipts: [...byId.values()].sort((a, b) => b.acceptedAt - a.acceptedAt),
+    unreadable,
+    unknownWithoutHold,
+  };
+}
+
+export type ReceiptsReading = { ok: true; feed: ReceiptsFeed } | { ok: false; why: string };
+
+export type ReconcileOutcome =
+  | { ok: true; repeat: boolean; receipt: ReceiptSummary }
+  | { ok: false; code: string; why: string; from: "server" | "client" };
+
+export type ReceiptsApi = {
+  /** `signal` reaches `fetch`, so the reader's deadline and unmount really stop the read. */
+  read: (signal?: AbortSignal) => Promise<ReceiptsReading>;
+  /**
+   * Record a person's statement beside an unknown enacted plan. Idempotent for
+   * the same statement, so a lost response is recovered by pressing again.
+   */
+  reconcile: (receiptId: string, disposition: OperatorDisposition) => Promise<ReconcileOutcome>;
+};
+
+export function makeReceiptsApi(fetchImpl: typeof fetch = fetch): ReceiptsApi {
+  return {
+    async read(signal?: AbortSignal): Promise<ReceiptsReading> {
+      let response: Response;
+      try {
+        response = await fetchImpl(RECEIPTS_URL, { cache: "no-store", ...(signal === undefined ? {} : { signal }) });
+      } catch (cause) {
+        return { ok: false, why: `this browser could not reach the dashboard: ${describe(cause)}` };
+      }
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch (cause) {
+        return { ok: false, why: `the server answered ${response.status} and the body was not JSON: ${describe(cause)}` };
+      }
+      if (response.status < 200 || response.status >= 300) {
+        const why = isRecord(parsed) && typeof parsed["why"] === "string" ? parsed["why"] : null;
+        return { ok: false, why: why ?? `the server answered ${response.status} without saying why` };
+      }
+      const feed = parseReceiptsFeed(parsed);
+      return feed === null ? { ok: false, why: "the server answered something that is not this API" } : { ok: true, feed };
+    },
+
+    async reconcile(receiptId: string, disposition: OperatorDisposition): Promise<ReconcileOutcome> {
+      const posted = await postJson(RECONCILE_URL, { receiptId, disposition }, fetchImpl);
+      if ("failure" in posted) return { ok: false, code: posted.failure.code, why: posted.failure.why, from: "client" };
+      const p = posted.parsed;
+      if (isRecord(p) && p["ok"] === true && p["op"] === "reconciled") {
+        const receipt = parseReceiptSummary(p["receipt"]);
+        if (receipt !== null) return { ok: true, repeat: p["repeat"] === true, receipt };
+      }
+      if (isRecord(p) && p["ok"] === false && typeof p["code"] === "string" && typeof p["why"] === "string") {
+        return { ok: false, code: p["code"], why: p["why"], from: "server" };
+      }
+      return {
+        ok: false,
+        code: "unknown",
+        why: `the server answered ${posted.response.status} with something this build cannot read; pressing again is safe`,
+        from: "client",
+      };
+    },
+  };
+}
+
+/** The default instance. Async, so even a missing `fetch` becomes a failed read rather than a throw. */
+export const httpReceiptsApi: ReceiptsApi = {
+  read: async (signal) => makeReceiptsApi().read(signal),
+  reconcile: async (receiptId, disposition) => makeReceiptsApi().reconcile(receiptId, disposition),
 };

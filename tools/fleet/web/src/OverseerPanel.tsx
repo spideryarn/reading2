@@ -59,7 +59,9 @@ import type { ReactNode } from "react";
 
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
 import { BroadcastCard } from "./BroadcastCard";
+import type { ReceiptsApi } from "./actions-client";
 import { MessageOverseerCard } from "./MessageOverseerCard";
+import { ReceiptList } from "./ReceiptList";
 import { Explain } from "./Tooltip";
 import type {
   ClockSkew,
@@ -617,7 +619,14 @@ export function OverseerPanel({
   now,
   receivedAt,
   skew,
+  receipts,
 }: {
+  /**
+   * The receipts seam — `ReceiptList` reads through it. Optional, and the
+   * browser gets the default; a test that wants the list without a network
+   * passes one.
+   */
+  receipts?: ReceiptsApi;
   actions: ActionsUi;
   rows: readonly FleetRow[];
   /**
@@ -711,6 +720,12 @@ export function OverseerPanel({
           routes-broadcast.ts § the header says why they are two loops today and
           which way the dependency should run when they become one. */}
       <BroadcastCard rows={rows} unreadableRows={unreadableRows} />
+
+      {/* **WHAT BECAME OF WHAT WAS SENT**, beside the two cards that send —
+          plan 260910d, Stage 4. Here and not in the Sessions detail pane, which
+          remounts on a change of execution identity; this tab is the neutral
+          host its cards already share (agreed with `session-continuity`). */}
+      <ReceiptList {...(receipts === undefined ? {} : { api: receipts })} />
     </div>
   );
 }

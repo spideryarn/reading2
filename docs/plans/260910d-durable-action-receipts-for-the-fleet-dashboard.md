@@ -1,10 +1,11 @@
 # Durable action receipts for the fleet dashboard
 
-**Status, 2026-09-10 12:25: Stages 1 and 2 are on `dev`** — Stage 1 (`afbfcf2c`, live since the
-Overseer's restart): queued work writes receipts and survives a restart. Stage 2 (`d85b487f`, live
-after the next restart): request ids and replay on the steer and enqueue routes, receipts for direct
-steer and answer, and the catalogue's `holdsDurable` for the restart check. **Stage 3 is being
-implemented by an Opus subagent; Stage 4's brief is written and its web files are authorised.** The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
+**Status, 2026-09-10 13:30: Stages 1–3 are on `dev`** — Stage 1 (`afbfcf2c`, live): queued work
+writes receipts and survives a restart. Stage 2 (`d85b487f`, live since the Overseer's restart):
+request ids and replay on the steer and enqueue routes, receipts for direct steer and answer, and the
+catalogue's `holdsDurable`. Stage 3 (`a034938b`, live after the next restart): receipts for enacted
+plans and both broadcasts, a keyed kill or worktree removal never run twice. **Stage 4 is being
+implemented by an Opus subagent**; its web files are authorised. The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
 arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
 
 **Learned on the way, for whoever finishes this:** a stage's gates here have been the fleet suites
@@ -446,6 +447,15 @@ accepted a broadcast child with no parent link, or a parent link on an unrelated
 pre-Stage-3 lines still read as parentless. **F43**: a thrown transport's error could quote the
 broadcast's text into the server log and the response — both are now generic; the receipt already was.
 
+**Mutation run over Stages 2 and 3, 2026-09-10** ([brief](260910d-durable-action-receipts-stage2-3-mutation-task.md),
+an Opus subagent in its own worktree against `a034938b`): 17 mutations, 15 killed, two real holes.
+**15** — `refuseAfterDoor` leaving its receipt at `accepted` survived, because no test anywhere names
+`refused-before-attempt` although ten call sites produce it; a keyed replay would then report a refused
+action as pending. **16** — a broadcast parent marked attempted *after* its queued half survived, because
+no broadcast test makes `attempted` fail; the route would answer "nothing was sent or queued" over
+recipients already queued. Killing tests are being written in that worktree
+(`tests/fleet-stage3-guards.test.ts`), each proved red under its mutation, and land with Stage 4.
+
 - [ ] Receipts for `remove-worktree`, `kill-session` and the box kills on `/api/actions/session` and
   `/api/actions/box`: `accepted` before the first `await`, `attempted` before `runPlan`, a `progress`
   record per completed step, `completed` / `plan-stopped` / `outcome-unknown`. A crash mid-plan
@@ -503,6 +513,21 @@ composer in `SessionDetail.tsx`, `MessageOverseerCard.tsx` and `BroadcastCard.ts
 ticket seam exactly as above; a new `ReceiptList.tsx` mounted in `OverseerPanel.tsx`, which is free
 (260908j's status agent finished 2026-09-09). Condition: merge `origin/dev` before touching the
 three cards — `session-continuity`'s drafts changes landed there today. Sol stage review, 30 minutes.
+
+**Status, 2026-09-10 14:10: built by an Opus subagent from [the Stage 4 brief](260910d-durable-action-receipts-stage4-task.md);
+diff read here; gates and Sol's stage review next.** A new `request-envelope.ts` (one id, one set of
+bytes, `not-confirmed` for anything unreadable), keyed methods on the three clients, the three
+composers carrying the original ticket, `ReceiptList.tsx` on the Overseer tab, and
+`POST /api/actions/receipts/reconcile`. Two things found in reading it:
+- **A replay clears the draft whatever its receipt says** — including `not-sent`, where the original
+  answer would have been a refusal that kept it. The agreed sentence *"a replay is a definitive
+  success"* is true of *definitive*, not always of *success*; the rule should be that a replay accepts
+  only when its receipt shows the action happened. Put to Sol's review to fix in all three composers.
+- **Not every keyed route is used yet.** The dialog answers (the option buttons in `SessionDetail.tsx`,
+  and `QuestionsPanel`) and `ActionButtons`' run and box-confirm still send unkeyed: their keyed client
+  methods exist and are tested, but the callers are outside the files the Overseer authorised. Wiring
+  them is a follow-on that needs that authorisation.
+- Not built: the `?sessionId=` filter on the receipts route (the plan lists it; the brief did not).
 
 **Done:** a person on a phone can see, for recent actions, which were proven, which were withdrawn,
 which are unknown, and which unknowns somebody has since looked at — and pressing retry after a lost
