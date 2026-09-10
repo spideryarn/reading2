@@ -28,8 +28,10 @@
 import type { ReactNode } from "react";
 
 import { BoxActionsCard } from "./ActionButtons";
+import { AdmissionSection } from "./AdmissionSection";
 import { HealthHistory } from "./HealthHistory";
 import { RawValue } from "./RawValue";
+import { httpAdmissionApi, type AdmissionApi } from "./admission-client";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
 import { readHealthStats, type Stat, type StatBar } from "./health-view";
@@ -134,12 +136,14 @@ export function HealthPanel({
      panel a window of history without a server, and the default is the real
      one so no caller has to know. */
   historyApi = httpHistoryApi,
+  admissionApi = httpAdmissionApi,
   skew,
 }: {
   health: unknown;
   actions: ActionsUi;
   rows: readonly FleetRow[];
   historyApi?: HistoryApi;
+  admissionApi?: AdmissionApi;
   /**
    * **PASSED STRAIGHT THROUGH TO THE CHART'S LABELS, and nothing else here
    * reads it.** Required rather than defaulted for the reason `parsePause`'s is:
@@ -218,6 +222,7 @@ export function HealthPanel({
           once a minute, so putting it in the five-second state poll would be
           the wrong shape twice over. */}
       <HealthHistory api={historyApi} nowMs={Date.now()} skew={skew} />
+      <AdmissionSection api={admissionApi} />
 
       {/* **The raw dump is a disclosure now, not the page.** It read as a debug
           view — load, memory, swap, disk and attribution as bare key-value
