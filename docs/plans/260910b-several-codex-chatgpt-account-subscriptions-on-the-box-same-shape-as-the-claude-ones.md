@@ -727,6 +727,29 @@ state dir explicitly rather than inheriting them, so the suite answers the same 
 runs it. Flagged to the Overseer rather than fixed here — it is outside this plan's file set, and it
 is a live launcher.
 
+**And it is not the only one.** `tests/gjd-remote-account.test.ts` § "does not leave the selected
+config dir in the shell after Claude exits" fails the same way, for the same reason. It asserts that
+once the job exits the shell's `CLAUDE_CONFIG_DIR` reads `unset` — and in a routed session the shell
+it spawns inherited one before the job ever started:
+
+```
+expected '/tmp/claude-pool-two|unset|…' to contain 'after=unset'
++ after=/home/greg/.claude-gregmindstone
+```
+
+That path is this session's own config directory. Measured the same way as above:
+
+| run | `CLAUDE_CONFIG_DIR` | `gjd-remote-account.test.ts` |
+|---|---|---|
+| full suite, before merging `dev` | unset | **19/19** |
+| focused suites, after merging `dev` | set (this session) | **1 failed** |
+| the same seven suites, after merging `dev` | unset | **212/212**, all seven files |
+
+So there are **at least two** suites whose answer depends on who runs them, and there may be more:
+this stage looked only at the files its own change could reach. The class is worth a repo-wide look
+by whoever takes the repair — search the suite for anything that spawns a shell or a launcher
+without pinning `CLAUDE_CONFIG_DIR` — rather than a fix to these two alone.
+
 The `--family codex` refusal becomes a branch. Per-family, behind one interface, the five operations
 the Claude plan named as the seams:
 
