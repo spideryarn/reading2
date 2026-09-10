@@ -43,6 +43,29 @@ that entered that state, never moved by `released` or anything after it (`update
 `endedAt` is the completion's instant and differs from `updatedAt`; the same for a
 `failed-before-launch` followed by `released`.
 
+## Three from `gradual-recovery`'s plan review (G6, G7, G1), checked and accepted
+
+- **G7 — tmux probing must be exhaustive by launcher family.** `evidenceDecision` probes tmux only
+  when `record.launcherKind === "tmux"`, so a `tmux-headless` launch that crashed after its session
+  was created and before `start.json` reads as `outcome-unknown` while it runs. Replace the test with
+  an exhaustive `usesTmux(kind: LauncherKind): boolean` (a `switch` with a `never` default), true
+  for `tmux` and `tmux-headless`; use it wherever launcher family matters. Test, for **both** tmux
+  kinds: the tmux session carries the id, no `start.json`, and reconciliation reaches
+  `observed-running`.
+- **G6 — a narrow read-only inspection on the composed protocol.** `LaunchProtocol.inspect(origin):
+  OccurrenceSummary | null` and `LaunchProtocol.inFlight(originKind): readonly OccurrenceSummary[]`,
+  where `OccurrenceSummary` is a frozen copy — `{ occurrenceId, state, attempt: number | null,
+  reservationHeld: boolean, disposed: boolean, endedAt: string | null, completion: { kind: "exit";
+  code: number | null } | { kind: "rebooted" } | null }` — never the fold, the journal or the parts.
+  "In flight": `planned`, `waiting-admission`, `reserved`, `launching`, `observed-running`,
+  `outcome-unknown`, **and any record whose reservation is still held**. Tests: a mutation of a
+  returned summary does not reach the fold; each state lands in or out of `inFlight` as defined.
+  If the exact shape has to change, say so in your report (it was promised to `gradual-recovery`).
+- **G1 — the `failed-before-launch` outcome says whether its slot was released.** `LaunchOutcome`'s
+  `failed-before-launch` arm gains `reservation: { kind: "released" } | { kind: "held"; why: string }`
+  from `releaseIfLicensed`'s actual result (both call sites in `drive()`). Test: an owner whose
+  release fails yields `held` with its reason, and `inspect` says `reservationHeld: true`.
+
 ## The per-class hold condition (plan: "(Q2) Admission classes get a typed hold condition")
 
 In `launch-admission.ts` and `launch-protocol.ts`: the admission class becomes a closed set of two,
