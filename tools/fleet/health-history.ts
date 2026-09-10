@@ -696,12 +696,21 @@ function makeStore(
    *
    * Extracted so the oversized-sample path can put its own small
    * `sample-omitted` record down through exactly the same discipline — the
-   * `O_APPEND` fd, `writeAll`'s short-write loop, and the poison-on-partial
-   * rule. A second inline copy of those three would be a second place to get
-   * them wrong, and the whole reason they exist is that they were got wrong
-   * elsewhere first.
+   * per-record and file-size bounds, `O_APPEND` fd, `writeAll`'s short-write
+   * loop, and the poison-on-partial rule. A second inline copy would be a second
+   * place to get them wrong, and the whole reason they exist is that they were
+   * got wrong elsewhere first.
    */
   const writeLine = (line: string): void => {
+    const lineBytes = Buffer.byteLength(line, "utf8");
+    if (lineBytes > MAX_LINE_BYTES) {
+      throw new RangeError(`the bounded history record still serialised to ${lineBytes} bytes`);
+    }
+    /* Rotation belongs at the write boundary. An earlier version performed it
+       only on the ordinary-sample path, so `sample-omitted` records bypassed
+       the file ceiling and could grow the live file without bound. */
+    const size = existsSync(live) ? statSync(live).size : 0;
+    if (size > 0 && size + lineBytes > MAX_FILE_BYTES) renameSync(live, prev);
     const fd = openSync(live, "a", 0o600);
     try {
       write(fd, line);
@@ -851,36 +860,35 @@ function makeStore(
           "so the reading was taken but not kept";
         failure = why;
         try {
-          writeLine(
+          const omissionWith = (candidate: StoredWorkTurn): string =>
             sampleLine({
               schema: 1,
               at: stamp.at,
               nextDueMs: stamp.nextDueMs,
               kind: "sample-omitted",
               why,
-              workTurn: storedWorkTurn,
-            }),
-          );
+              workTurn: candidate,
+            });
+          /* Once the oversized health report is gone, its bounded work reading
+             usually fits again. Keep that real observation; use the stated-loss
+             replacement only when the work value itself still breaks the line. */
+          let omittedLine = omissionWith(workTurn);
+          if (Buffer.byteLength(omittedLine, "utf8") > MAX_LINE_BYTES) {
+            omittedLine = omissionWith(storedWorkTurn);
+          }
+          writeLine(omittedLine);
           lastSuccessAt = stamp.at;
           return true;
         } catch (err) {
-          /* If even the small line will not go down, the ordinary failure path
-             owns it — and `poisoned` is not set, because nothing partial can
-             have been written by a failure to open. */
+          /* If even the bounded replacement will not go down, the ordinary
+             failure path owns it. `writeLine` poisons only after a write starts;
+             size, rotation and open failures happen before any record bytes. */
           failure = err instanceof Error ? err.message : String(err);
           return false;
         }
       }
 
       try {
-        /* Rotate BEFORE the write that would overflow, so the cap is a ceiling
-           on the file rather than a line it crosses once per rotation.
-           `statSync` each time rather than a counter in memory, because a
-           counter is wrong the moment anything else touches the file, and a
-           stat costs ~10µs. */
-        const size = existsSync(live) ? statSync(live).size : 0;
-        if (size > 0 && size + lineBytes > MAX_FILE_BYTES) renameSync(live, prev);
-
         /* `openSync(…, "a")` per append rather than one long-lived fd: at one
            write per ~73 seconds the open costs nothing, and it means a file that
            somebody deletes or rotates underneath us is recreated on the next
@@ -898,8 +906,7 @@ function makeStore(
            and losing those renders as a break in the record, which is a truthful
            drawing of a machine that stopped. */
         /**
-         * **`opened` IS WHAT DECIDES WHETHER TO POISON**, and the distinction is
-         * worth the extra variable.
+         * **STARTING THE WRITE IS WHAT DECIDES WHETHER TO POISON.**
          *
          * A throw from `openSync` — `EACCES`, `ENOENT`, a directory where the
          * file should be — happened BEFORE any byte could be written, so the

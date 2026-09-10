@@ -846,6 +846,53 @@ describe("bounding a record", () => {
     expect(stored.workTurn).toEqual(NOT_DUE);
   });
 
+  it("keeps bounded due work when the health reading itself is what was omitted", () => {
+    const { dir, store } = withStore();
+    const work = due({
+      kind: "scan",
+      scannedAt: "2026-09-08T11:59:59.000Z",
+      groups: [],
+      groupsDropped: 0,
+      panes: { work: 0, none: 2, cannotTell: 0 },
+    });
+    const huge = report({ verdict: { level: "critical", reasons: ["y".repeat(MAX_LINE_BYTES * 2)] } });
+
+    store.append(
+      { kind: "reading", report: huge },
+      { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 },
+      work,
+    );
+
+    const stored = JSON.parse(readFileSync(join(dir, "health.jsonl"), "utf8")) as HealthSample;
+    expect(stored.kind).toBe("sample-omitted");
+    expect(stored.workTurn).toEqual(work);
+  });
+
+  it("rotates before an omission record would cross the file-size ceiling", () => {
+    const { dir, store } = withStore();
+    const filler = sampleLine({
+      schema: 1,
+      at: "2026-09-08T11:59:59.000Z",
+      nextDueMs: 73_000,
+      kind: "collector-failed",
+      why: "x",
+      workTurn: NOT_DUE,
+    });
+    const copies = Math.floor(MAX_FILE_BYTES / Buffer.byteLength(filler, "utf8"));
+    writeFileSync(join(dir, "health.jsonl"), filler.repeat(copies));
+    expect(statSync(join(dir, "health.jsonl")).size).toBeLessThanOrEqual(MAX_FILE_BYTES);
+
+    const huge = report({ verdict: { level: "critical", reasons: ["y".repeat(MAX_LINE_BYTES * 2)] } });
+    store.append(
+      { kind: "reading", report: huge },
+      { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 },
+      NOT_DUE,
+    );
+
+    expect(statSync(join(dir, "health.jsonl")).size).toBeLessThanOrEqual(MAX_FILE_BYTES);
+    expect(statSync(join(dir, "health.prev.jsonl")).size).toBeGreaterThan(0);
+  });
+
   it("refuses a sample whose SERIALISED size blows the per-record limit", () => {
     /* Bounding one `why` was not bounding the record. A type-valid report whose
        READINGS' own `why` strings were long — every parser carries one, and

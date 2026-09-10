@@ -1901,6 +1901,42 @@ describe("box health, whose shape belongs to somebody else", () => {
     expect(text).toContain("The Overseer has not published a current-work checkpoint yet");
     expect(text).not.toContain("live-resource-job");
   });
+
+  it("describes disk's inclusive chart boundaries as inclusive", async () => {
+    window.location.hash = "#health";
+    const now = Date.now();
+    const history: HistoryView = {
+      kind: "history",
+      windowHours: 1,
+      fromMs: now - 60 * 60_000,
+      toMs: now,
+      samples: [{
+        kind: "reading",
+        atMs: now - 5 * 60_000,
+        nextDueMs: 73_000,
+        report: {
+          disk: { kind: "value", usePercent: 90 },
+          verdict: { level: "strained", reasons: [] },
+        },
+      }],
+      predecessor: null,
+      holes: [],
+      earliestAtMs: now - 5 * 60_000,
+      rotated: false,
+      unreadableLines: 0,
+      refreshMs: 73_000,
+      unreadableSamples: 0,
+      retention: null,
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, historyApi: { window: async () => history } });
+    act(() => feed.push(state({ health: { verdict: { level: "strained", reasons: [] } } })));
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Amber at 90 and red at 97");
+    expect(text).not.toContain("Amber past 90 and red past 97");
+  });
 });
 
 /**

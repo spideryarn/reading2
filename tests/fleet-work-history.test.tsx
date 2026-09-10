@@ -35,14 +35,14 @@ function group(overrides: Partial<StoredWorkGroup> = {}): StoredWorkGroup {
   };
 }
 
-function dueScan(scannedAtMs: number, groups: StoredWorkGroup[], cannotTell = 0): StoredWorkTurn {
+function dueScan(scannedAtMs: number, groups: StoredWorkGroup[], cannotTell = 0, groupsDropped = 0): StoredWorkTurn {
   return {
     kind: "due",
     result: {
       kind: "scan",
       scannedAt: new Date(scannedAtMs).toISOString(),
       groups,
-      groupsDropped: 0,
+      groupsDropped,
       panes: { work: groups.length, none: groups.length === 0 ? 2 : 0, cannotTell },
     },
   };
@@ -137,6 +137,13 @@ describe("work history", () => {
     expect(host.textContent).toContain("Work retention is newer than this window");
   });
 
+  it("does not claim an exact five-minute cadence across dashboard restarts", () => {
+    render(view([sample(START + 5 * MINUTE, dueScan(START + 5 * MINUTE, []))]));
+
+    expect(host.textContent).toContain("about every five minutes during an uninterrupted dashboard run, and once on startup");
+    expect(host.textContent).not.toContain("Sampled every five minutes:");
+  });
+
   it("keeps a valid health reading when only its work envelope is unreadable, and says so", () => {
     const health = sample(START);
     if (health.kind !== "reading") throw new Error("test fixture must be a reading");
@@ -192,6 +199,12 @@ describe("work history", () => {
 
     expect(host.textContent).toContain("Timing was unavailable for 1 of these jobs");
     expect(host.textContent).toContain("2 panes could not be read at this sample");
+  });
+
+  it("says when the byte budget omitted lower-ranked groups from a scan", () => {
+    render(view([sample(START + 5 * MINUTE, dueScan(START + 5 * MINUTE, [group()], 0, 2))]));
+
+    expect(host.textContent).toContain("2 lower-ranked groups were omitted from this scan to keep the stored reading bounded");
   });
 
   it("does not print conditional uncertainty when every pane and timing was readable", () => {

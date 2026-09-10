@@ -75,8 +75,8 @@ let skipped = 0;
 for (let at = start; at <= now; at += CADENCE_MS) {
   const hoursAgo = (now - at) / 3_600_000;
 
-  /* A four-hour outage: nothing was running. No sample is written at all —
-     this is the state that cannot be recorded, only inferred. */
+  /* A four-hour gap: no sample is written at all. The record cannot say whether
+     the box was down, collection was down, or work was running. */
   if (hoursAgo < 13 && hoursAgo > 9) {
     skipped += 1;
     continue;

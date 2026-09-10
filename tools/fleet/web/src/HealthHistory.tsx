@@ -10,7 +10,8 @@
  *
  * **A sentence about the record first** — how much of the day was actually
  * observed — because every shape below it is worth only what that sentence
- * says. Then four lines on one x scale: load, memory used, swap used, IO wait.
+ * says. Then five lines on one x scale: load, memory used, swap used, IO wait,
+ * disk used.
  * Then **the verdict strip**, one band per pixel column over the whole window
  * in the colour of the collector's own verdict, worst wins in a shared column,
  * so a single 73-second `critical` at 04:00 is still on screen at 09:00. It
@@ -18,8 +19,8 @@
  *
  * **The strip was at the top until 2026-09-09**, at full saturation, and Greg
  * asked for it moved down and toned down: it was the loudest thing on a card
- * whose subject is the four lines, and a box that is routinely *strained* drew
- * a day-long orange bar over four calm graphs. It is a summary of them, so it
+ * whose subject is the five lines, and a box that is routinely *strained* drew
+ * a day-long orange bar over five calm graphs. It is a summary of them, so it
  * now reads after them, and `stripAppearance` saturates by severity rather than
  * uniformly.
  *
@@ -261,7 +262,7 @@ function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: num
           > the most important?
           >
           > — Greg, 2026-09-09
-          It is a summary of the four plots above, so it reads better after
+          It is a summary of the five plots above, so it reads better after
           them; and the time axis it carries now sits under all five rather than
           labelling the first one only. */}
       <VerdictStrip plot={plot} at={at} />
@@ -466,8 +467,8 @@ function SeriesChart({ series, plot, at }: { series: SeriesPlot; plot: HistoryPl
        the prose describing it was not. */
     how: `${
       Number.isFinite(spec.bands.critical)
-        ? `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart.`
-        : `Amber past ${format(spec.bands.strained)}. There is no red band here: the collector calls this critical only in combination with pages actually moving to or from swap, and a band on one axis cannot say that — so the combined judgement stays in the verdict strip below, which is the collector's own.`
+        ? `Amber ${spec.boundary} ${format(spec.bands.strained)} and red ${spec.boundary} ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart.`
+        : `Amber ${spec.boundary} ${format(spec.bands.strained)}. There is no red band here: the collector calls this critical only in combination with pages actually moving to or from swap, and a band on one axis cannot say that — so the combined judgement stays in the verdict strip below, which is the collector's own.`
     } A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.${extra === "" ? "" : ` ${extra}`}`,
   };
 
@@ -624,7 +625,7 @@ function scaler(plot: HistoryPlot): (ms: number) => number {
  * Every band used to be drawn at full strength, so a box that had been
  * *strained* for six ordinary hours — which this one often has been — looked
  * like a six-hour emergency, in the loudest element on a card whose subject is
- * the four lines above it. Turning the whole strip down would have flattened
+ * the five lines above it. Turning the whole strip down would have flattened
  * the step that matters most, so instead the scale is drawn as a scale: `ok`
  * recedes to a tint, `strained` is halfway, `critical` keeps every bit of its
  * red. **The gap between amber and red is bigger than it was, not smaller.**

@@ -59,12 +59,12 @@
 /**
  * The box-health cutoffs.
  *
- * Read as: **at or above `strained` is amber, at or above `critical` is red** —
- * except `memoryAvailable`, where the scale runs the other way and *less* is
- * worse. That inversion is exactly the kind of thing a shared table hides, so
- * the memory reader states its comparison out loud rather than looping over
- * this object. See `MEMORY_USED_PERCENT` for what happens when somebody tries
- * to flatten the inversion instead.
+ * Each metric's note below says whether its boundary is inclusive. Most are
+ * **at or above**, but load is strictly greater and `memoryAvailable` runs the
+ * other way, where less is worse. Those distinctions are exactly the kind of
+ * thing a shared table hides, so consumers state their comparisons out loud
+ * rather than looping over this object. See `MEMORY_USED_PERCENT` for what
+ * happens when somebody tries to flatten the inversion instead.
  *
  * The provenance differs per line and is recorded per line, because "the doc
  * says so" and "we picked it" are different kinds of number and only one of

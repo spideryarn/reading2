@@ -50,7 +50,7 @@ export function WorkHistory({
 
       <div className="tw:mt-3 tw:space-y-1 tw:text-[12px] tw:text-ink-faint">
         <p>Ranked by how long each job was observed running, not by how much CPU or memory it used — the box does not measure per-job cost.</p>
-        <p>Sampled every five minutes: a job that started and finished between two samples is not here at all.</p>
+        <p>Work is retained about every five minutes during an uninterrupted dashboard run, and once on startup. A job that started and finished between retained readings may not be here at all.</p>
       </div>
     </section>
   );
@@ -211,11 +211,17 @@ function deltaWords(ms: number): string {
 
 function ScanUncertainty({ scans, at }: { scans: WorkScan[]; at: TimeLabel }): ReactNode {
   const uncertain = scans.filter((scan) => scan.panes.cannotTell > 0);
-  if (uncertain.length === 0) return null;
+  const truncated = scans.filter((scan) => scan.groupsDropped > 0);
+  if (uncertain.length === 0 && truncated.length === 0) return null;
   return (
     <div className="tw:mt-2 tw:space-y-1 tw:text-[12px] tw:text-unknown-ink">
+      {truncated.map((scan) => (
+        <p key={`truncated:${scan.atMs}`}>
+          {scan.groupsDropped} lower-ranked group{scan.groupsDropped === 1 ? " was" : "s were"} omitted from this scan to keep the stored reading bounded ({at(scan.atMs)}).
+        </p>
+      ))}
       {uncertain.map((scan) => (
-        <p key={scan.atMs}>
+        <p key={`unreadable:${scan.atMs}`}>
           {scan.panes.cannotTell} pane{scan.panes.cannotTell === 1 ? "" : "s"} could not be read at this sample ({at(scan.atMs)}).
         </p>
       ))}

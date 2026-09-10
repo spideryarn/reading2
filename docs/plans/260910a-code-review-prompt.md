@@ -7,17 +7,29 @@ here touches the product's reader-facing code or its database.
 
 ## The candidate
 
-Committed: `git log --oneline 243d108a..HEAD` — the branch's own commits, in order:
+Committed, seven commits in order:
 
-- `0d3398e1` the plan
-- `b76e…`/`509f29d4`/`0af436e6`/`3f49da1c`/… stages 1, 2, 2b, 3 and 4
-  (**this list is filled in exactly before the review runs; do not trust it if the shas below
-  disagree with `git log`**)
+| sha | what |
+|-----|------|
+| `0d3398e1` | the plan |
+| `f9283946` | stage 1 — one policy module for the box-health cutoffs |
+| `f46cb42f` | the plan revised against a review that refused it |
+| `509f29d4` | stage 2 — a fourth work projection out of the one checkpoint read |
+| `0af436e6` | stage 2b — the event's own clock, a bound in bytes, timing as a three-way answer |
+| `3f49da1c` | stage 3 — the box starts remembering what was running |
+| `15ab391f` | stage 4 — the page |
 
-    git log --oneline --first-parent 243d108a..HEAD
-    git diff 243d108a..HEAD --stat
+    git diff 0d3398e1^..15ab391f
+    git diff --name-only 0d3398e1^..15ab391f
 
-Changed paths: whatever `git diff --name-only 243d108a..HEAD` prints. **Start with**
+**Use that range and not `<branch-base>..HEAD`.** `264c9a8d` is a merge of `origin/dev` that brings in
+three other sessions' work — an `admission-visibility` stage, a Claude-accounts stage and their
+tests — and a range that includes it would put a hundred files in front of you that nobody is asking
+about. The merge itself resolved one conflict, both branches having appended a new section to the end
+of `tools/fleet/wire.ts`; both were kept in sequence and nothing was rewritten, which you can check
+with `git show 264c9a8d -- tools/fleet/wire.ts`.
+
+Changed paths: whatever `git diff --name-only 0d3398e1^..15ab391f` prints. **Start with**
 `tools/fleet/work-groups.ts`, `tools/fleet/health-history.ts`, `tools/fleet/health-wiring.ts` and
 `tools/fleet/web/src/work-series.ts` — that is where to begin, not the limit of scope; the manifest
 is.
@@ -53,9 +65,24 @@ with the test that reproduces it — and leave anything wider as a finding for m
 commit.** List every file you changed at the end.
 
 Do not restart or kill anything: the fleet dashboard on port 8787 and the Overseer daemon are live
-and other people depend on them. Do not touch `tools/overseer/`. `npm run check` and `npm test` take
-about 25 minutes here; run focused suites instead. The full-suite and typecheck output I ran is
-recorded in the plan doc.
+and other people depend on them. Do not touch `tools/overseer/`. **Do not touch any file outside the
+manifest** — three other sessions are working in this tree.
+
+`npm run check` and `npm test` take about 25 minutes here; run focused suites instead. What I have
+run, at `264c9a8d`:
+
+- `npx vitest run` over eighteen files — the new work suites, the health suites, the history client
+  and series, and every caller of `fleetState` and `readCheckpointFeeds` — **872 passed**;
+- `npm run typecheck` — **exit 0** across all four projects, 1918 files;
+- two mutations, run rather than reasoned about: flipping `computeVerdict`'s load comparison from `>`
+  to `>=` reds the policy boundary test, and replacing `App`'s `currentWork={feed.state?.currentWork
+  ?? …}` with the constant reds both end-to-end composition tests.
+
+**One thing to know about the tests before you weigh them.** The stage-4 run reported honestly that
+seven of its ten named tests were green on their first run rather than seen red — so they are
+descriptions of the code as written rather than reproductions. The composition one I have since
+verified by mutation, as above. **The rest have not been**, and finding one of them that would pass
+against a broken implementation is a good use of this run.
 
 ## Attack it
 
