@@ -1,6 +1,6 @@
 # Work reports and decisions: a small event vocabulary
 
-Roadmap stage: [260908f § Stage: Work reports and decisions](260908f-overseer-and-fleet-improvement-roadmap.md#stage-work-reports-and-decisions--a-small-event-vocabulary).
+Roadmap stage: [260908f § Stage: Work reports and decisions](260908f-overseer-and-fleet-improvement-roadmap.md#stage-work-reports-and-decisions-a-small-event-vocabulary).
 Queue item `qi-evwdxpkf`, dispatched by the Overseer as session `work-reports` on 2026-09-10.
 
 ## What this is for
