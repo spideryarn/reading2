@@ -3598,3 +3598,96 @@ export type QuestionsView =
   | { kind: "partial"; items: readonly QuestionItem[]; gaps: readonly [QuestionGap, ...QuestionGap[]] }
   /** Written by either composer/parser when no source supplied a usable observation; the named silences are retained. */
   | { kind: "not-observed"; gaps: readonly [QuestionGap, ...QuestionGap[]] };
+
+/* ================================================================== *
+ * BOX ACTION PREVIEWS — THE MATERIAL A PERSON ACTUALLY CONFIRMS
+ * ================================================================== */
+
+export type FleetActionPreview = {
+  schema: "fleet-action-preview/1";
+  previewId: string;
+  serverInstanceId: string;
+  actionId: string;
+  /** Epoch ms. Past this the preview is gone, whatever else matches. */
+  expiresAt: number;
+  material: FleetActionMaterial;
+};
+
+/**
+ * THE CANONICAL MATERIAL — and everything that decides the effect is inside it.
+ * Nothing that changes what happens, who it happens to, or what is said may sit
+ * outside this object as a sibling request field.
+ */
+export type FleetActionMaterial =
+  | {
+      kind: "kill";
+      /** Full identity. These, and only these, may be confirmed. */
+      confirmable: readonly KillIdentity[];
+      /** Echoed for equality and display, but never admitted to the signal target list. */
+      excluded: readonly { pid: number; why: string }[];
+    }
+  | {
+      kind: "broadcast";
+      /** It changes the sentence AND its authority; outside the check, the words could differ. */
+      speaker: "greg" | "overseer";
+      /** Order is material: it decides each recipient's stagger position. */
+      recipients: readonly BroadcastRecipientClaim[];
+    };
+
+/** A confirmable process: the pid, the exact start tick, and the boot it started in. */
+export type KillIdentity = { pid: number; startTicks: number; bootId: string };
+
+/** One recipient, exactly as the page claimed it, plus the pause it was promised. */
+export type BroadcastRecipientClaim = {
+  paneId: string;
+  sessionId: string;
+  claudeSessionId: string | null;
+  panePid: number | null;
+  /** The client's raw status claim, retained verbatim from the preview request. */
+  status: unknown;
+  /** The stagger this row was shown. Bound, so the delivered wait cannot differ from the read one. */
+  minutes: number | null;
+};
+
+/** What a run hands back to name which preview it is confirming. */
+export type FleetActionPreviewClaim = {
+  previewId: string;
+  serverInstanceId: string;
+  actionId: string;
+};
+
+/** The display-only process details already shown by a kill preview. */
+export type FleetKillCandidateView = {
+  pid: number;
+  rule: string;
+  why: string;
+  comm: string;
+  args: string;
+  rssKiB: number;
+  etimeSeconds: number;
+};
+
+/** Kill and broadcast have distinct request arms so neither can acquire the other's inputs. */
+export type FleetBoxActionRequest =
+  | { actionId: "kill-test-suites" | "kill-safe-processes"; mode: "dry-run"; confirm?: false }
+  | {
+      actionId: "kill-test-suites" | "kill-safe-processes";
+      mode: "run";
+      confirm: true;
+      preview: FleetActionPreviewClaim;
+      material: Extract<FleetActionMaterial, { kind: "kill" }>;
+    }
+  | {
+      actionId: "resource-broadcast";
+      mode: "dry-run";
+      confirm?: false;
+      speaker: "greg" | "overseer";
+      recipients: readonly Omit<BroadcastRecipientClaim, "minutes">[];
+    }
+  | {
+      actionId: "resource-broadcast";
+      mode: "run";
+      confirm: true;
+      preview: FleetActionPreviewClaim;
+      material: Extract<FleetActionMaterial, { kind: "broadcast" }>;
+    };

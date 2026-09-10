@@ -599,6 +599,52 @@ async function post(handle: (req: IncomingMessage, res: ServerResponse) => boole
   return { status: seen.status, json: seen.body === "" ? {} : (JSON.parse(seen.body) as Record<string, unknown>) };
 }
 
+/**
+ * A broadcast that actually goes out, which is TWO requests as of
+ * docs/plans/260909h-box-contracts-…: the dry run mints a receipt naming the
+ * recipients it showed, and the run has to hand that receipt back with the
+ * material echoed verbatim or it is refused before anything is sent.
+ *
+ * **Written as a helper rather than inlined three times** so that these tests
+ * stay about what this file is about — that a held session is never typed into
+ * — instead of becoming three copies of a request-shape fixture. The shape is
+ * `tests/fleet-actions-route.test.ts`'s subject; the hold is this file's.
+ *
+ * The three tests below posted a one-shot `mode: "run"` body until the receipt
+ * existed, and were answered `400 preview-required` the moment it did — which
+ * is the route working, and is exactly the kind of breakage a scoped test run
+ * cannot see. It took a full-suite run to find them.
+ */
+async function broadcastRun(
+  handle: (req: IncomingMessage, res: ServerResponse) => boolean,
+  recipients: readonly Record<string, unknown>[],
+): Promise<{ status: number | null; json: Record<string, unknown> }> {
+  const previewed = await post(handle, fakeReq("/api/actions/box", {
+    actionId: "resource-broadcast",
+    mode: "dry-run",
+    speaker: "greg",
+    recipients,
+  }));
+  const envelope = previewed.json["preview"] as
+    | { previewId: string; serverInstanceId: string; actionId: string; material: unknown }
+    | undefined;
+  /* Not an `expect` on the dry run's status: a preview that failed would
+     otherwise surface as `undefined is not an object` several lines later,
+     which reads as a helper bug rather than as the route refusing. */
+  if (envelope === undefined) throw new Error(`the dry run minted no preview: ${previewed.status} ${previewed.json["why"] ?? ""}`);
+  return post(handle, fakeReq("/api/actions/box", {
+    actionId: "resource-broadcast",
+    mode: "run",
+    confirm: true,
+    preview: {
+      previewId: envelope.previewId,
+      serverInstanceId: envelope.serverInstanceId,
+      actionId: envelope.actionId,
+    },
+    material: envelope.material,
+  }));
+}
+
 describe("every ambiguous send holds the session — the drain", () => {
   it("stops the SECOND item after the first came back partial", () => {
     const { q, quarantine, clock } = makeQueue();
@@ -766,16 +812,10 @@ describe("every ambiguous send holds the session — the broadcast", () => {
       actEnabled: () => true,
       yieldToLoop: () => Promise.resolve(),
     });
-    const r = await post(routes.handle, fakeReq("/api/actions/box", {
-      actionId: "resource-broadcast",
-      mode: "run",
-      confirm: true,
-      speaker: "greg",
-      recipients: [
-        { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
-        { paneId: "%97009", sessionId: OTHER_SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
-      ],
-    }));
+    const r = await broadcastRun(routes.handle, [
+      { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+      { paneId: "%97009", sessionId: OTHER_SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+    ]);
     expect(r.status).toBe(200);
     expect(quarantine.holding(SESSION)?.origin).toBe("broadcast");
     expect(quarantine.holding(OTHER_SESSION)).toBeNull();
@@ -795,13 +835,7 @@ describe("every ambiguous send holds the session — the broadcast", () => {
       actEnabled: () => true,
       yieldToLoop: () => Promise.resolve(),
     });
-    await post(routes.handle, fakeReq("/api/actions/box", {
-      actionId: "resource-broadcast",
-      mode: "run",
-      confirm: true,
-      speaker: "greg",
-      recipients: [{ paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } }],
-    }));
+    await broadcastRun(routes.handle, [{ paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } }]);
     expect(quarantine.holding(SESSION)?.reading).toBe("threw");
   });
 
@@ -921,16 +955,10 @@ describe("a held session is not typed into — every path", () => {
       actEnabled: () => true,
       yieldToLoop: () => Promise.resolve(),
     });
-    const r = await post(routes.handle, fakeReq("/api/actions/box", {
-      actionId: "resource-broadcast",
-      mode: "run",
-      confirm: true,
-      speaker: "greg",
-      recipients: [
-        { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
-        { paneId: "%97009", sessionId: OTHER_SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
-      ],
-    }));
+    const r = await broadcastRun(routes.handle, [
+      { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+      { paneId: "%97009", sessionId: OTHER_SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+    ]);
 
     expect(r.status).toBe(200);
     expect(typedAt).toEqual([OTHER_SESSION]);

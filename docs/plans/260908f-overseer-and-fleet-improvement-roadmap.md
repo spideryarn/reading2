@@ -681,6 +681,18 @@ distinct: a pane survives more than one execution.
 
 ### Stage: Box contracts — make the existing actions reach their intended inputs
 
+**Status, 2026-09-10 (session `box-contracts`, queue item qi-qsxergb4): landed on `dev` at 1e7c8528; plan and
+both review artefacts under `docs/plans/260909h-*`.** Every checkbox below is done except `actionRevision`,
+which was cut on GPT Sol's finding that it cannot fire: `ACTIONS` is a static literal, so a changed
+definition needs a restart, which mints a new `serverInstanceId`, which refuses the preview before any
+revision is compared — a check that cannot fail is a claim, not a reading. The kill's identity (pid +
+start ticks + boot id) does **not** close pid reuse between a candidate's own `/proc` read and its
+signal; the durable fix is a pidfd, which Node cannot open without a native dependency, so it is a
+recorded residual to revisit the day a kill acts on anything but test suites and orphaned browsers.
+Also landed: Broadcast on the Box Health tab, which had never worked because `HealthPanel` was never
+given rows. Accepted by the Overseer, 2026-09-10 00:00Z.
+
+
 - [ ] First add failing tests passing `boxActionBody` through real `makeActionRoutes` with fake
   probe/run/steer dependencies. Cover kill preview→confirm and broadcast preview→confirm. Assert on
   recorded execution/recipient calls, not only HTTP 200.

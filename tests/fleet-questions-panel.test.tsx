@@ -216,7 +216,8 @@ const UNUSED_ACTIONS: ActionsApi = {
   abandon: async () => { throw new Error("unused"); },
   clear: async () => { throw new Error("unused"); },
   releaseHold: async () => { throw new Error("unused"); },
-  box: async () => { throw new Error("unused"); },
+  boxPreview: async () => { throw new Error("unused"); },
+  boxConfirm: async () => { throw new Error("unused"); },
 };
 
 const SENT: SteerOutcome = {
