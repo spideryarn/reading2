@@ -22,6 +22,9 @@
  * mutant and how many tests each one turned red is in the plan's Stage A report; the point of
  * writing it down is that a mutant with a LOW kill count marks a rule held by one assertion.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -483,12 +486,118 @@ describe("an unknown flag is refused, loudly, by name", () => {
     expect(read(["claude", "--print=true"]).kind).toBe("unreadable");
   });
 
-  it("refuses a flag whose value is optional in the CLI", () => {
-    // `-r, --resume [value]` cannot be read from argv alone: `--resume foo` is either "resume foo"
-    // or "resume, then the prompt foo". Deliberately absent from the table.
+  it("refuses a flag whose value is optional in the CLI, and `--resume` with anything but a uuid", () => {
+    // `--resume` has a rule of its own since 2026-09-10 (the block below), and it reads exactly one
+    // shape: a uuid right after it. `--resume foo` is a picker search term, not a conversation.
     const reading = read(["claude", "--resume", "foo"]);
     expect(reading.kind).toBe("unreadable");
     expect(reading.kind === "unreadable" && reading.why).toContain("--resume");
+    // and the other optional-value flags are still simply absent from the table
+    expect(read(["claude", "--worktree", "foo"]).kind).toBe("unreadable");
+  });
+});
+
+/**
+ * `--resume <uuid>` — THE ONE OPTIONAL-VALUE SHAPE THIS REPO PRODUCES (plan 260910f, Stage 3a).
+ *
+ * The first two cases are a REAL capture, not redacted: `/proc/<pid>/cmdline` of a resumed
+ * interactive claude, taken on 2026-09-10 in the shape `gjd-remote --resume-conversation` emits, and
+ * the `ps` line of the same process. The id is the spike's own scratch conversation and the prompt
+ * the spike's own, so neither is anybody's brief; they live in tests/fixtures/claude-argv/ so the id
+ * is never a literal in two test files. Every refusal after them is paired with an acceptance, so a
+ * reader that has stopped saying yes to anything cannot pass.
+ */
+describe("`--resume <uuid>` names the conversation, and nothing else about `--resume` does", () => {
+  const CAPTURE = JSON.parse(
+    readFileSync(join(import.meta.dirname, "fixtures", "claude-argv", "resumed-claude.json"), "utf8"),
+  ) as { conversationId: string; argv: string[]; ps: { line: string } };
+  /** The ps line's args column: everything after pid, ppid and etimes. */
+  const psArgs = CAPTURE.ps.line.trim().split(/\s+/).slice(3).join(" ");
+  const resumed = (id: string): ClaudeReading => ({ kind: "session", headless: false, sessionIds: [id] });
+  const noConversation: ClaudeReading = { kind: "session", headless: false, sessionIds: [] };
+
+  it("reads the real capture as a session for the resumed conversation", () => {
+    expect(read(CAPTURE.argv)).toEqual(resumed(CAPTURE.conversationId));
+    // and through the kernel's own encoding, trailing NUL and all
+    expect(readClaudeCommandLine(fromProcCmdline(`${CAPTURE.argv.join("\0")}\0`))).toEqual(
+      resumed(CAPTURE.conversationId),
+    );
+  });
+
+  it("reads the same process off `ps` too, because what follows the id is dash-led", () => {
+    expect(readFlat(psArgs)).toEqual(resumed(CAPTURE.conversationId));
+  });
+
+  it("a bare `--resume` opens the picker, so it names no conversation", () => {
+    for (const argv of [
+      ["claude", "--resume"],
+      ["claude", "--resume", "--permission-mode", "auto"],
+      ["claude", "--resume", "--", ID_A],
+    ]) {
+      const reading = read(argv);
+      expect(reading.kind, argv.join(" ")).toBe("unreadable");
+      expect(reading.kind === "unreadable" && reading.why).toContain("picker");
+    }
+    expect(read(["claude", "--resume", ID_A, "--permission-mode", "auto"])).toEqual(resumed(ID_A));
+  });
+
+  it("a value that is not exactly a lowercase uuid is not a conversation", () => {
+    for (const value of ["foo", ID_A.toUpperCase(), `${ID_A}9`, ID_A.slice(0, 8), "", ` ${ID_A}`, `${ID_A} carry on`]) {
+      const reading = read(["claude", "--resume", value]);
+      expect(reading.kind, JSON.stringify(value)).toBe("unreadable");
+      expect(reading.kind === "unreadable" && reading.why).toContain("--resume");
+    }
+    expect(read(["claude", "--resume", ID_A])).toEqual(resumed(ID_A));
+  });
+
+  it("only the long spelling, as two elements, is read", () => {
+    expect(read(["claude", `--resume=${ID_A}`]).kind).toBe("unreadable");
+    expect(read(["claude", "-r", ID_A]).kind).toBe("unreadable");
+    expect(read(["claude", `--resume ${ID_A}`]).kind).toBe("unreadable");
+  });
+
+  it("a uuid anywhere but right after `--resume` is not the conversation", () => {
+    expect(read(["claude", "--permission-mode", "auto", ID_A])).toEqual(noConversation);
+    expect(read(["claude", "--model", "haiku", ID_A])).toEqual(noConversation);
+    expect(read(["claude", "--name", "fleet", ID_A])).toEqual(noConversation);
+    expect(read(["claude", "--", ID_A])).toEqual(noConversation);
+    expect(read(["claude", "--", "--resume", ID_A])).toEqual(noConversation);
+    expect(read(["claude", "--print", ID_A])).toEqual({ kind: "session", headless: true, sessionIds: [] });
+  });
+
+  it("reports the resumed id beside any --session-id, and a fork is refused", () => {
+    // Two conversations named: the caller's duplicate policy decides, as for two --session-ids.
+    expect(read(["claude", "--resume", ID_A, "--session-id", ID_B])).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: [ID_A, ID_B],
+    });
+    // `--fork-session` mints a new id nothing could match, and it is no flag this repo produces.
+    expect(read(["claude", "--resume", ID_A, "--fork-session"]).kind).toBe("unreadable");
+    // headless resume is still headless, which is what the spike ran
+    expect(read(["claude", "-p", "--resume", ID_A, "Reply"])).toEqual({
+      kind: "session",
+      headless: true,
+      sessionIds: [ID_A],
+    });
+  });
+
+  it("reads a resume after a prompt on faithful argv, because claude permutes, and not off `ps`", () => {
+    expect(read(["claude", "<prompt>", "--resume", ID_A])).toEqual(resumed(ID_A));
+    expect(readFlat(`claude <prompt> --resume ${ID_A}`).kind).toBe("unreadable");
+  });
+
+  it("the fidelity pair: a bare word after the id is the prompt on argv and undecidable off `ps`", () => {
+    // Faithful: the prompt is its own element, so the id is exactly the element after `--resume`.
+    const argv = ["claude", "--resume", ID_A, "carry on please"];
+    expect(read(argv)).toEqual(resumed(ID_A));
+    // Flattened: `--resume "<id> carry on please"` (a picker search term) prints identically.
+    const flat = readFlat(argv.join(" "));
+    expect(flat.kind).toBe("unreadable");
+    expect(flat.kind === "unreadable" && flat.why).toContain("--resume");
+    // and its pair, so the flattened rule is not a blanket refusal
+    expect(readFlat(`claude --resume ${ID_A} --permission-mode auto -- carry on please`)).toEqual(resumed(ID_A));
+    expect(readFlat(`claude --resume ${ID_A}`)).toEqual(resumed(ID_A));
   });
 });
 

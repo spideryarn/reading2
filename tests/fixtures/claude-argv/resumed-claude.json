@@ -1,0 +1,23 @@
+{
+  "what": "A real resumed interactive claude, in the shape gjd-remote --resume-conversation will produce, plus --model haiku to keep it cheap. Plan docs/plans/260910f, Stage 3a.",
+  "capturedAt": "2026-09-10",
+  "claudeVersion": "2.1.267",
+  "how": "tmux -L s3a-sock new-session -d -s cap -c <spike dir> claude --resume <uuid> --permission-mode auto --model haiku -- \"Reply with exactly: OK4\"; the pane pid (1224600) was the claude itself; /proc/1224600/cmdline read and NUL-split, trailing-NUL run exactly 1; then tmux -L s3a-sock kill-server. One paid call.",
+  "why the id is not redacted": "It is the spike's own scratch conversation, and the prompt is the spike's own; neither is another agent's brief. The id lives only in this file so tests/fixture-ids.test.ts never sees it in two test files.",
+  "conversationId": "723dd2cd-a055-48c2-8d9b-aec6743802bc",
+  "argv": [
+    "claude",
+    "--resume",
+    "723dd2cd-a055-48c2-8d9b-aec6743802bc",
+    "--permission-mode",
+    "auto",
+    "--model",
+    "haiku",
+    "--",
+    "Reply with exactly: OK4"
+  ],
+  "ps": {
+    "command": "ps -o pid=,ppid=,etimes=,args= -p 1224600",
+    "line": "1224600 1224599       9 claude --resume 723dd2cd-a055-48c2-8d9b-aec6743802bc --permission-mode auto --model haiku -- Reply with exactly: OK4"
+  }
+}

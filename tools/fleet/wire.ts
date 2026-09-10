@@ -1138,6 +1138,21 @@ export type ProducerStamp = {
 };
 
 /**
+ * Something THIS BUILD of the dashboard can do that an older one could not, declared on every
+ * payload so a consumer can refuse to depend on it until the collector says so. Plan 260910f,
+ * Sol's G3: the Overseer's resume pass must not launch a `claude --resume` that the dashboard
+ * collecting the box would read as unverifiable.
+ *
+ *  - `argv-resume-uuid`: `claude-argv.ts` reads `--resume <uuid>` as the conversation, so a resumed
+ *    session's execution reading can be `verified` rather than `claimed-only`.
+ *
+ * A union of literals rather than `string`, so the producer cannot declare a misspelling. The
+ * Overseer's parser keeps names it does not know as strings (tools/overseer/observation.ts), because a
+ * newer dashboard is not a broken one.
+ */
+export type ProducerCapability = "argv-resume-uuid";
+
+/**
  * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
  * three consumers cannot disagree about it.
  *
@@ -1219,6 +1234,13 @@ export type FleetState<Row, Health> = {
    */
   schema: 1;
   producer: ProducerStamp;
+  /**
+   * What this build can do that an older one could not — see `ProducerCapability`. Beside
+   * `producer` because both answer "who composed this payload". Additive, so not a bump: a consumer
+   * that ignores it is poorer rather than wrong, and a payload from an older dashboard, which lacks
+   * it, is read by the Overseer as declaring none.
+   */
+  capabilities: readonly ProducerCapability[];
   /**
    * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
    * claim about the box when `collectedAt` is non-null, and a freshly restarted
@@ -5075,7 +5097,25 @@ export type RecoveryResumeRequestState =
  * the transcript (Sol's G4 — `--resume` only finds its own config dir's
  * conversations). Never `auto`.
  */
-export type RecoveryResumeAccount = { kind: "pinned"; name: string; configDir: string } | { kind: "unknown"; why: string };
+export type RecoveryResumeAccount = { kind: "pinned"; name: string; configDir: string } | { kind: "unknown"; reason: RecoveryResumeAccountUnknown; why: string };
+
+/**
+ * WHY THE ACCOUNT IS NOT ESTABLISHED (Sol's G17), as a code, so the page never
+ * reads prose to decide what to tell Greg. Only `default-login` is PROVEN — a
+ * whole, readable ledger with no row for the conversation — and only it gets
+ * the plain `claude --resume` with no account warning. Every other code means
+ * nobody knows which config directory holds the transcript, and the manual
+ * instructions say `CLAUDE_CONFIG_DIR` must name it.
+ */
+export type RecoveryResumeAccountUnknown =
+  | "default-login"
+  | "ledger-unreadable"
+  /** A malformed or cut newest line, or a ledger longer than the window with no row in it. */
+  | "ledger-ambiguous"
+  | "account-unusable"
+  | "transcript-elsewhere"
+  | "no-transcript"
+  | "not-resolved";
 
 /**
  * The previous objective and the uncertainty, for a record whose resume is
@@ -5109,9 +5149,22 @@ export type RecoveryResumeProjection = {
   pace:
     | { kind: "free" }
     | { kind: "waiting-for-verification"; candidateId: string; name: string; since: string }
+    /**
+     * Sol's G19: the queue is blocked by a launch only Greg's `dispose` moves —
+     * `outcome-unknown`, or a terminal launch still holding its slot.
+     * `disposeCommand` is display text, never run.
+     */
+    | { kind: "stuck"; candidateId: string; name: string; state: RecoveryResumeLaunchState; why: string; disposeCommand: string }
     | { kind: "spacing"; until: string };
   requests: { candidateId: string; name: string; state: RecoveryResumeRequestState }[];
   previews: RecoveryResumePreview[];
+  /**
+   * Sol's G18: requests whose candidate this file's records do not hold — the
+   * record aged out of the index, or a stale tab asked for one it never held.
+   * The store's single write point puts them here rather than dropping them,
+   * and the page lists them apart from the records, which they never touch.
+   */
+  orphans: { candidateId: string; state: RecoveryResumeRequestState; why: string }[];
   /** Pending request files past the scan limit: present on disk, not listed. */
   pendingOverflow: number;
 };

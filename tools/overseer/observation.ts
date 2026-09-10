@@ -294,6 +294,17 @@ export type ObservedSnapshot = {
    * the snapshot.
    */
   readonly ordering: SourceOrdering;
+  /**
+   * The wire's `capabilities`: what the collecting dashboard's BUILD declares it can do (plan
+   * 260910f, Sol's G3) — today only `argv-resume-uuid`, which the resume pass waits for. `[]` for a
+   * dashboard built before the field and for a malformed list; neither fails the snapshot. See
+   * `parseCapabilities`.
+   *
+   * A FACT ABOUT THIS OBSERVATION AND NOTHING MORE (the Overseer's ruling, 2026-09-10): nothing
+   * writes it into the register or `current.json`, and a consumer asks the latest ACCEPTED snapshot,
+   * never a remembered one, so a dashboard restarted onto an older build stops declaring it at once.
+   */
+  readonly capabilities: readonly string[];
   readonly tookMs: number;
   /** The last collection's failure. A stale payload keeps its old rows and is broadcast anyway. */
   readonly error: string | null;
@@ -959,6 +970,33 @@ function parseOrdering(payload: Record<string, unknown>, clock: CollectionClock)
   return { kind: "stamped", instance, publication: publication.value, inventory };
 }
 
+/** More names than any build will declare, or a name longer than any: not a list this reads. */
+const CAPABILITIES_MAX = 32;
+const CAPABILITY_NAME_MAX = 64;
+
+/**
+ * The producer's declared capabilities, read off a whole payload — see
+ * `ObservedSnapshot.capabilities`.
+ *
+ * NEVER FAILS THE SNAPSHOT AND NEVER GUESSES. Absent is a dashboard built
+ * before the field. Anything but a short list of short, non-empty strings is a
+ * producer defect. BOTH READ AS NONE, and a list with one bad entry is none
+ * rather than its good entries: a capability is something a consumer depends
+ * on, so the answer to "can it?" from a producer that has not said so legibly
+ * is no. Names this reader does not know are kept, because a newer dashboard is
+ * not a broken one.
+ */
+function parseCapabilities(payload: Record<string, unknown>): readonly string[] {
+  const u = payload["capabilities"];
+  if (!Array.isArray(u) || u.length > CAPABILITIES_MAX) return [];
+  const names: string[] = [];
+  for (const item of u) {
+    if (typeof item !== "string" || item === "" || item.length > CAPABILITY_NAME_MAX) return [];
+    names.push(item);
+  }
+  return Object.freeze(names);
+}
+
 /**
  * A `/api/state` body, or a sentence saying why it is not one.
  *
@@ -1049,6 +1087,9 @@ export function parseObservation(u: unknown): ParseResult<ObservedSnapshot> {
       // is old rather than broken, and a stamp that is wrong is a condition
       // the daemon raises, not a snapshot it throws away.
       ordering: parseOrdering(u, clock),
+      // NOR THIS ONE: an old dashboard declares nothing, and nothing is what
+      // the resume pass then waits on — it defers, it does not refuse.
+      capabilities: parseCapabilities(u),
       tookMs: tookMs.value,
       error: error.value,
       refreshMs: refreshMs.value,

@@ -120,7 +120,7 @@ function preview(recordId: string, over: Partial<RecoveryResumePreview> = {}): R
 }
 
 function projection(over: Partial<RecoveryResumeProjection> = {}): RecoveryResumeProjection {
-  return { schema: 1, writtenAt: "2026-09-10T14:59:00.000Z", launcher: { kind: "wired" }, gate: null, pace: { kind: "free" }, requests: [], previews: [], pendingOverflow: 0, ...over };
+  return { schema: 1, writtenAt: "2026-09-10T14:59:00.000Z", launcher: { kind: "wired" }, gate: null, pace: { kind: "free" }, requests: [], previews: [], orphans: [], pendingOverflow: 0, ...over };
 }
 
 const published = (p: RecoveryResumeProjection): RecoveryResumeSection => ({ kind: "published", projection: p });
@@ -223,14 +223,27 @@ describe("Resume… appears only under all four conditions", () => {
     expect(testId("recovery-resume-why-not")?.textContent).toContain(why);
   });
 
-  it("an unknown account: no Resume…, the plain claude --resume with no config directory, and the why in words", async () => {
+  it("the PROVEN default login: no Resume…, the plain claude --resume, no config directory and no account warning, and the why in words", async () => {
     const why = "started on the default login, which gjd-remote cannot relaunch by name";
-    await show(feed([classified(id(1), "interrupted")], published(projection({ previews: [preview(id(1), { account: { kind: "unknown", why } })] }))));
+    await show(feed([classified(id(1), "interrupted")], published(projection({ previews: [preview(id(1), { account: { kind: "unknown", reason: "default-login", why } })] }))));
     expect(openButtons()).toHaveLength(0);
     const command = testId("recovery-resume-manual-command")?.textContent ?? "";
     expect(command).toContain(`claude --resume ${CONVERSATION}`);
     expect(command).not.toContain("CLAUDE_CONFIG_DIR");
     expect(testId("recovery-resume-manual")?.textContent).toContain(why);
+    expect(testId("recovery-resume-account-warning")).toBeNull();
+  });
+
+  it("G17: an account that is NOT established (unreadable, ambiguous, elsewhere): the plain command AND the warning that CLAUDE_CONFIG_DIR must name the transcript's account", async () => {
+    for (const reason of ["ledger-unreadable", "ledger-ambiguous", "account-unusable", "transcript-elsewhere", "no-transcript"] as const) {
+      const why = `the account is not established (${reason})`;
+      await show(feed([classified(id(1), "interrupted")], published(projection({ previews: [preview(id(1), { account: { kind: "unknown", reason, why } })] }))));
+      expect(openButtons()).toHaveLength(0);
+      expect(testId("recovery-resume-manual-command")?.textContent).not.toContain("CLAUDE_CONFIG_DIR=");
+      const warning = testId("recovery-resume-account-warning");
+      expect({ reason, warned: warning !== null }).toEqual({ reason, warned: true });
+      expect(warning?.textContent).toContain("CLAUDE_CONFIG_DIR");
+    }
   });
 
   it("no preview for the record: no Resume…, manual instructions", async () => {
@@ -412,6 +425,50 @@ describe("a state line for each of the seven request states", () => {
   it("no pace line when the pace is free", async () => {
     await show(feed(records, published({ ...p, pace: { kind: "free" } })));
     expect(testId("recovery-pace")).toBeNull();
+  });
+});
+
+describe("G18, G19: what the queue holds that no card can show", () => {
+  it("G18: a request for a record the index no longer holds is listed above the records, with its state and why, and the records are untouched", async () => {
+    const gone = "rc-99999999999999999999";
+    const why = "the recovery index no longer holds this record, so the request cannot be shown against it";
+    await show(
+      feed(
+        [classified(id(1), "interrupted")],
+        published(
+          projection({
+            previews: [preview(id(1))],
+            orphans: [{ candidateId: gone, state: { kind: "pending", position: 1, requestedAt: "2026-09-10T14:50:00.000Z", actor: "dashboard", why: "being handled", until: null }, why }],
+          }),
+        ),
+      ),
+    );
+    const orphans = testId("recovery-resume-orphans");
+    expect(orphans).not.toBeNull();
+    expect(orphans?.textContent).toContain(gone);
+    expect(orphans?.textContent).toContain(why);
+    expect(orphans?.textContent).toContain("Queued");
+    expect(all('[data-testid="recovery-record"]')).toHaveLength(1);
+    expect(openButtons()).toHaveLength(1);
+  });
+
+  it("G18: no orphans, no list", async () => {
+    await show(feed([classified(id(1), "interrupted")], published(projection({ previews: [preview(id(1))] }))));
+    expect(testId("recovery-resume-orphans")).toBeNull();
+  });
+
+  it("G19: a stuck blocker is named on the pace line with its exact dispose command", async () => {
+    const disposeCommand = `npx tsx scripts/overseer-launches.ts dispose lo-7 --as not-running --why "<what you checked>"`;
+    await show(
+      feed(
+        [classified(id(1), "interrupted")],
+        published(projection({ pace: { kind: "stuck", candidateId: id(1), name: `session-${id(1)}`, state: "completed", why: "its launch slot has not been released", disposeCommand } })),
+      ),
+    );
+    const pace = testId("recovery-pace");
+    expect(pace?.textContent).toContain(`session-${id(1)}`);
+    expect(pace?.textContent).toContain("its launch slot has not been released");
+    expect(pace?.textContent).toContain(disposeCommand);
   });
 });
 

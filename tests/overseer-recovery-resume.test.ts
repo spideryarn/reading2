@@ -21,6 +21,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -56,12 +57,18 @@ import {
   quotaGateFor,
   QUOTE_MAX_CHARS,
   revalidate,
+  RESERVATIONS_TAIL_BYTES,
   RESUME_SPACING_MS,
   RESUME_USAGE_STALE_AFTER_MS,
+  readRange,
   runResumePass,
+  settledStateOf,
+  transcriptAfter,
   transcriptQuotes,
+  VERIFY_TAIL_BYTES,
   verificationOf,
   type ReadRange,
+  type ResumeAccountPort,
   type ResumeObservation,
   type ResumeOccurrence,
   type Revalidation,
@@ -248,7 +255,7 @@ describe("the request leaf", () => {
   });
 
   test("the parser is strict and never throws", () => {
-    for (const text of ["", "{", "null", "[]", "42", '{"v":2}', '{"v":1,"candidateId":"rc-0123456789abcdef0123"}', " "]) {
+    for (const text of ["", "{", "null", "[]", "42", '{"v":2}', '{"v":1,"candidateId":"rc-0123456789abcdef0123"}', "\u0000\u0001"]) {
       expect(() => parseResumeRequest(text)).not.toThrow();
       expect(parseResumeRequest(text).ok).toBe(false);
     }
@@ -424,12 +431,17 @@ describe("the occurrence table (G1)", () => {
     if (decision.kind === "defer") expect(decision.why).toContain("slot has not been released");
   });
 
-  test("planned, waiting-admission and reserved defer with the protocol's state", () => {
-    for (const state of ["planned", "waiting-admission", "reserved"] as const) {
-      const decision = decide({ occurrence: occurrence(id, { state }) });
-      expect(decision.kind).toBe("defer");
-      if (decision.kind === "defer") expect(decision.why).toContain(state);
+  test("G13: planned and waiting-admission are driven once pace, the gates and revalidation pass; reserved defers with the protocol's state", () => {
+    for (const state of ["planned", "waiting-admission"] as const) {
+      expect(decide({ occurrence: occurrence(id, { state }) })).toMatchObject({ kind: "drive", occurrence: { state } });
+      // Not past a held gate, a refusing revalidation, or pace.
+      expect(decide({ occurrence: occurrence(id, { state }), health: healthGate({ verdict: { level: "critical" } }, "hold") }).kind).toBe("defer");
+      expect(decide({ occurrence: occurrence(id, { state }), revalidation: { kind: "refuse", why: "the directory is missing" } }).kind).toBe("refuse");
+      expect(decide({ occurrence: occurrence(id, { state }), pace: { kind: "spacing", untilMs: NOW + 1000 } }).kind).toBe("defer");
     }
+    const reserved = decide({ occurrence: occurrence(id, { state: "reserved" }) });
+    expect(reserved.kind).toBe("defer");
+    if (reserved.kind === "defer") expect(reserved.why).toContain("reserved");
   });
 
   test("launching, observed-running, outcome-unknown and completed are settled; so is anything disposed", () => {
@@ -455,8 +467,39 @@ describe("pace (G2, G8)", () => {
 
   test("an outcome-unknown blocker names the exact dispose command", () => {
     const pace = paceOf({ ...base, inFlight: [occurrence(other, { state: "outcome-unknown" })], verified: () => false });
-    if (pace.kind !== "blocked") throw new Error("expected blocked");
+    if (pace.kind !== "stuck") throw new Error("expected stuck");
     expect(pace.why).toContain(`scripts/overseer-launches.ts dispose lo-${other} --as not-running`);
+  });
+
+  test("G19: a terminal occurrence still holding its reservation is a STUCK blocker with the dispose command — completed or failed, verified or not", () => {
+    for (const state of ["completed", "failed-before-launch"] as const) {
+      for (const verified of [false, true]) {
+        const pace = paceOf({ ...base, inFlight: [occurrence(other, { state, reservationHeld: true })], verified: () => verified });
+        expect({ state, verified, kind: pace.kind }).toEqual({ state, verified, kind: "stuck" });
+        if (pace.kind !== "stuck") throw new Error("expected stuck");
+        expect(pace.disposeCommand).toBe(`npx tsx scripts/overseer-launches.ts dispose lo-${other} --as not-running --why "<what you checked>"`);
+        expect(pace.why).toContain(pace.disposeCommand);
+      }
+    }
+    // Released, it is not a blocker at all; disposed, nothing is.
+    expect(paceOf({ ...base, inFlight: [occurrence(other, { state: "completed", reservationHeld: false })], verified: () => false })).toEqual({ kind: "free" });
+    expect(paceOf({ ...base, inFlight: [occurrence(other, { state: "completed", reservationHeld: true, disposed: true })], verified: () => false })).toEqual({ kind: "free" });
+  });
+
+  test("G19: the page state of every terminal occurrence still holding its reservation is needs-greg with the dispose command, even one verified earlier", () => {
+    for (const state of ["completed", "failed-before-launch"] as const) {
+      for (const verifiedAt of [null, NOW_ISO]) {
+        const got = settledStateOf({
+          requestedAt: NOW_ISO,
+          settledAt: NOW_ISO,
+          occurrence: occurrence(other, { state, reservationHeld: true, completion: state === "completed" ? { kind: "exit", code: 0 } : null }),
+          verification: { inventoryResumed: false, observedRunning: false, transcriptGrew: false, sessionLineSeen: false },
+          verifiedAt,
+        });
+        expect({ state, verifiedAt, kind: got.kind }).toEqual({ state, verifiedAt, kind: "needs-greg" });
+        expect(got.kind === "needs-greg" && got.disposeCommand).toContain(`dispose lo-${other}`);
+      }
+    }
   });
 
   test("a disposed blocker releases pace; a verified one gives way to spacing", () => {
@@ -515,6 +558,7 @@ describe("revalidation (§ 2.6 and the dispositions)", () => {
     dir: { kind: "directory" },
     transcript: { kind: "file", size: 5, mtimeMs: 5 },
     account: pinned,
+    accountRecheck: { kind: "same" },
     producerCanVerify: true,
     ...changes,
   });
@@ -543,7 +587,7 @@ describe("revalidation (§ 2.6 and the dispositions)", () => {
   });
 
   test("an account that cannot be established is manual only", () => {
-    const result = revalidate(facts({ account: { kind: "unknown", why: "started on the default login, which gjd-remote cannot relaunch by name" } }));
+    const result = revalidate(facts({ account: { kind: "unknown", reason: "default-login", why: "started on the default login, which gjd-remote cannot relaunch by name" } }));
     expect(result.kind === "refuse" && result.why).toContain("manual only");
   });
 
@@ -572,26 +616,96 @@ describe("verification: all four facts", () => {
   const resumed = record(conversation, "/srv/v", "verify-one", {
     resolution: { disposition: "resumed", at: launchedAt, evidence: { previousToken: TOKEN_ONE, token: TOKEN_TWO, conversationId: conversation } },
   });
-  const after = line("assistant", "back", conversation, "2026-09-10T10:00:30.000Z");
+  const objects = (...lines: string[]): Record<string, unknown>[] => lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+  const after = objects(line("assistant", "back", conversation, "2026-09-10T10:00:30.000Z"));
+  /** A reading taken against this attempt's offset (100): `newLines` are the lines that began after it. */
+  const reading = (size: number, mtimeMs: number, newLines: Record<string, unknown>[]) => ({ size, mtimeMs, afterOffset: 100, newLines });
 
   test("resumed, observed running, grown and a new line: verified", () => {
-    const v = verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, { size: 200, mtimeMs: 2000, tail: after, tailFromStart: true }, attempt);
+    const v = verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, reading(200, 2000, after), attempt);
     expect(v).toEqual({ inventoryResumed: true, observedRunning: true, transcriptGrew: true, sessionLineSeen: true });
   });
 
-  test("a line dated after the launch in a transcript that did not grow is not verification", () => {
-    const v = verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, { size: 100, mtimeMs: 1000, tail: after, tailFromStart: true }, attempt);
+  test("a new line in a transcript whose size and mtime did not both move is not growth", () => {
+    const v = verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, reading(100, 1000, after), attempt);
     expect(v.transcriptGrew).toBe(false);
     expect(v.sessionLineSeen).toBe(true);
   });
 
-  test("a line from before the launch, another conversation's line, a launch not seen running, a record not resumed: each missing", () => {
-    const early = line("assistant", "old", conversation, "2026-09-10T09:59:00.000Z");
-    const foreign = line("assistant", "other", randomUUID(), "2026-09-10T10:00:30.000Z");
-    const grown = { size: 200, mtimeMs: 2000, tailFromStart: true };
-    expect(verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, { ...grown, tail: early + foreign }, attempt).sessionLineSeen).toBe(false);
-    expect(verificationOf(occurrence(attempt.candidateId, { state: "launching" }), resumed, { ...grown, tail: after }, attempt).observedRunning).toBe(false);
-    expect(verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), record(conversation, "/srv/v"), { ...grown, tail: after }, attempt).inventoryResumed).toBe(false);
+  test("only another conversation's line after the offset, a launch not seen running, a record not resumed: each missing", () => {
+    const foreign = objects(line("assistant", "other", randomUUID(), "2026-09-10T10:00:30.000Z"));
+    expect(verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), resumed, reading(200, 2000, foreign), attempt).sessionLineSeen).toBe(false);
+    expect(verificationOf(occurrence(attempt.candidateId, { state: "launching" }), resumed, reading(200, 2000, after), attempt).observedRunning).toBe(false);
+    expect(verificationOf(occurrence(attempt.candidateId, { state: "observed-running" }), record(conversation, "/srv/v"), reading(200, 2000, after), attempt).inventoryResumed).toBe(false);
+  });
+});
+
+describe("G12: a line counts only when it BEGINS AFTER the byte offset recorded before invocation", () => {
+  const conversation = randomUUID();
+  const mine = (text: string, at = "2026-09-10T11:00:00.000Z"): string => line("assistant", text, conversation, at);
+  const attemptAt = (size: number) => ({
+    v: 1 as const,
+    candidateId: "rc-0000000000000000000e",
+    conversationId: conversation,
+    transcriptPath: "/unused",
+    transcriptSizeAtLaunch: size,
+    transcriptMtimeAtLaunch: 1,
+    launchedAt: "2026-09-10T12:00:00.000Z",
+    verifiedAt: null,
+  });
+  const resumed = record(conversation, "/srv/v12", "verify-offset", {
+    resolution: { disposition: "resumed", at: NOW_ISO, evidence: { previousToken: TOKEN_ONE, token: TOKEN_TWO, conversationId: conversation } },
+  });
+  const running = occurrence("rc-0000000000000000000e", { state: "observed-running" });
+
+  async function readAfter(body: string, offset: number) {
+    const path = join(tempRoot(), `${conversation}.jsonl`);
+    writeFileSync(path, body);
+    return transcriptAfter(path, offset);
+  }
+
+  test("a line beginning exactly at the offset counts, and needs no timestamp after the launch clock", async () => {
+    const before = mine("before, dated far in the future", "2027-01-01T00:00:00.000Z");
+    const reading = await readAfter(before + mine("after, dated before the launch clock", "2026-09-10T00:00:00.000Z"), Buffer.byteLength(before));
+    expect(verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before))).sessionLineSeen).toBe(true);
+  });
+
+  test("everything before the offset is ignored, however it is dated, and unrelated growth after it proves nothing", async () => {
+    const before = mine("before, dated far in the future", "2027-01-01T00:00:00.000Z");
+    const unrelated = `${JSON.stringify({ type: "summary", summary: "x" })}\n${line("assistant", "other", randomUUID(), "2027-01-01T00:00:00.000Z")}`;
+    const reading = await readAfter(before + unrelated, Buffer.byteLength(before));
+    const v = verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before)));
+    expect(v.sessionLineSeen).toBe(false);
+  });
+
+  test("a line that began before the offset (the file ended mid-line at launch) is not after it", async () => {
+    const whole = mine("straddles the offset");
+    const reading = await readAfter(whole, 10);
+    expect(verificationOf(running, resumed, reading, attemptAt(10)).sessionLineSeen).toBe(false);
+  });
+
+  test("an offset before the 64 KiB tail window: the window after the offset is read, bounded, and a line there counts", async () => {
+    const before = mine("before");
+    const filler = `${JSON.stringify({ type: "attachment", filler: "f".repeat(4000) })}\n`;
+    let body = before + mine("the resumed session's first line");
+    while (Buffer.byteLength(body) < 300 * 1024) body += filler;
+    let bytes = 0;
+    const path = join(tempRoot(), `${conversation}.jsonl`);
+    writeFileSync(path, body);
+    const counting: ReadRange = async (p, position, length) => {
+      const got = await readRange(p, position, length);
+      bytes += got.length;
+      return got;
+    };
+    const reading = await transcriptAfter(path, Buffer.byteLength(before), counting);
+    expect(bytes).toBeLessThanOrEqual(2 * VERIFY_TAIL_BYTES + 1);
+    expect(verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before))).sessionLineSeen).toBe(true);
+  });
+
+  test("a reading taken against another attempt's offset is not this attempt's evidence", async () => {
+    const before = mine("before");
+    const reading = await readAfter(before + mine("after"), 0);
+    expect(verificationOf(running, resumed, reading, attemptAt(Buffer.byteLength(before))).sessionLineSeen).toBe(false);
   });
 });
 
@@ -720,21 +834,116 @@ describe("the production account port", () => {
     const w = world();
     const port = productionAccountPort({ accountsDir: w.accountsDir });
     const resolved = await port.resolve({ conversationId: w.conversation, transcriptPath: "", transcriptRoot: realpathSync(w.projects) });
-    expect(resolved).toEqual({ kind: "pinned", name: "ri-pool", configDir: w.stateDir });
+    expect(resolved.account).toEqual({ kind: "pinned", name: "ri-pool", configDir: w.stateDir });
   });
 
   test("no ledger row is the default login; a transcript under another root is not that account's", async () => {
     const w = world();
     const port = productionAccountPort({ accountsDir: w.accountsDir });
     const none = await port.resolve({ conversationId: randomUUID(), transcriptPath: "", transcriptRoot: realpathSync(w.projects) });
-    expect(none).toEqual({ kind: "unknown", why: "started on the default login, which gjd-remote cannot relaunch by name" });
+    // G17: THE ONE PROVEN DEFAULT LOGIN has its own reason code; nothing else may claim it.
+    expect(none.account).toEqual({ kind: "unknown", reason: "default-login", why: "started on the default login, which gjd-remote cannot relaunch by name" });
     const elsewhere = await port.resolve({ conversationId: w.conversation, transcriptPath: "", transcriptRoot: realpathSync(tempRoot()) });
-    expect(elsewhere.kind === "unknown" && elsewhere.why).toContain("not under the account ri-pool's own projects directory");
+    expect(elsewhere.account).toMatchObject({ kind: "unknown", reason: "transcript-elsewhere" });
+    expect(elsewhere.account.kind === "unknown" && elsewhere.account.why).toContain("not under the account ri-pool's own projects directory");
+  });
+
+  test("G11: the resolution carries evidence a synchronous recheck can test: unchanged is same; a ledger append, a registry replaced, or the account's projects link moved is changed", async () => {
+    const w = world();
+    const port = productionAccountPort({ accountsDir: w.accountsDir });
+    const input = { conversationId: w.conversation, transcriptPath: "", transcriptRoot: realpathSync(w.projects) };
+    const resolved = (await port.resolve(input)) as unknown as { account: RecoveryResumeAccount; recheck(): { kind: string } };
+    expect(resolved.account).toMatchObject({ kind: "pinned", name: "ri-pool" });
+    expect(resolved.recheck()).toEqual({ kind: "same" });
+    appendFileSync(join(w.accountsDir, "reservations.ndjson"), `${JSON.stringify({ schema: 1, note: "another launch" })}\n`);
+    expect(resolved.recheck().kind).toBe("changed");
+
+    const again = (await port.resolve(input)) as unknown as { recheck(): { kind: string } };
+    expect(again.recheck()).toEqual({ kind: "same" });
+    const registry = join(w.accountsDir, "registry.json");
+    writeFileSync(`${registry}.next`, readFileSync(registry));
+    renameSync(`${registry}.next`, registry);
+    expect(again.recheck().kind).toBe("changed");
+
+    const third = (await port.resolve(input)) as unknown as { recheck(): { kind: string } };
+    expect(third.recheck()).toEqual({ kind: "same" });
+    rmSync(join(w.stateDir, "projects"));
+    symlinkSync(tempRoot(), join(w.stateDir, "projects"));
+    expect(third.recheck().kind).toBe("changed");
   });
 
   test("the port reads no quota and so makes no network call: the quota is the daemon's stored per-account reading", () => {
     const w = world();
     expect(Object.keys(productionAccountPort({ accountsDir: w.accountsDir }))).toEqual(["resolve"]);
+  });
+});
+
+describe("G15: the account ledger's rows are the real launch record, and anything doubtful is unknown, never an account", () => {
+  /**
+   * Two registered accounts whose projects both resolve to the transcript's
+   * root, so a WRONG row would pin a launch to the wrong account — the danger
+   * being tested, not a row that happens to be refused later for its root.
+   */
+  function ledgerWorld(ledger: string): { accountsDir: string; projects: string } {
+    const accountsDir = tempRoot();
+    const projects = tempRoot();
+    const accounts = ["ri-pool", "ri-other"].map((name) => {
+      const stateDir = tempRoot();
+      symlinkSync(projects, join(stateDir, "projects"));
+      return { name, family: "claude", role: "pool", stateDir, providerAccountId: randomUUID(), providerTenantId: randomUUID(), addedAt: NOW_ISO, familyData: {} };
+    });
+    writeFileSync(join(accountsDir, "registry.json"), JSON.stringify({ schema: 1, accounts }));
+    writeFileSync(join(accountsDir, "reservations.ndjson"), ledger);
+    return { accountsDir, projects };
+  }
+  const row = (session: string, accountName: string, over: Record<string, unknown> = {}): string =>
+    JSON.stringify({ schema: 1, accountName, providerAccountId: null, sessionUuid: session, launchName: "ri", createdAt: NOW_ISO, outcome: "started", ...over });
+  async function resolveIn(ledger: string, conversation: string): Promise<RecoveryResumeAccount> {
+    const w = ledgerWorld(ledger);
+    const resolved: unknown = await productionAccountPort({ accountsDir: w.accountsDir }).resolve({ conversationId: conversation, transcriptPath: "", transcriptRoot: realpathSync(w.projects) });
+    // Stage-agnostic: the port answers the account, or (after G11) the account with its evidence.
+    return (typeof resolved === "object" && resolved !== null && "account" in resolved ? (resolved as { account: RecoveryResumeAccount }).account : resolved) as RecoveryResumeAccount;
+  }
+
+  test("a valid row is still the account", async () => {
+    const conversation = randomUUID();
+    expect(await resolveIn(`${row(conversation, "ri-pool")}\n`, conversation)).toMatchObject({ kind: "pinned", name: "ri-pool" });
+  });
+
+  test("a newer line naming the conversation that is not a whole launch record overrides nothing: unknown", async () => {
+    const conversation = randomUUID();
+    const foreign = JSON.stringify({ schema: 1, sessionUuid: conversation, accountName: "ri-other" });
+    const got = await resolveIn(`${row(conversation, "ri-pool")}\n${foreign}\n`, conversation);
+    expect(got.kind).toBe("unknown");
+    expect(got.kind === "unknown" && got.why).toContain("not a valid launch record");
+  });
+
+  test("a newer row with an unreadable timestamp or an outcome the ledger does not have is not a record: unknown", async () => {
+    for (const over of [{ createdAt: "not a time" }, { outcome: "exploded" }, { activeUntil: 7 }, { launchName: null }]) {
+      const conversation = randomUUID();
+      const got = await resolveIn(`${row(conversation, "ri-pool")}\n${row(conversation, "ri-other", over)}\n`, conversation);
+      expect({ over, kind: got.kind }).toEqual({ over, kind: "unknown" });
+    }
+  });
+
+  test("a tail window with no newline in it (one line longer than the window, still being written) is unknown, never parsed from its middle", async () => {
+    const conversation = randomUUID();
+    // The whole line is not JSON (two values); its last 4 MiB are whitespace and a row naming ri-other.
+    const giant = `{"a":1}${" ".repeat(RESERVATIONS_TAIL_BYTES + 16)}${row(conversation, "ri-other")}`;
+    const got = await resolveIn(`${row(conversation, "ri-pool")}\n${giant}`, conversation);
+    expect(got.kind).toBe("unknown");
+    expect(got.kind === "unknown" && got.why).toContain("longer than");
+  });
+
+  test("an oversized relevant line — cut by the window, naming the conversation, nothing newer — is unknown, not the default login", async () => {
+    const conversation = randomUUID();
+    const oversized = row(conversation, "ri-pool", { note: "n".repeat(RESERVATIONS_TAIL_BYTES + 16) });
+    const got = await resolveIn(`${oversized}\n${row(randomUUID(), "ri-other")}\n`, conversation);
+    expect(got.kind).toBe("unknown");
+    expect(got.kind === "unknown" && got.why).toContain("longer than");
+    // And a newer valid row after such a line still decides.
+    const decided = await resolveIn(`${oversized}\n${row(conversation, "ri-other")}\n`, conversation);
+    expect(decided).toMatchObject({ kind: "pinned", name: "ri-other" });
   });
 });
 
@@ -801,16 +1010,20 @@ function tap(w: PassWorld, name: string): void {
   w.clock.advance(1000);
 }
 
-async function pass(w: PassWorld, extra: { beforeRecapture?: () => Promise<void>; observe?: () => ResumeObservation } = {}) {
+/** What today's dashboard declares on every payload (tools/fleet/state.ts): it reads `--resume <uuid>`. */
+const THIS_BUILD: readonly string[] = ["argv-resume-uuid"];
+
+async function pass(w: PassWorld, extra: { beforeRecapture?: () => Promise<void>; observe?: () => ResumeObservation; accounts?: ResumeAccountPort } = {}) {
   return runResumePass({
     root: w.root,
     now: w.clock.now,
     log: (l) => w.logs.push(l),
     port: w.port,
-    accounts: fakeAccounts(),
+    accounts: extra.accounts ?? fakeAccounts(),
     accountUsage: () => w.usage(),
     evidence: evidenceDeps({ projectsDir: w.projects }),
-    observe: extra.observe ?? (() => ({ inventory: trusted(w.rows), health: w.health, index: indexOf([...w.records.values()]) })),
+    // THIS_BUILD: today's dashboard declares it reads `--resume <uuid>` (G3), so the pass may launch.
+    observe: extra.observe ?? (() => ({ inventory: trusted(w.rows), health: w.health, capabilities: THIS_BUILD, index: indexOf([...w.records.values()]) })),
     view: () => null,
     previewCache: newPreviewCache(),
     ...(extra.beforeRecapture === undefined ? {} : { beforeRecapture: extra.beforeRecapture }),
@@ -836,11 +1049,22 @@ function grow(w: PassWorld, name: string, timestampMs: number): void {
   utimesSync(path, at, at);
 }
 
+/** Growth that is not the resumed conversation: a line with no sessionId, and one from another conversation. */
+function growUnrelated(w: PassWorld, name: string): void {
+  const conversation = w.conversations.get(name) as string;
+  const path = join(w.projects, slugifyDir(w.dirs.get(name) as string), `${conversation}.jsonl`);
+  appendFileSync(path, `${JSON.stringify({ type: "file-history-snapshot", snapshot: { files: {} } })}\n`);
+  appendFileSync(path, line("assistant", "someone else", randomUUID(), new Date(w.clock.ms()).toISOString()));
+  const at = new Date(Date.now() + 10_000);
+  utimesSync(path, at, at);
+}
+
 describe("the pass (G1, G2, G8), with a fake launch port", () => {
   test("a live resumed process whose transcript does not grow stays unverified and blocks the next request, visibly (G2)", async () => {
     const w = passWorld(["alpha", "beta"]);
-    // A line dated AFTER the launch that is to come, already in the file
-    // before it: a future-stamped line is not growth.
+    // A line of this conversation dated AFTER the launch that is to come,
+    // already in the file before it: it is before the launch's byte offset,
+    // so it proves nothing about the resumed session (G12).
     grow(w, "alpha", NOW + 60 * 60_000);
     tap(w, "alpha");
     tap(w, "beta");
@@ -854,10 +1078,24 @@ describe("the pass (G1, G2, G8), with a fake launch port", () => {
     expect(second.head).toMatchObject({ candidateId: idOf(w, "beta"), decision: "defer" });
     expect(second.head?.why).toContain("alpha to be verified running");
     const alphaState = second.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state;
-    expect(alphaState).toMatchObject({ kind: "launched", verification: { inventoryResumed: true, observedRunning: true, transcriptGrew: false, sessionLineSeen: true } });
+    expect(alphaState).toMatchObject({ kind: "launched", verification: { inventoryResumed: true, observedRunning: true, transcriptGrew: false, sessionLineSeen: false } });
     expect(second.projection.pace).toMatchObject({ kind: "waiting-for-verification", candidateId: idOf(w, "alpha") });
 
-    // It grows: verified, then two minutes of spacing, then beta.
+    // G12: THE TRANSCRIPT GROWS, BUT NOT WITH THIS CONVERSATION. The pre-launch
+    // future-dated line plus an unrelated append is not verification.
+    growUnrelated(w, "alpha");
+    const unrelated = await pass(w);
+    expect(unrelated.head).toMatchObject({ candidateId: idOf(w, "beta"), decision: "defer" });
+    expect(unrelated.head?.why).toContain("alpha to be verified running");
+    expect(unrelated.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state).toMatchObject({
+      kind: "launched",
+      verification: { transcriptGrew: true, sessionLineSeen: false },
+    });
+    w.clock.advance(RESUME_SPACING_MS + 1000);
+    expect((await pass(w)).head).toMatchObject({ candidateId: idOf(w, "beta"), decision: "defer" });
+    expect(w.port.invocations).toBe(1);
+
+    // It writes a line of its own after the launch: verified, then two minutes of spacing, then beta.
     grow(w, "alpha", w.clock.ms() + 1000);
     const third = await pass(w);
     expect(third.head?.why).toContain("spacing");
@@ -889,43 +1127,61 @@ describe("the pass (G1, G2, G8), with a fake launch port", () => {
     expect(markerLines(w.port.markerPath)).toHaveLength(2);
   });
 
-  test("retry after a released failed-before-launch: refused, then a re-tap launches attempt 2 (G1)", async () => {
+  test("an immediate failed-before-launch whose slot was released stays pending, and the next pass tries attempt 2 through the gates again, with no second tap (G1, G14)", async () => {
     const w = passWorld(["alpha"]);
     w.port.script.push(({ request, occurrenceId, attempt, port }) => {
       port.occurrences.set(request.candidateId, occurrence(request.candidateId, { occurrenceId, state: "failed-before-launch", attempt, reservationHeld: false }));
       return { kind: "failed-before-launch", occurrenceId, proof: "launcher-refused", why: "the launcher refused", reservation: { kind: "released" } };
     });
     tap(w, "alpha");
-    await pass(w);
-    expect(filesIn(w, "refused")).toHaveLength(1);
+    const failed = await pass(w);
+    expect(failed.head).toMatchObject({ decision: "launch", outcome: "failed-before-launch" });
+    expect(filesIn(w, "refused")).toHaveLength(0);
+    expect(filesIn(w, "pending")).toHaveLength(1);
+    expect(failed.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state).toMatchObject({ kind: "pending" });
     expect(w.port.invocations).toBe(0);
-    tap(w, "alpha");
+
+    // The next pass: fresh gates and revalidation. A held gate still holds attempt 2.
+    w.health = { verdict: { level: "critical" } };
+    expect((await pass(w)).head).toMatchObject({ decision: "defer" });
+    expect(w.port.calls).toHaveLength(1);
+    w.health = OK_HEALTH;
     const retried = await pass(w);
     expect(retried.head).toMatchObject({ decision: "launch", outcome: "invoked" });
     expect(markerLines(w.port.markerPath)).toEqual([expect.objectContaining({ candidateId: idOf(w, "alpha"), attempt: 2 })]);
     expect(w.port.calls).toHaveLength(2);
+    expect(filesIn(w, "done")).toHaveLength(1);
   });
 
-  test("a held release defers the re-tap, and nothing is asked of the launcher (G1)", async () => {
+  test("an immediate failed-before-launch whose slot is still held stays pending and deferred, visibly, with the dispose command; nothing more is asked of the launcher (G1, G14)", async () => {
     const w = passWorld(["alpha"]);
     w.port.script.push(({ request, occurrenceId, attempt, port }) => {
       port.occurrences.set(request.candidateId, occurrence(request.candidateId, { occurrenceId, state: "failed-before-launch", attempt, reservationHeld: true }));
       return { kind: "failed-before-launch", occurrenceId, proof: "launcher-refused", why: "refused", reservation: { kind: "held", why: "the owner did not answer" } };
     });
     tap(w, "alpha");
-    await pass(w);
-    tap(w, "alpha");
+    const failed = await pass(w);
+    expect(filesIn(w, "refused")).toHaveLength(0);
+    expect(filesIn(w, "pending")).toHaveLength(1);
+    expect(failed.head?.why).toContain(`dispose lo-${idOf(w, "alpha")}`);
     const deferred = await pass(w);
     expect(deferred.head).toMatchObject({ decision: "defer" });
     expect(deferred.head?.why).toContain("slot has not been released");
+    expect(deferred.head?.why).toContain(`dispose lo-${idOf(w, "alpha")}`);
+    const state = deferred.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state;
+    expect(state).toMatchObject({ kind: "pending" });
+    expect(state?.kind === "pending" && state.why).toContain(`dispose lo-${idOf(w, "alpha")}`);
     expect(w.port.calls).toHaveLength(1);
     expect(filesIn(w, "pending")).toHaveLength(1);
   });
 
   test("not-launched leaves the request pending, and the next pass settles it by what the protocol folded (G1)", async () => {
+    // G13: planned and waiting-admission are DRIVEN (the protocol's
+    // resumeOccurrence), never deferred for ever; reserved waits for the
+    // protocol's own reconciliation.
     const expected = {
-      planned: "defer",
-      "waiting-admission": "defer",
+      planned: "drive",
+      "waiting-admission": "drive",
       reserved: "defer",
       launching: "settled",
       "observed-running": "settled",
@@ -934,7 +1190,7 @@ describe("the pass (G1, G2, G8), with a fake launch port", () => {
     for (const [state, next] of Object.entries(expected) as [keyof typeof expected, (typeof expected)[keyof typeof expected]][]) {
       const w = passWorld(["alpha"]);
       w.port.script.push(({ request, occurrenceId, port }) => {
-        port.occurrences.set(request.candidateId, occurrence(request.candidateId, { occurrenceId, state, reservationHeld: state !== "failed-before-launch" }));
+        port.occurrences.set(request.candidateId, occurrence(request.candidateId, { occurrenceId, state, reservationHeld: state === "reserved" || state === "launching" || state === "observed-running" }));
         return { kind: "not-launched", occurrenceId, why: "a journal write did not land" };
       });
       tap(w, "alpha");
@@ -944,6 +1200,7 @@ describe("the pass (G1, G2, G8), with a fake launch port", () => {
       const second = await pass(w);
       expect({ state, decision: second.head?.decision }).toEqual({ state, decision: next });
       expect(w.port.calls).toHaveLength(next === "launch" ? 2 : 1);
+      expect(w.port.drives).toHaveLength(next === "drive" ? 1 : 0);
       expect(filesIn(w, "done")).toHaveLength(next === "defer" ? 0 : 1);
     }
   });
@@ -958,6 +1215,108 @@ describe("the pass (G1, G2, G8), with a fake launch port", () => {
       kind: "ended-unverified",
       how: "it exited with code 1 before it was seen running",
     });
+  });
+
+  test("G19: a completed occurrence whose reservation is still held blocks the queue as stuck, names the dispose command on the pace line, and is needs-greg; disposing it frees the queue", async () => {
+    const w = passWorld(["alpha", "beta"]);
+    tap(w, "alpha");
+    await pass(w);
+    w.port.set(idOf(w, "alpha"), { state: "completed", reservationHeld: true, endedAt: w.clock.now().toISOString(), completion: { kind: "exit", code: 0 } });
+    tap(w, "beta");
+    const blocked = await pass(w);
+    const dispose = `npx tsx scripts/overseer-launches.ts dispose lo-${idOf(w, "alpha")} --as not-running --why "<what you checked>"`;
+    expect(blocked.head).toMatchObject({ candidateId: idOf(w, "beta"), decision: "defer" });
+    expect(blocked.head?.why).toContain(dispose);
+    expect(blocked.projection.pace).toMatchObject({ kind: "stuck", candidateId: idOf(w, "alpha"), state: "completed", disposeCommand: dispose });
+    expect(blocked.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state).toMatchObject({ kind: "needs-greg", disposeCommand: dispose });
+    expect(w.port.invocations).toBe(1);
+
+    w.port.set(idOf(w, "alpha"), { disposed: true });
+    expect((await pass(w)).head).toMatchObject({ candidateId: idOf(w, "beta"), decision: "launch", outcome: "invoked" });
+  });
+
+  test("G16: a terminal move that fails leaves the request pending AND projected, with an explicit error line, and a log line; it settles once the move can land", async () => {
+    const w = passWorld(["alpha"]);
+    tap(w, "alpha");
+    // done/ cannot be created: a regular file stands where the directory would be.
+    mkdirSync(join(w.root, RECOVERY_RESUME_DIR), { recursive: true });
+    writeFileSync(join(w.root, RECOVERY_RESUME_DIR, "done"), "not a directory");
+    const first = await pass(w);
+    expect(first.head).toMatchObject({ decision: "launch", outcome: "invoked" });
+    expect(filesIn(w, "pending")).toHaveLength(1);
+    const state = first.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state;
+    expect(state).toMatchObject({ kind: "pending" });
+    expect(state?.kind === "pending" && state.why).toContain("could not be moved out of pending/");
+    expect(w.logs.some((l) => l.includes("could not be moved out of pending/"))).toBe(true);
+
+    // Still failing: still shown, and the launch is not repeated (the occurrence settles it).
+    const second = await pass(w);
+    expect(second.head).toMatchObject({ decision: "settled" });
+    expect(second.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state.kind).toBe("pending");
+    expect(w.port.invocations).toBe(1);
+
+    rmSync(join(w.root, RECOVERY_RESUME_DIR, "done"));
+    const third = await pass(w);
+    expect(filesIn(w, "pending")).toHaveLength(0);
+    expect(filesIn(w, "done")).toHaveLength(1);
+    expect(third.projection.requests.find((r) => r.candidateId === idOf(w, "alpha"))?.state.kind).toBe("launched");
+  });
+
+  test("G13: a stored planned or waiting-admission occurrence is DRIVEN once the gates and revalidation pass — no replan, the attempt's offset written first; reserved is never driven; a held gate drives nothing", async () => {
+    for (const state of ["planned", "waiting-admission"] as const) {
+      const w = passWorld(["alpha"]);
+      tap(w, "alpha");
+      w.port.occurrences.set(idOf(w, "alpha"), occurrence(idOf(w, "alpha"), { state, attempt: null, reservationHeld: false }));
+      // Gates held: nothing is driven.
+      w.health = { verdict: { level: "critical" } };
+      expect((await pass(w)).head).toMatchObject({ decision: "defer" });
+      expect(w.port.drives).toEqual([]);
+      // Gates clear: driven, once, through the protocol's own operation, not a new launch.
+      w.health = OK_HEALTH;
+      const driven = await pass(w);
+      expect({ state, head: driven.head }).toMatchObject({ state, head: { decision: "drive", outcome: "invoked" } });
+      expect(w.port.drives).toEqual([idOf(w, "alpha")]);
+      expect(w.port.calls).toEqual([]);
+      expect(markerLines(w.port.markerPath)).toHaveLength(1);
+      expect(filesIn(w, "done")).toHaveLength(1);
+      expect(existsSync(join(w.root, RECOVERY_RESUME_DIR, "attempts", `${idOf(w, "alpha")}.json`))).toBe(true);
+    }
+    const reserved = passWorld(["alpha"]);
+    tap(reserved, "alpha");
+    reserved.port.occurrences.set(idOf(reserved, "alpha"), occurrence(idOf(reserved, "alpha"), { state: "reserved", attempt: null, reservationHeld: true }));
+    const held = await pass(reserved);
+    expect(held.head).toMatchObject({ decision: "defer" });
+    expect(held.head?.why).toContain("reserved");
+    expect(reserved.port.drives).toEqual([]);
+    expect(filesIn(reserved, "pending")).toHaveLength(1);
+  });
+
+  test("G11: a ledger row appended during the async phase moves the conversation's account — the launch is deferred, never made on the stale account, and the next pass resolves again", async () => {
+    const w = passWorld(["alpha"]);
+    const conversation = w.conversations.get("alpha") as string;
+    const accountsDir = tempRoot();
+    const accounts = ["ri-pool", "ri-other"].map((name) => {
+      const stateDir = tempRoot();
+      symlinkSync(w.projects, join(stateDir, "projects"));
+      return { name, family: "claude", role: "pool", stateDir, providerAccountId: randomUUID(), providerTenantId: randomUUID(), addedAt: NOW_ISO, familyData: {} };
+    });
+    writeFileSync(join(accountsDir, "registry.json"), JSON.stringify({ schema: 1, accounts }));
+    const ledgerRow = (accountName: string): string =>
+      `${JSON.stringify({ schema: 1, accountName, providerAccountId: null, sessionUuid: conversation, launchName: "ri", createdAt: NOW_ISO, outcome: "started" })}\n`;
+    writeFileSync(join(accountsDir, "reservations.ndjson"), ledgerRow("ri-pool"));
+    w.usage = () => storedUsage([usageSection("ri-pool", 12, w.clock.ms()), usageSection("ri-other", 12, w.clock.ms())], w.clock.ms());
+    const port = productionAccountPort({ accountsDir });
+    tap(w, "alpha");
+
+    const moved = await pass(w, { accounts: port, beforeRecapture: async () => appendFileSync(join(accountsDir, "reservations.ndjson"), ledgerRow("ri-other")) });
+    expect(moved.head).toMatchObject({ decision: "defer" });
+    expect(moved.head?.why).toContain("changed");
+    expect(w.port.calls).toEqual([]);
+    expect(filesIn(w, "pending")).toHaveLength(1);
+
+    const next = await pass(w, { accounts: port });
+    expect(next.head).toMatchObject({ decision: "launch", outcome: "invoked" });
+    expect(w.port.calls.map((c) => c.account.name)).toEqual(["ri-other"]);
   });
 
   test("the done record carries what revalidation measured at launch", async () => {
@@ -1003,5 +1362,23 @@ describe("unknown evidence holds the resume pass", () => {
     const result = await pass(w);
     expect(result.projection.requests[0]?.state).toMatchObject({ kind: "pending", until: new Date(resetsAtMs).toISOString() });
     expect(markerLines(w.port.markerPath)).toHaveLength(0);
+  });
+
+  test("G3: a collecting dashboard that declares nothing defers the head, never refuses it, and invokes nothing", async () => {
+    const w = passWorld(["alpha"]);
+    tap(w, "alpha");
+    const result = await pass(w, {
+      observe: () => ({ inventory: trusted(w.rows), health: w.health, capabilities: [], index: indexOf([...w.records.values()]) }),
+    });
+    expect(result.head).toMatchObject({ decision: "defer", why: expect.stringContaining("cannot yet verify a resumed session") });
+    expect(markerLines(w.port.markerPath)).toHaveLength(0);
+    expect(filesIn(w, "refused")).toEqual([]);
+    expect(filesIn(w, "pending")).toHaveLength(1);
+
+    // The pair, so this is not a pass that has stopped launching anything: the same world, declared.
+    const declared = passWorld(["alpha"]);
+    tap(declared, "alpha");
+    await pass(declared);
+    expect(markerLines(declared.port.markerPath)).toHaveLength(1);
   });
 });

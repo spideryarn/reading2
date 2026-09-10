@@ -90,6 +90,7 @@ import type {
   RecoveryWireView,
   RecoveryWireWorktree,
   RecoveryResumeAccount,
+  RecoveryResumeAccountUnknown,
   RecoveryResumeGateWire,
   RecoveryResumeLaunchState,
   RecoveryResumeLaunchWire,
@@ -692,11 +693,24 @@ function parseQuote(u: unknown, where: string): Parsed<RecoveryResumeQuote> {
   return bad(`${where} is neither a quotation with its text nor unavailable with why`);
 }
 
+/** Every code, so an unknown one marks the section unreadable rather than drawing a guess (G17). */
+const ACCOUNT_UNKNOWN_REASONS: Record<RecoveryResumeAccountUnknown, true> = {
+  "default-login": true,
+  "ledger-unreadable": true,
+  "ledger-ambiguous": true,
+  "account-unusable": true,
+  "transcript-elsewhere": true,
+  "no-transcript": true,
+  "not-resolved": true,
+};
+
 function parseAccount(u: unknown): Parsed<RecoveryResumeAccount> {
   if (!isRecord(u)) return bad("account is not an object");
   if (u["kind"] === "pinned" && nonBlank(u["name"]) && nonBlank(u["configDir"])) return ok({ kind: "pinned", name: u["name"], configDir: u["configDir"] });
-  if (u["kind"] === "unknown" && nonBlank(u["why"])) return ok({ kind: "unknown", why: u["why"] });
-  return bad(`account ${JSON.stringify(u["kind"])} is neither pinned with its name and config directory nor unknown with why`);
+  if (u["kind"] === "unknown" && typeof u["reason"] === "string" && Object.hasOwn(ACCOUNT_UNKNOWN_REASONS, u["reason"]) && nonBlank(u["why"])) {
+    return ok({ kind: "unknown", reason: u["reason"] as RecoveryResumeAccountUnknown, why: u["why"] });
+  }
+  return bad(`account ${JSON.stringify(u["kind"])} is neither pinned with its name and config directory nor unknown with a known reason and why`);
 }
 
 function parsePreview(u: unknown): Parsed<RecoveryResumePreview> {
@@ -732,6 +746,12 @@ function parsePace(u: unknown): Parsed<RecoveryResumeProjection["pace"]> {
       return nonBlank(u["candidateId"]) && typeof u["name"] === "string" && instant(u["since"])
         ? ok({ kind: "waiting-for-verification", candidateId: u["candidateId"], name: u["name"], since: u["since"] })
         : bad("pace waiting-for-verification lacks its candidate, name or since");
+    case "stuck": {
+      const { candidateId, name, state, why, disposeCommand } = u;
+      return nonBlank(candidateId) && typeof name === "string" && typeof state === "string" && Object.hasOwn(LAUNCH_STATES, state) && nonBlank(why) && nonBlank(disposeCommand)
+        ? ok({ kind: "stuck", candidateId, name, state: state as RecoveryResumeLaunchState, why, disposeCommand })
+        : bad("pace stuck lacks its candidate, name, launch state, why or dispose command");
+    }
     case "spacing":
       return instant(u["until"]) ? ok({ kind: "spacing", until: u["until"] }) : bad("pace spacing has no until");
     default:
@@ -768,8 +788,20 @@ function parseProjection(u: Record<string, unknown>): Parsed<RecoveryResumeProje
     if (!preview.ok) return bad(`previews[${index}]: ${preview.why}`);
     previews.push(preview.value);
   }
+  // G18: an older daemon writes no orphans, which is none — never a reason to refuse the section.
+  const rawOrphans = u["orphans"];
+  const orphans: RecoveryResumeProjection["orphans"] = [];
+  if (rawOrphans !== undefined) {
+    if (!Array.isArray(rawOrphans)) return bad("orphans is not a list");
+    for (const [index, raw] of rawOrphans.entries()) {
+      if (!isRecord(raw) || !nonBlank(raw["candidateId"]) || !nonBlank(raw["why"])) return bad(`orphans[${index}] lacks its candidate or its why`);
+      const state = parseRequestState(raw["state"]);
+      if (!state.ok) return bad(`orphans[${index}]: ${state.why}`);
+      orphans.push({ candidateId: raw["candidateId"], state: state.value, why: raw["why"] });
+    }
+  }
   if (!whole(u["pendingOverflow"])) return bad("pendingOverflow is not a count");
-  return ok({ schema: 1, writtenAt: u["writtenAt"], launcher, gate: gate.value, pace: pace.value, requests, previews, pendingOverflow: u["pendingOverflow"] });
+  return ok({ schema: 1, writtenAt: u["writtenAt"], launcher, gate: gate.value, pace: pace.value, requests, previews, orphans, pendingOverflow: u["pendingOverflow"] });
 }
 
 /**
@@ -808,7 +840,18 @@ function resumeContradiction(p: RecoveryResumeProjection, records: ReadonlyMap<s
       return `previews[${index}] for ${preview.candidateId} names conversation ${preview.conversationId}, but that record's evidence supports ${item.evidence.resume.conversationId}`;
     }
   }
+  // An orphan is by definition a candidate the file does not hold (G18).
+  for (const [index, orphan] of p.orphans.entries()) {
+    if (records.has(orphan.candidateId)) return `orphans[${index}] names ${orphan.candidateId}, which the index holds, so it is not an orphan`;
+  }
   if (p.pace.kind === "waiting-for-verification") return named("pace", p.pace.candidateId, p.pace.name);
+  // A STUCK BLOCKER NAMES A LAUNCH, NOT A RECORD (G19): its record may have
+  // left the index, and the dispose command still has to be shown. Only a name
+  // disagreeing with a record the file does hold is a contradiction.
+  if (p.pace.kind === "stuck") {
+    const record = records.get(p.pace.candidateId);
+    if (record !== undefined && record.name !== p.pace.name) return `pace names ${p.pace.candidateId} but carries a different name from that record's`;
+  }
   return null;
 }
 
@@ -966,6 +1009,26 @@ function projectPublished(path: string, json: Record<string, unknown>, composedA
     // Last, and from what is already settled: nothing in it can reach the fields above.
     resume: parseResumeSection(json["resume"], byId, view),
   };
+}
+
+/**
+ * EVERY CANDIDATE THE FILE HOLDS — not the first page — or null when that
+ * cannot be known (no file, an unreadable one, another schema, a record that
+ * will not parse). The resume route's membership check (Sol's G18): where the
+ * index is readable, a candidate it does not hold is refused before anything is
+ * written; where it is not, nothing is stopped, and the daemon revalidates.
+ */
+export function heldCandidateIds(load: RecoveryFileLoad): ReadonlySet<string> | null {
+  if (load.kind !== "json" || !isRecord(load.json) || load.json["schema"] !== KNOWN_RECOVERY_SCHEMA) return null;
+  const raw = load.json["records"];
+  if (!Array.isArray(raw)) return null;
+  const ids = new Set<string>();
+  for (const item of raw) {
+    const parsed = parseRecord(item);
+    if (!parsed.ok) return null;
+    ids.add(parsed.value.id);
+  }
+  return ids;
 }
 
 /** The file's arm, projected. Pure: no I/O, no clock of its own. */

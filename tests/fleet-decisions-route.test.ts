@@ -181,7 +181,13 @@ describe("the five read arms", () => {
         end(chunk?: string) { if (chunk !== undefined) raw += chunk; return res; },
       };
       feed.handle(
-        { method: "GET", url: DECISIONS_PATH, headers: {} } as IncomingMessage,
+        // A Host, because handler() refuses a request that names none (260910f).
+        {
+          method: "GET",
+          url: DECISIONS_PATH,
+          headers: { host: "127.0.0.1:8787" },
+          rawHeaders: ["Host", "127.0.0.1:8787"],
+        } as IncomingMessage,
         res as unknown as ServerResponse,
       );
       return JSON.parse(raw) as DecisionsFeed;
@@ -433,7 +439,13 @@ describe("server.ts wiring", () => {
       };
       const mountedHandler = handler as unknown as (req: IncomingMessage, res: ServerResponse) => void;
       mountedHandler(
-        { method: "GET", url: DECISIONS_PATH, headers: {} } as IncomingMessage,
+        // A Host, because handler() refuses a request that names none (260910f).
+        {
+          method: "GET",
+          url: DECISIONS_PATH,
+          headers: { host: "127.0.0.1:8787" },
+          rawHeaders: ["Host", "127.0.0.1:8787"],
+        } as IncomingMessage,
         response as unknown as ServerResponse,
       );
 
