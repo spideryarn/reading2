@@ -90,36 +90,83 @@ uncertainty.
 
 ### The stored shape
 
-`HealthSample`'s `reading` arm gains **one optional field**, `work`:
+**This is the second version of this section.** The first put one optional `work` field on the
+`reading` arm, and GPT Sol refused it: four different situations produced the identical stored shape
+(*a legacy sample*, *a turn that was not due*, *a due turn on which health collection itself failed*,
+*a due turn whose summary was too big*), which is precisely the four-state contract this store's
+header exists to protect. The envelope below is its fix, and it is on **every** sample arm, not only
+the successful one.
 
 ```ts
-export type StoredWorkGroup = {
-  session: string;           // the Overseer's session key — a session, never a command line
-  recogniser: string;        // "codex-exec", "vitest", … the Overseer's vocabulary, kept as a string
-  jobs: number;              // job processes with that recogniser under that pane, at that instant
-  oldestStartedAt: string | null;   // null when the kernel could not say
-  longestRanForMs: number | null;   // as at `scannedAt`, NOT as at now
-};
+/** Was work looked at on this turn, and what came back. On EVERY arm of HealthSample. */
+export type StoredWorkTurn =
+  | { kind: "not-due" }
+  | { kind: "due"; result: StoredWork };
 
+/**
+ * What the daemon's scan said — **the producer's own arms, with the producer's own clocks.**
+ * Never collapsed into one `unavailable`: see below.
+ */
 export type StoredWork =
-  | { kind: "unavailable"; why: string }
-  | { kind: "scan"; scannedAt: string; groups: StoredWorkGroup[]; groupsDropped: number;
-      panes: { work: number; none: number; cannotTell: number } };
+  | { kind: "not-yet-run"; asOf: string; why: string }
+  | { kind: "probe-failed"; attemptedAt: string; sourceCollectedAt: string; why: string }
+  /** We could not read the checkpoint at all — ours, not the daemon's. `checkedAt` is our clock. */
+  | { kind: "checkpoint-unavailable"; checkedAt: string; why: string }
+  | {
+      kind: "scan";
+      scannedAt: string;
+      groups: StoredWorkGroup[];
+      groupsDropped: number;
+      panes: { work: number; none: number; cannotTell: number };
+    };
+
+export type StoredWorkGroup = {
+  session: string;      // the Overseer's session key — a session, never a command line
+  recogniser: string;   // "codex-exec", "vitest", … the Overseer's vocabulary, kept as a string
+  jobs: number;         // job processes with that recogniser under that pane, at that instant
+  /** The group's timing, which is a THREE-way answer and not a nullable pair. See below. */
+  timing:
+    | { kind: "known"; oldestStartedAt: string; longestRanForMs: number }
+    | { kind: "partial"; knownJobs: number; oldestStartedAt: string; longestRanForMs: number }
+    | { kind: "unknown" };
+};
 ```
 
-Four things this shape is doing on purpose:
+Six things this shape is doing on purpose:
 
+- **`workTurn` is on every arm, and `not-due` is written explicitly.** *Absent* now means one thing
+  only — a record written before work tracking existed. A turn that was due and could not produce a
+  summary writes a `due` result saying why; it never writes nothing. This is what makes
+  `WORK_EVERY_MS` a description of intent rather than the only way to reconstruct what happened,
+  which it could not do across a restart's phase change or before the first work sample.
+- **The producer's arms survive, each with its own clock.** Collapsing `not-yet-run` and
+  `probe-failed` into one `unavailable` loses the timestamp of the *event*, and Sol's sequence is
+  real: a probe fails at 10:00, the daemon then stops producing fresh scans while its checkpoint
+  keeps that failure, and the store reads it at 10:05, 10:10 and 10:15. Three records of one
+  attempt. With the attempt's own clock kept, they are recognisably one.
+- **The same rule applies to a stale SUCCESS**, and it is the half nobody would think of: three
+  samples carrying the same `scannedAt` are **one observation**, not three. So the renderer's rule
+  is: *key an event by its source discriminant and its source timestamp; repeated copies of one
+  `scannedAt` or `attemptedAt` are one observation, never several.* That sentence has to be in the
+  browser projection's header, because nothing else can enforce it.
 - **`scannedAt` is separate from the sample's `at`.** The daemon's scan and the dashboard's health
   turn are different reads, seconds to minutes apart, and a renderer that used one clock for both
-  would be claiming a simultaneity nobody measured. It is the same rule `PaneJob.ranForMs` already
-  follows: *frozen at the read, not extrapolated to now*.
+  would be claiming a simultaneity nobody measured. Same rule `PaneJob.ranForMs` already follows:
+  *frozen at the read, not extrapolated to now*.
 - **`groupsDropped` exists so a truncated list never reads as a complete one.** A cap with no
-  counter is the shape of `a-truncated-grep-becomes-an-exhaustive-list`.
+  counter is a truncation that reads as an exhaustive list.
 - **`panes` is the uncertainty, stated as numbers.** "Three groups running" beside "eleven panes we
   could not read" is a different sentence from "three groups running" alone, and the second is the
   one this whole area exists not to print.
-- **`unavailable` carries the daemon's own `why`.** Never an empty `groups: []`, which would draw as
-  *nothing was running* — the exact collapse `health.ts`'s header is about.
+
+**On `timing`, where Sol's finding is taken and its repair is not.** F7 is right that a group can mix
+a job with a known start and a job without one, and that a min/max over only the known ones reads as
+exhaustive. Sol's fix is to null both aggregates unless every job's timing is known. That is safe and
+it throws away a real reading: one unknown job in six should not erase the other five. The
+discriminated union above keeps the information and makes the dishonest rendering **impossible to
+write** rather than merely discouraged — a renderer cannot print a `partial` as though it were a
+`known` without naming the arm, which is this repo's own "let the types catch it" rule. `knownJobs`
+is on the `partial` arm so the row can say *"2 of 5 jobs' timing was unavailable"*.
 
 ### The cadence, and its arithmetic
 
@@ -128,18 +175,44 @@ export const WORK_EVERY_MS = 5 * 60_000;
 ```
 
 The roadmap says *"store changes/events at a deliberate cadence"* and the brief's recorded product
-default is five minutes. The arithmetic that makes this safe, written down because
-`MAX_FILE_BYTES`'s comment is the reason this file rotates correctly:
+default is five minutes.
 
-- a group line is about 70 bytes; the cap is 30 groups, so a work-carrying sample adds ≤ ~2.2 KB;
-- at one work sample per five minutes that is 288/day ≈ 620 KB/day, on top of the measured
-  ~1 MB/day, so the live file still rotates at 8 MiB after about five days — comfortably more than
-  the one-day window the invariant requires;
-- `MAX_LINE_BYTES` (64 KiB) is untouched and a work-carrying sample is nowhere near it.
+**The first draft's arithmetic was wrong twice, and the second error was the one that mattered.** It
+said a group is about 70 bytes; serialising one with the fields actually proposed is about 173, so
+30 groups is ~5.35 KB and ~1.54 MB/day rather than the claimed 620 KB. The ordinary conclusion
+survived that — but the proof did not, and the proof was the point.
 
-**Absent `work` on a sample is not a gap.** It means *this was not a work turn*, and the browser
-knows the expected spacing because `WORK_EVERY_MS` is imported rather than restated. A work turn
-that produced `unavailable` is a different fact and is written down as one.
+The real hole was underneath it. **Capping the number of groups does not cap the number of bytes.**
+`session` and `why` are arbitrary non-empty strings as far as every parser in this repo is concerned,
+so the only bound in force would have been `MAX_LINE_BYTES` — and just-under-64-KiB work records
+every five minutes is about **18 MiB/day**, which rotates an 8 MiB file in **under eleven hours** and
+breaks the invariant `MAX_FILE_BYTES`'s comment states: *the cap must comfortably exceed a window's
+worth of samples*. A blank chart at the moment somebody is trying to find out what went wrong is the
+exact failure this whole feature exists to prevent. GPT Sol's F4, and it is the best finding of the
+review.
+
+So the bound is **in bytes, on the encoded value**:
+
+```ts
+export const MAX_STORED_WORK_BYTES = 4 * 1024;
+```
+
+- Drop the lowest-ranked group and re-encode until it fits, incrementing `groupsDropped` — so the
+  bound is enforced on the thing that is actually written, not on a proxy for it.
+- Bound `why` and every identifier string visibly, the way `boundWhy` already does, so a truncation
+  says it happened.
+- If no useful bounded projection fits at all, store a bounded `checkpoint-unavailable` saying so.
+- 288 × 4 KiB is ~1.15 MB/day on top of ~1 MB/day, so an 8 MiB file still covers about four days.
+
+**And the arithmetic is a test rather than a paragraph.** A comment claiming a rate is a comment;
+the check is a test that builds 288 maximum-sized work records plus a pessimistic day of ordinary
+health samples and asserts the total stays comfortably under `MAX_FILE_BYTES`. That is the only form
+of this argument that cannot go stale — which is the lesson of the 40,000,420-byte file that broke
+the same invariant in this same module in August.
+
+**Absent `workTurn` on a sample means one thing only: a record written before work tracking
+existed.** Everything else is written down — `not-due` when the cadence did not call for one, and a
+`due` result with its own arm and clock when it did.
 
 **THE WORK SUMMARY MUST NEVER COST US THE HEALTH READING.** Reading `append` closely turned up the
 sharp edge in this design. A line over `MAX_LINE_BYTES` is not written; a `sample-omitted` record
@@ -207,23 +280,49 @@ composition root is where the wiring argument already lives.
   the `admission-visibility` and box-health sessions' work in that file is barely touched. It shares
   the existing x scale: one row per job group, a strip marking the samples it was observed on,
   ranked by observed duration, with the sentence about what that ranking is and is not.
-- **The peak line**: the worst load sample in the window, named with its clock time, the groups
-  observed on it, and — from `attribution`, which every sample has already carried since 2026-09-08
-  and which nothing has ever drawn — the memory breakdown by process kind at that moment. This is
-  the acceptance sentence, rendered.
+- **The peak line**, and its wording is the whole finding. The first draft said "the groups observed
+  on" the worst-load sample and the memory breakdown "at that moment". **Neither is true, and the
+  second is false even within one health turn**: `collectHealth` runs `uptime`, `free`, `swapon`,
+  `df`, `vmstat` and `ps` one after another, each with a five-second timeout, and stamps a single
+  `collectedAt` at the end. So load and attribution are *related survey readings*, not one instant —
+  and the work scan is a third clock again. GPT Sol's F3. The rule, therefore:
+
+  > The peak line names the **load sample's** timestamp. Beside it, the nearest work scan is shown as
+  > *"observed at X — Δ before/after the load reading"*, never as having been observed *on* the peak.
+  > If no work scan falls within the nearby-window, it says that no nearby work reading exists rather
+  > than reaching further. Attribution is labelled *"collected in the same health survey turn"*, not
+  > *"at that moment"* — its command carries no timestamp of its own.
+
 - **Current expensive work** on the Box Health panel: what is running now, how long it has been
-  running as measured, and how many panes had no usable reading.
+  running as measured, and how many panes had no usable reading. **This needs a data path that does
+  not exist**, which the first draft never noticed (Sol's F5). It cannot come from the history —
+  that is a five-minute cadence, so "current" would be up to five minutes stale and would need a
+  history scan per browser, which the roadmap explicitly rules out. And it cannot come from the live
+  `overseer` feed either, because that carries `projectRegister`'s **eight-row capped** list. So:
+
+  > `currentWork` is projected from the same single checkpoint read `readCheckpointFeeds` already
+  > does, carried as a field on `FleetState`, parsed at the client boundary and passed to
+  > `HealthPanel`. It is never derived from the history file. **The five-minute cadence governs
+  > persistence only, never what the page shows as now.**
+
+  That threads `state.ts`, `wire.ts`, `web/src/types.ts` and `App.tsx` — files outside the brief's
+  named set, though not on its "not yours" list. The additions are a field and its parse. Recorded
+  here and named in the debrief.
 
 ### Attribution uncertainty, in the page's own words
 
-Three sentences the UI must carry, because each of them is a claim the data cannot support and a
-reader would otherwise assume:
+Five sentences the UI must carry, because each is a claim the data cannot support and a reader would
+otherwise assume:
 
 1. *Ranked by how long each job was observed running, not by how much CPU or memory it used — the
    box does not measure per-job cost.*
 2. *Sampled every five minutes: a job that started and finished between two samples is not here at
    all.*
 3. *N panes could not be read at this sample* — whenever `panes.cannotTell` is non-zero.
+4. *This reading is the same one as the previous sample's* — whenever consecutive records carry one
+   `scannedAt`, because the daemon has stopped producing fresh scans and the alternative is drawing
+   one observation as several.
+5. *Timing was unavailable for N of these jobs* — the `partial` arm of a group's `timing`.
 
 ## Stages
 
@@ -232,9 +331,11 @@ Each stage ends with `npm test`-scoped suites plus `npm run typecheck`, and a GP
 
 ### Stage 1 — one policy module for the cutoffs (mine, small)
 
-**Status 2026-09-10: built, green, not yet committed** — waiting on the plan review, which asks
-directly whether this extraction can change behaviour rather than relocate it. Done myself because
-it is an import and five comparisons; the tests and the mutation check are the substance.
+**Status 2026-09-10: built, green, committed.** Done myself because it is an import and five
+comparisons; the tests and the mutation check are the substance. The plan review reached it and
+found nothing wrong with the extraction, adding one caution now written into the tests: **the
+equality semantics are not uniform** — load and memory are strict, swap, disk and IO wait inclusive
+— so each direction is asserted separately.
 `npx vitest run tests/fleet-resource-policy.test.ts tests/fleet-health.test.ts tests/fleet-web.test.tsx`
 → 467 passed; `npm run typecheck` → exit 0 over all four projects.
 
@@ -269,32 +370,54 @@ difference"* — which is exactly what a silent duplicate looks like.
 
 ### Stage 2 — the read side over `checkpoint.work` (Codex, gpt-5.6-sol)
 
-- [ ] New `tools/fleet/work-groups.ts` with `projectStoredWork`, plus `export` on
-      `parsePaneWork`.
+- [ ] New `tools/fleet/work-groups.ts`; a fourth `work` projection out of the one `loadCheckpoint`
+      read, sharing `projectRegister`'s `resolveWork` call rather than making a second one.
 - [ ] Types in `wire.ts` (types only, appended).
+- [ ] `StoredWork` keeps the producer's four arms and their clocks (F2), and `StoredWorkGroup.timing`
+      is the three-armed union (F7) — **both of these arrived after the first Codex pass was
+      dispatched**, so Stage 2 lands in two rounds: the first against the collapsed shape, the second
+      correcting it. Recorded because the second round's diff will otherwise look like churn.
+- [ ] `MAX_STORED_WORK_BYTES` enforced on the encoded value, dropping the lowest-ranked group until
+      it fits, with bounded `why` and identifier strings (F4).
 - [ ] Tests: one job with several descendants → one group; two jobs same recogniser under one pane →
-      one group with `jobs: 2`; a `probe-failed` checkpoint → `unavailable` with the daemon's `why`;
-      a checkpoint written before work scans existed → `unavailable`, not an empty scan; a
-      `cannot-tell` pane counted in `panes.cannotTell` and absent from `groups`; the cap dropping
-      groups and saying how many.
+      one group with `jobs: 2`; a `probe-failed` checkpoint keeps `attemptedAt`; a checkpoint written
+      before work scans existed → `not-yet-run`/unavailable, not an empty scan; a `cannot-tell` pane
+      counted in `panes.cannotTell` and absent from `groups`; the byte cap dropping groups and saying
+      how many; a group with one known and one unknown start → `timing.kind === "partial"` with
+      `knownJobs: 1`.
 
 ### Stage 3 — writing it down (Codex, gpt-5.6-sol)
 
-- [ ] `health-history.ts`: `work` on the sample, parsed back, bounded, with the cadence constant and
-      its arithmetic.
-- [ ] `health-wiring.ts`: the `readWork` dep and the due check.
-- [ ] Tests: a work turn and a non-work turn; a sample from an older build with no `work` field
-      parses (this is a version boundary, and `StoredReport`'s comment is the precedent); an
-      oversized work summary is dropped without dropping the health reading; expired history — a
-      work group whose only samples have rotated out of the window.
+- [ ] `health-history.ts`: `workTurn` on **every** sample arm, parsed back, byte-bounded, with the
+      cadence constant. `not-due` is written explicitly; absent means "before work tracking existed"
+      and nothing else (F1).
+- [ ] Work is read **independently of whether the health turn succeeded** — a `collector-failed` turn
+      that was due still records what work said (F1).
+- [ ] `health-wiring.ts`: the `readWork` dep, the clock, and the due check, with the cadence state
+      in the wiring rather than the store.
+- [ ] The oversize retry: a work summary must never cost us the health reading, and a dropped
+      summary must say it was dropped rather than look like a turn that was not due.
+- [ ] **The rotation arithmetic as a test**, not a paragraph: 288 maximum-sized work records plus a
+      pessimistic day of ordinary samples, asserted comfortably under `MAX_FILE_BYTES` (F4).
+- [ ] Tests: all four of F1's sequences; a sample from an older build with no `workTurn` field
+      parses (a version boundary — `StoredReport`'s comment is the precedent); `{kind:"scan",
+      groups:[]}` round-trips and is not normalised into an absence; expired history — a work record
+      whose sample has rotated out of the window; a refused append does not advance the cadence.
 
 ### Stage 4 — the page (Codex, gpt-5.6-sol)
 
 - [ ] Disk as the fifth series.
-- [ ] `web/src/work-series.ts` (pure projection, testable without a DOM) and `WorkHistory.tsx`.
-- [ ] The peak line, including the memory attribution that has been stored and undrawn since
-      2026-09-08.
-- [ ] Current expensive work on `HealthPanel.tsx`.
+- [ ] `web/src/work-series.ts` (pure projection, testable without a DOM) and `WorkHistory.tsx`,
+      mounted from `HealthHistory.tsx`'s `HistoryBody` with one import and one element, after the
+      series and the verdict strip.
+- [ ] **The dedupe rule lives in `work-series.ts`'s header and in its code**: an event is keyed by
+      its source discriminant and source timestamp, so repeated copies of one `scannedAt` or
+      `attemptedAt` are one observation (F2). Nothing downstream can enforce this.
+- [ ] The peak line, with F3's wording: the load sample's own timestamp, the nearest work scan given
+      as a delta rather than as simultaneity, and attribution labelled "collected in the same health
+      survey turn".
+- [ ] `currentWork` threaded `readCheckpointFeeds → FleetState → App → HealthPanel`, never derived
+      from the history (F5).
 - [ ] Tests: stale vitals (a scan much older than the sample carrying it must render as *the reading
       is N minutes older than this point*, never as simultaneous); normal swap residency with no
       current swapping must not colour anything as an event; a window with no work samples at all
@@ -306,6 +429,48 @@ difference"* — which is exactly what a silent duplicate looks like.
 - [ ] Browser-check the trends at a small size, in a subagent, per `browser-control.md`. **Sonnet
       subagents are 429ing on this account until 2026-09-12**, so this runs on the default model.
 - [ ] Final Sol review over the whole diff; merge `origin/dev`; push to `dev`; debrief.
+
+## The plan review, and what was done with it
+
+GPT Sol reviewed commit `0d3398e1` read-only on 2026-09-10 and **refused the plan**: seven P1s, no
+P0. The full text is
+[260910a-resource-history-plan-review-sol.md](260910a-resource-history-plan-review-sol.md); the
+prompt is [260910a-resource-history-plan-review-prompt.md](260910a-resource-history-plan-review-prompt.md).
+Nothing below is a paraphrase of a finding I did not act on.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F1 | An optional `work` on the `reading` arm collapses four different situations into one stored shape — legacy, not-due, due-but-health-failed, due-but-oversized. | **Taken in full.** The `StoredWorkTurn` envelope, on every sample arm, with `not-due` written explicitly. |
+| F2 | Collapsing `not-yet-run` and `probe-failed` into one `unavailable` discards the *event's* clock, so one stale failure read three times looks like three attempts. | **Taken in full**, including the half I would not have thought of: three samples carrying one `scannedAt` are one observation too. |
+| F3 | The peak line joins three clocks and calls them "that moment" — and `collectHealth` runs six commands sequentially under one `collectedAt`, so even load and attribution are not simultaneous. | **Taken in full**, wording adopted. |
+| F4 | The size arithmetic was materially low (173 bytes a group, not 70), and — the real hole — capping the *number* of groups caps no bytes, so `MAX_LINE_BYTES` becomes the effective bound at ~18 MiB/day, rotating an 8 MiB file in under eleven hours and breaking the coverage invariant. | **Taken in full.** `MAX_STORED_WORK_BYTES`, enforced on the encoded value, and the arithmetic replaced by a test. |
+| F5 | There is no data path for "current expensive work": not the history (five minutes stale), not the live `overseer` feed (capped at eight rows). | **Taken in full**, including the wording. |
+| F6 | Exporting `parsePaneWork` alone would leave the outer invariants — clock ordering, duplicate keys, pane start against scan, `ranForMs` consistency — unchecked or re-derived. | **Already closed before the review landed**: the plan had moved to reusing `resolveWork`, the whole validated projection, which is Sol's own (b). Verify Stage 2's output actually does that. |
+| F7 | A group mixing a job with known timing and a job without has no honest min/max. | **Gap taken, repair refused.** Sol nulls both aggregates unless every job is known; that erases five good readings because of a sixth. A three-armed `timing` union keeps them and makes the dishonest rendering a compile error instead. |
+| F8 | "Attribution … nothing has ever drawn it" is literally false — `HealthPanel`'s raw disclosure renders it. | **Already corrected** before the review landed, in the same pass that narrowed the disk claim. |
+
+**The floor, restated.** Sol judged my proposed guarantee too strong, and it was: *"every"* failed
+while a due-but-unrecordable turn was indistinguishable from a not-due one, and *"at these sampled
+instants"* failed while an event's own clock was being discarded. With F1–F4 closed, the accurate
+statement — and the one the code must be checkable against — is:
+
+> Every **displayed measurement, and every exact count derived from a reading**, is either something
+> somebody measured or a stated absence naming why no reading exists. A work record says its listed
+> groups were observed at **its own `scannedAt`**, and never that they were running at the health
+> reading's instant or throughout the interval between samples. Repeated copies of one source
+> timestamp are one observation.
+
+**Sol also independently confirmed three claims this plan rests on** — that `classifyPaneWork` stops
+descending at a recognised job, that `projectRegister` caps at eight, and that the thresholds were
+genuinely duplicated at `0d3398e1` with no shared runtime source — and added one caution for Stage 1
+worth repeating: **the equality semantics are not uniform.** Load and memory are strict comparisons;
+swap, disk and IO wait are inclusive. The extracted policy preserves that, and
+`tests/fleet-resource-policy.test.ts` asserts each direction separately for exactly this reason.
+
+**One caveat about that run:** the sandbox refused `spawnSync` for `ps`/`echo`/`true`/`false`, so
+eight live-probe tests in `tests/overseer-work.test.ts` failed on `EPERM` rather than on behaviour.
+Its 54 pure tests, including the classifier controls, passed. That is a property of the review
+sandbox, not a result about the tree.
 
 ## Things found while planning that the brief did not know
 
