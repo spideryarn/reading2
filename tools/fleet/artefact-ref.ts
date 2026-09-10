@@ -108,23 +108,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
 /** A stored or submitted reference, strictly: nothing defaulted, nothing extra tolerated in meaning. */
 export function parseArtefactRef(value: unknown): ArtefactRef | null {
   if (!isRecord(value)) return null;
   switch (value["kind"]) {
     case "commit": {
+      if (!hasExactKeys(value, ["kind", "sha"])) return null;
       const sha = value["sha"];
       return typeof sha === "string" && SHA_RULE.test(sha) ? { kind: "commit", sha } : null;
     }
     case "path": {
+      if (!hasExactKeys(value, ["kind", "path"])) return null;
       const path = value["path"];
       return typeof path === "string" && pathProblem(path) === null ? { kind: "path", path } : null;
     }
     case "decision": {
+      if (!hasExactKeys(value, ["kind", "id"])) return null;
       const id = value["id"];
       return typeof id === "string" && DECISION_ID_RULE.test(id) ? { kind: "decision", id } : null;
     }
     case "queue-item": {
+      if (!hasExactKeys(value, ["kind", "id"])) return null;
       const id = value["id"];
       return typeof id === "string" && QUEUE_ID_RULE.test(id) ? { kind: "queue-item", id } : null;
     }
@@ -140,8 +149,10 @@ export function parseArtefactCheck(value: unknown): ArtefactCheck | null {
     case "found-locally":
     case "found":
     case "not-found":
+      if (!hasExactKeys(value, ["state"])) return null;
       return { state: value["state"] };
     case "unchecked": {
+      if (!hasExactKeys(value, ["state", "why"])) return null;
       const why = value["why"];
       if (typeof why !== "string" || why.trim() === "") return null;
       return untrustedTextProblem(why, MAX_CHECK_WHY_CHARS) === null ? { state: "unchecked", why } : null;
@@ -168,7 +179,7 @@ export function parseCheckedArtefacts(value: unknown): CheckedArtefact[] | null 
   if (!Array.isArray(value) || value.length > MAX_ARTEFACTS) return null;
   const out: CheckedArtefact[] = [];
   for (const candidate of value) {
-    if (!isRecord(candidate)) return null;
+    if (!isRecord(candidate) || !hasExactKeys(candidate, ["ref", "check"])) return null;
     const ref = parseArtefactRef(candidate["ref"]);
     const check = parseArtefactCheck(candidate["check"]);
     if (ref === null || check === null || !checkFitsKind(ref.kind, check)) return null;

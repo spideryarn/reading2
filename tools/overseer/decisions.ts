@@ -39,10 +39,25 @@
  * replaces. Claiming stronger identity here would be worse than naming the
  * limit; a device-scoped write boundary is a separate, still-open decision.
  *
- * Every `decided` row in V1 is Overseer-originated. That is a schema invariant,
- * not a per-row `decidedBy` field: an `assumption` unblocks work under Greg's
- * standing decision, so saying the Overseer decided it would be false. The
- * envelope's `by` says only who wrote the line.
+ * ## Who decided is not who recorded — schema 2
+ *
+ * `by` says only who wrote the line. Schema 2 (plan 260910e, GPT Sol's WR-P1)
+ * adds `author`, who DECIDED, and `by` gains `daemon`: the report drain copying
+ * a session's decision into this file, which the reasoning Overseer did not
+ * write. So `daemon` is valid only on a schema-2 `decided` whose author is a
+ * session, and never on a review.
+ *
+ * **Schema-1 lines are never migrated.** They fold with the author
+ * `legacy-unrecorded` — not `overseer`, because V1's assumptions were made
+ * under Greg's standing decision, and saying the Overseer decided them would be
+ * false — and every schema-2 field `not-recorded`: a literal, never undefined,
+ * and never guessed. That is also why V1's refusal of a `decidedBy` key stays.
+ *
+ * Every schema-2 field is the AUTHOR'S say-so. `gregAsked: "asked-answered"`
+ * is a claim about Greg, not Greg; it changes nothing in the fold, and the page
+ * renders it as the author's claim. Every schema-2 text field is bounded and
+ * refused if it carries a control or bidi-override character; schema-1 lines
+ * keep the looser rules they were written under.
  *
  * A verified session reference is the register's last verified run for that
  * name as of the checkpoint. `verifiedExecution` is sticky through observations
@@ -66,12 +81,23 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync } f
 import { homedir } from "node:os";
 import path from "node:path";
 
+import {
+  MAX_PATH_CHARS,
+  parseCheckedArtefacts,
+  untrustedTextProblem,
+  type CheckedArtefact,
+} from "../fleet/artefact-ref.js";
+import { isExecutionTokenText } from "../fleet/execution-token.js";
 import type { QueueActor } from "../fleet/wire.js";
 import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "./lock.js";
 
-/** Bumped only when an earlier reader could not safely ignore the change. */
-export const DECISIONS_SCHEMA = 1;
+/** What every new line is written at. Bumped only when an earlier reader could not safely ignore the change. */
+export const DECISIONS_SCHEMA = 2;
+/** The schema V1 wrote, still read exactly as it was. */
+export const LEGACY_DECISIONS_SCHEMA = 1;
+export type DecisionSchema = typeof LEGACY_DECISIONS_SCHEMA | typeof DECISIONS_SCHEMA;
+
 export const DECISIONS_FILE = "decisions.jsonl";
 export const DECISIONS_LOCK_FILE = "decisions.lock";
 
@@ -94,37 +120,140 @@ export type ExecutionRef =
 export type SessionRef = { readonly name: string; readonly execution: ExecutionRef };
 export type BearsOn = { readonly sessions: readonly SessionRef[]; readonly plan: string | null };
 
-/** The same two recorders the queue admits; this is who recorded, not who decided. */
+/** The two recorders the queue admits, and the only two that may record a review. */
 export type DecisionActor = QueueActor;
 export const DECISION_ACTORS: readonly DecisionActor[] = ["greg", "overseer"];
 
-export type Envelope = {
-  readonly schema: typeof DECISIONS_SCHEMA;
+/**
+ * Who recorded a line. `daemon` is the report drain copying a session's
+ * decision, and is valid on nothing else — see `parseEventDetailed`.
+ */
+export type DecisionRecorder = DecisionActor | "daemon";
+export const DECISION_RECORDERS: readonly DecisionRecorder[] = ["greg", "overseer", "daemon"];
+
+/* ---- Schema 2's fields. Each is the author's say-so; none of them reviews. ---- */
+
+export type Consequence = "high" | "medium" | "low";
+export const CONSEQUENCES: readonly Consequence[] = ["high", "medium", "low"];
+export type Reversibility = "easy" | "costly" | "one-way";
+export const REVERSIBILITIES: readonly Reversibility[] = ["easy", "costly", "one-way"];
+export type DecisionDomain = "product" | "technical";
+export const DECISION_DOMAINS: readonly DecisionDomain[] = ["product", "technical"];
+/** The author's claim about whether Greg was asked — rendered as a claim, never as review. */
+export type GregAsked = "no" | "asked-answered" | "asked-awaiting";
+export const GREG_ASKED: readonly GregAsked[] = ["no", "asked-answered", "asked-awaiting"];
+/** An annotation only: it never sorts and never gates. */
+export type Confidence = "high" | "medium" | "low";
+export const CONFIDENCES: readonly Confidence[] = ["high", "medium", "low"];
+
+/** What a schema-1 row carries for a schema-2 field. A literal, so it is never confused with absent. */
+export type NotRecorded = "not-recorded";
+export const NOT_RECORDED: NotRecorded = "not-recorded";
+
+/**
+ * A schema-2 value whose own range includes text or a list, so a bare
+ * `"not-recorded"` could collide with it: a recommendation may say anything,
+ * and an empty evidence list is a recorded fact, not an unrecorded one.
+ */
+export type Recorded<T> = { readonly kind: "not-recorded" } | { readonly kind: "recorded"; readonly value: T };
+
+/** A session name as an author: the same shape a report actor uses. */
+export const SESSION_NAME_RULE = /^[A-Za-z0-9._-]{1,64}$/;
+
+/** Who DECIDED, on a schema-2 line. */
+export type DecisionAuthor =
+  | { readonly kind: "overseer" }
+  | { readonly kind: "greg" }
+  | { readonly kind: "session"; readonly name: string; readonly execution: ExecutionRef };
+
+/** Who decided, as a folded record knows it. */
+export type RecordAuthor = DecisionAuthor | { readonly kind: "legacy-unrecorded" };
+
+/** Everything a schema-2 `decided` line carries beyond V1's fields. */
+export type DecisionAssessment = {
+  readonly author: DecisionAuthor;
+  readonly consequence: Consequence;
+  readonly reversibility: Reversibility;
+  readonly domain: DecisionDomain;
+  /** What the author recommends if Greg looks again, or null. */
+  readonly recommendation: string | null;
+  readonly evidence: readonly CheckedArtefact[];
+  readonly gregAsked: GregAsked;
+  readonly confidence: Confidence | null;
+};
+
+/** Required on every schema-2 `decided` line, in the order a refusal names them. */
+export const ASSESSMENT_FIELDS = [
+  "author",
+  "consequence",
+  "reversibility",
+  "domain",
+  "recommendation",
+  "evidence",
+  "gregAsked",
+  "confidence",
+] as const satisfies readonly (keyof DecisionAssessment)[];
+
+/**
+ * Bounds on a schema-2 line's text. Generous for prose; the point is that a
+ * line has a size and a character set at all, not that decisions are short.
+ */
+export const DECISION_TEXT_LIMITS = {
+  question: 1000,
+  why: 4000,
+  optionName: 200,
+  tradeoffs: 1000,
+  note: 1000,
+  recommendation: 2000,
+  plan: MAX_PATH_CHARS,
+  sessionName: 200,
+  commandId: 200,
+  isoInstant: 64,
+  executionToken: 200,
+  executionWhy: 500,
+  reviewText: 2000,
+  options: 20,
+  sessions: 20,
+} as const;
+
+type EnvelopeOf<S extends DecisionSchema, B extends DecisionRecorder> = {
+  readonly schema: S;
   readonly eventId: string;
   readonly commandId: string | null;
   readonly at: string;
-  /** Who recorded this line; every decision's Overseer origin is invariant. */
-  readonly by: DecisionActor;
+  /** Who recorded this line — never who decided; that is `author`, from schema 2. */
+  readonly by: B;
 };
 
-export type DecisionEvent = Envelope &
+export type Envelope = EnvelopeOf<DecisionSchema, DecisionRecorder>;
+
+type DecidedFields = {
+  readonly kind: "decided";
+  readonly id: string;
+  readonly decidedAt: string;
+  readonly class: DecisionClass;
+  readonly question: string;
+  readonly options: readonly DecisionOption[];
+  readonly chose: DecisionChoice;
+  readonly why: string;
+  readonly advisers: readonly Adviser[];
+  readonly bearsOn: BearsOn;
+  readonly supersedes: string | null;
+};
+
+/** A V1 line: no author, no assessment, and never recorded by the daemon. */
+export type DecidedV1Event = EnvelopeOf<typeof LEGACY_DECISIONS_SCHEMA, DecisionActor> & DecidedFields;
+export type DecidedV2Event = EnvelopeOf<typeof DECISIONS_SCHEMA, DecisionRecorder> & DecidedFields & DecisionAssessment;
+export type DecidedEvent = DecidedV1Event | DecidedV2Event;
+
+/** Reviews and reversals: the same shape at either schema, and only Greg's count. */
+export type ReviewEvent = EnvelopeOf<DecisionSchema, DecisionActor> &
   (
-    | {
-        readonly kind: "decided";
-        readonly id: string;
-        readonly decidedAt: string;
-        readonly class: DecisionClass;
-        readonly question: string;
-        readonly options: readonly DecisionOption[];
-        readonly chose: DecisionChoice;
-        readonly why: string;
-        readonly advisers: readonly Adviser[];
-        readonly bearsOn: BearsOn;
-        readonly supersedes: string | null;
-      }
     | { readonly kind: "reviewed"; readonly id: string; readonly note: string | null }
     | { readonly kind: "reversed"; readonly id: string; readonly why: string | null }
   );
+
+export type DecisionEvent = DecidedEvent | ReviewEvent;
 
 export type DecisionEventKind = DecisionEvent["kind"];
 
@@ -132,7 +261,7 @@ export type DecisionEventKind = DecisionEvent["kind"];
 export type DecisionTouch = {
   readonly kind: DecisionEventKind;
   readonly at: string;
-  readonly by: DecisionActor;
+  readonly by: DecisionRecorder;
   readonly what: string;
 };
 
@@ -153,11 +282,11 @@ export type DecisionProblem = {
   readonly eventId: string | null;
 };
 
-/** A decision as replay leaves it; the source fields are never amended in V1. */
+/** A decision as replay leaves it; the source fields are never amended. */
 export type DecisionRecord = {
   readonly id: string;
-  /** Who wrote the `decided` line. V1's Overseer origin is invariant. */
-  readonly recordedBy: DecisionActor;
+  /** Who wrote the `decided` line — not who decided it; that is `author`. */
+  readonly recordedBy: DecisionRecorder;
   readonly class: DecisionClass;
   readonly question: string;
   readonly options: readonly DecisionOption[];
@@ -175,6 +304,15 @@ export type DecisionRecord = {
   readonly reversedAt: string | null;
   readonly reversedWhy: string | null;
   readonly touches: readonly DecisionTouch[];
+  /** Schema 1 is `legacy-unrecorded`, and every field below it `not-recorded`. */
+  readonly author: RecordAuthor;
+  readonly consequence: Consequence | NotRecorded;
+  readonly reversibility: Reversibility | NotRecorded;
+  readonly domain: DecisionDomain | NotRecorded;
+  readonly recommendation: Recorded<string | null>;
+  readonly evidence: Recorded<readonly CheckedArtefact[]>;
+  readonly gregAsked: GregAsked | NotRecorded;
+  readonly confidence: Confidence | null | NotRecorded;
 };
 
 /** An opaque token naming the parseable history a client saw. */
@@ -216,9 +354,14 @@ export const EMPTY_VIEW: DecisionView = {
   version: VERSION_ZERO,
 };
 
-type MutableDecision = {
+type Assessed = Pick<
+  DecisionRecord,
+  "author" | "consequence" | "reversibility" | "domain" | "recommendation" | "evidence" | "gregAsked" | "confidence"
+>;
+
+type MutableDecision = Assessed & {
   id: string;
-  recordedBy: DecisionActor;
+  recordedBy: DecisionRecorder;
   class: DecisionClass;
   question: string;
   options: DecisionOption[];
@@ -237,6 +380,41 @@ type MutableDecision = {
   reversedWhy: string | null;
   touches: DecisionTouch[];
 };
+
+function copyAuthor(author: DecisionAuthor): DecisionAuthor {
+  return author.kind === "session"
+    ? { kind: "session", name: author.name, execution: { ...author.execution } }
+    : { kind: author.kind };
+}
+
+/** A schema-1 line never had these, so it says so — it does not guess. */
+function assessedOf(event: DecidedEvent): Assessed {
+  if (event.schema === LEGACY_DECISIONS_SCHEMA) {
+    return {
+      author: { kind: "legacy-unrecorded" },
+      consequence: NOT_RECORDED,
+      reversibility: NOT_RECORDED,
+      domain: NOT_RECORDED,
+      recommendation: { kind: "not-recorded" },
+      evidence: { kind: "not-recorded" },
+      gregAsked: NOT_RECORDED,
+      confidence: NOT_RECORDED,
+    };
+  }
+  return {
+    author: copyAuthor(event.author),
+    consequence: event.consequence,
+    reversibility: event.reversibility,
+    domain: event.domain,
+    recommendation: { kind: "recorded", value: event.recommendation },
+    evidence: {
+      kind: "recorded",
+      value: event.evidence.map((item) => ({ ref: { ...item.ref }, check: { ...item.check } })),
+    },
+    gregAsked: event.gregAsked,
+    confidence: event.confidence,
+  };
+}
 
 function describeTouch(event: DecisionEvent): string {
   switch (event.kind) {
@@ -276,6 +454,20 @@ function commandPayload(event: DecisionEvent): string {
         advisers: event.advisers,
         bearsOn: event.bearsOn,
         supersedes: event.supersedes,
+        // Schema 2's fields are part of the intent: a changed consequence under
+        // one command id is a different command, not a retry.
+        ...(event.schema === DECISIONS_SCHEMA
+          ? {
+              author: event.author,
+              consequence: event.consequence,
+              reversibility: event.reversibility,
+              domain: event.domain,
+              recommendation: event.recommendation,
+              evidence: event.evidence,
+              gregAsked: event.gregAsked,
+              confidence: event.confidence,
+            }
+          : {}),
       });
     case "reviewed":
       return JSON.stringify({ ...common, note: event.note });
@@ -413,6 +605,7 @@ export function foldDecisions(
         reversedAt: null,
         reversedWhy: null,
         touches: [{ kind: "decided", at: event.at, by: event.by, what: describeTouch(event) }],
+        ...assessedOf(event),
       });
       if (superseded !== undefined) superseded.supersededBy = event.id;
       order.push(event.id);
@@ -426,7 +619,8 @@ export function foldDecisions(
     }
     if (event.by !== "greg") {
       // Gate 1's centre: neither the CLI nor the later route gets to decide
-      // this. All entrances meet here, including a hand-edited line.
+      // this. All entrances meet here, including a hand-edited line — and
+      // whoever the decision's author is, including Greg himself.
       problem(
         "unauthorized-review",
         `${event.by} tried to record ${event.kind} for ${event.id}; only Greg may make a decision look reviewed`,
@@ -501,6 +695,14 @@ export function foldDecisions(
     reversedAt: record.reversedAt,
     reversedWhy: record.reversedWhy,
     touches: record.touches,
+    author: record.author,
+    consequence: record.consequence,
+    reversibility: record.reversibility,
+    domain: record.domain,
+    recommendation: record.recommendation,
+    evidence: record.evidence,
+    gregAsked: record.gregAsked,
+    confidence: record.confidence,
   });
 
   return {
@@ -518,6 +720,16 @@ export function foldDecisions(
  * Parsing. A field with the wrong type is never the same as an absent one.
  * ------------------------------------------------------------------ */
 
+type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly why: string };
+
+function ok<T>(value: T): Result<T> {
+  return { ok: true, value };
+}
+
+function no<T>(why: string): Result<T> {
+  return { ok: false, why };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -526,8 +738,8 @@ function isNonBlank(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "";
 }
 
-function asActor(value: unknown): DecisionActor | null {
-  return value === "greg" || value === "overseer" ? value : null;
+function asRecorder(value: unknown): DecisionRecorder | null {
+  return value === "greg" || value === "overseer" || value === "daemon" ? value : null;
 }
 
 function asClass(value: unknown): DecisionClass | null {
@@ -546,6 +758,10 @@ const UUID_RULE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-
 function asNullableString(value: unknown): string | null | undefined {
   if (value === null) return null;
   return typeof value === "string" ? value : undefined;
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : null;
 }
 
 function asOptions(value: unknown): readonly DecisionOption[] | null {
@@ -603,6 +819,19 @@ function asExecution(value: unknown): ExecutionRef | null {
   }
 }
 
+function executionTextProblem(name: string, execution: ExecutionRef): string | null {
+  if (execution.kind === "not-found") return null;
+  if (execution.kind === "unavailable") {
+    const why = untrustedTextProblem(execution.why, DECISION_TEXT_LIMITS.executionWhy);
+    return why === null ? null : `${name}.why ${why}`;
+  }
+  const token = untrustedTextProblem(execution.token, DECISION_TEXT_LIMITS.executionToken);
+  if (token !== null) return `${name}.token ${token}`;
+  if (!isExecutionTokenText(execution.token)) return `${name}.token is not a canonical execution token`;
+  const since = untrustedTextProblem(execution.since, DECISION_TEXT_LIMITS.isoInstant);
+  return since === null ? null : `${name}.since ${since}`;
+}
+
 function asBearsOn(value: unknown): BearsOn | null {
   if (!isRecord(value) || !Array.isArray(value["sessions"]) || !("plan" in value)) return null;
   const plan = asNullableString(value["plan"]);
@@ -620,22 +849,127 @@ function asBearsOn(value: unknown): BearsOn | null {
   return { sessions, plan };
 }
 
-function parseDecided(json: Record<string, unknown>, envelope: Envelope, id: string): DecisionEvent | null {
+/** Why a schema-2 line's inherited V1 text may not be stored, or null. Never applied to schema 1. */
+function v1FieldTextProblem(fields: DecidedFields): string | null {
+  const limits = DECISION_TEXT_LIMITS;
+  const checks: Array<[string, string | null, number]> = [
+    ["question", fields.question, limits.question],
+    ["why", fields.why, limits.why],
+    ["decidedAt", fields.decidedAt, limits.isoInstant],
+    ["chose.option", fields.chose.option, limits.optionName],
+    ["chose.note", fields.chose.note, limits.note],
+    ["bearsOn.plan", fields.bearsOn.plan, limits.plan],
+    ...fields.options.flatMap((option, index): Array<[string, string, number]> => [
+      [`options[${index}].name`, option.name, limits.optionName],
+      [`options[${index}].tradeoffs`, option.tradeoffs, limits.tradeoffs],
+    ]),
+    ...fields.bearsOn.sessions.map((session, index): [string, string, number] => [
+      `bearsOn.sessions[${index}].name`,
+      session.name,
+      limits.sessionName,
+    ]),
+  ];
+  if (fields.options.length > limits.options) return `options has more than ${limits.options} entries`;
+  if (fields.bearsOn.sessions.length > limits.sessions) return `bearsOn.sessions has more than ${limits.sessions} entries`;
+  for (const [name, text, max] of checks) {
+    if (text === null) continue;
+    const why = untrustedTextProblem(text, max);
+    if (why !== null) return `${name} ${why}`;
+  }
+  for (const [index, session] of fields.bearsOn.sessions.entries()) {
+    const why = executionTextProblem(`bearsOn.sessions[${index}].execution`, session.execution);
+    if (why !== null) return why;
+  }
+  return null;
+}
+
+function asAuthor(value: unknown): Result<DecisionAuthor> {
+  const shape = 'author must be {"kind":"overseer"}, {"kind":"greg"} or {"kind":"session","name":…,"execution":…}';
+  if (!isRecord(value)) return no(shape);
+  switch (value["kind"]) {
+    case "overseer":
+      return ok({ kind: "overseer" });
+    case "greg":
+      return ok({ kind: "greg" });
+    case "session": {
+      const name = value["name"];
+      if (typeof name !== "string" || !SESSION_NAME_RULE.test(name)) {
+        return no("author.name must be a session name: 1 to 64 letters, digits, '.', '_' or '-'");
+      }
+      const execution = asExecution(value["execution"]);
+      if (execution === null) return no("author.execution must be a verified, not-found or unavailable execution reference");
+      const why = executionTextProblem("author.execution", execution);
+      if (why !== null) return no(why);
+      return ok({ kind: "session", name, execution });
+    }
+    default:
+      return no(shape);
+  }
+}
+
+/** The schema-2 fields, each with its own reason for refusal. */
+function asAssessment(json: Record<string, unknown>): Result<DecisionAssessment> {
+  const missing = ASSESSMENT_FIELDS.filter((field) => !(field in json));
+  if (missing.length > 0) return no(`a schema-2 decision needs ${missing.join(", ")}`);
+
+  const author = asAuthor(json["author"]);
+  if (!author.ok) return author;
+  const consequence = oneOf(json["consequence"], CONSEQUENCES);
+  if (consequence === null) return no("consequence must be high, medium or low");
+  const reversibility = oneOf(json["reversibility"], REVERSIBILITIES);
+  if (reversibility === null) return no("reversibility must be easy, costly or one-way");
+  const domain = oneOf(json["domain"], DECISION_DOMAINS);
+  if (domain === null) return no("domain must be product or technical");
+
+  const recommendation = json["recommendation"];
+  if (recommendation !== null) {
+    if (!isNonBlank(recommendation)) return no("recommendation must be null or non-blank text");
+    const why = untrustedTextProblem(recommendation, DECISION_TEXT_LIMITS.recommendation);
+    if (why !== null) return no(`recommendation ${why}`);
+  }
+
+  const evidence = parseCheckedArtefacts(json["evidence"]);
+  if (evidence === null) {
+    return no("evidence must be a list of at most 20 well-formed artefact references, each with a check that fits its kind");
+  }
+  const gregAsked = oneOf(json["gregAsked"], GREG_ASKED);
+  if (gregAsked === null) return no("gregAsked must be no, asked-answered or asked-awaiting");
+  const confidence = json["confidence"] === null ? null : oneOf(json["confidence"], CONFIDENCES);
+  if (confidence === null && json["confidence"] !== null) return no("confidence must be high, medium, low or null");
+
+  return ok({
+    author: author.value,
+    consequence,
+    reversibility,
+    domain,
+    recommendation,
+    evidence,
+    gregAsked,
+    confidence,
+  });
+}
+
+function parseDecidedFields(json: Record<string, unknown>, id: string): Result<DecidedFields> {
   const decidedAt = asIso(json["decidedAt"]);
+  if (decidedAt === null) return no("decidedAt must be an ISO instant");
   const decisionClass = asClass(json["class"]);
-  if (decidedAt === null || decisionClass === null) return null;
-  if (!isNonBlank(json["question"]) || !isNonBlank(json["why"])) return null;
+  if (decisionClass === null) return no("class must be assumption, decision or decline");
+  if (!isNonBlank(json["question"])) return no("question must be non-blank text");
+  if (!isNonBlank(json["why"])) return no("why must be non-blank text");
   const options = asOptions(json["options"]);
-  if (options === null) return null;
+  if (options === null) return no("options must be at least two, each with a distinct non-blank name and non-blank trade-offs");
   const chose = asChoice(json["chose"], options);
+  if (chose === null) return no("chose must name one of the options, with a note that is text or null");
   const advisers = asAdvisers(json["advisers"]);
+  if (advisers === null) return no("advisers must be one or more of sol and fable, or just nobody");
   const bearsOn = asBearsOn(json["bearsOn"]);
-  if (!("supersedes" in json)) return null;
+  if (bearsOn === null) return no("bearsOn must hold distinct named sessions with execution references, and a plan that is text or null");
+  if (!("supersedes" in json)) return no("supersedes must be present, as a decision id or null");
   const supersedes = asNullableString(json["supersedes"]);
-  if (chose === null || advisers === null || bearsOn === null || supersedes === undefined) return null;
-  if (supersedes !== null && !ID_RULE.test(supersedes)) return null;
-  return {
-    ...envelope,
+  if (supersedes === undefined || (supersedes !== null && !ID_RULE.test(supersedes))) {
+    return no("supersedes must be a decision id or null");
+  }
+  return ok({
     kind: "decided",
     id,
     decidedAt,
@@ -647,44 +981,95 @@ function parseDecided(json: Record<string, unknown>, envelope: Envelope, id: str
     advisers,
     bearsOn,
     supersedes,
-  };
+  });
 }
 
-/** One JSONL line to a fully validated event, or null. Nothing is defaulted. */
-export function parseEvent(line: string): DecisionEvent | null {
+export type EventParse = { readonly ok: true; readonly event: DecisionEvent } | { readonly ok: false; readonly why: string };
+
+/**
+ * One JSONL line to a fully validated event, or the reason it is not one.
+ * Nothing is defaulted. `parseEvent` is the same verdict without the reason.
+ */
+export function parseEventDetailed(line: string): EventParse {
+  const refuse = (why: string): EventParse => ({ ok: false, why });
   let json: unknown;
   try {
     json = JSON.parse(line);
   } catch {
-    return null;
+    return refuse("the line is not JSON");
   }
-  if (!isRecord(json) || json["schema"] !== DECISIONS_SCHEMA || "decidedBy" in json) return null;
+  if (!isRecord(json)) return refuse("the line is not a JSON object");
+  const rawSchema = json["schema"];
+  if (rawSchema !== LEGACY_DECISIONS_SCHEMA && rawSchema !== DECISIONS_SCHEMA) {
+    return refuse(`schema ${JSON.stringify(rawSchema)} is not one this build reads (1 or 2)`);
+  }
+  const schema: DecisionSchema = rawSchema === LEGACY_DECISIONS_SCHEMA ? LEGACY_DECISIONS_SCHEMA : DECISIONS_SCHEMA;
+  if ("decidedBy" in json) return refuse("decidedBy is not a field of this record: `by` says who recorded the line");
   const eventId = json["eventId"];
+  if (typeof eventId !== "string" || !UUID_RULE.test(eventId)) return refuse("eventId must be a UUID");
   const commandId = asNullableString(json["commandId"]);
+  if (!("commandId" in json) || commandId === undefined) return refuse("commandId must be present, as text or null");
   const at = asIso(json["at"]);
-  const by = asActor(json["by"]);
+  if (at === null) return refuse("at must be an ISO instant");
+  if (schema === DECISIONS_SCHEMA) {
+    if (commandId !== null) {
+      const why = untrustedTextProblem(commandId, DECISION_TEXT_LIMITS.commandId);
+      if (why !== null) return refuse(`commandId ${why}`);
+    }
+    const why = untrustedTextProblem(at, DECISION_TEXT_LIMITS.isoInstant);
+    if (why !== null) return refuse(`at ${why}`);
+  }
+  const by = asRecorder(json["by"]);
+  if (by === null) return refuse("by must be greg, overseer or daemon");
   const id = json["id"];
-  if (typeof eventId !== "string" || !UUID_RULE.test(eventId)) return null;
-  if (!("commandId" in json) || commandId === undefined || at === null || by === null) return null;
-  if (typeof id !== "string" || !ID_RULE.test(id)) return null;
-  const envelope: Envelope = { schema: DECISIONS_SCHEMA, eventId, commandId, at, by };
+  if (typeof id !== "string" || !ID_RULE.test(id)) return refuse("id must be a decision id such as dec-a3k9mq2p");
 
   switch (json["kind"]) {
-    case "decided":
-      return parseDecided(json, envelope, id);
-    case "reviewed": {
-      if (!("note" in json)) return null;
-      const note = asNullableString(json["note"]);
-      return note === undefined ? null : { ...envelope, kind: "reviewed", id, note };
+    case "decided": {
+      const fields = parseDecidedFields(json, id);
+      if (!fields.ok) return refuse(fields.why);
+      if (schema === LEGACY_DECISIONS_SCHEMA) {
+        if (by === "daemon") return refuse("daemon records only a session's schema-2 decision, never a schema-1 line");
+        return { ok: true, event: { schema, eventId, commandId, at, by, ...fields.value } };
+      }
+      const text = v1FieldTextProblem(fields.value);
+      if (text !== null) return refuse(text);
+      const assessment = asAssessment(json);
+      if (!assessment.ok) return refuse(assessment.why);
+      const expectedAuthor = by === "daemon" ? "session" : by;
+      if (assessment.value.author.kind !== expectedAuthor) {
+        return refuse(
+          `${by} may record only a ${expectedAuthor} decision; this line names ${assessment.value.author.kind} as its author`,
+        );
+      }
+      return { ok: true, event: { schema, eventId, commandId, at, by, ...fields.value, ...assessment.value } };
     }
+    case "reviewed":
     case "reversed": {
-      if (!("why" in json)) return null;
-      const why = asNullableString(json["why"]);
-      return why === undefined ? null : { ...envelope, kind: "reversed", id, why };
+      if (by === "daemon") return refuse(`daemon never records a ${json["kind"]}: only Greg's count, and the drain copies decisions`);
+      const field = json["kind"] === "reviewed" ? "note" : "why";
+      if (!(field in json)) return refuse(`${json["kind"]} needs ${field}, as text or null`);
+      const text = asNullableString(json[field]);
+      if (text === undefined) return refuse(`${field} must be text or null`);
+      if (schema === DECISIONS_SCHEMA && text !== null) {
+        const why = untrustedTextProblem(text, DECISION_TEXT_LIMITS.reviewText);
+        if (why !== null) return refuse(`${field} ${why}`);
+      }
+      const base = { schema, eventId, commandId, at, by, id };
+      return {
+        ok: true,
+        event: json["kind"] === "reviewed" ? { ...base, kind: "reviewed", note: text } : { ...base, kind: "reversed", why: text },
+      };
     }
     default:
-      return null;
+      return refuse(`kind ${JSON.stringify(json["kind"])} is not decided, reviewed or reversed`);
   }
+}
+
+/** One JSONL line to a fully validated event, or null. Nothing is defaulted. */
+export function parseEvent(line: string): DecisionEvent | null {
+  const parsed = parseEventDetailed(line);
+  return parsed.ok ? parsed.event : null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -832,6 +1217,21 @@ export function appendEvents(
     return { ok: false, code: "refused", why: `the decisions directory must be an absolute path, not '${root}'` };
   }
   if (events.length === 0) return { ok: false, code: "refused", why: "nothing to append" };
+  /* **NOTHING GOES IN THAT THIS FILE'S OWN READER WOULD REFUSE.** The types
+     cannot carry every bound — a recommendation's length, a note's control
+     character — and the fold never parses, so without this a writer could
+     append a line that every later read reports as unreadable. Two writers use
+     this function (the CLI and the report drain); the check belongs to both. */
+  for (const event of events) {
+    const reread = parseEventDetailed(JSON.stringify(event));
+    if (!reread.ok) {
+      return {
+        ok: false,
+        code: "refused",
+        why: `refusing to write ${event.kind} ${event.id}: this record's own reader would not accept it — ${reread.why}`,
+      };
+    }
+  }
   try {
     mkdirSync(root, { recursive: true });
   } catch (cause) {
@@ -876,29 +1276,48 @@ export function appendEvents(
        make the record worse?" A corrupt line still does not freeze every
        future legitimate append, which is important for a human-owned record. */
     const prefix = readEvents(root);
+    /* A prepared report event is replayed as the exact same event after a
+       crash. The fold deliberately treats a duplicate event id as a problem,
+       so recognise an already-persisted, command-keyed event at this write
+       boundary before asking the fold about genuinely new input. A matching
+       command with a fresh event id remains the older CLI retry case below;
+       the same event id with any changed field still reaches the fold and is
+       refused as a duplicate. */
+    const pending = events.filter(
+      (event) =>
+        event.commandId === null ||
+        !prefix.some(
+          (written) =>
+            written.commandId === event.commandId &&
+            written.eventId === event.eventId &&
+            written.at === event.at &&
+            sameCommandPayload(written, event),
+        ),
+    );
+    if (pending.length === 0) return { ok: true, view: current, path: file, repaired };
     const baseline = foldDecisions(prefix, []);
-    const candidate = foldDecisions([...prefix, ...events], []);
+    const candidate = foldDecisions([...prefix, ...pending], []);
     if (candidate.problems.length > baseline.problems.length) {
       const added = candidate.problems.slice(baseline.problems.length);
       return {
         ok: false,
         code: added.some((problem) => problem.kind === "command-conflict") ? "command-conflict" : "would-break",
         why:
-          `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
+          `refusing to write: these ${pending.length} event(s) would put ${added.length} new problem(s) into the ` +
           "decision record, and an append-only log has no way to take them back — " +
           added.map((problem) => `${problem.kind}: ${problem.why}`).join("; "),
       };
     }
 
-    /* Exact retries are evidence that the original write succeeded, not new
-       history. Filter them only after the fold has checked duplicate event ids
-       and command conflicts, so idempotency cannot mute either problem. */
+    /* The CLI retries one intent with a fresh event id and clock. Filter that
+       form only after the fold has checked duplicate event ids and command
+       conflicts, so command idempotency cannot mute either problem. */
     const commands = new Map<string, DecisionEvent>();
     for (const event of prefix) {
       if (event.commandId !== null && !commands.has(event.commandId)) commands.set(event.commandId, event);
     }
     const toAppend: DecisionEvent[] = [];
-    for (const event of events) {
+    for (const event of pending) {
       if (event.commandId !== null) {
         const original = commands.get(event.commandId);
         if (original !== undefined && sameCommandPayload(original, event)) continue;
@@ -962,10 +1381,11 @@ export function mintEventId(): string {
   return randomUUID();
 }
 
-export function envelope(
-  by: DecisionActor,
+/** A new line's envelope: always the current schema, and `by` exactly as given. */
+export function envelope<B extends DecisionRecorder>(
+  by: B,
   options: { at?: string; commandId?: string | null } = {},
-): Envelope {
+): EnvelopeOf<typeof DECISIONS_SCHEMA, B> {
   return {
     schema: DECISIONS_SCHEMA,
     eventId: mintEventId(),

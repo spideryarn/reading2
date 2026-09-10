@@ -1,7 +1,7 @@
 # Schedule preview — make periodic work inspectable before launch
 
 The roadmap stage of the same name in
-[260908f § Stage: Schedule preview](260908f-overseer-and-fleet-improvement-roadmap.md#stage-schedule-preview--make-periodic-work-inspectable-before-launch),
+[260908f § Stage: Schedule preview](260908f-overseer-and-fleet-improvement-roadmap.md#stage-schedule-preview-make-periodic-work-inspectable-before-launch),
 dispatched by the Overseer on 2026-09-10 as queue item `qi-2yk4gxas`, session `schedule-preview`.
 
 **This stage launches nothing.** `OVERSEER_JOBS_ENABLED` stays unset and remains Greg's switch. What
@@ -164,8 +164,9 @@ server, which has two drifts: the fleet process holds *its own* loaded prompts, 
 constants, not the daemon's; and the checkpoint's occurrence ledger lags the scheduler timer.
 
 So: **on every checkpoint tick the daemon writes `~/.overseer/schedule.json`** (atomic temp +
-rename), computed by the shared planner from *its* loaded definitions, the documents as they are
-now, its **in-memory** occurrence index, its arming, and the capabilities it actually holds. It
+rename), computed by the shared planner from *its* loaded definitions, the session jobs' documents
+as they are now (rule jobs' sources as loaded — § D3), its **in-memory** occurrence index, its
+arming, and the capabilities it actually holds. It
 carries `schema`, `writtenAt`, the daemon's `instanceId`, `listRevision`, capabilities, arming,
 history state, the headline, and per job: resource class, dispatch mode, the verdict and its
 sentence, next due (absolute UTC instant, or *"after the run in flight settles"*), last attempt and
@@ -181,11 +182,15 @@ the checkpoint's scheduler line stays the headline.
 
 Readers: the fleet route reads that file (a few KB, bounded) and forwards it; `overseer status`
 reads it and **also** builds the list from the checkout it runs in, so it can say *"the running
-daemon holds list abc; this checkout builds def — a restart loads it"*. A daemon that predates this
-build writes no file, and both readers say exactly that.
+daemon holds list abc; this checkout builds def — a restart loads it"*. No file means a daemon that
+predates this build, one still inside its first checkpoint interval, or one failing to write it; the
+CLI uses the current checkpoint's instance id to say which it can tell apart, and a preview written
+by another instance says so on its first line.
 
-Limits stated on the page: it is as of `writtenAt` (≤ one tick, 30 s); rows after a proposed launch
-assume it succeeded.
+Limits stated on the page: it is as of `writtenAt` (at most one checkpoint tick while the daemon
+runs); rows after a proposed live session launch assume it succeeded — **including on a disarmed
+daemon**, where the row also says nothing can launch it now, because the spacing arming would apply
+is what a person deciding to arm needs to see.
 
 ### D7. Surfaces: `overseer status` and a section on the Overseer tab
 
@@ -203,7 +208,7 @@ assume it succeeded.
   ReceiptList if that has landed); `daemon.ts`'s scheduler region (not the usage pass) and
   `scripts/overseer.ts`'s `schedulerWiring` and `status` case.
 
-Absence is stated: no file (the daemon predates this build), an unreadable file, a schema this build
+Absence is stated: no file (the three readings above), an unreadable file, a schema this build
 does not know, an unreadable document, `armed.json` missing (the daemon is off, so first runs read
 *"2 h after it is armed"*), and *"this page could not reach the route"* — each its own sentence.
 
@@ -222,39 +227,102 @@ the tighter budget. Sol reviews each stage once.
 
 ### Stage 1 — the scheduler core
 
-- [ ] `schedule-plan.ts` `planJobs`; `schedulerTick` refactored onto it; duplicate preflight (red
+**Done.** `18f64a04` (built by an Opus subagent from
+[the task](260910e-schedule-preview-stage1-task.md); the activation fix by the manager) and Sol's
+stage-review fixes F1–F3 on top
+([review](260910e-schedule-preview-stage1-review-sol.md)). Focused overseer suites 9 files / 322
+tests, typecheck exit 0. What the plan did not know:
+
+- **A dry-run job needs its own eligibility arm, not `ineligible`**, or the activation preflight —
+  which stops on any `ineligible` — could never arm a box carrying the fixture. `overseer-activate`
+  now names it as never dispatching.
+- **Duplicates had to reach the headline too** (Sol's F1): the planner refused them and
+  `eligibilityOf` still counted them, so `ARMED` could stand over a tick that launched nothing.
+- **Rule document pins had to be literals** (F2): load-time digests compared a moved source with
+  itself.
+- New pins: get-ready-to-deploy `c5c7f9f93886`, feedback-sweep `c921a5c4b732`, schedule-fixture
+  `465648545712`, wedged-work `28d1f83b8a42`, launch-mode `4de4439f7848`. The D3b sentence is one
+  constant, `OVERSEER_OWNS_THE_RECURRENCE`, and the fixture's prompt carries it too.
+
+- [x] `schedule-plan.ts` `planJobs`; `schedulerTick` refactored onto it; duplicate preflight (red
   first); the planner and characterisation tests of D2.
-- [ ] `JobBehaviour.dispatch` (hashed), the `dry-run` report arm, `eligibilityOf` treating dry-run as
-  ineligible.
-- [ ] Required `readDocument`; session evidence per tick; the `standingJobs()` comment corrected;
+- [x] `JobBehaviour.dispatch` (hashed), the `dry-run` report arm, and a `dry-run` eligibility arm
+  (not `ineligible` — see above).
+- [x] Required `readDocument`; session evidence per tick; the `standingJobs()` comment corrected;
   wired through `schedulerWiring` and `daemon.ts`; the headline recomputed per checkpoint.
-- [ ] D3b's sentence in both prompts.
-- [ ] `authorisedDocuments`; the pins-agree test, shown red.
-- [ ] `schedule-fixture` job, its document, its pins; all four jobs re-pinned; shipped-job tests
+- [x] D3b's sentence in both prompts.
+- [x] `authorisedDocuments`; the pins-agree test, shown red.
+- [x] `schedule-fixture` job, its document, its pins; all four jobs re-pinned; shipped-job tests
   updated.
 
 ### Stage 2 — the preview file and the CLI
 
-- [ ] `wire.ts` types; `schedule-parse.ts`; pure `schedulePreview()` over `planJobs`;
+**Done, review pending.** `6b5ce4a9` (an Opus subagent, from
+[the task](260910e-schedule-preview-stage2-task.md)). Sol's stage review
+([prompt](260910e-schedule-preview-stage2-review-sol-prompt.md)) **timed out at 30 minutes with no
+answer**, having already edited the tree; the manager read every hunk and kept them as a separate
+commit — see its message. The Overseer was told; the proposal is that Stage 3's review also covers
+Stage 2's final state rather than a separate second round. What the plan did not know:
+
+- **`list: given | not-given`** in the file, so *"this daemon was handed no list"* differs from *"no
+  file"* (a daemon predating this build).
+- **The preview needs `arming` and `launchSeparationMs` of its own** for the disarmed case — and,
+  per Sol's edit, the live ticker's values must win when armed.
+- **`zonedLine` marks days against UTC**, so London-first printed 23:30 UTC as *"00:30 London
+  (+1d)"*; `londonFirst` marks them against London. Stage 3 prints through it.
+- **`describeAge` had to become a leaf** (`format-age.ts`): importing it from `status-cli.ts` pulled
+  `gjd-remote-tmux.ts` into the daemon.
+
+- [x] `wire.ts` types; `schedule-parse.ts`; pure `schedulePreview()` over `planJobs`;
   `listRevision`; `MISSED_RUN_POLICY`.
-- [ ] The daemon writes `schedule.json` each checkpoint tick; the `preview` option from
+- [x] The daemon writes `schedule.json` each checkpoint tick; the `preview` option from
   `schedulerWiring`; a daemon test with a disposable store.
-- [ ] `overseer status` prints the block, and the checkout-vs-daemon `listRevision` line.
+- [x] `overseer status` prints the block, and the checkout-vs-daemon `listRevision` line.
 
 ### Stage 3 — the browser section
 
-- [ ] `routes-schedule.ts` + `schedule-wiring.ts` + mount; `schedule-client.ts`;
+**Done.** `b623a503` (an Opus subagent, from [the task](260910e-schedule-preview-stage3-task.md);
+the Stage 2 check's fixes ride in the same commit because they share `schedule-preview.ts`). Before
+it: the independent read-only Opus check of `b0b8ee80` that the Overseer asked for (*push after
+fixes*: a latent P1 — a disarmed preview hid the spacing arming would apply — and two P2s, all
+fixed red first). After it: Sol's one review covering Stages 2–3
+([findings](260910e-schedule-preview-stage3-review-sol-findings.md)) — four established P1s, all
+fixed red first inside the stage (F4 the page did not say a preview came from another daemon
+instance; F5 the CLI called an unknown instance "another"; F6 duplicate-id rows borrowed the other
+definition's documents; F7 the route followed a symlinked or FIFO `schedule.json`), and F8's prose.
+A browser check at 1280 and 390 px passed every item; its one visual defect (prose broken mid-word
+by `break-all`) is fixed. Focused suites 16 files / 434 tests, typecheck and `build:fleet` exit 0.
+
+Known and left: a throwing document reader leaves the previous `schedule.json` in place and the jobs
+ticker's reader is unguarded (the real reader returns a result and never throws); on a disarmed
+preview the spacing row's sentence is the planner's own and reads *"a Claude session was launched
+0s ago"*, which the caveat qualifies; the page's verdict words are a second copy of the CLI's,
+checked for completeness by the compiler but not for agreement; the payload type lives in
+`routes-schedule.ts` rather than `wire.ts`.
+
+- [x] `routes-schedule.ts` + `schedule-wiring.ts` + mount; `schedule-client.ts`;
   `SchedulePreview.tsx`; the `OverseerPanel` mount.
-- [ ] Tests: the route over a fixture store; the join through `makeSchedule()`; the section drives
-  the seam, draws each absence, and prints times through `zones.ts`.
+- [x] Tests: the route over a fixture store; the join through `makeSchedule()`; the section drives
+  the seam, draws each absence, and prints times London first.
 
 ### Stage 4 — docs and close-out
 
-- [ ] `overseer.md` § The standing jobs: the preview, the fixture, dry-run, per-tick evidence, the
-  no-recurrence sentence. Factual, not a change to a rule.
-- [ ] Full suite through `tmux-job`, typecheck, lint of touched files; the roadmap row; debrief. The
-  daemon needs a restart to write the file, and the dashboard one to serve the route — both the
-  Overseer's.
+- [x] `overseer.md` § The standing jobs: the preview, the fixture, dry-run, per-tick evidence for
+  session jobs, the no-recurrence sentence. Factual, not a change to a rule.
+- [x] Full suite through `tmux-job`, typecheck, lint of touched files; debrief. The roadmap row is
+  the Overseer's to update on close-out. The daemon needs a restart to write the file, and the
+  dashboard one to serve the route — both the Overseer's.
+
+**The full suite found what the focused lists could not.** On the merged tree (`f597c7d0`) it was
+1011 files passed and 4 red: the two environment tests every fresh worktree reds
+(`cold-start-lazy-imports`, `pdf-bundle-trace`), a timing test in `fetch.test.ts` that passes alone
+(121/121), and **`fleet-attention.test.ts`'s seam test, which was this branch's**: the new route
+reached sixteen Overseer modules through `storeRoot` from `store.ts` and a file-name constant from
+`schedule-preview.ts`. The fix keeps the dashboard at the nine modules it was argued for — the
+fleet's own `storeRoot`, and the constant in the `schedule-parse.ts` leaf — rather than adding an
+allowlist entry. The lesson for the next fleet-side stage: **any new `tools/fleet/` import of
+`tools/overseer/` belongs in the focused list with `tests/fleet-attention.test.ts`**, because that
+test walks the whole closure and nothing else does.
 
 ## Not doing
 

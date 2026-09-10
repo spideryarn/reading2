@@ -15,6 +15,7 @@ import { groupUsageIncidents } from "../fleet/usage-feed.js";
 import { zonedLine } from "../fleet/zones.js";
 import type { OverseerEvent } from "./diff.js";
 import { splitJsonl } from "./jsonl.js";
+import { describeAge } from "./format-age.js";
 import { describeRuleOutcome } from "./rules.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "./notes.js";
 import {
@@ -166,6 +167,10 @@ export function describeEvent(event: OverseerEvent): string {
       return `${at}  intends    ${event.occurrenceId} ${event.ruleId} — ${event.what}`;
     case "rule-settled":
       return `${at}  rule       ${event.occurrenceId} ${event.ruleId} — ${describeRuleOutcome(event.outcome)}`;
+    case "recovery-candidate":
+      return `${at}  candidate  ${event.entry.name} (${event.entry.tmuxId}) — ${event.id}, generation ${event.disappearance.generation}${event.disappearance.bootChanged ? ", boot changed" : ""}${event.disappearance.watched ? "" : ", unwatched"}`;
+    case "recovery-disposition":
+      return `${at}  disposed   ${event.id} — ${event.disposition}`;
     default: {
       const never: never = event;
       throw new Error(String(never));
@@ -384,14 +389,9 @@ function describeStatusAge(since: StatusSince, nowMs: number): string {
   }
 }
 
-export function describeAge(ms: number): string {
-  if (ms < 0) return "in the future";
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 90) return `${seconds}s`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `${minutes}m`;
-  return `${Math.round(minutes / 60)}h`;
-}
+// Compatibility for callers that imported this from the renderer before the
+// schedule preview needed the formatter in the daemon's import graph.
+export { describeAge } from "./format-age.js";
 
 export function when(iso: string): string {
   return zonedLine(iso) ?? `${iso} (a time this tool cannot read)`;

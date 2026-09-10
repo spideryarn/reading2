@@ -29,6 +29,7 @@ import {
   sameVersion,
   spellVersion,
   viewOf,
+  type DecidedV2Event,
   type DecisionEvent,
   type DecisionRecord,
   type DecisionView,
@@ -61,10 +62,10 @@ function eventEnvelope(by: "greg" | "overseer" = "overseer", at?: string, comman
   } as const;
 }
 
-function decided(
-  id: string = A,
-  over: Partial<Extract<DecisionEvent, { kind: "decided" }>> = {},
-): Extract<DecisionEvent, { kind: "decided" }> {
+/* Schema 2 since plan 260910e: every new line carries who decided and the
+   triage fields. Schema 1's own behaviour is pinned in
+   `tests/overseer-decisions-schema2.test.ts`. */
+function decided(id: string = A, over: Partial<DecidedV2Event> = {}): DecidedV2Event {
   return {
     ...eventEnvelope("overseer"),
     kind: "decided",
@@ -81,6 +82,14 @@ function decided(
     advisers: ["nobody"],
     bearsOn: { sessions: [], plan: null },
     supersedes: null,
+    author: { kind: "overseer" },
+    consequence: "low",
+    reversibility: "easy",
+    domain: "technical",
+    recommendation: null,
+    evidence: [],
+    gregAsked: "no",
+    confidence: null,
     ...over,
   };
 }
@@ -97,7 +106,7 @@ function asLine(event: DecisionEvent): string {
 
 describe("the on-disk contract and ids", () => {
   test("pins the schema, file names, root and readable id alphabet", () => {
-    expect(DECISIONS_SCHEMA).toBe(1);
+    expect(DECISIONS_SCHEMA).toBe(2);
     expect(DECISIONS_FILE).toBe("decisions.jsonl");
     expect(DECISIONS_LOCK_FILE).toBe("decisions.lock");
     expect(DECISIONS_INIT_FILE).toBe("decisions.created");
@@ -132,7 +141,7 @@ describe("strict event parsing", () => {
   });
 
   test.each([
-    ["schema", { schema: 2 }],
+    ["schema", { schema: 3 }],
     ["kind", { kind: "invented" }],
     ["eventId", { eventId: "not-a-uuid" }],
     ["at", { at: "Tuesday lunchtime" }],
@@ -556,13 +565,13 @@ describe("reading and appending", () => {
     expect(readFileSync(join(root, DECISIONS_FILE), "utf8")).toBe(before);
   });
 
-  test("append reports duplicate-event even when the command id is duplicated too", () => {
+  test("append reports duplicate-event when the same event id is reused with a changed envelope clock", () => {
     const root = tempRoot();
     const firstEvent = decided(A, { ...eventEnvelope("overseer", undefined, "command-a") });
     expect(appendEvents([firstEvent], { root }).ok).toBe(true);
     const before = readFileSync(join(root, DECISIONS_FILE), "utf8");
 
-    const result = appendEvents([{ ...firstEvent }], { root });
+    const result = appendEvents([{ ...firstEvent, at: "2026-09-09T10:00:05.000Z" }], { root });
 
     expect(result).toMatchObject({ ok: false, code: "would-break" });
     expect(result.ok ? "unexpected success" : result.why).toContain("duplicate-event");

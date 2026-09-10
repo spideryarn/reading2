@@ -59,6 +59,14 @@ function record(id: string, index: number, over: Partial<DecisionRecord> = {}): 
     reversedAt: null,
     reversedWhy: null,
     touches: [],
+    author: { kind: "legacy-unrecorded" },
+    consequence: "not-recorded",
+    reversibility: "not-recorded",
+    domain: "not-recorded",
+    recommendation: { kind: "not-recorded" },
+    evidence: { kind: "not-recorded" },
+    gregAsked: "not-recorded",
+    confidence: "not-recorded",
     ...over,
   };
 }
@@ -137,7 +145,7 @@ describe("the five read arms", () => {
     }).body;
 
     expect(feed).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "unreadable",
       composedAt: NOW.toISOString(),
       why: "line 4 is not an event",
@@ -271,6 +279,34 @@ describe("the maximum", () => {
     expect(answer.body?.kind).not.toBe("oversized-unreviewed");
     expect(answer.raw).toContain("required context exceeds");
     expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(2_097_152);
+  });
+});
+
+describe("schema 2 crosses the route", () => {
+  it("every arm says schema 2, including the refusals the route writes inline", () => {
+    expect(call({ kind: "never-written", path: "/tmp/fake/decisions.jsonl" }).body?.schema).toBe(2);
+    expect(call(decisionRead([])).body?.schema).toBe(2);
+    expect(JSON.parse(call(decisionRead([]), DECISIONS_PATH, "POST").raw)).toMatchObject({ schema: 2 });
+    expect(JSON.parse(call(decisionRead([]), `${DECISIONS_PATH}/x`).raw)).toMatchObject({ schema: 2 });
+  });
+
+  it("a session's decision keeps its author, recorder and every new field on the wire", () => {
+    const session = record("dec-session2", 0, {
+      recordedBy: "daemon",
+      author: { kind: "session", name: "work-reports", execution: { kind: "not-found" } },
+      consequence: "high",
+      reversibility: "one-way",
+      domain: "product",
+      recommendation: { kind: "recorded", value: null },
+      evidence: { kind: "recorded", value: [{ ref: { kind: "decision", id: "dec-a3k9mq2p" }, check: { state: "found" } }] },
+      gregAsked: "asked-awaiting",
+      confidence: "low",
+      touches: [{ kind: "decided", at: NOW.toISOString(), by: "daemon", what: "decision decided" }],
+    });
+    const legacy = record("dec-legacy22", 1);
+    const feed = call(decisionRead([session, legacy])).body;
+    if (feed?.kind !== "decisions") throw new Error("unreachable");
+    expect(feed.rows.map((row) => row.record)).toEqual([session, legacy]);
   });
 });
 

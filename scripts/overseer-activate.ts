@@ -193,6 +193,10 @@ export function activationVerdict(input: {
     const one = byId.get(jobId);
     if (one === undefined) problems.push(`${jobId} is not among the loaded job definitions at all`);
     else if (one.kind === "ineligible") problems.push(`${jobId} could not run: ${one.why}`);
+    // A DRY-RUN JOB IS NEITHER. It is pinned never to dispatch (plan 260910e
+    // D5), so it must not stop activation — and calling it "eligible" in the
+    // success notes would tell whoever armed the box that it will run.
+    else if (one.kind === "dry-run") notes.push(`${jobId} is dry-run and will never dispatch: ${one.why}`);
     else notes.push(`${jobId} is eligible`);
   }
 
@@ -263,7 +267,13 @@ function main(argv: readonly string[]): number {
   console.log("preflight");
   for (const problem of problems) console.log(`  ✗ ${problem}`);
   for (const one of eligibility) {
-    console.log(one.kind === "eligible" ? `  ✓ ${one.jobId} would be eligible` : `  ✗ ${one.jobId} would NOT be eligible: ${one.why}`);
+    console.log(
+      one.kind === "eligible"
+        ? `  ✓ ${one.jobId} would be eligible`
+        : one.kind === "dry-run"
+          ? `  · ${one.jobId} is dry-run and will never dispatch: ${one.why}`
+          : `  ✗ ${one.jobId} would NOT be eligible: ${one.why}`,
+    );
   }
   if (problems.length > 0 || eligibility.some((one) => one.kind === "ineligible") || requiredJobIds.length === 0) {
     console.error("\nSTOPPING: the definitions this checkout builds cannot all run, so installing the unit would arm nothing.");

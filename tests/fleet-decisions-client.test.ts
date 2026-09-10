@@ -3,14 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DECISIONS_FETCH_TIMEOUT_MS,
+  decisionMatchesSearch,
   makeDecisionsApi,
   parseDecisionsFeed,
   type DecisionsRequest,
 } from "../tools/fleet/web/src/decisions-client";
-import type { DecisionRow, DecisionsFeed } from "../tools/fleet/wire";
+import { decisionMatchesSearch as cliDecisionMatchesSearch } from "../tools/fleet/decisions-view.js";
+import type { DecisionRow, DecisionWireRecord, DecisionsFeed } from "../tools/fleet/wire";
 
 const EMPTY: DecisionsFeed = {
-  schema: 1,
+  schema: 2,
   kind: "decisions",
   version: "0",
   path: "/tmp/fake/decisions.jsonl",
@@ -58,6 +60,14 @@ const ROW: DecisionRow = {
     reversedAt: null,
     reversedWhy: null,
     touches: [{ kind: "decided", at: "2026-09-09T11:00:00.000Z", by: "overseer", what: "decision decided" }],
+    author: { kind: "overseer" },
+    consequence: "high",
+    reversibility: "costly",
+    domain: "technical",
+    recommendation: { kind: "recorded", value: "Keep protecting unseen rows." },
+    evidence: { kind: "recorded", value: [{ ref: { kind: "commit", sha: "f9970832" }, check: { state: "on-dev" } }] },
+    gregAsked: "no",
+    confidence: null,
   },
   ageMs: 3_600_000,
   pendingReview: true,
@@ -111,33 +121,33 @@ describe("strict parsing", () => {
   it("accepts each server arm without changing whose voice its reason is in", () => {
     expect(
       parseDecisionsFeed({
-        schema: 1,
+        schema: 2,
         kind: "never-written",
         composedAt: "2026-09-09T12:00:00.000Z",
         why: "nobody has written it",
       }),
     ).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "never-written",
       composedAt: "2026-09-09T12:00:00.000Z",
       why: "nobody has written it",
     });
     expect(
       parseDecisionsFeed({
-        schema: 1,
+        schema: 2,
         kind: "unreadable",
         composedAt: "2026-09-09T12:00:00.000Z",
         why: "line 4 is broken",
       }),
     ).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "unreadable",
       composedAt: "2026-09-09T12:00:00.000Z",
       why: "line 4 is broken",
     });
     expect(
       parseDecisionsFeed({
-        schema: 1,
+        schema: 2,
         kind: "oversized-unreviewed",
         composedAt: "2026-09-09T12:00:00.000Z",
         why: "the unseen rows do not fit",
@@ -145,7 +155,7 @@ describe("strict parsing", () => {
         limitBytes: 2 * 1024 * 1024,
       }),
     ).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "oversized-unreviewed",
       composedAt: "2026-09-09T12:00:00.000Z",
       why: "the unseen rows do not fit",
@@ -154,7 +164,7 @@ describe("strict parsing", () => {
     });
     expect(
       parseDecisionsFeed({
-        schema: 1,
+        schema: 2,
         kind: "oversized-file",
         composedAt: "2026-09-09T12:00:00.000Z",
         why: "the input exceeds the synchronous-read bound",
@@ -162,7 +172,7 @@ describe("strict parsing", () => {
         limitBytes: 4_000_000,
       }),
     ).toEqual({
-      schema: 1,
+      schema: 2,
       kind: "oversized-file",
       composedAt: "2026-09-09T12:00:00.000Z",
       why: "the input exceeds the synchronous-read bound",
@@ -172,7 +182,8 @@ describe("strict parsing", () => {
   });
 
   it.each([
-    ["wrong schema", { ...EMPTY, schema: 2 }],
+    ["wrong schema", { ...EMPTY, schema: 3 }],
+    ["the previous schema", { ...EMPTY, schema: 1 }],
     ["missing aggregate", { ...EMPTY, aggregates: undefined }],
     ["coerced count", { ...EMPTY, historyWithheld: "0" }],
     ["malformed nested count", { ...EMPTY, aggregates: { kind: "counts", notYetReviewed: "0" } }],
@@ -284,7 +295,7 @@ describe("strict parsing", () => {
     ["bad date", { ...EMPTY, composedAt: "not a date" }],
     [
       "a silence without a composition time",
-      { schema: 1, kind: "never-written", why: "nobody has written it" },
+      { schema: 2, kind: "never-written", why: "nobody has written it" },
     ],
   ])("rejects %s instead of coercing it", (_name, malformed) => {
     expect(parseDecisionsFeed(malformed).kind).toBe("no-answer");
@@ -346,6 +357,138 @@ describe("strict parsing", () => {
       rows: [{ ...ROW, pendingReview, record: impossibleRecord }],
     };
     expect(parseDecisionsFeed(malformed).kind).toBe("no-answer");
+  });
+});
+
+function withRecord(record: DecisionWireRecord): DecisionsFeed {
+  if (WITH_ROW.kind !== "decisions") throw new Error("unreachable");
+  return { ...WITH_ROW, rows: [{ ...ROW, record }] };
+}
+
+const SESSION_RECORD: DecisionWireRecord = {
+  ...ROW.record,
+  recordedBy: "daemon",
+  author: {
+    kind: "session",
+    name: "work-reports",
+    execution: { kind: "verified", token: "boot-a:42001:711", since: "2026-09-09T10:00:00.000Z" },
+  },
+  touches: [{ kind: "decided", at: "2026-09-09T11:00:00.000Z", by: "daemon", what: "decision decided" }],
+  gregAsked: "asked-answered",
+  confidence: "low",
+  evidence: {
+    kind: "recorded",
+    value: [
+      { ref: { kind: "commit", sha: "f9970832" }, check: { state: "found-locally" } },
+      { ref: { kind: "path", path: "tools/fleet/artefact-ref.ts" }, check: { state: "on-dev" } },
+      { ref: { kind: "decision", id: "dec-a3k9mq2p" }, check: { state: "found" } },
+      { ref: { kind: "queue-item", id: "qi-evwdxpkf" }, check: { state: "unchecked", why: "the queue was locked" } },
+    ],
+  },
+};
+
+const LEGACY_RECORD: DecisionWireRecord = {
+  ...ROW.record,
+  author: { kind: "legacy-unrecorded" },
+  consequence: "not-recorded",
+  reversibility: "not-recorded",
+  domain: "not-recorded",
+  recommendation: { kind: "not-recorded" },
+  evidence: { kind: "not-recorded" },
+  gregAsked: "not-recorded",
+  confidence: "not-recorded",
+};
+
+describe("schema 2 of the payload", () => {
+  it("accepts a session's decision recorded by the drain, and a V1 row with nothing recorded", () => {
+    expect(parseDecisionsFeed(withRecord(SESSION_RECORD))).toEqual(withRecord(SESSION_RECORD));
+    expect(parseDecisionsFeed(withRecord(LEGACY_RECORD))).toEqual(withRecord(LEGACY_RECORD));
+  });
+
+  it("refuses version 1 with a sentence, rather than drawing it without its authors", () => {
+    const view = parseDecisionsFeed({ ...EMPTY, schema: 1 });
+    expect(view).toEqual({
+      kind: "no-answer",
+      why: "this browser can read version 2 of the decisions API; the server sent 1",
+    });
+  });
+
+  it.each(["author", "consequence", "reversibility", "domain", "recommendation", "evidence", "gregAsked", "confidence"])(
+    "refuses a record missing %s",
+    (field) => {
+      const record: Record<string, unknown> = { ...ROW.record };
+      delete record[field];
+      expect(parseDecisionsFeed({ ...WITH_ROW, rows: [{ ...ROW, record }] }).kind).toBe("no-answer");
+    },
+  );
+
+  it.each([
+    ["daemon recording an Overseer-authored decision", { ...ROW.record, recordedBy: "daemon" }],
+    ["the Overseer recorder claiming Greg authored the decision", { ...ROW.record, author: { kind: "greg" } }],
+    [
+      "Greg's recorder claiming the Overseer authored the decision",
+      {
+        ...ROW.record,
+        recordedBy: "greg",
+        touches: [{ ...ROW.record.touches[0], by: "greg" }],
+      },
+    ],
+    [
+      "the Overseer recorder claiming a session authored the decision",
+      {
+        ...SESSION_RECORD,
+        recordedBy: "overseer",
+        touches: [{ ...SESSION_RECORD.touches[0], by: "overseer" }],
+      },
+    ],
+    [
+      "a review touch by the daemon",
+      {
+        ...SESSION_RECORD,
+        touches: [...SESSION_RECORD.touches, { kind: "reviewed", at: "2026-09-09T11:30:00.000Z", by: "daemon", what: "reviewed" }],
+      },
+    ],
+    ["a session name outside its rule", { ...SESSION_RECORD, author: { kind: "session", name: "has space", execution: { kind: "not-found" } } }],
+    ["a consequence outside its values", { ...ROW.record, consequence: "critical" }],
+    ["a bare null recommendation", { ...ROW.record, recommendation: null }],
+    [
+      "evidence whose path climbs out of the repository",
+      { ...ROW.record, evidence: { kind: "recorded", value: [{ ref: { kind: "path", path: "../x" }, check: { state: "on-dev" } }] } },
+    ],
+    [
+      "evidence whose check does not fit its kind",
+      { ...ROW.record, evidence: { kind: "recorded", value: [{ ref: { kind: "commit", sha: "f9970832" }, check: { state: "found" } }] } },
+    ],
+  ])("refuses %s", (_name, record) => {
+    expect(parseDecisionsFeed({ ...WITH_ROW, rows: [{ ...ROW, record }] }).kind).toBe("no-answer");
+  });
+});
+
+describe("search", () => {
+  it("matches case-insensitively over the fields the CLI searches, and the two agree field by field", () => {
+    const record: DecisionWireRecord = {
+      ...SESSION_RECORD,
+      question: "Question about ALPHA?",
+      options: [
+        { name: "Bravo option", tradeoffs: "Costs charlie." },
+        { name: "Other", tradeoffs: "Nothing much." },
+      ],
+      chose: { option: "Bravo option", note: "Delta note." },
+      why: "Because of echo.",
+      recommendation: { kind: "recorded", value: "Foxtrot again." },
+      bearsOn: {
+        sessions: [{ name: "golf-session", execution: { kind: "not-found" } }],
+        plan: "docs/plans/hotel.md",
+      },
+    };
+    for (const query of ["alpha", "BRAVO", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "work-reports", ""]) {
+      expect(decisionMatchesSearch(record, query)).toBe(true);
+      expect(cliDecisionMatchesSearch(record, query)).toBe(true);
+    }
+    for (const query of ["india", "f9970832", "asked-answered"]) {
+      expect(decisionMatchesSearch(record, query)).toBe(false);
+      expect(cliDecisionMatchesSearch(record, query)).toBe(false);
+    }
   });
 });
 

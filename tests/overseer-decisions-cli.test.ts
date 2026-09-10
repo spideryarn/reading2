@@ -16,7 +16,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { identityOf, sessionKey, type OverseerEvent } from "../tools/overseer/diff.js";
 import type { ObservedRow } from "../tools/overseer/observation.js";
 import { describeRefusal, openStore, type OverseerStore } from "../tools/overseer/store.js";
-import { DECISIONS_FILE, readDecisions } from "../tools/overseer/decisions.js";
+import { DECISIONS_FILE, appendEvents, envelope, readDecisions } from "../tools/overseer/decisions.js";
 import { parseArgv, runParsed } from "../scripts/overseer-decisions.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,7 +63,8 @@ function run(root: string, args: readonly string[], input?: string) {
   };
 }
 
-function payload(sessions: readonly string[] = []): Record<string, unknown> {
+/** The input as V1 took it: what an Overseer with an old habit would still write. */
+function legacyPayload(sessions: readonly string[] = []): Record<string, unknown> {
   return {
     class: "decision",
     question: "Which shape should the first version use?",
@@ -77,6 +78,73 @@ function payload(sessions: readonly string[] = []): Record<string, unknown> {
     bearsOn: { sessions, plan: null },
     supersedes: null,
   };
+}
+
+/** Schema 2's input: the V1 fields plus every new one except `author`, which `--by` supplies. */
+function payload(sessions: readonly string[] = []): Record<string, unknown> {
+  return {
+    ...legacyPayload(sessions),
+    consequence: "low",
+    reversibility: "easy",
+    domain: "technical",
+    recommendation: null,
+    evidence: [],
+    gregAsked: "no",
+    confidence: null,
+  };
+}
+
+const NEW_INPUT_FIELDS = ["consequence", "reversibility", "domain", "recommendation", "evidence", "gregAsked", "confidence"];
+
+function addFile(root: string, name: string, body: Record<string, unknown>): string {
+  const file = join(root, name);
+  writeFileSync(file, JSON.stringify(body));
+  return file;
+}
+
+function addedId(stdout: string): string {
+  const id = /dec-[23456789abcdefghjkmnpqrstvwxyz]{8}/.exec(stdout)?.[0];
+  if (id === undefined) throw new Error(`no decision id in ${stdout}`);
+  return id;
+}
+
+function listedIds(stdout: string): string[] {
+  return (JSON.parse(stdout) as { records: Array<{ record: { id: string } }> }).records.map((item) => item.record.id);
+}
+
+/** What only the report drain writes: a session's decision, recorded by `daemon`. */
+function appendSessionDecision(root: string, id: string): void {
+  const result = appendEvents(
+    [
+      {
+        ...envelope("daemon"),
+        kind: "decided",
+        id,
+        decidedAt: new Date(Date.now() - 60_000).toISOString(),
+        class: "decision",
+        question: "Should the claims section live in the Decisions tab?",
+        options: [
+          { name: "A new tab", tradeoffs: "Six places in three files." },
+          { name: "A section", tradeoffs: "Shares the tab's search." },
+        ],
+        chose: { option: "A section", note: null },
+        why: "A new tab costs more than it gives.",
+        advisers: ["nobody"],
+        bearsOn: { sessions: [], plan: null },
+        supersedes: null,
+        author: { kind: "session", name: "cli-session-writer", execution: { kind: "not-found" } },
+        consequence: "high",
+        reversibility: "one-way",
+        domain: "product",
+        recommendation: "Keep it as a section.",
+        evidence: [],
+        gregAsked: "asked-awaiting",
+        confidence: "high",
+      },
+    ],
+    { root },
+  );
+  if (!result.ok) throw new Error(result.why);
 }
 
 function observedRow(
@@ -170,8 +238,220 @@ describe("Commander grammar", () => {
     const parsed = parseArgv(["list", "--class", "decision", "--unreviewed", "--json"]);
     expect(parsed).toEqual({
       kind: "run",
-      parsed: { command: "list", class: "decision", unreviewed: true, json: true },
+      parsed: {
+        command: "list",
+        class: "decision",
+        unreviewed: true,
+        json: true,
+        search: null,
+        domain: null,
+        consequence: null,
+        author: null,
+      },
     });
+  });
+
+  test("list accepts search, domain, consequence and author filters, and refuses values outside them", () => {
+    expect(
+      parseArgv(["list", "--search", "Wombat", "--domain", "product", "--consequence", "high", "--author", "session"]),
+    ).toEqual({
+      kind: "run",
+      parsed: {
+        command: "list",
+        class: null,
+        unreviewed: false,
+        json: false,
+        search: "Wombat",
+        domain: "product",
+        consequence: "high",
+        author: "session",
+      },
+    });
+    expect(parseArgv(["list", "--author", "legacy"])).toMatchObject({ kind: "run", parsed: { author: "legacy" } });
+    expect(parseArgv(["list", "--author", "daemon"]).kind).toBe("error");
+    expect(parseArgv(["list", "--domain", "politics"]).kind).toBe("error");
+    expect(parseArgv(["list", "--consequence", "critical"]).kind).toBe("error");
+  });
+
+  test("--by daemon is refused: only the report drain records a line as daemon", () => {
+    const root = tempRoot();
+    const file = addFile(root, "decision.json", payload());
+    for (const args of [
+      ["add", "--file", file, "--by", "daemon"],
+      ["reviewed", "dec-aaaaaaaa", "--by", "daemon"],
+    ]) {
+      const result = run(root, args);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/report drain/);
+    }
+    expect(() => readFileSync(join(root, DECISIONS_FILE), "utf8")).toThrow();
+  });
+});
+
+describe("schema 2 through add", () => {
+  test("an old-shape file is refused, naming every missing field and pointing at template", () => {
+    const root = tempRoot();
+    const file = addFile(root, "decision.json", legacyPayload());
+
+    const result = run(root, ["add", "--file", file, "--by", "overseer"]);
+
+    expect(result.status).not.toBe(0);
+    for (const field of NEW_INPUT_FIELDS) expect(result.stderr).toContain(field);
+    expect(result.stderr).toContain("template");
+    expect(() => readFileSync(join(root, DECISIONS_FILE), "utf8")).toThrow();
+  });
+
+  test("an author in the file is refused, because --by is where it comes from", () => {
+    const root = tempRoot();
+    const file = addFile(root, "decision.json", { ...payload(), author: { kind: "greg" } });
+    const result = run(root, ["add", "--file", file, "--by", "overseer"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("author");
+  });
+
+  test("a control character in a new field is refused and the field is named", () => {
+    const root = tempRoot();
+    const file = addFile(root, "decision.json", { ...payload(), recommendation: `ring${String.fromCharCode(7)}` });
+    const result = run(root, ["add", "--file", file, "--by", "overseer"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("recommendation");
+  });
+
+  test("the author comes from --by, and the line is written at schema 2", () => {
+    const root = tempRoot();
+    const byOverseer = run(root, ["add", "--file", addFile(root, "a.json", payload()), "--by", "overseer"]);
+    const byGreg = run(root, [
+      "add",
+      "--file",
+      addFile(root, "b.json", { ...payload(), question: "A question Greg decided?" }),
+      "--by",
+      "greg",
+    ]);
+    expect(byOverseer.status).toBe(0);
+    expect(byGreg.status).toBe(0);
+    const byId = new Map(records(root).map((record) => [record.id, record]));
+    expect(byId.get(addedId(byOverseer.stdout))).toMatchObject({ author: { kind: "overseer" }, recordedBy: "overseer" });
+    expect(byId.get(addedId(byGreg.stdout))).toMatchObject({ author: { kind: "greg" }, recordedBy: "greg" });
+    const lines = readFileSync(join(root, DECISIONS_FILE), "utf8").trimEnd().split("\n");
+    expect(lines.map((line) => (JSON.parse(line) as { schema: number }).schema)).toEqual([2, 2]);
+  });
+
+  test("evidence is the CLI spelling; a decision reference is checked in the record, the rest stated unchecked", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    const file = addFile(root, "decision.json", {
+      ...payload(),
+      evidence: ["decision:dec-dashstg6", "decision:dec-22222222", "commit:f9970832"],
+    });
+
+    const result = run(root, ["add", "--file", file, "--by", "overseer"]);
+
+    expect(result.status).toBe(0);
+    const added = records(root).find((record) => record.id === addedId(result.stdout));
+    expect(added?.evidence).toEqual({
+      kind: "recorded",
+      value: [
+        { ref: { kind: "decision", id: "dec-dashstg6" }, check: { state: "found" } },
+        { ref: { kind: "decision", id: "dec-22222222" }, check: { state: "not-found" } },
+        { ref: { kind: "commit", sha: "f9970832" }, check: { state: "unchecked", why: expect.stringMatching(/does not check/) } },
+      ],
+    });
+
+    const bad = run(root, ["add", "--file", addFile(root, "bad.json", { ...payload(), evidence: ["url:https://example.com"] }), "--by", "overseer"]);
+    expect(bad.status).not.toBe(0);
+    expect(bad.stderr).toContain("evidence");
+  });
+
+  test("a retry whose new fields changed is a conflict, not a retry", () => {
+    const root = tempRoot();
+    const first = run(root, ["add", "--file", addFile(root, "a.json", payload()), "--by", "overseer", "--command-id", "k"]);
+    const same = run(root, ["add", "--file", addFile(root, "b.json", payload()), "--by", "overseer", "--command-id", "k"]);
+    const changed = run(root, [
+      "add",
+      "--file",
+      addFile(root, "c.json", { ...payload(), consequence: "high" }),
+      "--by",
+      "overseer",
+      "--command-id",
+      "k",
+    ]);
+    expect(first.status).toBe(0);
+    expect(same.status).toBe(0);
+    expect(changed.status).not.toBe(0);
+    expect(changed.stderr).toMatch(/different/i);
+    expect(records(root)).toHaveLength(1);
+  });
+});
+
+describe("list search and filters", () => {
+  test("--search finds a decision by its recommendation and another by an option's trade-off, case-insensitively", () => {
+    const root = tempRoot();
+    const byRecommendation = addedId(
+      run(root, ["add", "--file", addFile(root, "a.json", { ...payload(), recommendation: "Prefer the Wombat route." }), "--by", "overseer"]).stdout,
+    );
+    const byTradeoff = addedId(
+      run(root, [
+        "add",
+        "--file",
+        addFile(root, "b.json", {
+          ...payload(),
+          question: "Which animal?",
+          options: [
+            { name: "Small", tradeoffs: "A platypus-sized change." },
+            { name: "General", tradeoffs: "Handles imagined cases, with more machinery." },
+          ],
+        }),
+        "--by",
+        "overseer",
+      ]).stdout,
+    );
+
+    expect(listedIds(run(root, ["list", "--search", "WOMBAT", "--json"]).stdout)).toEqual([byRecommendation]);
+    expect(listedIds(run(root, ["list", "--search", "Platypus", "--json"]).stdout)).toEqual([byTradeoff]);
+    expect(listedIds(run(root, ["list", "--search", "no such words", "--json"]).stdout)).toEqual([]);
+  });
+
+  test("--author session and --author legacy filter by who decided, not who recorded", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    const overseer = addedId(run(root, ["add", "--file", addFile(root, "a.json", payload()), "--by", "overseer"]).stdout);
+    appendSessionDecision(root, "dec-sess2222");
+
+    expect(listedIds(run(root, ["list", "--author", "session", "--json"]).stdout)).toEqual(["dec-sess2222"]);
+    expect(listedIds(run(root, ["list", "--author", "legacy", "--json"]).stdout)).toEqual(["dec-dashstg6"]);
+    expect(listedIds(run(root, ["list", "--author", "overseer", "--json"]).stdout)).toEqual([overseer]);
+    expect(listedIds(run(root, ["list", "--author", "greg", "--json"]).stdout)).toEqual([]);
+    // Search reaches the session's name through the author too.
+    expect(listedIds(run(root, ["list", "--search", "cli-session-writer", "--json"]).stdout)).toEqual(["dec-sess2222"]);
+  });
+
+  test("--domain and --consequence filter, and a V1 row matches neither", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    appendSessionDecision(root, "dec-sess2222");
+    const low = addedId(run(root, ["add", "--file", addFile(root, "a.json", payload()), "--by", "overseer"]).stdout);
+
+    expect(listedIds(run(root, ["list", "--domain", "product", "--json"]).stdout)).toEqual(["dec-sess2222"]);
+    expect(listedIds(run(root, ["list", "--domain", "technical", "--json"]).stdout)).toEqual([low]);
+    expect(listedIds(run(root, ["list", "--consequence", "high", "--json"]).stdout)).toEqual(["dec-sess2222"]);
+    expect(listedIds(run(root, ["list", "--consequence", "not-recorded", "--json"]).stdout)).toEqual(["dec-dashstg6"]);
+  });
+
+  test("printed rows show who decided, who recorded, and every new field — not recorded for V1", () => {
+    const root = tempRoot();
+    expect(run(root, ["seed"]).status).toBe(0);
+    appendSessionDecision(root, "dec-sess2222");
+
+    const out = run(root, ["list"]).stdout;
+
+    expect(out).toContain("Decided by: cli-session-writer (session) · recorded by the report drain");
+    expect(out).toContain("Consequence: high · reversibility: one-way · domain: product");
+    expect(out).toContain("Recommendation: Keep it as a section.");
+    expect(out).toContain("Greg asked: the author says Greg has been asked and has not answered");
+    expect(out).toContain("Confidence: high");
+    expect(out).toContain("Decided by: author not recorded · recorded by overseer");
+    expect(out).toContain("Consequence: not recorded · reversibility: not recorded · domain: not recorded");
+    expect(out).toContain("Evidence: not recorded");
   });
 });
 

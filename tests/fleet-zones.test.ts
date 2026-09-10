@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { DISPLAY_ZONES, zonedLine, zonedReadings } from "../tools/fleet/zones.js";
+import { DISPLAY_ZONES, LONDON_FIRST, londonFirstLine, zonedLine, zonedLineAgainstFirst, zonedReadings } from "../tools/fleet/zones.js";
 
 describe("zonedReadings", () => {
   it("reads one summer instant in all three zones", () => {
@@ -97,6 +97,31 @@ describe("zonedLine", () => {
     expect(zonedLine("2026-09-08T02:00:00.000Z", [{ zone: "Pacific/Honolulu", label: "Honolulu" }])).toBe(
       "2026-09-07 16:00 Honolulu (−1d)",
     );
+  });
+});
+
+describe("zonedLineAgainstFirst, and London first", () => {
+  it("marks each zone's day against the FIRST zone — the date actually printed — not against UTC", () => {
+    /* 23:30 UTC on the 10th is 00:30 London on the 11th. Marked against UTC, as
+       zonedLine marks, this would read "2026-09-11 00:30 London (+1d)" — a day
+       after the 11th. Plan 260910e, Stage 2's finding. */
+    expect(londonFirstLine("2026-09-10T23:30:00.000Z")).toBe("2026-09-11 00:30 London · 23:30 UTC (−1d) · 02:30 Athens");
+  });
+
+  it("prints the ordinary day with no marks at all", () => {
+    expect(londonFirstLine("2026-09-10T12:00:00.000Z")).toBe("2026-09-10 13:00 London · 12:00 UTC · 15:00 Athens");
+  });
+
+  it("marks a later zone forward when it has rolled over and the first has not", () => {
+    expect(zonedLineAgainstFirst("2026-09-10T22:30:00.000Z", LONDON_FIRST)).toBe("2026-09-10 23:30 London · 22:30 UTC · 01:30 Athens (+1d)");
+  });
+
+  it("refuses an instant it cannot read", () => {
+    expect(londonFirstLine("not a timestamp")).toBeNull();
+  });
+
+  it("is London, UTC, Athens, in that order", () => {
+    expect(LONDON_FIRST.map((z) => z.zone)).toEqual(["Europe/London", "UTC", "Europe/Athens"]);
   });
 });
 
