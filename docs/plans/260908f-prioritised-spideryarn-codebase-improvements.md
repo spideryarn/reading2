@@ -9,6 +9,8 @@ not authorise implementing every product decision below.
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
 L (the unknown-throw mapper) investigated the same day and closed with no change — see § L.
 I (retire the revision alias) built the same day — see § I.
+O (on-demand draft sweep) built 2026-09-11 and wired in `count` mode; the first deletion waits for
+Greg — see § O.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -741,28 +743,73 @@ explicit reversal from Greg, justified by new measurements.
 
 ### Stage: scope and safely wire the existing on-demand operation
 
-- [ ] Add a read-only inventory/report for draft age, status, reference protection and associated
+**Status, 2026-09-11: built and wired in `count` mode — measured, not deleting.** The remote
+deletion is prepared and pending Greg's approval; nothing destructive has run against production.
+
+- **Where it runs.** `openOrBeginJobDraft` (`src/store/pg-revisions.ts`), on the branch that mints
+  a draft, after the article and job locks — so once per job, on its first step, for the article
+  row it has just resolved and locked, by id. `sweepAbandonedDrafts(tx, articleId, opts)` replaced
+  the global `sweepAbandonedDrafts(olderThanMs)`; the name was kept because some twenty comments
+  describe what it spares, and those stay true.
+- **The predicate** is `abandonedDraftCondition`: `draft`/`failed`, older than six hours by the
+  database clock, named by no job row (live or terminal), and not any article's current revision,
+  as `not exists` rather than `not in`. `scripts/draft-sweep-inventory.ts` imports it.
+- **Atomic protection.** Enumerate one batch (ten, oldest first); lock those rows `for update skip
+  locked`; delete the locked rows where the same predicate still holds, in a new statement. Under
+  read committed that statement sees any protection committed after enumeration, and none can
+  commit after it because a pointer's foreign-key check needs `KEY SHARE` on the row we hold. An
+  in-flight protection makes its row unlockable, so `skip locked` leaves it. The function refuses
+  to delete under any other isolation level. `deleted` is the `DELETE`'s own row count.
+- **Errors.** The sweep runs in a savepoint; a failure is rolled back to it, the step goes ahead,
+  and a warning is logged with the error's class name after the commit. Every non-empty sweep
+  logs its mode, candidate count, whether more remain, the deleted count and the duration.
+- **Why `count`.** `STEP_START_DRAFT_SWEEP = "count"`: every job start runs the real selection
+  and logs what it would take. Deploying `"delete"` would be the first destructive run against
+  readers' data, unreviewed, so this stage stops short of it; flipping the constant is the
+  approval.
+- **Tests.** `tests/draft-sweep-on-step-start.test.ts` (private lane, 10 cases): the plan's six
+  kinds of revision plus another article's equally old candidates; idempotence; no second sweep
+  when a job reopens its draft; the `count` default deletes nothing; the batch limit; an injected
+  failure leaves the step and its draft intact; a job pointer and a publication committed at a
+  barrier between enumeration and deletion (candidates 3, deleted 1); a pointer still in flight
+  (skipped, pointer kept); the isolation refusal; and scope to one article. **Negative controls,
+  each seen red:** dropping the delete-time recheck; replacing the lock step with a single
+  rechecking `DELETE` (it waited behind the in-flight pointer, then deleted the row anyway —
+  deleted 2, not 1 — which is the claim in the code comment, measured); dropping the article
+  scope; and removing the call from `openOrBeginJobDraft`.
+- **Local inventory** (the shared dev database, 2026-09-11): 134 candidates across 48 articles
+  (7 `draft`, 127 `failed`), 6,662 cascaded block rows, 9.9 MiB by `pg_column_size`; two articles
+  above one batch; oldest 2026-09-01; no draft or failed revision was protected by a job or a
+  current pointer. The script's two independent joins agreed.
+- **Pending for Greg** (not run): the read-only production inventory,
+  `DATABASE_URL='<production URL>' npx tsx scripts/draft-sweep-inventory.ts` — read its `Target:`
+  line — and then, if its numbers look right, a one-line commit setting `STEP_START_DRAFT_SWEEP`
+  to `"delete"` and a deploy. There is no whole-library delete command, by design.
+
+- [x] Add a read-only inventory/report for draft age, status, reference protection and associated
   row/byte estimates, using the exact candidate-selection predicate. Run locally first; production
   reads are allowed but do not print article text or credentials.
-- [ ] Change the global sweeper seam to accept the **resolved article identity** and constrain
+- [x] Change the global sweeper seam to accept the **resolved article identity** and constrain
   selection/deletion to that article. Place one bounded invocation on its existing step-start path
   after ownership/identity is established, using the current transaction/fencing conventions.
   Do not run a whole-library sweep because one reader starts a step.
-- [ ] Test old abandoned, recent, current, published, job-referenced and in-flight drafts with local
+- [x] Test old abandoned, recent, current, published, job-referenced and in-flight drafts with local
   fixtures, including another article with equally old candidates. A dry-run counts the same
   selection predicate; an approximate dashboard count is not approval evidence.
-- [ ] Put a test barrier between enumeration and deletion. Add and commit current/job protection
+- [x] Put a test barrier between enumeration and deletion. Add and commit current/job protection
   for a candidate, then release deletion: **delete zero protected rows and preserve every article
   and job pointer**. Use compatible locking or an atomic delete-time recheck of the same protection
   predicate. Capture actual affected-row count; do not report the earlier candidate count as deleted.
-- [ ] Choose bounded age/batch limits within the existing on-demand policy, retaining the current
+- [x] Choose bounded age/batch limits within the existing on-demand policy, retaining the current
   live/owned-draft protection. The historical six-hour constant is a starting point to assess, not
   permission to delete reader-owned work. Test that step start really calls the scoped operation
   and cleanup errors have an explicit, reviewed effect on the requested step.
-- [ ] Prepare the command and candidate summary before asking for the destructive remote run.
+- [x] Prepare the command and candidate summary before asking for the destructive remote run.
   Keep that manual remote run pending until approved. This does not reopen the approved on-demand
   design; it is the separate safeguard for a destructive operation against real production data.
-- [ ] Log bounded counts/duration/outcome, prove idempotence, and update the implementation status
+  (Command prepared, local summary above. The production summary is the read-only command's to
+  produce: there is no `.env.prod` on the box, so it waits for Greg with the approval.)
+- [x] Log bounded counts/duration/outcome, prove idempotence, and update the implementation status
   in `cron-scheduler.md`. The stage may finish measured/deferred with no deletion; do not call it
   operated retention until a real step invocation has exercised it.
 
