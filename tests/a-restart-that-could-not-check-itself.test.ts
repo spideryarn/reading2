@@ -426,6 +426,65 @@ describe("the steering queue", () => {
   });
 
   /**
+   * **A DURABLE QUEUE IS NOT DISCARDED BY A RESTART** — plan 260910d Stage 1,
+   * on dev at afbfcf2c. The dashboard now writes queued items to its receipt
+   * journal and restores them at startup, and it says so per queue with
+   * `volatile: false`. Refusing every restart with anything queued would stop
+   * the Overseer restarting the dashboard at all while work is waiting, which is
+   * exactly when it most often needs to.
+   *
+   * **ONLY `volatile === false` COUNTS AS DURABLE.** A missing or non-boolean
+   * field is what an older build sends (it always said `volatile: true`) or a
+   * shape this script does not understand, and both keep the refusal — the
+   * direction this check has always been wrong in on purpose.
+   *
+   * **HOLDS ARE UNCHANGED BY THIS**: a steering hold still refuses.
+   */
+  const durable = (items: unknown[], quarantine: unknown = null, volatile: unknown = false) => ({
+    ok: true,
+    op: "catalogue",
+    queues: [{ sessionId: "$1", items, quarantine, volatile }],
+  });
+
+  it("passes when everything queued is on a durable queue, because a restart keeps it", () => {
+    const check = judgeQueue(true, summariseQueues(durable([item("q1"), item("q2")])), false);
+    expect(check.verdict).toBe("pass");
+    expect(check.detail).toContain("kept");
+  });
+
+  it("still refuses a queue that says it is volatile", () => {
+    expect(judgeQueue(true, summariseQueues(durable([item("q1")], null, true)), false).verdict).toBe("fail");
+  });
+
+  it("treats a missing or non-boolean volatile as memory-only, and refuses", () => {
+    expect(judgeQueue(true, summariseQueues(body([item("q1")])), false).verdict).toBe("fail");
+    expect(judgeQueue(true, summariseQueues(durable([item("q1")], null, "no")), false).verdict).toBe("fail");
+  });
+
+  it("still refuses for a steering hold on a durable queue, and does not call its items discarded", () => {
+    const check = judgeQueue(
+      true,
+      summariseQueues(durable([item("q1")], { id: "h1", sessionId: "$1", why: "an uncertain send" })),
+      false,
+    );
+    expect(check.verdict).toBe("fail");
+    expect(check.detail).toContain("hold");
+    expect(check.detail).not.toMatch(/\bitems?\b/);
+  });
+
+  it("is memory-only if any one queue says so", () => {
+    const mixed = {
+      ok: true,
+      op: "catalogue",
+      queues: [
+        { sessionId: "$1", items: [item("q1")], quarantine: null, volatile: false },
+        { sessionId: "$2", items: [item("q2")], quarantine: null, volatile: true },
+      ],
+    };
+    expect(judgeQueue(true, summariseQueues(mixed), false).verdict).toBe("fail");
+  });
+
+  /**
    * THE ENVELOPE. An error-shaped 200 carrying `queues: []` — a proxy's page, a
    * route that moved, a different server on the port — would otherwise read as
    * "the queue is empty" and clear the way for a restart.
