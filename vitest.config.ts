@@ -4,6 +4,7 @@ import { defaultExclude, defineConfig } from "vitest/config";
 
 import { recordRefusal } from "./admission-journal.js";
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
+import { ACCOUNT_ROUTING_VARIABLES } from "./tests/helpers/account-neutral-env.js";
 import {
   ADMISSION_POLICY_VERSION,
   decideAdmission,
@@ -140,6 +141,23 @@ function workersForThisRun(): number {
   }
   return decision.workers;
 }
+
+/*
+ * **The suite's answer must not depend on which account runs it.** Every session the Overseer
+ * dispatches carries a pool account's CLAUDE_CONFIG_DIR, and a test that spawned with
+ * `...process.env` handed it to its child: 12 tests failed for those sessions only, each looking
+ * like "I broke this file" (plan 260910d). Deleted here, before any worker or child exists, so no
+ * test inherits them — a spawn with no `env:` at all included. A test that wants one sets it, where
+ * a reader can see it. tests/account-neutral-env.test.ts checks from inside a worker.
+ *
+ * What this cannot see:
+ *  - a routing variable that is not on ACCOUNT_ROUTING_VARIABLES — the list is the thing to extend;
+ *  - a child that re-reads a login shell's profile (`bash -l`), which can export them again;
+ *  - `.env.local`, which setup files load and which beats the inherited environment, so its
+ *    OPENAI_API_KEY and CODEX_API_KEY reappear in workers — the same for every runner, so not
+ *    this class, but not absent either.
+ */
+for (const name of ACCOUNT_ROUTING_VARIABLES) delete process.env[name];
 
 const PARALLEL_WORKERS = workersForThisRun();
 

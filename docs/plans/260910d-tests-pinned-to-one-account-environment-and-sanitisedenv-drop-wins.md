@@ -29,12 +29,31 @@ A second defect sat in the same place. `sanitisedEnv(parent, passThrough, drop)`
 
 - [x] Reproduce both named reds under `CLAUDE_CONFIG_DIR=/home/greg/.claude-gregmindstone`: 12
   failed, 55 passed. With it unset, all 67 pass.
-- [ ] A/B over every candidate file, meaning any file that spawns, mentions one of the six
-  variables, or imports an account-routing module: 141 files. A = all six unset; B = all six set.
-- [ ] The list, each entry with the mutation that shows it.
+- [x] A/B over every candidate file, meaning any file that spawns (`child_process`, `spawn`,
+  `exec*`), mentions one of the six variables, or imports an account-routing module (`run-claude`,
+  `run-codex`, `gjd-remote*`, `claude-accounts`, `subagent-cli`, `tmux-job`,
+  `tools/overseer/{accounts,codex-usage}`). That is 141 files. A = all six unset. B = all six set to
+  pool values: `CLAUDE_CONFIG_DIR=/home/greg/.claude-gregmindstone`, an empty `CODEX_HOME`, and
+  dummy tokens and keys.
+- [x] The list, each entry with the mutation that shows it:
+
+  | file | unset | set | why |
+  |---|---|---|---|
+  | `tests/run-claude.test.ts` | 48/48 | 37/48 | 11 end-to-end tests spawn `run-claude.ts` with `...process.env`; it routes on the variable, and the fake `claude` cannot pass the routed probe |
+  | `tests/gjd-remote-account.test.ts` | 19/19 | 18/19 | the bash shell inherits `CLAUDE_CONFIG_DIR`, so `after=unset` is false before the job ever runs |
+  | *every other candidate* (139 files) | pass | pass | A and B are identical: 141 files and 4,771 tests in each, 0 failed, the same 21 skipped. The only differences are the two tests added to `run-claude.test.ts` between the runs |
+
+  **Read with this caveat.** B read the working tree, and both named files had already been fixed
+  when it started, so B's green says nothing about them. Their rows come from the reproduction at
+  the top of this stage. B started before the stage 5 guard existed, so for every other file it is
+  an unguarded measurement.
+
+  **What the sweep cannot see.** A test outside the 141 that reaches one of the six in-process,
+  through a module it imports transitively. The stage 5 guard covers that case whether or not
+  anyone finds it.
 - [ ] Sol review of the list.
 
-_Status:_ in progress.
+_Status:_ the list is two files, both the ones already named, and both fixed in stage 2.
 
 ### Stage 2 — the tests stop depending on the runner
 
@@ -88,7 +107,42 @@ settled before any code was written.
 
 ### Stage 5 — the guard
 
-_To be decided after the sweep._
+**Chosen: `vitest.config.ts` deletes the six account-routing variables when the config loads**,
+before any worker or child process exists. The Overseer authorised it, since the file was outside
+this slice's set. It follows the precedent of the readiness-token delete in the same file, and
+the names come from `ACCOUNT_ROUTING_VARIABLES` in the helper, so there is one list.
+`tests/account-neutral-env.test.ts` asserts from inside a worker that none of the six arrived.
+
+**What it cannot see**, which is also written beside the delete in `vitest.config.ts`:
+
+- A routing variable that is not on the list.
+- A child that re-reads a login shell's profile (`bash -l`).
+- `.env.local`. Setup files load it over the inherited environment, so its `OPENAI_API_KEY` and
+  `CODEX_API_KEY` reappear in workers. Those values are the same for every runner, so they are not
+  this class, but they are not absent either. The in-worker test exempts exactly the names
+  `.env.local` defines.
+
+The in-worker test cannot fail on a runner that carries none of the six. It is meaningful on
+exactly the runs where the class bites.
+
+**The option passed over: a static scan of test files for `{ ...process.env` in spawn options.** It
+is cheaper to reason about, but it cannot see a spawn with no `env:` at all, which inherits
+implicitly, or an environment built in a helper.
+
+**Mutation check.** The Overseer's condition was that the guard be shown to be *what makes* the
+suite runner-independent, not a second thing that happens to pass. The two originally-red files
+are now fixed by the helper, so removing the guard alone could not show that. The check therefore
+ran the **unfixed** originals, copied from `1209bc70`, with all six variables set to pool values:
+
+| config | result |
+|---|---|
+| with the delete | 70/70 passed: both unfixed originals and the guard test |
+| a copy of the config with the delete line removed | 13 failed: all 12 original reds, plus the guard test (`expected [ 'CLAUDE_CONFIG_DIR', …(3) ] to deeply equal []`) |
+
+The temporary copies were deleted afterwards.
+
+- [x] Delete, comment and in-worker test.
+- [x] Mutation check (above).
 
 ## Which stages Codex implemented
 
