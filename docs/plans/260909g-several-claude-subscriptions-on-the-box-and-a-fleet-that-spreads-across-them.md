@@ -803,6 +803,27 @@ attributed to an account*.
 checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
 JSON, the UI, and their tests.
 
+#### The attribution proof, measured 2026-09-10 on live sessions
+
+**This is the evidence the Usage Limits tab rests on**, and until it existed the per-account claim was
+an inference from how the endpoint *ought* to behave.
+
+| `greg@mindstone.com` | five-hour | seven-day |
+|---|---|---|
+| 00:11:58Z, before any pool session | **0%** | 3% |
+| 00:33:02Z, two pool sessions running on it | **2%** | 3% |
+
+Work dispatched onto a pool account moves **that account's own reading**, and nothing was done to
+mindstone in between except run sessions on it. So `/api/oauth/usage` genuinely reports per account,
+and the tab can show one section per account rather than one number for the box.
+
+**The five-hour window is the sensitive instrument, and the seven-day is not.** The seven-day sat at
+3% throughout — as expected, since it is an integer percentage over a far larger denominator. Anyone
+checking attribution, or debugging a tab that looks stuck, should watch the five-hour: **a flat
+seven-day over twenty minutes is not evidence of anything**, and reading it as such would have
+produced a confident wrong conclusion here. The first check was very nearly reported that way, off a
+reminder set an hour too early.
+
 #### When the endpoint moves, we must find out — containment is not detection
 
 `unknown` stops a wrong number being used. It does not tell anyone the readings have gone quiet, and
