@@ -53,6 +53,26 @@ that entered that state, never moved by `released` or anything after it (`update
   its artefact directory or the owner). Parser and replay updated; tests for both cases, and that a
   reset line carrying an origin replays.
 
+## Two operations for `scheduled-dispatch` (its narrow check's F1)
+
+On the composed `LaunchProtocol` (and in its F9 import-walk test's expectations):
+
+- **`resumeOccurrence(id: LaunchOccurrenceId): LaunchOutcome`** — `drive()` on the stored, pinned
+  record; no re-plan, no request comparison. Refused unless the record is `planned` or
+  `waiting-admission` (`not-launchable` with the state otherwise; `refused` for an unknown id or a
+  lost history). Tests: a waiting occurrence resumes to `invoked` without its caller re-supplying
+  the material; a `launching`/`completed`/`outcome-unknown` one is refused and invokes nothing.
+- **`abandon(id: LaunchOccurrenceId, why: string): { kind: "abandoned"; reservation: { kind:
+  "released" } | { kind: "held"; why: string } } | { kind: "refused"; why: string }`** — only from
+  `planned` or `waiting-admission` (no attempt, no `launching` ever written); appends
+  `failed-before-launch` with a new `FailedProof`, `"superseded"`, and the caller's `why`. **A
+  `planned` record may hold an owner reservation the journal never recorded (the lost reply)**: look
+  the key up and release it; if the owner is `unavailable`, answer `held` with the reason and leave
+  it to reconciliation's F7 release. Tests: abandon from `planned` with an owner-held lost reply
+  releases it; abandon from `launching` is refused; after abandon, the same origin is not
+  launchable again (the occurrence is terminal) and a new origin plans normally; the new proof
+  parses and replays.
+
 ## Three from `gradual-recovery`'s plan review (G6, G7, G1), checked and accepted
 
 - **G7 — tmux probing must be exhaustive by launcher family.** `evidenceDecision` probes tmux only
