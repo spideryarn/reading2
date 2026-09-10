@@ -186,10 +186,13 @@ describe("readStartRevision against a real scratch repository", () => {
 });
 
 /**
- * The daemon and the dashboard find their checkout from `import.meta.url`. Under
- * jsdom that is not a `file:` URL, and `fileURLToPath` threw from the first line
- * of `runOverseer` — tests/fleet-work-evidence-e2e.test.tsx went red on dev.
- * A stamp is a diagnostic: it may say "unknown", it may never stop a start.
+ * The daemon and the dashboard find their checkout from `import.meta.url`. The
+ * literal `new URL("../..", import.meta.url)` is rewritten to an `http:` URL when a
+ * jsdom test loads the module (vitest's normalize-url plugin), and `fileURLToPath`
+ * threw from the first line of `runOverseer` — tests/fleet-work-evidence-e2e.test.tsx
+ * went red on dev (docs/postmortems/260910d). The second case below is the
+ * defensive arm, not a model of that rewrite: a stamp is a diagnostic, it may say
+ * "unknown", it may never stop a start.
  */
 describe("readModuleStartRevision — the checkout a module sits in", () => {
   const sha = "0123456789abcdef0123456789abcdef01234567";
