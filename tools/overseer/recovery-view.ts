@@ -20,7 +20,7 @@
  * directory is a missing directory: it never resolves a record, and
  * `worktree:check` is not called.
  */
-import { opendir, stat as fsStat } from "node:fs/promises";
+import { opendir, realpath, stat as fsStat } from "node:fs/promises";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 
@@ -161,15 +161,31 @@ export type StatLike = { isDirectory(): boolean; isFile(): boolean; mtimeMs: num
 
 /** Injected so tests need no fake home: the projects directory, the stat, and the host name. */
 export type EvidenceDeps = {
+  /** The one projects directory a caller named. Ignored when `projectsRoots` is given. */
   projectsDir: string;
+  /**
+   * EVERY PROJECTS DIRECTORY A TRANSCRIPT MAY BE UNDER, asked once per lookup
+   * pass (plan 260910f, G4). A pool account runs with its own
+   * `CLAUDE_CONFIG_DIR`, and `claude --resume` finds only its own config
+   * directory's conversations, so the locator searches each account's
+   * `projects/` and records which one held the transcript. The daemon supplies
+   * this (recovery-resume.ts § `defaultProjectsRoots`); absent, the one
+   * `projectsDir` is the only root. Each is resolved by `realpath` and
+   * duplicates dropped: on this box `~/.claude-gregmindstone/projects` is a
+   * symlink to `~/.claude/projects`.
+   */
+  projectsRoots?: () => Promise<readonly string[]>;
   stat: (path: string) => Promise<StatLike>;
   hostname: () => string;
 };
 
 /** The real ones, with any of them replaced. Resolved inside the call, never at module scope. */
-export function evidenceDeps(overrides: { projectsDir?: string; stat?: EvidenceDeps["stat"]; hostname?: () => string } = {}): EvidenceDeps {
+export function evidenceDeps(
+  overrides: { projectsDir?: string; projectsRoots?: () => Promise<readonly string[]>; stat?: EvidenceDeps["stat"]; hostname?: () => string } = {},
+): EvidenceDeps {
   return {
     projectsDir: overrides.projectsDir ?? join(homedir(), ".claude", "projects"),
+    ...(overrides.projectsRoots === undefined ? {} : { projectsRoots: overrides.projectsRoots }),
     stat: overrides.stat ?? ((path: string) => fsStat(path)),
     hostname: overrides.hostname ?? osHostname,
   };
@@ -333,10 +349,45 @@ async function mtimeOf(path: string, deps: EvidenceDeps): Promise<string | null>
   }
 }
 
-type LocatedTranscript =
-  | { kind: "found"; path: string; via: "slug-guess" | "scan" }
+/**
+ * Where a transcript was, or why it was not found. `root` is the projects
+ * directory it was found under, after `realpath` — what the account port maps
+ * to an account (plan 260910f, G4). It is not put into the view: the resume
+ * pass locates again and carries it itself.
+ */
+export type LocatedTranscript =
+  | { kind: "found"; path: string; via: "slug-guess" | "scan"; root: string }
   | { kind: "not-found"; reason: NotFoundReason; why: string }
   | { kind: "cannot-tell"; why: string };
+
+/** A projects directory as it was named (`path`, what is joined onto) and as `realpath` resolves it (`real`, what dedupes and is recorded). */
+type ProjectsRoot = { path: string; real: string };
+
+/** The roots a lookup searches, in order: deduplicated by `realpath`, unreadable ones dropped. */
+async function resolvedRoots(deps: EvidenceDeps): Promise<{ roots: ProjectsRoot[]; dropped: string[] }> {
+  let asked: readonly string[];
+  try {
+    asked = deps.projectsRoots === undefined ? [deps.projectsDir] : await deps.projectsRoots();
+  } catch (cause) {
+    return { roots: [], dropped: [`the projects roots could not be listed: ${errText(cause)}`] };
+  }
+  const roots: ProjectsRoot[] = [];
+  const dropped: string[] = [];
+  for (const path of asked) {
+    try {
+      const real = await realpath(path);
+      if (!roots.some((root) => root.real === real)) roots.push({ path, real });
+    } catch (cause) {
+      dropped.push(`${path}: ${errText(cause)}`);
+    }
+  }
+  return { roots, dropped };
+}
+
+/** The locator, for a caller outside the view pass — the resume pass, which needs `root`. One per pass. */
+export function transcriptLocator(deps: EvidenceDeps): (conversationId: string, dir: string | null) => Promise<LocatedTranscript> {
+  return transcriptLookup(deps);
+}
 
 /**
  * One bounded project-directory listing, shared by every record in a view pass.
@@ -356,26 +407,42 @@ type LocatedTranscript =
  * made here too.
  */
 function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: string | null) => Promise<LocatedTranscript> {
-  let projects:
-    | Promise<{ kind: "listed"; names: string[]; complete: boolean } | { kind: "unavailable"; why: string }>
-    | null = null;
-  const listProjects = (): Promise<{ kind: "listed"; names: string[]; complete: boolean } | { kind: "unavailable"; why: string }> => {
+  type Listed =
+    | { kind: "listed"; roots: ProjectsRoot[]; dirs: { root: ProjectsRoot; name: string }[]; complete: boolean }
+    | { kind: "unavailable"; why: string };
+  let rootsPromise: Promise<{ roots: ProjectsRoot[]; dropped: string[] }> | null = null;
+  const rootsOnce = (): Promise<{ roots: ProjectsRoot[]; dropped: string[] }> => (rootsPromise ??= resolvedRoots(deps));
+  let projects: Promise<Listed> | null = null;
+  // EVERY ROOT, ONE BOUND: `RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT` counts
+  // project directories across all roots together, so a second root cannot
+  // double the walk (plan 260910f, G4: "keep the whole search bounded by the
+  // existing limit").
+  const listProjects = (): Promise<Listed> => {
     projects ??= (async () => {
-      const names: string[] = [];
-      try {
-        const directory = await opendir(deps.projectsDir);
-        let complete = true;
-        for await (const item of directory) {
-          if (names.length >= RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT) {
-            complete = false;
-            break;
+      const { roots, dropped } = await rootsOnce();
+      if (roots.length === 0) return { kind: "unavailable" as const, why: `no projects directory could be read (${dropped.join("; ") || "none was named"})` };
+      const dirs: { root: ProjectsRoot; name: string }[] = [];
+      let complete = true;
+      let readable = 0;
+      const failures: string[] = [...dropped];
+      for (const root of roots) {
+        if (!complete) break;
+        try {
+          const directory = await opendir(root.path);
+          readable += 1;
+          for await (const item of directory) {
+            if (dirs.length >= RECOVERY_TRANSCRIPT_PROJECT_DIR_LIMIT) {
+              complete = false;
+              break;
+            }
+            dirs.push({ root, name: item.name });
           }
-          names.push(item.name);
+        } catch (cause) {
+          failures.push(`could not list ${root.path}: ${errText(cause)}`);
         }
-        return { kind: "listed" as const, names, complete };
-      } catch (cause) {
-        return { kind: "unavailable" as const, why: `could not list ${deps.projectsDir}: ${errText(cause)}` };
       }
+      if (readable === 0) return { kind: "unavailable" as const, why: failures.join("; ") };
+      return { kind: "listed" as const, roots, dirs, complete };
     })();
     return projects;
   };
@@ -397,23 +464,25 @@ function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: str
     }
     const filename = `${conversationId}.jsonl`;
     if (dir !== null && dir !== "") {
-      const guess = join(deps.projectsDir, slugifyDir(dir), filename);
-      if ((await fileInfo(guess)) !== null) return { kind: "found", path: guess, via: "slug-guess" };
+      for (const root of (await rootsOnce()).roots) {
+        const guess = join(root.path, slugifyDir(dir), filename);
+        if ((await fileInfo(guess)) !== null) return { kind: "found", path: guess, via: "slug-guess", root: root.real };
+      }
     }
     const listed = await listProjects();
     if (listed.kind === "unavailable") return { kind: "not-found", reason: "no-projects-directory", why: listed.why };
-    let best: { path: string; mtimeMs: number } | null = null;
-    for (const name of listed.names) {
-      const path = join(deps.projectsDir, name, filename);
+    let best: { path: string; mtimeMs: number; root: string } | null = null;
+    for (const { root, name } of listed.dirs) {
+      const path = join(root.path, name, filename);
       const info = await fileInfo(path);
-      if (info !== null && (best === null || info.mtimeMs > best.mtimeMs)) best = { path, mtimeMs: info.mtimeMs };
+      if (info !== null && (best === null || info.mtimeMs > best.mtimeMs)) best = { path, mtimeMs: info.mtimeMs, root: root.real };
     }
     // A transcript the bounded listing already found EXISTS, and that is all
     // `found` and `resume: supported` claim. An unlisted directory could hold a
     // newer copy, but a uuid was under exactly one slug for all 244 transcripts
     // on this box (transcript.ts § `findTranscript`), so reporting `cannot-tell`
     // over a real file would hide the common case to guard the rare one.
-    if (best !== null) return { kind: "found", path: best.path, via: "scan" };
+    if (best !== null) return { kind: "found", path: best.path, via: "scan", root: best.root };
     if (!listed.complete) {
       return {
         kind: "cannot-tell",
@@ -423,7 +492,7 @@ function transcriptLookup(deps: EvidenceDeps): (conversationId: string, dir: str
     return {
       kind: "not-found",
       reason: "no-transcript-file",
-      why: `no transcript for this conversation in ${deps.projectsDir} (looked in all ${listed.names.length} project directories)`,
+      why: `no transcript for this conversation in ${listed.roots.map((root) => root.path).join(", ")} (looked in all ${listed.dirs.length} project directories)`,
     };
   };
 }

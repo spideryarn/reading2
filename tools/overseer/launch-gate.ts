@@ -33,7 +33,13 @@
  * `why` and the notes are shown to Greg on a web page, so they are short plain
  * English and never the producer's internal wording.
  */
-import type { StoredUsage, UsageLevel } from "../fleet/wire.js";
+import type {
+  AccountUsageSection,
+  StoredAccountUsage,
+  StoredUsage,
+  UsageLevel,
+  UsageWindowCard,
+} from "../fleet/wire.js";
 
 export type LaunchGate = { kind: "clear"; notes: string[] } | { kind: "held"; why: string; until: string | null };
 
@@ -149,8 +155,159 @@ export function launchGate(input: {
   /** A usage report whose `collectedAt` is older than this counts as unknown. */
   usageStaleAfterMs: number;
 }): LaunchGate {
-  const findings = [readUsage(input.usage, input.nowMs, input.usageStaleAfterMs), readHealth(input.health)];
+  return combine([readUsage(input.usage, input.nowMs, input.usageStaleAfterMs), readHealth(input.health)], input.onUnknown);
+}
 
+/**
+ * THE HEALTH HALF ALONE — the box, and nothing about any quota. The same
+ * rules `launchGate` applies to health (critical holds, strained is clear with
+ * a note, unreadable goes to `onUnknown`), factored out so gradual recovery
+ * can pair it with `accountQuotaGate` instead of the ambient usage report
+ * (plan 260910f, G4 disposition). `launchGate` is unchanged.
+ */
+export function healthGate(health: unknown, onUnknown: "hold" | "clear"): LaunchGate {
+  return combine([readHealth(health)], onUnknown);
+}
+
+/*
+ * The daemon's per-account usage reading (docs/project/usage-per-account.md),
+ * re-exported from wire.ts so the recovery modules and their fakes name one
+ * type through this gate. Stage 1 was built against local copies before dev's
+ * types reached this branch; the merge replaced them with these.
+ */
+export type { AccountUsageSection, StoredAccountUsage, UsageWindowCard };
+
+/** At or past this a window holds. */
+const QUOTA_APPROACHING_PERCENT = 80;
+
+function windowLabel(window: unknown): string {
+  if (window === "five_hour") return "5-hour";
+  if (window === "seven_day") return "7-day";
+  return typeof window === "string" ? `"${window}"` : "an unnamed";
+}
+
+/**
+ * One account's section, judged. Every rule is the coordinator's for plan
+ * 260910f's G4, and the order within is: positive evidence holds (several
+ * joined, `until` the latest), then anything unknown, then fine.
+ */
+function readAccountSection(section: unknown, nowMs: number, staleAfterMs: number): Finding {
+  const s = record(section);
+  if (s === null) return { kind: "unknown", why: "no usage reading for the account" };
+  const name = typeof s["name"] === "string" ? s["name"] : "the account";
+  if (s["family"] !== "claude") return { kind: "unknown", why: `${name} is not a Claude account` };
+  const reading = record(s["reading"]);
+  if (reading?.["kind"] === "unknown") {
+    return { kind: "unknown", why: `${name}'s usage could not be read${typeof reading["why"] === "string" ? `: ${reading["why"]}` : ""}` };
+  }
+  if (typeof s["providerAccountId"] !== "string") return { kind: "unknown", why: `${name}'s usage reading proves no account identity` };
+  // Date.parse, never a canonical-form check: the live endpoint spells reset
+  // instants with microseconds and `+00:00` (usage-per-account.md).
+  const takenMs = typeof s["takenAt"] === "string" ? Date.parse(s["takenAt"]) : Number.NaN;
+  if (!Number.isFinite(takenMs)) return { kind: "unknown", why: `${name}'s usage reading has no readable time` };
+  if (takenMs - nowMs > FUTURE_SKEW_MS) return { kind: "unknown", why: `${name}'s usage reading is dated in the future, so its clock cannot be trusted` };
+  if (nowMs - takenMs > staleAfterMs) {
+    return { kind: "unknown", why: `${name}'s last usage reading is too old to trust (${Math.round((nowMs - takenMs) / 60_000)} min)` };
+  }
+  if (reading?.["kind"] !== "windows" || !Array.isArray(reading["windows"])) {
+    return { kind: "unknown", why: `${name}'s usage reading is in a shape this build does not recognise` };
+  }
+  const holds: { why: string; untilMs: number | null }[] = [];
+  const unknowns: string[] = [];
+  const ignored: string[] = [];
+  const seenNamed = new Set<string>();
+  for (const raw of reading["windows"] as unknown[]) {
+    const card = record(raw);
+    const window = card?.["window"];
+    const label = windowLabel(window);
+    // THE TWO NAMED WINDOWS ARE REQUIRED; A CODENAME WINDOW COUNTS ONLY WITH A
+    // NUMBER. The live endpoint sends rotating codename windows at 0% with no
+    // reset time, which dev's `windowCard` turns into `unknown` cards: judged
+    // as unknown evidence they would hold every resume for ever. A number is
+    // positive evidence whatever the window is called, so a numbered codename
+    // window is still judged below; an unnumbered one is ignored, and named.
+    const named = window === "five_hour" || window === "seven_day";
+    if (named) seenNamed.add(window);
+    const unreadable = (why: string): void => {
+      if (named) unknowns.push(why);
+      else ignored.push(`${why} (ignored: only the 5-hour and 7-day windows are required)`);
+    };
+    switch (card?.["kind"]) {
+      case "value": {
+        const percent = card["utilizationPercent"];
+        if (typeof percent !== "number" || !Number.isFinite(percent)) {
+          unreadable(`the ${label} window has no readable percentage`);
+          break;
+        }
+        if (percent >= 100) {
+          const resetsAtMs = typeof card["resetsAt"] === "string" ? Date.parse(card["resetsAt"]) : Number.NaN;
+          // A limit whose reset has passed is no longer evidence of anything.
+          if (!Number.isFinite(resetsAtMs) || resetsAtMs <= nowMs) unreadable(`the ${label} window's limit reset has passed and no newer reading confirms it`);
+          else holds.push({ why: `${name} has used its ${label} limit`, untilMs: resetsAtMs });
+        } else if (percent >= QUOTA_APPROACHING_PERCENT) {
+          holds.push({ why: `${name} is at ${Math.round(percent)}% of its ${label} limit`, untilMs: null });
+        }
+        break;
+      }
+      case "expired":
+        unreadable(`the ${label} window's reading describes a window that has already reset`);
+        break;
+      default:
+        unreadable(`the ${label} window could not be read`);
+        break;
+    }
+  }
+  for (const required of ["five_hour", "seven_day"] as const) {
+    if (!seenNamed.has(required)) unknowns.push(`${name}'s reading has no ${windowLabel(required)} window`);
+  }
+  if (holds.length > 0) {
+    const resets = holds.map((h) => h.untilMs).filter((ms): ms is number => ms !== null);
+    return { kind: "hold", why: holds.map((h) => h.why).join("; "), untilMs: resets.length > 0 ? Math.max(...resets) : null };
+  }
+  if (unknowns.length > 0) return { kind: "unknown", why: unknowns.join("; ") };
+  if (ignored.length > 0) return { kind: "note", why: ignored.join("; ") };
+  return { kind: "fine" };
+}
+
+/**
+ * THE PINNED ACCOUNT'S OWN QUOTA — the gate gradual recovery pairs with
+ * `healthGate`, because a resumed conversation runs under the account whose
+ * config directory holds its transcript, and the ambient usage report is about
+ * the default login (plan 260910f, G4 disposition). It judges one section of
+ * the daemon's per-account usage reading.
+ *
+ *  - a `value` window at 100% or more holds until its `resetsAt` — unknown if
+ *    that is already past; at 80% or more it holds with no `until`;
+ *  - `five_hour` and `seven_day` are REQUIRED: either one missing, unreadable,
+ *    `expired` or `unknown` makes the section unknown;
+ *  - any other (codename) window is judged only when it carries a number; an
+ *    `expired` or `unknown` codename window is ignored with a note, because the
+ *    live endpoint sends them at 0% with no reset time as a matter of course;
+ *  - the section is unknown when it is null, its reading is `unknown`, it is
+ *    not a Claude account, its `providerAccountId` is null, or its `takenAt`
+ *    is unparseable, older than `staleAfterMs`, or over five minutes ahead.
+ *
+ * Unknown goes to `onUnknown`. Never throws.
+ */
+export function accountQuotaGate(section: AccountUsageSection | null, nowMs: number, onUnknown: "hold" | "clear", staleAfterMs: number): LaunchGate {
+  return combine([readAccountSection(section, nowMs, staleAfterMs)], onUnknown);
+}
+
+/** Two gates' verdicts as one: any hold holds (the latest `until`), otherwise clear with every note. */
+export function bothGates(a: LaunchGate, b: LaunchGate): LaunchGate {
+  if (a.kind === "held" || b.kind === "held") {
+    const held = [a, b].filter((g): g is Extract<LaunchGate, { kind: "held" }> => g.kind === "held");
+    const untils = held.map((g) => g.until).filter((u): u is string => u !== null);
+    return {
+      kind: "held",
+      why: held.map((g) => g.why).join("; "),
+      until: untils.length > 0 ? untils.reduce((x, y) => (Date.parse(x) >= Date.parse(y) ? x : y)) : null,
+    };
+  }
+  return { kind: "clear", notes: [...a.notes, ...b.notes] };
+}
+
+function combine(findings: readonly Finding[], onUnknown: "hold" | "clear"): LaunchGate {
   const holds = findings.filter((f): f is Extract<Finding, { kind: "hold" }> => f.kind === "hold");
   if (holds.length > 0) {
     const resets = holds.map((h) => h.untilMs).filter((ms): ms is number => ms !== null);
@@ -165,13 +322,13 @@ export function launchGate(input: {
   const unknowns = findings.filter((f) => f.kind === "unknown").map((f) => f.why);
   if (unknowns.length === 0) return { kind: "clear", notes };
 
-  switch (input.onUnknown) {
+  switch (onUnknown) {
     case "hold":
       return { kind: "held", why: unknowns.join("; "), until: null };
     case "clear":
       return { kind: "clear", notes: [...notes, ...unknowns] };
     default: {
-      const never: never = input.onUnknown;
+      const never: never = onUnknown;
       return never;
     }
   }
