@@ -238,6 +238,23 @@ export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
   "launch-mode": "4de4439f7848",
 };
 
+/**
+ * **THE RULE SOURCES' DIGESTS WHEN THE HASHES ABOVE WERE AUTHORISED.** Diagnosis
+ * only, like the standing jobs' `AUTHORISED_DOCUMENTS`; the composite behaviour
+ * hash remains the sole dispatch gate.
+ *
+ * These must be literals rather than the documents read while this process
+ * starts. If both sides came from the current checkout, a moved source would
+ * correctly trip the composite pin but the diagnostic would compare the new
+ * digest with itself and could not say which file moved. Both rules share the
+ * same sources and therefore the same pinned document revision.
+ */
+const AUTHORISED_RULE_DOCUMENTS: readonly JobDocument[] = [
+  { path: "tools/overseer/rules.ts", sha256: "7dfd9549cee7c3857d959e166966319a6261c4c13e3b8c09f8597ce18279ab62" },
+  { path: "tools/overseer/rule-work.ts", sha256: "2777327eb0ddf6df933734711ce3ad3b5c505d2abac5d3d75bc3c3ddd7ece4ab" },
+  { path: "tools/overseer/rule-protocol.ts", sha256: "2a424578bcc6f92a84034586aa6fac9c6ce8b30dd91257131ccca391bedd992a" },
+];
+
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
 export const WEDGED_WORK_SPEC: RuleSpec = {
   kind: "wedged-work",
@@ -327,12 +344,10 @@ export function ruleJobs(repoRoot: string): RuleJobs {
     jobs: defined.map((definition) => ({
       definition,
       authorisedHash: AUTHORISED_RULE_HASHES[definition.behaviour.id as RuleJobId] as BehaviourHash,
-      // THE LOAD-TIME DIGESTS, not literals (plan 260910e § D4). A rule's
-      // documents are the code this process has already loaded, and the tick
-      // never re-reads them, so the digest the definition was built with IS the
-      // one it is judged by — a literal beside the hash would be a second copy
-      // of `RULE_SOURCES`' bytes to keep in step for no diagnosis it could add.
-      authorisedDocuments: documents,
+      // THE PINNED DIGESTS, not the load-time readings above. The behaviour hash
+      // is still judged against the loaded code; this second list exists only so
+      // a mismatch can name which source moved and what its old digest was.
+      authorisedDocuments: AUTHORISED_RULE_DOCUMENTS,
     })),
     problems,
   };

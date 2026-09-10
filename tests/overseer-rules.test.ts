@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import { behaviourHash, type Arming, type AuthorisedJob, type JobBehaviour, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
+import { authorisationOf, behaviourHash, type Arming, type AuthorisedJob, type JobBehaviour, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
 import {
   AUTHORISED_RULE_HASHES,
   LAUNCH_MODE_SPEC,
@@ -809,6 +809,23 @@ describe("the shipped rule job, and its pin", () => {
       documents: job.definition.behaviour.documents.map((d, i) => (i === 0 ? { ...d, sha256: flip(d.sha256) } : d)),
     };
     expect(behaviourHash(tampered)).not.toBe(behaviourHash(job.definition.behaviour));
+  });
+
+  test("authorised document digests preserve the pinned revision, so a moved rule source is named", () => {
+    const root = tempRoot();
+    for (const path of RULE_SOURCES) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      copyFileSync(join(REPO, path), join(root, path));
+    }
+    appendFileSync(join(root, RULE_SOURCES[0]), "\n// an implementation edit not present in the authorised revision\n");
+
+    const job = ruleJobs(root).jobs[0];
+    if (job === undefined) throw new Error("expected the wedged-work rule");
+    expect(job.authorisedDocuments).not.toEqual(job.definition.behaviour.documents);
+    const authorisation = authorisationOf(job);
+    expect(authorisation.kind).toBe("unauthorised");
+    expect(authorisation.kind === "unauthorised" && authorisation.why).toContain(`${RULE_SOURCES[0]}: pinned`);
+    expect(authorisation.kind === "unauthorised" && authorisation.why).toContain("edited since it was authorised");
   });
 
   test("OFF and ARMED read differently, and OFF still says what it would have run", () => {

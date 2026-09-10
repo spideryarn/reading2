@@ -641,6 +641,20 @@ describe("eligibility and the headline, made of the same evidence as the tick", 
     expect(beside.why).toContain("1 of 2");
   });
 
+  test("a dry-run job needs no unavailable launch capability and still cannot stop activation", () => {
+    const dry = sessionJob("fixture", { dispatch: { kind: "dry-run", why: "the harmless fixture" } });
+    const [one] = eligibilityOf([dry], { session: false, rules: false });
+    expect(one?.kind).toBe("dry-run");
+  });
+
+  test("duplicate definitions cannot earn ARMED when the planner will refuse every one", () => {
+    const twins = [sessionJob("twin"), sessionJob("twin")];
+    expect(eligibilityOf(twins, HELD).map((one) => one.kind)).toEqual(["ineligible", "ineligible"]);
+    const standing = schedulerStandingOf({ jobs: { definitions: twins, held: HELD }, detail: undefined, at: AT });
+    expect(standing.kind).toBe("blocked");
+    expect(standing.why).toContain("share this id");
+  });
+
   test("the headline over FRESH evidence is BLOCKED when a document moved, and ARMED over the evidence it was built with", () => {
     const definitions = [sessionJob("sweep")];
     const moved = resolveEvidence(definitions, (path) => ({ kind: "read", path, sha256: "c".repeat(64) }));

@@ -220,10 +220,27 @@ export type PlanInput = {
 /** Start this job — or, for a preview, say whether it would count as a launch. `true` means a session did or may have started. */
 export type Launch = (job: AuthorisedJob) => boolean;
 
-/** The sentence both duplicates get. One copy, because the tick and the preview print it. */
-const DUPLICATE_WHY =
+/** The sentence every duplicate gets. One copy, because the tick, preview and eligibility headline print it. */
+export const DUPLICATE_WHY =
   "two or more definitions share this id, so none of them can be addressed unambiguously and none is dispatched — " +
   "they would mint the same occurrence key, and one occurrence in the log could stand for two children on the box";
+
+/**
+ * Every id that occurs more than once in a definition list.
+ *
+ * The planner owns the duplicate gate, but the scheduler headline must answer
+ * the same list-wide fact: otherwise it can say `ARMED` about jobs the planner
+ * will refuse before launch. Keeping the count here gives both callers the one
+ * preflight rather than two similar loops.
+ */
+export function duplicateJobIds(definitions: readonly AuthorisedJob[]): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+  for (const job of definitions) {
+    const id = job.definition.behaviour.id;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, count]) => count > 1).map(([id]) => id));
+}
 
 /**
  * Plan every job, in definition order, calling `launch` for each that reaches
@@ -241,11 +258,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
   // PLANNED. Counting first is the whole fix: a check made while walking the
   // list can only refuse the SECOND definition, by which time the first has
   // been launched.
-  const counts = new Map<string, number>();
-  for (const job of input.definitions) {
-    const id = job.definition.behaviour.id;
-    counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
+  const duplicateIds = duplicateJobIds(input.definitions);
 
   // THE SPACING GATE'S STATE, SEEDED FROM THE DISK AND MOVED WITHIN THE PASS.
   // Seeded from the ledger so it survives a restart and a day's downtime (S8-5);
@@ -260,7 +273,7 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
   for (const job of input.definitions) {
     const behaviour = job.definition.behaviour;
     const jobId = behaviour.id;
-    if ((counts.get(jobId) ?? 0) > 1) {
+    if (duplicateIds.has(jobId)) {
       plans.push({ kind: "duplicate-id", jobId, why: DUPLICATE_WHY });
       continue;
     }

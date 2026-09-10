@@ -132,7 +132,17 @@ import {
   type SpawnJob,
 } from "./jobs.js";
 import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
-import { authorisationUnder, evidenceAsBuilt, planJobs, resolveEvidence, type DocumentEvidence, type JobPlan, type ReadDocument } from "./schedule-plan.js";
+import {
+  authorisationUnder,
+  DUPLICATE_WHY,
+  duplicateJobIds,
+  evidenceAsBuilt,
+  planJobs,
+  resolveEvidence,
+  type DocumentEvidence,
+  type JobPlan,
+  type ReadDocument,
+} from "./schedule-plan.js";
 import type { AppendResult, StoredScheduler } from "./store.js";
 
 /**
@@ -385,12 +395,23 @@ export type HeldCapabilities = { readonly session: boolean; readonly rules: bool
  */
 export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabilities, evidence?: DocumentEvidence): readonly JobEligibility[] {
   const reading = evidence ?? evidenceAsBuilt(jobs);
+  const duplicateIds = duplicateJobIds(jobs);
   return jobs.map((job) => {
     const jobId = job.definition.behaviour.id;
+    // THE PLANNER REFUSES EVERY DEFINITION SHARING AN ID. A headline that
+    // counted those same definitions as runnable could say ARMED while a tick
+    // correctly launched none of them.
+    if (duplicateIds.has(jobId)) return { kind: "ineligible", jobId, why: DUPLICATE_WHY };
     // THE SAME GATE THE TICK APPLIES, over the same kind of evidence — so the
     // headline and the refusal cannot disagree about a document.
     const authorisation = authorisationUnder(job, reading);
     if (authorisation.kind === "unauthorised") return { kind: "ineligible", jobId, why: authorisation.why };
+    const dispatch = job.definition.behaviour.dispatch;
+    // A DRY-RUN NEEDS NO LAUNCH CAPABILITY: it is authorised precisely to stop
+    // before reservation. Checking for a spawner or rule runner first made an
+    // inert fixture an activation blocker in a process that could not launch it
+    // anyway, contrary to this arm's contract.
+    if (dispatch.kind === "dry-run") return { kind: "dry-run", jobId, why: `pinned as dry-run, so it will never start anything: ${dispatch.why}` };
     const work = job.definition.behaviour.work;
     if (work.kind === "session" && !held.session) {
       return { kind: "ineligible", jobId, why: "this daemon holds no session dispatcher, so it cannot start a Claude session for this job" };
@@ -398,8 +419,6 @@ export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabili
     if (work.kind === "rule" && !held.rules) {
       return { kind: "ineligible", jobId, why: "this daemon holds no rule capability, so it cannot run this rule" };
     }
-    const dispatch = job.definition.behaviour.dispatch;
-    if (dispatch.kind === "dry-run") return { kind: "dry-run", jobId, why: `pinned as dry-run, so it will never start anything: ${dispatch.why}` };
     return { kind: "eligible", jobId };
   });
 }
