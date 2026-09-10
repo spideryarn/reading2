@@ -1778,6 +1778,7 @@ describe("box health, whose shape belongs to somebody else", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -1851,6 +1852,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => ({
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
@@ -2738,6 +2740,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -9564,6 +9567,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
