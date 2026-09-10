@@ -245,6 +245,45 @@ describe("a reboot", () => {
     expect(register(root)).toHaveLength(6);
   });
 
+  test("a boot change closes the old world even when the new populated generation is unreadable", async () => {
+    const root = tempRoot();
+    await run(
+      root,
+      async function* () {
+        yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+      },
+      { bootId: () => BOOT_ONE },
+    );
+
+    // The rows cannot become a differ baseline without a tmux generation, but
+    // the kernel boot id independently proves that every stored entry belongs
+    // to an old world and must be journalled now.
+    const held = await run(
+      root,
+      async function* () {
+        yield payload(
+          stamped("session-new-before", { instance: RUN_B, publication: 1, inventory: 1 }, { tmuxServerPid: null, collectedAt: LATER }),
+        );
+      },
+      { bootId: () => BOOT_TWO },
+    );
+    expect(candidates(held)).toHaveLength(6);
+    expect(index(root)).toHaveLength(6);
+
+    // No stale old-world baseline may survive the close-out. Once the producer
+    // can name the generation, its rows start the new world without another
+    // recovery candidate, even though tmux reused the old pid and handles.
+    const recovered = await run(
+      root,
+      async function* () {
+        yield payload(stamped("session-new-before", { instance: RUN_B, publication: 2, inventory: 2 }, { collectedAt: LATER_STILL }));
+      },
+      { bootId: () => BOOT_TWO },
+    );
+    expect(candidates(recovered)).toHaveLength(6);
+    expect(register(root)).toHaveLength(6);
+  });
+
   test("an unreadable boot id concludes nothing: the pid rule applies as today", async () => {
     const root = tempRoot();
     await run(

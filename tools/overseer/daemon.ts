@@ -1300,18 +1300,54 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     const bootChanged = hostBootId !== null && recordedBootId !== null && hostBootId !== recordedBootId;
     const outcome = diff(bootChanged ? null : baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
-      // NOT A SILENCE. The baseline stays where it is, so the comparison
-      // happens the moment a readable generation arrives; without this note the
-      // only trace would be a history that quietly skipped a few minutes.
+      if (bootChanged) {
+        // THE BOOT ID ALREADY PROVES THE OLD WORLD ENDED. The new populated
+        // snapshot still cannot become a baseline without a readable tmux
+        // generation, but that uncertainty is about the NEW world and must not
+        // hide the old one. Remove the durable old baseline before the append:
+        // if the process dies in between, the stored old boot id makes the next
+        // daemon repeat this close-out; if it dies after the append, the
+        // candidates carry the new boot id and recovery replay catches up.
+        forgetBaseline(root);
+        const closures = withRecoveryCandidates(closeOutOldBoot(store.register, at), store.register, {
+          observation: observationOf(observed.ordering, observed.clock.at),
+          tmuxServerPid: observed.tmuxServerPid,
+          baseline:
+            baseline === null
+              ? null
+              : {
+                  rows: baseline.snapshot.rows,
+                  collectedAt: baseline.snapshot.clock.at,
+                  observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+                },
+          producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+          bootChanged: true,
+          hostBootId,
+        });
+        if (closures.length > 0) {
+          const appended = store.append(closures);
+          if (!guard(appended)) return false;
+          log(`${at} ${closures.length} events closing the previous host boot (via ${via})`);
+        }
+        store.recordBootId(hostBootId);
+        baseline = null;
+        if (!guard(store.checkpoint(checkpointUpdate()))) return false;
+      }
+      // NOT A SILENCE. Ordinarily the baseline stays where it is, so the
+      // comparison happens the moment a readable generation arrives. A proven
+      // boot change above clears it because that old world is already closed.
+      // Without this note the only trace would be a history that quietly
+      // skipped a few minutes.
       write(conditions.degrade("baseline", at, outcome.reason));
       return true;
     }
     write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
 
-    // BELOW THE `held` RETURN, deliberately. `admissible()` can accept a
+    // BELOW THE ordinary `held` RETURN, deliberately. `admissible()` can accept a
     // populated inventory whose tmux generation `diff()` cannot place; probing
     // on the accept arm would spend a process-table read and throw its answer
-    // away because that path writes no checkpoint.
+    // away because that path writes no checkpoint. The proven-boot-change arm
+    // above is the exception: it checkpoints the old world's close-out only.
     let reading: ProcessTableReading;
     try {
       reading = probe();
@@ -1366,7 +1402,14 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     const events = withRecoveryCandidates([...closures, ...outcome.events], store.register, {
       observation: observationOf(observed.ordering, observed.clock.at),
       tmuxServerPid: observed.tmuxServerPid,
-      baseline: baseline === null ? null : { rows: baseline.snapshot.rows, collectedAt: baseline.snapshot.clock.at },
+      baseline:
+        baseline === null
+          ? null
+          : {
+              rows: baseline.snapshot.rows,
+              collectedAt: baseline.snapshot.clock.at,
+              observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+            },
       producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
       bootChanged,
       hostBootId,

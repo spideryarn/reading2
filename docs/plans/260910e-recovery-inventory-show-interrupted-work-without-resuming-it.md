@@ -359,10 +359,31 @@ Tests, red first, through the real parser, gate, differ and store, driven by a s
   mutations, each turning the intended tests red), typecheck exit 0, 26 focused files / 748 tests
   green. Live-log check on a frozen copy (2,081 lines, sha256 `21130318…`): 2,081 parsed, 0
   refused, 0 world changes, 0 candidates.
-- [ ] Sol review; commit.
+- [x] Sol review (*accept*, three P1s fixed red-first in the stage, one P2 left for me); gates
+  re-run on the fixed tree; commit.
 
-Status, 2026-09-10: implemented, awaiting its Sol review. Decisions the implementer made, recorded
-so the review can check them:
+Status, 2026-09-10: **done.** [Sol's review](260910e-recovery-inventory-stage1-review-sol.md):
+
+- **F11, P1, fixed: a boot change did not close the old world when the new populated snapshot's
+  tmux generation was unreadable.** `diff()` returned `held`, and the close-out never ran. The held
+  arm now appends the old world's closures with their candidates, forgets the old baseline, records
+  the boot id and checkpoints. The new world stays un-baselined until a readable generation arrives.
+- **F12, P1, fixed: an orphaned pending candidate could swallow a later real disappearance.** An
+  unchanged sighting writes no session event, so "any other event ends the wait" (decision 3 below)
+  was not enough. Candidates now carry the collection behind their last sighting
+  (`lastSeen.observation`), and only a candidate from the same sighting merges.
+- **F13, P1, fixed: after a refused recovery-tail replay, `checkpoint()` moved the recovery cursor
+  past the unread range**, which would skip valid candidates for good. The cursor now stays at the
+  last range the fold accepted. `replay.not-run` records whether to retry the whole log or the tail,
+  and the earlier verdict is restored once the range reads.
+- **F14, P2, not changed — overruled by me.** When `recovery.json` is absent or unusable, the
+  whole-log derivation starts with no boot id, so a reboot before the first later collection,
+  with tmux reusing its pid *and* its handles, would go unseen. Sol's fix would close the whole
+  restored register once, as "boot unverifiable", on every upgrade and every loss of the index,
+  putting spurious `unknown` records in front of Greg. That noise is certain, and the miss needs
+  three rare things together, so I kept the design. A P2, so it does not go to Fable or Greg.
+
+Decisions the implementer made, recorded so the review could check them:
 
 1. **An unstamped producer counts as the same run** in the candidate rule (`needsCandidate`). Read
    literally, the rule would write a candidate on every close from a dashboard without stamps.

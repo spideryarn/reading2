@@ -18,7 +18,11 @@ this brief disagree, the plan wins; tell me.
   `checkedAt` for the whole pass. Inject `projectsDir`, `stat` and `hostname` so tests need no fake
   home.
 - `tools/overseer/recovery.ts`: the derived dispositions (`resumed` and `superseded`, per plan §2 as
-  revised by Sol's F2), and the request-id idempotency for `dismissed`.
+  revised by Sol's F2), and the request-id idempotency for `dismissed`. **Also the retention rule
+  Stage 1 deferred**: resolved records older than 30 days leave the index and stay in the journal.
+  Unresolved records never leave, and this must not disturb the pending-merge rule. Pending entries
+  now carry the collection behind their last sighting (`lastSeen.observation`, Sol's F12), and
+  `replay.not-run` carries `retry` and `previous` (F13). Read both before you touch the fold.
 - `tools/overseer/store.ts`: the view goes into `recovery.json` beside the fold. It has its own
   clock, and is written when it changed.
 - `tools/overseer/daemon.ts`: the view pass. It runs after a fold change, after each accepted

@@ -100,6 +100,11 @@ export type RecoveryLastSeen = {
   executionToken: string | null;
   /** From a verified execution, else null. A claim alone is not here — see `ConversationReading`. */
   conversation: ConversationReading | null;
+  /**
+   * The accepted collection this sighting came from, for crash-merge identity.
+   * Absent only on a line written by the first Stage 1 implementation.
+   */
+  observation?: string;
   /** The baseline's clock: when this was last true. */
   collectedAt: string;
 };
@@ -212,9 +217,18 @@ export type RecoveryRecord =
  * `not-run` is shown by the page as it is, and never as an empty list: over the
  * replay ceiling, or across a hole, the index cannot say what the log holds.
  */
+export type RecoveryReplayRan = { kind: "ran"; worldChanges: number; derived: number; scannedBytes: number };
+
 export type RecoveryReplay =
-  | { kind: "ran"; worldChanges: number; derived: number; scannedBytes: number }
-  | { kind: "not-run"; why: string };
+  | RecoveryReplayRan
+  | {
+      kind: "not-run";
+      why: string;
+      /** Where a later start must retry. Absent only in a file written before this repair metadata existed. */
+      retry?: "whole" | "tail";
+      /** The legacy-derivation verdict to restore after a refused tail becomes readable. */
+      previous?: RecoveryReplayRan | null;
+    };
 
 /** The fold's whole state. Mutable, held by the store; readers get `RecoveryIndex`. */
 export type RecoveryFold = {
@@ -225,8 +239,16 @@ export type RecoveryFold = {
    * count it twice.
    */
   overflowIds: Set<RecoveryCandidateId>;
-  /** A candidate whose gone has not yet been folded, by session key — the pending-merge rule. */
-  pending: Map<SessionKey, RecoveryCandidateId>;
+  /**
+   * A candidate whose gone has not yet been folded, by session key — the
+   * pending-merge rule. The baseline collection distinguishes a replay of that
+   * disappearance from a later one after an unchanged sighting, which emits no
+   * session event of its own.
+   */
+  pending: Map<
+    SessionKey,
+    { id: RecoveryCandidateId; lastSeenObservation: string | null; lastSeenAt: string | null }
+  >;
   /** Dismissal requests already applied, so a request replayed after a crash is applied once. */
   appliedRequests: Set<string>;
   /** The host boot id this daemon last recorded, or null when none has been. */
@@ -249,7 +271,7 @@ export type CandidateContext = {
   /** That collection's tmux generation. */
   tmuxServerPid: number | null;
   /** The world it was compared against: rows and clock. Null when the daemon had none (`goneWhileAway`). */
-  baseline: { rows: readonly ObservedRow[]; collectedAt: string } | null;
+  baseline: { rows: readonly ObservedRow[]; collectedAt: string; observation: string } | null;
   producerRun: ProducerRunRelation;
   /** The host's boot id differs from the one recorded — every entry is being closed out of the old world. */
   bootChanged: boolean;
@@ -349,7 +371,7 @@ function capTitle(title: string | null): string | null {
   return points.length <= LAST_SEEN_TITLE_MAX ? title : points.slice(0, LAST_SEEN_TITLE_MAX).join("");
 }
 
-function lastSeenOf(row: ObservedRow, collectedAt: string): RecoveryLastSeen {
+function lastSeenOf(row: ObservedRow, collectedAt: string, observation: string): RecoveryLastSeen {
   const verified = row.execution.kind === "verified" ? row.execution : null;
   return {
     statusKey: statusKey(row.status),
@@ -357,6 +379,7 @@ function lastSeenOf(row: ObservedRow, collectedAt: string): RecoveryLastSeen {
     harness: verified?.harness ?? null,
     executionToken: verified === null ? null : executionTokenText(verified.token),
     conversation: verified?.conversation ?? null,
+    observation,
     collectedAt,
   };
 }
@@ -405,7 +428,10 @@ export function withRecoveryCandidates(
               observation: context.observation,
             }),
             entry,
-            lastSeen: row === undefined || context.baseline === null ? null : lastSeenOf(row, context.baseline.collectedAt),
+            lastSeen:
+              row === undefined || context.baseline === null
+                ? null
+                : lastSeenOf(row, context.baseline.collectedAt, context.baseline.observation),
             disappearance,
           });
         }
@@ -470,8 +496,11 @@ function insertRecord(fold: RecoveryFold, record: Extract<RecoveryRecord, { over
  * LATER collection, and so under a different id. **Any other event for that key
  * ends the wait** (the session was seen alive, so that removal never happened),
  * which keeps an orphaned candidate from swallowing a real disappearance weeks
- * later. The orphan stays in the index: it is evidence, and Stage 2 classifies
- * it against the live inventory like any other.
+ * later. An unchanged accepted sighting emits no session event, so the next
+ * candidate's `lastSeen.observation` is the second way to end the wait: if it
+ * differs, the session was observed again and this is a distinct disappearance.
+ * The orphan stays in the index: it is evidence, and Stage 2 classifies it
+ * against the live inventory like any other.
  */
 export function foldRecovery(events: readonly OverseerEvent[], into: RecoveryFold): boolean {
   let changed = false;
@@ -483,8 +512,16 @@ export function foldRecovery(events: readonly OverseerEvent[], into: RecoveryFol
           into.bootId = event.disappearance.hostBootId;
           changed = true;
         }
-        if (into.pending.has(key)) break;
-        into.pending.set(key, event.id);
+        const lastSeenObservation = event.lastSeen?.observation ?? null;
+        const lastSeenAt = event.lastSeen?.collectedAt ?? null;
+        const previous = into.pending.get(key);
+        const sameSighting =
+          previous !== undefined &&
+          (previous.lastSeenObservation !== null && lastSeenObservation !== null
+            ? previous.lastSeenObservation === lastSeenObservation
+            : previous.lastSeenAt === lastSeenAt);
+        if (sameSighting) break;
+        into.pending.set(key, { id: event.id, lastSeenObservation, lastSeenAt });
         changed = true;
         insertRecord(
           into,

@@ -176,6 +176,7 @@ import {
   type RecoveryLastSeen,
   type RecoveryRecord,
   type RecoveryReplay,
+  type RecoveryReplayRan,
   type RecoveryResolution,
 } from "./recovery.js";
 
@@ -1681,6 +1682,10 @@ function parseLastSeen(u: unknown): ParseResult<RecoveryLastSeen | null> {
   }
   const collectedAt = u["collectedAt"];
   if (!isIsoTimestamp(collectedAt)) return { ok: false, reason: "lastSeen.collectedAt is not an ISO timestamp" };
+  const observation = u["observation"];
+  if (observation !== undefined && !isName(observation)) {
+    return { ok: false, reason: "lastSeen.observation is not a collection's identity" };
+  }
   return {
     ok: true,
     value: {
@@ -1689,6 +1694,7 @@ function parseLastSeen(u: unknown): ParseResult<RecoveryLastSeen | null> {
       harness: harness as HarnessKind | null,
       executionToken: executionToken as string | null,
       conversation,
+      ...(observation === undefined ? {} : { observation }),
       collectedAt,
     },
   };
@@ -2755,8 +2761,33 @@ function parseRecoveryFile(u: unknown): ParseResult<{ cursor: { events: number; 
   const pending = u["pending"];
   if (!Array.isArray(pending)) return { ok: false, reason: "pending is not an array" };
   for (const item of pending) {
-    if (!isRecord(item) || !isName(item["key"]) || !isRecoveryId(item["id"])) return { ok: false, reason: "pending holds something that is not a key and a candidate id" };
-    fold.pending.set(item["key"] as SessionKey, item["id"]);
+    if (!isRecord(item) || !isName(item["key"]) || !isRecoveryId(item["id"])) {
+      return { ok: false, reason: "pending holds something that is not a key and a candidate id" };
+    }
+    const pendingId = item["id"];
+    const rawObservation = item["lastSeenObservation"];
+    const rawAt = item["lastSeenAt"];
+    let lastSeenObservation: string | null;
+    let lastSeenAt: string | null;
+    if (rawObservation === undefined && rawAt === undefined) {
+      // The first Stage 1 writer persisted only key + id. Recover both fields
+      // from the record it also wrote so upgrading cannot turn a readable file
+      // into a byte-0 replay (or a not-run index over the ceiling).
+      const record = fold.records.get(pendingId);
+      const lastSeen = record !== undefined && !record.oversize ? record.lastSeen : null;
+      lastSeenObservation = lastSeen?.observation ?? null;
+      lastSeenAt = lastSeen?.collectedAt ?? null;
+    } else {
+      if (rawObservation !== null && !isName(rawObservation)) {
+        return { ok: false, reason: "pending.lastSeenObservation is not a collection's identity or null" };
+      }
+      if (rawAt !== null && !isIsoTimestamp(rawAt)) {
+        return { ok: false, reason: "pending.lastSeenAt is not an ISO timestamp or null" };
+      }
+      lastSeenObservation = rawObservation;
+      lastSeenAt = rawAt;
+    }
+    fold.pending.set(item["key"] as SessionKey, { id: pendingId, lastSeenObservation, lastSeenAt });
   }
   const applied = u["appliedRequests"];
   if (!Array.isArray(applied) || !applied.every(isName)) return { ok: false, reason: "appliedRequests is not a list of request ids" };
@@ -2767,8 +2798,35 @@ function parseRecoveryFile(u: unknown): ParseResult<{ cursor: { events: number; 
 function parseRecoveryReplay(u: unknown): ParseResult<RecoveryReplay> {
   if (!isRecord(u)) return { ok: false, reason: "replay is not an object" };
   if (u["kind"] === "not-run") {
-    return typeof u["why"] === "string" ? { ok: true, value: { kind: "not-run", why: u["why"] } } : { ok: false, reason: "a replay that did not run says no why" };
+    if (typeof u["why"] !== "string") return { ok: false, reason: "a replay that did not run says no why" };
+    const retry = u["retry"];
+    if (retry !== undefined && retry !== "whole" && retry !== "tail") {
+      return { ok: false, reason: "a replay retry is neither whole nor tail" };
+    }
+    const rawPrevious = u["previous"];
+    let previous: RecoveryReplayRan | null | undefined;
+    if (rawPrevious === undefined || rawPrevious === null) {
+      previous = rawPrevious;
+    } else {
+      const parsed = parseRecoveryReplayRan(rawPrevious);
+      if (!parsed.ok) return { ok: false, reason: `replay.previous: ${parsed.reason}` };
+      previous = parsed.value;
+    }
+    return {
+      ok: true,
+      value: {
+        kind: "not-run",
+        why: u["why"],
+        ...(retry === undefined ? {} : { retry }),
+        ...(previous === undefined ? {} : { previous }),
+      },
+    };
   }
+  return parseRecoveryReplayRan(u);
+}
+
+function parseRecoveryReplayRan(u: unknown): ParseResult<RecoveryReplayRan> {
+  if (!isRecord(u)) return { ok: false, reason: "a completed replay is not an object" };
   if (u["kind"] !== "ran") return { ok: false, reason: `replay kind ${JSON.stringify(u["kind"])} is neither ran nor not-run` };
   const worldChanges = u["worldChanges"];
   const derived = u["derived"];
@@ -2834,7 +2892,7 @@ function recoveryFileText(fold: RecoveryFold, cursor: { events: number; bytes: n
       overflow: fold.overflowIds.size,
       records: [...fold.records.values()],
       overflowIds: [...fold.overflowIds],
-      pending: [...fold.pending].map(([key, id]) => ({ key, id })),
+      pending: [...fold.pending].map(([key, pending]) => ({ key, ...pending })),
       appliedRequests: [...fold.appliedRequests],
     },
     null,
@@ -3305,8 +3363,8 @@ class Store implements OverseerStore {
   private readonly recoveryFold: RecoveryFold;
   /** Whether the fold (or the boot id in it) has changed since `recovery.json` was last written. */
   private recoveryDirty: boolean;
-  /** The log size `recovery.json`'s cursor names. See `RECOVERY_CURSOR_STRIDE_BYTES`. */
-  private recoveryWrittenAtBytes: number;
+  /** The last log cursor the recovery fold proved it had accepted. */
+  private recoveryWrittenAt: { events: number; bytes: number };
   private closed = false;
 
   constructor(input: {
@@ -3322,7 +3380,7 @@ class Store implements OverseerStore {
     events: number;
     /** From the previous checkpoint when there was a readable one; absent on a cold or rebuilt start. */
     usage?: StoredUsage;
-    recovery: { fold: RecoveryFold; dirty: boolean; writtenAtBytes: number };
+    recovery: { fold: RecoveryFold; dirty: boolean; writtenAt: { events: number; bytes: number } };
   }) {
     this.root = input.root;
     this.lock = input.lock;
@@ -3341,7 +3399,7 @@ class Store implements OverseerStore {
     this.schedulerHeld = schedulerNotYetSaid(input.now().toISOString());
     this.recoveryFold = input.recovery.fold;
     this.recoveryDirty = input.recovery.dirty;
-    this.recoveryWrittenAtBytes = input.recovery.writtenAtBytes;
+    this.recoveryWrittenAt = input.recovery.writtenAt;
   }
 
   get register(): SessionRegister {
@@ -3368,7 +3426,11 @@ class Store implements OverseerStore {
    * give every brand-new store a file nobody asked for.
    */
   private recoveryDue(): boolean {
-    if (!this.recoveryDirty && this.bytes - this.recoveryWrittenAtBytes < RECOVERY_CURSOR_STRIDE_BYTES) return false;
+    // A refused range deliberately keeps the earlier cursor. Once its degraded
+    // state has been written, the distance to the log end must not turn every
+    // heartbeat into another identical atomic write.
+    if (!this.recoveryDirty && this.recoveryFold.replay.kind === "not-run") return false;
+    if (!this.recoveryDirty && this.bytes - this.recoveryWrittenAt.bytes < RECOVERY_CURSOR_STRIDE_BYTES) return false;
     const fold = this.recoveryFold;
     const empty = fold.records.size === 0 && fold.overflowIds.size === 0 && fold.pending.size === 0 && fold.bootId === null;
     return !(empty && this.bytes === 0);
@@ -3496,12 +3558,21 @@ class Store implements OverseerStore {
     if (update.snapshotStaleAfterMs !== undefined) this.snapshotStaleAfterMsHeld = update.snapshotStaleAfterMs;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
     // AFTER `current.json`, which is the last of the writes the plan orders:
-    // events, baseline, checkpoint, recovery. The cursor is the same one the
-    // checkpoint just wrote, so the file never claims events the log lacks.
+    // events, baseline, checkpoint, recovery. Ordinarily its cursor is the one
+    // the checkpoint just wrote; after a refused replay it stays at the last
+    // range the recovery fold actually accepted.
     if (this.recoveryDue()) {
-      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, { events: this.events, bytes: this.bytes }, at));
+      // An all-or-nothing replay that refused a tail accepted NONE of that
+      // range. Keep its previous cursor so a later version or a repaired log
+      // retries the bytes; advancing to the end here would permanently skip
+      // valid candidates on either side of the refused line.
+      const recoveryCursor =
+        this.recoveryFold.replay.kind === "not-run"
+          ? this.recoveryWrittenAt
+          : { events: this.events, bytes: this.bytes };
+      writeAtomically(join(this.root, RECOVERY_FILE), this.root, recoveryFileText(this.recoveryFold, recoveryCursor, at));
       this.recoveryDirty = false;
-      this.recoveryWrittenAtBytes = this.bytes;
+      this.recoveryWrittenAt = recoveryCursor;
     }
     return { ok: true, checkpoint };
   }
@@ -3818,7 +3889,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
         // `exactOptionalPropertyTypes` is on precisely so those two cannot be
         // confused, and this is the case it is guarding.
         ...(read.kind === "checkpoint" ? { usage: read.checkpoint.usage } : {}),
-        recovery: { fold: recovery.fold, dirty: recovery.dirty, writtenAtBytes: recovery.writtenAtBytes },
+        recovery: { fold: recovery.fold, dirty: recovery.dirty, writtenAt: recovery.writtenAt },
       }),
     };
   } catch (cause) {
@@ -3841,22 +3912,61 @@ function openRecovery(input: {
   size: number;
   ceiling: number;
   wholeLog: Extract<Replay, { kind: "read" }> | null;
-}): { fold: RecoveryFold; dirty: boolean; writtenAtBytes: number; opening: RecoveryOpening } {
+}): { fold: RecoveryFold; dirty: boolean; writtenAt: { events: number; bytes: number }; opening: RecoveryOpening } {
   const read = readRecoveryFile(input.root);
   if (read.kind === "file" && read.cursor.bytes <= input.size) {
     const fold = read.fold;
-    const tail = replay(input.eventsPath, read.cursor.bytes, input.size, input.ceiling);
-    if (tail.kind === "read") {
+    // A file written after a WHOLE replay refusal is not a base to fold a tail
+    // onto: legacy candidates still have not been derived. Missing retry
+    // metadata is the first Stage 1 writer, which advanced past a refusal; a
+    // byte-0 derivation is the only honest repair for that file too.
+    const retryWhole = fold.replay.kind === "not-run" && fold.replay.retry !== "tail";
+    if (retryWhole) {
+      const whole = input.wholeLog ?? replay(input.eventsPath, 0, input.size, input.ceiling);
+      if (whole.kind === "read") {
+        const rebuilt = deriveRecovery(
+          whole.events,
+          (event, into) => {
+            foldEvents([event], into);
+          },
+          whole.bytesScanned,
+        );
+        return {
+          fold: rebuilt,
+          dirty: true,
+          writtenAt: { events: 0, bytes: 0 },
+          opening: {
+            kind: "derived",
+            why: `${RECOVERY_FILE} recorded that its whole-log derivation had not run`,
+            eventsScanned: whole.events.length,
+            bytesScanned: whole.bytesScanned,
+          },
+        };
+      }
+      const why = `the whole log still could not be read to retry ${RECOVERY_FILE}'s derivation (${whole.why})`;
+      fold.replay = { kind: "not-run", why, retry: "whole", previous: null };
       return {
         fold,
-        dirty: foldRecovery(tail.events, fold),
-        writtenAtBytes: read.cursor.bytes,
+        dirty: true,
+        writtenAt: { events: 0, bytes: 0 },
+        opening: { kind: "not-run", why },
+      };
+    }
+    const previousReplay = fold.replay.kind === "ran" ? fold.replay : fold.replay.previous;
+    const tail = replay(input.eventsPath, read.cursor.bytes, input.size, input.ceiling);
+    if (tail.kind === "read") {
+      const recovered = fold.replay.kind === "not-run";
+      if (recovered && previousReplay !== undefined && previousReplay !== null) fold.replay = previousReplay;
+      return {
+        fold,
+        dirty: foldRecovery(tail.events, fold) || recovered,
+        writtenAt: read.cursor,
         opening: { kind: "restored", eventsReplayed: tail.events.length, bytesScanned: tail.bytesScanned },
       };
     }
     const why = `the log past ${RECOVERY_FILE}'s cursor could not be read (${tail.why}), so the index may be missing what happened after byte ${read.cursor.bytes}`;
-    fold.replay = { kind: "not-run", why };
-    return { fold, dirty: true, writtenAtBytes: read.cursor.bytes, opening: { kind: "not-run", why } };
+    fold.replay = { kind: "not-run", why, retry: "tail", previous: previousReplay ?? null };
+    return { fold, dirty: true, writtenAt: read.cursor, opening: { kind: "not-run", why } };
   }
   const why =
     read.kind === "absent"
@@ -3867,7 +3977,12 @@ function openRecovery(input: {
   const whole = input.wholeLog ?? replay(input.eventsPath, 0, input.size, input.ceiling);
   if (whole.kind === "refused") {
     const notRun = `${why}, and the whole log could not be read to derive it (${whole.why}), so the index cannot say what the log holds`;
-    return { fold: emptyRecoveryFold({ kind: "not-run", why: notRun }, null), dirty: true, writtenAtBytes: 0, opening: { kind: "not-run", why: notRun } };
+    return {
+      fold: emptyRecoveryFold({ kind: "not-run", why: notRun, retry: "whole", previous: null }, null),
+      dirty: true,
+      writtenAt: { events: 0, bytes: 0 },
+      opening: { kind: "not-run", why: notRun },
+    };
   }
   const fold = deriveRecovery(
     whole.events,
@@ -3879,7 +3994,7 @@ function openRecovery(input: {
   return {
     fold,
     dirty: true,
-    writtenAtBytes: 0,
+    writtenAt: { events: 0, bytes: 0 },
     opening: { kind: "derived", why, eventsScanned: whole.events.length, bytesScanned: whole.bytesScanned },
   };
 }

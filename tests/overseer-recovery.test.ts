@@ -11,7 +11,7 @@
  * the register, a gone whose session was never seen) are easier to state
  * exactly than to drive a daemon into.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -107,7 +107,11 @@ function context(changes: Partial<CandidateContext> = {}): CandidateContext {
   return {
     observation: "run e4d2b6f0 collection 1",
     tmuxServerPid: null,
-    baseline: { rows: [ROW_A, ROW_B], collectedAt: "2026-09-10T09:00:00.000Z" },
+    baseline: {
+      rows: [ROW_A, ROW_B],
+      collectedAt: "2026-09-10T09:00:00.000Z",
+      observation: "run 3a9c1e7b collection 9",
+    },
     producerRun: "changed",
     bootChanged: false,
     hostBootId: "ri-unit-boot",
@@ -206,7 +210,17 @@ describe("withRecoveryCandidates", () => {
       status: { kind: "working" },
     });
     const register = registerOf(seen(verified, "2026-09-10T08:30:00.000Z", G1));
-    const out = withRecoveryCandidates([gone(verified, at, G1, "absent-from-snapshot")], register, context({ baseline: { rows: [verified], collectedAt: "2026-09-10T09:00:00.000Z" } }));
+    const out = withRecoveryCandidates(
+      [gone(verified, at, G1, "absent-from-snapshot")],
+      register,
+      context({
+        baseline: {
+          rows: [verified],
+          collectedAt: "2026-09-10T09:00:00.000Z",
+          observation: "run 3a9c1e7b collection 9",
+        },
+      }),
+    );
     const [candidate] = candidatesIn(out);
     expect(candidate?.lastSeen).toEqual({
       statusKey: "working",
@@ -214,6 +228,7 @@ describe("withRecoveryCandidates", () => {
       harness: "claude-code",
       executionToken: "ri-unit-tok:5150:77",
       conversation: { kind: "verified", id: CLAIM_A },
+      observation: "run 3a9c1e7b collection 9",
       collectedAt: "2026-09-10T09:00:00.000Z",
     });
   });
@@ -281,6 +296,32 @@ describe("foldRecovery", () => {
     expect(fold.records.size).toBe(2);
   });
 
+  test("a newer unchanged sighting ends the wait even when it emitted no session event", () => {
+    const fold = fresh();
+    const [orphan] = batch("run e4d2b6f0 collection 1", ROW_A);
+    if (orphan === undefined) throw new Error("expected a candidate");
+    foldRecovery([orphan], fold);
+
+    // The identical row was accepted alive after the orphan, so diff emitted
+    // nothing for it. Its later disappearance carries the newer baseline
+    // collection as the only durable proof that these are two disappearances.
+    const later = withRecoveryCandidates(
+      [gone(ROW_A, "2026-09-10T09:15:00.000Z", G1, "absent-from-snapshot")],
+      register,
+      context({
+        observation: "run e4d2b6f0 collection 3",
+        baseline: {
+          rows: [ROW_A],
+          collectedAt: "2026-09-10T09:10:00.000Z",
+          observation: "run e4d2b6f0 collection 2",
+        },
+      }),
+    );
+    foldRecovery(later, fold);
+
+    expect(fold.records.size).toBe(2);
+  });
+
   test("a disposition resolves a record once; a second, an unknown id, and a repeated request are ignored", () => {
     const fold = fresh();
     const events = batch("run e4d2b6f0 collection 1", ROW_A, ROW_B);
@@ -300,6 +341,113 @@ describe("foldRecovery", () => {
     expect(foldRecovery([dismiss(b.id, "req-ri-1")], fold)).toBe(false);
     expect(fold.records.get(a.id)?.resolution).toEqual({ disposition: "dismissed", at: "2026-09-10T10:00:00.000Z", evidence: { requestId: "req-ri-1", why: "checked by hand" } });
     expect(fold.records.get(b.id)?.resolution).toEqual({ disposition: "unresolved" });
+  });
+});
+
+describe("the recovery parser accepts every shape this stage has written", () => {
+  test("a pre-review candidate without lastSeen.observation still replays", () => {
+    const root = tempRoot();
+    const original = [
+      seen(ROW_A, "2026-09-10T08:30:00.000Z", G1),
+      ...withRecoveryCandidates(
+        [gone(ROW_A, "2026-09-10T09:05:00.000Z", G1, "absent-from-snapshot")],
+        registerOf(seen(ROW_A, "2026-09-10T08:30:00.000Z", G1)),
+        context(),
+      ),
+    ];
+    const written = JSON.parse(JSON.stringify(original)) as Array<Record<string, unknown>>;
+    const candidate = written.find((event) => event["kind"] === "recovery-candidate");
+    if (candidate === undefined || typeof candidate["lastSeen"] !== "object" || candidate["lastSeen"] === null) {
+      throw new Error("expected a candidate with a last sighting");
+    }
+    delete (candidate["lastSeen"] as Record<string, unknown>)["observation"];
+    writeFileSync(join(root, EVENTS_FILE), written.map((event) => `${JSON.stringify(event)}\n`).join(""));
+
+    const store = mustOpen(root);
+    expect(store.opening.start.kind).toBe("rebuilt");
+    expect(store.recovery.records.size).toBe(1);
+  });
+
+  test("a pre-review recovery file with id-only pending entries restores", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.append([seen(ROW_A, "2026-09-10T08:30:00.000Z", G1)]);
+    const [candidate] = withRecoveryCandidates(
+      [gone(ROW_A, "2026-09-10T09:05:00.000Z", G1, "absent-from-snapshot")],
+      store.register,
+      context(),
+    );
+    if (candidate?.kind !== "recovery-candidate") throw new Error("expected a candidate");
+    store.append([candidate]);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: false });
+    close(store);
+
+    const path = join(root, RECOVERY_FILE);
+    const file = JSON.parse(readFileSync(path, "utf8")) as {
+      records: Array<{ lastSeen?: Record<string, unknown> | null }>;
+      pending: Array<{ key: string; id: RecoveryCandidateId }>;
+    };
+    for (const record of file.records) {
+      if (record.lastSeen !== null && record.lastSeen !== undefined) delete record.lastSeen["observation"];
+    }
+    file.pending = file.pending.map(({ key, id }) => ({ key, id }));
+    writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+
+    const reopened = mustOpen(root);
+    expect(reopened.opening.recovery.kind).toBe("restored");
+    expect(reopened.recovery.records.size).toBe(1);
+  });
+});
+
+describe("the recovery cursor names only events the fold accepted", () => {
+  test("a checkpoint after a refused recovery tail does not advance past the hole", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.append([seen(ROW_A, "2026-09-10T08:30:00.000Z", G1)]);
+    store.append(
+      withRecoveryCandidates(
+        [gone(ROW_A, "2026-09-10T09:05:00.000Z", G1, "absent-from-snapshot")],
+        store.register,
+        context(),
+      ),
+    );
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: false });
+    close(store);
+    const recoveryPath = join(root, RECOVERY_FILE);
+    const before = JSON.parse(readFileSync(recoveryPath, "utf8")) as { cursor: { events: number; bytes: number } };
+
+    const laterRegister = registerOf(seen(ROW_B, "2026-09-10T09:10:00.000Z", G1));
+    const later = withRecoveryCandidates(
+      [gone(ROW_B, "2026-09-10T09:15:00.000Z", G1, "absent-from-snapshot")],
+      laterRegister,
+      context({ observation: "run e4d2b6f0 collection 4" }),
+    );
+    const eventsPath = join(root, EVENTS_FILE);
+    writeFileSync(
+      eventsPath,
+      `${readFileSync(eventsPath, "utf8")}{not an event}\n${later.map((event) => `${JSON.stringify(event)}\n`).join("")}`,
+    );
+
+    const reopened = mustOpen(root);
+    expect(reopened.opening.recovery.kind).toBe("not-run");
+    reopened.checkpoint({ lastGoodSnapshotAt: null, tick: false });
+    close(reopened);
+
+    const after = JSON.parse(readFileSync(recoveryPath, "utf8")) as { cursor: { events: number; bytes: number } };
+    expect(after.cursor).toEqual(before.cursor);
+
+    const repaired = readFileSync(eventsPath, "utf8")
+      .split("\n")
+      .filter((line) => line !== "{not an event}")
+      .join("\n");
+    writeFileSync(eventsPath, repaired);
+    const recovered = mustOpen(root);
+    expect(recovered.recovery.replay.kind).toBe("ran");
+    expect(recovered.recovery.records.size).toBe(2);
+    recovered.checkpoint({ lastGoodSnapshotAt: null, tick: false });
+    close(recovered);
+    const caughtUp = JSON.parse(readFileSync(recoveryPath, "utf8")) as { cursor: { bytes: number } };
+    expect(caughtUp.cursor.bytes).toBe(statSync(eventsPath).size);
   });
 });
 
