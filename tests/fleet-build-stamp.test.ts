@@ -31,8 +31,11 @@ const AT = new Date("2026-09-10T12:00:00.000Z");
 
 describe("buildStamp", () => {
   test("is the start revision of the checkout, plus when it was built", () => {
-    const run = (argv: string[]) =>
-      argv.includes("rev-parse") ? { status: 0, stdout: `${SHA}\n`, stderr: "" } : { status: 0, stdout: " M x.ts\n", stderr: "" };
+    const run = () => ({
+      status: 0,
+      stdout: `# branch.oid ${SHA}\n# branch.head main\n1 .M N... 100644 100644 100644 ${SHA} ${SHA} x.ts\n`,
+      stderr: "",
+    });
     expect(buildStamp("/checkout", { run, now: () => AT })).toEqual({
       kind: "known",
       sha: SHA,
@@ -105,6 +108,14 @@ describe("readBuildStamp", () => {
       { kind: "unknown", readAt: "x", builtAt: "y" },
       { kind: "maybe", why: "x", readAt: "x", builtAt: "y" },
       { kind: "known", sha: SHA, dirty: false, readAt: "x", builtAt: 7 },
+      // Otherwise well-formed, but a timestamp that is not an instant: a clock
+      // calculation later would read NaN as a time.
+      { kind: "known", sha: SHA, dirty: false, readAt: "not-a-date", builtAt: AT.toISOString() },
+      { kind: "known", sha: SHA, dirty: false, readAt: AT.toISOString(), builtAt: "also-not-a-date" },
+      { kind: "unknown", why: "git failed", readAt: "not-a-date", builtAt: AT.toISOString() },
+      // Parses as a date, but is not the ISO instant the writer produces.
+      { kind: "known", sha: SHA, dirty: false, readAt: "2026-09-10", builtAt: AT.toISOString() },
+      { kind: "known", sha: SHA, dirty: false, readAt: AT.toISOString(), builtAt: "Thu, 10 Sep 2026 12:00:00 GMT" },
     ];
     for (const shape of shapes) {
       const dir = distDir();
