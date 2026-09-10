@@ -20,7 +20,8 @@
  * connection, and it is entirely possible for the second to be fine while the
  * first is hours old.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { pollingTransport, type Transport } from "./transport";
 import type { FleetState } from "./types";
@@ -49,6 +50,8 @@ export type FleetFeed = {
    * told is better than inferring, and the inference needs two payloads.
    */
   cadenceMs: number | null;
+  /** The newest successful payload delivered by the transport, even before React commits it. */
+  latestDeliveredState: () => FleetState | null;
   /** Ask now. Wired to the button the stale banner shows. */
   refresh: () => void;
 };
@@ -78,6 +81,11 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
   const [error, setError] = useState<string | null>(null);
   const [failures, setFailures] = useState(0);
   const [cadenceMs, setCadenceMs] = useState<number | null>(null);
+  /* Updated at the transport boundary, before React can batch the render. A
+     refusal callback uses this to preserve the real arrival order between a
+     payload and an answer that resolve in the same turn. */
+  const latestDelivered = useRef<FleetState | null>(null);
+  const latestDeliveredState = useCallback(() => latestDelivered.current, []);
   /* When the box was last collected, as of the previous payload — the other
      half of the subtraction above. A ref, because it is read inside the
      transport's callback and must not re-run the effect. */
@@ -89,25 +97,34 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
   useEffect(() => {
     const running = transport({
       onState: (next) => {
-        setState(next);
-        setReceivedAt(Date.now());
-        setError(null);
-        setFailures(0);
-        /* The gap between two DISTINCT collections, which is not the gap
-           between two polls: the server caches, so several polls in a row hand
-           back the same snapshot and `at > previous` is what tells them apart.
-           The last gap rather than an average, so a cadence that changes is
-           followed rather than smoothed away; the bounds throw out a clock jump
-           and a first payload whose `collectedAt` predates this tab. */
-        const at = next.collectedAt === null ? Number.NaN : Date.parse(next.collectedAt);
-        if (Number.isFinite(at)) {
-          const previous = lastCollected.current;
-          if (previous !== null && at > previous) {
-            const gap = at - previous;
-            if (gap >= 5_000 && gap <= 30 * 60_000) setCadenceMs(gap);
+        latestDelivered.current = next;
+        /* Every delivery is evidence, including a short-lived conflict or the
+           end of a dialog. React 19 otherwise batches two transport callbacks
+           in one turn and components see only the latter, which can restore a
+           refusal for an identical new dialog or erase an established conflict.
+           Deliveries are infrequent (poll snapshots today, SSE snapshots later),
+           so commit each one as the atomic observation the transport promises. */
+        flushSync(() => {
+          setState(next);
+          setReceivedAt(Date.now());
+          setError(null);
+          setFailures(0);
+          /* The gap between two DISTINCT collections, which is not the gap
+             between two polls: the server caches, so several polls in a row hand
+             back the same snapshot and `at > previous` is what tells them apart.
+             The last gap rather than an average, so a cadence that changes is
+             followed rather than smoothed away; the bounds throw out a clock jump
+             and a first payload whose `collectedAt` predates this tab. */
+          const at = next.collectedAt === null ? Number.NaN : Date.parse(next.collectedAt);
+          if (Number.isFinite(at)) {
+            const previous = lastCollected.current;
+            if (previous !== null && at > previous) {
+              const gap = at - previous;
+              if (gap >= 5_000 && gap <= 30 * 60_000) setCadenceMs(gap);
+            }
+            lastCollected.current = at;
           }
-          lastCollected.current = at;
-        }
+        });
       },
       onError: (message) => {
         // The state is deliberately untouched. See the header.
@@ -129,8 +146,9 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
       error,
       failures,
       cadenceMs,
+      latestDeliveredState,
       refresh: () => handle.current?.refresh(),
     }),
-    [state, receivedAt, error, failures, cadenceMs],
+    [state, receivedAt, error, failures, cadenceMs, latestDeliveredState],
   );
 }

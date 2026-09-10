@@ -3,13 +3,16 @@
 **Status:** in progress · revision 3 of the plan, after GPT Sol refused revision 1 and Fable
 arbitrated · worktree `session-continuity` · branch `worktree-session-continuity`
 
-**Where it stands, 2026-09-10 ~09:00 UTC.** Pushed to `dev` at `536b1b68` (from `fc509eb0`), after
-all 95 `tests/fleet-*` files passed on the tree merged with `origin/dev` and `npm run typecheck` was
-exit 0: Stage 1 and its two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. The
-Overseer has been told a dashboard restart is needed for any of it to reach the live page, the
-double-launch fix most urgently. **In flight:** Sol's Stage 1 round 2 (the last discovery round
-for that stage) and the shared-reader extraction. **Still to build:** 2b, 4b, the `role="region"`
-fix, the Read-again regressions, the Sessions-filter decision and the browser check.
+**Where it stands, 2026-09-10.** Pushed to `dev` at `536b1b68` after all 95 `tests/fleet-*` files
+passed on the tree merged with `origin/dev` and `npm run typecheck` was exit 0: Stage 1 and its
+two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. **The Overseer restarted the
+dashboard on `536b1b68` at 12:45Z** (its decision log, `1209bc70`), so all of that is live —
+including one tap on Start launching one session — and it chose to restart before Stage 1's second
+Sol round closed, on the grounds that the round re-checks four fixed P1s rather than reopening the
+design. **Since then** the shared single-flight reader (`e942f57c`, a behaviour-preserving
+refactor) is on `dev` at `3764afb6` and not yet live. **In flight:** Sol's Stage 1 round 2. **Still
+to build:** 2b, 4b, the `role="region"` fix and the Read-again regressions (5c), the
+Sessions-filter decision and the browser check.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -614,6 +617,27 @@ typecheck passed. Mutation checks on each fix were Sol's, and are in its answer.
 | F14 | `question A → refusal → no question → identical A` resurrected the old refusal | P1 established | **Fixed by Sol, accepted** — F7's rule that a transition through no dialog is a change, now made final rather than merely hidden. |
 | F15 | A replacement hidden entirely inside unverifiable readings cannot be detected, so the absolute guarantee is false | P1 established contract gap | **Guarantee narrowed**, the first of the two options Sol offered; see § What this guarantees. The second (withhold everything before a first verified reading) is the rule Fable's arbitration already declined. Not an overrule. |
 | F16 | `QuestionsPanel` owns a second `answering-disabled` latch for the same server-wide fact | P1 established, wider than the detail pane | **Accepted; follow-up.** `App` owns the one latch; `QuestionsPanel` takes it and its handler as props, and keeps only its dialog-scoped refusal local. |
+
+Stage 1 code review, **round 2** — the last discovery round — GPT Sol, 2026-09-10, on `c71ddbac`
+and `3b4d7a07` (`260910c-stage1-code-review-r2-sol.md`). Verdict: **refused the two commits as
+committed on F17–F21, fixed all five in the tree, and found no remaining P0 or P1 in Stage 1.**
+Its fixes verified by me before commit (gates below), and F17/F18 sent for an independent scoped
+check because they change the one hook every panel uses.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F17 | React batched a delivered payload and the answer's resolution into one turn, so the layout-effect ref (F13's fix) named the previous commit and an enabled payload that arrived *before* the refusal cleared it | P1 established | **Fixed by Sol, accepted; scoped check.** `useFleetState` records the newest *delivered* payload synchronously at the transport boundary (`latestDeliveredState`), and App latches against that. |
+| F18 | React batching erased intermediate evidence: `conflicting → unknown` and `question A → none → identical A`, delivered in one turn, rendered only their last member, so a conflict vanished and a stale refusal survived | P1 established | **Fixed by Sol, accepted; scoped check.** Each transport delivery is committed with `flushSync`. Sol's postmortem `docs/postmortems/260910b-react-batching-erased-transport-evidence.md` names the class — *a snapshot store was asked to preserve an event* — and records the rejected alternative (an event reducer at the transport boundary) with the condition for revisiting it: high-frequency delivery. Accepted as the narrow fix: snapshots arrive at most every five seconds. |
+| F19 | The route's 404 and its catch arm returned unstamped answers, which the browser accepted as an older server's | P1 established | **Fixed by Sol, accepted.** The 404 stamps `null`; the catch arm stamps the row's claim. |
+| F20 | The `moved` refusal claimed a read happened and that waiting would help — neither supported by a `null` stamp or a C→D→C sequence | P1 established | **Fixed by Sol, accepted.** The copy now says only that the answer named a different claim, and offers Read again "as it is now". |
+| F21 | The Questions tab's alarm said a refusal withheld buttons that could never have existed | P1 established | **Fixed by Sol, accepted.** One eligibility predicate, shared by the button gate and the alarm. |
+| F22 | The provenance wrapper stamped options that could be mutated during the `await` | P2 established | **Fixed by Sol, accepted** — primitives snapshotted before the await. |
+| F23, F24 | First-known world/claim, and two provenance policies, survived mutation | P2 established | **Fixed by Sol, accepted** — regressions added, each proved by its mutation. |
+
+**Round 1 missed F17–F21, and so did I.** Every earlier transition test pushed each payload in its
+own `act`, forcing a commit between states, so the tests shared the implementation's assumption
+that one delivery meant one render — the postmortem's "why nothing went red". Discovery for Stage 1
+is now closed; the F17/F18 check is scoped to those fixes and does not reopen it.
 
 **The Stage 1 follow-up — built**, an Opus subagent, from the three open rows above; every change
 seen red first, and every test that passed on the old code proved able to fail by a deliberate

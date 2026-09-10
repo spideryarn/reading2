@@ -1058,10 +1058,13 @@ export async function readOpeningMessages(opts: OpeningMessagesOptions): Promise
  *
  * **One stamp, applied once, over every arm** — rather than a field written
  * into each `return` below, where the next arm somebody adds could forget it.
+ * Snapshot the options before the first await so a caller cannot mutate the
+ * claim into a stamp for a conversation this invocation did not read.
  * `RecentMessagesOf` says why the stamp exists.
  */
 export async function readRecentMessages(opts: RecentMessagesOptions): Promise<RecentMessagesOf> {
-  return { ...(await readUnstamped(opts)), claudeSessionId: opts.claudeSessionId };
+  const asked = { ...opts };
+  return { ...(await readUnstamped(asked)), claudeSessionId: asked.claudeSessionId };
 }
 
 async function readUnstamped(opts: RecentMessagesOptions): Promise<RecentMessages> {

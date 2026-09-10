@@ -476,6 +476,20 @@ describe("every reading names the conversation it was asked to read", () => {
       chmodSync(file, 0o600);
     }
   });
+
+  it("stamps the claim captured when the read began even if a caller mutates its options", async () => {
+    const options: {
+      claudeSessionId: string | null;
+      dir: string | null;
+      projectsDir: string;
+    } = { claudeSessionId: null, dir: DIR, projectsDir: stage("") };
+    const pending = readRecentMessages(options);
+    options.claudeSessionId = UUID;
+
+    const res = await pending;
+    expect(res.kind).toBe("not-found");
+    expect(res.claudeSessionId).toBeNull();
+  });
 });
 
 describe("saying so, instead of returning nothing", () => {
