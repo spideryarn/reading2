@@ -9,10 +9,38 @@ two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. **The Oversee
 dashboard on `536b1b68` at 12:45Z** (its decision log, `1209bc70`), so all of that is live —
 including one tap on Start launching one session — and it chose to restart before Stage 1's second
 Sol round closed, on the grounds that the round re-checks four fixed P1s rather than reopening the
-design. **Since then** the shared single-flight reader (`e942f57c`, a behaviour-preserving
-refactor) is on `dev` at `3764afb6` and not yet live. **In flight:** Sol's Stage 1 round 2. **Still
-to build:** 2b, 4b, the `role="region"` fix and the Read-again regressions (5c), the
-Sessions-filter decision and the browser check.
+design. **That premise did not hold**: round 2 found five new P1s (F17–F21) in the code the
+restart put live — all rare or cosmetic, none dangerous — and the Overseer was told so. **It
+restarted again at 14:50Z on `67d28c58`** (decision log `2cf2b4c5`), which put live Stage 1's
+round-2 fixes and the shared single-flight reader, and logged its own lesson: *"restart on closed
+rounds, or say the code is one round short when restarting early."* **Stage 1 is closed** (two Sol
+rounds and an independent check of the round-2 fixes). **On `dev` since, not yet live:** Stage 2b
+(`0e3d92c0`). **Built, being committed:** 5c. **In flight:** 4b. **Still to do:** one combined Sol
+review of Stages 2 and 4, a small follow-up passing the abort signal through `messages-client.ts`,
+the Sessions-filter decision, the browser check, and Stage 5's review.
+
+**Stage 5c — built.** An Opus subagent; eight tests in a new `tests/fleet-detail-reader.test.tsx`,
+the ones that could fail seen red, the rest proved by mutation. *Read again* now uses the shared
+single-flight reader — one per effect run, keyed on the api and the identity, stopped on teardown —
+rather than a third copy of the mechanism. A tap in the frame before the button disables is
+**dropped, not coalesced**: it is a duplicate of the tap that just started the read, and a trailing
+read would be a second multi-megabyte disk read for a sub-second freshness gain. It adds a 30 s
+deadline (`MESSAGES_READ_DEADLINE_MS`) where there was none, so a read that never answers no longer
+leaves "Reading…" on screen for the life of the tab. It found one late-discovery sequence nothing
+covered — every `fleet-web` identity test goes through `App`, where a claim change also remounts
+the reader, so none could see the hook's own logic — and added it. The detail pane's focus target is
+now a named `<section>`, implicitly a `region`, so its label is announced; biome clean on those lines.
+**Its one flag, taken as a follow-up:** `MessagesApi.recent` takes no abort signal, so a read the
+page abandons still finishes on the server — the same class as F5 for the feed.
+
+**The abort follow-up — built** (`f5fe6fec`), an Opus subagent. `MessagesApi.recent(row, signal?)`
+hands the signal to `fetch` only when it is defined, the shape F5 set for the other two feeds.
+**It found the step the brief did not name:** `App` hands the page the messages API wrapped in
+`withClockSkew`, not the API itself, and that wrapper dropped the signal — so tests written against
+the hook alone would have passed while the production read stayed uncancellable. The wrapper now
+passes it on, with one test on the wrapper and one that mounts the real `App`. Seven of the eight
+new tests were red before any source change, and each abort test also asserts the signal was *not*
+aborted a moment earlier, so a signal that is always aborted cannot pass.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -639,6 +667,26 @@ own `act`, forcing a commit between states, so the tests shared the implementati
 that one delivery meant one render — the postmortem's "why nothing went red". Discovery for Stage 1
 is now closed; the F17/F18 check is scoped to those fixes and does not reopen it.
 
+**The scoped check of F17/F18 — an independent Opus agent, read-only: all four questions hold.**
+Removing `flushSync` in memory turned exactly the two F18 tests red and left both F17 tests green,
+so each fix stands on its own; `onState` is reached only after an `await` on every transport path,
+never from inside a render or effect, so `flushSync` is always legal there; every interleaving of a
+refusal and a delivery, including both in one turn, leaves `under` naming a payload delivered no
+later than the refusal; and a delivery was already one render, so nothing re-renders more than
+before. **Stage 1 is closed**: two Sol rounds, then an independent check of the round-2 P1 fixes,
+no open P0 or P1.
+
+Two notes it raised outside its scope, recorded rather than built:
+
+- **A transport that ever delivered from inside a render or effect would break F18 again**, since
+  `flushSync` would warn and fall back to batching. Nothing guards against it, so the rule is now a
+  fifth promise in `transport.ts`'s list of what a replacement must keep — which is where whoever
+  writes the SSE transport will read it.
+- **A named limit on the answering latch:** its boundary is the order payloads *arrive*, not the
+  order the server *sent* them. A poll response sent before a 503 but arriving after it could clear
+  the latch. It needs the server restarted with a different `FLEET_ANSWER_ENABLED` at exactly that
+  moment; comparing `servedAt` would close it. Not built.
+
 **The Stage 1 follow-up — built**, an Opus subagent, from the three open rows above; every change
 seen red first, and every test that passed on the old code proved able to fail by a deliberate
 mutation, restored afterwards.
@@ -676,6 +724,32 @@ stays a string because the renderers in `ActionButtons.tsx` take one.
 stale threshold of `2 × pollMs + ACTIONS_READ_DEADLINE_MS`, checked against the tests that pass
 `actionsPollMs={0}`; and `SessionQueue` currently draws its error *instead of* its status line,
 which 4b must check still leaves the items drawn underneath.
+
+### Stage 4b — built
+
+An Opus subagent: `SessionDetail.tsx`, a targeted edit to `ActionButtons.tsx`, and a new describe in
+`tests/fleet-web.test.tsx`. One line, `read {age} ago`, at the top of "Waiting to go to it", wearing
+a tooltip that says the age covers both the queue and the list of actions above it. It is absent
+before the first good read and while reads work; it appears once no read has worked for
+`actionsStaleAfterMs(pollMs) = 2 × pollMs + ACTIONS_READ_DEADLINE_MS` — 28 s at the real 10 s poll,
+because a working poll leaves at most one interval plus one read between good feeds and one read
+lost to its deadline adds at most one more — or at once when a read fails, followed in the alarm
+colour by the reason. At a 0 ms poll the deadline is the floor, so a feed is never stale on arrival.
+The last good queue stays drawn underneath.
+
+- **Drawn once, above the queue, rather than beside both the queue and the action buttons** — a
+  deliberate reading of F8's "beside the action and queue surfaces". The buttons come from a list
+  that does not change while the server runs, and a button posts and lets the server decide, so an
+  old list changes nothing you would do; an old queue does. The tooltip says the age covers both.
+- **A side effect on a shared component, caught and made opt-in.** Its first build changed the
+  empty-queue branch of `SessionQueue` to say "Nothing was waiting at the last read that worked."
+  when a last good read exists — right for the session detail, where the error is already drawn in
+  the age line above, but `SessionQueue` is shared with the **Overseer** tab's `FleetQueues`, which
+  draws no age: a held, empty queue with a failed read there lost its reason. Sent back: the new
+  sentence is now behind an `errorDrawnAbove` prop only `SessionDetail` sets, the Overseer tab's
+  wording is back as it was, and a test on that tab went red on the first build and passes now.
+- **One vacuous test of its own, caught by itself:** a regex beginning `\b` against text that runs
+  straight into it ("…go to itread 0s ago") made every `not.toMatch` pass whatever was drawn.
 
 **One reader, not two — built.** 4a reported that its `actionsReader` and Stage 3's `feedReader`
 repeated the same core almost line for line — one read in flight, one pending, a deadline racing

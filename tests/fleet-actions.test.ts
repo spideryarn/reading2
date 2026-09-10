@@ -613,6 +613,110 @@ describe("what may be killed, and what may never be", () => {
     if (!v.kill) expect(v.refusal).toBe("no-rule-matched");
   });
 
+  it("does not mistake vim's vitest-path argument for the executable", () => {
+    expect(isVitestRunner(proc({ comm: "vim", args: "vim /repo/node_modules/.bin/vitest" }))).toBe(false);
+  });
+
+  it("does not mistake grep's vitest entry-point argument for the executable", () => {
+    expect(isVitestRunner(proc({ comm: "grep", args: "grep x /repo/node_modules/vitest/vitest.mjs" }))).toBe(false);
+  });
+
+  it("does not mistake cat's vitest dist-file argument for the executable", () => {
+    expect(isVitestRunner(proc({ comm: "cat", args: "cat /repo/node_modules/vitest/dist/index.js" }))).toBe(false);
+  });
+
+  it("does not mistake an unrelated node script's vitest-path argument for its executable", () => {
+    expect(
+      isVitestRunner(proc({ args: "node /repo/scripts/something.mjs /repo/node_modules/.bin/vitest" })),
+    ).toBe(false);
+  });
+
+  it("does not look past Node's stdin script marker for a Vitest path", () => {
+    expect(isVitestRunner(proc({ args: "node - /repo/node_modules/.bin/vitest" }))).toBe(false);
+  });
+
+  it("refuses vim with a vitest-path argument under the test-suites policy", () => {
+    const verdict = killVerdict(
+      proc({ comm: "vim", args: "vim /repo/node_modules/.bin/vitest" }),
+      "test-suites",
+      CTX,
+    );
+
+    expect(verdict.kill).toBe(false);
+    if (!verdict.kill) expect(verdict.refusal).toBe("no-rule-matched");
+  });
+
+  it("recognises only direct or node-launched vitest executable positions", () => {
+    expect(
+      isVitestRunner(
+        proc({
+          args: "node /home/greg/code/spideryarn2/.claude/worktrees/x/node_modules/.bin/vitest run tests/a.test.ts",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isVitestRunner(
+        proc({
+          args: "/usr/bin/node --experimental-import-meta-resolve --require /home/greg/code/spideryarn2/.claude/worktrees/x/node_modules/vitest/suppress-warnings.cjs --conditions node --conditions development /home/greg/code/spideryarn2/.claude/worktrees/x/node_modules/vitest/dist/workers/forks.js",
+        }),
+      ),
+    ).toBe(true);
+    expect(isVitestRunner(proc({ args: "/repo/node_modules/.bin/vitest run" }))).toBe(true);
+  });
+
+  it("does not mistake a Node option value for the Vitest executable position", () => {
+    const titledEval = proc({
+      args: "node --title /repo/node_modules/.bin/vitest -e setInterval(()=>{},1000)",
+    });
+
+    expect(isVitestRunner(titledEval)).toBe(false);
+    const verdict = killVerdict(titledEval, "test-suites", CTX);
+    expect(verdict.kill).toBe(false);
+    if (!verdict.kill) expect(verdict.refusal).toBe("no-rule-matched");
+
+    expect(
+      isVitestRunner(proc({ args: "node --title census /repo/node_modules/.bin/vitest --version" })),
+    ).toBe(true);
+  });
+
+  it.each([
+    "node --inspect /repo/node_modules/.bin/vitest run",
+    "nodejs --require=x /repo/node_modules/.bin/vitest run",
+    "node --require x --import y --conditions development /repo/node_modules/.bin/vitest run",
+    "node -- /repo/node_modules/.bin/vitest run",
+    "node /repo␣with␣space/node_modules/.bin/vitest run",
+  ])("keeps the real Node-launched executable position in %s", (args) => {
+    expect(isVitestRunner(proc({ args }))).toBe(true);
+  });
+
+  it("refuses an unrecognised bare Node option rather than guessing its arity", () => {
+    expect(
+      isVitestRunner(
+        proc({ args: "node --future-option /repo/node_modules/.bin/vitest -e setInterval(()=>{},1000)" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not skip a real script after an unrecognised boolean Node option", () => {
+    const nonVitest = proc({
+      args: "node --abort-on-uncaught-exception /repo/node_modules/typescript/lib/tsc.js /repo/node_modules/.bin/vitest",
+    });
+
+    expect(isVitestRunner(nonVitest)).toBe(false);
+    const verdict = killVerdict(nonVitest, "test-suites", CTX);
+    expect(verdict.kill).toBe(false);
+    if (!verdict.kill) expect(verdict.refusal).toBe("no-rule-matched");
+  });
+
+  it("normalises the executable path before deciding that it is inside Vitest", () => {
+    expect(
+      isVitestRunner(
+        proc({ args: "node /repo/node_modules/vitest/dist/../../typescript/lib/tsc.js --version" }),
+      ),
+    ).toBe(false);
+    expect(isVitestRunner(proc({ args: "node /repo/node_modules/vitest/dist/cli.js --version" }))).toBe(true);
+  });
+
   it("does not kill a process merely because 'vitest' appears in its arguments", () => {
     // The trap diagnose-box-resources.md names: pgrep -f matches command lines,
     // not programs. An agent editing the config, or grepping for it, is not a
