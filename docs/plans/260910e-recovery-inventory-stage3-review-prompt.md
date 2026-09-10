@@ -84,4 +84,17 @@ These are already my doubts, so confirming them is worth less than anything you 
 
 ## Raw gate results (mine, on the committed candidate)
 
-(filled in before launch)
+- `npm run typecheck`: `TYPECHECK_EXIT=0` (all four projects).
+- `npx vitest run tests/fleet-recovery-feed.test.ts tests/fleet-recovery-route.test.ts
+  tests/fleet-recovery-panel.test.tsx tests/fleet-recovery-wiring.test.ts tests/fixture-ids.test.ts`:
+  `Test Files 5 passed (5)`, `Tests 67 passed (67)`, exit 0.
+- The implementer's runs: `npm run build:fleet` exit 0; 27 focused files / 1,283 tests `EXIT=0`;
+  the drill run for real, exit 0.
+- Red first was shown by mutation, because the code came before its tests: skipping a malformed
+  record, the inventory sentence on every row, a POST let through, and the `App.tsx` mount removed.
+  Each turned exactly its tests red.
+- The browser check, on a disposable store built by the drill and the implementer's own server:
+  the page shows the four drill sessions as the plan's Stage 3 status describes, with 0 buttons and
+  0 links, and nothing wider than the screen at 400 px.
+
+`App.tsx` carries one import line beyond the approved mount line; the mount needs it.

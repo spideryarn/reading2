@@ -28,6 +28,7 @@ import { OverseerPanel } from "./OverseerPanel";
 import { QueuePanel } from "./QueuePanel";
 import { QuestionsPanel } from "./QuestionsPanel";
 import { ReadinessPanel } from "./ReadinessPanel";
+import { RecoveryPanel } from "./RecoveryPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
@@ -511,6 +512,7 @@ export function App({
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
+            <RecoveryPanel refreshNonce={refreshNonce} nowMs={now} />
           </div>
         ) : null}
         {/* **Deploys takes no snapshot props, and that is the shape rather than

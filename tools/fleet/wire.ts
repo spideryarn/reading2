@@ -4356,3 +4356,198 @@ export type ReportsFeed =
       refused: number;
       problems: ReportWireProblem[];
     };
+
+/* ---------------- Recovery inventory: interrupted work, GET /api/recovery (260910e) ---------------- */
+
+/**
+ * **What the Overseer recorded about work a world change interrupted** —
+ * `~/.overseer/recovery.json`, parsed by tools/fleet/recovery-feed.ts under its
+ * own validator (fleet does not import the daemon's store), projected to the
+ * first page, and drawn by `RecoveryPanel`.
+ * docs/plans/260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md § 6.
+ *
+ * **Nothing here is a command.** Every string is a fact to read — a directory, a
+ * host, a conversation id — and none is assembled into something to paste into
+ * a terminal. `manual` carries the host and the directory as two fields for
+ * exactly that reason.
+ *
+ * The shapes below mirror tools/overseer/recovery-view.ts and recovery.ts arm
+ * for arm. A new arm there makes the feed's validator refuse the view, which
+ * the page then says, rather than drawing an arm it cannot name.
+ */
+export type RecoveryWireResolution =
+  | { disposition: "unresolved" }
+  | {
+      disposition: "resumed";
+      at: string;
+      /** Both tokens: a resumption is a DIFFERENT run holding the same verified conversation. */
+      evidence: { previousToken: string; token: string; conversationId: string };
+    }
+  | { disposition: "superseded"; at: string; evidence: { by: string } }
+  | { disposition: "dismissed"; at: string; evidence: { requestId: string; why: string } };
+
+/** A live row's facts, shown beside a record it may or may not be. */
+export type RecoveryWireLiveRow = {
+  tmuxId: string;
+  name: string;
+  dir: string | null;
+  claimedConversationId: string | null;
+  statusKey: string;
+  executionToken: string | null;
+  /** The conversation the row VERIFIABLY holds, or null. Never its claim. */
+  conversationId: string | null;
+};
+
+/** The daemon's classification, first match wins (recovery-view.ts § `classifyRecord`). */
+export type RecoveryWireClass =
+  | { kind: "unknown"; why: string }
+  | { kind: "already-live"; why: string; sameRun: boolean | null; row: RecoveryWireLiveRow }
+  | { kind: "present-but-unmatched"; why: string; row: RecoveryWireLiveRow }
+  | { kind: "ended-before-reboot"; why: string; statusKey: string; observedAt: string }
+  | { kind: "interrupted"; why: string };
+
+export type RecoveryWireDir =
+  | { kind: "exists"; path: string }
+  | { kind: "missing"; path: string; why: string }
+  | { kind: "not-recorded"; why: string }
+  /** The stat failed for a reason that is not absence. Never drawn as missing. */
+  | { kind: "cannot-tell"; path: string; why: string };
+
+export type RecoveryWireWorktree =
+  | { kind: "none" }
+  | { kind: "recorded"; name: string; dir: string }
+  | { kind: "not-recorded"; name: string; why: string };
+
+export type RecoveryWireNotFoundReason =
+  | "no-claude-session-id"
+  | "malformed-claude-session-id"
+  | "no-projects-directory"
+  | "no-transcript-file";
+
+export type RecoveryWireTranscript =
+  | { kind: "found"; conversationId: string; path: string; via: "slug-guess" | "scan"; mtime: string | null }
+  /** Found under the CLAIM, which outlives its conversation: drawn as UNVERIFIED, never a resume. */
+  | { kind: "found-under-claim"; claimedConversationId: string; path: string; mtime: string | null; why: string }
+  | { kind: "not-found"; under: "verified" | "claim"; conversationId: string; reason: RecoveryWireNotFoundReason; why: string }
+  /** The search stopped at its project-directory bound (Sol's F20): it cannot say. Never drawn as not-found. */
+  | { kind: "cannot-tell"; under: "verified" | "claim"; conversationId: string; why: string }
+  | { kind: "no-conversation"; why: string };
+
+export type RecoveryWireResume =
+  | { kind: "supported"; conversationId: string; transcriptPath: string }
+  | { kind: "not-supported"; why: string }
+  /** A shell or a manual job: a host and a directory, as two facts. */
+  | { kind: "manual"; host: string; dir: string | null; why: string };
+
+export type RecoveryWireEvidence =
+  | {
+      kind: "checked";
+      dir: RecoveryWireDir;
+      worktree: RecoveryWireWorktree;
+      transcript: RecoveryWireTranscript;
+      /** `register-floor` is a floor — alive at least this recently — and is drawn with `≥`. */
+      lastActivity: { at: string; source: "transcript" | "register-floor" };
+      resume: RecoveryWireResume;
+    }
+  | { kind: "unavailable"; why: string };
+
+/** What the fold itself kept of the register entry. Null for an oversize stub or a legacy stub. */
+export type RecoveryWireEntry = {
+  /** Null when the launcher's metadata is legacy and recorded none. */
+  dir: string | null;
+  worktree: string | null;
+  /** A FLOOR, never a reading. */
+  lastSeenAlive: string;
+  lastStatusKey: string;
+};
+
+/** The last accepted observation of the session. Null when nobody watched it go. */
+export type RecoveryWireLastSeen = {
+  statusKey: string;
+  /** For reading only, never a command. */
+  title: string | null;
+  harness: string | null;
+  collectedAt: string;
+};
+
+export type RecoveryWireDisappearance = {
+  goneWhy: string;
+  generation: "same" | "changed" | "unverifiable";
+  producerRun: "same" | "changed" | "cannot-tell";
+  watched: boolean;
+  bootChanged: boolean;
+};
+
+/**
+ * Three states, never one with optional fields: a record the daemon resolved; an
+ * unresolved record its latest view did not classify (no view yet, an
+ * unreadable view, or a record newer than the pass); and one it did.
+ */
+export type RecoveryWireRecordState =
+  | { kind: "resolved"; resolution: Exclude<RecoveryWireResolution, { disposition: "unresolved" }> }
+  | { kind: "unchecked"; why: string }
+  | { kind: "classified"; classification: RecoveryWireClass; evidence: RecoveryWireEvidence };
+
+export type RecoveryWireRecord = {
+  id: string;
+  key: string;
+  name: string;
+  /** When it disappeared. */
+  at: string;
+  origin: "journal" | "legacy";
+  /** The index holds a stub; the full candidate is in events.jsonl. */
+  oversize: boolean;
+  entry: RecoveryWireEntry | null;
+  lastSeen: RecoveryWireLastSeen | null;
+  disappearance: RecoveryWireDisappearance | null;
+  state: RecoveryWireRecordState;
+};
+
+/**
+ * The daemon's latest view. **`not-yet-checked` is its own state**: `view` is
+ * null until the daemon's first pass after a start, and the records are then
+ * shown with their classification unknown — never as an empty list.
+ */
+export type RecoveryWireView =
+  | { kind: "not-yet-checked"; why: string }
+  | { kind: "unreadable"; why: string }
+  | {
+      kind: "checked";
+      checkedAt: string;
+      /** `untrusted` makes every record `unknown`; its sentence is drawn once, as a banner. */
+      inventory: { kind: "trusted"; collectedAt: string; rows: number } | { kind: "untrusted"; why: string };
+    };
+
+export type RecoveryWireReplay =
+  | { kind: "ran"; worldChanges: number; derived: number; scannedBytes: number }
+  | { kind: "not-run"; why: string };
+
+/**
+ * `GET /api/recovery`. **No failure arm carries a list**: `absent`, `unreadable`,
+ * `unsupported-schema` and `oversized` each say why there is nothing to show,
+ * and only `published` has records — which may then genuinely be none.
+ */
+export type RecoveryFeed =
+  | {
+      schema: 1;
+      kind: "published";
+      composedAt: string;
+      path: string;
+      writtenAt: string | null;
+      view: RecoveryWireView;
+      replay: RecoveryWireReplay;
+      /** Candidates past the index's capacity: in events.jsonl only, and not listed anywhere else. */
+      overflow: number;
+      /** Records the index holds. */
+      total: number;
+      /** Of which unresolved. */
+      unresolved: number;
+      /** Records past the first page. */
+      olderCount: number;
+      /** The first page: unresolved first, grouped with interrupted first, newest disappearance first. */
+      records: RecoveryWireRecord[];
+    }
+  | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
+  | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };

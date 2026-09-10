@@ -436,7 +436,13 @@ Tests, red first (the spec's list, plus the spec's failed-collection rule):
   request, retention of unresolved, a refused payload in the daemon) each turned exactly their
   tests red. Green: 53 of 53 on the two Stage 2 files; 26 focused files / 773 tests `EXIT=0`;
   typecheck exit 0. On the manager's own run: typecheck exit 0, and the three recovery suites 89 of 89.
-- [ ] Sol review; commit.
+- [x] Sol review, round 1 (timed out, fixes salvaged) and round 2 (read-only); an independent Opus
+  check; the review fixes; a narrow Sol check of the four P1 fixes; Fable's settle of F22; commit.
+  **Done, 2026-09-10.** The commits, in order: `730aec9d` the stage, `defba055` round 1's salvage,
+  `c91c35cf` the review fixes, `2ce27ca5` F22b, `f938b023` the merge from `dev`, `b3475059` F22c and
+  the reports-timer test. The merge result differs from `dev`'s tip only in this branch's own files.
+  All 29 lines it deletes are this branch superseding its own older lines, or `dev`'s inline timer
+  clearing now inside `stopTimers()`.
 
 **Sol's round 1 timed out, and left fixes but no verdict.** The writable review (`--effort high`,
 30 minutes) was killed at 1,800 s (`EXIT=1`) before it wrote an answer. No Codex process survived
@@ -625,7 +631,49 @@ Files: `tools/fleet/wire.ts` (appended block), `tools/fleet/recovery-feed.ts` (n
 - `npm run build:fleet`; the full suite through `scripts/tmux-job.ts`; typecheck; lint the touched
   files.
 
-- [ ] Implementation, tests red → green, the browser check, full suite; Sol review; commit; push.
+- [x] Implementation (**Opus subagent**). Red first was shown by mutation, because the code was written
+  before its tests. Each mutation turned exactly its tests red:
+  - the feed skipping a malformed record;
+  - the inventory sentence repeated on every row;
+  - a POST let through;
+  - the `App.tsx` mount removed.
+
+  Gates:
+  - typecheck exit 0;
+  - `build:fleet` exit 0;
+  - 27 focused files / 1,283 tests `EXIT=0`;
+  - the new suites: feed 20, route 13, panel 23, wiring 6;
+  - on the manager's own run, typecheck exit 0, and the five suites 67 of 67.
+- [x] **The acceptance, shown.** `scripts/overseer-recovery-drill.ts` drives the real daemon through
+  boot B1 / generation G1, with four sessions. Then comes an empty post-reboot snapshot under B2,
+  then G2 with one session back under a new run. The page was served from that disposable store on
+  a server of the subagent's own (port 8791; the shared 8787 was untouched). The manager looked at
+  the screenshots, at 1280 px and 400 px:
+  - *Interrupted*: `drill-dir-deleted`, with its directory **missing** and its transcript not found.
+    `drill-shell-job`, marked manual, "on spideryarn-box, in …".
+  - *Stopped before the world change*: `drill-claude-exited`, last seen `no-claude`.
+  - *Resolved*: `drill-claude-working`, resumed, with both run tokens.
+
+  The page has no buttons, no links and no command text. Its footer reads "Read-only. Nothing on
+  this page starts, resumes or dismisses anything." Nothing wider than the screen at 400 px. No
+  console errors.
+- [ ] Sol review; commit; full suite; push.
+
+Status, 2026-09-10: implemented, awaiting its read-only Sol review. The shared-file hunks:
+
+- `server.ts`: the three approved lines.
+- `App.tsx`: the approved mount line, **plus its import line**. The mount cannot exist without it,
+  and the Overseer was told.
+- `wire.ts`: 17 `Recovery*` types, appended after `work-reports`' block.
+
+Decisions the implementer made, recorded so the review can check them:
+
+1. **One malformed record makes the whole index `unreadable`**, and the page names the record. It
+   never shows a shorter list. That is how the store itself restores the file.
+2. **The first page is the 100 records the daemon's view pass checked**, in its order, then grouped
+   with interrupted first, so old unchecked records cannot push classified ones off the page.
+3. **GET and HEAD** only, like `routes-decisions`.
+4. **A 16 MiB input ceiling**, checked on the open file before any read.
 
 ## What this deliberately does not do
 
