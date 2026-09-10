@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { decideAdmission as gateDecideAdmission, type AdmissionDecision, type MemorySnapshot } from "../../vitest-admission.js";
 import type {
+  AdmissionCensusState,
   AdmissionOutcome,
   AdmissionPayload,
   AdmissionPolicy,
@@ -25,6 +26,8 @@ export type AdmissionRouteDeps = {
   resolveParallelWorkers(): number;
   policyVersion: number;
   readRefusals(): AdmissionRefusalJournal;
+  readCensus(): AdmissionCensusState;
+  censusCadenceMs: number;
   decideAdmission?: ((args: {
     nominalWorkers: number;
     snapshot: MemorySnapshot;
@@ -105,7 +108,20 @@ function payload(
   } catch (cause) {
     journal = { kind: "unreadable", why: `reading the refusal journal threw: ${message(cause)}` };
   }
-  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs(), journal };
+  let census: AdmissionCensusState;
+  try {
+    census = deps.readCensus();
+  } catch (cause) {
+    census = {
+      kind: "failed",
+      label: "observed",
+      why: `reading the admission census threw: ${message(cause)}`,
+      failedAtMs: deps.nowMs(),
+      cadenceMs: deps.censusCadenceMs,
+      lastGood: null,
+    };
+  }
+  const base = { schema: 1 as const, request, computedAtMs: deps.nowMs(), journal, census };
   if (explanation.label === "forecast") {
     return {
       ...base,

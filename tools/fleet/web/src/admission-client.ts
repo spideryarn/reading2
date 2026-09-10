@@ -69,6 +69,36 @@ export type AdmissionJournalView =
   | { kind: "directory-absent" }
   | { kind: "unreadable"; why: string };
 
+export type AdmissionCensusClassView = "test" | "codex-batch" | "browser";
+
+export type AdmissionCensusCountsView = {
+  byClass: Record<AdmissionCensusClassView, { roots: number; uncertain: number }>;
+  changedUnderRead: number;
+  unreadable: number;
+  processesSeen: number;
+};
+
+export type AdmissionCensusView =
+  | { kind: "not-yet-computed"; label: "observed"; startedAtMs: number }
+  | {
+      kind: "value";
+      label: "observed";
+      census: AdmissionCensusCountsView;
+      startedAtMs: number;
+      completedAtMs: number;
+      durationMs: number;
+      cadenceMs: number;
+    }
+  | {
+      kind: "failed";
+      label: "observed";
+      why: string;
+      failedAtMs: number;
+      cadenceMs: number;
+      lastGood: { census: AdmissionCensusCountsView; startedAtMs: number; completedAtMs: number } | null;
+    }
+  | { kind: "unreadable"; why: string };
+
 export type AdmissionView =
   | {
       kind: "answer";
@@ -79,6 +109,7 @@ export type AdmissionView =
       policy: AdmissionPolicyView;
       outcome: AdmissionForecastOutcomeView;
       journal: AdmissionJournalView;
+      census: AdmissionCensusView;
     }
   | {
       kind: "answer";
@@ -88,8 +119,15 @@ export type AdmissionView =
       requestKind: "review" | "browser";
       outcome: { kind: "not-modelled"; why: string };
       journal: AdmissionJournalView;
+      census: AdmissionCensusView;
     }
-  | { kind: "no-answer"; source: "browser" | "server"; why: string };
+  | {
+      kind: "no-answer";
+      source: "browser" | "server";
+      why: string;
+      /** A valid census survives an independently unreadable forecast. */
+      census: AdmissionCensusView | null;
+    };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -123,8 +161,12 @@ function dateInstant(value: unknown): number | null {
     : null;
 }
 
-function noAnswer(why: string, source: "browser" | "server" = "browser"): AdmissionView {
-  return { kind: "no-answer", source, why };
+function noAnswer(
+  why: string,
+  source: "browser" | "server" = "browser",
+  census: AdmissionCensusView | null = null,
+): AdmissionView {
+  return { kind: "no-answer", source, why, census };
 }
 
 function parseRequestKind(raw: unknown): AdmissionRequestKind | null {
@@ -265,6 +307,121 @@ function parseJournal(raw: unknown): AdmissionJournalView {
   return { kind: "read", entries: entries as AdmissionRefusalEntryView[], unparseableLines };
 }
 
+function unreadableCensus(why: string): AdmissionCensusView {
+  return { kind: "unreadable", why };
+}
+
+function parseCensusCounts(raw: unknown): AdmissionCensusCountsView | null {
+  if (!isRecord(raw) || !isRecord(raw["byClass"])) return null;
+  const byClass = raw["byClass"];
+  const parseClass = (name: AdmissionCensusClassView): { roots: number; uncertain: number } | null => {
+    const value = byClass[name];
+    if (!isRecord(value)) return null;
+    const roots = nonNegativeInteger(value["roots"]);
+    const uncertain = nonNegativeInteger(value["uncertain"]);
+    return roots === null || uncertain === null ? null : { roots, uncertain };
+  };
+  const test = parseClass("test");
+  const codexBatch = parseClass("codex-batch");
+  const browser = parseClass("browser");
+  const changedUnderRead = nonNegativeInteger(raw["changedUnderRead"]);
+  const unreadable = nonNegativeInteger(raw["unreadable"]);
+  const processesSeen = nonNegativeInteger(raw["processesSeen"]);
+  if (
+    test === null ||
+    codexBatch === null ||
+    browser === null ||
+    changedUnderRead === null ||
+    unreadable === null ||
+    processesSeen === null
+  ) {
+    return null;
+  }
+  const accountedFor =
+    test.roots +
+    test.uncertain +
+    codexBatch.roots +
+    codexBatch.uncertain +
+    browser.roots +
+    browser.uncertain +
+    changedUnderRead +
+    unreadable;
+  if (!Number.isSafeInteger(accountedFor) || accountedFor > processesSeen) return null;
+  return {
+    byClass: { test, "codex-batch": codexBatch, browser },
+    changedUnderRead,
+    unreadable,
+    processesSeen,
+  };
+}
+
+function parseCensus(raw: unknown): AdmissionCensusView {
+  if (!isRecord(raw)) {
+    return unreadableCensus("the response did not contain a readable process census state");
+  }
+  if (raw["label"] !== "observed") {
+    return unreadableCensus("the response's process census had an unknown signal label");
+  }
+  if (raw["kind"] === "not-yet-computed") {
+    const startedAtMs = dateInstant(raw["startedAtMs"]);
+    return startedAtMs === null
+      ? unreadableCensus("the response's unfinished process census had an unreadable start time")
+      : { kind: "not-yet-computed", label: "observed", startedAtMs };
+  }
+  if (raw["kind"] === "value") {
+    const census = parseCensusCounts(raw["census"]);
+    const startedAtMs = dateInstant(raw["startedAtMs"]);
+    const completedAtMs = dateInstant(raw["completedAtMs"]);
+    const durationMs = nonNegativeInteger(raw["durationMs"]);
+    const cadenceMs = positiveInteger(raw["cadenceMs"]);
+    if (
+      census === null ||
+      startedAtMs === null ||
+      completedAtMs === null ||
+      durationMs === null ||
+      cadenceMs === null ||
+      completedAtMs < startedAtMs
+    ) {
+      return unreadableCensus("the response's process census value contained an unreadable field");
+    }
+    return { kind: "value", label: "observed", census, startedAtMs, completedAtMs, durationMs, cadenceMs };
+  }
+  if (raw["kind"] === "failed") {
+    const why = nonEmptyString(raw["why"]);
+    const failedAtMs = dateInstant(raw["failedAtMs"]);
+    const cadenceMs = positiveInteger(raw["cadenceMs"]);
+    const rawLastGood = raw["lastGood"];
+    let lastGood: {
+      census: AdmissionCensusCountsView;
+      startedAtMs: number;
+      completedAtMs: number;
+    } | null;
+    if (rawLastGood === null) {
+      lastGood = null;
+    } else if (isRecord(rawLastGood)) {
+      const census = parseCensusCounts(rawLastGood["census"]);
+      const startedAtMs = dateInstant(rawLastGood["startedAtMs"]);
+      const completedAtMs = dateInstant(rawLastGood["completedAtMs"]);
+      if (
+        census === null ||
+        startedAtMs === null ||
+        completedAtMs === null ||
+        completedAtMs < startedAtMs
+      ) {
+        return unreadableCensus("the response's failed process census had an unreadable last value");
+      }
+      lastGood = { census, startedAtMs, completedAtMs };
+    } else {
+      return unreadableCensus("the response's failed process census had an unreadable last value");
+    }
+    if (why === null || failedAtMs === null || cadenceMs === null) {
+      return unreadableCensus("the response's failed process census contained an unreadable field");
+    }
+    return { kind: "failed", label: "observed", why, failedAtMs, cadenceMs, lastGood };
+  }
+  return unreadableCensus("the response carried a process census state this page does not understand");
+}
+
 /** Parse an unknown response body without throwing or manufacturing values. */
 export function parseAdmission(raw: unknown): AdmissionView {
   if (!isRecord(raw) || raw["schema"] !== 1) {
@@ -272,9 +429,10 @@ export function parseAdmission(raw: unknown): AdmissionView {
   }
   const computedAtMs = dateInstant(raw["computedAtMs"]);
   const journal = parseJournal(raw["journal"]);
+  const census = parseCensus(raw["census"]);
   const requestKind = parseRequestKind(raw["request"]);
   if (requestKind === null || !isRecord(raw["outcome"])) {
-    return noAnswer("the admission response was missing a readable request or outcome");
+    return noAnswer("the admission response was missing a readable request or outcome", "browser", census);
   }
 
   if (raw["label"] === "not-modelled") {
@@ -285,7 +443,11 @@ export function parseAdmission(raw: unknown): AdmissionView {
       why === null ||
       "policy" in raw
     ) {
-      return noAnswer("the admission response's not-modelled answer was not a shape this page understands");
+      return noAnswer(
+        "the admission response's not-modelled answer was not a shape this page understands",
+        "browser",
+        census,
+      );
     }
     return {
       kind: "answer",
@@ -294,18 +456,23 @@ export function parseAdmission(raw: unknown): AdmissionView {
       requestKind,
       outcome: { kind: "not-modelled", why },
       journal,
+      census,
     };
   }
 
   if (raw["label"] !== "forecast" || requestKind !== "test") {
-    return noAnswer("the admission response carried an outcome or label this page does not understand");
+    return noAnswer(
+      "the admission response carried an outcome or label this page does not understand",
+      "browser",
+      census,
+    );
   }
   const policy = parsePolicy(raw["policy"]);
   const outcome = parseForecastOutcome(raw["outcome"]);
   if (policy === null || outcome === null) {
-    return noAnswer("the admission forecast contained a field this page could not read");
+    return noAnswer("the admission forecast contained a field this page could not read", "browser", census);
   }
-  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome, journal };
+  return { kind: "answer", label: "forecast", computedAtMs, requestKind, policy, outcome, journal, census };
 }
 
 function describe(cause: unknown): string {
@@ -315,14 +482,17 @@ function describe(cause: unknown): string {
 }
 
 /** The injectable operation the section uses. Tests replace this, never `fetch`. */
-export type AdmissionApi = { forecast: () => Promise<AdmissionView> };
+export type AdmissionApi = { forecast: (options?: { signal?: AbortSignal }) => Promise<AdmissionView> };
 
 export function makeAdmissionApi(fetchImpl: typeof fetch = fetch): AdmissionApi {
   return {
-    async forecast(): Promise<AdmissionView> {
+    async forecast(options = {}): Promise<AdmissionView> {
       let response: Response;
       try {
-        response = await fetchImpl(ADMISSION_URL, { cache: "no-store" });
+        const request: RequestInit = options.signal === undefined
+          ? { cache: "no-store" }
+          : { cache: "no-store", signal: options.signal };
+        response = await fetchImpl(ADMISSION_URL, request);
       } catch (cause) {
         return noAnswer(`the dashboard could not be reached: ${describe(cause)}`);
       }
@@ -342,5 +512,5 @@ export function makeAdmissionApi(fetchImpl: typeof fetch = fetch): AdmissionApi 
 
 /** The real operation, with `fetch` deliberately resolved only when called. */
 export const httpAdmissionApi: AdmissionApi = {
-  forecast: () => makeAdmissionApi().forecast(),
+  forecast: (options) => makeAdmissionApi().forecast(options),
 };

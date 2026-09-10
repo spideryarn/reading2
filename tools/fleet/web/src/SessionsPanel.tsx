@@ -53,6 +53,7 @@ import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain, type Tip } from "./Tooltip";
+import { useDetailTargetKey } from "./continuity";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
 import type { MessagesApi } from "./messages-client";
@@ -452,6 +453,8 @@ export function SessionsPanel({
   collected,
   unreadableRows,
   answeringEnabled,
+  answeringRefusal,
+  onAnsweringRefused,
   tmuxServerPid,
   order,
   onOrder,
@@ -489,6 +492,15 @@ export function SessionsPanel({
    * types.ts § `AnsweringReading`.
    */
   answeringEnabled: AnsweringReading;
+  /**
+   * A `answering-disabled` refusal the server has already made, latched by
+   * `App` — and the way to tell it about a new one. **Passed straight through**
+   * for the same reason as the flag above: the list cards have no answer
+   * buttons, so nothing here reads either. SessionDetail.tsx § `answeringRefusal`
+   * says why the owner has to be `App` and not this panel.
+   */
+  answeringRefusal: string | null;
+  onAnsweringRefused: (why: string) => void;
   /**
    * Which tmux server every `$…` and `%…` below belongs to. Passed through for
    * the same reason: it is drawn beside the handles in the detail pane, which
@@ -568,6 +580,16 @@ export function SessionsPanel({
     selectedId === null || wrongWorld ? null : (sorted.find((r) => r.id === selectedId) ?? null);
 
   /**
+   * **WHAT THE DETAIL PANE IS MOUNTED UNDER** — the run, the tmux server and the
+   * conversation claim, each of which moves the key only between two readings
+   * that were both taken and disagree. See the `key` below, and continuity.ts §
+   * `useDetailTargetKey`, which owns what counts as a change of target so that
+   * this file does not keep a second version of the rule. Called
+   * unconditionally, `null` included, because it is a hook.
+   */
+  const detailKey = useDetailTargetKey(selected, tmuxServerPid);
+
+  /**
    * **BRING THE DETAIL ONTO THE SCREEN WHEN A SELECTION ARRIVES.**
    *
    * A selection can now come from somewhere the reader cannot see: the Recent
@@ -624,7 +646,7 @@ export function SessionsPanel({
   const scrolledFor = useRef<string | null>(null);
   if (selectedId === null) scrolledFor.current = null;
   const detailRef = useCallback(
-    (node: HTMLDivElement | null) => {
+    (node: HTMLElement | null) => {
       if (node === null || selectedId === null || scrolledFor.current === selectedId) return;
       scrolledFor.current = selectedId;
       node.focus?.({ preventScroll: true });
@@ -681,13 +703,36 @@ export function SessionsPanel({
       <MissingSession id={selectedId} onBack={() => onSelect(null)} />
     ) : (
       <SessionDetail
-        /* Keyed by the session, so switching rows resets the message box and
-           the last outcome rather than carrying one row's typing onto another
-           row's terminal. */
-        key={selected.id}
+        /* **KEYED BY THE TMUX WORLD, SESSION, CONVERSATION CLAIM AND WHICH RUN
+           IS IN ITS PANE**, so that
+           everything this component holds — the message box, the two outcome
+           cards, the dialog refusal — is thrown away when it stops being about
+           the agent it was created against.
+
+           Four changes reset it and they are all changes of resolvable target:
+           a different tmux server, a different row, a different conversation
+           claim, and a **verifiably replaced process** under this one.
+           A pane outlives the `claude` inside it, and across that replacement
+           the handle, the pane pid and `CLAUDE_SESSION_ID` are all unchanged —
+           so `key={selected.id}` went on carrying one agent's half-typed
+           message onto the terminal of the one that replaced it.
+
+           **WHAT DOES NOT RESET IT, and this is the half worth stating:** a
+           reading that could not be taken and comes back the same — an
+           unverifiable execution, a failed `list-panes` (`tmuxServerPid: null`),
+           a claim one collection could not read. On a loaded
+           box that is the normal weather rather than an event — the probe's own
+           tolerance was widened to 15 s in September for exactly this — and a
+           key built from the token itself would read `T → "" → T`, remount
+           twice, and eat whatever was being typed. continuity.ts holds the last
+           token that was VERIFIED and advances only on `continuityOf` saying
+           `replaced`. */
+        key={detailKey}
         row={selected}
         now={now}
         answeringEnabled={answeringEnabled}
+        answeringRefusal={answeringRefusal}
+        onAnsweringRefused={onAnsweringRefused}
         tmuxServerPid={tmuxServerPid}
         steer={steer}
         rename={rename}
@@ -837,10 +882,25 @@ export function SessionsPanel({
 
       {detail !== null && panes === 1 ? (
         /* ONE PANE, SOMETHING SELECTED: the detail is a push. The list is not
-           on screen at all, and the detail carries the button back to it. */
-        <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:mx-auto tw:max-w-3xl tw:pt-2 tw:outline-none">
+           on screen at all, and the detail carries the button back to it.
+
+           **A `<section>` WITH A NAME, WHICH IS WHAT MAKES THE LABEL COUNT**,
+           here and on the two-pane target below. Selecting a session moves
+           focus into this element (`detailRef`). It was a `div`, and an
+           `aria-label` on an element with no role may not be announced at all,
+           so a screen-reader user was moved somewhere with no name. A named
+           `<section>` has the `region` role implicitly: the ARIA role for a
+           significant part of the page a person may want to reach directly,
+           which is what this is. A named region is exposed as a landmark, and
+           its name is read out when focus moves into it. The element rather
+           than `role="region"` on a `div`, because the semantic element is
+           the one that cannot lose its role (biome's `useSemanticElements`).
+           `tabIndex={-1}` keeps it focusable by script and out of the tab
+           order. Not `group`, which is a set of controls rather than a place,
+           and not `dialog`, because nothing behind it is inert. */
+        <section ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:mx-auto tw:max-w-3xl tw:pt-2 tw:outline-none">
           {detail}
-        </div>
+        </section>
       ) : detail !== null ? (
         /* TWO PANES. The list column is exactly `COLUMN_MIN_PX` wide, which is
            the same number `chooseColumns` gives a column up at — one constant,
@@ -850,9 +910,9 @@ export function SessionsPanel({
           style={{ gridTemplateColumns: `minmax(0, ${COLUMN_MIN_PX}px) minmax(0, 1fr)` }}
         >
           <div>{oneColumnList}</div>
-          <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:max-w-3xl tw:outline-none">
+          <section ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:max-w-3xl tw:outline-none">
             {detail}
-          </div>
+          </section>
         </div>
       ) : spread ? (
         <div

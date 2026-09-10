@@ -1,7 +1,46 @@
 # Session continuity: protect drafts and keep context current
 
-**Status:** planning · revision 3, after GPT Sol refused revision 1 and Fable arbitrated ·
-worktree `session-continuity` · branch `worktree-session-continuity`
+**Status:** in progress · revision 3 of the plan, after GPT Sol refused revision 1 and Fable
+arbitrated · worktree `session-continuity` · branch `worktree-session-continuity`
+
+**Where it stands, 2026-09-10.** Pushed to `dev` at `536b1b68` after all 95 `tests/fleet-*` files
+passed on the tree merged with `origin/dev` and `npm run typecheck` was exit 0: Stage 1 and its
+two follow-ups, Stage 2a, Stage 3 (closed), Stage 4a and Stage 5a. **The Overseer restarted the
+dashboard on `536b1b68` at 12:45Z** (its decision log, `1209bc70`), so all of that is live —
+including one tap on Start launching one session — and it chose to restart before Stage 1's second
+Sol round closed, on the grounds that the round re-checks four fixed P1s rather than reopening the
+design. **That premise did not hold**: round 2 found five new P1s (F17–F21) in the code the
+restart put live — all rare or cosmetic, none dangerous — and the Overseer was told so. **It
+restarted again at 14:50Z on `67d28c58`** (decision log `2cf2b4c5`), which put live Stage 1's
+round-2 fixes and the shared single-flight reader, and logged its own lesson: *"restart on closed
+rounds, or say the code is one round short when restarting early."* **Stage 1 is closed** (two Sol
+rounds and an independent check of the round-2 fixes). **On `dev` since, not yet live:** Stage 2b
+(`0e3d92c0`). **Built, being committed:** 5c. **In flight:** 4b. **Still to do:** one combined Sol
+review of Stages 2 and 4, a small follow-up passing the abort signal through `messages-client.ts`,
+the Sessions-filter decision, the browser check, and Stage 5's review.
+
+**Stage 5c — built.** An Opus subagent; eight tests in a new `tests/fleet-detail-reader.test.tsx`,
+the ones that could fail seen red, the rest proved by mutation. *Read again* now uses the shared
+single-flight reader — one per effect run, keyed on the api and the identity, stopped on teardown —
+rather than a third copy of the mechanism. A tap in the frame before the button disables is
+**dropped, not coalesced**: it is a duplicate of the tap that just started the read, and a trailing
+read would be a second multi-megabyte disk read for a sub-second freshness gain. It adds a 30 s
+deadline (`MESSAGES_READ_DEADLINE_MS`) where there was none, so a read that never answers no longer
+leaves "Reading…" on screen for the life of the tab. It found one late-discovery sequence nothing
+covered — every `fleet-web` identity test goes through `App`, where a claim change also remounts
+the reader, so none could see the hook's own logic — and added it. The detail pane's focus target is
+now a named `<section>`, implicitly a `region`, so its label is announced; biome clean on those lines.
+**Its one flag, taken as a follow-up:** `MessagesApi.recent` takes no abort signal, so a read the
+page abandons still finishes on the server — the same class as F5 for the feed.
+
+**The abort follow-up — built** (`f5fe6fec`), an Opus subagent. `MessagesApi.recent(row, signal?)`
+hands the signal to `fetch` only when it is defined, the shape F5 set for the other two feeds.
+**It found the step the brief did not name:** `App` hands the page the messages API wrapped in
+`withClockSkew`, not the API itself, and that wrapper dropped the signal — so tests written against
+the hook alone would have passed while the production read stayed uncancellable. The wrapper now
+passes it on, with one test on the wrapper and one that mounts the real `App`. Seven of the eight
+new tests were red before any source change, and each abort test also asserts the signal was *not*
+aborted a moment earlier, so a signal that is always aborted cannot pass.
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -52,8 +91,19 @@ could be *presented under, or delivered to*, an execution other than the one it 
 
 > After this stage, no state the browser **holds and draws** about a session — a draft, a transcript
 > reading, an action outcome, a refusal — can be **presented under**, or **restored for**, a
-> conversation other than the one it was created against. Whether a keystroke **reaches** the right
-> conversation is not decided here: the server decides it, freshly, at the moment of the write.
+> conversation other than the one it was created against, **among the changes the browser has
+> evidence for**. Whether a keystroke **reaches** the right conversation is not decided here: the
+> server decides it, freshly, at the moment of the write.
+
+**The evidence clause is Sol's F15, and it is a limit, not a gap to close later.** A replacement that
+happens entirely inside readings the box could not verify — a session first seen unverifiable,
+replaced, and then verified for the first time as the new run — leaves the browser no evidence that
+anything changed, so nothing on the page can detect it. The only way to guarantee otherwise is to
+withhold or discard everything created before the first verified reading, which is Sol's F2/F3 rule
+that Fable's arbitration declined: on this box that would blank the dashboard in exactly the weather
+it is most needed. Stage 2's drafts are safe regardless — they persist only under a verified
+conversation and restore only under a live verification of the same one — so what this limit can
+leave behind is an outcome card, not a message.
 
 ### Delivery — what the server already protects, and the one thing it does not
 
@@ -189,7 +239,39 @@ reviewer fixes inside the stage and reports wider).
 ### Stage 1 — Detail state follows the execution, not the handle
 
 Roadmap checkbox 1. Files: `continuity.ts` (new), `SessionsPanel.tsx`, `SessionDetail.tsx`,
-`App.tsx`, `RecentMessages.tsx`, `tests/fleet-web.test.tsx`.
+`App.tsx`, `RecentMessages.tsx`, `tests/fleet-web.test.tsx`, and two lines in
+`tests/fleet-overseer-badge.test.tsx` (it mounts `SessionsPanel` directly and needed the new props).
+
+**Status: built, awaiting Sol's stage review.** Implemented by an Opus subagent, reviewed by me
+before commit; ten new tests, each seen red first. What the code taught the plan:
+
+- **The `identityOf` wording above was self-contradictory**, and the implementer caught it before I
+  did. Revision 3 said "the verified conversation id, or a stable kind/cause marker": that breaks
+  the existing sibling test (a claim change under one handle with an `unknown` reading gives two
+  equal identities), and `verified → unknown → verified` becomes three identities, putting a
+  transcript read on the refresh loop. **Built instead: the epoch key plus `row.claudeSessionId`**
+  — *which run* and *what the server actually fetches* (`server.ts:772` resolves `/api/messages`
+  from the row's claim). `useRecentMessages` calls `useExecutionEpoch` itself, so it does not rely
+  on its caller remounting it.
+- **My own review of the first build found two bugs.** (A) An intermediate version keyed the
+  `conflicting` arm on the *observed* conversation while the held turns were the *claimed* one's;
+  if the claim then caught up under the same process, nothing re-read and the previous
+  conversation's turns rendered with no heading and no caveat. (B) The dialog key used the raw
+  token, which is null on every unverifiable collection, so buttons the server had just refused came
+  back in exactly the weather this design exists for. Both now use the epoch; both have a test that
+  was seen red.
+- **One test was testing an impossible state**: a `conflicting` reading carrying the *same* token
+  as an earlier verified one. One process cannot change the `--session-id` on its own argv. It now
+  carries a new token.
+- **Two tests passed on the old code** until rewritten: the flicker test (nothing remounted before,
+  so nothing could be lost) and the two-unverifiable-sessions test (at one pane the list replaces
+  the detail, so moving A → B passes through "nothing selected" and remounts whatever the key is —
+  it now runs at a pinned 1280 px so selection moves directly).
+- **Checked and not a bug**: the App latch captures its payload before an `await`. Both the
+  payload's `answeringEnabled` and the tap-time `answering-disabled` read
+  `process.env["FLEET_ANSWER_ENABLED"]`, so they only disagree across a restart.
+- **Left alone, and noted for the debrief**: `QuestionsPanel` holds its own `answering-disabled`
+  state, a second latch for one server-wide fact.
 
 - [ ] `continuity.ts`: **`useExecutionEpoch(row: FleetRow | null)`**, called unconditionally, which
       keeps the last verified token **per `row.id`**. Its returned key always contains both the
@@ -233,7 +315,59 @@ its buttons back; a server-wide refusal survives a tab change.
 
 ### Stage 2 — Unsent drafts, per execution and per input
 
-Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
+Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, `MessageOverseerCard.tsx`,
+`BroadcastCard.tsx`, tests.
+
+**Status: split in two, and the first half is in flight.** Widening the stage to all three inputs
+(below) changed what it is blocked on. The composer half needs `SessionDetail.tsx` and
+`tests/fleet-web.test.tsx`, where Sol's Stage 1 reviewer has write access; the rest does not. So:
+
+- **2a — built**, an Opus subagent: `drafts.ts` and its one hook, the Overseer message card,
+  the broadcast box, and tests in a new `tests/fleet-drafts.test.tsx` plus the two cards' own test
+  files. Disjoint from both reviewers' write scopes. Every new test seen red against a stub with the
+  final signature; twelve deliberate mutations, each red on exactly its target test. What it taught
+  the plan:
+  - **A vacuous-test class, found and fixed.** `vi.spyOn(Storage.prototype, …)` under jsdom spies
+    on *Node's* `Storage`, not the one behind `window.sessionStorage`, so a "never reads the old
+    draft" test passed with a spy that never fired and the storage-refusal tests could not have
+    worked. Spies now go through `Object.getPrototypeOf(window.sessionStorage)`, and the test also
+    asserts the spy saw the key. The same shape as the `localStorage` shadowing note in
+    `src/web/install-hint.ts`, one layer down.
+  - **"One conversation per mount" is true of the composer and false of the Overseer card.** The
+    composer remounts per process; the Overseer card stays mounted while the Overseer moves between
+    rows and processes. So the hook takes an optional `scope` — the card passes
+    `useExecutionEpoch`'s key for the Overseer's row — and the fail-safe belongs to the **text**
+    rather than the mount: words that may be meant for another conversation stay on screen and are
+    never stored until the box is empty, after which persistence resumes. Taken literally, revision
+    3's "stop persisting for the rest of the mount" would have switched drafts off on that card for
+    the life of the tab after one Overseer change.
+  - **The Overseer card restores no draft under `conflicting`**, because its Send is not gated by
+    execution (the server's `verifyTarget` protects that send), and a draft written for one
+    conversation should not appear in front of a live button aimed at another.
+  - The shape the composer adopts in 2b: `useDraft({ purpose, address: draftAddressOf(reading) })`,
+    where `draftAddressOf` maps verified-and-verified → `verified`, `conflicting` → `hold(claimed)`,
+    `not-claimed` or a non-addressable harness → `hold(null)`, and everything else → `cannot-tell`.
+    `hold(claimed)` is already §3's "restore the claimed draft, never persist edits".
+  - Copy, one shown near Clear when it applies: *"This browser will not let the page keep a copy, so
+    a reload would lose this message."* / *"Too long to keep a copy of, so a reload would lose this
+    message."*
+- **2b — after Sol's Stage 1 round 2 lands**: the session composer's wiring, the composer under
+  each reading (Fable's table), and the `conflicting` restore. 2a is in (`08fa8e19`).
+
+  **Why round 2 stays write-capable rather than report-only so 2b could overlap it.** Round 2 can
+  write to `SessionDetail.tsx` and `tests/fleet-web.test.tsx`, which are 2b's files, so the only way
+  to run them together would be to take the reviewer's write access away. It would buy nothing: when
+  the Stage 1 follow-up finishes, the Stage 3 round-2 check, Stage 4a and Stage 1 round 2 are three
+  things running tests, which is `overseer.md`'s ceiling, so 2b could not start alongside them
+  anyway. Giving up the house default — a reviewer that fixes what it finds — for no gain in
+  throughput is a bad trade; 2b goes after.
+
+**Stage 4 was held rather than started alongside 2a.** With two reviewers and 2a running, three
+things in this worktree were running tests, and `docs/project/overseer.md` caps test-running work at
+three: *"beyond three the suites go red for reasons that are nobody's bug."* When 2a finished it was
+split the same way as this stage — **4a** (the hook, the client seam, and a new test file) started
+at once, disjoint from everything running; **4b** (drawing the age and error beside the queue in
+`SessionDetail`) waits for 2b.
 
 - [ ] `drafts.ts`: `useDraft(purpose, key)` over **sessionStorage** — per tab, dies with the tab,
       survives the reload iOS forces. Key `sy.draft.v1:<purpose>:<verified conversation id>`;
@@ -274,12 +408,39 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
       drop", the rule is now: a different verified conversation leaves the text **on screen**,
       persists nothing, and lets the disabled Send do the protecting. Dropping a person's words on
       the evidence of a process id was a bug wearing caution's clothes.
+
+      **How that meets Stage 1's remount**, which Fable's table did not have to reckon with: a
+      `conflicting` reading always arrives with a new process, so the detail pane has just been
+      remounted and its box is empty. "Keep on screen" therefore means **restore the draft stored
+      under the *claimed* conversation into the box** — the reading names it — with Send and Queue
+      disabled and further edits not persisted. A genuinely different *verified* conversation
+      (the claim itself changed) restores nothing: the old draft stays in storage under its own key
+      and comes back only if that conversation does.
+- [ ] **The composer under each reading** — Fable's table, composer rows. Assigned here because no
+      stage owned it in revision 3: *cannot tell* keeps Send and Queue live with one line beside
+      Send; *can tell* (`conflicting`, `not-claimed`, non-addressable harness) disables them with
+      `identityWriteGate`'s sentence. Typing is enabled in every arm. The gate supplies the sentence
+      and **not** the enable condition — its own header says a cached verdict is not authority, and
+      its refusals for the *cannot tell* arms are exactly what Fable ruled must not disable the
+      controls.
+- [ ] **One quiet limitation, stated rather than discovered.** A session whose Claude was started
+      without `--session-id`, in a pane that has `CLAUDE_SESSION_ID` set, reads
+      `conversation.kind === "unverifiable"` for as long as it runs, so its drafts never persist.
+      Harmless, because `verifyTarget` refuses a send to that pane anyway (`noUsableClaude`) — but
+      it is the kind of quiet gap that should be in the plan rather than found later as a bug.
 - [ ] Tests: suspend/resume restores the draft; a different token restores nothing and leaves the
       old draft unread in storage; storage that throws on the accessor, on `getItem`, and on
       `setItem`; Clear removes the key; over-cap text is not stored.
-- [ ] **v1 wires one input**: the session composer, the one that can reach a stranger's terminal.
-      `purpose` exists so the Overseer message card and the broadcast box are one line each later;
-      both are page-level rather than execution-level and are not part of this stage.
+- [ ] **All three inputs, not one.** Revision 3 wired only the session composer and deferred the
+      other two. That was a narrowing of the roadmap's *"per execution and input purpose"*, and
+      `docs/project/overseer.md` gate 2 is explicit that narrowing scope is never the agent's call —
+      *"scope is where his fifth options come from."* Widened back, 2026-09-10, and reported to the
+      Overseer as a correction rather than a request:
+      - the **session composer**, keyed by its row's verified conversation id;
+      - the **Overseer message card**, keyed by the Overseer row's verified conversation id — the
+        strongest case of the three, because the Overseer is the session relaunched most often;
+      - the **broadcast box**, keyed by purpose alone, because it has no single recipient and so
+        nothing for a replacement to inherit.
 
 **Not built, and it is Greg's call, not mine** (Overseer ruling, 2026-09-10 — logged as an
 assumption pending Greg rather than decided):
@@ -293,7 +454,28 @@ assumption pending Greg rather than decided):
 
 ### Stage 3 — The feed knows when it last read, and re-reads on evidence
 
-Roadmap checkbox 3. Files: `FeedPanel.tsx`, **`feed-client.ts`** (F5), tests.
+Roadmap checkbox 3. Files: `FeedPanel.tsx`, **`feed-client.ts`** (F5), a new
+`tests/fleet-feed-freshness.test.tsx` (it runs on fake timers throughout, so it is not folded into
+`fleet-feed-panel.test.tsx`), and one section of `docs/project/fleet-recent-messages.md`.
+
+**Status: built, one correction in flight, then Sol's stage review.** Implemented by an Opus
+subagent in parallel with Stage 1's review — the file sets do not overlap. Ten cases, each seen red
+first. Three of them (twenty identical snapshots, the `why`-only difference, cannot-loop) would have
+passed on the old code, since a page that never re-reads trivially "reads once"; each now ends with
+a real change that must cause a read, and the implementer broke the new code twice on purpose to
+prove they fail for the right reason. Judgment calls it made, all accepted: a 15 s read deadline
+(`FEED_READ_DEADLINE_MS`, three times the server's own per-session limit); the floor measured from
+when the last read *started*; only a change between two *known* tmux-server pids bypasses the floor,
+so a collector that intermittently omits the pid cannot use that path to escape it; a hidden tab
+defers only the reads the page starts itself; the first digest is a baseline, never a trigger.
+
+**The correction, and it is a flaw in the spec rather than the build.** F6's wording, accepted
+verbatim, put the execution reading's *kind* into the digest. The implementer flagged the
+consequence: every verified ↔ unknown flip counts as evidence, and on a loaded box that flip is
+routine, so the feed would re-read about once a minute — ~10 MB of transcript reads each time,
+triggered by nothing that changed a transcript. That is the very distinction Fable's ruling draws.
+The execution component is now **the last verified token per row id**, so a real replacement
+triggers a read and a flicker does not — the same idea as `useExecutionEpoch`, applied to many rows.
 
 Today `useFeed` fetches on mount and on the button, has a generation guard, and has **no clock, no
 error state and no abort**. A feed read costs the box ~250 ms and ~10 MB of transcript reads, so it
@@ -353,6 +535,30 @@ timeout or abort, and offers no age for its last good feed.
 
 Roadmap checkboxes 4 and 6.
 
+**Stage 5a — the creation-poll half — status: built, ahead of stage order, awaiting the Stage 5
+review.** Its files (`NewSessionPanel.tsx` and a new `tests/fleet-new-session-deadline.test.tsx`)
+overlap nothing else in flight, so it ran in parallel. Implemented by an Opus subagent. **It found
+two production bugs, and one of them could have launched two agents from one press:**
+
+- **A double tap on Start launched two sessions.** The only guard was the button's `disabled`,
+  which takes effect after the redraw, so two taps before it both reached `api.start`. Now a
+  `posting` ref guards the action itself — the same shape as the existing `blocked` guard for
+  dictation — released in a `finally` so an api that throws cannot leave the button dead. Red first:
+  `expected 2 to be 1`.
+- **A late poll answer could beat the deadline.** The deadline was checked only when the 3-second
+  interval ticked, and the tick landing exactly on the 4-minute mark does not pass it (`>`), so for
+  up to one interval a poll begun before the deadline could land and settle the launch as though it
+  were on time, with no give-up ever drawn. The clock is now also checked when an answer arrives,
+  before it is read. Red first, for both a late `started` and a late `failed`.
+- **The F9 trade-off, accepted as written:** a genuine `started` arriving a second after the
+  4-minute mark is thrown away and the panel says it stopped asking. The banner already sends the
+  reader to the session list, which is where that session will appear.
+- **Unmount mid-poll and tap-after-give-up passed on the old code**; each was proved able to fail by
+  a deliberate mutation (removing `clearInterval`; reusing the old launch's start time).
+- **React here is 19.2.8, not 18** as this plan's review prompts said. React 19 no longer warns
+  about a state update on an unmounted component, so a `console.error` spy cannot catch that
+  teardown class; the timer and request counts are what catch it. Corrected in the later prompts.
+
 - [ ] Extend, do not redo, Baseline's two: the creation-polling **absolute discovery deadline**
       (`NewSessionPanel.tsx`) and the conversation-claim refresh. New cases: **a poll begun before
       the absolute deadline but resolving after it must not update the launch or erase the give-up
@@ -365,8 +571,30 @@ Roadmap checkboxes 4 and 6.
       here; built only if the answer is yes.
 - [ ] Browser check in a Sonnet subagent with Playwright on this box, per
       `docs/project/browser-control.md`: 390 px and desktop, keyboard-only, and returning from
-      offline. Against this worktree's own dev server on its own port — **never the live dashboard**,
-      and the subagent is told to kill only its own pid.
+      offline. **Never the live dashboard**, and the subagent is told to kill only its own pid.
+
+      **How, since there is no fixture mode.** The fleet server's rows come only from real tmux
+      (`FLEET_PORT` moves the port, nothing injects state), and every behaviour this stage adds
+      turns on execution readings that are derived from `/proc` — a *replaced* run needs a real
+      `claude` to be replaced, which the brief forbids on the live box. So the check does not go
+      through the fleet server at all: `npm run build:fleet` builds `tools/fleet/web/dist`, a static
+      server serves it on a side port, and **Playwright's `page.route` answers `/api/*` from
+      fixtures**. The client asks only relative URLs (`api/state`, `api/messages?id=…`,
+      `api/actions`, `api/feed`), so a replacement, a flicker, a `conflicting` reading and a
+      refused answer are each one JSON edit, and *offline* is `context.setOffline`. What that cannot
+      prove is the wire from a real collector — which the unit tests' `parseFleetState` round trips
+      and the existing server tests cover, and which this stage does not change.
+- [ ] **One existing-control defect already found, for this stage's accessibility line.** Biome
+      reports `useAriaPropsSupportedByRole` twice in `SessionsPanel.tsx` (lines 879 and 891 at
+      `93c3af30`): the detail pane's focus target is a `div` with `tabIndex={-1}` and an
+      `aria-label`, and a label on an element with no role may not be announced at all — so the
+      region the page moves focus into on selection has no name to a screen reader. Present
+      unchanged in the parent commit, so not a Stage 1 regression. The fix is one attribute,
+      `role="region"`, and the roadmap makes it this stage's: *"keyboard labels, focus and touch
+      targets are acceptance criteria for existing controls."*
+- [ ] **Risk noted up front**: this account's Sonnet subagents hit a hard weekly 429 on 2026-09-07
+      that was not due to reset until 2026-09-12. If the browser subagent dies on a 429, it is
+      rerun on Opus rather than skipped.
 
 **Acceptance for the whole stage** (roadmap, unchanged): suspend/resume preserves the right draft; a
 replacement session never inherits it; creation polling terminates under permanent failure; recent
@@ -375,6 +603,16 @@ messages cannot show a previous execution as the current one.
 ---
 
 ## The review ledger
+
+**Three plans share the letter `260910c` today** — this one, bounded transport and responsive
+collection — which the naming scheme allows by design (`docs/reusable/write-planning-doc.md`), so
+nothing already committed is renamed. But review artefacts named only `260910c-stageN-…` collide:
+on 2026-09-10 I overwrote responsive collection's `260910c-stage2-code-review-prompt.md` in this
+working tree with my own Stage 2 prompt, a file my merge of `origin/dev` had brought in. It was
+caught before any commit, from the write tool reporting *updated* rather than *created*, and
+restored from `HEAD`. **This plan's review artefacts from Stage 2 onwards carry the slug:**
+`260910c-session-continuity-stageN-code-review-*`. The unslugged Stage 1 and Stage 3 artefacts
+below are this plan's and stay where they are.
 
 Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 `npx vitest run tests/fleet-web.test.tsx` itself: 430 tests passed.
@@ -386,10 +624,191 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 | F3 | Adding only the token leaves transcript quarantine incomplete: `coherentWith` can keep a verified token while downgrading the conversation | P1 established | **Gap accepted, blanket repair overruled via Fable.** The identity is the verified *conversation id*, which is the half Sol was right about; `conflicting` is relabelled rather than hidden. Sol's rule — no held view unless `identityWriteGate` allows — would blank every transcript on a loaded box, against `RecentMessages.tsx`'s stated purpose, and misuses a gate whose own header forbids caching its verdict. |
 | F4 | The mount key's selection domain is underspecified | P1 reasoned | **Accepted verbatim**, Stage 1. |
 | F5 | Stages 3 and 4 cannot abort through APIs that take no `AbortSignal` | P1 established | **Accepted verbatim.** `feed-client.ts` and `actions-client.ts` added to scope, plus the promise-versus-deadline race. |
-| F6 | The feed digest omits `claudeSessionId` and `tmuxServerPid` | P1 established | **Accepted verbatim**, Stage 3. |
+| F6 | The feed digest omits `claudeSessionId` and `tmuxServerPid` | P1 established | **Accepted, then corrected in the build.** Both omissions were real and are fixed. But the replacement wording's "unverifiable arms contain only their stable kind/cause" made every verified ↔ unknown flip a trigger — a re-read a minute on a loaded box. The execution component is now the last verified token per row. |
 | F7 | `answeringOff` needs `questionSafetyKey` and a genuinely page-level owner in `App.tsx` | P1 established | **Accepted verbatim**, Stage 1. Found an existing helper I was about to reinvent. |
 | F8 | `lastGoodAt` planned as a field nothing renders | P2 established | **Accepted verbatim**, Stage 4. |
 | F9 | The late-discovery regression names no winner | P2 reasoned | **Accepted verbatim**, Stage 5. |
+
+Stage 1 code review, round 1, GPT Sol, 2026-09-10, on `93c3af30`
+(`260910c-stage1-code-review-sol.md`). Verdict: **refuse the guarantee as stated**. Run
+write-capable; its fixes verified by me: `fleet-web`, `fleet-overseer-badge`,
+`fleet-questions-panel` and `fixture-ids` pass; typecheck is red only in
+`tests/fleet-overseer-message.test.tsx`, which Stage 2a was rewriting at the time, and Sol's own
+typecheck passed. Mutation checks on each fix were Sol's, and are in its answer.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F10 | A transcript response carries no provenance: if the server's snapshot moves from claim C to D mid-request, D's turns arrive and are labelled C | P1 established | **Accepted; follow-up.** `readRecentMessages` stamps every answer with the conversation id it read; the browser discards an answer whose stamp differs from the claim it asked under. The brief allowed exactly this — a read-side addition "if identity must travel in a request". The world is not needed in the stamp: two tmux servers holding one conversation uuid hold one conversation. |
+| F11 | Under an unverifiable execution, a changed claim or tmux world kept the draft and both cards | P1 established | **Fixed by Sol, and the fix introduced a flicker — follow-up.** Sol put `tmuxServerPid` and the claim into the mount key; `collect.ts:550` returns `tmuxServerPid: null` whenever `list-panes` fails, which on a loaded box is weather, so the key can read `123 → null → 123` and wipe the composer. The same rule the epoch and Stage 3's digest already follow applies: hold the last known value and move the key only between two known values. |
+| F12 | An unverifiable flicker erased an established conflict, leaving the previous conversation's turns uncaveated | P1 established | **Fixed by Sol, accepted.** The last established conflict is held until a verified conversation positively refutes it, with wording that says the latest pass could not re-check. |
+| F13 | The page latch recorded the tap-time payload, so a payload that arrived while the answer was pending counted as evidence after the refusal | P1 established | **Fixed by Sol — and I had dismissed this.** I reasoned that the payload flag and the tap-time refusal read one env var and so only disagree across a restart; but the latch exists *for* the restart case, so that was the case in which the race matters. The boundary is now the latest committed payload at the moment the refusal arrives. |
+| F14 | `question A → refusal → no question → identical A` resurrected the old refusal | P1 established | **Fixed by Sol, accepted** — F7's rule that a transition through no dialog is a change, now made final rather than merely hidden. |
+| F15 | A replacement hidden entirely inside unverifiable readings cannot be detected, so the absolute guarantee is false | P1 established contract gap | **Guarantee narrowed**, the first of the two options Sol offered; see § What this guarantees. The second (withhold everything before a first verified reading) is the rule Fable's arbitration already declined. Not an overrule. |
+| F16 | `QuestionsPanel` owns a second `answering-disabled` latch for the same server-wide fact | P1 established, wider than the detail pane | **Accepted; follow-up.** `App` owns the one latch; `QuestionsPanel` takes it and its handler as props, and keeps only its dialog-scoped refusal local. |
+
+Stage 1 code review, **round 2** — the last discovery round — GPT Sol, 2026-09-10, on `c71ddbac`
+and `3b4d7a07` (`260910c-stage1-code-review-r2-sol.md`). Verdict: **refused the two commits as
+committed on F17–F21, fixed all five in the tree, and found no remaining P0 or P1 in Stage 1.**
+Its fixes verified by me before commit (gates below), and F17/F18 sent for an independent scoped
+check because they change the one hook every panel uses.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F17 | React batched a delivered payload and the answer's resolution into one turn, so the layout-effect ref (F13's fix) named the previous commit and an enabled payload that arrived *before* the refusal cleared it | P1 established | **Fixed by Sol, accepted; scoped check.** `useFleetState` records the newest *delivered* payload synchronously at the transport boundary (`latestDeliveredState`), and App latches against that. |
+| F18 | React batching erased intermediate evidence: `conflicting → unknown` and `question A → none → identical A`, delivered in one turn, rendered only their last member, so a conflict vanished and a stale refusal survived | P1 established | **Fixed by Sol, accepted; scoped check.** Each transport delivery is committed with `flushSync`. Sol's postmortem `docs/postmortems/260910b-react-batching-erased-transport-evidence.md` names the class — *a snapshot store was asked to preserve an event* — and records the rejected alternative (an event reducer at the transport boundary) with the condition for revisiting it: high-frequency delivery. Accepted as the narrow fix: snapshots arrive at most every five seconds. |
+| F19 | The route's 404 and its catch arm returned unstamped answers, which the browser accepted as an older server's | P1 established | **Fixed by Sol, accepted.** The 404 stamps `null`; the catch arm stamps the row's claim. |
+| F20 | The `moved` refusal claimed a read happened and that waiting would help — neither supported by a `null` stamp or a C→D→C sequence | P1 established | **Fixed by Sol, accepted.** The copy now says only that the answer named a different claim, and offers Read again "as it is now". |
+| F21 | The Questions tab's alarm said a refusal withheld buttons that could never have existed | P1 established | **Fixed by Sol, accepted.** One eligibility predicate, shared by the button gate and the alarm. |
+| F22 | The provenance wrapper stamped options that could be mutated during the `await` | P2 established | **Fixed by Sol, accepted** — primitives snapshotted before the await. |
+| F23, F24 | First-known world/claim, and two provenance policies, survived mutation | P2 established | **Fixed by Sol, accepted** — regressions added, each proved by its mutation. |
+
+**Round 1 missed F17–F21, and so did I.** Every earlier transition test pushed each payload in its
+own `act`, forcing a commit between states, so the tests shared the implementation's assumption
+that one delivery meant one render — the postmortem's "why nothing went red". Discovery for Stage 1
+is now closed; the F17/F18 check is scoped to those fixes and does not reopen it.
+
+**The scoped check of F17/F18 — an independent Opus agent, read-only: all four questions hold.**
+Removing `flushSync` in memory turned exactly the two F18 tests red and left both F17 tests green,
+so each fix stands on its own; `onState` is reached only after an `await` on every transport path,
+never from inside a render or effect, so `flushSync` is always legal there; every interleaving of a
+refusal and a delivery, including both in one turn, leaves `under` naming a payload delivered no
+later than the refusal; and a delivery was already one render, so nothing re-renders more than
+before. **Stage 1 is closed**: two Sol rounds, then an independent check of the round-2 P1 fixes,
+no open P0 or P1.
+
+Two notes it raised outside its scope, recorded rather than built:
+
+- **A transport that ever delivered from inside a render or effect would break F18 again**, since
+  `flushSync` would warn and fall back to batching. Nothing guards against it, so the rule is now a
+  fifth promise in `transport.ts`'s list of what a replacement must keep — which is where whoever
+  writes the SSE transport will read it.
+- **A named limit on the answering latch:** its boundary is the order payloads *arrive*, not the
+  order the server *sent* them. A poll response sent before a 503 but arriving after it could clear
+  the latch. It needs the server restarted with a different `FLEET_ANSWER_ENABLED` at exactly that
+  moment; comparing `servedAt` would close it. Not built.
+
+**The Stage 1 follow-up — built**, an Opus subagent, from the three open rows above; every change
+seen red first, and every test that passed on the old code proved able to fail by a deliberate
+mutation, restored afterwards.
+
+- **F11's flicker** — `useDetailTargetKey(row, tmuxServerPid)` in `continuity.ts` replaces the
+  hand-built key in `SessionsPanel`. It holds the last *known* tmux pid and the last known claim per
+  session, with `useExecutionEpoch`'s render-phase pattern: a null reading keeps what was held, a
+  first known value is not a change, and only a different known value moves the key. An empty-string
+  claim counts as unknown, as the transcript reader already treats it.
+- **F10** — `readRecentMessages` returns `RecentMessagesOf`, the unchanged `RecentMessages` plus
+  the conversation id it was asked to read, stamped by one wrapper so no arm added later can forget
+  it. No other caller changed: `server.ts` serialises the payload whole, and `routes-recent-feed.ts`
+  maps fields explicitly. The browser reads the stamp as stamped or unstamped, and a mismatch on
+  *any* arm — found, not-found or unreadable — becomes a new `moved` arm, drawn as a refusal naming
+  both ids with Read again live. A stamp present but neither a string nor null is `no-answer`
+  rather than silently unstamped.
+- **F16** — `QuestionsPanel` takes App's latch and handler. It also draws the latched refusal and
+  the server's reason on the Questions tab, since otherwise a refusal made on the other tab would
+  leave its buttons missing with no explanation.
+
+### Stage 4a — built
+
+An Opus subagent: `useActions.ts`, four lines of `actions-client.ts`, and a new
+`tests/fleet-actions-freshness.test.tsx`, eleven cases each seen red on the old hook. The one that
+cannot fail against correct old code — *never requests `/api/state`* — was proved by inserting a
+`fetch("api/state")` into the reader and watching it go red; the test also asserts its own spy fired
+and that a confirmed action posts the page's stale row identifiers rather than re-reading them.
+Judgment calls, accepted: an 8 s read deadline (`ACTIONS_READ_DEADLINE_MS`), under the 10 s poll so
+a lost read costs one poll rather than two; a poll tick during a read is skipped rather than queued;
+a person's refresh still reads from a hidden tab, and only the page's own poll skips one; `error`
+stays a string because the renderers in `ActionButtons.tsx` take one.
+
+**What 4b draws, from 4a's own note:** `lastGoodAt`, `error` and `pollMs` on the `actions` object
+`SessionDetail` already receives; the age is `now − lastGoodAt` on App's one clock; a suggested
+stale threshold of `2 × pollMs + ACTIONS_READ_DEADLINE_MS`, checked against the tests that pass
+`actionsPollMs={0}`; and `SessionQueue` currently draws its error *instead of* its status line,
+which 4b must check still leaves the items drawn underneath.
+
+### Stage 4b — built
+
+An Opus subagent: `SessionDetail.tsx`, a targeted edit to `ActionButtons.tsx`, and a new describe in
+`tests/fleet-web.test.tsx`. One line, `read {age} ago`, at the top of "Waiting to go to it", wearing
+a tooltip that says the age covers both the queue and the list of actions above it. It is absent
+before the first good read and while reads work; it appears once no read has worked for
+`actionsStaleAfterMs(pollMs) = 2 × pollMs + ACTIONS_READ_DEADLINE_MS` — 28 s at the real 10 s poll,
+because a working poll leaves at most one interval plus one read between good feeds and one read
+lost to its deadline adds at most one more — or at once when a read fails, followed in the alarm
+colour by the reason. At a 0 ms poll the deadline is the floor, so a feed is never stale on arrival.
+The last good queue stays drawn underneath.
+
+- **Drawn once, above the queue, rather than beside both the queue and the action buttons** — a
+  deliberate reading of F8's "beside the action and queue surfaces". The buttons come from a list
+  that does not change while the server runs, and a button posts and lets the server decide, so an
+  old list changes nothing you would do; an old queue does. The tooltip says the age covers both.
+- **A side effect on a shared component, caught and made opt-in.** Its first build changed the
+  empty-queue branch of `SessionQueue` to say "Nothing was waiting at the last read that worked."
+  when a last good read exists — right for the session detail, where the error is already drawn in
+  the age line above, but `SessionQueue` is shared with the **Overseer** tab's `FleetQueues`, which
+  draws no age: a held, empty queue with a failed read there lost its reason. Sent back: the new
+  sentence is now behind an `errorDrawnAbove` prop only `SessionDetail` sets, the Overseer tab's
+  wording is back as it was, and a test on that tab went red on the first build and passes now.
+- **One vacuous test of its own, caught by itself:** a regex beginning `\b` against text that runs
+  straight into it ("…go to itread 0s ago") made every `not.toMatch` pass whatever was drawn.
+
+**One reader, not two — built.** 4a reported that its `actionsReader` and Stage 3's `feedReader`
+repeated the same core almost line for line — one read in flight, one pending, a deadline racing
+the API promise, the generation check, abort on stop — differing only in what triggers a read. Two
+copies of one mechanism is the drift this repo's "prefer simple" rule names, so once Sol's Stage 3
+round 2 was out of `FeedPanel.tsx`, an Opus subagent extracted it: `single-flight-reader.ts`, with
+its own eleven tests, which both hooks now use. A behaviour-preserving refactor, and the proof is
+that the four protected test files (`fleet-feed-freshness`, `fleet-feed-panel`,
+`fleet-actions-freshness`, `fleet-web`) passed without an edit.
+
+- **The gate stays with the caller**, through an `admit` hook the core asks only when the slot is
+  free. So the two hidden-tab rules stay deliberately different, as they were: the feed defers every
+  read while hidden (F52); the actions hook lets a person's refresh read from a hidden tab.
+- **One mutation shortfall, accepted rather than fixed.** Removing *only* the generation check —
+  keeping the in-flight check — turns the core's own suite red but neither hook's, because every
+  hook test settles the newer read before delivering the stale answer, so the in-flight check alone
+  catches it. That gap predates the refactor: the two originals had the same double guard and the
+  same tests. The core's suite now covers the case directly, which is where the guard lives. Adding
+  it to the hook suites would mean editing the files whose being untouched is the proof that nothing
+  changed, for no gain.
+- The Read-again guard in Stage 5 is a third instance of the same problem, and its brief says to
+  use this module rather than write a third copy.
+
+Stage 3 code review, round 1, GPT Sol, 2026-09-10, on `8465380d`
+(`260910c-stage3-code-review-sol.md`), concurrently with the Stage 1 review in disjoint files; its
+IDs start at F50 to keep the two apart. Verdict: **"no P0/P1 remains after the fixes. I would
+accept the revised Stage 3."** Its fixes verified by me: `fleet-feed-freshness`, `fleet-feed-panel`,
+`fixture-ids` and `doc-links` pass; typecheck shows no error in any Stage 3 file.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F50 | A first `unknown → verified` reading triggered a re-read though it proved no replacement; the execution memory also crossed tmux worlds | P1 established | **Fixed by Sol, accepted.** Per-row, per-world epochs: a first verification is epoch 0, only a later different token advances it. |
+| F51 | `tmuxServerPid` going `42 → null → 42` caused a re-read with no world change | P1 established | **Fixed by Sol, accepted.** The pid travels beside the digest rather than inside it; only two different *named* pids take the immediate world path. **The same flicker class as the one Sol's own Stage 1 F11 fix introduced** into the detail pane's mount key, found independently here — which is some evidence the class is real rather than theoretical. |
+| F52 | Mounting, refreshing or changing the limit while hidden started requests | P1 established | **Fixed by Sol, accepted.** Every read entry point defers until visible. |
+| F53 | The verified-token memory was written during render, so a render React discards could move it | P2 reasoned | **Fixed by Sol, accepted.** Written from an effect; `rememberVerified` returns the same object when nothing changed, so the effect does not retrigger. The implementer's argument that a render-time write was harmless did not hold: a discarded render could make a later unverifiable snapshot look like a replacement. |
+| F54 | "Never sooner than the floor" omitted the deliberate tmux-restart exception | P3 established | **Fixed by Sol, accepted** — the doc says two different named pids re-read at once. |
+| F55 | "One read in flight" is impossible when an injected API ignores abort and never settles | P3 reasoned | **Fixed by Sol, accepted** — the accurate claim is one live reader slot, with abandoned promises generation-discarded. |
+
+Sol also answered two of my stated doubts and I accept both: anchoring the floor to a read's
+*start* is right (a 15 s timeout then permits the next evidence read at 20 s; anchoring to
+completion would make it 35 s for nothing), and the Read again button does keep the one-pending-refresh
+promise — two activations before React draws `disabled` coalesce into one trailing read, now with a
+UI-level test.
+
+**Round 2 is narrow, not a second discovery pass.** The fixes to F50–F52 are P1 fixes nobody but
+their author has read, and the rule is that such a fix gets a scoped check of that fix. Scope:
+F50–F53 only.
+
+Stage 3 code review, round 2, GPT Sol, 2026-09-10, on `f5c7b048`
+(`260910c-stage3-code-review-r2-sol.md`). Verdict: **"no production defect remains in F50–F53"** —
+each fix holds, with the sequences it was asked about walked through. Two coverage findings, both
+fixed in the test file only; production code unchanged.
+
+| ID | Finding | Severity | Disposition |
+|---|---|---|---|
+| F56 | Making `null → 42` count as a tmux restart left the suite green | P2 established | **Fixed by Sol, accepted** — a regression for `null → 42 → 43`, proved by that mutation. |
+| F57 | Moving the evidence memory back into render, or disabling the unchanged-object reuse, left the suite green | P2 established | **Fixed by Sol, accepted** — abandoned-render and identity tests, proved by those mutations. |
+
+**Stage 3 is closed**: two rounds, the second a scoped check, no open P0 or P1.
 
 ## Risks, and what would catch each
 
@@ -412,6 +831,14 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
   before any change: `fleet-web`, `fleet-feed-panel` and `fleet-execution-identity`, **535 tests,
   exit 0**. The two environment reds in a fresh worktree (`cold-start-lazy-imports`,
   `pdf-bundle-trace`) are expected and are not mine.
+- **A third environment red, found and proved on 2026-09-10.** In a worktree that has never run
+  `npm run build:fleet`, `tests/fleet-decisions-route.test.ts` › *server.ts wiring* fails with
+  `process.exit unexpectedly called with "2"`: `server.ts` refuses to start without
+  `tools/fleet/web/dist/index.html` (its own comment says why — a server with no client once
+  answered 404 to the only person who visited). Proved rather than reasoned: after one
+  `npm run build:fleet` the file passes 15 of 15. `dist/` is gitignored, so the build leaves nothing
+  to commit. Same class as the two above — a build artefact a fresh worktree lacks — and worth
+  adding to the brief the Overseer gives every fleet agent.
 
 ## Decision log
 

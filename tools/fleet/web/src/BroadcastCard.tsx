@@ -66,6 +66,7 @@ import {
   type BroadcastResult,
   type RecipientOutcome,
 } from "./broadcast-client";
+import { draftNoticeSentence, useDraft } from "./drafts";
 import { sentTarget, type SentTarget } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
@@ -203,7 +204,17 @@ export function BroadcastCard({
   /** The seam. A test drives this card without a network; the browser gets the default. */
   api?: BroadcastApi;
 }): ReactNode {
-  const [text, setText] = useState("");
+  /**
+   * **THE ONE DRAFT NOT KEYED TO A CONVERSATION.** The other two boxes are
+   * addressed to one conversation and keep their words under its verified id,
+   * so a replacement running a different conversation never finds them. A
+   * broadcast has no single recipient — it goes to whoever is on the box when
+   * it is sent — so there is no execution for a replacement to inherit it
+   * from, and nothing that could make it the wrong recipient's. Keyed by
+   * purpose alone (drafts.ts), with the same storage guards, cap and Clear.
+   */
+  const draft = useDraft({ purpose: "broadcast" });
+  const text = draft.text;
   const [includeOverseer, setIncludeOverseer] = useState(false);
   const [busy, setBusy] = useState(false);
   /**
@@ -283,11 +294,13 @@ export function BroadcastCard({
       } else {
         setPreview(null);
         setDone({ outcome, sent });
-        if (outcome.kind === "ran") setText("");
+        /* Only a broadcast that RAN takes the draft with it — a refusal or an
+           unknown answer leaves the sentence, and its stored copy, where it is. */
+        if (outcome.kind === "ran") draft.clear();
       }
       setBusy(false);
     },
-    [api, incomplete, targets, words],
+    [api, draft, incomplete, targets, words],
   );
 
   const overseerRow = rows.find(isOverseer);
@@ -316,7 +329,7 @@ export function BroadcastCard({
         placeholder="one line to every agent"
         aria-label="Broadcast to all agents"
         onChange={(e) => {
-          setText(e.target.value);
+          draft.setText(e.target.value);
           /* The preview described the OLD sentence. Kept on screen it would be
              a confirmation of something nobody is about to send. */
           setPreview(null);
@@ -375,7 +388,21 @@ export function BroadcastCard({
             {busy ? "Sending…" : `Send it to ${preview.result.counts.asked} sessions`}
           </Button>
         ) : null}
+        <Button
+          disabled={busy || text === ""}
+          onClick={() => {
+            draft.clear();
+            /* Same reason as the textarea's: a preview of a sentence that is no
+               longer in the box is a confirmation of nothing. */
+            setPreview(null);
+          }}
+        >
+          Clear
+        </Button>
       </p>
+      {draft.notice === null ? null : (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
+      )}
 
       {current && preview !== null ? (
         <div className="tw:mt-3 tw:rounded-lg tw:border tw:border-rule tw:p-3 tw:text-[13px]">

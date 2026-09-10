@@ -389,6 +389,7 @@ function livePayload(initial: FleetSnapshot, health: HealthReport | null): { ren
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: new Date().toISOString(),
+        producer: { instance: "1a2b3c4d", publication: 1, inventory: 1 },
         readCheckpoint: readCheckpointFeeds,
       }),
     keep: (s, h) => {
@@ -573,6 +574,7 @@ async function modeReal(runs: number): Promise<void> {
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: new Date().toISOString(),
+          producer: { instance: "1a2b3c4d", publication: 1, inventory: 1 },
           readCheckpoint: readCheckpointFeeds,
         }).length;
       }

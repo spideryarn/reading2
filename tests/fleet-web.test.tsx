@@ -34,7 +34,7 @@ import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Profiler, act } from "react";
+import { Profiler, StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -76,6 +76,7 @@ import {
   STALE_TRANSCRIPT_MS,
   makeMessagesApi,
   messagesUrl,
+  ofTheClaimAsked,
   parseRecentMessages,
   transcriptAge,
   withClockSkew,
@@ -128,7 +129,13 @@ import { statePayload } from "../tools/fleet/state";
    payloads from an OLDER server; what the annotation buys is that every field
    they do name is a field the server really sends, spelled the way it spells
    it. A fixture that is deliberately malformed says so — see `malformed`. */
-import type { Action as ActionWire, FleetActionPreview, FleetState as FleetStateWire } from "../tools/fleet/wire";
+import type {
+  Action as ActionWire,
+  ConversationReading,
+  ExecutionReading,
+  FleetActionPreview,
+  FleetState as FleetStateWire,
+} from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -138,6 +145,10 @@ import {
   sortRows,
   triageSort,
 } from "../tools/fleet/web/src/view";
+import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
+import { actionsStaleAfterMs } from "../tools/fleet/web/src/SessionDetail";
+import { ACTIONS_READ_DEADLINE_MS } from "../tools/fleet/web/src/useActions";
+import { identityWriteGate } from "../tools/fleet/execution-token";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
    jsdom environment does not set it. Written as a cast rather than a `declare
@@ -463,6 +474,12 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  /* The session composer keeps drafts in sessionStorage (drafts.ts), which
+     jsdom keeps for the whole file — so without this, one test's draft is
+     restored into the next test's box. Through `window`: the bare global is
+     Node's under jsdom. The page's own memory and refusal latch go too. */
+  window.sessionStorage.clear();
+  resetDraftPageStateForTests();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -1763,6 +1780,7 @@ describe("box health, whose shape belongs to somebody else", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -1836,6 +1854,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => ({
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
@@ -2723,6 +2742,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -3399,6 +3419,8 @@ function mountFull(args: {
   actionsApi?: ActionsApi;
   messagesApi?: MessagesApi;
   historyApi?: HistoryApi;
+  /** The actions poll. An hour unless the test is about the poll's own clock — see below. */
+  actionsPollMs?: number;
 }): void {
   act(() =>
     root.render(
@@ -3413,7 +3435,7 @@ function mountFull(args: {
         /* An hour, so the poll never fires inside a test. The poll itself is
            tested on its own; leaving it live here would make every other test
            in the file depend on a timer. */
-        actionsPollMs={3_600_000}
+        actionsPollMs={args.actionsPollMs ?? 3_600_000}
       />,
     ),
   );
@@ -4660,7 +4682,7 @@ describe("the transcript reply, as this page reads it", () => {
 
   it("reads the server's 404 body rather than inventing a sentence for it", async () => {
     const api = makeMessagesApi(async () =>
-      new Response(JSON.stringify({ kind: "not-found", reason: "no-such-session", why: "no session with that handle in the current snapshot" }), {
+      new Response(JSON.stringify({ kind: "not-found", reason: "no-such-session", why: "no session with that handle in the current snapshot", claudeSessionId: null }), {
         status: 404,
         headers: { "content-type": "application/json" },
       }),
@@ -4669,6 +4691,35 @@ describe("the transcript reply, as this page reads it", () => {
     expect(view.kind).toBe("not-found");
     if (view.kind !== "not-found") throw new Error("unreachable");
     expect(view.why).toBe("no session with that handle in the current snapshot");
+    expect(ofTheClaimAsked(view, "conversation-C").kind).toBe("moved");
+  });
+
+  it("stamps the two /api/messages refusals synthesized outside the transcript reader", () => {
+    const source = readFileSync(join(process.cwd(), "tools", "fleet", "server.ts"), "utf8");
+    expect(source).toMatch(/reason:\s*"no-such-session"[\s\S]{0,240}claudeSessionId:\s*null/);
+    expect(source).toMatch(/claudeSessionId:\s*row\.claudeSessionId[\s\S]{0,240}reading the transcript threw/);
+  });
+
+  it("refuses unreadable mismatches and malformed present provenance rather than treating either as old-server", () => {
+    const unreadable = parseRecentMessages({
+      kind: "unreadable",
+      path: "/tmp/d.jsonl",
+      why: "EACCES",
+      claudeSessionId: "conversation-D",
+    });
+    expect(ofTheClaimAsked(unreadable, "conversation-C")).toEqual({
+      kind: "moved",
+      asked: "conversation-C",
+      read: "conversation-D",
+    });
+
+    const malformed = parseRecentMessages({
+      kind: "unreadable",
+      path: null,
+      why: "failed",
+      claudeSessionId: 17,
+    });
+    expect(malformed.kind).toBe("no-answer");
   });
 });
 
@@ -6901,6 +6952,182 @@ describe("the queue, which is the feature and so is on screen", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * How old the queue on screen is — plan 260910c Stage 4, Sol's F8.
+ *
+ * `useActions` keeps its last good feed through a failure, and since Stage 4a
+ * it knows when that feed arrived. These are about the half that makes the
+ * field worth having: the page SAYS how old the queue is once that matters,
+ * and says the latest read failed, while still drawing what the last good read
+ * found — a queue you cannot currently read is not an empty queue.
+ * ------------------------------------------------------------------ */
+
+describe("how old the queue on screen is", () => {
+  const ROW = steerable({ id: "$1643", title: "the one whose queue ages" });
+  /* "read 30s ago", "read 1m 5s ago" — formatDuration's shapes. NO LEADING
+     `\b`: the section's text runs the heading straight into the line
+     ("…go to itread 0s ago"), so a word boundary there never matches, and
+     every `not.toMatch` below would pass whatever the page drew. */
+  const AGE = /read \d[\dhms ]* ago/;
+  const HELLO = itemWire({ id: "q1", payload: { kind: "message", text: "hello" } });
+
+  function setVisibility(value: "visible" | "hidden"): void {
+    /* jsdom's `visibilityState` is a prototype getter with no setter. Not
+       announced: the point is that the page's own poll skips a hidden tab. */
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  }
+
+  /** The queue's own section, so an age drawn anywhere else on the page cannot answer for it. */
+  function queueSection(): string {
+    const heading = [...container.querySelectorAll("h3")].find((h) => h.textContent === "Waiting to go to it");
+    const section = heading?.closest("section");
+    if (!section) throw new Error("no queue section on the page");
+    return section.textContent ?? "";
+  }
+
+  /** The page open on a session with a queue, and a switch that makes every later read fail. */
+  function openAging(items: unknown[], pollMs?: number): { failWith: (why: string | null) => void } {
+    let failing: string | null = null;
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE], queues: [queueWire({ items })] }));
+    const api: ActionsApi = {
+      ...rec.api,
+      feed: async (signal) => (failing === null ? rec.api.feed(signal) : { ok: false, why: failing }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: api, ...(pollMs === undefined ? {} : { actionsPollMs: pollMs }) });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one whose queue ages");
+    return {
+      failWith: (why) => {
+        failing = why;
+      },
+    };
+  }
+
+  /** One read, now: `online` is one of the two moments the hook reads at once. */
+  async function readNow(): Promise<void> {
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it("draws no age while every poll lands", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      /* Six polls' worth of time. Each lands, so the feed is never older than
+         one interval, which is well inside the threshold. */
+      for (let i = 0; i < 12; i += 1) await advance(5_000);
+      const text = queueSection();
+      expect(text).toContain("hello");
+      expect(text).not.toMatch(AGE);
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws the age once the feed is older than two polls and one read's deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      const stale = actionsStaleAfterMs(10_000);
+      expect(stale).toBe(2 * 10_000 + ACTIONS_READ_DEADLINE_MS);
+
+      /* A hidden tab skips the page's own polls — the one way this feed ages
+         with no error to say so. */
+      setVisibility("hidden");
+      await advance(stale - 2_000);
+      expect(queueSection()).not.toMatch(AGE);
+
+      await advance(4_000);
+      const text = queueSection();
+      expect(text).toContain(`read ${(stale + 2_000) / 1000}s ago`);
+      // The last good queue is still drawn under its age.
+      expect(text).toContain("hello");
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+      setVisibility("visible");
+    }
+  });
+
+  it("draws the error beside the queue, and keeps the items the last good read found", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    expect(queueSection()).toContain("hello");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+
+    const text = queueSection();
+    expect(text).toContain("the latest read failed: connect ECONNREFUSED 127.0.0.1:8787");
+    // With the age, which is what says how much the failure matters.
+    expect(text).toMatch(AGE);
+    // And NOT instead of the queue: the item and its button are still there.
+    expect(text).toContain("hello");
+    expect(buttonSaying("Cancel")).toBeDefined();
+  });
+
+  it("clears the age and the error once a read works again", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    expect(queueSection()).toContain("latest read failed");
+
+    page.failWith(null);
+    await readNow();
+    const text = queueSection();
+    expect(text).not.toContain("latest read failed");
+    expect(text).not.toMatch(AGE);
+    expect(text).toContain("hello");
+  });
+
+  /* The empty queue drew the error INSTEAD of its status line. Right when
+     there is no feed at all; once the age and the error are drawn above it,
+     it is the same error twice, and a claim that the queue "could not be
+     read" beside an age saying when it was. */
+  it("says what the last good read found on an empty queue, and names the failure once", async () => {
+    const page = openAging([]);
+    await act(async () => {});
+    expect(queueSection()).toContain("Nothing is waiting.");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    const text = queueSection();
+    // Not the present tense: nothing here knows what is waiting now.
+    expect(text).not.toContain("Nothing is waiting.");
+    expect(text).toContain("Nothing was waiting at the last read that worked.");
+    expect(text.split("ECONNREFUSED").length - 1).toBe(1);
+  });
+
+  /* The feed-panel and decisions-panel tests mount App with
+     `actionsPollMs={0}`. A threshold that scaled only with the interval would
+     be zero there, and every feed would be "stale" the moment it landed.
+
+     The threshold, not a render. A mounted page at a 0 ms poll cannot be
+     driven deterministically here: on real timers the poll re-renders without
+     pause and `act` timed out at 30 s on correct code; on fake timers every
+     tick schedules the next at +0, and advancing the clock never ends. None
+     of those tests opens a session, so no age can be drawn in them anyway. */
+  it("keeps a floor of one read's deadline at a zero poll interval", () => {
+    expect(actionsStaleAfterMs(0)).toBe(ACTIONS_READ_DEADLINE_MS);
+    expect(actionsStaleAfterMs(0)).toBeGreaterThan(0);
+  });
+});
+
 describe("queueing a message, in one line with the buttons", () => {
   /* WORKING, not idle, and that is now load-bearing: v0.5g stops offering
      Queue on an idle session, so a fixture left at the default status would
@@ -7508,6 +7735,33 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("may be sitting in its input box");
     // And the header says how many sessions are in this state.
     expect(container.textContent).toContain("held after a send nobody can account for");
+  });
+
+  /* Plan 260910c Stage 4b. SessionDetail draws the actions feed's error in its
+     own age line and so asks the shared `SessionQueue` for a past-tense
+     sentence instead; this tab draws no such line, so it must keep the old
+     sentence WITH the reason, or a reader here loses why. */
+  it("still says a held, empty queue could not be read, with the reason, when a read fails", async () => {
+    let failing: string | null = null;
+    const base = heldFleet();
+    const rec = {
+      ...base,
+      api: {
+        ...base.api,
+        feed: async (signal?: AbortSignal) =>
+          failing === null ? base.api.feed(signal) : { ok: false as const, why: failing },
+      },
+    };
+    await mountHeld(rec);
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+
+    failing = "connect ECONNREFUSED 127.0.0.1:8787";
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+    expect(container.textContent).toContain("The queue could not be read: connect ECONNREFUSED 127.0.0.1:8787");
+    expect(container.textContent).not.toContain("Nothing was waiting at the last read that worked.");
   });
 
   it("never says nothing has been sent over a held session", async () => {
@@ -9520,6 +9774,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
@@ -10625,5 +10880,1490 @@ describe("the heading on a session card, and what it is about", () => {
     act(() => feed.push(state({ rows: [row({ id: "$1", name: "wf-x" })] })));
     expect(container.textContent).not.toContain("not-yet-described");
     expect(container.textContent).not.toContain("undefined");
+  });
+});
+
+/**
+ * **THE PANE OUTLIVES THE `claude` INSIDE IT, AND THE PAGE HAS TO NOTICE.**
+ *
+ * Across a replacement the pane's handle, the pane's pid and `CLAUDE_SESSION_ID`
+ * are all unchanged, so every address the dashboard holds goes on resolving and
+ * every piece of state it holds *about* that session goes on being drawn under
+ * the new run's name — the half-typed message, the last action's outcome card,
+ * the previous run's transcript. `FleetRow.execution` is the only field on the
+ * row that can tell the two runs apart, and Stage 1 of docs/plans/260910c makes
+ * the detail pane's state follow it. `continuity.ts` says how.
+ */
+describe("the detail pane's state follows the execution, not the handle", () => {
+  /**
+   * A verified execution reading, **asked for explicitly**.
+   *
+   * `row()` answers `unknown`/`not-reported` — the shape `parseExecution`
+   * returns for a payload with no `execution` field, which is what a producer
+   * from before this stage sends — so every other fixture in this file is
+   * unverifiable, and none of them is disturbed by anything below. That is the
+   * honest default and it is worth keeping: on a loaded box *nobody could tell*
+   * is the normal weather, and a page that quietly worked because every fixture
+   * happened to carry a verified identity would say nothing about the real one.
+   */
+  function ran(
+    over: { pid?: number; startTicks?: number; boot?: string; conversation?: ConversationReading } = {},
+  ): ExecutionReading {
+    return {
+      kind: "verified",
+      token: {
+        boot: over.boot ?? "3f2a7c11-boot",
+        pid: over.pid ?? 4242,
+        startTicks: over.startTicks ?? 72_055_933,
+      },
+      harness: "claude-code",
+      conversation: over.conversation ?? { kind: "verified", id: "conv-A" },
+    };
+  }
+
+  /** The reading a loaded box produces for a collection or two at a time. */
+  const CANNOT_TELL: ExecutionReading = {
+    kind: "unknown",
+    cause: "process-table-unreadable",
+    why: "the process table could not be read while the box was at load average 391",
+  };
+
+  function rowsRunning(execution: ExecutionReading): FleetState["rows"] {
+    return [
+      steerable({
+        id: "$a",
+        title: "a session",
+        status: { kind: "working" },
+        claudeSessionId: "conv-A",
+        execution,
+      }),
+    ];
+  }
+
+  function composer(): HTMLTextAreaElement {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box on the page");
+    return box;
+  }
+
+  /** Leave a draft, a steer outcome card and a queue outcome card on the pane. */
+  async function leaveStateBehind(): Promise<void> {
+    typeInto(composer(), "a message that went");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    typeInto(composer(), "a message to queue");
+    await act(async () => {
+      buttonSaying("Queue (~73s)")?.click();
+    });
+    typeInto(composer(), "a draft I am still writing");
+  }
+
+  it("clears the draft and both outcome cards when the process under one handle is replaced", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+
+    /* Same `id`, same `claudeSessionId`, a different process. Nothing else on
+       the row can tell these two runs apart, which is the whole point.
+
+       **Its conversation could not be checked**, and that is deliberate. A
+       replacement that verifiably runs the SAME conversation gets its draft
+       back — drafts are keyed by the conversation, and a relaunch of it is the
+       same recipient (plan 260910c § Stage 2; the composer's own tests below).
+       So the draft half of this test holds for a replacement the page cannot
+       place, which is the one where keeping the words would be a guess. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsRunning(
+            ran({
+              pid: 5150,
+              startTicks: 90_000_000,
+              conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+            }),
+          ),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  it("commits no stale-key frame on replacement under StrictMode", async () => {
+    const feed = manualTransport();
+    let frames: string[] = [];
+    act(() =>
+      root.render(
+        <StrictMode>
+          <Profiler id="continuity" onRender={() => frames.push(container.textContent ?? "")}>
+            <App
+              transport={feed.transport}
+              steer={recordingSteer().api}
+              newSession={fakeNewSession()}
+              rename={fakeRename()}
+              actionsApi={recordingActions().api}
+              messagesApi={recordingMessages().api}
+              actionsPollMs={3_600_000}
+            />
+          </Profiler>
+        </StrictMode>,
+      ),
+    );
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    typeInto(composer(), "belongs to the old execution");
+
+    frames = [];
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "the replacement execution",
+              status: { kind: "working" },
+              claudeSessionId: "conv-A",
+              /* Unverifiable conversation, for the reason the test above gives:
+                 a verified relaunch of conv-A would rightly get the draft back. */
+              execution: ran({
+                pid: 5150,
+                startTicks: 90_000_000,
+                conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+              }),
+            }),
+          ],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(frames.some((frame) => frame.includes("the replacement execution"))).toBe(true);
+    expect(
+      frames.filter(
+        (frame) => frame.includes("the replacement execution") && frame.includes("belongs to the old execution"),
+      ),
+    ).toEqual([]);
+  });
+
+  /**
+   * **THE ONE MOST LIKELY TO REGRESS.** The token is absent whenever the
+   * reading is not `verified`, which on this box happens for a collection or
+   * two at a time — so a key built naively from the token reads `T → "" → T`,
+   * remounts twice, and eats whatever was being typed for a reason that is not
+   * a replacement.
+   */
+  it("keeps the draft and the cards when the reading goes unverifiable and comes back the same", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+  });
+
+  it("clears detail state when the claimed conversation changes inside one execution epoch", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+
+    /* The transcript reader already treats this as a different file. The rest
+       of the detail pane must do the same: all three requests are addressed
+       with the row's claimed conversation id, even when execution cannot be
+       verified. */
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "a session",
+              status: { kind: "working" },
+              claudeSessionId: "conv-B",
+              execution: CANNOT_TELL,
+            }),
+          ],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  it("clears detail state when the tmux world changes around the same unverifiable handle", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    expect(composer().value).toBe("a draft I am still writing");
+
+    /* `$a` only names a session inside one tmux server. Reusing the handle in
+       another server is a different target even when process identity could
+       not be collected in either snapshot. */
+    act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  /**
+   * **A FAILED `list-panes` IS WEATHER, NOT A NEW WORLD.** `collect.ts` answers
+   * `tmuxServerPid: null` whenever `list-panes` fails — a timeout on a loaded
+   * box, while the session rows can still arrive — so a mount key that carried
+   * the raw pid read `123 → null → 123` and remounted twice, wiping exactly
+   * what the execution epoch exists to keep. The follow-up to Sol's F11.
+   */
+  it("keeps the draft and the cards when the tmux world goes unreadable for one snapshot and returns the same", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() => feed.push(state({ tmuxServerPid: null, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+  });
+
+  /** The claim half of the same weather: one collection that could not read the row's tmux environment. */
+  it("keeps the draft and the cards when the claim goes unreadable for one snapshot and returns the same", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    const claimless = [
+      steerable({ id: "$a", title: "a session", status: { kind: "working" }, claudeSessionId: null, execution: CANNOT_TELL }),
+    ];
+    act(() => feed.push(state({ rows: claimless })));
+    await act(async () => {});
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").toContain("Typed at the pane:");
+    expect(container.textContent ?? "").toContain("number 1 in the line");
+  });
+
+  it("keeps a draft when the tmux world and claim become known for the first time", async () => {
+    const feed = manualTransport();
+    const withClaim = (claim: string | null): FleetState["rows"] => [
+      steerable({
+        id: "$a",
+        title: "a session",
+        status: { kind: "working" },
+        claudeSessionId: claim,
+        execution: CANNOT_TELL,
+      }),
+    ];
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: null, rows: withClaim(null) })));
+    openSession("a session");
+    typeInto(composer(), "written before either fact was readable");
+
+    /* A first known value establishes a baseline; it is not evidence that the
+       target changed while the fact was unknown. Exercise the two independent
+       memories separately so either one counting first sight as a change makes
+       this test lose the draft. */
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: withClaim(null) })));
+    await act(async () => {});
+    expect(composer().value).toBe("written before either fact was readable");
+
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: withClaim("conv-A") })));
+    await act(async () => {});
+    expect(composer().value).toBe("written before either fact was readable");
+  });
+
+  /**
+   * **AN UNKNOWN IN THE MIDDLE DOES NOT LAUNDER A CHANGE.** Known 132280, then
+   * nothing, then known 132281: two known values that differ, and so a
+   * different world — however many unreadable snapshots lie between them. A
+   * version that let the null overwrite what it held would treat 132281 as a
+   * first sighting and keep one server's draft under another's handle.
+   */
+  it("still clears detail state when the world changes to a different known one across an unreadable snapshot", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() => feed.push(state({ tmuxServerPid: null, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+    act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  it("still clears detail state when the claim changes to a different known one across an unreadable snapshot", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    const claiming = (claim: string | null): FleetState["rows"] => [
+      steerable({ id: "$a", title: "a session", status: { kind: "working" }, claudeSessionId: claim, execution: CANNOT_TELL }),
+    ];
+    act(() => feed.push(state({ rows: claiming(null) })));
+    await act(async () => {});
+    expect(composer().value).toBe("a draft I am still writing");
+    act(() => feed.push(state({ rows: claiming("conv-B") })));
+    await act(async () => {});
+
+    expect(composer().value).toBe("");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
+  /**
+   * The epoch alone would be equal for two sessions that have each been
+   * replaced the same number of times — which, on a page whose default state is
+   * *nobody could verify anything*, means equal for every session at zero. So
+   * the key carries the session id as well, and this is what says so.
+   */
+  /**
+   * **AT TWO PANES, SO THE SELECTION MOVES WITHOUT PASSING THROUGH NOTHING.**
+   * At one pane the list is replaced by the detail, so going from A to B is
+   * A → no selection → B, and the pane is unmounted in the middle whatever the
+   * key says — which would make this test pass over a key that had dropped the
+   * session id entirely. Measured: it does.
+   */
+  it("still changes the key between two sessions that are both unverifiable", async () => {
+    const undo = pinWidth(1280);
+    try {
+      const feed = manualTransport();
+      mountFull({ transport: feed.transport });
+      act(() =>
+        feed.push(
+          state({
+            rows: [
+              steerable({ id: "$a", title: "session a", status: { kind: "working" }, claudeSessionId: "conv-shared" }),
+              steerable({ id: "$b", title: "session b", status: { kind: "working" }, claudeSessionId: "conv-shared" }),
+            ],
+          }),
+        ),
+      );
+      openSession("session a");
+      await act(async () => {});
+      typeInto(composer(), "meant for session a");
+      expect(composer().value).toBe("meant for session a");
+
+      openSession("session b");
+      await act(async () => {});
+      expect(composer().value).toBe("");
+    } finally {
+      undo();
+    }
+  });
+});
+
+/**
+ * **WHICH CONVERSATION A TRANSCRIPT READING IS OF.**
+ *
+ * `identityOf` used to pair only the handle with `row.claudeSessionId`, which
+ * is the tmux environment's launch CLAIM: written once before the first Claude
+ * started, never rewritten, and — since execution identity landed — capable of
+ * being contradicted by what is actually in the pane. The identity now adds the
+ * execution epoch while retaining the claim, because the claim is the file the
+ * transcript route actually reads.
+ */
+describe("recent messages, when the execution reading contradicts the row's claim", () => {
+  /** A messages api that records every ask. */
+  function watchingExecution(): { api: MessagesApi; asked: string[] } {
+    const asked: string[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        asked.push(row.id);
+        return parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: "the pane said something", uuid: "u-one" })] }),
+        );
+      },
+    };
+    return { api, asked };
+  }
+
+  function rowsWith(execution: ExecutionReading): FleetState["rows"] {
+    return [
+      steerable({
+        id: "$a",
+        title: "a session",
+        status: { kind: "working" },
+        claudeSessionId: "conv-A",
+        execution,
+      }),
+    ];
+  }
+
+  const VERIFIED_A: ExecutionReading = {
+    kind: "verified",
+    token: { boot: "3f2a7c11-boot", pid: 4242, startTicks: 72_055_933 },
+    harness: "claude-code",
+    conversation: { kind: "verified", id: "conv-A" },
+  };
+
+  /**
+   * The pane changed hands: the claim is the stale one, `observed` is the truth.
+   *
+   * **A NEW TOKEN, AND IT HAS TO BE.** One process cannot carry `--session-id
+   * conv-A` in its argv at one reading and `conv-B` at the next, so a
+   * `conflicting` reading that follows a verified one always names a different
+   * run. The first version of this fixture reused `VERIFIED_A`'s token, which
+   * is a state the box cannot produce — and a test built on it passed for a
+   * reason that was not true.
+   */
+  const CONFLICTING: ExecutionReading = {
+    kind: "verified",
+    token: { boot: "3f2a7c11-boot", pid: 5150, startTicks: 90_000_000 },
+    harness: "claude-code",
+    conversation: { kind: "conflicting", claimed: "conv-A", observed: "conv-B" },
+  };
+
+  /**
+   * **AN ANSWER SAYS WHICH CONVERSATION IT IS OF, AND THE PAGE CHECKS.**
+   * `/api/messages` resolves the claim off the server's CURRENT row, so if the
+   * server's snapshot moved from claim C to D between this page's snapshot and
+   * the request, D's turns come back — and were drawn as C's, because nothing in
+   * the answer said otherwise. The reader now stamps every answer with the
+   * conversation it read (transcript.ts), and a stamp that disagrees with the
+   * claim the page asked under is refused aloud: not drawn as this row's turns,
+   * and not dropped into silence either. GPT Sol's F10.
+   */
+  function answeringFor(stamp: Record<string, unknown>): MessagesApi {
+    return {
+      recent: async () =>
+        parseRecentMessages(
+          messagesWire({ ...stamp, turns: [turnWire({ text: "a turn the server read", uuid: "u-stamped" })] }),
+        ),
+    };
+  }
+
+  it("refuses to draw an answer stamped with a different conversation as this row's transcript", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({ claudeSessionId: "conv-D" }) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("a turn the server read");
+    expect(text).toContain("answered under a different conversation claim");
+    expect(text).toContain("conv-D");
+    /* Not a dead end: the next read, once the page's snapshot has caught up, is
+       one tap away. */
+    expect(buttonSaying("Read again")?.disabled).toBe(false);
+  });
+
+  it("refuses a failure stamped with a different conversation too, rather than drawing it as this row's", async () => {
+    const feed = manualTransport();
+    const api: MessagesApi = {
+      recent: async () =>
+        parseRecentMessages({
+          kind: "not-found",
+          reason: "no-claude-session-id",
+          why: "this session has no conversation id",
+          claudeSessionId: null,
+        }),
+    };
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("answered under a different conversation claim");
+    expect(text).toContain("answer named no conversation");
+    expect(text).toContain("Read again to ask about the session as it is now");
+    expect(text).not.toContain("server read no conversation");
+    expect(text).not.toContain("There is no transcript to read for this session.");
+  });
+
+  it("draws an answer stamped with the conversation it asked for", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({ claudeSessionId: "conv-A" }) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn the server read");
+    expect(text).not.toContain("answered under a different conversation claim");
+  });
+
+  /**
+   * **AN OLD SERVER'S ANSWER IS ACCEPTED EXACTLY AS BEFORE.** The page and the
+   * server ship together, and refusing every unstamped answer would blank this
+   * panel for the minutes of a partial deploy.
+   */
+  it("draws an unstamped answer, which is what a server from before the stamp sends", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: answeringFor({}) });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn the server read");
+    expect(text).not.toContain("answered under a different conversation claim");
+  });
+
+  it("re-reads when the observed conversation changes under one handle, and not on an unchanged snapshot", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+    expect(messages.asked).toHaveLength(1);
+
+    /* THE HALF THAT MUST NOT REGRESS. A snapshot arrives every sixty seconds
+       and replaces every row object; none of that is news, and a transcript
+       read on the refresh loop is the one thing this section must not do. */
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    await act(async () => {});
+    expect(messages.asked).toHaveLength(1);
+
+    /* Nor is a reading that simply could not be taken. Unverifiable is the
+       box's weather, not evidence that the pane changed hands. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsWith({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      ),
+    );
+    await act(async () => {});
+    expect(messages.asked).toHaveLength(1);
+
+    // And now the box can see that the pane is running something else.
+    act(() => feed.push(state({ rows: rowsWith(CONFLICTING) })));
+    await act(async () => {});
+    expect(messages.asked).toHaveLength(2);
+  });
+
+  /**
+   * **THE IDENTITY IS WHAT IS FETCHED, NOT WHAT IS OBSERVED.** `/api/messages`
+   * resolves the transcript from the row's CLAIM (server.ts, `readRecentMessages`
+   * is handed `row.claudeSessionId`), so a reading whose identity named the
+   * observed conversation would be holding the claimed conversation's turns
+   * under the observed one's name. Then the claim catches up, the identity does
+   * not move, nothing is re-read, and the previous conversation's turns sit on
+   * screen with neither the relabel (no longer conflicting) nor the stale note
+   * (now verified) — the exact failure this stage exists to end.
+   *
+   * Every committed frame is checked, for the reason the Profiler test above
+   * gives: a frame that exists briefly and is corrected is still a frame.
+   */
+  it("re-reads when the claim catches up with a replacement, and never shows the old turns uncaveated", async () => {
+    const asked: (string | null)[] = [];
+    const api: MessagesApi = {
+      /* Answers with the CLAIMED conversation's turns, because that is what the
+         server reads. */
+      recent: async (row) => {
+        asked.push(row.claudeSessionId);
+        return parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${row.claudeSessionId}`, uuid: `u-${row.claudeSessionId}` })] }),
+        );
+      },
+    };
+    const at = (claim: string, execution: ExecutionReading): FleetState["rows"] => [
+      steerable({ id: "$a", title: "a session", status: { kind: "working" }, claudeSessionId: claim, execution }),
+    ];
+    const T2 = { boot: "3f2a7c11-boot", pid: 5150, startTicks: 90_000_000 };
+
+    let frames: string[] = [];
+    const feed = manualTransport();
+    act(() =>
+      root.render(
+        <Profiler id="detail" onRender={() => frames.push(container.textContent ?? "")}>
+          <App
+            transport={feed.transport}
+            steer={recordingSteer().api}
+            newSession={fakeNewSession()}
+            rename={fakeRename()}
+            actionsApi={recordingActions().api}
+            messagesApi={api}
+            actionsPollMs={3_600_000}
+          />
+        </Profiler>,
+      ),
+    );
+
+    // t0: the claim and the process agree.
+    act(() => feed.push(state({ rows: at("conv-C", VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+    expect(asked).toEqual(["conv-C"]);
+
+    // t1: a different Claude starts in the pane. A new run, and the claim is stale.
+    act(() =>
+      feed.push(
+        state({
+          rows: at("conv-C", {
+            kind: "verified",
+            token: T2,
+            harness: "claude-code",
+            conversation: { kind: "conflicting", claimed: "conv-C", observed: "conv-D" },
+          }),
+        }),
+      ),
+    );
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("previous conversation");
+
+    // t2: the claim catches up. Same run as t1, now verified.
+    frames = [];
+    act(() =>
+      feed.push(
+        state({
+          rows: at("conv-D", {
+            kind: "verified",
+            token: T2,
+            harness: "claude-code",
+            conversation: { kind: "verified", id: "conv-D" },
+          }),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(asked[asked.length - 1]).toBe("conv-D");
+    expect(container.textContent ?? "").toContain("a turn from conv-D");
+    /* Once the claim is D, C's turns may only ever appear under the heading
+       that says they are the previous conversation — and that heading has
+       gone, because nothing is conflicting any more. So: never. */
+    const uncaveated = frames.filter((f) => f.includes("a turn from conv-C") && !f.includes("previous conversation"));
+    expect(uncaveated).toEqual([]);
+  });
+
+  it("relabels a conflicting conversation's turns rather than hiding them, and Read again still works", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(CONFLICTING) })));
+    openSession("a session");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    /* The turns stay: they are a real conversation, correctly attributed, and
+       "what did the old one say before it died" is a question people ask. What
+       is withheld is the implication that this is the pane's current state. */
+    expect(text).toContain("the pane said something");
+    expect(text).toContain("conv-A");
+    expect(text).toContain("conv-B");
+    expect(text).toContain("previous conversation");
+
+    const asked = messages.asked.length;
+    await act(async () => {
+      buttonSaying("Read again")?.click();
+    });
+    expect(messages.asked).toHaveLength(asked + 1);
+  });
+
+  it("keeps the established previous-conversation relabel through an unverifiable flicker", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(CONFLICTING) })));
+    openSession("a session");
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("previous conversation");
+
+    /* Unknown is no evidence that the established conflict has ended. The
+       transcript is deliberately fresh, so the age-based StaleNote cannot
+       accidentally qualify it for this test. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsWith({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(container.textContent ?? "").toContain("previous conversation");
+    expect(container.textContent ?? "").toContain("latest pass could not re-check");
+    expect(messages.asked).toHaveLength(1);
+  });
+
+  it("does not let React batching erase a delivered conflict before an unknown reading", async () => {
+    const feed = manualTransport();
+    const messages = watchingExecution();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    openSession("a session");
+    await act(async () => {});
+
+    /* The browser receives evidence of the conflict, then a reading unable to
+       re-check it. Both deliveries may share one React turn (an SSE transport
+       is allowed to call its sink any number of times), but the second must not
+       erase what the first established. */
+    act(() => {
+      feed.push(state({ rows: rowsWith(CONFLICTING) }));
+      feed.push(
+        state({
+          rows: rowsWith({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      );
+    });
+    await act(async () => {});
+
+    expect(container.textContent ?? "").toContain("previous conversation");
+    expect(container.textContent ?? "").toContain("latest pass could not re-check");
+  });
+
+  /**
+   * `StaleNote` asks, in violet, whether these turns belong to this session at
+   * all — from an inference about transcript age. A verified conversation
+   * DISPROVES that hazard, so the note withdraws; anything less and it stands
+   * exactly as it did.
+   */
+  it("withdraws the stale note when the conversation is verified, and keeps it when it is not", async () => {
+    const stale = (): Record<string, unknown> =>
+      messagesWire({
+        lastModified: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+        turns: [turnWire({ text: "the pane said something" })],
+      });
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      messagesApi: { recent: async () => parseRecentMessages(stale()) },
+    });
+    act(() => feed.push(state({ rows: rowsWith({ kind: "unknown", cause: "not-probed", why: "no pass ran" }) })));
+    openSession("a session");
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("This may not be this session's conversation.");
+
+    act(() => feed.push(state({ rows: rowsWith(VERIFIED_A) })));
+    await act(async () => {});
+    expect(container.textContent ?? "").not.toContain("This may not be this session's conversation.");
+  });
+});
+
+/**
+ * **TWO REFUSALS THAT WERE ONE PIECE OF STATE, AND NEITHER OF THEM LIVED WHERE
+ * IT BELONGED.**
+ *
+ * `grants-permission` is about ONE dialog and must come back when the dialog
+ * changes; `answering-disabled` is about the whole server and must survive
+ * anything the reader does on this page. They shared a `useState` whose comment
+ * claimed it lasted for the life of the dialog, which was false in both
+ * directions. GPT Sol's F7, docs/plans/260910c.
+ */
+describe("the two answering refusals, and who owns each", () => {
+  const REFUSED_PERMISSION =
+    "answering a dialog is disabled: one of the options would grant a permission, so tapping it could " +
+    "approve something other than what you were shown.";
+  const REFUSED_SERVER = "answering is switched off on this server right now.";
+
+  function askingRows(prompt: string): FleetState["rows"] {
+    return [
+      steerable({
+        id: "$a",
+        title: "asking",
+        status: { kind: "needs-you" },
+        question: question({ prompt, gate: { kind: "conversation" } }),
+      }),
+    ];
+  }
+
+  it("offers the buttons again once the dialog itself has changed, and not before", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* THE SAME DIALOG, ARRIVING AGAIN. A snapshot every sixty seconds replaces
+       the row object, and the refusal must not come off for that. */
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* A DIFFERENT DIALOG. `questionSafetyKey` is what says so, and it is the
+       server's own `sameQuestion` fields rather than object identity. */
+    act(() =>
+      feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to write to disk?") })),
+    );
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not resurrect a refusal when an identical dialog returns after no question", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* No question ends the dialog. A later dialog may have byte-for-byte equal
+       safety fields, but it is no longer the instance the refusal answered. */
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: { kind: "enabled" },
+          rows: [steerable({ id: "$a", title: "asking", status: { kind: "working" }, question: null })],
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not let React batching erase the delivered end of a dialog", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    await act(async () => container.querySelector<HTMLButtonElement>("button.answer")?.click());
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    act(() => {
+      feed.push(
+        state({
+          answeringEnabled: { kind: "enabled" },
+          rows: [steerable({ id: "$a", title: "asking", status: { kind: "working" }, question: null })],
+        }),
+      );
+      feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") }));
+    });
+    await act(async () => {});
+
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * **THE DIALOG REFUSAL MUST SURVIVE THE WEATHER.** A key built from the raw
+   * token changes on every collection the box is too loaded to verify, which
+   * would hand back the buttons the server has just refused — for exactly as
+   * long as the box is struggling, which is when a person is least able to
+   * tell. The key uses the last VERIFIED run instead (continuity.ts).
+   */
+  it("keeps a dialog refusal when the execution reading flickers unverifiable and back", async () => {
+    const verified: ExecutionReading = {
+      kind: "verified",
+      token: { boot: "3f2a7c11-boot", pid: 4242, startTicks: 72_055_933 },
+      harness: "claude-code",
+      conversation: { kind: "verified", id: "117e181a-155b-435a-b95b-e74220678d1a" },
+    };
+    const asking = (execution: ExecutionReading): FleetState["rows"] => [
+      steerable({
+        id: "$a",
+        title: "asking",
+        status: { kind: "needs-you" },
+        question: question({ prompt: "Do you want to proceed?", gate: { kind: "conversation" } }),
+        execution,
+      }),
+    ];
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "grants-permission",
+        why: REFUSED_PERMISSION,
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: asking(verified) })));
+    openSession("asking");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: { kind: "enabled" },
+          rows: asking({ kind: "unknown", cause: "process-table-unreadable", why: "the box was too loaded" }),
+        }),
+      ),
+    );
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: asking(verified) })));
+    await act(async () => {});
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    expect(container.textContent ?? "").toContain(REFUSED_PERMISSION);
+  });
+
+  it("keeps a server-wide refusal across a trip to another tab and back", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "answering-disabled",
+        why: REFUSED_SERVER,
+        status: 503,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* `App` unmounts the whole Sessions panel on a mode change, so a latch held
+       any lower than `App` is lost by doing exactly this.
+
+       **By `aria-label`, not by text.** A dock button's `textContent` carries
+       the needs-you badge glued to its label — "Sessions1" on a page with one
+       blocked session, which is every page this test could be about — so
+       matching on the exact text finds nothing, the mode never changes, and the
+       assertion below then passes or fails for a reason that has nothing to do
+       with the latch. */
+    const dock = (label: string): HTMLButtonElement => {
+      const button = [...container.querySelectorAll("button")].find((b) =>
+        (b.getAttribute("aria-label") ?? "").startsWith(label),
+      );
+      if (!button) throw new Error(`no dock button labelled ${JSON.stringify(label)}`);
+      return button;
+    };
+    act(() => dock("Box health").click());
+    /* The selection rides along in the params, which is what makes coming back
+       land on the same session rather than on the list. */
+    expect(window.location.hash.startsWith("#health")).toBe(true);
+    expect(container.textContent ?? "").not.toContain(REFUSED_SERVER);
+    act(() => dock("Sessions").click());
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("Say something to it");
+
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+
+  it("does not treat a payload received before the refusal as evidence received after it", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () => ({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } }),
+      answer: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: pending });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+    /* This payload arrived after the tap, but before the server answered it.
+       It therefore cannot be the post-refusal evidence the latch requires. */
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+
+    await act(async () => {
+      settle?.({
+        ok: false,
+        code: "answering-disabled",
+        why: REFUSED_SERVER,
+        status: 503,
+        from: "server",
+        delivery: { kind: "none" },
+      });
+    });
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+
+    /* Only a payload that arrives now is after the refusal. */
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    await act(async () => {});
+    /* The action receipt correctly keeps the server's refusal on screen; the
+       buttons returning is the observable fact that the page-level latch came
+       off. */
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+
+  it("does not let React batching reorder a delivered payload after the refusal", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () => ({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } }),
+      answer: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: pending });
+    act(() => feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") })));
+    openSession("asking");
+    act(() => container.querySelector<HTMLButtonElement>("button.answer")?.click());
+
+    /* Delivery order is payload, then refusal. Keep both in one async `act` so
+       React batches the payload's render: a commit-time ref still points at the
+       older payload when the refusal callback runs and reverses that order. */
+    await act(async () => {
+      feed.push(state({ answeringEnabled: { kind: "enabled" }, rows: askingRows("Do you want to proceed?") }));
+      settle?.({
+        ok: false,
+        code: "answering-disabled",
+        why: REFUSED_SERVER,
+        status: 503,
+        from: "server",
+        delivery: { kind: "none" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.textContent ?? "").toContain(REFUSED_SERVER);
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+});
+
+/**
+ * **THE SESSION COMPOSER KEEPS ITS WORDS THROUGH A RELOAD — for the
+ * conversation they were written to, and for nobody else.**
+ *
+ * drafts.ts is the hook, and its rules are tested one by one in
+ * tests/fleet-drafts.test.tsx. What is under test here is the composer's wiring
+ * through the whole page: the remount Stage 1 keys by execution, the two send
+ * paths that must take the stored draft with them, and what Send and Queue may
+ * do under each execution reading — Fable's table in docs/plans/260910c
+ * § Withhold, caveat or relabel.
+ *
+ * A **reload** here is: unmount, forget the page's memory, mount again.
+ * sessionStorage is what a reload keeps, so it is left alone; the file-wide
+ * `beforeEach` empties it, so one test's draft cannot answer another's
+ * assertion. Conversation ids are not uuids, for tests/fixture-ids.test.ts.
+ */
+describe("the session composer keeps its draft for the conversation it was written to", () => {
+  const KEY_A = draftKey("session-composer", "conv-A");
+  const KEY_B = draftKey("session-composer", "conv-B");
+
+  /**
+   * The prototype of the storage the page actually uses. Under jsdom the bare
+   * `Storage` global is Node's, so a spy on `Storage.prototype` watches a class
+   * nothing calls (tests/fleet-drafts.test.tsx found that the hard way).
+   */
+  const storageProto = (): Storage => Object.getPrototypeOf(window.sessionStorage) as Storage;
+
+  /** The one line beside Send when the page cannot tell which Claude is in the pane. */
+  const CANNOT_TELL_LINE =
+    "The page cannot confirm which Claude is in this pane right now; the box checks before it types.";
+
+  function running(
+    over: {
+      pid?: number;
+      conversation?: ConversationReading;
+      harness?: Extract<ExecutionReading, { kind: "verified" }>["harness"];
+    } = {},
+  ): ExecutionReading {
+    const pid = over.pid ?? 7001;
+    return {
+      kind: "verified",
+      token: { boot: "5d81e0aa-boot", pid, startTicks: 11_000_000 + pid },
+      harness: over.harness ?? "claude-code",
+      conversation: over.conversation ?? { kind: "verified", id: "conv-A" },
+    };
+  }
+
+  /** The box's normal weather: a collection too loaded to look. */
+  const WEATHER: ExecutionReading = {
+    kind: "unknown",
+    cause: "process-table-unreadable",
+    why: "the process table could not be read at load average 300",
+  };
+
+  /**
+   * A different Claude in the pane. A new process, because one process cannot
+   * carry `--session-id conv-A` at one reading and `conv-B` at the next.
+   */
+  const CONFLICTING = running({ pid: 7002, conversation: { kind: "conflicting", claimed: "conv-A", observed: "conv-B" } });
+
+  function rowsOf(execution: ExecutionReading, claim = "conv-A"): FleetState["rows"] {
+    return [steerable({ id: "$d", title: "drafting", status: { kind: "working" }, claudeSessionId: claim, execution })];
+  }
+
+  function composer(): HTMLTextAreaElement {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box on the page");
+    return box;
+  }
+
+  function pressed(text: string): HTMLButtonElement {
+    const button = buttonSaying(text);
+    if (!button) throw new Error(`no button saying ${JSON.stringify(text)} on the page`);
+    return button;
+  }
+
+  /** Mount the page and open the session — unless the hash already has, which after a reload it does. */
+  async function start(
+    execution: ExecutionReading,
+    seams: { steer?: SteerApi; actionsApi?: ActionsApi } = {},
+  ): Promise<ReturnType<typeof manualTransport>> {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, ...seams });
+    act(() => feed.push(state({ rows: rowsOf(execution) })));
+    if (container.querySelector("#steer-text") === null) openSession("drafting");
+    await act(async () => {});
+    return feed;
+  }
+
+  async function arrives(feed: ReturnType<typeof manualTransport>, rows: FleetState["rows"]): Promise<void> {
+    act(() => feed.push(state({ rows })));
+    await act(async () => {});
+  }
+
+  /** What iOS does when it reclaims the tab: the page goes, sessionStorage stays. */
+  function reload(): void {
+    act(() => root.unmount());
+    resetDraftPageStateForTests();
+    root = createRoot(container);
+  }
+
+  function draftKeys(): string[] {
+    const s = window.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < s.length; i += 1) {
+      const key = s.key(i);
+      if (key !== null && key.startsWith("sy.draft.v1:")) keys.push(key);
+    }
+    return keys.sort();
+  }
+
+  // 1
+  it("brings a draft back after a reload, under the same verified conversation", async () => {
+    await start(running());
+    typeInto(composer(), "half a thought about the migration");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("half a thought about the migration");
+
+    reload();
+    await start(running());
+    expect(composer().value).toBe("half a thought about the migration");
+  });
+
+  // 2
+  it("restores nothing in front of a different verified conversation, and never reads the old draft", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "meant for conversation A");
+
+    const getItem = vi.spyOn(storageProto(), "getItem");
+    /* The claim and the process both moved: a genuinely different recipient. */
+    await arrives(feed, [
+      steerable({
+        id: "$d",
+        title: "drafting",
+        status: { kind: "working" },
+        claudeSessionId: "conv-B",
+        execution: running({ pid: 7003, conversation: { kind: "verified", id: "conv-B" } }),
+      }),
+    ]);
+    const read = getItem.mock.calls.map(([key]) => key);
+    getItem.mockRestore();
+
+    expect(composer().value).toBe("");
+    /* The spy is live — it saw the new conversation's key looked up — so its
+       silence about the old one means something. */
+    expect(read).toContain(KEY_B);
+    expect(read).not.toContain(KEY_A);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("meant for conversation A");
+  });
+
+  // 3
+  it("brings the draft back when the same conversation is relaunched in a new process", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "still for conversation A");
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("still for conversation A");
+  });
+
+  // 4
+  it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
+    await start(running());
+    typeInto(composer(), "written before the reload");
+
+    reload();
+    const feed = await start(WEATHER);
+    expect(composer().value).toBe("");
+
+    await arrives(feed, rowsOf(running()));
+    expect(composer().value).toBe("written before the reload");
+  });
+
+  // 5
+  it("keeps typing through an unverifiable gap under the last verified conversation, and under nothing else", async () => {
+    const feed = await start(running());
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "typed while the box was too loaded to look");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("typed while the box was too loaded to look");
+    expect(draftKeys()).toEqual([KEY_A]);
+  });
+
+  it("stores nothing until a conversation is verified, then files the box's words under it", async () => {
+    const feed = await start(WEATHER);
+    typeInto(composer(), "nobody has been verified yet");
+    expect(draftKeys()).toEqual([]);
+
+    await arrives(feed, rowsOf(running()));
+    expect(draftKeys()).toEqual([KEY_A]);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("nobody has been verified yet");
+  });
+
+  // 6
+  it("never replaces what is in the box with a stored draft — the box's words are the ones kept", async () => {
+    await start(running());
+    typeInto(composer(), "the old draft");
+
+    reload();
+    const feed = await start(WEATHER);
+    typeInto(composer(), "what I am typing now");
+    await arrives(feed, rowsOf(running()));
+
+    expect(composer().value).toBe("what I am typing now");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("what I am typing now");
+  });
+
+  // 7 — the hook's own tests cover the three ways storage refuses; this proves the composer draws the line.
+  it("says in one line that the message will not survive a reload when the browser refuses storage", async () => {
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    await start(running());
+    typeInto(composer(), "a message in a private window");
+    expect(composer().value).toBe("a message in a private window");
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("storage-refused"));
+  });
+
+  // 8 — likewise one composer-level case.
+  it("removes the stored copy rather than keep a shorter one when the text goes over the cap, and says so", async () => {
+    await start(running());
+    typeInto(composer(), "the start of it");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("the start of it");
+
+    typeInto(composer(), "x".repeat(DRAFT_CAP + 1));
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("too-long"));
+  });
+
+  // 9
+  it("takes the stored draft away on Clear, on a Send the server accepted, and on a Queue it accepted", async () => {
+    await start(running());
+    typeInto(composer(), "to be cleared");
+    act(() => pressed("Clear").click());
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be sent");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be sent");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be queued");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be queued");
+    await act(async () => {
+      pressed("Queue (~73s)").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+  });
+
+  it("keeps the box and its stored copy when the server refuses the send", async () => {
+    await start(running(), {
+      steer: refusingSteer({
+        ok: false,
+        code: "wrong-pane",
+        why: "pane %2108 is in session $1643 now, not $d",
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    typeInto(composer(), "try this again in a moment");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("try this again in a moment");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("try this again in a moment");
+  });
+
+  // 10 — cannot tell: live, and one line.
+  const cannotTell: [string, ExecutionReading][] = [
+    ["an unknown reading", WEATHER],
+    [
+      "a claimed-only reading",
+      {
+        kind: "claimed-only",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "nothing under the pane could be identified" },
+        why: "no process under the pane matched a harness",
+      },
+    ],
+    [
+      "a verified process whose conversation cannot be checked",
+      running({ conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" } }),
+    ],
+  ];
+  it.each(cannotTell)("keeps Send and Queue live under %s, with one line beside Send", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(pressed("Queue (~73s)").disabled).toBe(false);
+    expect((container.textContent ?? "").split(CANNOT_TELL_LINE)).toHaveLength(2);
+  });
+
+  it("draws no such line when the conversation is verified", async () => {
+    await start(running());
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  // 10 — can tell: off, with the gate's sentence, and typing still on.
+  const canTell: [string, ExecutionReading][] = [
+    ["a conflicting conversation", CONFLICTING],
+    ["a pane whose process claims no conversation", running({ conversation: { kind: "not-claimed" } })],
+    [
+      "a harness that cannot be addressed",
+      running({
+        harness: "claude-headless",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "a headless Claude stopped reading its terminal" },
+      }),
+    ],
+  ];
+  it.each(canTell)("disables Send and Queue under %s, says why in the gate's words, and leaves typing on", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(composer().disabled).toBe(false);
+    expect(composer().value).toBe("go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+
+    const gate = identityWriteGate(execution);
+    if (gate.allowed) throw new Error("this fixture is one the gate allows, so it proves nothing here");
+    expect(container.textContent ?? "").toContain(gate.why);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  /**
+   * **AN UNKNOWN READING DOES NOT END A CONFLICT.** The same rule the
+   * transcript's relabel follows (RecentMessages.tsx, `lastConflict`): a
+   * collection too loaded to look is not evidence that the pane went back to
+   * the conversation this row addresses.
+   */
+  it("keeps Send and Queue off through an unverifiable flicker after a conflict", async () => {
+    const feed = await start(CONFLICTING);
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+  });
+
+  // 11
+  it("puts the claimed conversation's draft back under a conflict, and stores none of the edits", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "for conversation A");
+
+    await arrives(feed, rowsOf(CONFLICTING));
+    expect(composer().value).toBe("for conversation A");
+    expect(pressed("Send now").disabled).toBe(true);
+
+    typeInto(composer(), "for conversation A, and a bit more");
+    expect(composer().value).toBe("for conversation A, and a bit more");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("for conversation A");
+    expect(draftKeys()).toEqual([KEY_A]);
   });
 });
