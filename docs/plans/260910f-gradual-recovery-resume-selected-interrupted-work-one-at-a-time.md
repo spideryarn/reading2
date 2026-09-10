@@ -603,6 +603,19 @@ Red first:
 - a browser check at 1280 px and 400 px by an Opus subagent, on its own fixture server and never on
   8787.
 
+**Stages 1 and 2, 2026-09-10 ~21:00: committed together as `cfc963eb`, and on `dev` in `f72a4a7e`.**
+
+The merge from `dev` (`bef22460`) brought in `accountUsage`. `1704334e` wires the daemon's own
+reading into the pass, and swaps the local type copies for `dev`'s. On the merged tree:
+
+- typecheck exit 0;
+- 15 files / 437 tests passing;
+- `build:fleet` exit 0.
+
+Sol's stage review is running, read-only and findings-only, from
+[the prompt](260910f-gradual-recovery-stage1-2-review-sol-prompt.md). Its findings are numbered G11
+onwards.
+
 **Stage 1 status, 2026-09-10 ~20:05: built by an Opus subagent. Uncommitted in the worktree, and
 not yet reviewed** (paused by the Overseer for the `mindstone` five-hour window).
 
