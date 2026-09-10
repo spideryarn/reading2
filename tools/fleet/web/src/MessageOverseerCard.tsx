@@ -108,7 +108,13 @@ import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useExecutionEpoch } from "./continuity";
-import { draftAddressOf, draftNoticeSentence, useDraft, type DraftAddress } from "./drafts";
+import {
+  DRAFT_RECIPIENT_CHANGED_SENTENCE,
+  draftAddressOf,
+  draftNoticeSentence,
+  useDraft,
+  type DraftAddress,
+} from "./drafts";
 import { httpSteerApi, sentTarget, type SentTarget, type SteerApi, type SteerOutcome } from "./steer-client";
 import { SteerReceipt } from "./SteerReceipt";
 import { Explain } from "./Tooltip";
@@ -284,12 +290,17 @@ export function MessageOverseerCard({
     purpose: "overseer-message",
     address: overseerDraftAddress(holder),
     scope: holder === null ? null : epoch,
+    /* One card owns this slot for the life of the page. It gives unverifiable
+       typing a page-only identity until a conversation can safely file it. */
+    pageSlot: "overseer",
   });
   const text = draft.text;
 
   const onSend = useCallback(async () => {
-    if (to.kind !== "found") return;
-    const words = text.trim();
+    if (to.kind !== "found" || !draft.canSubmit) return;
+    const submission = draft.submission();
+    if (submission === null) return;
+    const words = submission.text.trim();
     /* **Checked here, not only on the button's `disabled`.** `disabled` stops a
        pointer; it does not stop a keyboard path somebody adds later, and an
        empty line typed at an agent is a turn of a paid model spent on nothing. */
@@ -304,9 +315,9 @@ export function MessageOverseerCard({
     /* Only a send the server accepted takes the draft with it. A refusal
        leaves both the box and the stored copy, so the words are there to try
        again or to take elsewhere. */
-    if (result.ok) draft.clear();
+    if (result.ok) draft.accept(submission);
     setBusy(false);
-  }, [draft, steer, text, to]);
+  }, [draft, steer, to]);
 
   return (
     <Card className="tw:mt-3 tw:p-4">
@@ -358,7 +369,11 @@ export function MessageOverseerCard({
             aria-label="Message the Overseer"
           />
           <p className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button variant="loud" disabled={busy || text.trim() === ""} onClick={() => void onSend()}>
+            <Button
+              variant="loud"
+              disabled={busy || text.trim() === "" || !draft.canSubmit}
+              onClick={() => void onSend()}
+            >
               {busy ? "Sending…" : "Send"}
             </Button>
             <Button disabled={busy || text === ""} onClick={draft.clear}>
@@ -367,6 +382,9 @@ export function MessageOverseerCard({
           </p>
           {draft.notice === null ? null : (
             <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
+          )}
+          {draft.canSubmit ? null : (
+            <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">Send is off: {DRAFT_RECIPIENT_CHANGED_SENTENCE}</p>
           )}
         </>
       )}

@@ -1,0 +1,1631 @@
+{
+  "meta": {
+    "startedAt": "2026-09-05T17:51:41.976Z",
+    "commit": "add1f65bcfaa3b2a1a96016a357c6d4297374d53",
+    "gitDirty": true,
+    "srcPatchSha256": null,
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "node": "v26.8.1",
+    "model": "anthropic/claude-sonnet-5",
+    "effort": {
+      "hierarchy": "low",
+      "pipelineEnvOverride": null,
+      "note": "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts (EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. Every CandidateRecord carries the model and effort it was decided under."
+    },
+    "jobConcurrency": 3,
+    "jobConcurrencyRuntime": 3,
+    "stepBudgetMs": 700000,
+    "effectiveDeadlineMs": 740000
+  },
+  "runTag": "e5aq8o9s",
+  "args": {
+    "book": "output/2701-h.html",
+    "articles": [
+      "output/noema-mythology-of-conscious-ai.html"
+    ],
+    "repeats": 3,
+    "spend": true,
+    "dryRun": false,
+    "keep": false,
+    "mode": "spend"
+  },
+  "fixtures": [
+    {
+      "role": "book",
+      "file": "output/2701-h.html",
+      "sha256": "9ef7866a853cdf783af6281a5cf66b5d9e2caa7085d022c992801d2d3b25321b",
+      "bytes": 1415665
+    },
+    {
+      "role": "article-1",
+      "file": "output/noema-mythology-of-conscious-ai.html",
+      "sha256": "7d110be8d94a9c2c5a38324d2a4965c1968e480f85b93bb4343e9b39591531e6",
+      "bytes": 78787
+    }
+  ],
+  "notes": [
+    "Stage 1 (fetch) is a fixture read of a file named on the command line, so no network latency is in any elapsed time here, and there is no committed manifest holding those bytes constant — output/ is gitignored. The sha256 of what this run read is in `fixtures`.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`. Every label call carries stepName=hierarchy and job=labels. The SCOPED EXPANSION CALLS also carry job=hierarchy, the same as the whole-document structure call — so on a repeat with the structure checkpoint resumed, the `hierarchy` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that into a check rather than an assumption.",
+    "Money is the ledger's (`costStore.forJob`). Token counts are reported beside it and are never converted into a price here.",
+    "Question 1 pairs candidates on parent-plus-derived-range, never on `where`, which is an ordinal path derived from the answer's own fan-out. Verdict flips, changed fan-out and moved boundaries at equal fan-out are three separate rows and must not be added together.",
+    "A repeat is only a repeat if it bought its wave again. SPIDERYARN_DEEPEN_REASK names the book's slug and nothing else; the structure checkpoint is deliberately still resumed, which is what holds the seed constant.",
+    "Phase D runs three jobs at once, and this box is shared: another agent's dev server holding a claim slot would serialise them. Read the per-step clocks against each other, not only against the budget."
+  ],
+  "seamProof": {
+    "cold": 1,
+    "repeatWithoutReask": 0,
+    "repeatWithReask": 1,
+    "readsWhileReasking": 0,
+    "namespaces": [
+      "hierarchy-deepen"
+    ]
+  },
+  "estimate": {
+    "rows": [
+      {
+        "what": "book, full ingest, deepening on",
+        "jobs": 1,
+        "usdEach": 8.4,
+        "basis": "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound."
+      },
+      {
+        "what": "book, forced hierarchy, structure + labels resumed",
+        "jobs": 3,
+        "usdEach": 7.4,
+        "basis": "$8.4 less the $1.00 structure call the checkpoint resumes (same table). Labels resume too wherever the deepened tree comes out the same, so this is an upper bound twice over."
+      },
+      {
+        "what": "ordinary article, full ingest",
+        "jobs": 3,
+        "usdEach": 3.4,
+        "basis": "evals/cost/run.ts records ~$3.40 for a `long-html` (186-block) ingest, measured 2026-09-03. The plan says an ordinary article's wave is 'a fraction' of a book's; nothing is measured, so nothing is added. **One of these runs with the flag off** — phase C's first pass, which is the byte-identical baseline — and that costs the same, because on an article where nothing is eligible the wave makes no call either way. That equality is the thing phase C is measuring, so it is an assumption here and a result there."
+      },
+      {
+        "what": "ordinary article, forced hierarchy, everything resumed",
+        "jobs": 1,
+        "usdEach": 0.1,
+        "basis": "the inertness pass: structure and labels both resume and no section is eligible, so the expectation is zero. $0.10 is headroom for a label batch the deepened tree re-cut."
+      }
+    ],
+    "totalUsd": 40.9,
+    "worstCaseUsd": 85.30000000000001,
+    "bound": "$40.90 is the NOMINAL ESTIMATE — one purchase of each row — and $85.30 is the THREE-WINDOW REQUEUE EXPOSURE: what the same run would cost if every re-asking pass were re-claimed at its own 740s deadline and bought its wave in each of the three windows `REQUEUE_BUDGET = 2` permits. This run stops a re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § driveToDone), so it does not buy that exposure. **NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP.** No dollar or token limit refuses a call at $N. An ordinary, non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed; a redraw buys a second answer to the same question; and every per-row figure is the plan's arithmetic rather than a limit anything checks against. Watch the bill.",
+    "caveat": "Every per-row figure is an upper bound on ONE purchase of that row, derived from the plan's own arithmetic rather than measured — it is not a bound on how many purchases the run makes, which is the sentence above. The run's own `run.json` carries what it really cost. If the real bill lands far under this, that is question 4 answering itself; if it lands over, stop and read why before repeating."
+  },
+  "jobs": [
+    {
+      "phase": "A",
+      "label": "book ingest, deepening on (repeat 1)",
+      "repeat": 1,
+      "slug": "evaldeepen-e5aq8o9s-book-spya-yynkqz",
+      "jobId": "spya-wcb7kq",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract",
+        "blocks",
+        "hierarchy",
+        "assets"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T17:51:42.679Z",
+      "finishedAt": "2026-09-05T18:01:47.487Z",
+      "elapsedMs": 604807,
+      "jobStatus": "done",
+      "requeuedAt": null,
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "1382 KB (fixture book)",
+          "startedAt": "2026-09-05T17:51:42.756Z",
+          "finishedAt": "2026-09-05T17:51:42.936Z",
+          "ms": 180
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "Moby Dick; or The Whale",
+          "startedAt": "2026-09-05T17:51:42.977Z",
+          "finishedAt": "2026-09-05T17:51:50.227Z",
+          "ms": 7250
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "2569 blocks, 2 new ids (2567 kept)",
+          "startedAt": "2026-09-05T17:51:50.421Z",
+          "finishedAt": "2026-09-05T17:52:01.405Z",
+          "ms": 10984
+        },
+        {
+          "name": "hierarchy",
+          "status": "done",
+          "detail": "154 sections over 2569 blocks, 22 of 23 sections deepened",
+          "startedAt": "2026-09-05T17:52:03.485Z",
+          "finishedAt": "2026-09-05T18:01:37.976Z",
+          "ms": 574491
+        },
+        {
+          "name": "assets",
+          "status": "done",
+          "detail": "0 images stored",
+          "startedAt": "2026-09-05T18:01:47.018Z",
+          "finishedAt": "2026-09-05T18:01:47.161Z",
+          "ms": 143
+        }
+      ],
+      "hierarchyMs": 574491,
+      "deepenFlag": true,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "hierarchy",
+          "calls": 35,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "assets",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "lateCalls": 0,
+      "money": {
+        "credits": 3484536900,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 35,
+          "money": {
+            "credits": 3484536900,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "188d131e-f32a-4f56-8988-9ec47458d46e"
+          ],
+          "jobIds": [
+            "spya-wcb7kq"
+          ],
+          "tokens": {
+            "input": 1167392,
+            "output": 109397,
+            "cacheRead": 65477,
+            "cacheWrite": 17075,
+            "reasoning": 3551
+          },
+          "outcomes": {
+            "ok": 35
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 569387,
+          "summedDurationMs": 1187997
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 9,
+          "money": {
+            "credits": 1691016900,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "188d131e-f32a-4f56-8988-9ec47458d46e"
+          ],
+          "jobIds": [
+            "spya-wcb7kq"
+          ],
+          "tokens": {
+            "input": 717582,
+            "output": 21909,
+            "cacheRead": 2077,
+            "cacheWrite": 14539,
+            "reasoning": 3330
+          },
+          "outcomes": {
+            "ok": 9
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 112301,
+          "summedDurationMs": 241150
+        },
+        {
+          "step": "labels",
+          "calls": 26,
+          "money": {
+            "credits": 1793520000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "188d131e-f32a-4f56-8988-9ec47458d46e"
+          ],
+          "jobIds": [
+            "spya-wcb7kq"
+          ],
+          "tokens": {
+            "input": 449810,
+            "output": 87488,
+            "cacheRead": 63400,
+            "cacheWrite": 2536,
+            "reasoning": 221
+          },
+          "outcomes": {
+            "ok": 26
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 456815,
+          "summedDurationMs": 946847
+        }
+      ],
+      "recordsFiles": [
+        "evaldeepen-e5aq8o9s-book-spya-yynkqz-2026-09-05-17-53-55-2369875-1.json"
+      ],
+      "stats": {
+        "targets": 23,
+        "expanded": 22,
+        "added": 115,
+        "withheld": 0,
+        "uncheckpointed": 0,
+        "calls": 8,
+        "resumed": 0,
+        "oversized": 1,
+        "refusedTargets": 0,
+        "outOfTime": 0,
+        "rateLimited": 0,
+        "gate": {
+          "initialWidth": 8,
+          "finalWidth": 8,
+          "narrowestWidth": 8,
+          "refusals": 0
+        },
+        "verdicts": {
+          "candidates": 144,
+          "rawYes": 4,
+          "rawNo": 111,
+          "unassessed": 29,
+          "effectiveYes": 38,
+          "overrides": {
+            "authored-heading": 6,
+            "depth-cap": 0,
+            "divisibility-floor": 0,
+            "forced-open": 5
+          }
+        },
+        "usage": {
+          "inputTokens": 263344,
+          "outputTokens": 15777,
+          "cacheReadTokens": 2077,
+          "cacheWriteTokens": 14539
+        }
+      },
+      "waveFailed": false,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 2)",
+      "repeat": 2,
+      "slug": "evaldeepen-e5aq8o9s-book-spya-yynkqz",
+      "jobId": "spya-avuffm",
+      "createdArticle": false,
+      "steps": [
+        "hierarchy"
+      ],
+      "force": [
+        "hierarchy"
+      ],
+      "startedAt": "2026-09-05T18:01:47.545Z",
+      "finishedAt": "2026-09-05T18:10:27.008Z",
+      "elapsedMs": 519463,
+      "jobStatus": "done",
+      "requeuedAt": null,
+      "stepOutcomes": [
+        {
+          "name": "hierarchy",
+          "status": "done",
+          "detail": "145 sections over 2569 blocks, 22 of 23 sections deepened",
+          "startedAt": "2026-09-05T18:01:48.572Z",
+          "finishedAt": "2026-09-05T18:10:24.753Z",
+          "ms": 516181
+        }
+      ],
+      "hierarchyMs": 516181,
+      "deepenFlag": true,
+      "reaskEnv": "evaldeepen-e5aq8o9s-book-spya-yynkqz",
+      "observedSpend": [
+        {
+          "step": "hierarchy",
+          "calls": 34,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "lateCalls": 0,
+      "money": {
+        "credits": 2535497400,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 34,
+          "money": {
+            "credits": 2535497400,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "1a2dc9fe-b28a-4c09-a23d-552480083a10"
+          ],
+          "jobIds": [
+            "spya-avuffm"
+          ],
+          "tokens": {
+            "input": 711681,
+            "output": 105714,
+            "cacheRead": 62852,
+            "cacheWrite": 16970,
+            "reasoning": 5659
+          },
+          "outcomes": {
+            "ok": 34
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 509095,
+          "summedDurationMs": 1148498
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 8,
+          "money": {
+            "credits": 735510900,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "1a2dc9fe-b28a-4c09-a23d-552480083a10"
+          ],
+          "jobIds": [
+            "spya-avuffm"
+          ],
+          "tokens": {
+            "input": 263344,
+            "output": 17206,
+            "cacheRead": 2077,
+            "cacheWrite": 14539,
+            "reasoning": 5534
+          },
+          "outcomes": {
+            "ok": 8
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 40565,
+          "summedDurationMs": 180436
+        },
+        {
+          "step": "labels",
+          "calls": 26,
+          "money": {
+            "credits": 1799986500,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "1a2dc9fe-b28a-4c09-a23d-552480083a10"
+          ],
+          "jobIds": [
+            "spya-avuffm"
+          ],
+          "tokens": {
+            "input": 448337,
+            "output": 88508,
+            "cacheRead": 60775,
+            "cacheWrite": 2431,
+            "reasoning": 125
+          },
+          "outcomes": {
+            "ok": 26
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 468418,
+          "summedDurationMs": 968062
+        }
+      ],
+      "recordsFiles": [
+        "evaldeepen-e5aq8o9s-book-spya-yynkqz-2026-09-05-18-02-29-2369875-2.json"
+      ],
+      "stats": {
+        "targets": 23,
+        "expanded": 22,
+        "added": 106,
+        "withheld": 0,
+        "uncheckpointed": 0,
+        "calls": 8,
+        "resumed": 0,
+        "oversized": 1,
+        "refusedTargets": 0,
+        "outOfTime": 0,
+        "rateLimited": 0,
+        "gate": {
+          "initialWidth": 8,
+          "finalWidth": 8,
+          "narrowestWidth": 8,
+          "refusals": 0
+        },
+        "verdicts": {
+          "candidates": 135,
+          "rawYes": 6,
+          "rawNo": 100,
+          "unassessed": 29,
+          "effectiveYes": 42,
+          "overrides": {
+            "authored-heading": 9,
+            "depth-cap": 0,
+            "divisibility-floor": 0,
+            "forced-open": 4
+          }
+        },
+        "usage": {
+          "inputTokens": 263344,
+          "outputTokens": 17206,
+          "cacheReadTokens": 2077,
+          "cacheWriteTokens": 14539
+        }
+      },
+      "waveFailed": false,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 3)",
+      "repeat": 3,
+      "slug": "evaldeepen-e5aq8o9s-book-spya-yynkqz",
+      "jobId": "spya-fm4y2w",
+      "createdArticle": false,
+      "steps": [
+        "hierarchy"
+      ],
+      "force": [
+        "hierarchy"
+      ],
+      "startedAt": "2026-09-05T18:10:27.061Z",
+      "finishedAt": "2026-09-05T18:22:47.108Z",
+      "elapsedMs": 740047,
+      "jobStatus": "queued",
+      "requeuedAt": 1,
+      "stepOutcomes": [
+        {
+          "name": "hierarchy",
+          "status": "pending",
+          "startedAt": null,
+          "finishedAt": null,
+          "ms": null
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": true,
+      "reaskEnv": "evaldeepen-e5aq8o9s-book-spya-yynkqz",
+      "observedSpend": [
+        {
+          "step": "hierarchy",
+          "calls": 39,
+          "pending": 1,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "lateCalls": 1,
+      "money": {
+        "credits": 2956302300,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 39,
+          "money": {
+            "credits": 2956302300,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "31c41249-0307-45f7-83e8-e4172d4b5084"
+          ],
+          "jobIds": [
+            "spya-fm4y2w"
+          ],
+          "tokens": {
+            "input": 748948,
+            "output": 139998,
+            "cacheRead": 78394,
+            "cacheWrite": 17099,
+            "reasoning": 37469
+          },
+          "outcomes": {
+            "ok": 39
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 735946,
+          "summedDurationMs": 1438429
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 9,
+          "money": {
+            "credits": 821074300,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "31c41249-0307-45f7-83e8-e4172d4b5084"
+          ],
+          "jobIds": [
+            "spya-fm4y2w"
+          ],
+          "tokens": {
+            "input": 286848,
+            "output": 21020,
+            "cacheRead": 4154,
+            "cacheWrite": 14539,
+            "reasoning": 6997
+          },
+          "outcomes": {
+            "ok": 9
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 53180,
+          "summedDurationMs": 217909
+        },
+        {
+          "step": "labels",
+          "calls": 30,
+          "money": {
+            "credits": 2135228000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "31c41249-0307-45f7-83e8-e4172d4b5084"
+          ],
+          "jobIds": [
+            "spya-fm4y2w"
+          ],
+          "tokens": {
+            "input": 462100,
+            "output": 118978,
+            "cacheRead": 74240,
+            "cacheWrite": 2560,
+            "reasoning": 30472
+          },
+          "outcomes": {
+            "ok": 30
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 682391,
+          "summedDurationMs": 1220520
+        }
+      ],
+      "recordsFiles": [
+        "evaldeepen-e5aq8o9s-book-spya-yynkqz-2026-09-05-18-11-21-2369875-3.json"
+      ],
+      "stats": {
+        "targets": 23,
+        "expanded": 22,
+        "added": 111,
+        "withheld": 0,
+        "uncheckpointed": 0,
+        "calls": 8,
+        "resumed": 0,
+        "oversized": 1,
+        "refusedTargets": 0,
+        "outOfTime": 0,
+        "rateLimited": 0,
+        "gate": {
+          "initialWidth": 8,
+          "finalWidth": 8,
+          "narrowestWidth": 8,
+          "refusals": 0
+        },
+        "verdicts": {
+          "candidates": 140,
+          "rawYes": 8,
+          "rawNo": 103,
+          "unassessed": 29,
+          "effectiveYes": 41,
+          "overrides": {
+            "authored-heading": 4,
+            "depth-cap": 0,
+            "divisibility-floor": 0,
+            "forced-open": 6
+          }
+        },
+        "usage": {
+          "inputTokens": 286848,
+          "outputTokens": 21020,
+          "cacheReadTokens": 4154,
+          "cacheWriteTokens": 14539
+        }
+      },
+      "waveFailed": false,
+      "waveFailureReason": null,
+      "findings": [
+        {
+          "kind": "requeued",
+          "fatal": true,
+          "message": "book hierarchy forced (repeat 3): the claimant handed this job back at its own deadline (requeue window 1 of 3). This run STOPPED rather than re-claiming it. SPIDERYARN_DEEPEN_REASK still named evaldeepen-e5aq8o9s-book-spya-yynkqz, so the next claim would ignore the checkpoint rows this one just wrote and buy the whole wave again, and the budget permits three such windows. The job is left `queued`, the article and the job are RETAINED rather than cleaned up, and no later job in this run can publish over that slug. This pass is partial and must not be quoted."
+        },
+        {
+          "kind": "ledger-short",
+          "fatal": true,
+          "message": "hierarchy: hierarchy made 39 call(s) but 1 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+        }
+      ]
+    }
+  ],
+  "answers": {
+    "q1": {
+      "passes": 3,
+      "parentsCompared": 22,
+      "parentsPartial": 0,
+      "fanOutChanged": [
+        {
+          "parent": "spya-sdadcb..spya-sa2yuj",
+          "whereFirstSeen": "root > child 1 > child 1",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 2,
+              "ranges": [
+                "spya-mnzuhk..spya-sa2yuj",
+                "spya-sdadcb..spya-zfhdft"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 2,
+              "ranges": [
+                "spya-mnzuhk..spya-sa2yuj",
+                "spya-sdadcb..spya-zfhdft"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 3,
+              "ranges": [
+                "spya-mnzuhk..spya-sa2yuj",
+                "spya-qphj8e..spya-zfhdft",
+                "spya-sdadcb..spya-vjuv0b"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-fd9gdt..spya-wte999",
+          "whereFirstSeen": "root > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 3,
+              "ranges": [
+                "spya-fd9gdt..spya-dbu6yx",
+                "spya-fknfme..spya-h3u673",
+                "spya-p9v3bg..spya-wte999"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 4,
+              "ranges": [
+                "spya-fcbxhb..spya-h3u673",
+                "spya-fd9gdt..spya-b94kh6",
+                "spya-p9v3bg..spya-wte999",
+                "spya-uh7srh..spya-a2ymh5"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 4,
+              "ranges": [
+                "spya-fcbxhb..spya-h3u673",
+                "spya-fd9gdt..spya-b94kh6",
+                "spya-p9v3bg..spya-wte999",
+                "spya-uh7srh..spya-a2ymh5"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-knaxw2..spya-f4e69d",
+          "whereFirstSeen": "root > child 3 > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 8,
+              "ranges": [
+                "spya-jg7e22..spya-fqqkwu",
+                "spya-knaxw2..spya-tq088k",
+                "spya-muq0bq..spya-f4e69d",
+                "spya-qephw4..spya-a5hhda",
+                "spya-r55pzp..spya-zjjnkc",
+                "spya-s59efc..spya-p8qg76",
+                "spya-sqv0gd..spya-kjasts",
+                "spya-v8rjf0..spya-kups4j"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 8,
+              "ranges": [
+                "spya-jg7e22..spya-zjjnkc",
+                "spya-knaxw2..spya-tq088k",
+                "spya-muq0bq..spya-f4e69d",
+                "spya-qephw4..spya-a5hhda",
+                "spya-s59efc..spya-s59efc",
+                "spya-sqv0gd..spya-kjasts",
+                "spya-v8rjf0..spya-kups4j",
+                "spya-zwrqph..spya-p8qg76"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 9,
+              "ranges": [
+                "spya-f4e69d..spya-f4e69d",
+                "spya-j0bcsa..spya-s59efc",
+                "spya-jg7e22..spya-fqqkwu",
+                "spya-knaxw2..spya-tq088k",
+                "spya-qephw4..spya-a5hhda",
+                "spya-r55pzp..spya-j2jahr",
+                "spya-sqv0gd..spya-kjasts",
+                "spya-v8rjf0..spya-a6z8mw",
+                "spya-zwrqph..spya-p8qg76"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-ugtgb9..spya-ba3yta",
+          "whereFirstSeen": "root > child 4 > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 2,
+              "ranges": [
+                "spya-gh68h3..spya-ba3yta",
+                "spya-ugtgb9..spya-xeduyc"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 2,
+              "ranges": [
+                "spya-gh68h3..spya-ba3yta",
+                "spya-ugtgb9..spya-xeduyc"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 3,
+              "ranges": [
+                "spya-ba3yta..spya-ba3yta",
+                "spya-gh68h3..spya-axmuxp",
+                "spya-ugtgb9..spya-xeduyc"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-n48c7y..spya-rd0wuj",
+          "whereFirstSeen": "root > child 4 > child 3",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 3,
+              "ranges": [
+                "spya-c5cevz..spya-rd0wuj",
+                "spya-mdxnua..spya-mgjzjb",
+                "spya-n48c7y..spya-ae49kq"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 4,
+              "ranges": [
+                "spya-mdxnua..spya-csk8vc",
+                "spya-mgjzjb..spya-mb2tb0",
+                "spya-n48c7y..spya-ae49kq",
+                "spya-vbug6u..spya-rd0wuj"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 3,
+              "ranges": [
+                "spya-c5cevz..spya-rd0wuj",
+                "spya-mdxnua..spya-mgjzjb",
+                "spya-n48c7y..spya-ae49kq"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-gsm059..spya-md3zw4",
+          "whereFirstSeen": "root > child 5 > child 1",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 3,
+              "ranges": [
+                "spya-fttbsp..spya-tcpnyb",
+                "spya-gsm059..spya-wr2uvm",
+                "spya-md3zw4..spya-md3zw4"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 4,
+              "ranges": [
+                "spya-fttbsp..spya-tcpnyb",
+                "spya-gsm059..spya-wb7qmn",
+                "spya-md3zw4..spya-md3zw4",
+                "spya-yhzae0..spya-wr2uvm"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 3,
+              "ranges": [
+                "spya-fttbsp..spya-tcpnyb",
+                "spya-gsm059..spya-wr2uvm",
+                "spya-md3zw4..spya-md3zw4"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-e64kqp..spya-ebnsaf",
+          "whereFirstSeen": "root > child 5 > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 5,
+              "ranges": [
+                "spya-e64kqp..spya-r52m2v",
+                "spya-fxbc7q..spya-vgvkuy",
+                "spya-p2tkj3..spya-t9gqt4",
+                "spya-s0ag08..spya-cn85nj",
+                "spya-vp93wh..spya-ebnsaf"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 4,
+              "ranges": [
+                "spya-e64kqp..spya-r52m2v",
+                "spya-p2tkj3..spya-pk6y6w",
+                "spya-s0ag08..spya-cn85nj",
+                "spya-wxnvb3..spya-ebnsaf"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 5,
+              "ranges": [
+                "spya-bs9y6q..spya-pk6y6w",
+                "spya-cn85nj..spya-zmtk23",
+                "spya-e64kqp..spya-s0ag08",
+                "spya-uj0fqk..spya-xqq4sk",
+                "spya-wxnvb3..spya-ebnsaf"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-jc5xsx..spya-ans9tf",
+          "whereFirstSeen": "root > child 6 > child 1",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 4,
+              "ranges": [
+                "spya-ans9tf..spya-ans9tf",
+                "spya-eu6b7p..spya-un8bbw",
+                "spya-jc5xsx..spya-asb2ge",
+                "spya-zbhbj5..spya-up0d0h"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 2,
+              "ranges": [
+                "spya-eu6b7p..spya-ans9tf",
+                "spya-jc5xsx..spya-up0d0h"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 4,
+              "ranges": [
+                "spya-ans9tf..spya-ans9tf",
+                "spya-eu6b7p..spya-un8bbw",
+                "spya-jc5xsx..spya-asb2ge",
+                "spya-zbhbj5..spya-up0d0h"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-xs96sg..spya-be8xz9",
+          "whereFirstSeen": "root > child 6 > child 3",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 10,
+              "ranges": [
+                "spya-be8xz9..spya-be8xz9",
+                "spya-bngb6t..spya-bngb6t",
+                "spya-c39fqq..spya-c39fqq",
+                "spya-esu7bt..spya-esu7bt",
+                "spya-m602a7..spya-m602a7",
+                "spya-nnvfvf..spya-nnvfvf",
+                "spya-rcqu29..spya-rcqu29",
+                "spya-u0fu0v..spya-d0rbwp",
+                "spya-ugz949..spya-ugz949",
+                "spya-xs96sg..spya-h2ekdu"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 7,
+              "ranges": [
+                "spya-be8xz9..spya-be8xz9",
+                "spya-bngb6t..spya-m602a7",
+                "spya-esu7bt..spya-d0rbwp",
+                "spya-nnvfvf..spya-nnvfvf",
+                "spya-rcqu29..spya-rcqu29",
+                "spya-ut3ebh..spya-h2ekdu",
+                "spya-xs96sg..spya-wf4jct"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 6,
+              "ranges": [
+                "spya-be8xz9..spya-be8xz9",
+                "spya-bngb6t..spya-m602a7",
+                "spya-esu7bt..spya-rcqu29",
+                "spya-h2ekdu..spya-h2ekdu",
+                "spya-nnvfvf..spya-nnvfvf",
+                "spya-xs96sg..spya-ut3ebh"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-yee4t9..spya-qyfmuy",
+          "whereFirstSeen": "root > child 8 > child 1",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 3,
+              "ranges": [
+                "spya-a7nde6..spya-a7nde6",
+                "spya-ws4hp3..spya-qyfmuy",
+                "spya-yee4t9..spya-pn8nme"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 2,
+              "ranges": [
+                "spya-ws4hp3..spya-qyfmuy",
+                "spya-yee4t9..spya-a7nde6"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 2,
+              "ranges": [
+                "spya-ws4hp3..spya-qyfmuy",
+                "spya-yee4t9..spya-a7nde6"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-hnmtsx..spya-fs022h",
+          "whereFirstSeen": "root > child 9 > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 8,
+              "ranges": [
+                "spya-ahsftu..spya-uuf6gk",
+                "spya-e0h3x6..spya-s8qjtf",
+                "spya-hnmtsx..spya-ssxvb3",
+                "spya-jk6wen..spya-ktwfgf",
+                "spya-kp6u48..spya-yhn3ux",
+                "spya-uptbbz..spya-fs022h",
+                "spya-yjvukr..spya-hvaecm",
+                "spya-z2e9y4..spya-rskaxa"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 9,
+              "ranges": [
+                "spya-ahsftu..spya-faazyd",
+                "spya-e0h3x6..spya-s8qjtf",
+                "spya-hnmtsx..spya-ssxvb3",
+                "spya-hyprpg..spya-fs022h",
+                "spya-jk6wen..spya-ktwfgf",
+                "spya-kp6u48..spya-yhn3ux",
+                "spya-m07gav..spya-h89ym2",
+                "spya-r5f2sb..spya-hzkpqm",
+                "spya-yjvukr..spya-rskaxa"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 11,
+              "ranges": [
+                "spya-ahsftu..spya-kv07nc",
+                "spya-av7mwa..spya-v9zjsn",
+                "spya-e0h3x6..spya-s8qjtf",
+                "spya-hnmtsx..spya-ssxvb3",
+                "spya-jk6wen..spya-nax3nf",
+                "spya-kp6u48..spya-yhn3ux",
+                "spya-wass97..spya-fs022h",
+                "spya-wx2yu5..spya-qv9etg",
+                "spya-xnhbcz..spya-ktwfgf",
+                "spya-yjvukr..spya-hvaecm",
+                "spya-z2e9y4..spya-rskaxa"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-uxfjpj..spya-q5ynqu",
+          "whereFirstSeen": "root > child 10 > child 1",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 7,
+              "ranges": [
+                "spya-ckh8mn..spya-ut5bz2",
+                "spya-ebywyz..spya-a4afyv",
+                "spya-kkkmbf..spya-e5bx4q",
+                "spya-p48y6h..spya-wh6ftr",
+                "spya-q5ynqu..spya-q5ynqu",
+                "spya-uxfjpj..spya-t7dywj",
+                "spya-vdkhku..spya-vdkhku"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 5,
+              "ranges": [
+                "spya-ebywyz..spya-a4afyv",
+                "spya-p48y6h..spya-e5bx4q",
+                "spya-q5ynqu..spya-q5ynqu",
+                "spya-uxfjpj..spya-t7dywj",
+                "spya-vdkhku..spya-vdkhku"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 8,
+              "ranges": [
+                "spya-ckh8mn..spya-ut5bz2",
+                "spya-ebywyz..spya-a4afyv",
+                "spya-kkkmbf..spya-e5bx4q",
+                "spya-p48y6h..spya-wryvvk",
+                "spya-q5ynqu..spya-q5ynqu",
+                "spya-uxfjpj..spya-t7dywj",
+                "spya-vdkhku..spya-vdkhku",
+                "spya-wh6ftr..spya-wh6ftr"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-nnp03d..spya-y4tx0a",
+          "whereFirstSeen": "root > child 10 > child 2",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 9,
+              "ranges": [
+                "spya-a59dhx..spya-awetvc",
+                "spya-b9mkfe..spya-ujeh5r",
+                "spya-hwajvw..spya-s09je3",
+                "spya-nnp03d..spya-nnp03d",
+                "spya-prmtay..spya-wqjf4a",
+                "spya-tbz8p5..spya-jp5hpd",
+                "spya-tr8jer..spya-uf004z",
+                "spya-v5jjyc..spya-tjq2x3",
+                "spya-y4tx0a..spya-y4tx0a"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 9,
+              "ranges": [
+                "spya-a59dhx..spya-awetvc",
+                "spya-caf3rk..spya-ccnjf6",
+                "spya-cj8cjw..spya-e0kgz2",
+                "spya-hwajvw..spya-wsyzy8",
+                "spya-keu4z2..spya-jp5hpd",
+                "spya-nnp03d..spya-trp5de",
+                "spya-tr8jer..spya-uf004z",
+                "spya-y4tx0a..spya-y4tx0a",
+                "spya-z8c3mx..spya-ujeh5r"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 7,
+              "ranges": [
+                "spya-a59dhx..spya-uf004z",
+                "spya-keu4z2..spya-jp5hpd",
+                "spya-nnp03d..spya-vhtqth",
+                "spya-s09je3..spya-e0kgz2",
+                "spya-wr02ya..spya-ccnjf6",
+                "spya-y4tx0a..spya-y4tx0a",
+                "spya-z8c3mx..spya-xupns5"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-wg4w8r..spya-r0kuh8",
+          "whereFirstSeen": "root > child 10 > child 3",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 10,
+              "ranges": [
+                "spya-pun5w3..spya-fmqaj6",
+                "spya-quxy5r..spya-gcm8t0",
+                "spya-r0kuh8..spya-r0kuh8",
+                "spya-sq39hw..spya-rdzn9j",
+                "spya-tpsvht..spya-c2e9km",
+                "spya-ugebkq..spya-d5mv88",
+                "spya-w4dp40..spya-ndzzkz",
+                "spya-wg4w8r..spya-d3wajn",
+                "spya-xkd8jq..spya-txrajv",
+                "spya-yrazr5..spya-byevq2"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 7,
+              "ranges": [
+                "spya-am6s73..spya-quxy5r",
+                "spya-cfj02m..spya-pun5w3",
+                "spya-hbnn2j..spya-rdzn9j",
+                "spya-r0kuh8..spya-r0kuh8",
+                "spya-t5d28k..spya-yrazr5",
+                "spya-w4dp40..spya-ndzzkz",
+                "spya-wg4w8r..spya-xght30"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 8,
+              "ranges": [
+                "spya-am6s73..spya-quxy5r",
+                "spya-cfj02m..spya-pun5w3",
+                "spya-r0kuh8..spya-r0kuh8",
+                "spya-sq39hw..spya-rdzn9j",
+                "spya-sudsd2..spya-byevq2",
+                "spya-t5d28k..spya-nr27p6",
+                "spya-w4dp40..spya-ndzzkz",
+                "spya-wg4w8r..spya-xght30"
+              ]
+            }
+          ]
+        },
+        {
+          "parent": "spya-a7zdj5..spya-nyq2u9",
+          "whereFirstSeen": "root > child 10 > child 4",
+          "perPass": [
+            {
+              "label": "A r1",
+              "fanOut": 11,
+              "ranges": [
+                "spya-a7zdj5..spya-pnuypj",
+                "spya-afymg6..spya-t8a3ba",
+                "spya-cs322v..spya-v3zrwh",
+                "spya-en26cb..spya-pmx9pk",
+                "spya-jhfu5r..spya-y6crfj",
+                "spya-nyq2u9..spya-nyq2u9",
+                "spya-q6t3yk..spya-azn999",
+                "spya-txv80c..spya-txv80c",
+                "spya-u7s64c..spya-k0mm4h",
+                "spya-vncz6s..spya-xdusfj",
+                "spya-vu7tgu..spya-xf4yaz"
+              ]
+            },
+            {
+              "label": "B r2",
+              "fanOut": 10,
+              "ranges": [
+                "spya-a7zdj5..spya-q33j38",
+                "spya-afymg6..spya-cs322v",
+                "spya-eqq4yt..spya-sp32bx",
+                "spya-jnaseg..spya-v3zrwh",
+                "spya-nyq2u9..spya-nyq2u9",
+                "spya-pnuypj..spya-en26cb",
+                "spya-r0f662..spya-y6crfj",
+                "spya-txv80c..spya-k0mm4h",
+                "spya-u6gkr4..spya-khvxpc",
+                "spya-vu7tgu..spya-xdusfj"
+              ]
+            },
+            {
+              "label": "B r3",
+              "fanOut": 8,
+              "ranges": [
+                "spya-a7zdj5..spya-khvxpc",
+                "spya-cs322v..spya-dvmmag",
+                "spya-jhfu5r..spya-cw2sez",
+                "spya-mg59p0..spya-vu7tgu",
+                "spya-pnuypj..spya-pmx9pk",
+                "spya-r6u5ut..spya-xdusfj",
+                "spya-t0a8pe..spya-azn999",
+                "spya-txv80c..spya-nyq2u9"
+              ]
+            }
+          ]
+        }
+      ],
+      "boundariesMoved": [],
+      "rangesMatched": 27,
+      "verdictFlips": [],
+      "bothMovedAndFlipped": 0,
+      "unpairable": 0
+    },
+    "q2": {
+      "overall": {
+        "candidates": 419,
+        "asked": 332,
+        "yes": 18,
+        "no": 314,
+        "rate": 0.05421686746987952
+      },
+      "byWave": [
+        {
+          "wave": 1,
+          "rate": {
+            "candidates": 87,
+            "asked": 0,
+            "yes": 0,
+            "no": 0,
+            "rate": null
+          }
+        },
+        {
+          "wave": 2,
+          "rate": {
+            "candidates": 332,
+            "asked": 332,
+            "yes": 18,
+            "no": 314,
+            "rate": 0.05421686746987952
+          }
+        }
+      ],
+      "bySize": [
+        {
+          "bucket": "under the floor (<10 blocks)",
+          "rate": {
+            "candidates": 231,
+            "asked": 216,
+            "yes": 0,
+            "no": 216,
+            "rate": 0
+          }
+        },
+        {
+          "bucket": "10+ blocks, <800 words",
+          "rate": {
+            "candidates": 26,
+            "asked": 23,
+            "yes": 0,
+            "no": 23,
+            "rate": 0
+          }
+        },
+        {
+          "bucket": "10+ blocks, 800-2000 words",
+          "rate": {
+            "candidates": 75,
+            "asked": 51,
+            "yes": 0,
+            "no": 51,
+            "rate": 0
+          }
+        },
+        {
+          "bucket": "10+ blocks, 2000+ words",
+          "rate": {
+            "candidates": 87,
+            "asked": 42,
+            "yes": 18,
+            "no": 24,
+            "rate": 0.42857142857142855
+          }
+        }
+      ]
+    },
+    "q3": {
+      "candidates": 419,
+      "expanded": 121,
+      "stopped": 298,
+      "because": {
+        "authored-heading": 100,
+        "forced-open": 15,
+        "unassessed-ceiling": 3,
+        "depth-cap": 0,
+        "divisibility-floor": 221,
+        "verdict": 71,
+        "no-verdict": 9
+      },
+      "assessed": 332,
+      "overruled": 34,
+      "overrides": {
+        "authored-heading": 19,
+        "depth-cap": 0,
+        "divisibility-floor": 0,
+        "forced-open": 15
+      },
+      "decidedByVerdict": 71,
+      "reading": "A bound overruled the model on 10% of the nodes it was asked about, and the verdict alone decided 71 of 332. **The higher the first number, the weaker the case for the feature**: if the heading rule and the two counters are doing nearly all the deciding, the self-assessment is an expensive opinion and the conditional-depth prompt does the same job for nothing. docs/plans/260904d-deepen-fat-sections.md § stage 5 question 3."
+    },
+    "q4": {
+      "rows": [
+        {
+          "label": "A book ingest, deepening on (repeat 1)",
+          "nanos": 3484536900,
+          "unpriced": 0,
+          "unreadable": 0,
+          "lateCalls": 0,
+          "vsIncumbent": 3.4845369
+        },
+        {
+          "label": "B book hierarchy forced (repeat 2)",
+          "nanos": 2535497400,
+          "unpriced": 0,
+          "unreadable": 0,
+          "lateCalls": 0,
+          "vsIncumbent": 2.5354974
+        },
+        {
+          "label": "B book hierarchy forced (repeat 3)",
+          "nanos": 2956302300,
+          "unpriced": 0,
+          "unreadable": 0,
+          "lateCalls": 1,
+          "vsIncumbent": 2.9563023
+        }
+      ],
+      "totalNanos": 8976336600,
+      "answerable": false,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "B book hierarchy forced (repeat 3): 1 call(s) opened in this process and were never recorded — a request whose collector closed before its answer came back gets no ledger row at all, on purpose, because the report had already been taken. So the figure beside this row is a FLOOR and not a bill. The count is process-wide rather than per job (`LedgerRead.lateCalls`), so it says that something here is short without saying which."
+        }
+      ],
+      "source": "Money is read back from `spideryarn.ai_calls` by job id (`costStore.forJob`), which is what the gateway billed — and reconciled against what each step's own collector saw (`AdvanceParts.onStepSpend`), because a row that was never inserted reads back as `unreadable: 0`. The wave's own token counts are reported separately and are NOT converted into a price here — docs/plans/260904d-deepen-fat-sections.md § stage 5b asks for one or the other, said plainly, and this is the ledger."
+    },
+    "q5": {
+      "budgetMs": 700000,
+      "deadlineMs": 740000,
+      "clocks": [],
+      "overBudget": [],
+      "selfAborted": [],
+      "wasted": [],
+      "measured": 0,
+      "expected": 0,
+      "completed": 0,
+      "peakConcurrency": 0,
+      "fullConcurrencyMs": null,
+      "fullConcurrencyFloorMs": 60000,
+      "answerable": false,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "Question 5 needs 0 completed step(s) with a clock and a wave that finished, and this phase has 0 of 0 (no clocks at all). A step that started and failed carries both timestamps, so its clock is a duration and not a measurement; neither is a step that finished on the fallback tree because its wave threw — this is an absence, not a pass."
+        }
+      ],
+      "reading": "Question 5 was NOT measured: 0 of 0 step(s) completed and the peak concurrency was 0. This is an absence, not a pass — read the findings before quoting any number in this block."
+    },
+    "phaseDBookPasses": []
+  },
+  "findings": [
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "2 fatal finding(s) on a job that has already stopped, so the run did not go on to repeat 4 and phases C and D. What is below covers what was really driven and really bought; the phases named are absent, not zero."
+    },
+    {
+      "kind": "ledger-short",
+      "fatal": true,
+      "message": "B book hierarchy forced (repeat 3), on the end-of-run ledger read: hierarchy: hierarchy made 39 call(s) but 1 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+    },
+    {
+      "kind": "requeued",
+      "fatal": true,
+      "message": "book hierarchy forced (repeat 3): the claimant handed this job back at its own deadline (requeue window 1 of 3). This run STOPPED rather than re-claiming it. SPIDERYARN_DEEPEN_REASK still named evaldeepen-e5aq8o9s-book-spya-yynkqz, so the next claim would ignore the checkpoint rows this one just wrote and buy the whole wave again, and the budget permits three such windows. The job is left `queued`, the article and the job are RETAINED rather than cleaned up, and no later job in this run can publish over that slug. This pass is partial and must not be quoted."
+    },
+    {
+      "kind": "ledger-short",
+      "fatal": true,
+      "message": "hierarchy: hierarchy made 39 call(s) but 1 call(s) opened and never recorded — the ledger is short, and a Postgres read cannot tell you so: a row that was never inserted reads as unreadable: 0."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "B book hierarchy forced (repeat 3): 1 call(s) opened in this process and were never recorded — a request whose collector closed before its answer came back gets no ledger row at all, on purpose, because the report had already been taken. So the figure beside this row is a FLOOR and not a bill. The count is process-wide rather than per job (`LedgerRead.lateCalls`), so it says that something here is short without saying which."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "Question 5 needs 0 completed step(s) with a clock and a wave that finished, and this phase has 0 of 0 (no clocks at all). A step that started and failed carries both timestamps, so its clock is a duration and not a measurement; neither is a step that finished on the fallback tree because its wave threw — this is an absence, not a pass."
+    }
+  ]
+}

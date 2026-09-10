@@ -10,10 +10,10 @@
  * one. Those are the same picture on a page that only renders the register, and
  * the whole of docs/reusable/silent-success.md is about that picture.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../tools/overseer/status-cli.js";
 import type { SessionEvent } from "../tools/overseer/diff.js";
@@ -32,6 +32,8 @@ import {
   type StatusSince,
 } from "../tools/overseer/store.js";
 import type { DaemonNote } from "../tools/overseer/notes.js";
+import { NOTES_FILE } from "../tools/overseer/notes.js";
+import { runParsed } from "../scripts/overseer.js";
 
 const roots: string[] = [];
 
@@ -182,6 +184,46 @@ describe("telling a dead daemon from a quiet one", () => {
 });
 
 describe("reading the event log without disturbing the daemon", () => {
+  test("an event log that cannot be read is reported by the reader, command and status", async () => {
+    const root = tempRoot();
+    const path = join(root, EVENTS_FILE);
+    mkdirSync(path);
+
+    expect(readEventTail(root, 40)).toMatchObject({ cause: expect.stringMatching(/EISDIR|directory/i) });
+    expect(statusLines(root, NOW).join("\n")).toMatch(/events\s+UNREADABLE/);
+
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "events", limit: 40 });
+      expect(code).toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringMatching(/events\.jsonl.*EISDIR|events\.jsonl.*directory/i));
+    } finally {
+      error.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
+  test("the events command fails visibly when every complete line is malformed", async () => {
+    const root = tempRoot();
+    writeFileSync(join(root, EVENTS_FILE), "{not an event}\n");
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "events", limit: 40 });
+      expect(code).toBe(1);
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/1 unreadable line/));
+      expect(log).not.toHaveBeenCalledWith(expect.stringMatching(/^no events/));
+    } finally {
+      log.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
   test("the tail is the last N events, and unreadable lines are counted", () => {
     const root = tempRoot();
     const events: SessionEvent[] = [1, 2, 3].map((n) => ({
@@ -195,16 +237,58 @@ describe("reading the event log without disturbing the daemon", () => {
     }));
     writeFileSync(
       join(root, EVENTS_FILE),
-      `${events.map((e) => JSON.stringify(e)).join("\n")}\n{"kind":"nonsense"}\nnot json at all\n`,
+      `${JSON.stringify(events[0])}\n{"kind":"nonsense"}\n${JSON.stringify(events[1])}\nnot json at all\n${JSON.stringify(events[2])}\n`,
     );
     const read = readEventTail(root, 2);
     expect(read.total).toBe(3);
     expect(read.events.map((e) => (e.kind === "tmux-session-gone" ? e.name : ""))).toEqual(["session-2", "session-3"]);
     expect(read.unreadable).toBe(2);
+    expect(read.tornTail).toBeNull();
+  });
+
+  test("a malformed event of a known kind is refused before the renderer can dereference it", () => {
+    const root = tempRoot();
+    writeFileSync(
+      join(root, EVENTS_FILE),
+      `${JSON.stringify({
+        kind: "session-seen",
+        at: "2026-09-08T07:01:00.000Z",
+        tmuxServerPid: 132280,
+        key: "$1 none",
+        identity: { tmuxId: "$1", claimedConversationId: null },
+      })}\n`,
+    );
+
+    const read = readEventTail(root, 10);
+
+    expect(read.events).toEqual([]);
+    expect(read.unreadable).toBe(1);
+    expect(() => read.events.map(describeEvent)).not.toThrow();
+  });
+
+  test("an unterminated final event is reported separately from corrupt complete lines", () => {
+    const root = tempRoot();
+    const complete = JSON.stringify({
+      kind: "tmux-session-gone",
+      at: "2026-09-08T07:01:00.000Z",
+      tmuxServerPid: 132280,
+      key: "$1 none",
+      identity: { tmuxId: "$1", claimedConversationId: null },
+      name: "overseer-o1-store",
+      why: "absent-from-snapshot",
+    });
+    const torn = '{"kind":"tmux-session-gone","at":"2026-09-08T07:02';
+    writeFileSync(join(root, EVENTS_FILE), `${complete}\n${torn}`);
+
+    const read = readEventTail(root, 10);
+
+    expect(read.total).toBe(1);
+    expect(read.unreadable).toBe(0);
+    expect(read.tornTail).toBe(torn);
   });
 
   test("no log at all reads as empty rather than throwing", () => {
-    expect(readEventTail(tempRoot(), 10)).toEqual({ events: [], unreadable: 0, total: 0 });
+    expect(readEventTail(tempRoot(), 10)).toEqual({ events: [], unreadable: 0, tornTail: null, total: 0, cause: null });
   });
 
   test("every event kind renders as a sentence naming the session", () => {
@@ -275,6 +359,60 @@ describe("reading the event log without disturbing the daemon", () => {
 });
 
 describe("the status page a person actually reads", () => {
+  test("corrupt complete notes make standing and conditions unknown, and the notes command fails", async () => {
+    const root = tempRoot();
+    writeFileSync(join(root, NOTES_FILE), "{not a note}\n");
+
+    const lines = statusLines(root, NOW).join("\n");
+    expect(lines).toContain("CANNOT TELL");
+    expect(lines).toMatch(/notes\s+UNREADABLE/);
+    expect(lines).not.toContain("no checkpoint and no notes");
+    expect(lines).not.toContain("conditions  all clear");
+
+    const saved = process.env.OVERSEER_STORE_DIR;
+    process.env.OVERSEER_STORE_DIR = root;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "notes", limit: 40 });
+      expect(code).toBe(1);
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/1 unreadable line/));
+      expect(log).not.toHaveBeenCalledWith("the Overseer has written nothing about itself yet");
+    } finally {
+      log.mockRestore();
+      if (saved === undefined) delete process.env.OVERSEER_STORE_DIR;
+      else process.env.OVERSEER_STORE_DIR = saved;
+    }
+  });
+
+  test("unreadable daemon notes make standing unknown instead of looking like no notes", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, NOTES_FILE));
+
+    const lines = statusLines(root, NOW).join("\n");
+
+    expect(lines).toContain("CANNOT TELL");
+    expect(lines).toMatch(/notes\s+UNREADABLE/);
+    expect(lines).not.toContain("no checkpoint and no notes");
+    expect(lines).not.toContain("conditions  all clear");
+  });
+
+  test("the notes command prints a read failure and returns non-zero", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, NOTES_FILE));
+    const saved = process.env["OVERSEER_STORE_DIR"];
+    process.env["OVERSEER_STORE_DIR"] = root;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await runParsed({ command: "notes", limit: 40 });
+      expect(code).toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringMatching(/daemon\.jsonl.*EISDIR|daemon\.jsonl.*directory/i));
+    } finally {
+      error.mockRestore();
+      if (saved === undefined) delete process.env["OVERSEER_STORE_DIR"];
+      else process.env["OVERSEER_STORE_DIR"] = saved;
+    }
+  });
+
   test("an empty store says so in words rather than rendering an empty fleet", () => {
     const lines = statusLines(tempRoot(), NOW).join("\n");
     // AN EMPTY REGISTER AND A DEAD DAEMON MUST NOT LOOK ALIKE. "0 sessions" over

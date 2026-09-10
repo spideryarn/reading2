@@ -36,7 +36,7 @@ Specific to this project; the rest of the doc travels. **Every plan under `docs/
 Sol before it is built, and the code built from it goes back for a second review.**
 
 ```bash
-npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
+npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
   --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
 ```
 

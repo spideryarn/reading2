@@ -1,0 +1,630 @@
+{
+  "meta": {
+    "startedAt": "2026-09-05T14:18:39.246Z",
+    "commit": "9d1cf057edb0de1a8f4266eb99869afa56b4e03f",
+    "gitDirty": true,
+    "srcPatchSha256": "56799476335bdb22e3c87f22c87e7000fb137d5f9c79ded4873d21cb31a89930",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "node": "v26.8.1",
+    "model": "anthropic/claude-sonnet-5",
+    "effort": {
+      "hierarchy": "low",
+      "pipelineEnvOverride": null,
+      "note": "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts (EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. Every CandidateRecord carries the model and effort it was decided under."
+    },
+    "jobConcurrency": 3,
+    "jobConcurrencyRuntime": 3,
+    "stepBudgetMs": 700000,
+    "effectiveDeadlineMs": 740000
+  },
+  "runTag": "trixezls",
+  "args": {
+    "book": "output/2701-h.html",
+    "articles": [
+      "output/noema-mythology-of-conscious-ai.html"
+    ],
+    "repeats": 3,
+    "spend": false,
+    "dryRun": true,
+    "keep": false,
+    "mode": "dry-run"
+  },
+  "fixtures": [
+    {
+      "role": "book",
+      "file": "output/2701-h.html",
+      "sha256": "9ef7866a853cdf783af6281a5cf66b5d9e2caa7085d022c992801d2d3b25321b",
+      "bytes": 1415665
+    },
+    {
+      "role": "article-1",
+      "file": "output/noema-mythology-of-conscious-ai.html",
+      "sha256": "7d110be8d94a9c2c5a38324d2a4965c1968e480f85b93bb4343e9b39591531e6",
+      "bytes": 78787
+    }
+  ],
+  "notes": [
+    "Stage 1 (fetch) is a fixture read of a file named on the command line, so no network latency is in any elapsed time here, and there is no committed manifest holding those bytes constant — output/ is gitignored. The sha256 of what this run read is in `fixtures`.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`. Every label call carries stepName=hierarchy and job=labels. The SCOPED EXPANSION CALLS also carry job=hierarchy, the same as the whole-document structure call — so on a repeat with the structure checkpoint resumed, the `hierarchy` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that into a check rather than an assumption.",
+    "Money is the ledger's (`costStore.forJob`). Token counts are reported beside it and are never converted into a price here.",
+    "Question 1 pairs candidates on parent-plus-derived-range, never on `where`, which is an ordinal path derived from the answer's own fan-out. Verdict flips, changed fan-out and moved boundaries at equal fan-out are three separate rows and must not be added together.",
+    "A repeat is only a repeat if it bought its wave again. SPIDERYARN_DEEPEN_REASK names the book's slug and nothing else; the structure checkpoint is deliberately still resumed, which is what holds the seed constant.",
+    "Phase D runs three jobs at once, and this box is shared: another agent's dev server holding a claim slot would serialise them. Read the per-step clocks against each other, not only against the budget."
+  ],
+  "seamProof": {
+    "cold": 1,
+    "repeatWithoutReask": 0,
+    "repeatWithReask": 1,
+    "readsWhileReasking": 0,
+    "namespaces": [
+      "hierarchy-deepen"
+    ]
+  },
+  "estimate": {
+    "rows": [
+      {
+        "what": "book, full ingest, deepening on",
+        "jobs": 1,
+        "usdEach": 8.4,
+        "basis": "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound."
+      },
+      {
+        "what": "book, forced hierarchy, structure + labels resumed",
+        "jobs": 3,
+        "usdEach": 7.4,
+        "basis": "$8.4 less the $1.00 structure call the checkpoint resumes (same table). Labels resume too wherever the deepened tree comes out the same, so this is an upper bound twice over."
+      },
+      {
+        "what": "ordinary article, full ingest",
+        "jobs": 3,
+        "usdEach": 3.4,
+        "basis": "evals/cost/run.ts records ~$3.40 for a `long-html` (186-block) ingest, measured 2026-09-03. The plan says an ordinary article's wave is 'a fraction' of a book's; nothing is measured, so nothing is added. **One of these runs with the flag off** — phase C's first pass, which is the byte-identical baseline — and that costs the same, because on an article where nothing is eligible the wave makes no call either way. That equality is the thing phase C is measuring, so it is an assumption here and a result there."
+      },
+      {
+        "what": "ordinary article, forced hierarchy, everything resumed",
+        "jobs": 1,
+        "usdEach": 0.1,
+        "basis": "the inertness pass: structure and labels both resume and no section is eligible, so the expectation is zero. $0.10 is headroom for a label batch the deepened tree re-cut."
+      }
+    ],
+    "totalUsd": 40.9,
+    "worstCaseUsd": 85.30000000000001,
+    "bound": "$40.90 is the NOMINAL ESTIMATE — one purchase of each row — and $85.30 is the THREE-WINDOW REQUEUE EXPOSURE: what the same run would cost if every re-asking pass were re-claimed at its own 740s deadline and bought its wave in each of the three windows `REQUEUE_BUDGET = 2` permits. This run stops a re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § driveToDone), so it does not buy that exposure. **NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP.** No dollar or token limit refuses a call at $N. An ordinary, non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed; a redraw buys a second answer to the same question; and every per-row figure is the plan's arithmetic rather than a limit anything checks against. Watch the bill.",
+    "caveat": "Every per-row figure is an upper bound on ONE purchase of that row, derived from the plan's own arithmetic rather than measured — it is not a bound on how many purchases the run makes, which is the sentence above. The run's own `run.json` carries what it really cost. If the real bill lands far under this, that is question 4 answering itself; if it lands over, stop and read why before repeating."
+  },
+  "jobs": [
+    {
+      "phase": "A",
+      "label": "book ingest, deepening on (repeat 1)",
+      "repeat": 1,
+      "slug": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "jobId": "spya-a68zad",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T14:18:39.453Z",
+      "finishedAt": "2026-09-05T14:18:45.223Z",
+      "elapsedMs": 5770,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "1382 KB (fixture book)",
+          "startedAt": "2026-09-05T14:18:39.503Z",
+          "finishedAt": "2026-09-05T14:18:39.631Z",
+          "ms": 128
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "Moby Dick; or The Whale",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T14:18:39.667Z",
+          "finishedAt": "2026-09-05T14:18:45.192Z",
+          "ms": 5525
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 2)",
+      "repeat": 2,
+      "slug": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "jobId": "spya-q99p6m",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T14:18:45.244Z",
+      "finishedAt": "2026-09-05T14:18:45.327Z",
+      "elapsedMs": 83,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T14:18:45.274Z",
+          "finishedAt": "2026-09-05T14:18:45.297Z",
+          "ms": 23
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "B",
+      "label": "book hierarchy forced (repeat 3)",
+      "repeat": 3,
+      "slug": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "jobId": "spya-q4thyz",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T14:18:45.342Z",
+      "finishedAt": "2026-09-05T14:18:45.410Z",
+      "elapsedMs": 67,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T14:18:45.369Z",
+          "finishedAt": "2026-09-05T14:18:45.384Z",
+          "ms": 15
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "C",
+      "label": "ordinary article ingest, deepening OFF",
+      "repeat": null,
+      "slug": "evaldeepen-trixezls-inert-spya-e9ggf3",
+      "jobId": "spya-qqg2jp",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T14:18:45.429Z",
+      "finishedAt": "2026-09-05T14:18:46.044Z",
+      "elapsedMs": 615,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "77 KB (fixture article-1)",
+          "startedAt": "2026-09-05T14:18:45.497Z",
+          "finishedAt": "2026-09-05T14:18:45.534Z",
+          "ms": 37
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "The Mythology Of Conscious AI",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T14:18:45.560Z",
+          "finishedAt": "2026-09-05T14:18:46.021Z",
+          "ms": 461
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "C",
+      "label": "the same article, hierarchy forced, deepening ON",
+      "repeat": null,
+      "slug": "evaldeepen-trixezls-inert-spya-e9ggf3",
+      "jobId": "spya-v2bpun",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T14:18:46.058Z",
+      "finishedAt": "2026-09-05T14:18:46.133Z",
+      "elapsedMs": 75,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T14:18:46.088Z",
+          "finishedAt": "2026-09-05T14:18:46.102Z",
+          "ms": 14
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": null,
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": []
+    },
+    {
+      "phase": "D",
+      "label": "ordinary article 1 ingest, under load",
+      "repeat": null,
+      "slug": "evaldeepen-trixezls-load1-spya-vd02zn",
+      "jobId": "spya-q66vjy",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T14:18:46.197Z",
+      "finishedAt": "2026-09-05T14:18:47.082Z",
+      "elapsedMs": 885,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "77 KB (fixture article-1)",
+          "startedAt": "2026-09-05T14:18:46.241Z",
+          "finishedAt": "2026-09-05T14:18:46.282Z",
+          "ms": 41
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "The Mythology Of Conscious AI",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T14:18:46.321Z",
+          "finishedAt": "2026-09-05T14:18:47.054Z",
+          "ms": 733
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "ordinary article 1 ingest, under load: this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+        }
+      ]
+    },
+    {
+      "phase": "D",
+      "label": "ordinary article 2 ingest, under load",
+      "repeat": null,
+      "slug": "evaldeepen-trixezls-load2-spya-ym9tfa",
+      "jobId": "spya-z72adr",
+      "createdArticle": true,
+      "steps": [
+        "fetch",
+        "extract"
+      ],
+      "force": [],
+      "startedAt": "2026-09-05T14:18:46.197Z",
+      "finishedAt": "2026-09-05T14:18:47.093Z",
+      "elapsedMs": 896,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+      "stepOutcomes": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "77 KB (fixture article-1)",
+          "startedAt": "2026-09-05T14:18:46.272Z",
+          "finishedAt": "2026-09-05T14:18:46.314Z",
+          "ms": 42
+        },
+        {
+          "name": "extract",
+          "status": "error",
+          "detail": "The Mythology Of Conscious AI",
+          "error": "Extracting the article did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "startedAt": "2026-09-05T14:18:46.342Z",
+          "finishedAt": "2026-09-05T14:18:47.056Z",
+          "ms": 714
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "ordinary article 2 ingest, under load: this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+        }
+      ]
+    },
+    {
+      "phase": "D",
+      "label": "book hierarchy forced under load (repeat 4)",
+      "repeat": 4,
+      "slug": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "jobId": "spya-mmb5ur",
+      "createdArticle": false,
+      "steps": [
+        "extract"
+      ],
+      "force": [
+        "extract"
+      ],
+      "startedAt": "2026-09-05T14:18:46.359Z",
+      "finishedAt": "2026-09-05T14:18:47.066Z",
+      "elapsedMs": 707,
+      "jobStatus": "error",
+      "requeuedAt": null,
+      "jobError": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+      "stepOutcomes": [
+        {
+          "name": "extract",
+          "status": "error",
+          "error": "Extracting the article did not finish, and the reason is something about how this app is set up rather than anything about the article or about you. Nothing you can do from here will change that, and trying again will not help until somebody fixes it. [jb-step-ours]",
+          "startedAt": "2026-09-05T14:18:46.385Z",
+          "finishedAt": "2026-09-05T14:18:47.022Z",
+          "ms": 637
+        }
+      ],
+      "hierarchyMs": null,
+      "deepenFlag": false,
+      "reaskEnv": "evaldeepen-trixezls-book-spya-vzkgbf",
+      "observedSpend": [
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "recordsFiles": [],
+      "stats": null,
+      "waveFailed": null,
+      "waveFailureReason": null,
+      "findings": [
+        {
+          "kind": "not-answerable",
+          "fatal": true,
+          "message": "book hierarchy forced under load (repeat 4): this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "ordinary article 1 ingest, under load: this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "ordinary article 2 ingest, under load: this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+    },
+    {
+      "kind": "not-answerable",
+      "fatal": true,
+      "message": "book hierarchy forced under load (repeat 4): this job's measured step was CANCELLED, not broken — the phase had already lost the ability to answer (PROBE: a sibling lost the phase mid-step) and the fate's abort signal is combined into this step's own. Calls it had not yet made were never made; at most the one request in flight was paid for. Its clock is not a measurement."
+    }
+  ]
+}

@@ -78,7 +78,7 @@ export function freshFixture(name: FixtureName): AdmissibleSnapshot {
 }
 
 export function freshFrom(payload: JsonValue, label: string): AdmissibleSnapshot {
-  const verdict = admissible(null, parseObservation(payload));
+  const verdict = admissible(null, parseObservation(payload), new Set());
   if (verdict.verdict !== "accept") throw new Error(`${label} is not a collection: ${verdict.reason}`);
   return verdict.snapshot;
 }

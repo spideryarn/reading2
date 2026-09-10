@@ -228,9 +228,32 @@ export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
   // implementation files rather than prose, and a rule's implementation is the
   // thing a person is authorising. Re-pinned after reading the diff: two words
   // in two comments, both of them the new name of a function this file calls.
-  "wedged-work": "17abcb1814de",
-  "launch-mode": "f130e228aa85",
+  //
+  // BOTH RE-PINNED 2026-09-10 (plan 260910e § D5), for one thing only:
+  // `JobBehaviour` gained the hashed `dispatch` field and both rules are
+  // `{ kind: "live" }`, which is what they already were. No spec, threshold,
+  // disposition or source file moved — `RULE_SOURCES` are byte-for-byte what
+  // they were. Was `17abcb1814de` and `f130e228aa85`.
+  "wedged-work": "28d1f83b8a42",
+  "launch-mode": "4de4439f7848",
 };
+
+/**
+ * **THE RULE SOURCES' DIGESTS WHEN THE HASHES ABOVE WERE AUTHORISED.** Diagnosis
+ * only, like the standing jobs' `AUTHORISED_DOCUMENTS`; the composite behaviour
+ * hash remains the sole dispatch gate.
+ *
+ * These must be literals rather than the documents read while this process
+ * starts. If both sides came from the current checkout, a moved source would
+ * correctly trip the composite pin but the diagnostic would compare the new
+ * digest with itself and could not say which file moved. Both rules share the
+ * same sources and therefore the same pinned document revision.
+ */
+const AUTHORISED_RULE_DOCUMENTS: readonly JobDocument[] = [
+  { path: "tools/overseer/rules.ts", sha256: "7dfd9549cee7c3857d959e166966319a6261c4c13e3b8c09f8597ce18279ab62" },
+  { path: "tools/overseer/rule-work.ts", sha256: "2777327eb0ddf6df933734711ce3ad3b5c505d2abac5d3d75bc3c3ddd7ece4ab" },
+  { path: "tools/overseer/rule-protocol.ts", sha256: "2a424578bcc6f92a84034586aa6fac9c6ce8b30dd91257131ccca391bedd992a" },
+];
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
 export const WEDGED_WORK_SPEC: RuleSpec = {
@@ -301,7 +324,9 @@ export function ruleJobs(repoRoot: string): RuleJobs {
   // question there is.
   const defined: readonly RuleJobDefinition[] = [
     {
-      behaviour: { id: "wedged-work", what: WEDGED_WORK_WHAT, documents, work: { kind: "rule", rule: WEDGED_WORK_SPEC } },
+      // `dispatch: live` — a rule that only proposes has no dry-run worth the
+      // name, and it is hashed like every other job's (`jobs.ts` § JobDispatch).
+      behaviour: { id: "wedged-work", what: WEDGED_WORK_WHAT, documents, work: { kind: "rule", rule: WEDGED_WORK_SPEC }, dispatch: { kind: "live" } },
       // THE RULES' SCHEDULES ARE NOT IN `schedules.ts`, deliberately. That file
       // is Greg's — the two standing jobs, the ones that cost money, the ones he
       // asked to be able to retune at 3am. A rule ticks in-process and costs
@@ -311,7 +336,7 @@ export function ruleJobs(repoRoot: string): RuleJobs {
       schedule: { everyMs: WEDGED_WORK_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
     {
-      behaviour: { id: "launch-mode", what: LAUNCH_MODE_WHAT, documents, work: { kind: "rule", rule: LAUNCH_MODE_SPEC } },
+      behaviour: { id: "launch-mode", what: LAUNCH_MODE_WHAT, documents, work: { kind: "rule", rule: LAUNCH_MODE_SPEC }, dispatch: { kind: "live" } },
       schedule: { everyMs: LAUNCH_MODE_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
   ];
@@ -319,6 +344,10 @@ export function ruleJobs(repoRoot: string): RuleJobs {
     jobs: defined.map((definition) => ({
       definition,
       authorisedHash: AUTHORISED_RULE_HASHES[definition.behaviour.id as RuleJobId] as BehaviourHash,
+      // THE PINNED DIGESTS, not the load-time readings above. The behaviour hash
+      // is still judged against the loaded code; this second list exists only so
+      // a mismatch can name which source moved and what its old digest was.
+      authorisedDocuments: AUTHORISED_RULE_DOCUMENTS,
     })),
     problems,
   };

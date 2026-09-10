@@ -41,7 +41,9 @@ import {
   resetDraftPageStateForTests,
   useDraft,
   type ConversationPurpose,
+  type Draft,
   type DraftAddress,
+  type DraftSubmission,
 } from "../tools/fleet/web/src/drafts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -93,7 +95,7 @@ function Box({
   scope?: string | null;
   purpose?: ConversationPurpose;
 }) {
-  const draft = useDraft({ purpose, address, scope });
+  const draft = useDraft({ purpose, address, scope, pageSlot: "box" });
   return (
     <div>
       <textarea aria-label="box" value={draft.text} onChange={(e) => draft.setText(e.target.value)} />
@@ -523,5 +525,83 @@ describe("draftAddressOf — which reading may key a draft", () => {
       draftAddressOf({ kind: "claimed-only", conversation: { kind: "unverifiable", claimed: A, why: "x" }, why: "y" }),
     ).toEqual(CANNOT_TELL);
     expect(draftAddressOf({ kind: "unknown", cause: "not-probed", why: "z" })).toEqual(CANNOT_TELL);
+  });
+});
+
+describe("a successful request clears what it submitted, and nothing typed since (F29, F30)", () => {
+  let latest: Draft | null = null;
+  const hook = (): Draft => {
+    if (latest === null) throw new Error("the box has not rendered");
+    return latest;
+  };
+
+  /** A box that hands its hook out, so a test can hold a request open the way a card does. */
+  function TicketBox({ address, scope }: { address: DraftAddress; scope: string }) {
+    const draft = useDraft({ purpose: "session-composer", address, scope, pageSlot: "box" });
+    latest = draft;
+    return <textarea aria-label="box" value={draft.text} onChange={(e) => draft.setText(e.target.value)} />;
+  }
+
+  function ticket(): DraftSubmission {
+    const t = hook().submission();
+    if (t === null) throw new Error("no ticket for a box with words in it");
+    return t;
+  }
+
+  it("does not clear an edit made to the same box while the request was open, from the box or from storage", () => {
+    render(<TicketBox address={verified(A)} scope="exec-1" />);
+    type("the words that were sent");
+    const sent = ticket();
+    type("the words that were sent, and a correction");
+
+    act(() => hook().accept(sent));
+    expect(box().value).toBe("the words that were sent, and a correction");
+    expect(store().getItem(KEY_A)).toBe("the words that were sent, and a correction");
+  });
+
+  it("takes the sent copy out of storage when a box that stayed mounted moved to B and its words were edited there", () => {
+    render(<TicketBox address={verified(A)} scope="exec-1" />);
+    type("sent to alpha");
+    const sent = ticket();
+
+    /* The Overseer card's shape: the mount stays, the recipient moves. The
+       words stay on screen, kept for nobody. */
+    render(<TicketBox address={verified(B)} scope="exec-2" />);
+    expect(box().value).toBe("sent to alpha");
+    type("sent to alpha, reworded for bravo");
+
+    act(() => hook().accept(sent));
+    expect(box().value).toBe("sent to alpha, reworded for bravo");
+    expect(store().getItem(KEY_A)).toBeNull();
+    expect(storedKeys()).toEqual([]);
+  });
+
+  it("takes the sent words out of the key they were filed under after the send, when the success clears the box (F30)", () => {
+    render(<TicketBox address={CANNOT_TELL} scope="exec-1" />);
+    type("typed before anyone was verified");
+    const sent = ticket();
+
+    render(<TicketBox address={verified(A)} scope="exec-1" />);
+    expect(store().getItem(KEY_A)).toBe("typed before anyone was verified");
+
+    act(() => hook().accept(sent));
+    expect(box().value).toBe("");
+    expect(store().getItem(KEY_A)).toBeNull();
+
+    reload(<TicketBox address={verified(A)} scope="exec-1" />);
+    expect(box().value).toBe("");
+  });
+
+  it("keeps an edit made after the send in the key the words were filed under (F30)", () => {
+    render(<TicketBox address={CANNOT_TELL} scope="exec-1" />);
+    type("typed before anyone was verified");
+    const sent = ticket();
+
+    render(<TicketBox address={verified(A)} scope="exec-1" />);
+    type("typed before anyone was verified, then changed");
+
+    act(() => hook().accept(sent));
+    expect(box().value).toBe("typed before anyone was verified, then changed");
+    expect(store().getItem(KEY_A)).toBe("typed before anyone was verified, then changed");
   });
 });

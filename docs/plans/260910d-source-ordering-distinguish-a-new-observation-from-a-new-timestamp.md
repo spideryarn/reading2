@@ -239,8 +239,33 @@ Daemon tests, through the real parser, gate, differ and store, driven by a scrip
 Unit tests for `parseObservation`'s three arms, each `unreadable` cause, `parseAttempt` on an
 unknown schema, and `admissible()`'s rule order.
 
-- [ ] Parse, gate, daemon wiring, condition.
-- [ ] Tests red then green; focused suites, typecheck; Sol review; commit.
+Status, 2026-09-10: started ~10:55 UTC, implemented by an **Opus subagent** (not Codex; see the
+budget note under Findings). Started before web-260910's `daemon.ts` push landed, on the Overseer's
+call: that push waits on Greg's own approval with no bound, and this stage's `take()`/conditions
+hunk does not overlap its usage-pass hunk. `origin/dev` merged immediately before the subagent
+started and again before the push.
+
+- [x] Parse, gate, daemon wiring, condition.
+- [x] Tests red then green (48 new tests red before the implementation, all green after); focused
+  suites and typecheck green on the manager's own runs, before and after the review's fixes (after:
+  typecheck exit 0; 44 files / 1,583 tests); Sol review; commit.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with fixes, and found no defect in
+production behaviour; see Findings.
+
+Decisions the implementer made, recorded so the review can check them:
+
+- **An unknown schema makes the attempt reading "cannot say", not "unchanged".** `parseAttempt`
+  reports no attempt clock for an unsupported schema, and `take()` still folds that in as the
+  latest reading. So a schema-2 payload can neither restore nor clear `collector`: an open alarm
+  stays open, a closed one stays closed. This is Sol's plan-review recommendation ("install only a
+  cannot-tell attempt reading"), and it supersedes this plan's earlier wording that such a payload
+  "changes none of the attempt reading".
+- **"Never collected" ranks below every collection in the same run**, so a late placeholder
+  publication from before the first collection gets the out-of-order sentence.
+- **`producer: null` is unreadable**; only a missing key is unstamped.
+- **`INSTANCE_TOKEN` is imported from `tools/fleet/instance.ts`, not duplicated**: observation.ts
+  already imports two fleet leaf modules, and nothing forbids it.
 
 ### Stage 3 — the store and CLI readers
 
@@ -285,9 +310,19 @@ their tests.
   left as it is: they are CLI readers, and the page load never reaches them. Nothing here adds a
   full-history parse to a page load: the dashboard reads only the checkpoint (Sol, finding 6).
 
-- [ ] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail.
-- [ ] The live-log check (read-only), recorded below with its count.
-- [ ] Focused suites, typecheck, full suite via `tmux-job`; Sol review; commit; push.
+- [x] Short reads, `parseEvent`, `readEventTail`, `readNotes`, torn tail. **Implemented by Codex
+  (gpt-5.6-sol), run ahead of Stage 2** because Stage 2's `daemon.ts` edits wait on another
+  session's push to that file, and Stage 3 touches none of it. `parseEventLines` is now exported and
+  takes complete lines, so `readEventTail` uses the store's parser instead of its own kind-and-`at`
+  check; `splitJsonl` in `jsonl.ts` is the one splitter.
+- [x] The live-log check (read-only): **1,918 events, 0 unreadable on the new parser**, the same
+  frozen bytes as the baseline.
+- [x] Focused suites and typecheck green on the manager's own runs, before and after the review's
+  fixes (after: typecheck exit 0; 31 files / 873 tests across the four focused suites and every
+  other suite that reaches these readers; live-log check still 1,918 events, 0 unreadable); Sol
+  review; commit. Full suite and push at the end of the plan.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with three fixes; see Findings.
 
 ## What this deliberately does not do
 
@@ -357,8 +392,82 @@ stage, red first where a behaviour changed.
    it red before the class existed. Now plain static imports.
 4. **P3, `ProducerStamp` had displaced `FleetState`'s doc comment.** Moved above it.
 
+### Stage 3 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+The manager raised two points; Sol refuted one with a proof and confirmed the other.
+
+- **The frozen log is a survey, not a proof — refuted as a risk, by tracing.** Every constructor in
+  `diff.ts` that emits `session-seen`, `session-replaced` or `session-row-changed`, and
+  `goneWhileAway` in `daemon.ts`, derives `row`, `identity` and `key` from the same values; a claim
+  appearing or clearing takes the `session-replaced` branch, whose new side comes from the row and
+  whose previous side comes from the old one. So the new agreement checks cannot refuse anything the
+  differ legitimately writes, which is the proof the 1,918-line survey could not give.
+- **P1, a log that could not be repaired crashed daemon startup** (confirmed). `openStore` rethrew
+  after releasing its lock, and `openNoteLog` escaped without closing the store. **Fixed:** a new
+  `unusable-log` store refusal on both paths, locks released. This put a 13-line hunk in
+  `daemon.ts`'s startup, outside `take()`; the Overseer was told.
+- **P1, a corrupt note history still produced a reassuring status.** A log with only a corrupt
+  complete note made `overseer status` say *never run* and *all clear*, and `overseer notes` exit 0.
+  **Fixed:** corrupt complete lines make the daemon's standing and its conditions unknown, and both
+  `overseer notes` and `overseer events` exit 1 when a complete line is unreadable.
+- **P2, an unreadable event file crashed both event surfaces.** **Fixed:** `EventTail` carries a
+  named cause; status prints `events UNREADABLE`.
+
+**One behaviour kept rather than softened, and worth knowing.** A torn final line in the notes log
+also makes `overseer status` report the daemon's standing as *cannot tell* (labelled `INCOMPLETE`,
+apart from `UNREADABLE`). A status read that lands mid-append will therefore say so for that one
+read; it corrects itself on the next. Reporting from the last complete note instead was the
+alternative, and it could call a daemon *running* while its stopping note is half-written. Rare,
+transient, and on the safe side, so it was not worth a second paid review round.
+
+### Stage 2 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+No defect in production behaviour. Every hard check held: an A→B dashboard restart, across a
+daemon restart too, produces no events after A's baseline, and a late A payload is refused; every
+inadmissible sample returns before `diff()` and `goneWhileAway()`; a duplicate, re-stamped or
+out-of-order payload cannot move `lastGoodSnapshotAt`; the rule order matches the plan; the Stage 1
+sentinel is tested through the real `statePayload()`.
+
+1. **P2, the tests did not prove two of the safety claims.** Proved by mutation: breaking
+   `parseAttempt` so a schema-2 payload was read opened `collector` with every test still green, and
+   admitting a baseline-null sample produced six false `tmux-session-gone` events, again unseen.
+   **Fixed:** tests for the closed→unknown-schema direction and a warm-register, missing-baseline,
+   unknown-schema empty sample; also pinned a duplicate not moving `lastGoodSnapshotAt`, the startup
+   placeholder's sentence, and the current run surviving retirement trimming.
+2. **P2, the bound on `retired` has a consequence, left as designed — a decision.** After seventeen
+   dashboard replacements the oldest run is let go; a payload from it would then be accepted as a new
+   run, retiring the real current run, whose payloads would be refused until the next dashboard
+   restart. The reviewer did not change it because the plan chose the bound. **Kept, deliberately:**
+   a payload can only come from a live process, and a dashboard sixteen restarts old is not one, so
+   the path needs something the single sequential source cannot deliver. If it ever happened it
+   would not be silent: every refused payload degrades `snapshots`, and the next dashboard restart
+   clears it. Raising the bound would cost nothing in memory but would need either a test that drives
+   a thousand restarts or a new daemon option to inject it, which is more surface than an
+   unreachable path is worth. The test now exposes the whole consequence, so a future change to the
+   bound is made knowingly.
+3. **P3, `daemon.ts`'s module header still described clock-only ordering.** **Fixed**, with two
+   related "the clock moves on" comments.
+
+**Implementer for Stage 2 changed.** The Overseer's budget notice of 2026-09-10 (~09:35Z) moved
+implementation off Codex, whose weekly window was emptying under seven sessions; Codex is now for
+the obligatory Sol reviews only, capped at 30 minutes. Stage 2 is implemented by an Opus subagent in
+this worktree and reviewed by Sol.
+
 ## Status
 
-2026-09-10 — Stage 0 done: plan reviewed by Sol, all six findings accepted. Stage 1 done: producer
-stamp committed, Sol stage review passed with four fixes. Stage 2 waits on another session's
-`daemon.ts` push; Stage 3 is independent of it.
+2026-09-10 — **finished.** Every stage done and Sol-reviewed, no second review round needed on any:
+
+- Stage 0, the plan: six findings, all accepted.
+- Stage 1, the producer stamp (Codex): four fixes from its review.
+- Stage 3, the store and CLI readers (Codex, run ahead of Stage 2): three fixes.
+- Stage 2, the daemon's ordering (Opus subagent, started before web-260910's `daemon.ts` push on
+  the Overseer's call): stronger tests, no production defect.
+
+**Full suite on the final merged tree:** 989 files passed, 1 skipped, 2 failed. The two are
+`cold-start-lazy-imports` and `pdf-bundle-trace`, both at "has a build to inspect": the known
+environment failures of a worktree with no `api-dist/`. `fleet-decisions-route`, the third known
+one, passed because `build:fleet` ran first. No Postgres contention failures. Typecheck exit 0.
+**Live-log check:** 0 of 1,918 frozen lines refused at every stage.
+
+**To be live it needs both restarts, in either order:** a dashboard restart makes the stamps exist,
+a daemon restart makes them read. Until then old and new combine without harm in both directions.

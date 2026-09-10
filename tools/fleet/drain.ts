@@ -214,8 +214,10 @@ export type DrainHoldReason =
    * An earlier send left text that may be sitting unsent in that agent's input
    * box, and nothing goes in behind it until a person says what is there.
    * quarantine.ts; only a person's gesture or a tmux restart clears it.
-   */
+  */
   | "quarantined"
+  /** The durable attempted record could not land, so nothing was typed. */
+  | "not-durable"
   /** This session cannot be typed into at all, in steer.ts's words. */
   | "blocked"
   /** The row has no pane handle, so there is no address to send to. */
@@ -352,6 +354,11 @@ function held(sessionId: string, reason: DrainHoldReason, item: QueuedItem | nul
   return { kind: "held", sessionId, itemId: item?.id ?? null, reason, why };
 }
 
+/** A failed durable boundary never reached the transport and costs no slot. */
+function spentSendSlot(outcome: DrainOutcome): boolean {
+  return outcome.kind !== "held" || outcome.reason !== "not-durable";
+}
+
 /**
  * One session, one item, one pass.
  *
@@ -368,6 +375,11 @@ function deliverOne(row: FleetRow, address: { paneId: string; claudeSessionId: s
     deps.queue.settle(row.id, item.id, "refused");
     return { kind: "undeliverable", sessionId: row.id, itemId: item.id, why: words.why };
   }
+
+  // The attempted line is the queue's write-ahead boundary. A durable
+  // acceptance without it is proof that the transport was never reached.
+  const begun = deps.queue.beginDelivery(row.id, item.id);
+  if (!begun.ok) return held(row.id, "not-durable", item, begun.why);
 
   // BUILT FROM THE ROW, not from the item and not from anything a browser sent.
   // `row.id` is the tmux SESSION handle (`$1643`) and `row.paneId` is the PANE
@@ -436,10 +448,12 @@ function deliverOne(row: FleetRow, address: { paneId: string; claudeSessionId: s
     // cannot fire today. If it ever does, the item was leased and never sent:
     // the lease is left open for the throw's reason above — a person decides —
     // rather than settled, which would destroy an instruction that was never
-    // delivered.
+    // delivered. The receipt remains `attempted`; recovery concludes that as
+    // outcome-unknown and never sends it again.
     return { kind: "held", sessionId: row.id, itemId: item.id, reason: "quarantined", why: attempt.why };
   }
   if (attempt.kind === "threw") {
+    deps.queue.noteThrew(row.id, item.id);
     return { kind: "threw", sessionId: row.id, itemId: item.id, why: `the delivery module threw: ${attempt.error.message}` };
   }
   const result = attempt.result;
@@ -602,17 +616,18 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
         case "blocked":
           outcomes.push(held(row.id, "blocked", next.head, next.reason.why));
           break;
-        case "ready":
-          // Counted whatever the outcome: a refused send costs the same
-          // ten-second timeouts as a delivered one, and it is the SPENDING that
-          // the bound is about, not the success.
-          sends += 1;
-          // MOVED FOR THE SAME REASON THE SLOT IS SPENT, and before the send
-          // rather than after it: a send that throws has still cost the pass its
-          // time, so the next pass must not start on this row again.
-          deps.cursor.advanceTo(row.id);
-          outcomes.push(deliverOne(row, { paneId, claudeSessionId }, next.item, deps));
+        case "ready": {
+          const outcome = deliverOne(row, { paneId, claudeSessionId }, next.item, deps);
+          outcomes.push(outcome);
+          // A failed receipt boundary reaches no transport and spends no send
+          // slot. Every other arm keeps the old accounting: a refusal or throw
+          // may still have spent the coordinator's full timeout budget.
+          if (spentSendSlot(outcome)) {
+            sends += 1;
+            deps.cursor.advanceTo(row.id);
+          }
           break;
+        }
         default: {
           const never: never = next;
           return never;

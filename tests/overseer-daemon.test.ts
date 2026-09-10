@@ -17,7 +17,7 @@
  * is where sockets are tested. Every store root is a temp directory: the real
  * `~/.overseer` is never touched.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -35,6 +35,7 @@ import {
   type DaemonOptions,
 } from "../tools/overseer/daemon.js";
 import { behaviourHash, type Arming, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
+import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock } from "../tools/overseer/observation.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
@@ -108,7 +109,13 @@ async function run(
     ...(options.schedulerDetail === undefined ? {} : { schedulerDetail: options.schedulerDetail }),
   });
   expect(outcome.kind).toBe(options.outcome ?? "stopped");
-  return { notes: readNotes(root).notes, events: eventsIn(root) };
+  return { notes: notesIn(root), events: eventsIn(root) };
+}
+
+function notesIn(root: string): DaemonNote[] {
+  const read = readNotes(root);
+  if (read.kind === "unreadable") throw new Error(read.cause);
+  return read.notes;
 }
 
 function eventsIn(root: string): OverseerEvent[] {
@@ -688,6 +695,26 @@ describe("a restart does not re-announce the fleet", () => {
 });
 
 describe("refusing to be the second daemon", () => {
+  test("an unreadable note log is a named startup refusal and leaves no store lock", async () => {
+    const root = tempRoot();
+    const path = join(root, NOTES_FILE);
+    mkdirSync(path);
+
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      log: () => undefined,
+      source: () => (async function* () {})(),
+    });
+
+    expect(outcome).toMatchObject({
+      kind: "refused",
+      refusal: { reason: "unusable-log", path },
+    });
+    expect(existsSync(join(root, "overseer.lock"))).toBe(false);
+  });
+
   test("a running daemon's lock stops a second one, and the second says who has it", async () => {
     const root = tempRoot();
     let release = (): void => undefined;
@@ -725,7 +752,7 @@ describe("refusing to be the second daemon", () => {
     // AND THE REFUSED ONE WROTE NOTHING. A second daemon that logged its own
     // start into the same file would be the first line of a history nobody
     // could trust.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.filter((n) => n.kind === "daemon-started").length).toBe(1);
   });
 });
@@ -748,7 +775,7 @@ describe("stopping", () => {
         })(),
     });
     expect(outcome.kind).toBe("stopped");
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     expect(notes.at(-1)?.kind).toBe("daemon-stopped");
     expect(existsSync(join(root, "overseer.lock"))).toBe(false);
     expect(existsSync(join(root, NOTES_FILE))).toBe(true);
@@ -777,7 +804,7 @@ describe("stopping", () => {
     // stopping note, and a lock file naming a pid that is probably still alive
     // because the process that died was a test worker. The two want different
     // things done about them, so they must not look alike.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const last = notes.at(-1);
     if (last?.kind !== "daemon-stopped") throw new Error("expected a stopping note");
     expect(last.why).toContain("the daemon threw");
@@ -793,11 +820,11 @@ describe("the scheduler on the daemon's clock", () => {
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
   const JOB: JobDefinition = {
-    behaviour: { id: "prod-the-overseer", what: "say hello", documents: [], work: { kind: "session" } },
+    behaviour: { id: "prod-the-overseer", what: "say hello", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } },
     schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
   };
   /** Pinned to its own fingerprint: this file is about the daemon's timers, and the pin itself is tested in overseer-jobs.test.ts. */
-  const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) };
+  const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) };
 
   /**
    * THE ARMING AND THE SPACING GATE, both set so the daemon's TIMERS are what
@@ -812,6 +839,8 @@ describe("the scheduler on the daemon's clock", () => {
    */
   const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
   const NO_SPACING = 0;
+  /** Every session job in this file leans on no document, so a tick that asked for one would be a bug — it says so rather than inventing a digest. */
+  const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
 
   test("a job whose work never settles is dispatched, reported STUCK, and dispatched again — while the heartbeat goes on ticking", async () => {
     // The daemon-level statement of GPT Sol's S6. The in-memory
@@ -841,7 +870,7 @@ describe("the scheduler on the daemon's clock", () => {
       jobs: {
         intervalMs: 5,
         arming: ARMED,
-        launchSeparationMs: NO_SPACING,
+        launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
         definitions: [AUTHORISED],
         spawn: () => {
           spawned.push(spawned.length);
@@ -857,7 +886,7 @@ describe("the scheduler on the daemon's clock", () => {
     expect(lines.some((line) => line.includes("STUCK"))).toBe(true);
 
     // REPORTED DURABLY, not only on a console somebody was not keeping.
-    const notes = readNotes(root).notes;
+    const notes = notesIn(root);
     const unaccounted = notes.filter((note) => note.kind === "job-unaccounted");
     expect(unaccounted.length).toBeGreaterThanOrEqual(1);
     expect(unaccounted[0]?.kind === "job-unaccounted" && unaccounted[0].reason).toBe("lease-expired");
@@ -882,11 +911,11 @@ describe("the scheduler on the daemon's clock", () => {
       id: "wedged-work",
       what: "propose kills for wedged work",
       documents: [],
-      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } }, dispatch: { kind: "live" },
     },
     schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
   };
-  const RULE_AUTHORISED: AuthorisedJob = { definition: RULE, authorisedHash: behaviourHash(RULE.behaviour) };
+  const RULE_AUTHORISED: AuthorisedJob = { definition: RULE, authorisedDocuments: [], authorisedHash: behaviourHash(RULE.behaviour) };
 
   test("A RULE STILL LOOKING WHEN THE DAEMON STOPS IS WAITED FOR, so its settlement is not lost", async () => {
     // GPT Sol's SC-1, the half that bites today. `runProposingRule` returns a hot
@@ -915,7 +944,7 @@ describe("the scheduler on the daemon's clock", () => {
         jobs: {
           intervalMs: 5,
           arming: ARMED,
-          launchSeparationMs: NO_SPACING,
+          launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
           definitions: [RULE_AUTHORISED],
           rules: {
             selfPid: 4242,
@@ -954,7 +983,7 @@ describe("the scheduler on the daemon's clock", () => {
         jobs: {
           intervalMs: 5,
           arming: ARMED,
-          launchSeparationMs: NO_SPACING,
+          launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
           // Short enough that the test is quick; the shipped one is measured in
           // seconds against a ten-second observer timeout.
           settleGraceMs: 20,
@@ -1021,7 +1050,7 @@ describe("the scheduler on the daemon's clock", () => {
         jobs: {
           intervalMs: 5,
           arming: ARMED,
-          launchSeparationMs: NO_SPACING,
+          launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
           definitions: [AUTHORISED],
           spawn: () => ({
             kind: "spawned",
@@ -1047,7 +1076,7 @@ describe("the scheduler on the daemon's clock", () => {
       jobs: {
         intervalMs: 5,
         arming: ARMED,
-        launchSeparationMs: NO_SPACING,
+        launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
         definitions: [AUTHORISED],
         // Refused, so nothing is started and nothing outlives the test — the
         // arming is what is under test, not the dispatch.
@@ -1059,6 +1088,59 @@ describe("the scheduler on the daemon's clock", () => {
     if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
     expect(read.checkpoint.scheduler.kind).toBe("armed");
     expect(read.checkpoint.scheduler.why).toContain("prod-the-overseer");
+  });
+
+  test("THE HEADLINE IS MADE OF FRESH EVIDENCE: a document edited while the daemon runs turns ARMED into BLOCKED", async () => {
+    // RED FIRST, and it is Sol's P1-1 on plan 260910e. The headline used to be
+    // computed once at start, so once the tick re-read documents it could refuse
+    // a job while every checkpoint went on saying ARMED — the one line a person
+    // trusts, saying the opposite of what the scheduler was doing.
+    const root = tempRoot();
+    const DOCUMENT = { path: "docs/fixture/daemon-headline.md", sha256: "e".repeat(64) };
+    const behaviour: AuthorisedJob["definition"]["behaviour"] = {
+      id: "follows-a-document",
+      what: "follow the document",
+      documents: [DOCUMENT],
+      work: { kind: "session" },
+      dispatch: { kind: "live" },
+    };
+    const job: AuthorisedJob = {
+      definition: { behaviour, schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 } },
+      authorisedHash: behaviourHash(behaviour),
+      authorisedDocuments: [DOCUMENT],
+    };
+    let digest = DOCUMENT.sha256;
+    const headlines: string[] = [];
+    const headline = (): string => {
+      const read = readCheckpoint(root);
+      return read.kind === "checkpoint" ? read.checkpoint.scheduler.kind : read.kind;
+    };
+    await run(
+      root,
+      async function* () {
+        yield payload(fixture("session-new-before"));
+        await sleep(30);
+        // NON-VACUOUS FIRST: it really did start ARMED.
+        headlines.push(headline());
+        digest = "f".repeat(64);
+        await sleep(40);
+      },
+      {
+        jobs: {
+          intervalMs: 5,
+          arming: ARMED,
+          launchSeparationMs: NO_SPACING,
+          definitions: [job],
+          spawn: () => ({ kind: "refused", why: "not in a test" }),
+          readDocument: (path) => ({ kind: "read", path, sha256: digest }),
+        },
+      },
+    );
+    headlines.push(headline());
+    expect(headlines).toEqual(["armed", "blocked"]);
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
+    expect(read.checkpoint.scheduler.why).toContain(DOCUMENT.path);
   });
 });
 

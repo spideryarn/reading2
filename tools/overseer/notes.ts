@@ -45,7 +45,7 @@
 import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
+import { splitJsonl, truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 
 /** Beside `events.jsonl` and `current.json`, in the same store root. */
 export const NOTES_FILE = "daemon.jsonl";
@@ -53,8 +53,10 @@ export const NOTES_FILE = "daemon.jsonl";
 /**
  * The ways the Overseer can stop knowing what the fleet is doing.
  *
- * **SIX NAMES, NOT ONE FLAG**, and that is the point of the type. They have
- * one symptom — no new history — and six different causes, and a single
+ * **SEVEN NAMES, NOT ONE FLAG**, and that is the point of the type. Six have
+ * one symptom — no new history — and six different causes; the seventh,
+ * `ordering`, is a history that is still arriving and is ordered by less than
+ * it could be. A single
  * `degraded: boolean` would let the second one overwrite the first, so that
  * curing the stream would report the box healthy while the baseline was still
  * held. Every one of them is independently open and independently closed.
@@ -78,9 +80,25 @@ export const NOTES_FILE = "daemon.jsonl";
  *    where both frozen is a collector that has stopped and will not. Measured
  *    on 2026-09-08 — a `collectedAt` thirty minutes stale with `error: null` —
  *    and invisible until the producer added `attemptedAt` for it.
+ *  - `ordering` — the dashboard's producer stamp (which run composed a payload,
+ *    which collection its rows came from) is present and cannot be believed,
+ *    so payloads are being ordered by their clock alone. Not a loss of
+ *    knowledge today, and that is why it is its own name rather than a cause
+ *    of `snapshots`: nothing is refused because of it, and what is lost is the
+ *    ordering that survives a clock step or a restart. A producer that sends
+ *    NO stamp does not raise it — an old dashboard is ordered exactly as well
+ *    as it was before stamps existed, and an alarm about that would mean
+ *    nothing. docs/plans/260910d § The daemon.
  */
-export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector";
+export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector" | "ordering" | "reports";
 
+/*
+ * `reports` — **the work-report drain threw**, so submissions are waiting in the
+ * inbox and nothing is recording them. A condition rather than a new note kind:
+ * it opens on a throw and closes on the next pass that completes, which is the
+ * shape of a condition, and a refused or pending ITEM is not one — those are in
+ * the drain's own outcome and in `report-refused/`. docs/plans/260910e.
+ */
 const CONDITIONS: Record<OverseerCondition, true> = {
   "sse-stream": true,
   poll: true,
@@ -88,6 +106,8 @@ const CONDITIONS: Record<OverseerCondition, true> = {
   freshness: true,
   baseline: true,
   collector: true,
+  ordering: true,
+  reports: true,
 };
 
 /**
@@ -335,25 +355,32 @@ export function openNoteLog(root: string): NoteLog {
 }
 
 /**
- * Every note in the log, plus a count of the lines that were not notes.
+ * Every complete note in the log, corrupt complete lines, and any unfinished
+ * suffix observed while the writer was appending. A failure to read the file
+ * is its own result rather than an empty history.
  *
  * Lock-free by construction, like `readCheckpoint`: `scripts/overseer.ts` reads
  * this while the daemon is writing it, and must not be able to disturb it.
  * `unreadable` is returned rather than swallowed for the store's own reason —
  * a silent skip is how a log rots without anybody finding out.
  */
-export function readNotes(root: string, limit?: number): { notes: DaemonNote[]; unreadable: number } {
+export type ReadNotes =
+  | { kind: "read"; notes: DaemonNote[]; unreadable: number; tornTail: string | null }
+  | { kind: "unreadable"; cause: string };
+
+export function readNotes(root: string, limit?: number): ReadNotes {
   const path = join(root, NOTES_FILE);
-  if (!existsSync(path)) return { notes: [], unreadable: 0 };
-  let raw: string;
+  if (!existsSync(path)) return { kind: "read", notes: [], unreadable: 0, tornTail: null };
+  let raw: Buffer;
   try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return { notes: [], unreadable: 0 };
+    raw = readFileSync(path);
+  } catch (cause) {
+    return { kind: "unreadable", cause: `could not read ${path}: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
+  const split = splitJsonl(raw);
   const notes: DaemonNote[] = [];
   let unreadable = 0;
-  for (const line of raw.split("\n")) {
+  for (const line of split.completeLines) {
     if (line.trim() === "") continue;
     let parsed: unknown;
     try {
@@ -365,7 +392,12 @@ export function readNotes(root: string, limit?: number): { notes: DaemonNote[]; 
     if (isNote(parsed)) notes.push(parsed);
     else unreadable += 1;
   }
-  return { notes: limit === undefined ? notes : notes.slice(-limit), unreadable };
+  return {
+    kind: "read",
+    notes: limit === undefined ? notes : notes.slice(-limit),
+    unreadable,
+    tornTail: split.tornTail,
+  };
 }
 
 function isNote(u: unknown): u is DaemonNote {

@@ -261,7 +261,7 @@ export type QueueView = {
    * ahead of a new message; see the comment on the field's producer.
    */
   deliverable: number;
-  volatile: true;
+  volatile: boolean;
   warning: string;
   since: number;
   /**
@@ -3269,7 +3269,8 @@ export type HoldBasis =
  * ================================================================== */
 
 export type DecisionWireClass = "assumption" | "decision" | "decline";
-export type DecisionWireActor = "greg" | "overseer";
+/** Who recorded a line. `daemon` is the report drain, and only ever copies a session's decision. */
+export type DecisionWireRecorder = "greg" | "overseer" | "daemon";
 export type DecisionWireAdviser = "sol" | "fable" | "nobody";
 
 export type DecisionWireExecution =
@@ -3277,9 +3278,43 @@ export type DecisionWireExecution =
   | { kind: "not-found" }
   | { kind: "unavailable"; why: string };
 
+/** Who DECIDED. A schema-1 row is `legacy-unrecorded`, never the Overseer. */
+export type DecisionWireAuthor =
+  | { kind: "overseer" }
+  | { kind: "greg" }
+  | { kind: "session"; name: string; execution: DecisionWireExecution }
+  | { kind: "legacy-unrecorded" };
+
+/** What a schema-1 row carries for every schema-2 field. */
+export type DecisionWireNotRecorded = "not-recorded";
+export type DecisionWireRecorded<T> = { kind: "not-recorded" } | { kind: "recorded"; value: T };
+export type DecisionWireConsequence = "high" | "medium" | "low";
+export type DecisionWireReversibility = "easy" | "costly" | "one-way";
+export type DecisionWireDomain = "product" | "technical";
+/** The author's claim about Greg, shown as a claim — never as review. */
+export type DecisionWireGregAsked = "no" | "asked-answered" | "asked-awaiting";
+export type DecisionWireConfidence = "high" | "medium" | "low";
+
+/* Restated from `artefact-ref.ts`, because this file may import nothing. The
+   two must stay structurally equal: `routes-decisions.ts` assigns the owner's
+   type to this one and the panel hands this one to `artefactHref`, so a drift
+   in either direction is a compile error rather than a silent mismatch. */
+export type DecisionWireArtefactRef =
+  | { kind: "commit"; sha: string }
+  | { kind: "path"; path: string }
+  | { kind: "decision"; id: string }
+  | { kind: "queue-item"; id: string };
+export type DecisionWireArtefactCheck =
+  | { state: "on-dev" }
+  | { state: "found-locally" }
+  | { state: "found" }
+  | { state: "not-found" }
+  | { state: "unchecked"; why: string };
+export type DecisionWireEvidence = { ref: DecisionWireArtefactRef; check: DecisionWireArtefactCheck };
+
 export type DecisionWireRecord = {
   id: string;
-  recordedBy: DecisionWireActor;
+  recordedBy: DecisionWireRecorder;
   class: DecisionWireClass;
   question: string;
   options: { name: string; tradeoffs: string }[];
@@ -3302,9 +3337,17 @@ export type DecisionWireRecord = {
   touches: {
     kind: "decided" | "reviewed" | "reversed";
     at: string;
-    by: DecisionWireActor;
+    by: DecisionWireRecorder;
     what: string;
   }[];
+  author: DecisionWireAuthor;
+  consequence: DecisionWireConsequence | DecisionWireNotRecorded;
+  reversibility: DecisionWireReversibility | DecisionWireNotRecorded;
+  domain: DecisionWireDomain | DecisionWireNotRecorded;
+  recommendation: DecisionWireRecorded<string | null>;
+  evidence: DecisionWireRecorded<DecisionWireEvidence[]>;
+  gregAsked: DecisionWireGregAsked | DecisionWireNotRecorded;
+  confidence: DecisionWireConfidence | null | DecisionWireNotRecorded;
 };
 
 export type DecisionWireSessionState =
@@ -3354,12 +3397,16 @@ export type DecisionWireAggregates =
  * `GET /api/decisions`. Every arm carries the instant at which its claim was
  * composed. The route refuses loudly before either an input file or mandatory
  * context can exceed the synchronous work and response bounds respectively.
+ *
+ * **Schema 2 on every arm** (plan 260910e, WR-P2): schema 1's browser ignores
+ * fields it does not know, so it would have drawn a session's decision as
+ * "recorded by overseer". At 2 it says which version it can read instead.
  */
 export type DecisionsFeed =
-  | { schema: 1; kind: "never-written"; composedAt: string; why: string }
-  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 2; kind: "never-written"; composedAt: string; why: string }
+  | { schema: 2; kind: "unreadable"; composedAt: string; why: string }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-file";
       composedAt: string;
       why: string;
@@ -3367,7 +3414,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-unreviewed";
       composedAt: string;
       why: string;
@@ -3375,7 +3422,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "decisions";
       version: string;
       path: string;
@@ -3906,6 +3953,7 @@ type AdmissionPayloadBase = {
   /** When the server completed building this answer, by the SERVER's clock. */
   computedAtMs: number;
   journal: AdmissionRefusalJournal;
+  census: AdmissionCensusState;
 };
 
 /** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */
@@ -4090,3 +4138,620 @@ export type AccountUsageFeed =
       problems: readonly string[];
       coordinatorWrittenAt: string;
     };
+
+/** The three executable-shaped process classes the admission census recognises. */
+export type AdmissionCensusClass = "test" | "codex-batch" | "browser";
+
+/** Counts from one completed pass over the process table. */
+export type AdmissionCensusCounts = {
+  byClass: Record<AdmissionCensusClass, { roots: number; uncertain: number }>;
+  /** Rows whose identity, parent, or recogniser-bearing command name changed between the bracketing reads. */
+  changedUnderRead: number;
+  /** Pid entries that existed at enumeration but could not yield one complete row. */
+  unreadable: number;
+  /** Numeric entries returned by the process-table enumeration. */
+  processesSeen: number;
+};
+
+/**
+ * The cached census lifecycle. `observed` describes the kind of evidence on
+ * every arm; it does not imply that a successful observation exists yet.
+ */
+export type AdmissionCensusState =
+  | {
+      kind: "not-yet-computed";
+      label: "observed";
+      startedAtMs: number;
+    }
+  | {
+      kind: "value";
+      label: "observed";
+      census: AdmissionCensusCounts;
+      /** The bounds of the pass during which these rows were observed. */
+      startedAtMs: number;
+      completedAtMs: number;
+      durationMs: number;
+      cadenceMs: number;
+    }
+  | {
+      kind: "failed";
+      label: "observed";
+      why: string;
+      failedAtMs: number;
+      cadenceMs: number;
+      lastGood: {
+        census: AdmissionCensusCounts;
+        /** The bounds of the successful pass whose counts remain available. */
+        startedAtMs: number;
+        completedAtMs: number;
+      } | null;
+    };
+
+/* ---------------- Durable action receipt summaries ---------------- */
+
+/**
+ * The deliberately small, text-free receipt shape exposed by the Stage 1
+ * read endpoint. Exact queued words remain only in the short-lived material
+ * file and never cross this boundary.
+ */
+export type ReceiptSummary = {
+  receiptId: string;
+  op:
+    | "queued-message"
+    | "queued-action"
+    | "steer-message"
+    | "steer-answer"
+    /** Stage 3: `remove-worktree` or `kill-session`, run from one session's row. */
+    | "enacted-session"
+    /** Stage 3: one recipient of a broadcast, sent to directly. `parentReceiptId` names the broadcast. */
+    | "broadcast-recipient"
+    /** Stage 3: a box-wide kill. Box-scoped, so `target` is null. */
+    | "enacted-box"
+    /** Stage 3: the parent of one broadcast request. Box-scoped; its recipients are its children. */
+    | "broadcast";
+  origin: "enqueue" | "broadcast" | "direct-steer" | "enacted";
+  /**
+   * True while the receipt is still non-terminal — `accepted`, `attempted` or
+   * `returned`. A replay of a pending receipt is not an outcome: the action may
+   * still happen (queued work) or be concluded at the next start.
+   */
+  pending: boolean;
+  actor: {
+    kind: "client-claimed" | "unattributed-http" | "system";
+    id: string | null;
+  };
+  speaker: Speaker | null;
+  /** Null exactly for a box-scoped op (`enacted-box`, `broadcast`) — never a sentinel session. */
+  target: {
+    sessionId: string;
+    paneId: string | null;
+    claudeSessionId: string | null;
+    tmuxGeneration: number | null;
+  } | null;
+  /** The broadcast this receipt is one recipient of, or null. */
+  parentReceiptId: string | null;
+  /**
+   * For an enacted plan, the steps known to have finished (each with its gate's
+   * verdict on the receipt); null for anything that is not a plan. After a crash
+   * mid-plan this is how far it is known to have got — never further.
+   */
+  stepsCompleted: number | null;
+  /** A bounded description such as `message (42 characters)`, never its text. */
+  what: string;
+  acceptedAt: number;
+  state:
+    | "accepted"
+    | "attempted"
+    | "returned"
+    | "withdrawn"
+    | "keys-submitted"
+    | "not-sent"
+    | "outcome-unknown"
+    /** Stage 3: an enacted plan passed every gate, or a broadcast's fan-out came to an end. */
+    | "completed"
+    /** Stage 3: an enacted plan stopped at a gate; `reason` is `gate-refused`. */
+    | "plan-stopped";
+  reason: string | null;
+  attemptedAt: number | null;
+  outcomeAt: number | null;
+  reconciled: boolean;
+  queueItemId: string | null;
+  materialDeletionPending: boolean;
+};
+
+/* ================================================================== *
+ * SCHEDULE PREVIEW — WHAT THE OVERSEER'S SCHEDULER WOULD RUN, AND WHY NOT
+ * ================================================================== */
+
+/**
+ * **`~/.overseer/schedule.json`: what the scheduler would do with every job it
+ * holds, as of one checkpoint.** Plan 260910e § D6.
+ *
+ * Written by the daemon on every checkpoint tick, from the definitions it
+ * LOADED, the documents as they are NOW, its in-memory occurrence ledger and the
+ * capabilities it actually holds — not computed on demand by a reader, because a
+ * reader holds its own prompts, pins and schedule constants rather than the
+ * daemon's (Sol's P1-4). `tools/fleet/schedule-parse.ts` is the one parser; the
+ * CLI, the fleet route and the browser all go through it.
+ *
+ * **It launches nothing and authorises nothing.** Every verdict in it is the
+ * shared planner's (`tools/overseer/schedule-plan.ts`), so the preview and the
+ * tick cannot disagree about the gate order.
+ */
+export type SchedulePreview = {
+  schema: 1;
+  /** When the daemon computed this. Every verdict below is as of this instant — see `caveat`. */
+  writtenAt: string;
+  /** The daemon instance that wrote it, so a reader can tell a restarted daemon's file from the one before. */
+  instanceId: string;
+  /** Which job list the daemon holds, by revision — or that it was handed none. */
+  list: SchedulePreviewList;
+  /** What the daemon holds, not what it would hold armed: a disarmed daemon holds neither. */
+  capabilities: { session: boolean; rules: boolean };
+  arming: SchedulePreviewArming;
+  history: SchedulePreviewHistory;
+  /** The checkpoint's own scheduler headline, recomputed from the same fresh evidence on the same tick. */
+  headline: SchedulePreviewHeadline;
+  missedRunPolicy: { kind: "one-run"; sentence: string };
+  /** The limits of the file, in one sentence a reader is shown: as of `writtenAt`, and rows after a proposed launch assume it succeeded. */
+  caveat: string;
+  jobs: SchedulePreviewJob[];
+};
+
+/**
+ * `given` carries a short hash over every job's id, pin, schedule and dispatch
+ * mode (`tools/overseer/schedule-preview.ts` § `listRevision`), so a reader
+ * building the list from a checkout can say whether the running daemon holds
+ * the same one. `not-given` is a daemon started with no list at all — its own
+ * arm rather than an empty revision, because "no list" and "a list whose hash
+ * we have" are two facts.
+ */
+export type SchedulePreviewList = { kind: "given"; listRevision: string } | { kind: "not-given"; why: string };
+
+/** When the scheduler was armed — what a never-run job's first eligibility is measured from — or why there is no such instant. */
+export type SchedulePreviewArming = { kind: "armed"; at: string } | { kind: "none"; why: string };
+
+/** Whether the occurrence ledger is whole. `lost` holds every job, and the rows say so. */
+export type SchedulePreviewHistory = { kind: "intact" } | { kind: "lost"; why: string };
+
+/** `store.ts`'s `StoredScheduler`, restated here because this file imports nothing. */
+export type SchedulePreviewHeadline = { kind: "armed" | "blocked" | "off" | "unknown"; why: string; at: string };
+
+/**
+ * One job, as the scheduler would treat it now.
+ *
+ * `sessionTimeout` and `sessionNoOverlap` are literals on purpose: they are
+ * things this build does NOT do, stated on every row so nobody reads the
+ * launcher lease as either (plan 260910e § D1). The Scheduled-dispatch stage is
+ * what changes them.
+ */
+export type SchedulePreviewJob = {
+  jobId: string;
+  /** Derived from the job's hashed `work.kind`: a Claude session on the box (rationed by the spacing gate), or a rule inside the daemon. */
+  resourceClass: "claude-session" | "in-process-rule";
+  dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
+  verdict: SchedulePreviewVerdict;
+  lastAttempt: SchedulePreviewAttempt;
+  /** Durations in milliseconds. `launcherLeaseMs` is how long the LAUNCHER may stay unsettled — not a session timeout. */
+  schedule: { everyMs: number; launcherLeaseMs: number; initialDelayMs: number };
+  sessionTimeout: "not built";
+  sessionNoOverlap: "not enforced";
+  /** The authorised instruction — the job's `what`. */
+  prompt: string;
+  /** What the job fingerprints as against the documents read this checkpoint, or why that could not be computed. */
+  behaviourHash: SchedulePreviewHash;
+  /** The pin it must equal to be dispatched at all. */
+  authorisedHash: string;
+  documents: SchedulePreviewDocument[];
+};
+
+export type SchedulePreviewHash = { kind: "computed"; hash: string } | { kind: "not-computed"; why: string };
+
+/** Every kind the planner can give a job. `JobPlan` in `tools/overseer/schedule-plan.ts`, one for one. */
+export type SchedulePreviewVerdictKind =
+  | "history-lost"
+  | "duplicate-id"
+  | "unauthorised"
+  | "held"
+  | "waiting"
+  | "not-yet-eligible"
+  | "dry-run"
+  | "spacing-held"
+  | "dispatch";
+
+/** The planner's verdict, with its sentence and when the job could next run. Only `unauthorised` carries more: which documents moved. */
+export type SchedulePreviewVerdict =
+  | { kind: "unauthorised"; sentence: string; drift: string[]; next: SchedulePreviewNext }
+  | { kind: Exclude<SchedulePreviewVerdictKind, "unauthorised">; sentence: string; next: SchedulePreviewNext };
+
+/**
+ * **WHEN THE JOB COULD NEXT RUN — every case its own arm, never a null.**
+ *
+ * `next-due` and `first-eligible` are absolute UTC instants, so a backward clock
+ * jump does not move them. `after-in-flight-settles` is a run still inside its
+ * lease; `after-arming` is a never-run job on a daemon that is not armed (its
+ * first run is its own delay after somebody arms it); `none` says why there is
+ * no answer — a lost ledger, a moved pin, a duplicate id.
+ */
+export type SchedulePreviewNext =
+  | { kind: "due-now" }
+  | { kind: "next-due"; at: string }
+  | { kind: "first-eligible"; at: string }
+  | { kind: "after-in-flight-settles"; leaseUntil: string }
+  | { kind: "after-arming"; initialDelayMs: number }
+  | { kind: "none"; why: string };
+
+/**
+ * The newest occurrence the ledger holds for this job, in its own state.
+ *
+ * `meaning` is on every arm that is an occurrence, and it is the sentence that
+ * stops a reader over-trusting the word `finished`: **for a session job the
+ * ledger follows the `gjd-remote` launcher, not the session** — `finished` is
+ * the launcher exiting, and the Claude session it started runs on, detached.
+ * `not-known` is a ledger that is not whole, which must not read as `never`.
+ */
+export type SchedulePreviewAttempt =
+  | { kind: "never" }
+  | { kind: "not-known"; why: string }
+  | { kind: "reserved"; occurrenceId: string; reservedAt: string; leaseUntil: string; meaning: string }
+  | { kind: "started"; occurrenceId: string; reservedAt: string; startedAt: string; leaseUntil: string; pid: number; meaning: string }
+  | {
+      kind: "finished";
+      occurrenceId: string;
+      reservedAt: string;
+      finishedAt: string;
+      outcome: { kind: "exited"; code: number } | { kind: "failed"; why: string };
+      meaning: string;
+    }
+  | { kind: "refused"; occurrenceId: string; reservedAt: string; refusedAt: string; why: string; meaning: string }
+  | {
+      kind: "unknown";
+      occurrenceId: string;
+      reservedAt: string;
+      why: string;
+      /** `derived`: read off a reservation a dead daemon left; `recorded`: a later instance wrote it down at `at`. */
+      noticed: { kind: "derived" } | { kind: "recorded"; at: string };
+      meaning: string;
+    };
+
+/**
+ * One document the job's authority comes from: its pinned digest, its digest
+ * now, and whether they differ.
+ *
+ * `current.when` says which reading it is: a session job's documents are read
+ * `this-checkpoint`; a rule's are the source of code already loaded, so they are
+ * the digests taken `when-loaded` (`schedule-plan.ts` § `DocumentEvidence`).
+ * `changed` is `cannot-tell` when the document could not be read — a
+ * three-valued answer, because "no" would be a claim nobody could make.
+ */
+export type SchedulePreviewDocument = {
+  path: string;
+  pinned: { kind: "pinned"; sha256: string } | { kind: "not-pinned" };
+  current: { kind: "read"; sha256: string; when: "this-checkpoint" | "when-loaded" } | { kind: "unreadable"; why: string } | { kind: "absent" };
+  changed: "yes" | "no" | "cannot-tell";
+};
+
+/**
+ * One row as the parser returned it: a job it could read, or that row's own
+ * `unreadable` arm — a verdict or state kind this build does not know makes ONE
+ * row unreadable, never the file and never a different kind. `jobId` is null
+ * only when the row carried no readable id.
+ */
+export type SchedulePreviewRow = { kind: "job"; job: SchedulePreviewJob } | { kind: "unreadable"; jobId: string | null; why: string };
+
+/** The file as a reader holds it: every field of `SchedulePreview`, with its jobs as rows. */
+export type ParsedSchedulePreview = Omit<SchedulePreview, "jobs"> & { jobs: SchedulePreviewRow[] };
+
+/** What `parseSchedulePreview` returns. It never throws. */
+export type SchedulePreviewParse =
+  | { kind: "preview"; preview: ParsedSchedulePreview }
+  | { kind: "unsupported-schema"; schema: number }
+  | { kind: "unreadable"; why: string };
+
+/* ===== WORK REPORTS — WHAT AN AGENT CLAIMED ====================== *
+ * `GET /api/reports` (plan 260910e). A uniquely named banner, for the
+ * reason the DECISIONS MADE block gives.
+ *
+ * **Every row is a claim, and the types say so**: `claimedBy`, never
+ * "done", "ready", "landed" or "contradicts". A later claim is only a later
+ * claim. Types only; restated from `tools/overseer/reports.ts`, which this
+ * leaf may not import — `routes-reports.ts` assigns the owner's values to
+ * these, so a drift is a compile error there. The artefact types are the
+ * decision block's, which are pinned to `artefact-ref.ts` the same way.
+ * ================================================================== */
+
+export type ReportWireKind = "progress" | "blocked" | "decision" | "completed";
+/** A self-declaration, as a decision's `by` is. */
+export type ReportWireActor = { kind: "session"; name: string } | { kind: "overseer" } | { kind: "greg" };
+/** The submitter's token against the register's verified run; null unless the actor is a session. */
+export type ReportWireExecution = "same-verified-run" | "different-verified-run" | { unverifiable: string } | null;
+export type ReportWireCorrection = { eventId: string; actor: ReportWireActor; at: string };
+export type ReportWireJob = {
+  plan: string | null;
+  queueItem: string | null;
+  occurrence: { jobId: string; scheduledAt: string } | null;
+};
+export type ReportWireBlockedOn = "greg" | "peer" | "review" | "environment" | "other";
+export type ReportWireEnding = "finished" | "done-enough" | "important-work-left";
+/** What the agent SAID it reviewed, tested and merged. An empty list is "not stated". */
+export type ReportWireRevisions = { reviewed: string[]; tested: string[]; merged: string[] };
+
+export type ReportWireClaim = {
+  eventId: string;
+  claimedBy: ReportWireActor;
+  submittedAt: string;
+  receivedAt: string;
+  execution: ReportWireExecution;
+  job: ReportWireJob;
+  summary: string;
+  artefacts: DecisionWireEvidence[];
+  corrects: string | null;
+  correctedBy: ReportWireCorrection | null;
+  /** The next claim by the same reporter, if there is one. Never read as a disagreement. */
+  laterClaim: string | null;
+} & (
+  | { kind: "progress" }
+  | { kind: "blocked"; on: ReportWireBlockedOn; needs: string }
+  | { kind: "completed"; ending: ReportWireEnding; revisions: ReportWireRevisions }
+  | { kind: "decision"; decisionId: string }
+);
+
+/** Unreported is not idle, stuck or failed: it means nothing was said. */
+export type ReportWireClaimed = { kind: "claimed"; claims: number; latest: ReportWireClaim };
+export type ReportWireSession =
+  | { name: string; register: "in-register"; latest: { kind: "unreported" } | ReportWireClaimed }
+  | { name: string; register: "not-in-register"; latest: ReportWireClaimed };
+
+/**
+ * The register join, or why there is none. **Two shapes, so "every session is
+ * unreported" and "the register could not be read" can never look alike.**
+ */
+export type ReportWireSessions =
+  | { kind: "joined-with-register"; rows: ReportWireSession[] }
+  | { kind: "register-unavailable"; why: string; reported: { name: string; latest: ReportWireClaimed }[] };
+
+export type ReportWireProblem = {
+  kind: "unreadable-line" | "duplicate-event" | "invalid-correction";
+  why: string;
+  eventId: string | null;
+};
+
+/**
+ * A count, and whether it is all of them: `exact` when the server read the
+ * directory to its end, `atLeast` when it stopped at its cap. **Never a bare
+ * number**, which would be silently partial for a flooded inbox (WR-S3-5).
+ */
+export type ReportWireCount = { exact: number } | { atLeast: number };
+
+/**
+ * Inbox entries that can never be a report, moved aside by the daemon — which
+ * never empties that directory, so it grows until a person does. `oldestMovedAt`
+ * is read from the entry names: with an `atLeast` count it is the oldest SEEN,
+ * and it is null when no entry seen carries a stamp.
+ */
+export type ReportWireQuarantine = { count: ReportWireCount; oldestMovedAt: string | null };
+
+/** Schema 2: the counts became `ReportWireCount`s, and the quarantine arrived. */
+export type ReportsFeed =
+  | {
+      schema: 2;
+      kind: "never-written";
+      composedAt: string;
+      why: string;
+      /** Submitted and not yet recorded — the sign of a daemon that is not draining. */
+      inFlight: ReportWireCount;
+      refused: ReportWireCount;
+      quarantine: ReportWireQuarantine;
+    }
+  | { schema: 2; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 2; kind: "oversized-file"; composedAt: string; why: string; sizeBytes: number; limitBytes: number }
+  | {
+      schema: 2;
+      kind: "reports";
+      path: string;
+      composedAt: string;
+      sessions: ReportWireSessions;
+      /** Newest first. */
+      recent: ReportWireClaim[];
+      /** Claims left out by the 200-row cap or the 2 MiB byte cap. */
+      recentWithheld: number;
+      inFlight: ReportWireCount;
+      refused: ReportWireCount;
+      quarantine: ReportWireQuarantine;
+      problems: ReportWireProblem[];
+    };
+
+/* ---------------- Recovery inventory: interrupted work, GET /api/recovery (260910e) ---------------- */
+
+/**
+ * **What the Overseer recorded about work a world change interrupted** —
+ * `~/.overseer/recovery.json`, parsed by tools/fleet/recovery-feed.ts under its
+ * own validator (fleet does not import the daemon's store), projected to the
+ * first page, and drawn by `RecoveryPanel`.
+ * docs/plans/260910e-recovery-inventory-show-interrupted-work-without-resuming-it.md § 6.
+ *
+ * **Nothing here is a command.** Every string is a fact to read — a directory, a
+ * host, a conversation id — and none is assembled into something to paste into
+ * a terminal. `manual` carries the host and the directory as two fields for
+ * exactly that reason.
+ *
+ * The shapes below mirror tools/overseer/recovery-view.ts and recovery.ts arm
+ * for arm. A new arm there makes the feed's validator refuse the view, which
+ * the page then says, rather than drawing an arm it cannot name.
+ */
+export type RecoveryWireResolution =
+  | { disposition: "unresolved" }
+  | {
+      disposition: "resumed";
+      at: string;
+      /** Both tokens: a resumption is a DIFFERENT run holding the same verified conversation. */
+      evidence: { previousToken: string; token: string; conversationId: string };
+    }
+  | { disposition: "superseded"; at: string; evidence: { by: string } }
+  | { disposition: "dismissed"; at: string; evidence: { requestId: string; why: string } };
+
+/** A live row's facts, shown beside a record it may or may not be. */
+export type RecoveryWireLiveRow = {
+  tmuxId: string;
+  name: string;
+  dir: string | null;
+  claimedConversationId: string | null;
+  statusKey: string;
+  executionToken: string | null;
+  /** The conversation the row VERIFIABLY holds, or null. Never its claim. */
+  conversationId: string | null;
+};
+
+/** The daemon's classification, first match wins (recovery-view.ts § `classifyRecord`). */
+export type RecoveryWireClass =
+  | { kind: "unknown"; why: string }
+  | { kind: "already-live"; why: string; sameRun: boolean | null; row: RecoveryWireLiveRow }
+  | { kind: "present-but-unmatched"; why: string; row: RecoveryWireLiveRow }
+  | { kind: "ended-before-reboot"; why: string; statusKey: string; observedAt: string }
+  | { kind: "interrupted"; why: string };
+
+export type RecoveryWireDir =
+  | { kind: "exists"; path: string }
+  | { kind: "missing"; path: string; why: string }
+  | { kind: "not-recorded"; why: string }
+  /** The stat failed for a reason that is not absence. Never drawn as missing. */
+  | { kind: "cannot-tell"; path: string; why: string };
+
+export type RecoveryWireWorktree =
+  | { kind: "none" }
+  | { kind: "recorded"; name: string; dir: string }
+  | { kind: "not-recorded"; name: string; why: string };
+
+export type RecoveryWireNotFoundReason =
+  | "no-claude-session-id"
+  | "malformed-claude-session-id"
+  | "no-projects-directory"
+  | "no-transcript-file";
+
+export type RecoveryWireTranscript =
+  | { kind: "found"; conversationId: string; path: string; via: "slug-guess" | "scan"; mtime: string | null }
+  /** Found under the CLAIM, which outlives its conversation: drawn as UNVERIFIED, never a resume. */
+  | { kind: "found-under-claim"; claimedConversationId: string; path: string; mtime: string | null; why: string }
+  | { kind: "not-found"; under: "verified" | "claim"; conversationId: string; reason: RecoveryWireNotFoundReason; why: string }
+  /** The search stopped at its project-directory bound (Sol's F20): it cannot say. Never drawn as not-found. */
+  | { kind: "cannot-tell"; under: "verified" | "claim"; conversationId: string; why: string }
+  | { kind: "no-conversation"; why: string };
+
+export type RecoveryWireResume =
+  | { kind: "supported"; conversationId: string; transcriptPath: string }
+  | { kind: "not-supported"; why: string }
+  /** A shell or a manual job: a host and a directory, as two facts. */
+  | { kind: "manual"; host: string; dir: string | null; why: string };
+
+export type RecoveryWireEvidence =
+  | {
+      kind: "checked";
+      dir: RecoveryWireDir;
+      worktree: RecoveryWireWorktree;
+      transcript: RecoveryWireTranscript;
+      /** `register-floor` is a floor — alive at least this recently — and is drawn with `≥`. */
+      lastActivity: { at: string; source: "transcript" | "register-floor" };
+      resume: RecoveryWireResume;
+    }
+  | { kind: "unavailable"; why: string };
+
+/** What the fold itself kept of the register entry. Null for an oversize stub or a legacy stub. */
+export type RecoveryWireEntry = {
+  /** Null when the launcher's metadata is legacy and recorded none. */
+  dir: string | null;
+  worktree: string | null;
+  /** A FLOOR, never a reading. */
+  lastSeenAlive: string;
+  lastStatusKey: string;
+};
+
+/** The last accepted observation of the session. Null when nobody watched it go. */
+export type RecoveryWireLastSeen = {
+  statusKey: string;
+  /** For reading only, never a command. */
+  title: string | null;
+  harness: string | null;
+  collectedAt: string;
+};
+
+export type RecoveryWireDisappearance = {
+  goneWhy: string;
+  generation: "same" | "changed" | "unverifiable";
+  producerRun: "same" | "changed" | "cannot-tell";
+  watched: boolean;
+  bootChanged: boolean;
+};
+
+/**
+ * Three states, never one with optional fields: a record the daemon resolved; an
+ * unresolved record its latest view did not classify (no view yet, an
+ * unreadable view, or a record newer than the pass); and one it did.
+ */
+export type RecoveryWireRecordState =
+  | { kind: "resolved"; resolution: Exclude<RecoveryWireResolution, { disposition: "unresolved" }> }
+  | { kind: "unchecked"; why: string }
+  | { kind: "classified"; classification: RecoveryWireClass; evidence: RecoveryWireEvidence };
+
+export type RecoveryWireRecord = {
+  id: string;
+  key: string;
+  name: string;
+  /** When it disappeared. */
+  at: string;
+  origin: "journal" | "legacy";
+  /** The index holds a stub; the full candidate is in events.jsonl. */
+  oversize: boolean;
+  entry: RecoveryWireEntry | null;
+  lastSeen: RecoveryWireLastSeen | null;
+  disappearance: RecoveryWireDisappearance | null;
+  state: RecoveryWireRecordState;
+};
+
+/**
+ * The daemon's latest view. **`not-yet-checked` is its own state**: `view` is
+ * null until the daemon's first pass after a start, and the records are then
+ * shown with their classification unknown — never as an empty list.
+ */
+export type RecoveryWireView =
+  | { kind: "not-yet-checked"; why: string }
+  | { kind: "unreadable"; why: string }
+  | {
+      kind: "checked";
+      checkedAt: string;
+      /** `untrusted` makes every record `unknown`; its sentence is drawn once, as a banner. */
+      inventory: { kind: "trusted"; collectedAt: string; rows: number } | { kind: "untrusted"; why: string };
+    };
+
+export type RecoveryWireReplay =
+  | { kind: "ran"; worldChanges: number; derived: number; scannedBytes: number }
+  | { kind: "not-run"; why: string };
+
+/**
+ * `GET /api/recovery`. **No failure arm carries a list**: `absent`, `unreadable`,
+ * `unsupported-schema` and `oversized` each say why there is nothing to show,
+ * and only `published` has records — which may then genuinely be none.
+ */
+export type RecoveryFeed =
+  | {
+      schema: 1;
+      kind: "published";
+      composedAt: string;
+      path: string;
+      writtenAt: string | null;
+      view: RecoveryWireView;
+      replay: RecoveryWireReplay;
+      /** Candidates past the index's capacity: in events.jsonl only, and not listed anywhere else. */
+      overflow: number;
+      /** Records the index holds. */
+      total: number;
+      /** Of which unresolved. */
+      unresolved: number;
+      /** Records past the first page. */
+      olderCount: number;
+      /** The first page: unresolved first, grouped with interrupted first, newest disappearance first. */
+      records: RecoveryWireRecord[];
+    }
+  | { schema: 1; kind: "absent"; composedAt: string; path: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
+  | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };

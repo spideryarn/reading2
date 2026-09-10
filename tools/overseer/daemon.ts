@@ -42,9 +42,9 @@
  * its baseline file is ignored rather than trusted.
  *
  * **Two marks, not one.** `accepted` is the newest snapshot the gate blessed
- * and is what the next payload's clock is compared against; `baseline` is the
- * newest world the differ agreed to stand on. A `held` result moves the first
- * and not the second.
+ * and is what the next payload is ordered against — by run and collection when
+ * both are stamped, by clock otherwise; `baseline` is the newest world the
+ * differ agreed to stand on. A `held` result moves the first and not the second.
  *
  * ## What it does not do
  *
@@ -68,10 +68,23 @@ import {
   type SessionKey,
 } from "./diff.js";
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
-import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
+import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
-import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
-import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
+import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
+import { drainRecoveryInbox, pendingRecoveryRequestCount } from "./recovery-inbox.js";
+import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust } from "./recovery-view.js";
+import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
+import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
+import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
+import {
+  parseAttempt,
+  parseObservation,
+  type JsonValue,
+  type ObservedAttemptClock,
+  type ObservedRow,
+  type SourceOrdering,
+} from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import { probeProcessTable } from "./work-probe.js";
 import { scanPaneWork } from "./work-reading.js";
@@ -355,6 +368,19 @@ export type DaemonOptions = {
    */
   probe?: () => ProcessTableReading;
   /**
+   * THIS HOST'S BOOT ID, or null when it cannot be read. Defaults to
+   * `readHostBootId`; injected so a test can drive one boot into the next.
+   * See the close-out in `take()`.
+   */
+  bootId?: () => string | null;
+  /**
+   * THE RECOVERY VIEW'S WORLD — where transcripts live, how a path is stat'ted,
+   * this host's name, and how often the view is re-checked when nothing
+   * prompts it. Each defaults to the real one (`evidenceDeps`), and is injected
+   * so a test needs no fake home. See the view pass in `runOverseer`.
+   */
+  recovery?: { projectsDir?: string; stat?: EvidenceDeps["stat"]; hostname?: () => string; viewIntervalMs?: number };
+  /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
    * `claude auth status`, and this file does neither.
@@ -470,6 +496,17 @@ export type DaemonOptions = {
     /** The minimum gap between two session launches. `schedules.ts` § `LAUNCH_SEPARATION_MS`, and GPT Sol's S8-5. */
     launchSeparationMs: number;
     /**
+     * **HOW A SESSION JOB'S DOCUMENTS ARE READ — every tick, and every
+     * checkpoint.** `scheduler.ts` § `TickInput.readDocument` says why the tick
+     * reads; the checkpoint reads for Sol's P1-1 on plan 260910e, so the `ARMED`
+     * headline is made of the same evidence that refuses a job and cannot go on
+     * claiming a job the tick has stopped dispatching.
+     *
+     * Required for the reason `arming` is: a default would be this file deciding
+     * that a digest taken days ago is good enough.
+     */
+    readDocument: ReadDocument;
+    /**
      * How long a shutdown waits for rule runs still in flight, before giving up
      * on them **loudly**. Defaults to `RULE_SETTLE_GRACE_MS`.
      *
@@ -493,6 +530,47 @@ export type DaemonOptions = {
    * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
    */
   schedulerDetail?: string;
+  /**
+   * **THE LIST THE SCHEDULER WOULD RUN, FOR THE SCHEDULE PREVIEW — and nothing
+   * this daemon can dispatch from.** Plan 260910e § D6.
+   *
+   * Separate from `jobs` because `jobs` is absent whenever the scheduler is off,
+   * and off is exactly when a person most needs to see what arming would do.
+   * It carries the definitions, how to read their documents, and facts about
+   * this process — never a spawner or a rule runner, so no code path from here
+   * can start anything. On every checkpoint tick the daemon plans these with
+   * the shared planner against its in-memory ledger and writes
+   * `schedule.json` (`schedule-preview.ts`).
+   *
+   * **Absent means this daemon was given no job list**, and the file it writes
+   * says exactly that — not no file, which is what a daemon predating this
+   * build leaves, and a reader tells the two apart.
+   */
+  preview?: {
+    /** The full list — standing jobs and rules — whatever the arming. */
+    definitions: readonly AuthorisedJob[];
+    /** Read every session job's documents afresh each checkpoint, as the tick does. */
+    readDocument: ReadDocument;
+    /** What this process holds, matching `jobs`: a disarmed daemon holds neither. */
+    capabilities: HeldCapabilities;
+    /** `schedule-preview.ts` § `listRevision` of `definitions`, so a reader can compare its checkout's. */
+    listRevision: string;
+    /** The arming `jobs` would carry — `unknown` on a disarmed daemon, which the preview renders as "after it is armed". */
+    arming: Arming;
+    /** The launch spacing an armed scheduler would apply, so the preview's spacing verdicts are the real ones. */
+    launchSeparationMs: number;
+  };
+  /**
+   * WORK REPORTS, drained into `reports.jsonl` on their own timer. Plan 260910e.
+   *
+   * Injected, like the passes above, because the drain shells out to git and
+   * this file does not. It is handed `store.register` — the live one — so its
+   * execution comparison is against what this daemon verified, which is the
+   * whole reason the daemon rather than the CLI is the writer. It is synchronous
+   * and relies on this process holding `overseer.lock` for its exclusion, so
+   * there is nothing to await on the way out.
+   */
+  reports?: { intervalMs?: number; drain: (register: SessionRegister) => ReportDrainOutcome };
 };
 
 /**
@@ -528,16 +606,21 @@ export const USAGE_INTERVAL_MS = 300_000;
  * How often the scheduler looks: every tick's worth, 30 seconds.
  *
  * **It is deliberately the cheapest of the three timers**, and it can be,
- * because a tick that finds nothing due does no I/O at all — it reads a map the
- * store already holds and compares two numbers. The interval is therefore the
- * granularity of the schedule rather than a cost, and the shortest job anyone
- * has asked for is five minutes.
+ * because a tick that finds nothing due reads a map the store already holds,
+ * compares two numbers — and, since 2026-09-10, digests each session job's
+ * documents, which is three small files (plan 260910e § D3: a digest taken at
+ * start and reused for days authorised whatever the document said by the time
+ * it was followed). The interval is therefore the granularity of the schedule
+ * rather than a cost, and the shortest job anyone has asked for is five minutes.
  *
  * It is a SEPARATE timer from the heartbeat rather than a line inside it,
  * because a spawn is a syscall and `lastTickAt` is how a reader tells a dead
  * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
  */
 export const JOBS_INTERVAL_MS = 30_000;
+
+/** How often the report inbox is drained: 30 s, which is the "within about 30 s" `overseer report` promises. */
+export const REPORTS_INTERVAL_MS = 30_000;
 
 /**
  * **Fifteen seconds.** How long a shutdown waits for rule runs still in flight.
@@ -555,6 +638,13 @@ export const JOBS_INTERVAL_MS = 30_000;
  */
 export const RULE_SETTLE_GRACE_MS = 15_000;
 
+/**
+ * The recovery view's floor: at most once a minute when nothing prompts it.
+ * A fold change and an accepted inventory prompt it at once; this is what
+ * catches a directory or a transcript that changed while nothing else did.
+ */
+export const RECOVERY_VIEW_INTERVAL_MS = 60_000;
+
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
   | { kind: "stopped"; why: string }
@@ -570,12 +660,26 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
   const probe = options.probe ?? probeProcessTable;
+  const readBootId = options.bootId ?? readHostBootId;
 
   const opened = openStore({ root, now });
   if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
   const store = opened.store;
 
-  const notes = openNoteLog(root);
+  let notes: NoteLog;
+  try {
+    notes = openNoteLog(root);
+  } catch (cause) {
+    store.close();
+    return {
+      kind: "refused",
+      refusal: {
+        reason: "unusable-log",
+        path: join(root, NOTES_FILE),
+        detail: cause instanceof Error ? cause.message : String(cause),
+      },
+    };
+  }
   const conditions = conditionTracker(store.instanceId);
   const write = (note: DaemonNote | null): void => {
     if (note === null) return;
@@ -585,10 +689,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 
   // TWO MARKS, NOT ONE, and the pair is the whole of the crash-recovery
   // design. `accepted` is the last snapshot `admissible()` blessed, and it is
-  // what the next payload's clock is compared against. `baseline` is the last
+  // what the next payload is ordered against — its run and collection when
+  // both are stamped, its clock when either is not. `baseline` is the last
   // world `diff()` agreed to stand on. They come apart on a `held` result: the
-  // snapshot was perfectly admissible, so the clock must move on, and it could
-  // not be placed in a world, so the baseline must not.
+  // snapshot was perfectly admissible, so the accepted mark must move on, and
+  // it could not be placed in a world, so the baseline must not.
   //
   // A BASELINE IS ONLY USABLE BESIDE THE REGISTER IT MATCHES, and a cold store
   // has no register at all. The store starts cold when the log is gone, or when
@@ -622,6 +727,29 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "started without one because there was no file" are different facts.
   const seeded = restored.accepted === null ? null : baselineOf(restored.accepted);
   let accepted: AdmissibleSnapshot | null = restored.accepted;
+  // THE DASHBOARD RUNS SEEN REPLACED, which is what lets `admissible()` refuse
+  // a late payload from a previous run rather than accept it as an unseen one.
+  // A run is retired when an accepted stamped snapshot's run differs from the
+  // previous accepted one's — here, in `take()`, beside the line that moves
+  // `accepted`.
+  //
+  // BOUNDED, because a daemon runs for weeks and the dashboard restarts several
+  // times a day: the last 16 runs, oldest let go first. A payload from a run
+  // older than that would be accepted as a new run — the cost of the bound, and
+  // a payload sixteen restarts late is not one the sequential source delivers.
+  //
+  // NOT PERSISTED, and it starts empty after a daemon restart. That is safe not
+  // because the old dashboard is gone — restarting the Overseer does not stop
+  // it — but because the source is sequential (stream and poll never overlap,
+  // source.ts) and the restored `accepted` carries its run: the first payload
+  // from a new run B retires the stored run A, and anything from A after that
+  // is refused. docs/plans/260910d § The daemon, and Sol's finding 4.
+  const RETIRED_RUNS_KEPT = 16;
+  const retired = new Set<string>();
+  // What the last payload that parsed said about its stamp, so the console
+  // says when the dashboard stops (or starts) stamping — once per transition,
+  // not once per payload.
+  let lastOrdering: SourceOrdering["kind"] | null = null;
   let baseline: Baseline | null = seeded !== null && seeded.ok ? seeded.baseline : null;
   let lastGoodSnapshotAt: string | null = restored.accepted?.snapshot.clock.at ?? null;
   let refreshMs = restored.accepted?.snapshot.refreshMs ?? MEASURED_CADENCE_MS;
@@ -714,9 +842,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // pass reads every account afresh and a section that failed says so, so the
   // newest reading is always the one to publish.
   let accountUsage: StoredAccountUsage | null = null;
-  // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
-  // option rather than off a flag beside it, so "armed" and "there are jobs"
-  // cannot come apart.
+  // RECOMPUTED ON EVERY CHECKPOINT, from the documents as they are now. `armed`
+  // is read off the option rather than off a flag beside it, so "armed" and
+  // "there are jobs" cannot come apart.
   //
   // **AND `armed` IS A CLAIM ABOUT THE LOADED DEFINITIONS, not about a switch**
   // (GPT Sol's S8-7). It used to be `jobs === undefined ? "off" : "armed"`,
@@ -725,18 +853,33 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // document could not be read, still said `ARMED`. Now the switch being on with
   // nothing runnable is `blocked`, which is its own word because it is its own
   // situation — not off, and not working.
-  const schedulerStanding: StoredScheduler = schedulerStandingOf({
-    jobs:
-      options.jobs === undefined
-        ? undefined
-        : { definitions: options.jobs.definitions, held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined } },
-    detail: options.schedulerDetail,
-    at: now().toISOString(),
-  });
-  const checkpointUpdate = (): CheckpointUpdate => ({
+  //
+  // **It was built ONCE, at start, until 2026-09-10** — Sol's P1-1 on plan
+  // 260910e. Once the tick began re-reading documents, a document edited after
+  // start would have the tick refusing its job while every checkpoint went on
+  // saying ARMED. So it is made of the same fresh reading the tick uses, and
+  // `at` is when this checkpoint decided it.
+  const schedulerStandingNow = (evidence?: DocumentEvidence): StoredScheduler =>
+    schedulerStandingOf({
+      jobs:
+        options.jobs === undefined
+          ? undefined
+          : {
+              definitions: options.jobs.definitions,
+              held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined },
+              evidence: evidence ?? resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
+            },
+      detail: options.schedulerDetail,
+      at: now().toISOString(),
+    });
+  // THE HEADLINE CAN BE HANDED IN, so the checkpoint and the schedule preview
+  // written on the same tick carry the same one rather than two readings a
+  // moment apart. Defaulted, because the checkpoint written from `take()` has
+  // no preview beside it to agree with.
+  const checkpointUpdate = (scheduler: StoredScheduler = schedulerStandingNow()): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
-    scheduler: schedulerStanding,
+    scheduler,
     // THE DEADLINE, NOT THE CADENCE, and written on every tick because
     // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
     // this instead of computing its own: sharing `staleAfterMs` stopped the
@@ -753,10 +896,264 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     ...(accountUsage === null ? {} : { accountUsage }),
   });
 
+  // ══ THE RECOVERY VIEW, THE DERIVED DISPOSITIONS AND THE INBOX
+  //
+  // docs/plans/260910e § 2, § 4 and § 5. Three things, one owner, and none of
+  // them on a request path: the route reads `recovery.json` and nothing else.
+  //
+  // THE INVENTORY-TRUST RULE is the first thing the view asks, and it is held
+  // here because only this loop sees the thing it is about: whether the LATEST
+  // payload was accepted. A refused payload, a failed collection or a held one
+  // since the last accept makes every record `unknown`, whatever rows the stale
+  // inventory before it carried — an empty list from a failed collection is not
+  // evidence of interruption. A daemon that has accepted nothing in its own life
+  // trusts nothing: a restored baseline is a cache of the previous process's
+  // bytes, not a current inventory.
+  // `recoveryEvidence`, not `evidence`: the schedule preview below and the
+  // ticker use `evidence` for the job documents' reading, a different thing.
+  const recoveryEvidence = evidenceDeps(options.recovery ?? {});
+  const viewIntervalMs = options.recovery?.viewIntervalMs ?? RECOVERY_VIEW_INTERVAL_MS;
+  let inventory: InventoryTrust = { kind: "untrusted", why: "no inventory has been accepted in this daemon's life yet" };
+  // ONE VIEW PASS AT A TIME, and a request during one is remembered rather than
+  // dropped: `viewWanted` makes the pass run again when it finishes, against the
+  // state as it is then. Awaited on the way out, like the other passes.
+  let viewRunning: Promise<void> | null = null;
+  let viewWanted = false;
+  // A pass snapshots both the inventory and recovery records before its first
+  // filesystem await. If either changes while it is running, publishing that
+  // completed pass would put older evidence back on disk until the queued pass
+  // caught up. The revision makes an obsolete pass disposable.
+  let viewRevision = 0;
+  let lastViewAtMs = Number.NEGATIVE_INFINITY;
+  const startView = (): void => {
+    viewWanted = false;
+    const revision = viewRevision;
+    const recovery = store.recovery;
+    const viewInventory: InventoryTrust =
+      recovery.replay.kind === "not-run"
+        ? { kind: "untrusted", why: `the recovery index is incomplete: ${recovery.replay.why}` }
+        : inventory;
+    viewRunning = buildRecoveryView(recovery, viewInventory, { ...recoveryEvidence, now })
+      .then((view) => {
+        if (revision !== viewRevision) return;
+        lastViewAtMs = now().getTime();
+        if (halted() !== null) return;
+        // Written when it changed — `setRecoveryView` decides — through the same
+        // checkpoint, so the write order stays events, baseline, current.json,
+        // recovery.json.
+        if (store.setRecoveryView(view)) guard(store.checkpoint({ ...checkpointUpdate(), tick: false }));
+      })
+      .catch((cause: unknown) => {
+        log(`recovery view pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        viewRunning = null;
+        if (viewWanted && halted() === null) startView();
+      });
+  };
+  const requestView = (invalidateRunning = true): void => {
+    if (invalidateRunning) viewRevision += 1;
+    viewWanted = true;
+    if (viewRunning === null) startView();
+  };
+  const trustInventory = (next: InventoryTrust): void => {
+    const before = inventory;
+    inventory = next;
+    // A repeated failure with the same sentence changes nothing the view says.
+    if (before.kind === "untrusted" && next.kind === "untrusted" && before.why === next.why) return;
+    // ONLY WITHDRAWING TRUST MAKES THE RUNNING PASS OBSOLETE (the Opus check's
+    // O5). A pass that classified against a trusted inventory and finishes after
+    // a newer trusted one is still a true account of an accepted inventory; it is
+    // published and the queued pass follows it. Invalidating on every accept
+    // would let a steady stream of collections, each faster than one slow pass,
+    // discard every pass before it lands, so no view would ever be written.
+    requestView(!(before.kind === "trusted" && next.kind === "trusted"));
+  };
+  // `resumed` and `superseded`, appended by the daemon and by nothing else.
+  // Idempotent by construction (recovery.ts § `deriveDispositions`), so running
+  // it every tick costs a map walk and writes nothing twice.
+  //
+  // NOTHING IS DERIVED WHILE THE REPLAY IS `not-run` (the Opus check's O1, Sol's
+  // F21). The fold is then deliberately stale, and "unresolved" in it may be a
+  // record whose disposition is in the unread tail, so a derivation from it
+  // could append a second one. The gate is here, at the one place derived
+  // events are written, rather than at each caller: the recovery tick had it,
+  // and the accepted-payload path in `take()` did not.
+  const appendDerived = (): boolean => {
+    if (store.recovery.replay.kind === "not-run") return true;
+    const derived = deriveDispositions(store.recovery, inventory.kind === "trusted" ? inventory.rows : null, now().toISOString());
+    if (derived.length === 0) return true;
+    if (!guard(store.append(derived))) return false;
+    log(`${now().toISOString()} ${derived.length} recovery dispositions derived (${derived.map((e) => `${e.id} ${e.disposition}`).join(", ")})`);
+    requestView();
+    return true;
+  };
+  let recoveryRunning: Promise<void> | null = null;
+  // Whether this start has said that requests are held (O2). Once per start:
+  // the hold lasts as long as the process, so a line per tick would be noise.
+  let heldAnnounced = false;
+  const runRecoveryTick = async (): Promise<void> => {
+    // A refused all-or-nothing replay leaves the fold deliberately stale. It
+    // cannot authorize a dismissal, suppress a replayed request id, or prove a
+    // derived disposition until a later start reads the missing tail. Leave
+    // requests exactly where they are and publish only an unknown view.
+    if (store.recovery.replay.kind === "not-run") {
+      // SAY SO, once, when somebody is waiting (the Opus check's O2). The hold
+      // outlives every restart until the log is repaired, and without this line
+      // a `dismiss` would simply never happen.
+      if (!heldAnnounced) {
+        const waiting = await pendingRecoveryRequestCount({ root, now, log });
+        if (waiting > 0) {
+          heldAnnounced = true;
+          log(
+            `${now().toISOString()} RECOVERY REQUESTS HELD: ${waiting} request(s) in recovery-inbox/ stay pending, because the recovery index is incomplete (${store.recovery.replay.why}); nothing is applied until a daemon start can read the whole log`,
+          );
+        }
+      }
+      if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+      return;
+    }
+    const drained = await drainRecoveryInbox({ root, index: () => store.recovery, append: (events) => guard(store.append(events)), now, log });
+    if (drained.halted || halted() !== null) return;
+    if (drained.applied > 0) requestView();
+    if (!appendDerived()) return;
+    // A clock refresh asks for another pass but does not make the facts in the
+    // one already running obsolete. Invalidating every minute could starve a
+    // slow evidence pass indefinitely.
+    if (now().getTime() - lastViewAtMs >= viewIntervalMs) requestView(false);
+  };
+  const recoveryTick = (): void => {
+    if (recoveryRunning !== null) return;
+    recoveryRunning = runRecoveryTick()
+      .catch((cause: unknown) => {
+        log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      })
+      .finally(() => {
+        recoveryRunning = null;
+      });
+  };
+  // AT START, before the source: a request left while the daemon was down is
+  // applied now, and the first view is drawn — against no inventory, so every
+  // record is `unknown` until a collection is accepted, which says so.
+  await runRecoveryTick().catch((cause: unknown) => {
+    log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+  });
+
+  /*
+   * THE SCHEDULE PREVIEW, written after every checkpoint the ticker lands —
+   * plan 260910e § D6.
+   *
+   * Computed from what THIS process holds: its loaded definitions, the
+   * documents as they are now, its in-memory ledger (`store.occurrences`, which
+   * is ahead of the checkpoint's copy), its arming and its capabilities — the
+   * reason the daemon writes it rather than a reader computing it (Sol's P1-4).
+   * It plans; it never launches. The preview's `launch` answers without
+   * starting anything, and no spawner is in reach of this code.
+   *
+   * **A failure here never stops the daemon, and is said once.** A preview that
+   * cannot be written is a missing convenience, not a fault in the thing the
+   * daemon is for; logging it every 30 seconds would be the alarm fatigue this
+   * area refuses everywhere else. So: one line when it starts failing, one when
+   * it recovers, and the reason carried between them.
+   */
+  const previewOptions = options.preview;
+  let previewFailing: string | null = null;
+  const recordPreviewResult = (written: { ok: true } | { ok: false; why: string }): void => {
+    if (!written.ok) {
+      if (previewFailing === null) log(`schedule preview: NOT WRITTEN — ${written.why}. The daemon carries on; this is said once, and again when it recovers`);
+      previewFailing = written.why;
+      return;
+    }
+    if (previewFailing !== null) {
+      log(`schedule preview: written again (it had been failing: ${previewFailing})`);
+      previewFailing = null;
+    }
+  };
+  const writePreview = (headline: StoredScheduler, evidence: DocumentEvidence | null): void => {
+    let written: { ok: true } | { ok: false; why: string };
+    try {
+      // WHEN ARMED, THESE ARE THE LIVE TICKER'S FACTS. The copies on `preview`
+      // exist for the disarmed case; allowing them to overrule `jobs` would let
+      // one process publish a different arming, capability set or spacing from
+      // the scheduler it actually runs.
+      const capabilities: HeldCapabilities =
+        options.jobs === undefined
+          ? (previewOptions?.capabilities ?? { session: false, rules: false })
+          : { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined };
+      const list: Parameters<typeof schedulePreview>[0]["list"] =
+        previewOptions === undefined
+          ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
+          : evidence === null
+            ? (() => {
+                throw new Error("no document evidence was resolved for this checkpoint's preview");
+              })()
+            : {
+                kind: "given",
+                definitions: previewOptions.definitions,
+                listRevision: previewOptions.listRevision,
+                evidence,
+              };
+      written = writeSchedulePreview(
+        root,
+        schedulePreview({
+          instanceId: store.instanceId,
+          now: now(),
+          list,
+          occurrences: store.occurrences,
+          history: store.occurrenceHistory,
+          arming: options.jobs?.arming ?? previewOptions?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
+          launchSeparationMs: options.jobs?.launchSeparationMs ?? previewOptions?.launchSeparationMs ?? 0,
+          capabilities,
+          headline,
+        }),
+      );
+    } catch (cause) {
+      written = { ok: false, why: `the preview could not be computed (${cause instanceof Error ? cause.message : String(cause)})` };
+    }
+    recordPreviewResult(written);
+  };
+
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
-    guard(store.checkpoint(checkpointUpdate()));
+    recoveryTick();
+    if (halted() !== null) return;
+    // ONE DOCUMENT READING, THEN ONE HEADLINE FOR BOTH FILES written this tick.
+    // Re-reading between them lets a file edit in that tiny window produce an
+    // ARMED headline over an unauthorised row (or the reverse).
+    let evidence: DocumentEvidence | null;
+    try {
+      // OVER BOTH LISTS. The headline is judged over `jobs.definitions` and the
+      // preview over its own; a session job in the first and not the second
+      // would have had no reading, and `authorisationUnder` fails closed on
+      // that — a BLOCKED headline over a tick that dispatches. The shipped
+      // wiring makes one a subset of the other; this does not rely on it.
+      // `resolveEvidence` reads each distinct loaded definition once; duplicate
+      // ids with different documents need separate evidence for their rows.
+      evidence =
+        previewOptions === undefined
+          ? null
+          : resolveEvidence(
+              [...(options.jobs?.definitions ?? []), ...previewOptions.definitions],
+              options.jobs?.readDocument ?? previewOptions.readDocument,
+            );
+    } catch (cause) {
+      const why = `the preview's document evidence could not be resolved (${cause instanceof Error ? cause.message : String(cause)})`;
+      // A throwing reader still must not stop the heartbeat. When jobs are live,
+      // make the headline fail closed from an explicit unreadable reading; when
+      // they are off, the headline needs no document evidence at all.
+      const unavailable =
+        options.jobs === undefined
+          ? undefined
+          : resolveEvidence(options.jobs.definitions, (path) => ({ kind: "unreadable", path, why }));
+      const headline = schedulerStandingNow(unavailable);
+      if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+      recordPreviewResult({ ok: false, why });
+      return;
+    }
+    const headline = schedulerStandingNow(evidence ?? undefined);
+    if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+    writePreview(headline, evidence);
   }, tickMs);
   ticker.unref?.();
 
@@ -1006,6 +1403,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             rules: jobOptions.rules,
             arming: jobOptions.arming,
             launchSeparationMs: jobOptions.launchSeparationMs,
+            // THE DOCUMENTS, READ NOW — not the digests the definitions were
+            // built with at start (plan 260910e, defect 1).
+            readDocument: jobOptions.readDocument,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.
@@ -1034,6 +1434,31 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
   jobsTicker?.unref?.();
 
+  /*
+   * The report drain, on its own timer. A throw is the `reports` condition — it
+   * opens a note and closes on the next pass that completes — and never stops
+   * the daemon: a broken inbox is a reason to say so, not to stop watching the
+   * fleet. A pass that refused or left something pending says so once.
+   */
+  const reportOptions = options.reports;
+  const reportsTicker =
+    reportOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null) return;
+          const at = now().toISOString();
+          try {
+            const outcome = reportOptions.drain(store.register);
+            write(conditions.restore("reports", at, "a report drain pass completed"));
+            if (outcome.refused > 0 || outcome.pending > 0) {
+              log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
+            }
+          } catch (cause) {
+            write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
+          }
+        }, reportOptions.intervalMs ?? REPORTS_INTERVAL_MS);
+  reportsTicker?.unref?.();
+
   /**
    * Wait for everything this PROCESS is in the middle of — the two passes, and
    * the rule runs.
@@ -1053,6 +1478,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // to still be running when a signal arrives.
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
+    }
+    // THE VIEW PASS, in a loop: one that finishes with a request pending starts
+    // the next, and that one writes through the store too.
+    while (viewRunning !== null || recoveryRunning !== null) {
+      if (recoveryRunning !== null) await recoveryRunning;
+      if (viewRunning !== null) await viewRunning;
     }
     await settleRuleRuns();
   }
@@ -1094,6 +1525,27 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 
   const makeSource = options.source ?? fleetSource;
 
+  // EVERY TIMER, stopped in one place (Sol's F23). The exceptional path awaits
+  // `settleInFlight()` before its `finally` runs, and with the timers still live
+  // each tick asked for another view, every finishing view pass started the
+  // next, and the wait never ended: no `daemon-stopped`, a lock never released,
+  // and systemd unable to replace the process. So the timers stop BEFORE any
+  // settlement, and again in `finally`, where clearing twice is harmless.
+  const stopTimers = (): void => {
+    clearInterval(ticker);
+    if (attentionTicker !== null) clearInterval(attentionTicker);
+    if (usageTicker !== null) clearInterval(usageTicker);
+    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
+    // leaves behind is two different things wearing one word. A dispatched
+    // SESSION is a separate process with a durable reservation behind it, so a
+    // shutdown mid-run leaves a record rather than a second writer; it may not
+    // get its `finished`, which is the lease's case and the next daemon reports
+    // it. A dispatched RULE runs in here, and this comment used to cover it too
+    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
+    if (jobsTicker !== null) clearInterval(jobsTicker);
+    if (reportsTicker !== null) clearInterval(reportsTicker);
+  };
+
   try {
     // Spread rather than assigned, because `exactOptionalPropertyTypes` makes
     // "absent" and "present and undefined" different things — and here they
@@ -1116,11 +1568,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           break;
         case "poll-failed":
           write(conditions.degrade("poll", at, message.why));
+          trustInventory({ kind: "untrusted", why: `the latest collection failed: ${message.why}` });
           break;
         case "unreadable":
           // Bytes arrived and were not a payload. Same condition as a payload
           // the gate refuses: the Overseer is receiving and not learning.
           write(conditions.degrade("snapshots", at, `the ${message.via} delivered something that was not JSON: ${message.why}`));
+          trustInventory({ kind: "untrusted", why: `the latest payload was not JSON: ${message.why}` });
           break;
         case "payload":
           write(conditions.restore("poll", at, transportRestored(message.via)));
@@ -1149,21 +1603,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // store's lock with a paid call still in flight and a runner about to write
     // `attention.json`. The exceptional path is exactly when a second daemon is
     // most likely to be started, so it is the wrong one to leave open.
+    stopTimers();
     await settleInFlight();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
-    clearInterval(ticker);
-    if (attentionTicker !== null) clearInterval(attentionTicker);
-    if (usageTicker !== null) clearInterval(usageTicker);
-    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
-    // leaves behind is two different things wearing one word. A dispatched
-    // SESSION is a separate process with a durable reservation behind it, so a
-    // shutdown mid-run leaves a record rather than a second writer; it may not
-    // get its `finished`, which is the lease's case and the next daemon reports
-    // it. A dispatched RULE runs in here, and this comment used to cover it too
-    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
-    if (jobsTicker !== null) clearInterval(jobsTicker);
+    stopTimers();
   }
 
   /**
@@ -1192,10 +1637,57 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // `latestAttempt`.
     attemptReading = latestAttempt(attemptReading, attempt);
 
-    const verdict = admissible(accepted, parsed);
+    // THE ORDERING CONDITION, from every payload that PARSED — accepted,
+    // duplicate or refused alike, because the stamp is a fact about the
+    // producer rather than about this collection. A payload that did not parse
+    // (an unread schema above all) says nothing either way: it neither raises
+    // the condition nor restores it.
+    //
+    // `unstamped` RESTORES rather than staying silent. An old producer is a
+    // supported fallback, so a rollback after one malformed stamp must close
+    // the alarm — conditions stay open until something restores them (Sol's
+    // finding 5). And it RAISES nothing: an old producer is ordered exactly as
+    // well as it was before stamps existed, and an alarm about something no
+    // worse than yesterday means nothing, which is the watchdog's own argument
+    // for its large threshold. The console says so instead, once per change.
+    if (parsed.ok) {
+      const ordering = parsed.value.ordering;
+      switch (ordering.kind) {
+        case "unreadable":
+          write(
+            conditions.degrade(
+              "ordering",
+              at,
+              `the dashboard's producer stamp cannot be believed, so its payloads are ordered by their clock alone: ${ordering.why}`,
+            ),
+          );
+          break;
+        case "unstamped":
+          write(conditions.restore("ordering", at, "the latest payload carries no stamp at all, which is ordered by its clock as before stamps existed"));
+          break;
+        case "stamped":
+          write(conditions.restore("ordering", at, `the latest payload's stamp is readable (dashboard run ${ordering.instance})`));
+          break;
+        default: {
+          const never: never = ordering;
+          throw new Error(String(never));
+        }
+      }
+      if ((ordering.kind === "unstamped") !== (lastOrdering === "unstamped")) {
+        log(
+          ordering.kind === "unstamped"
+            ? `${at} the dashboard sends no producer stamp (via ${via}), so its payloads are ordered by their clock, as before stamps existed`
+            : `${at} the dashboard's payloads carry a producer stamp again (via ${via})`,
+        );
+      }
+      lastOrdering = ordering.kind;
+    }
+
+    const verdict = admissible(accepted, parsed, retired);
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
+        trustInventory({ kind: "untrusted", why: `the latest payload was refused: ${verdict.reason}` });
         return true;
       case "duplicate":
         // THE ORDINARY CASE, and deliberately not a restoration of anything: a
@@ -1213,10 +1705,23 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     const observed = verdict.snapshot.snapshot;
     write(conditions.restore("snapshots", at, `a collection from ${observed.clock.at} was accepted`));
     refreshMs = observed.refreshMs;
-    // THE CLOCK MOVES ON EVEN IF THE WORLD DOES NOT. This is the accepted mark,
-    // not the baseline; a snapshot that is held below is still the newest
-    // collection this Overseer has seen, and forgetting that would let the next
-    // one look like a duplicate.
+    // THE ACCEPTED MARK MOVES ON EVEN IF THE WORLD DOES NOT. A snapshot that is
+    // held below is still the newest collection this Overseer has seen, and
+    // forgetting that would let the next one look like a duplicate.
+    //
+    // AND A NEW RUN RETIRES THE ONE IT REPLACED, here and only here: when an
+    // accepted stamped snapshot's run differs from the previous accepted one's.
+    // Not on a refused payload — a placeholder from a new run is refused, and
+    // the old run is not replaced until the new one has actually collected.
+    const replaced = accepted?.snapshot.ordering;
+    if (replaced?.kind === "stamped" && observed.ordering.kind === "stamped" && replaced.instance !== observed.ordering.instance) {
+      retired.add(replaced.instance);
+      // Insertion order is age order, so the first entries are the oldest.
+      for (const oldest of retired) {
+        if (retired.size <= RETIRED_RUNS_KEPT) break;
+        retired.delete(oldest);
+      }
+    }
     accepted = verdict.snapshot;
 
     // THE REGISTER IS THE THIRD INPUT, and it has to be read HERE rather than
@@ -1228,20 +1733,73 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const [key, entry] of store.register) {
       if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
     }
-    const outcome = diff(baseline, verdict.snapshot, known);
+    // THE HOST'S BOOT ID, BEFORE `diff()` — GPT Sol's F5. `tmuxServerPid` is
+    // only a pid, and a fresh boot can hand tmux the same number, so the pid
+    // rule alone can compare a new world with the old one and see nothing. The
+    // daemon runs on the box, so it asks the kernel rather than waiting for a
+    // wire field. On the first accepted collection under a different boot id,
+    // every register entry is closed out of the old world, each with its
+    // candidate, and this collection is diffed against NO baseline, so every
+    // row is new. An unreadable boot id concludes nothing: never equal, never
+    // changed, and the pid rule applies as it always has. The new id is
+    // recorded only once this collection's events are on disk, below.
+    const hostBootId = readBootId();
+    const recordedBootId = store.recovery.bootId;
+    const bootChanged = hostBootId !== null && recordedBootId !== null && hostBootId !== recordedBootId;
+    const outcome = diff(bootChanged ? null : baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
-      // NOT A SILENCE. The baseline stays where it is, so the comparison
-      // happens the moment a readable generation arrives; without this note the
-      // only trace would be a history that quietly skipped a few minutes.
+      if (bootChanged) {
+        // THE BOOT ID ALREADY PROVES THE OLD WORLD ENDED. The new populated
+        // snapshot still cannot become a baseline without a readable tmux
+        // generation, but that uncertainty is about the NEW world and must not
+        // hide the old one. Remove the durable old baseline before the append:
+        // if the process dies in between, the stored old boot id makes the next
+        // daemon repeat this close-out; if it dies after the append, the
+        // candidates carry the new boot id and recovery replay catches up.
+        forgetBaseline(root);
+        const closures = withRecoveryCandidates(closeOutOldBoot(store.register, at), store.register, {
+          observation: observationOf(observed.ordering, observed.clock.at),
+          tmuxServerPid: observed.tmuxServerPid,
+          baseline:
+            baseline === null
+              ? null
+              : {
+                  rows: baseline.snapshot.rows,
+                  collectedAt: baseline.snapshot.clock.at,
+                  observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+                },
+          producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+          bootChanged: true,
+          hostBootId,
+        });
+        if (closures.length > 0) {
+          const appended = store.append(closures);
+          if (!guard(appended)) return false;
+          log(`${at} ${closures.length} events closing the previous host boot (via ${via})`);
+        }
+        store.recordBootId(hostBootId);
+        baseline = null;
+        if (!guard(store.checkpoint(checkpointUpdate()))) return false;
+      }
+      // NOT A SILENCE. Ordinarily the baseline stays where it is, so the
+      // comparison happens the moment a readable generation arrives. A proven
+      // boot change above clears it because that old world is already closed.
+      // Without this note the only trace would be a history that quietly
+      // skipped a few minutes.
       write(conditions.degrade("baseline", at, outcome.reason));
+      // An admissible collection the differ could not place is not an
+      // inventory the view may classify against, whatever rows it carries.
+      trustInventory({ kind: "untrusted", why: `the latest collection was held: ${outcome.reason}` });
+      if (bootChanged) requestView();
       return true;
     }
     write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
 
-    // BELOW THE `held` RETURN, deliberately. `admissible()` can accept a
+    // BELOW THE ordinary `held` RETURN, deliberately. `admissible()` can accept a
     // populated inventory whose tmux generation `diff()` cannot place; probing
     // on the accept arm would spend a process-table read and throw its answer
-    // away because that path writes no checkpoint.
+    // away because that path writes no checkpoint. The proven-boot-change arm
+    // above is the exception: it checkpoints the old world's close-out only.
     let reading: ProcessTableReading;
     try {
       reading = probe();
@@ -1281,14 +1839,44 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // snapshot after a start with no baseline reconciles the register against
     // it, and the invariant is worth stating plainly: AFTER THE FIRST ACCEPTED
     // SNAPSHOT, THE REGISTER IS THE SNAPSHOT — whatever the daemon started from.
-    const events =
-      baseline === null ? [...goneWhileAway(store.register, verdict.snapshot, at), ...outcome.events] : outcome.events;
+    // A boot change closes out the whole register instead, which covers this.
+    const closures = bootChanged
+      ? closeOutOldBoot(store.register, at)
+      : baseline === null
+        ? goneWhileAway(store.register, verdict.snapshot, at)
+        : [];
+
+    // THE RECOVERY CANDIDATES, IMMEDIATELY BEFORE THE APPEND — over the
+    // differ's gones and the daemon's own closures alike. `store.register` has
+    // not folded this batch yet, so it still holds each removed session's final
+    // entry, and the candidate goes into the same single write as the gone it
+    // explains. recovery.ts says why this is the daemon's job and not `diff()`'s.
+    const events = withRecoveryCandidates([...closures, ...outcome.events], store.register, {
+      observation: observationOf(observed.ordering, observed.clock.at),
+      tmuxServerPid: observed.tmuxServerPid,
+      baseline:
+        baseline === null
+          ? null
+          : {
+              rows: baseline.snapshot.rows,
+              collectedAt: baseline.snapshot.clock.at,
+              observation: observationOf(baseline.snapshot.ordering, baseline.snapshot.clock.at),
+            },
+      producerRun: producerRunOf(baseline?.snapshot.ordering ?? null, observed.ordering),
+      bootChanged,
+      hostBootId,
+    });
 
     if (events.length > 0) {
       const appended = store.append(events);
       if (!guard(appended)) return false;
       log(`${at} ${events.length} events from the collection at ${observed.clock.at} (via ${via})`);
     }
+    // AFTER THE APPEND, so a crash before it leaves the old boot id and the
+    // close-out happens again rather than not at all. The candidates carry the
+    // same id, which is how the recovery fold gets it back if the process dies
+    // before `recovery.json` is written.
+    if (hostBootId !== null) store.recordBootId(hostBootId);
 
     baseline = outcome.baseline;
     lastGoodSnapshotAt = observed.clock.at;
@@ -1299,6 +1887,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //   1. `store.append(events)`   — the events, fsync'd, O_APPEND
     //   2. `saveBaseline(json)`     — the payload those events were derived FROM
     //   3. `store.checkpoint(...)`  — the register, and the cursor into (1)
+    //      — then, inside it, `recovery.json`: the recovery index and its own
+    //      cursor, which `openStore` replays from independently (store.ts §
+    //      `RECOVERY_FILE`)
     //
     // The invariant the order buys: **the event log is always at or ahead of
     // the baseline file, and the baseline file is always at or ahead of the
@@ -1332,7 +1923,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     saveBaseline(root, json);
     if (!guard(store.checkpoint(checkpointUpdate()))) return false;
     checkFreshness();
-    return true;
+    // THE INVENTORY THE VIEW MAY TRUST, and only now: after the append, the
+    // baseline and the checkpoint, so nothing classifies against a collection
+    // whose events are not on the disk. Then the derived dispositions against
+    // it — `resumed` needs a live row in exactly this kind of inventory — after
+    // the durable writes above, so a crash before them re-derives them rather
+    // than losing them.
+    trustInventory({
+      kind: "trusted",
+      rows: observed.rows,
+      collectedAt: observed.clock.at,
+      observation: observationOf(observed.ordering, observed.clock.at),
+    });
+    return appendDerived();
   }
 
   // AWAIT THE PASS IN FLIGHT BEFORE RELEASING ANYTHING — GPT Sol's finding 5.
@@ -1377,8 +1980,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
 /**
  * The sessions the restored register holds and this snapshot does not.
  *
- * **THE ONE PLACE THE DAEMON MINTS AN EVENT OUTSIDE `diff()`, and it mints
- * CLOSURES ONLY — never a `session-status`, never a `session-replaced`.** That
+ * **ONE OF TWO PLACES THE DAEMON MINTS AN EVENT OUTSIDE `diff()` — the other is
+ * `closeOutOldBoot` below — and both mint CLOSURES ONLY — never a
+ * `session-status`, never a `session-replaced`.** That
  * restriction is the point rather than an omission, and the next person will
  * want to relax it: comparing a register entry's `lastStatusKey` against a
  * row's status looks like the same job. It is not. A status transition needs
@@ -1438,6 +2042,43 @@ function goneWhileAway(register: SessionRegister, snapshot: AdmissibleSnapshot, 
   return gone;
 }
 
+/**
+ * Every register entry, closed out of the old boot's world — GPT Sol's F5.
+ *
+ * `tmux-server-changed` rather than `absent-from-snapshot`, and whether or not
+ * the new collection lists a row with the same handle and claim: under a new
+ * boot that row is a fresh allocation wearing an old number, which is the whole
+ * reason the boot id is asked. Closures only, for `goneWhileAway`'s reason; the
+ * new collection's rows arrive as `session-seen` from `diff(null, …)`.
+ */
+function closeOutOldBoot(register: SessionRegister, at: string): OverseerEvent[] {
+  return [...register.values()].map((entry) => {
+    const identity: SessionIdentity = { tmuxId: entry.tmuxId, claimedConversationId: entry.claimedConversationId };
+    return {
+      kind: "tmux-session-gone",
+      at,
+      tmuxServerPid: entry.tmuxServerPid,
+      key: sessionKey(identity),
+      identity,
+      name: entry.name,
+      why: "tmux-server-changed",
+    };
+  });
+}
+
+/**
+ * The kernel's id for this boot, or null when it cannot be read — which is any
+ * host that is not Linux, and concludes nothing.
+ */
+export function readHostBootId(): string | null {
+  try {
+    const text = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+    return text === "" ? null : text;
+  } catch {
+    return null;
+  }
+}
+
 function transportRestored(via: Transport): string {
   return via === "poll" ? "a poll succeeded" : "the stream is delivering, so the fallback is not in use";
 }
@@ -1492,7 +2133,10 @@ function restoreBaseline(root: string): { accepted: AdmissibleSnapshot | null; w
   if (typeof stored !== "object" || stored === null || !("payload" in stored)) {
     return { accepted: null, why: `none usable: ${BASELINE_FILE} has no payload in it` };
   }
-  const verdict = admissible(null, parseObservation((stored as { payload: JsonValue }).payload));
+  // NO RETIRED RUNS: nothing has been replaced before the daemon has started,
+  // and there is no predecessor to be ordered against. `retired` is rebuilt
+  // from the payloads that arrive after this — see its declaration.
+  const verdict = admissible(null, parseObservation((stored as { payload: JsonValue }).payload), new Set());
   if (verdict.verdict !== "accept") {
     return { accepted: null, why: `none usable: the stored collection is not admissible (${verdict.reason})` };
   }

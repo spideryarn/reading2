@@ -502,6 +502,16 @@ const OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY: Record<string, string> = {
      `lock.ts`, both already permitted here. No store, and nothing new. */
   "decisions.ts":
     "the decision record's own file discipline — append, read, repair — for the Decisions tab. Closure: `node:` builtins, `fleet/wire.js` (types only), and `jsonl.ts` + `lock.ts`, which are already here. No store.",
+  /* Added 2026-09-10 by `work-reports` (plan 260910e), the session that
+     introduced the import — `reports-view.ts` and `routes-reports.ts` read the
+     reports log for the Claims section. The first version type-imported
+     `store.ts` for the register, which put nineteen modules on this side of
+     the seam; `reports.ts` now declares the two register fields it reads as a
+     structural `ReportRegister` instead. Closure read, not assumed: `node:`
+     builtins, `fleet/artefact-ref.js` and `fleet/execution-token.js` (both
+     import-free leaves), `decisions.ts`, and `jsonl.ts`, all already here. */
+  "reports.ts":
+    "the work-report log's own file discipline — parse, fold, read the inbox and the log — for the Claims section. Closure: `node:` builtins, two import-free `fleet/` leaves, `decisions.ts` and `jsonl.ts`, which are already here. No store.",
 };
 
 const OVERSEER_MODULES_FLEET_MAY_IMPORT = Object.keys(OVERSEER_MODULES_FLEET_MAY_IMPORT_WHY);

@@ -27,6 +27,7 @@ import {
 } from "../scripts/run-claude.js";
 import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
+import { accountNeutralEnv } from "./helpers/account-neutral-env.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
 const resultEvent = (fields: Record<string, unknown> = {}): string =>
@@ -40,7 +41,9 @@ describe("parseArgs", () => {
     /* The same trap as the codex wrapper's: --pass-env is applied after the denylist sweep, so a
        run that asked for the subscription would spend the key, and every observable thing about it
        — the status line included — would name the wrong account. */
-    expect(() => parseArgs(["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"]))
+    // An explicit, unrouted environment: parseArgs reads CLAUDE_CONFIG_DIR, and under a pool
+    // account the routed refusal would answer instead (plan 260910d, repo-wide A/B).
+    expect(() => parseArgs(["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"], {}))
       .toThrow(/--auth env/);
   });
 
@@ -65,6 +68,20 @@ describe("parseArgs", () => {
 
   it("accepts an explicit account name", () => {
     expect(parseArgs(["--prompt", "x", "--account", "pool-a"]).account).toBe("pool-a");
+  });
+
+  it("explains that --auth env cannot replace an inherited routed account", () => {
+    expect(() => parseArgs(
+      ["--prompt", "x", "--auth", "env"],
+      { CLAUDE_CONFIG_DIR: "/configs/pool-a" },
+    )).toThrow(/routed run.*state directory/i);
+  });
+
+  it.each([
+    [["--prompt", "x", "--pass-env", "ANTHROPIC_API_KEY"], { CLAUDE_CONFIG_DIR: "/configs/pool-a" }],
+    [["--prompt", "x", "--account", "pool-a", "--pass-env", "ANTHROPIC_API_KEY"], {}],
+  ] as const)("does not recommend --auth env for a credential on a routed run", (argv, env) => {
+    expect(() => parseArgs([...argv], env)).toThrow(/routed run.*state directory/i);
   });
 });
 
@@ -104,6 +121,64 @@ describe("account routing", () => {
       .toMatchObject({ kind: "refused" });
     expect(resolveRunClaudeAccount(registry, undefined, "/configs/missing"))
       .toMatchObject({ kind: "refused" });
+  });
+
+  it("never hands a routed child a credential, however it is asked", () => {
+    /* A routed child's account is its config directory and nothing else. Measured 2026-09-10:
+       `--auth env` or `--pass-env CLAUDE_CODE_OAUTH_TOKEN` handed a child routed to pool-a the
+       parent's token as well — a second account riding in beside the first, because --pass-env was
+       re-added after the drop list. Plan 260910d. */
+    const parent = {
+      PATH: "/bin",
+      CLAUDE_CONFIG_DIR: "/configs/parent",
+      CLAUDE_CODE_OAUTH_TOKEN: "oauth-of-another-account",
+      ANTHROPIC_AUTH_TOKEN: "auth-of-another-account",
+      ANTHROPIC_API_KEY: "key-of-another-account",
+    };
+    const credentials = ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"];
+    const asks: Array<[Parameters<typeof claudeEnv>[1], string[]]> = [
+      ["env", []],
+      ["machine", credentials],
+      ["env", credentials],
+    ];
+    for (const [auth, passEnv] of asks) {
+      const env = claudeEnv(parent, auth, passEnv, "/configs/pool-a", () => {});
+      expect(env.CLAUDE_CONFIG_DIR).toBe("/configs/pool-a");
+      for (const name of credentials) expect(env[name], `${auth} ${passEnv.join(",")}: ${name}`).toBeUndefined();
+    }
+  });
+
+  it("says which names a routed child was refused", () => {
+    const told: string[][] = [];
+    claudeEnv(
+      { CLAUDE_CODE_OAUTH_TOKEN: "t" }, "machine", ["CLAUDE_CODE_OAUTH_TOKEN"], "/configs/pool-a",
+      (names) => told.push(names),
+    );
+    expect(told).toEqual([["CLAUDE_CODE_OAUTH_TOKEN"]]);
+  });
+
+  it("treats routed CLAUDE_* and CLAUDECODE as absolute even when --pass-env asks", () => {
+    for (const name of ["CLAUDE_FUTURE_PROVIDER", "CLAUDECODE"]) {
+      const env = claudeEnv(
+        { [name]: "another-account" },
+        "machine",
+        [name],
+        "/configs/pool-a",
+        () => {},
+      );
+      expect(env[name], name).toBeUndefined();
+    }
+  });
+
+  it("still lets --pass-env restore a routed non-credential ANTHROPIC_* name", () => {
+    const env = claudeEnv(
+      { ANTHROPIC_BASE_URL: "https://deliberate.example" },
+      "machine",
+      ["ANTHROPIC_BASE_URL"],
+      "/configs/pool-a",
+      () => {},
+    );
+    expect(env.ANTHROPIC_BASE_URL).toBe("https://deliberate.example");
   });
 
   it("sets only the selected state directory after sanitising the child environment", () => {
@@ -474,7 +549,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", answerPath, ...extraArgs],
-      { encoding: "utf8", env: { ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}` } },
+      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     return { ...r, answerPath };
   }
@@ -587,7 +662,7 @@ describe("the CLI, end to end", () => {
     const r = spawnSync(
       "npx",
       ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", both, "--activity-log", both],
-      { encoding: "utf8", env: { ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}` } },
+      { encoding: "utf8", env: accountNeutralEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
     );
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("--activity-log");

@@ -96,6 +96,7 @@ listed here; the names under each are files in `docs/project/`.
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `overseer-queue.md` (the deferred work the Overseer may pick up in a lull, and what each waits on) ·
+  `work-reports.md` (an agent's progress, blocks, decisions and completion, recorded as claims) ·
   `fleet-dashboard-modes.md` (adding a tab to the dashboard: six places in three files, two of them
   checked by nothing) ·
   `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a
@@ -294,8 +295,9 @@ nothing else has a copy of.
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
-  the best of both, and show Greg the proposal before you change anything —
-  [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
+  the best of both, write the proposal down, and resolve it yourself — with GPT Sol or Fable when
+  unsure. It goes to Greg only if it is a real product trade-off neither side can keep (Greg,
+  2026-09-10) — [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked —
   **and push it.** Unpushed work is invisible to the other machine and to every check that asks
   whether it landed.
@@ -317,7 +319,7 @@ nothing else has a copy of.
   rejects the request.
 
   ```
-  npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
+  npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
     --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
   ```
 

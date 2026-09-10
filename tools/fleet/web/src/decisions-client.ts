@@ -15,12 +15,15 @@ import type {
   DecisionRow,
   DecisionsFeed,
   DecisionWireAggregates,
+  DecisionWireAuthor,
   DecisionWireCheckpoint,
   DecisionWireExecution,
   DecisionWireProblem,
   DecisionWireRecord,
+  DecisionWireRecorder,
   DecisionWireSessionState,
 } from "../../wire";
+import { parseCheckedArtefacts } from "../../artefact-ref";
 import { isExecutionTokenText } from "../../execution-token";
 
 export const DECISIONS_URL = "api/decisions";
@@ -69,8 +72,90 @@ function nullableDecisionId(value: unknown): value is string | null {
   return value === null || (text(value) && DECISION_ID.test(value));
 }
 
-function actor(value: unknown): value is "greg" | "overseer" {
-  return value === "greg" || value === "overseer";
+function recorder(value: unknown): value is DecisionWireRecorder {
+  return value === "greg" || value === "overseer" || value === "daemon";
+}
+
+const NOT_RECORDED = "not-recorded";
+const SESSION_NAME = /^[A-Za-z0-9._-]{1,64}$/;
+
+function oneOf(value: unknown, allowed: readonly string[]): boolean {
+  return typeof value === "string" && allowed.includes(value);
+}
+
+function author(value: unknown): value is DecisionWireAuthor {
+  if (!isRecord(value)) return false;
+  switch (value["kind"]) {
+    case "overseer":
+    case "greg":
+    case "legacy-unrecorded":
+      return true;
+    case "session":
+      return text(value["name"]) && SESSION_NAME.test(value["name"]) && execution(value["execution"]);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Schema 2's fields, strictly, and all-or-nothing: a V1 row (author
+ * `legacy-unrecorded`) has every one `not-recorded`, a schema-2 row has none.
+ * A mixture is a record no build writes, so it is refused rather than drawn.
+ * Evidence goes through `parseCheckedArtefacts`, so the panel only ever links
+ * from references that passed the one shared shape check.
+ */
+function assessment(value: Record<string, unknown>): boolean {
+  if (!author(value["author"])) return false;
+  const legacy = value["author"].kind === "legacy-unrecorded";
+  const recommendation = value["recommendation"];
+  const evidence = value["evidence"];
+  if (!isRecord(recommendation) || !isRecord(evidence)) return false;
+  const unrecorded = [
+    value["consequence"] === NOT_RECORDED,
+    value["reversibility"] === NOT_RECORDED,
+    value["domain"] === NOT_RECORDED,
+    recommendation["kind"] === NOT_RECORDED,
+    evidence["kind"] === NOT_RECORDED,
+    value["gregAsked"] === NOT_RECORDED,
+    value["confidence"] === NOT_RECORDED,
+  ];
+  if (!unrecorded.every((flag) => flag === legacy)) return false;
+  if (legacy) return true;
+  return (
+    oneOf(value["consequence"], ["high", "medium", "low"]) &&
+    oneOf(value["reversibility"], ["easy", "costly", "one-way"]) &&
+    oneOf(value["domain"], ["product", "technical"]) &&
+    recommendation["kind"] === "recorded" &&
+    (recommendation["value"] === null || nonBlank(recommendation["value"])) &&
+    evidence["kind"] === "recorded" &&
+    parseCheckedArtefacts(evidence["value"]) !== null &&
+    oneOf(value["gregAsked"], ["no", "asked-answered", "asked-awaiting"]) &&
+    (value["confidence"] === null || oneOf(value["confidence"], ["high", "medium", "low"]))
+  );
+}
+
+/**
+ * Case-insensitive, over the prose a person would remember a decision by; a
+ * blank query matches everything. **The same fields as the CLI's
+ * `decisionMatchesSearch` in `decisions-view.ts`**, which this browser module
+ * cannot import; `tests/fleet-decisions-client.test.ts` runs both over one
+ * record so they cannot drift apart unseen.
+ */
+export function decisionMatchesSearch(record: DecisionWireRecord, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return true;
+  const haystack = [
+    record.question,
+    ...record.options.flatMap((option) => [option.name, option.tradeoffs]),
+    record.chose.option,
+    record.chose.note ?? "",
+    record.why,
+    record.recommendation.kind === "recorded" ? (record.recommendation.value ?? "") : "",
+    record.bearsOn.plan ?? "",
+    ...record.bearsOn.sessions.map((session) => session.name),
+    record.author.kind === "session" ? record.author.name : "",
+  ];
+  return haystack.some((item) => item.toLowerCase().includes(needle));
 }
 
 function execution(value: unknown): value is DecisionWireExecution {
@@ -163,7 +248,16 @@ function bearsOn(value: unknown): boolean {
 
 function record(value: unknown): value is DecisionWireRecord {
   if (!isRecord(value)) return false;
-  if (!text(value["id"]) || !DECISION_ID.test(value["id"]) || !actor(value["recordedBy"])) return false;
+  if (!text(value["id"]) || !DECISION_ID.test(value["id"]) || !recorder(value["recordedBy"])) return false;
+  if (!assessment(value)) return false;
+  /* There are exactly three schema-2 entrances: Greg and the Overseer use the
+     CLI for their own decisions; the drain copies a session's. A mismatch is
+     a forgery or a server bug, never another supported provenance. V1 remains
+     `legacy-unrecorded` with either historical human recorder. */
+  const authorKind = (value["author"] as DecisionWireAuthor).kind;
+  const expectedAuthor = value["recordedBy"] === "daemon" ? "session" : value["recordedBy"];
+  if (authorKind !== "legacy-unrecorded" && authorKind !== expectedAuthor) return false;
+  if (authorKind === "legacy-unrecorded" && value["recordedBy"] === "daemon") return false;
   if (value["class"] !== "assumption" && value["class"] !== "decision" && value["class"] !== "decline") {
     return false;
   }
@@ -184,7 +278,8 @@ function record(value: unknown): value is DecisionWireRecord {
         isRecord(touch) &&
         (touch["kind"] === "decided" || touch["kind"] === "reviewed" || touch["kind"] === "reversed") &&
         iso(touch["at"]) &&
-        actor(touch["by"]) &&
+        recorder(touch["by"]) &&
+        (touch["by"] !== "daemon" || touch["kind"] === "decided") &&
         text(touch["what"]),
     )
   ) {
@@ -234,9 +329,9 @@ function noAnswer(why: string): Extract<DecisionsView, { kind: "no-answer" }> {
 /** A recursively checked server payload, or this browser's refusal to guess. */
 export function parseDecisionsFeed(body: unknown): DecisionsView {
   if (!isRecord(body)) return noAnswer("this browser received something that is not the decisions API");
-  if (body["schema"] !== 1) {
+  if (body["schema"] !== 2) {
     return noAnswer(
-      `this browser can read version 1 of the decisions API; the server sent ${JSON.stringify(body["schema"])}`,
+      `this browser can read version 2 of the decisions API; the server sent ${JSON.stringify(body["schema"])}`,
     );
   }
   if (!iso(body["composedAt"])) {

@@ -102,6 +102,45 @@ export type JobWork =
   | { readonly kind: "rule"; readonly rule: RuleSpec };
 
 /**
+ * **WHETHER A DUE JOB MAY ACTUALLY START ANYTHING — and it is in the
+ * fingerprint.**
+ *
+ * `live` is every job that shipped before 2026-09-10. `dry-run` goes through
+ * every gate the scheduler has — the history, the pin, the clock — and where a
+ * live job would reserve, it reports *due now; dry-run, so nothing is reserved
+ * or launched* instead, and **writes nothing to the ledger**: a last attempt
+ * that never happened would corrupt the one record whose value is that it can
+ * be believed. It never counts against the launch-spacing gate, and
+ * `eligibilityOf` does not let it earn `ARMED`.
+ *
+ * **Hashed, not scheduled**, and that is GPT Sol's P1-3 on plan 260910e: the
+ * clock fields are outside the fingerprint because they change only *when* a
+ * job runs, and dry-run → live changes *whether an unattended Claude session
+ * may start at all*. That is gate 3's question, not S8-1's, so moving this
+ * field is a re-pin like moving a prompt.
+ *
+ * The `why` is hashed as well as the kind. It is prose, so that costs a re-pin
+ * on a reworded reason; the alternative was a field of a hashed type that the
+ * hash quietly does not read, which is the SC-4 shape this module refuses
+ * everywhere else.
+ */
+export type JobDispatch = { readonly kind: "live" } | { readonly kind: "dry-run"; readonly why: string };
+
+/** The canonical form of the dispatch mode. Exhaustive for the reason `canonicalWork` is. */
+function canonicalDispatch(dispatch: JobDispatch): string {
+  switch (dispatch.kind) {
+    case "live":
+      return "dispatch:live";
+    case "dry-run":
+      return `dispatch:dry-run:${dispatch.why.length}:${dispatch.why}`;
+    default: {
+      const never: never = dispatch;
+      throw new Error(`no canonical form for job dispatch ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/**
  * A job definition narrowed to the rule arm, at the type level.
  *
  * This is half of what makes the deterministic-only arming path structural
@@ -112,8 +151,12 @@ export type JobWork =
  */
 export type RuleJobDefinition = JobDefinition & { readonly behaviour: { readonly work: Extract<JobWork, { kind: "rule" }> } };
 
-/** An authorised job whose work is a rule, by construction. */
-export type AuthorisedRuleJob = { readonly definition: RuleJobDefinition; readonly authorisedHash: BehaviourHash };
+/** An authorised job whose work is a rule, by construction. `authorisedDocuments` as on `AuthorisedJob`. */
+export type AuthorisedRuleJob = {
+  readonly definition: RuleJobDefinition;
+  readonly authorisedHash: BehaviourHash;
+  readonly authorisedDocuments: readonly JobDocument[];
+};
 
 /**
  * The canonical form of a job's work.
@@ -141,7 +184,8 @@ function canonicalWork(work: JobWork): string {
  * The split from `ScheduleConfig` is GPT Sol's S8-1, and it is the reason
  * `tools/overseer/schedules.ts` can be edited by hand without disarming
  * anything. What lives here changes what the box does: the instruction it runs,
- * the kind of work it is, and the documents that instruction leans on. What
+ * the kind of work it is, the documents that instruction leans on, and whether
+ * a due run may start anything at all (`dispatch`, since 2026-09-10). What
  * lives in the schedule changes only *when* — and when is not a thing an
  * authorisation should be spent on.
  *
@@ -187,6 +231,11 @@ export type JobBehaviour = {
    * rest of this module refuses.
    */
   readonly work: JobWork;
+  /**
+   * WHETHER A DUE RUN STARTS ANYTHING — `live`, or `dry-run` with the reason.
+   * Required for the reason `work` is, and hashed: see `JobDispatch`.
+   */
+  readonly dispatch: JobDispatch;
 };
 
 /**
@@ -286,6 +335,10 @@ const BEHAVIOUR_ENCODERS: { readonly [K in keyof JobBehaviour]-?: (value: JobBeh
       `documents:${documents.length}`,
       ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
     ].join("\n"),
+  // WHETHER IT MAY START ANYTHING. Added 2026-09-10 (plan 260910e § D5), which
+  // re-pinned every shipped job once: see `JobDispatch` for why this is gate 3's
+  // and not the schedule's.
+  dispatch: (dispatch) => canonicalDispatch(dispatch),
 };
 
 /**
@@ -322,7 +375,47 @@ export type AuthorisedJob = {
   readonly definition: JobDefinition;
   /** What `behaviourHash(definition.behaviour)` must equal for this job to be dispatched at all. NOT a claim about the schedule. */
   readonly authorisedHash: BehaviourHash;
+  /**
+   * **EACH DOCUMENT'S FULL DIGEST AT THE MOMENT IT WAS PINNED — a diagnosis, not
+   * a gate.** Plan 260910e § D4.
+   *
+   * The behaviour hash stays the only thing a dispatch is refused on. This
+   * exists so the refusal can say *which* document moved — *"feedback-reports.md:
+   * pinned 1a2b…, now 9f8e… — edited since it was authorised"* — rather than
+   * only that a composite fingerprint did, which for a rule leaning on three
+   * shared files is a puzzle.
+   *
+   * Required rather than optional: a pin with no documents to name would make
+   * "nothing moved" and "nobody said" the same empty list. Standing jobs pin it
+   * as a literal beside their hash; rule jobs take their load-time digests.
+   * `tests/overseer-standing-jobs.test.ts` holds the two literals to one
+   * another — rebuild the hash from these and it must equal `authorisedHash`.
+   */
+  readonly authorisedDocuments: readonly JobDocument[];
 };
+
+/**
+ * Which documents differ from the ones that were pinned, as sentences.
+ *
+ * Eight hex characters each side: enough to tell two digests apart in a log
+ * line, and the full ones are a `sha256sum` away. A document present on only
+ * one side says so rather than printing a digest it does not have.
+ */
+export function documentDrift(authorised: readonly JobDocument[], found: readonly JobDocument[]): readonly string[] {
+  const pinned = new Map(authorised.map((document) => [document.path, document.sha256]));
+  const now = new Map(found.map((document) => [document.path, document.sha256]));
+  const short = (sha: string): string => `${sha.slice(0, 8)}…`;
+  const drift: string[] = [];
+  for (const [path, sha] of now) {
+    const was = pinned.get(path);
+    if (was === undefined) drift.push(`${path}: not among the documents it was pinned with`);
+    else if (was !== sha) drift.push(`${path}: pinned ${short(was)}, now ${short(sha)} — edited since it was authorised`);
+  }
+  for (const path of pinned.keys()) {
+    if (!now.has(path)) drift.push(`${path}: pinned, and no longer among its documents`);
+  }
+  return drift;
+}
 
 /**
  * Whether a definition still matches the fingerprint it was authorised under.
@@ -344,6 +437,7 @@ export function authorisationOf(job: AuthorisedJob): Authorisation {
   const behaviour = job.definition.behaviour;
   const found = behaviourHash(behaviour);
   if (found === job.authorisedHash) return { kind: "authorised", hash: found };
+  const drift = documentDrift(job.authorisedDocuments, behaviour.documents);
   return {
     kind: "unauthorised",
     authorised: job.authorisedHash,
@@ -351,6 +445,7 @@ export function authorisationOf(job: AuthorisedJob): Authorisation {
     why:
       `this job's behaviour was authorised as ${job.authorisedHash} and now fingerprints as ${found}` +
       (behaviour.documents.length === 0 ? "" : ` (its documents are ${behaviour.documents.map((document) => document.path).join(", ")})`) +
+      (drift.length === 0 ? "" : ` — ${drift.join("; ")}`) +
       ", so it is not the job that was queued and it will not be dispatched until somebody re-pins it. " +
       "A schedule edit cannot cause this: cadence, lease and first-run delay are not in the fingerprint",
   };
@@ -722,7 +817,7 @@ export function lastRunOf(index: OccurrenceIndex, jobId: string, nowMs: number):
     // old pin, because an unsettled occurrence was hidden by the same filter.
     //
     // The property the filter was protecting is now held by the authorisation
-    // gate, which `schedulerTick` asks BEFORE it asks this function anything: an
+    // gate, which `planJobs` asks BEFORE it asks this function anything: an
     // edited behaviour does not reach the arithmetic at all (C2). The hash stays
     // on the key for audit; it is not a lineage.
     if (occurrence.key.jobId !== jobId) continue;
@@ -996,6 +1091,10 @@ export function foldOccurrences(
       // record silently editing this one.
       case "rule-intended":
       case "rule-settled":
+      // AND THE RECOVERY JOURNAL'S. A candidate or a disposition is about a
+      // session that went away, never about a run of a job.
+      case "recovery-candidate":
+      case "recovery-disposition":
         break;
       default: {
         const never: never = event;

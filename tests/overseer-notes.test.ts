@@ -14,7 +14,7 @@
  * and a test that only proves "a torn line is skipped" passes against the
  * design that concatenates the next event onto the corrupt bytes.
  */
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -78,7 +78,10 @@ describe("the note log survives being cut off mid-line", () => {
     // the torn suffix on read but appends after it passes the first half of
     // this test and fails here.
     const read = readNotes(root);
+    expect(read.kind).toBe("read");
+    if (read.kind !== "read") throw new Error("expected readable notes");
     expect(read.unreadable).toBe(0);
+    expect(read.tornTail).toBeNull();
     expect(read.notes.map((n) => n.kind)).toEqual(["daemon-started", "condition-restored", "daemon-stopped"]);
     for (const line of readFileSync(path, "utf8").split("\n").filter((l) => l !== "")) {
       expect(() => JSON.parse(line)).not.toThrow();
@@ -89,15 +92,51 @@ describe("the note log survives being cut off mid-line", () => {
     const root = tempRoot();
     writeFileSync(join(root, NOTES_FILE), `${JSON.stringify(started("2026-09-08T07:00:00.000Z"))}\n`);
     appendFileSync(join(root, NOTES_FILE), `{"kind":"who-knows","at":"2026-09-08T07:00:01.000Z"}\n`);
+    appendFileSync(
+      join(root, NOTES_FILE),
+      `${JSON.stringify({ kind: "daemon-stopped", at: "2026-09-08T07:00:02.000Z", instanceId: "i1", why: "done" })}\n`,
+    );
     const read = readNotes(root);
-    expect(read.notes.map((n) => n.kind)).toEqual(["daemon-started"]);
+    expect(read.kind).toBe("read");
+    if (read.kind !== "read") throw new Error("expected readable notes");
+    expect(read.notes.map((n) => n.kind)).toEqual(["daemon-started", "daemon-stopped"]);
     expect(read.unreadable).toBe(1);
+    expect(read.tornTail).toBeNull();
+  });
+
+  test("an unterminated final note is reported separately from corrupt complete lines", () => {
+    const root = tempRoot();
+    const complete = `${JSON.stringify(started("2026-09-08T07:00:00.000Z"))}\n`;
+    const torn = '{"kind":"condition-degraded","at":"2026-09-08T07:01';
+    writeFileSync(join(root, NOTES_FILE), complete + torn);
+
+    const read = readNotes(root);
+
+    expect(read.kind).toBe("read");
+    if (read.kind !== "read") throw new Error("expected readable notes");
+    expect(read.notes.map((note) => note.kind)).toEqual(["daemon-started"]);
+    expect(read.unreadable).toBe(0);
+    expect(read.tornTail).toBe(torn);
+  });
+
+  test("a note log that cannot be read is not mistaken for an empty log", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, NOTES_FILE));
+
+    const read = readNotes(root);
+
+    expect(read.kind).toBe("unreadable");
+    if (read.kind !== "unreadable") throw new Error("expected an unreadable result");
+    expect(read.cause).toMatch(/EISDIR|directory/i);
   });
 
   test("no note log at all reads as empty rather than throwing", () => {
     const read = readNotes(tempRoot());
+    expect(read.kind).toBe("read");
+    if (read.kind !== "read") throw new Error("expected readable notes");
     expect(read.notes).toEqual([]);
     expect(read.unreadable).toBe(0);
+    expect(read.tornTail).toBeNull();
   });
 });
 
@@ -155,6 +194,22 @@ describe("what a reader makes of the log afterwards", () => {
     // A NEW INSTANCE KNOWS NOTHING YET, and carrying the dead one's conditions
     // forward would show Greg a fault that belongs to a process that is gone.
     expect(openConditions(notes)).toEqual([]);
+  });
+
+  test("the ordering condition is a condition a reader recognises, not a rotted line", () => {
+    // `readNotes` refuses a condition name it does not know and counts the line
+    // as unreadable, which is the alarm that means the log is decaying. So a
+    // new condition the daemon writes and the reader rejects would look like
+    // corruption rather than like an alarm.
+    const root = tempRoot();
+    const log = openNoteLog(root);
+    log.append(started("2026-09-08T07:00:00.000Z"));
+    log.append({ kind: "condition-degraded", at: "2026-09-08T07:01:00.000Z", instanceId: "i1", condition: "ordering", why: "the stamp cannot be believed" });
+    log.close();
+    const read = readNotes(root);
+    if (read.kind !== "read") throw new Error("expected readable notes");
+    expect(read.unreadable).toBe(0);
+    expect(openConditions(read.notes).map((c) => c.condition)).toEqual(["ordering"]);
   });
 
   test("every note renders as a sentence, so the CLI never prints a bare object", () => {

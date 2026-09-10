@@ -38,6 +38,10 @@
  * repairs, except with nothing having gone wrong at the time and no error
  * anywhere.
  *
+ * Reads have the same count contract. `readFully` is shared by both reads in
+ * the repair path so a short first read cannot leave zero-filled bytes hiding
+ * the newline or the text that is about to be dropped.
+ *
  * ## The difference between the two copies, which was real
  *
  * They were not identical, and the divergences all resolved towards store.ts:
@@ -68,6 +72,44 @@ export const DROPPED_TEXT_CAP = 4096;
  */
 export type JsonlRepair = { torn: false } | { torn: true; droppedBytes: number; droppedText: string };
 
+export type JsonlSplit = {
+  /** Newline-terminated records, without their newline bytes. */
+  completeLines: string[];
+  /** An append observed between its first byte and newline. Not corruption. */
+  tornTail: string | null;
+  /** Bytes through the final newline, and therefore a safe cursor. */
+  completeBytes: number;
+};
+
+type JsonlReader = (fd: number, buffer: Buffer, offset: number, length: number, position: number) => number;
+
+function readFully(fd: number, buffer: Buffer, position: number, reader: JsonlReader): void {
+  let read = 0;
+  while (read < buffer.length) {
+    const count = reader(fd, buffer, read, buffer.length - read, position + read);
+    if (count <= 0) throw new Error(`read ${count} of ${buffer.length - read} remaining bytes`);
+    read += count;
+  }
+}
+
+/** Split a lock-free snapshot without calling its unfinished suffix corrupt. */
+export function splitJsonl(bytes: Buffer): JsonlSplit {
+  const lastNewline = bytes.lastIndexOf(0x0a);
+  if (lastNewline === -1) {
+    return {
+      completeLines: [],
+      tornTail: bytes.byteLength === 0 ? null : bytes.toString("utf8"),
+      completeBytes: 0,
+    };
+  }
+  const completeText = bytes.subarray(0, lastNewline).toString("utf8");
+  return {
+    completeLines: completeText === "" ? [] : completeText.split("\n"),
+    tornTail: lastNewline === bytes.byteLength - 1 ? null : bytes.subarray(lastNewline + 1).toString("utf8"),
+    completeBytes: lastNewline + 1,
+  };
+}
+
 /**
  * Cut the file back to its last complete line, **on disk**, before anything
  * appends to it.
@@ -77,7 +119,7 @@ export type JsonlRepair = { torn: false } | { torn: true; droppedBytes: number; 
  * empty — that is a single torn line and there is nothing in it to keep. A file
  * that does not exist is not torn.
  */
-export function truncateToLastLine(path: string): JsonlRepair {
+export function truncateToLastLine(path: string, reader: JsonlReader = readSync): JsonlRepair {
   if (!existsSync(path)) return { torn: false };
   const fd = openSync(path, "r+");
   try {
@@ -90,7 +132,7 @@ export function truncateToLastLine(path: string): JsonlRepair {
     while (end > 0) {
       const start = Math.max(0, end - CHUNK);
       const buffer = Buffer.alloc(end - start);
-      readSync(fd, buffer, 0, buffer.length, start);
+      readFully(fd, buffer, start, reader);
       const index = buffer.lastIndexOf(0x0a);
       if (index !== -1) {
         lastNewline = start + index;
@@ -105,7 +147,7 @@ export function truncateToLastLine(path: string): JsonlRepair {
     const dropped = Buffer.alloc(Math.min(droppedBytes, DROPPED_TEXT_CAP));
     // READ BEFORE THE TRUNCATE. Afterwards those bytes are gone, and a repair
     // that can say how much it lost but not what is a repair nobody can check.
-    readSync(fd, dropped, 0, dropped.length, keep);
+    readFully(fd, dropped, keep, reader);
     ftruncateSync(fd, keep);
     fsyncSync(fd);
     return { torn: true, droppedBytes, droppedText: dropped.toString("utf8") };

@@ -31,6 +31,7 @@ import {
   type HoldEvidence,
 } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { makeActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter, makeSteerRoutes } from "../tools/fleet/routes-steer.js";
 import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
@@ -356,7 +357,7 @@ const IDLE: FleetStatus = { kind: "idle" };
 function makeQueue() {
   const clock = { t: 1_700_000_000_000 };
   const quarantine = new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE });
-  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId: INSTANCE, quarantine });
+  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId: INSTANCE, quarantine, receipts: memoryReceiptJournal({ now: () => clock.t, serverInstanceId: INSTANCE }) });
   return { q, quarantine, clock, advance: (ms: number) => (clock.t += ms) };
 }
 

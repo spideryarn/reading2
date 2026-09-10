@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { probeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
+import { makeSchedule } from "./schedule-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealthAsync, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
@@ -48,12 +49,14 @@ import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
-import { openSharedQuarantine } from "./quarantine.js";
+import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
 import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
+import { makeRecoveryRoute } from "./routes-recovery.js";
+import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
@@ -136,11 +139,12 @@ const publicationLedger = new PublicationLedger(serverInstanceId());
 let health: HealthReport | null = null;
 
 /**
- * One owner for the process lifetime. Building this inside `refreshHealth`
- * would forget a stuck child every minute and start it a new sibling, which is
- * the multiplication the owned-child registry exists to prevent.
+ * One owner for every fleet probe over the process lifetime. Building this
+ * inside either health or collection would forget a stuck child every minute
+ * and start it a new sibling, which is the multiplication the owned-child
+ * registry exists to prevent. Health and tmux use disjoint probe-key prefixes.
  */
-const healthProbeOwner = probeOwner();
+const fleetProbeOwner = probeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
@@ -183,12 +187,15 @@ const retention = makeHealthRetention({
   refreshMs: REFRESH_MS,
 });
 const admission = makeAdmission();
+// The scheduler's preview, as the Overseer daemon last wrote it. A store that
+// cannot be resolved answers `unreadable` rather than stopping the dashboard.
+const schedule = makeSchedule();
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
 /**
- * **THE HOLDS FROM THE LAST RUN, READ BACK BEFORE THIS ONE CAN BE ASKED TO
- * TYPE.**
+ * **THE HOLDS AND ACTION RECEIPTS FROM THE LAST RUN, READ BACK BEFORE THIS ONE
+ * CAN BE ASKED TO TYPE.**
  *
  * A session held after a send nobody could account for may still have half a
  * sentence in its input box, and a tmux server does not restart just because
@@ -198,18 +205,18 @@ for (const line of retention.lines.error) console.error(line);
  * **THE POSITION OF THIS LINE IS THE WHOLE GUARANTEE**: it is synchronous, and
  * it is above `createServer` and every route mounted in `handler`, so there is
  * no window in which this server can be asked to send while it is still
- * reading. tests/fleet-hold-wiring.test.ts reads this file and fails if the
- * call goes missing or drifts below the listener — the same kind of source
- * guard health-wiring.ts describes, and for the same reason: nothing can import
- * this file without binding port 8787.
+ * reading either store. tests/fleet-hold-restart.test.ts reads this file and
+ * fails if the call goes missing or drifts below the listener — the same kind
+ * of source guard health-wiring.ts describes, and for the same reason: nothing
+ * can import this file without binding port 8787.
  *
- * A ledger that will not open is NOT fatal, exactly like the health store: the
- * dashboard is the thing you reach for when other things are broken, so it runs
- * on with the holds in memory only — and says so, loudly, rather than silently.
+ * A store that will not open is NOT fatal, exactly like the health store: the
+ * dashboard is the thing you reach for when other things are broken, so it
+ * opens both stores here, falls back in memory where needed, and says so loudly.
  */
-const quarantine = openSharedQuarantine({ log: (line) => console.error(line) });
-for (const line of quarantine.lines.log) console.log(line);
-for (const line of quarantine.lines.error) console.error(line);
+const actionStores = openFleetActionStores({ log: (line) => console.error(line) });
+for (const line of actionStores.lines.log) console.log(line);
+for (const line of actionStores.lines.error) console.error(line);
 
 /**
  * Readiness: whether dev is green, and the day behind that answer.
@@ -306,6 +313,7 @@ const queueRoute = ideaQueueRoute();
 
 /** Read fresh on request: this is the review record, not refresh-loop state. */
 const decisionsApiRoute = makeDecisionsRoute();
+const recoveryApiRoute = makeRecoveryRoute();
 
 /**
  * The Deploys tab's record and its probe.
@@ -441,7 +449,7 @@ function statePayload(): string {
 async function refreshHealth(): Promise<HealthTurn> {
   try {
     const report = await collectHealthAsync({
-      owner: healthProbeOwner,
+      owner: fleetProbeOwner,
       includeSwapActivity: true,
     });
     health = report;
@@ -482,7 +490,7 @@ async function refreshHealth(): Promise<HealthTurn> {
  * The latch is in refresh.ts, where a test can drive it; this is the wiring.
  */
 const collector = singleFlightCollect({
-  run: collect,
+  run: () => collect(fleetProbeOwner),
   deadlineMs: COLLECT_DEADLINE_MS,
   now: Date.now,
   // BEFORE the child is awaited, and only when one is actually started — see
@@ -732,6 +740,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
   if (admission.route.handle(req, res)) return;
+  // What the Overseer's scheduler would run next. Read-only: one bounded read of
+  // the file the daemon writes each tick, and nothing computed here.
+  if (schedule.route.handle(req, res)) return;
 
   // Whether dev is green, and the day behind it. Read-only, and it serves the
   // snapshot the refresh loop built rather than computing anything here.
@@ -883,6 +894,8 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  if (recoveryApiRoute.handle(req, res)) return;
+  if (reportsApiRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot

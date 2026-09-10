@@ -22,8 +22,15 @@ import {
   type ObservedAttemptClock,
   type ObservedStatus,
 } from "../tools/overseer/observation.js";
-import { EVERY_FIXTURE, editableFixture, freshFixture, freshFrom, rawFixture, rowsOf } from "./overseer-fixtures.js";
+import { EVERY_FIXTURE, editableFixture, freshFixture, freshFrom, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
 import type { AttentionFeed, OverseerStatusFeed, UsageFeed } from "../tools/fleet/wire.js";
+
+/**
+ * No dashboard run retired. `admissible()`'s third argument is required, so a
+ * caller that has none says so in as many words — which is true of every test
+ * here that is not about retirement.
+ */
+const NONE_RETIRED: ReadonlySet<string> = new Set();
 
 /**
  * What a caller that did not look at the attention inbox passes.
@@ -91,9 +98,10 @@ describe("the dashboard's own payload", () => {
     // It PARSES and is then REJECTED, which is the split that matters: an empty
     // row list is a well-formed payload, and it is the null clock rather than
     // the empty rows that makes it uninhabitable evidence.
-    const verdict = admissible(null, parsed);
+    const verdict = admissible(null, parsed, NONE_RETIRED);
     expect(verdict.verdict).toBe("reject");
     expect(verdict.reason).toContain("never collected");
+    expect(verdict.reason).not.toContain("out of order");
   });
 
   test("a snapshot's schema number is still the one this reader was written against", () => {
@@ -254,8 +262,8 @@ describe("admissibility", () => {
     const first = freshFixture("duplicate-first");
     const second = parseObservation(rawFixture("duplicate-second"));
 
-    expect(admissible(null, parseObservation(rawFixture("duplicate-first"))).verdict).toBe("accept");
-    const verdict = admissible(first, second);
+    expect(admissible(null, parseObservation(rawFixture("duplicate-first")), NONE_RETIRED).verdict).toBe("accept");
+    const verdict = admissible(first, second, NONE_RETIRED);
     // NOT a fault. SSE pushes its cached snapshot on reconnect and the poll runs
     // between collections, so this is the ordinary case — the reason the middle
     // arm exists at all.
@@ -265,14 +273,14 @@ describe("admissibility", () => {
 
   test("a collection that advanced is accepted, and carries the snapshot with it", () => {
     const before = freshFixture("status-change-before");
-    const verdict = admissible(before, parseObservation(rawFixture("status-change-after")));
+    const verdict = admissible(before, parseObservation(rawFixture("status-change-after")), NONE_RETIRED);
     expect(verdict.verdict).toBe("accept");
     if (verdict.verdict !== "accept") return;
     expect(verdict.snapshot.snapshot.clock.atMs).toBeGreaterThan(before.snapshot.clock.atMs);
   });
 
   test("a payload that did not parse is rejected here, not thrown at the caller", () => {
-    const verdict = admissible(null, parseObservation("not a snapshot"));
+    const verdict = admissible(null, parseObservation("not a snapshot"), NONE_RETIRED);
     expect(verdict.verdict).toBe("reject");
     expect(verdict.reason).toContain("not a snapshot");
   });
@@ -285,7 +293,7 @@ describe("admissibility", () => {
     const payload = editableFixture("status-change-after");
     payload["error"] = "could not read this box's tmux sessions: tmux server not found";
 
-    const verdict = admissible(freshFixture("status-change-before"), parseObservation(payload));
+    const verdict = admissible(freshFixture("status-change-before"), parseObservation(payload), NONE_RETIRED);
     expect(verdict.verdict).toBe("reject");
     expect(verdict.reason).toContain("tmux server not found");
     expect(rowsOf(payload)).toHaveLength(6);
@@ -297,13 +305,13 @@ describe("admissibility", () => {
     // refusing the truth at exactly the moment the history is most interesting.
     const payload = editableFixture("status-change-after");
     payload["rows"] = [];
-    const verdict = admissible(freshFixture("status-change-before"), parseObservation(payload));
+    const verdict = admissible(freshFixture("status-change-before"), parseObservation(payload), NONE_RETIRED);
     expect(verdict.verdict).toBe("accept");
   });
 
   test("CONSTRUCTED: a clock that went backwards is rejected rather than shrugged at", () => {
     const later = freshFixture("status-change-after");
-    const verdict = admissible(later, parseObservation(rawFixture("status-change-before")));
+    const verdict = admissible(later, parseObservation(rawFixture("status-change-before")), NONE_RETIRED);
     // Deliberately not `duplicate`. Equal has an innocent explanation that
     // happens every minute; earlier has none, and calling it a duplicate would
     // stall the history silently for as long as the skew lasted.
@@ -312,7 +320,7 @@ describe("admissibility", () => {
   });
 
   test("the first snapshot after a cold start needs no predecessor", () => {
-    const verdict = admissible(null, parseObservation(rawFixture("session-new-after")));
+    const verdict = admissible(null, parseObservation(rawFixture("session-new-after")), NONE_RETIRED);
     expect(verdict.verdict).toBe("accept");
   });
 
@@ -601,7 +609,7 @@ describe("CONSTRUCTED: equal clocks with disagreeing bodies", () => {
     const payload = editableFixture("duplicate-second");
     edit(payload);
     expect(payload["collectedAt"]).toBe(first.snapshot.clock.at);
-    return admissible(first, parseObservation(payload));
+    return admissible(first, parseObservation(payload), NONE_RETIRED);
   }
 
   test("the real byte-identical pair is still a duplicate", () => {
@@ -789,5 +797,287 @@ describe("the attempt clock, which is not the collection clock", () => {
       if (!parsed.ok) continue;
       expect(parsed.value.attempt).toEqual(parseAttempt(payload));
     }
+  });
+
+  test("a schema this reader has not read reports no attempt clock, however plausible its attemptedAt", () => {
+    // Sol's finding 1 on the plan. The daemon reads the attempt clock off
+    // payloads that failed to parse, and a schema-2 payload fails to parse —
+    // so this function is the only thing standing between a producer nobody
+    // here has read and the collector condition. The schema is refused before
+    // any field is.
+    const payload = editableFixture("status-change-before");
+    payload["schema"] = 2;
+    payload["attemptedAt"] = "2026-09-08T02:47:20.000Z";
+    const attempt = parseAttempt(payload);
+    expect(attempt.reported).toBe(false);
+    if (attempt.reported) throw new Error("an unread schema cannot report an attempt");
+    expect(attempt.why).toContain("schema 2");
+
+    // Absent is not 1 either: a bare `{ attemptedAt }` is not a payload of any
+    // schema this reader knows.
+    expect(parseAttempt({ attemptedAt: "2026-09-08T02:47:20.000Z" }).reported).toBe(false);
+  });
+});
+
+/**
+ * The producer stamp: which run of the dashboard composed a payload, and which
+ * collection its rows came from. docs/plans/260910d § Consumer.
+ *
+ * LIKE `attemptedAt`, IT CANNOT FAIL THE PARSE. A dashboard built before the
+ * stamp is an old producer, not a broken one, and a stamp that is present and
+ * wrong is a producer defect the daemon reports as a condition — refusing the
+ * whole snapshot over it would take the Overseer off the air to punish it.
+ */
+describe("the producer stamp", () => {
+  /** A run id minted for this file. */
+  const R1 = "c0ffee01";
+
+  function withProducer(producer: JsonValue | undefined, name: FixtureName = "status-change-before", edits: Record<string, JsonValue> = {}) {
+    const payload = { ...editableFixture(name), ...edits };
+    if (producer !== undefined) payload["producer"] = producer;
+    return parseObservation(payload);
+  }
+
+  function orderingOf(parsed: ReturnType<typeof parseObservation>) {
+    if (!parsed.ok) throw new Error(`the snapshot did not parse: ${parsed.reason}`);
+    return parsed.value.ordering;
+  }
+
+  test("a readable stamp is carried through whole", () => {
+    expect(orderingOf(withProducer({ instance: R1, publication: 4, inventory: 3 }))).toEqual({
+      kind: "stamped",
+      instance: R1,
+      publication: 4,
+      inventory: 3,
+    });
+    // Never collected: inventory null beside a null clock, which agree.
+    expect(orderingOf(withProducer({ instance: R1, publication: 0, inventory: null }, "status-change-before", { collectedAt: null, rows: [] }))).toEqual({
+      kind: "stamped",
+      instance: R1,
+      publication: 0,
+      inventory: null,
+    });
+  });
+
+  test("no producer key at all is the old-producer state, and every captured fixture is one", () => {
+    for (const name of EVERY_FIXTURE) {
+      expect(orderingOf(parseObservation(rawFixture(name)))).toEqual({ kind: "unstamped" });
+    }
+  });
+
+  /** Every cause the plan names, each with the field it should name in its sentence. */
+  const unreadable: { what: string; producer: JsonValue; edits?: Record<string, JsonValue>; names: string }[] = [
+    { what: "null", producer: null, names: "not an object" },
+    { what: "a number", producer: 3, names: "not an object" },
+    { what: "a bare run id", producer: R1, names: "not an object" },
+    { what: "an array", producer: [R1, 1, 1], names: "not an object" },
+    { what: "the producer's own 'invalid' sentinel", producer: { instance: "invalid", publication: 1, inventory: 1 }, names: "instance" },
+    { what: "an upper-case run id", producer: { instance: "C0FFEE01", publication: 1, inventory: 1 }, names: "instance" },
+    { what: "a short run id", producer: { instance: "c0ffee0", publication: 1, inventory: 1 }, names: "instance" },
+    { what: "a long run id", producer: { instance: "c0ffee011", publication: 1, inventory: 1 }, names: "instance" },
+    { what: "a numeric run id", producer: { instance: 12345678, publication: 1, inventory: 1 }, names: "instance" },
+    { what: "no run id", producer: { publication: 1, inventory: 1 }, names: "instance" },
+    { what: "a negative publication", producer: { instance: R1, publication: -1, inventory: null }, edits: { collectedAt: null }, names: "publication" },
+    { what: "a fractional publication", producer: { instance: R1, publication: 1.5, inventory: 1 }, names: "publication" },
+    { what: "a string publication", producer: { instance: R1, publication: "3", inventory: 1 }, names: "publication" },
+    { what: "an unsafe publication", producer: { instance: R1, publication: 1e30, inventory: 1 }, names: "publication" },
+    { what: "no publication", producer: { instance: R1, inventory: 1 }, names: "publication" },
+    { what: "a negative inventory", producer: { instance: R1, publication: 1, inventory: -1 }, names: "inventory" },
+    { what: "a fractional inventory", producer: { instance: R1, publication: 3, inventory: 2.5 }, names: "inventory" },
+    { what: "no inventory", producer: { instance: R1, publication: 1 }, names: "inventory" },
+    { what: "more collections than publications", producer: { instance: R1, publication: 2, inventory: 3 }, names: "inventory" },
+    { what: "inventory null beside a real collection", producer: { instance: R1, publication: 2, inventory: null }, names: "collectedAt" },
+    {
+      what: "an inventory beside a null collection",
+      producer: { instance: R1, publication: 2, inventory: 1 },
+      edits: { collectedAt: null, rows: [] },
+      names: "collectedAt",
+    },
+  ];
+
+  for (const { what, producer, edits, names } of unreadable) {
+    test(`unreadable, and the snapshot still stands: ${what}`, () => {
+      const parsed = withProducer(producer, "status-change-before", edits ?? {});
+      expect(parsed.ok, `a stamp that is ${what} must not fail the snapshot`).toBe(true);
+      const ordering = orderingOf(parsed);
+      expect(ordering.kind).toBe("unreadable");
+      if (ordering.kind !== "unreadable") return;
+      expect(ordering.why).toContain(names);
+    });
+  }
+});
+
+/**
+ * `admissible()`'s rules, in the order the plan puts them — and the order is
+ * the point: several of these payloads break two rules at once, and the test
+ * is which sentence they get.
+ */
+describe("admissibility with producer stamps", () => {
+  const R1 = "c0ffee01";
+  const R2 = "5eed1234";
+
+  type Stamp = { instance: string; publication: number; inventory: number | null };
+
+  function stampedJson(name: FixtureName, stamp: Stamp, edits: Record<string, JsonValue> = {}): JsonValue {
+    return { ...editableFixture(name), ...edits, producer: stamp } as unknown as JsonValue;
+  }
+
+  function plainJson(name: FixtureName, edits: Record<string, JsonValue> = {}): JsonValue {
+    return { ...editableFixture(name), ...edits } as unknown as JsonValue;
+  }
+
+  const placeholder = (instance: string, edits: Record<string, JsonValue> = {}): JsonValue =>
+    stampedJson("status-change-before", { instance, publication: 0, inventory: null }, { collectedAt: null, rows: [], tookMs: 0, ...edits });
+
+  // status-change-before is 02:41:07.661Z; status-change-after is 02:42:21.913Z.
+  const EARLIER = "2026-09-08T02:30:00.000Z";
+
+  test("a retired run is refused before its error is read", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R2, publication: 1, inventory: 1 }), "R2");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-after", { instance: R1, publication: 9, inventory: 9 }, { error: "tmux server not found" })),
+      new Set([R1]),
+    );
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("replaced");
+    expect(verdict.reason).toContain(R1);
+    expect(verdict.reason).not.toContain("tmux server not found");
+  });
+
+  test("a lower collection in the same run is out of order, before its error is read", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 3 }), "R1 at 3");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-after", { instance: R1, publication: 3, inventory: 2 }, { error: "tmux server not found" })),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("out of order");
+    expect(verdict.reason).not.toContain("last collection failed");
+  });
+
+  test("a publication from before the run's first collection, arriving after one, is out of order too", () => {
+    // Within one run the inventory never goes back to null, so this is an old
+    // publication delivered late — the same fact as a lower ordinal.
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 3 }), "R1 at 3");
+    const verdict = admissible(previous, parseObservation(placeholder(R1)), NONE_RETIRED);
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("out of order");
+  });
+
+  test("an error still comes before never-collected, as it did", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 3 }), "R1 at 3");
+    const verdict = admissible(previous, parseObservation(placeholder(R2, { error: "tmux server not found" })), NONE_RETIRED);
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("last collection failed");
+  });
+
+  test("never collected in a new run says the run is new, because a restart is not a fault", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 3 }), "R1 at 3");
+    const verdict = admissible(previous, parseObservation(placeholder(R2)), NONE_RETIRED);
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("new dashboard run");
+    expect(verdict.reason).toContain(R2);
+  });
+
+  test("the same run and collection is a duplicate whatever servedAt, health or publication say", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 3, inventory: 2 }), "R1 at 2");
+    const verdict = admissible(
+      previous,
+      parseObservation(
+        stampedJson("status-change-before", { instance: R1, publication: 9, inventory: 2 }, {
+          servedAt: "2026-09-08T02:45:00.000Z",
+          health: { verdict: { level: "calm" } },
+        }),
+      ),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("duplicate");
+  });
+
+  test("one collection wearing two clocks is a contract failure, and the sentence names both", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 3, inventory: 2 }), "R1 at 2");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 2 }, { collectedAt: "2026-09-08T02:44:00.000Z" })),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("contract failure");
+    expect(verdict.reason).toContain("2026-09-08T02:41:07.661Z");
+    expect(verdict.reason).toContain("2026-09-08T02:44:00.000Z");
+  });
+
+  test("one collection with a different row is a contract failure too", () => {
+    const previous = freshFrom(stampedJson("status-change-before", { instance: R1, publication: 3, inventory: 2 }), "R1 at 2");
+    const changed = stampedJson("status-change-before", { instance: R1, publication: 3, inventory: 2 });
+    const row = rowsOf(changed as Record<string, JsonValue>)[1];
+    if (row) row["status"] = { kind: "working" };
+    const verdict = admissible(previous, parseObservation(changed), NONE_RETIRED);
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("$1643");
+  });
+
+  test("a newer collection in the same run is accepted with an earlier clock", () => {
+    const previous = freshFrom(stampedJson("status-change-after", { instance: R1, publication: 3, inventory: 2 }), "R1 at 2");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-before", { instance: R1, publication: 4, inventory: 3 }, { collectedAt: EARLIER })),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("accept");
+  });
+
+  test("a new run is accepted with an earlier clock", () => {
+    const previous = freshFrom(stampedJson("status-change-after", { instance: R1, publication: 3, inventory: 2 }), "R1 at 2");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-before", { instance: R2, publication: 1, inventory: 1 }, { collectedAt: EARLIER })),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("accept");
+  });
+
+  test("retirement is only consulted when both sides are stamped", () => {
+    // After an unstamped predecessor the clock rules apply, exactly as
+    // yesterday — including to a run this daemon once retired.
+    const unstampedPrevious = freshFrom(plainJson("status-change-before"), "unstamped");
+    const later = stampedJson("status-change-after", { instance: R1, publication: 5, inventory: 5 });
+    expect(admissible(unstampedPrevious, parseObservation(later), new Set([R1])).verdict).toBe("accept");
+  });
+
+  test("stamped after unstamped orders by the clock", () => {
+    const previous = freshFrom(plainJson("status-change-after"), "unstamped");
+    const verdict = admissible(
+      previous,
+      parseObservation(stampedJson("status-change-before", { instance: R1, publication: 1, inventory: 1 })),
+      NONE_RETIRED,
+    );
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("went backwards");
+  });
+
+  test("unstamped after stamped orders by the clock", () => {
+    const previous = freshFrom(stampedJson("status-change-after", { instance: R1, publication: 1, inventory: 1 }), "R1");
+    const verdict = admissible(previous, parseObservation(plainJson("status-change-before")), NONE_RETIRED);
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("went backwards");
+  });
+
+  test("an unreadable stamp on either side orders by the clock", () => {
+    const bad = { instance: "invalid", publication: 1, inventory: 1 };
+    const unreadablePrevious = freshFrom(stampedJson("status-change-after", bad), "unreadable");
+    expect(
+      admissible(
+        unreadablePrevious,
+        parseObservation(stampedJson("status-change-before", { instance: R1, publication: 2, inventory: 2 })),
+        NONE_RETIRED,
+      ).reason,
+    ).toContain("went backwards");
+    const stampedPrevious = freshFrom(stampedJson("status-change-after", { instance: R1, publication: 1, inventory: 1 }), "R1");
+    expect(admissible(stampedPrevious, parseObservation(stampedJson("status-change-before", bad)), NONE_RETIRED).reason).toContain(
+      "went backwards",
+    );
   });
 });

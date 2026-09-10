@@ -6,16 +6,43 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ADMISSION_POLICY_VERSION, FIXED_RUN_PEAK_BYTES, PER_WORKER_PEAK_BYTES } from "../vitest-admission.js";
-import { makeAdmission } from "../tools/fleet/admission-wiring.js";
+import { makeAdmission, type Admission } from "../tools/fleet/admission-wiring.js";
 import { ADMISSION_PATH, admissionRoute, type AdmissionRouteDeps } from "../tools/fleet/routes-admission.js";
-import type { AdmissionRefusalJournal } from "../tools/fleet/wire.js";
+import type { AdmissionCensusState, AdmissionRefusalJournal } from "../tools/fleet/wire.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dirs: string[] = [];
+const admissions: Admission[] = [];
+
+const censusValue: AdmissionCensusState = {
+  kind: "value",
+  label: "observed",
+  census: {
+    byClass: {
+      test: { roots: 1, uncertain: 2 },
+      "codex-batch": { roots: 3, uncertain: 4 },
+      browser: { roots: 5, uncertain: 6 },
+    },
+    changedUnderRead: 7,
+    unreadable: 8,
+    processesSeen: 21,
+  },
+  startedAtMs: 1_788_999_999_900,
+  completedAtMs: 1_789_000_000_000,
+  durationMs: 100,
+  cadenceMs: 30_000,
+};
 
 afterEach(() => {
+  for (const admission of admissions.splice(0)) admission.stop();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
+
+function trackedAdmission(options?: Parameters<typeof makeAdmission>[0]): Admission {
+  const admission = makeAdmission({ autostart: false, ...options });
+  admissions.push(admission);
+  return admission;
+}
 
 function deps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
   return {
@@ -30,6 +57,8 @@ function deps(over: Partial<AdmissionRouteDeps> = {}): AdmissionRouteDeps {
     resolveParallelWorkers: () => 2,
     policyVersion: ADMISSION_POLICY_VERSION,
     readRefusals: () => ({ kind: "read", entries: [], unparseableLines: 0 }),
+    readCensus: () => censusValue,
+    censusCadenceMs: 30_000,
     ...over,
   };
 }
@@ -80,6 +109,42 @@ describe("GET /api/admission", () => {
     expect(answer.status).toBe(200);
     expect(answer.body?.journal).toEqual(journal);
     expect(answer.body?.outcome).toMatchObject({ kind: "would-admit" });
+  });
+
+  it.each([
+    ["test", "forecast"],
+    ["browser", "not-modelled"],
+  ] as const)("carries the census on the %s label arm", (kind, label) => {
+    const answer = get(admissionRoute(deps()), `${ADMISSION_PATH}?kind=${kind}`);
+
+    expect(answer.status).toBe(200);
+    expect(answer.body?.label).toBe(label);
+    expect(answer.body?.census).toEqual(censusValue);
+  });
+
+  it("turns a throwing census cache read into a failed census without blanking the forecast", () => {
+    const answer = get(
+      admissionRoute(
+        deps({
+          censusCadenceMs: 77,
+          readCensus: () => {
+            throw new Error("census cache exploded");
+          },
+        }),
+      ),
+      ADMISSION_PATH,
+    );
+
+    expect(answer.status).toBe(200);
+    expect(answer.body?.outcome).toMatchObject({ kind: "would-admit" });
+    expect(answer.body?.census).toEqual({
+      kind: "failed",
+      label: "observed",
+      why: "reading the admission census threw: census cache exploded",
+      failedAtMs: 1_789_000_000_000,
+      cadenceMs: 77,
+      lastGood: null,
+    });
   });
 
   it("answers a suffix under the admission prefix with the explicit 404 arm", () => {
@@ -171,7 +236,7 @@ describe("GET /api/admission", () => {
 describe("the production composition", () => {
   it("uses the wall clock when production does not inject one", () => {
     const before = Date.now();
-    const composed = makeAdmission();
+    const composed = trackedAdmission();
     const composedNow = composed.deps.nowMs();
     const after = Date.now();
 
@@ -180,7 +245,7 @@ describe("the production composition", () => {
   });
 
   it("drives injected readers through the same makeAdmission function server.ts calls", () => {
-    const composed = makeAdmission({
+    const composed = trackedAdmission({
       nowMs: () => 1_789_000_000_000,
       meminfoPath: "/definitely/not/proc/meminfo",
       reserveFile: "/definitely/no/reserve/file",
@@ -203,7 +268,7 @@ describe("the production composition", () => {
     writeFileSync(workersFile, "3\n");
 
     const computedAtMs = 1_789_123_456_789;
-    const composed = makeAdmission({ nowMs: () => computedAtMs, meminfoPath, reserveFile, workersFile });
+    const composed = trackedAdmission({ nowMs: () => computedAtMs, meminfoPath, reserveFile, workersFile });
     const answer = get(composed.route, ADMISSION_PATH);
 
     expect(answer.status).toBe(200);
@@ -214,6 +279,36 @@ describe("the production composition", () => {
     });
     expect(answer.body?.computedAtMs).toBe(computedAtMs);
     expect(answer.body?.policy).toMatchObject({ gateVersion: ADMISSION_POLICY_VERSION });
+  });
+
+  it("serves an injected census through the real composition and delegates stop", () => {
+    let stopped = false;
+    const composed = trackedAdmission({
+      census: {
+        read: () => censusValue,
+        stop: () => {
+          stopped = true;
+        },
+      },
+    });
+
+    const answer = get(composed.route, ADMISSION_PATH);
+    expect(answer.status).toBe(200);
+    expect(answer.body?.census).toEqual(censusValue);
+
+    composed.stop();
+    expect(stopped).toBe(true);
+  });
+
+  it("can disable census autostart without pretending a pass completed", () => {
+    const startedAtMs = 1_789_123_456_789;
+    const composed = trackedAdmission({ autostart: false, nowMs: () => startedAtMs });
+
+    expect(composed.deps.readCensus()).toEqual({
+      kind: "not-yet-computed",
+      label: "observed",
+      startedAtMs,
+    });
   });
 });
 

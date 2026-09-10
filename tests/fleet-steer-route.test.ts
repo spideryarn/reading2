@@ -24,6 +24,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { classifyGate, fingerprintMaterial, type PaneOption } from "../tools/fleet/pane.js";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -213,6 +214,9 @@ function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<S
     // still reading as a test of answering. The gate itself has its own
     // describe block below, which drives both sides of it explicitly.
     answeringEnabled: () => true,
+    // ITS OWN JOURNAL, for the book's reason above: the process-shared one
+    // would carry receipts from one test into the next.
+    receipts: memoryReceiptJournal({ now: () => 1_700_000_000_000, serverInstanceId: "1a2b3c4d" }),
     ...rest,
   });
   return { routes, calls, logs, book };

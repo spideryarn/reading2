@@ -175,7 +175,8 @@ export type SendAttempt =
  * went into a pane that might be holding half a sentence.
  *
  * **WHAT IS NOW TRUE.** `hold-ledger.ts` writes holds to disk, so a process that
- * calls `openSharedQuarantine()` starts with the holds the last one left, and a
+ * calls `openFleetActionStores()` (`action-stores.ts`, which replaced
+ * `openSharedQuarantine()` on 2026-09-10) starts with the holds the last one left, and a
  * DASHBOARD RESTART no longer forgets them. That is the P0 this file's last
  * paragraph pointed at, and it is closed.
  *
@@ -188,7 +189,7 @@ export type SendAttempt =
  *  - The parent holds the ledger's writer lock, so the child is **read-only** —
  *    its own ambiguous sends are recorded nowhere, and the next start will not
  *    know about them.
- *  - A child that never calls `openSharedQuarantine()` — which is every child
+ *  - A child that never calls `openFleetActionStores()` — which is every child
  *    that is not this dashboard — still gets the fresh, empty book described
  *    above.
  *

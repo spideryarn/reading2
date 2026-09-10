@@ -95,6 +95,10 @@ reference, and is authoritative wherever the two disagree.
   Greg's behalf, the standing scheduled jobs, the three deterministic rules that are worth more than
   any amount of judgement, and the traps — a steering message must be one line, `partial` delivery
   means the text landed and the Enter did not, and a pane can show a prompt that nobody typed.
+- **[work-reports.md](work-reports.md)** — what an agent claimed: `overseer report` puts progress, a
+  block, a decision or completion on the record, the daemon records it, and Greg reads it in the
+  Decisions tab's Claims section. A report is a claim, never a state or a permission; read it before
+  building anything that treats one as either.
 - **[overseer-queue.md](overseer-queue.md)** — the Overseer's slow lane: work Greg approved and
   deferred, one line each and the product question it waits on, so a lull has something queued and
   gate 3's "is it in the queue?" has a place to look. The Spideryarn product plan sits there whole.

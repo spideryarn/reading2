@@ -43,6 +43,7 @@ import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fl
 import { boxActionBody, makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -219,6 +220,7 @@ function harness(
       // machinery is tests/fleet-quarantine.test.ts's subject; what this needs
       // is that `next()` here asks the same question production's does.
       quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: instanceId }),
+      receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: instanceId }),
     });
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
@@ -381,6 +383,20 @@ const VITEST_ARGS = `${PRIMARY}/node_modules/.bin/vitest run`;
  * ================================================================== */
 
 describe("GET /api/actions", () => {
+  it("marks the narrow broadcast enqueue door as broadcast on its receipt", () => {
+    const { routes, queue } = harness();
+    const enqueued = routes.enqueueMessage(
+      { sessionId: "$99001", claudeSessionId: CLAUDE_ID },
+      "words queued by the broadcast route",
+      "greg",
+    );
+    expect(enqueued.ok).toBe(true);
+    expect(queue.receiptJournal().recent(1)[0]?.accepted).toMatchObject({
+      op: "queued-message",
+      origin: "broadcast",
+    });
+  });
+
   it("serves the vocabulary from actions.ts rather than a copy", async () => {
     const { routes } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions", method: "GET", headers: { "content-type": "" } }));
@@ -1811,7 +1827,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     // about elapsed time without sleeping through it.
     let clock = 1_000_000;
     const sent: string[] = [];
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const routes = makeActionRoutes({
       queue,
       send: sends(queue.quarantineBook(), (target) => {
@@ -2239,8 +2255,8 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
     const r = await previewAndConfirm(routes, body());
     const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
     expect(row?.outcome).toBe("outcome-unknown");
-    expect(row?.why).toContain("EAGAIN");
     expect(row?.why).toContain("the delivery module threw while handling this recipient");
+    expect(row?.why).not.toContain("EAGAIN");
     // The uncertainty survives the rewrite; the invented timing does not.
     expect(row?.why).toContain("Nothing here can tell whether any of it reached the pane.");
     expect(row?.why).not.toContain("partway");

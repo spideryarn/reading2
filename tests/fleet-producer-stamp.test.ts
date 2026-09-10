@@ -163,6 +163,14 @@ describe("the stamp on the fleet payload", () => {
     expect(parsedStamped.ok).toBe(true);
     expect(parsedUnstamped.ok).toBe(true);
     if (!parsedStamped.ok || !parsedUnstamped.ok) return;
-    expect(parsedStamped.value).toEqual(parsedUnstamped.value);
+    // Since Stage 2 (docs/plans/260910d) the parser READS the stamp into
+    // `ordering`, so the two now differ in exactly that field and nowhere
+    // else — which is the additivity claim: everything a reader without
+    // `ordering` sees is the same with or without the key.
+    const { ordering: stampedOrdering, ...stampedRest } = parsedStamped.value;
+    const { ordering: unstampedOrdering, ...unstampedRest } = parsedUnstamped.value;
+    expect(stampedRest).toEqual(unstampedRest);
+    expect(stampedOrdering).toEqual({ kind: "stamped", instance: "1a2b3c4d", publication: 1, inventory: 1 });
+    expect(unstampedOrdering).toEqual({ kind: "unstamped" });
   });
 });

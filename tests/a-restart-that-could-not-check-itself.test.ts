@@ -398,7 +398,9 @@ describe("the steering queue", () => {
    * THE HALF WITH NO ITEMS BEHIND IT. `wire.ts` says a queue reaches the wire
    * when it has items *or* a quarantine hold, and that the commonest hold has
    * no items at all — so counting `items` reads "nothing queued" over a session
-   * that nothing may be sent to, and the restart erases the hold.
+   * that nothing may be sent to — and a restart that lost the hold would re-open
+   * delivery to it. (Since 260908j Stage 4b a restart keeps a hold when the hold
+   * ledger is writing; the tests below say how the check learns that.)
    */
   it("refuses for a steering hold with no items behind it", () => {
     const read = summariseQueues(body([], { id: "h1", sessionId: "$1", why: "an uncertain send" }));
@@ -423,6 +425,102 @@ describe("the steering queue", () => {
   it("is unknown for a quarantine value that is neither a hold nor null", () => {
     expect(summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [], quarantine: false }] }).ok).toBe(false);
     expect(summariseQueues({ ok: true, op: "catalogue", queues: [{ items: [], quarantine: "held" }] }).ok).toBe(false);
+  });
+
+  /**
+   * **A DURABLE QUEUE IS NOT DISCARDED BY A RESTART** — plan 260910d Stage 1,
+   * on dev at afbfcf2c. The dashboard now writes queued items to its receipt
+   * journal and restores them at startup, and it says so per queue with
+   * `volatile: false`. Refusing every restart with anything queued would stop
+   * the Overseer restarting the dashboard at all while work is waiting, which is
+   * exactly when it most often needs to.
+   *
+   * **ONLY `volatile === false` COUNTS AS DURABLE.** A missing or non-boolean
+   * field is what an older build sends (it always said `volatile: true`) or a
+   * shape this script does not understand, and both keep the refusal — the
+   * direction this check has always been wrong in on purpose.
+   *
+   * **HOLDS ARE UNCHANGED BY THIS**: a steering hold still refuses.
+   */
+  const durable = (items: unknown[], quarantine: unknown = null, volatile: unknown = false) => ({
+    ok: true,
+    op: "catalogue",
+    queues: [{ sessionId: "$1", items, quarantine, volatile }],
+  });
+
+  it("passes when everything queued is on a durable queue, because a restart keeps it", () => {
+    const check = judgeQueue(true, summariseQueues(durable([item("q1"), item("q2")])), false);
+    expect(check.verdict).toBe("pass");
+    expect(check.detail).toContain("kept");
+  });
+
+  it("still refuses a queue that says it is volatile", () => {
+    expect(judgeQueue(true, summariseQueues(durable([item("q1")], null, true)), false).verdict).toBe("fail");
+  });
+
+  it("treats a missing or non-boolean volatile as memory-only, and refuses", () => {
+    expect(judgeQueue(true, summariseQueues(body([item("q1")])), false).verdict).toBe("fail");
+    expect(judgeQueue(true, summariseQueues(durable([item("q1")], null, "no")), false).verdict).toBe("fail");
+  });
+
+  it("still refuses for a steering hold on a durable queue, and does not call its items discarded", () => {
+    const check = judgeQueue(
+      true,
+      summariseQueues(durable([item("q1")], { id: "h1", sessionId: "$1", why: "an uncertain send" })),
+      false,
+    );
+    expect(check.verdict).toBe("fail");
+    expect(check.detail).toContain("hold");
+    expect(check.detail).not.toMatch(/\bitems?\b/);
+  });
+
+  /**
+   * **A HOLD SURVIVES A RESTART TOO, WHEN THE HOLD LEDGER IS WRITING** — Stage
+   * 4b of 260908j made holds durable, and Stage 1 of 260910d puts the ledger's
+   * own word on the catalogue as `holdsDurable`. Only a literal `true` counts:
+   * a missing or non-boolean field (every build before that) keeps the refusal.
+   */
+  const withHolds = (queues: unknown[], holdsDurable: unknown) => ({ ok: true, op: "catalogue", holdsDurable, queues });
+  const HOLD = { id: "h1", sessionId: "$1", why: "an uncertain send" };
+
+  it("passes for a steering hold when the dashboard says its hold ledger is writing", () => {
+    const read = summariseQueues(withHolds([{ sessionId: "$1", items: [], quarantine: HOLD, volatile: false }], true));
+    const check = judgeQueue(true, read, false);
+    expect(check.verdict).toBe("pass");
+    expect(check.detail).toContain("hold");
+    expect(check.detail).not.toMatch(/erase/);
+  });
+
+  it("still refuses a steering hold when the hold ledger's durability is missing or not a boolean", () => {
+    const queue = { sessionId: "$1", items: [], quarantine: HOLD, volatile: false };
+    expect(judgeQueue(true, summariseQueues(withHolds([queue], undefined)), false).verdict).toBe("fail");
+    expect(judgeQueue(true, summariseQueues(withHolds([queue], "yes")), false).verdict).toBe("fail");
+    expect(judgeQueue(true, summariseQueues(withHolds([queue], false)), false).verdict).toBe("fail");
+  });
+
+  it("passes with durable items and durable holds together", () => {
+    const read = summariseQueues(withHolds([{ sessionId: "$1", items: [item("q1")], quarantine: HOLD, volatile: false }], true));
+    expect(judgeQueue(true, read, false).verdict).toBe("pass");
+  });
+
+  it("refuses memory-only items even when the holds are durable, and counts only the items", () => {
+    const read = summariseQueues(withHolds([{ sessionId: "$1", items: [item("q1")], quarantine: HOLD, volatile: true }], true));
+    const check = judgeQueue(true, read, false);
+    expect(check.verdict).toBe("fail");
+    expect(check.detail).toMatch(/\bitem\b/);
+    expect(check.detail).not.toContain("hold");
+  });
+
+  it("is memory-only if any one queue says so", () => {
+    const mixed = {
+      ok: true,
+      op: "catalogue",
+      queues: [
+        { sessionId: "$1", items: [item("q1")], quarantine: null, volatile: false },
+        { sessionId: "$2", items: [item("q2")], quarantine: null, volatile: true },
+      ],
+    };
+    expect(judgeQueue(true, summariseQueues(mixed), false).verdict).toBe("fail");
   });
 
   /**

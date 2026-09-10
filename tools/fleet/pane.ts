@@ -53,6 +53,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import type { OwnedOutcome, ProbeOwner } from "./child.js";
+
 /**
  * What to send to choose an option.
  *
@@ -1398,4 +1400,80 @@ export function capturePane(paneId: string): string {
     maxBuffer: 4 * 1024 * 1024,
     timeout: 10_000,
   });
+}
+
+function ownedCaptureFailure(outcome: Exclude<OwnedOutcome, { kind: "ok" }>): string {
+  if (outcome.kind === "refused") {
+    return (
+      `capture refused: ${outcome.why}; owned child pid ${outcome.pid} has been alive for ` +
+      `${Math.max(1, outcome.liveForMs)}ms`
+    );
+  }
+  if (outcome.kind === "timed-out") {
+    const pid = outcome.pid === null ? "no child pid was observable" : `child pid ${outcome.pid}`;
+    return (
+      `capture timed-out: ${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms; ${pid}`
+    );
+  }
+  return `capture ${outcome.kind}: ${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms`;
+}
+
+const CAPTURE_TIMEOUT_MS = 2_000;
+const CAPTURE_CHILD_CAP = 4;
+
+function captureCapFailure(owner: ProbeOwner, key: string): string | null {
+  let live: ReturnType<ProbeOwner["live"]>;
+  try {
+    live = owner.live().filter((child) => child.key.startsWith("capture-pane:"));
+  } catch (cause) {
+    return `capture failed: could not inspect the capture child registry: ${cause instanceof Error ? cause.message : String(cause)}`;
+  }
+
+  /* Let the owner re-check this key even at the cap. It can prove that a child
+     whose exit event was missed is gone, while a genuinely live child is
+     refused without adding a sibling. A different key cannot make that proof
+     and must not turn four survivors into five. */
+  if (live.length < CAPTURE_CHILD_CAP || live.some((child) => child.key === key)) return null;
+
+  const now = Date.now();
+  const children = live
+    .map((child) => `pid ${child.pid} alive for ${Math.max(1, now - child.startedAtMs)}ms`)
+    .join(", ");
+  return (
+    `capture refused: probe "${key}" was not started because ${live.length} capture children remain ` +
+    `unaccounted for (${children}); the ${CAPTURE_CHILD_CAP}-child capture cap was kept`
+  );
+}
+
+/**
+ * Read a pane without holding Node's request thread while tmux answers.
+ *
+ * The key is the pane handle, not one fleet-wide capture key. A pane whose
+ * child survives its deadline must refuse only its own next capture; otherwise
+ * one wedged terminal would make every healthy row unreadable on every turn.
+ * Non-success outcomes throw with the owner's pid and clock intact, preserving
+ * `capturePane`'s bargain that unreadable is not an empty pane.
+ */
+export async function capturePaneAsync(owner: ProbeOwner, paneId: string): Promise<string> {
+  if (!isPaneId(paneId)) throw new Error(`not a tmux pane id: ${paneId}`);
+  const key = `capture-pane:${paneId}`;
+  const capFailure = captureCapFailure(owner, key);
+  if (capFailure !== null) throw new Error(capFailure);
+  let outcome: OwnedOutcome;
+  try {
+    outcome = await owner.run({
+      key,
+      cmd: "tmux",
+      args: ["capture-pane", "-p", "-t", paneId],
+      // A healthy capture is ~12–14ms on this box. Two seconds is still over
+      // 140× that measured cost, while seven four-wide timeout rounds plus the
+      // owner's one-second grace remain inside collect's 120-second backstop.
+      timeoutMs: CAPTURE_TIMEOUT_MS,
+      maxBytes: 4 * 1024 * 1024,
+    });
+  } catch (cause) {
+    throw new Error(`capture failed: the owned probe threw: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+  if (outcome.kind === "ok") return outcome.stdout;
+  throw new Error(ownedCaptureFailure(outcome));
 }

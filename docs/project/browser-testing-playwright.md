@@ -206,6 +206,22 @@ these is a section of `browser-testing.md` that does not apply here.
   `addInitScript` with a **`content` string**, not a function, or the helper's own body goes through
   the same compiler and needs what it is defining.
 
+### Two that make a check pass for nothing
+
+Both found on 2026-09-10 while checking the fleet dashboard against fixtures served by `page.route`
+([260910c](../plans/260910c-session-continuity-protect-drafts-and-keep-context-current.md), Stage 5).
+
+- **`context.setOffline(true)` does not touch a request `page.route` answers.** A route that calls
+  `route.fulfill()` bypasses Playwright's network layer entirely, so "going offline" changes nothing
+  and the page goes on receiving its fixtures — a check for the offline banner then fails, or worse,
+  a check for recovery passes having never been offline. Drive the outage from the handler instead:
+  have it call `route.abort()` while a flag is set, and clear the flag to come back.
+- **A scripted `.focus()` does not trigger `:focus-visible`.** Chrome's heuristic shows the focus
+  ring, and opens anything keyed on it such as a focus-driven tooltip, only for keyboard focus. A
+  test that calls `element.focus()` and looks for the ring or the tooltip sees neither and reports a
+  defect that is not there. Press `Tab` to reach the element (`page.keyboard.press("Tab")`) when the
+  question is what a keyboard user sees.
+
 ### Under `isMobile: true`, three things lie to you
 
 All three cost a browser pass an hour on 2026-09-03, checking the glossary card at 390×844
