@@ -108,6 +108,17 @@ review returned, for speed; reworked if that review touches D1–D3.
 - [x] Client: `__FLEET_BUILD__` + `dist/build-stamp.json`. Red first: a test that builds a stamp
   from a fake run and that the server-side reader treats a missing/malformed stamp file as unknown.
 
+**Stage review (GPT Sol, findings-only, at `cb4c3ba7`): refuse, on established P1s; no P0.** Answer
+in `260910f-…stage1-review-answer.md`. Each finding was established by a scratch-repository run or a
+control-flow trace, and all four are accepted; an Opus subagent fixes them.
+
+| ID | Finding, short | Disposition |
+|----|----------------|-------------|
+| S1-F1 | `dirty` does not say whether the sha names the running code: an untracked imported file or an `assume-unchanged` flag stamps clean; an unrelated tracked Markdown edit stamps dirty | **Accepted as wording, no rename.** Every description of `dirty` now says only what git status reported about tracked files; neither value proves which bytes loaded. Rendering already never says "running code is" (plan-review F1). Scoping untracked files to `tools/`/`scripts/`/`src/` rejected as certification, per the reviewer: imports cross those boundaries |
+| S1-F2 | sha and cleanliness come from two git processes, so a commit landing between them pairs A's sha with B's cleanliness | **Fixed:** one `git status --porcelain=v2 --branch` call gives both (`branch.oid` plus change lines) |
+| S1-F3 | `vite build --watch` resolves the config once, so every rebuild carries the first build's stamp | **Fixed, smallest:** the config refuses watch mode with a sentence; the stamp is described as "checkout observed when the config loaded" |
+| S1-F4 (P2) | a malformed `readAt`/`builtAt` still reads as a known stamp | **Fixed:** finite ISO instants required; invalid-date cases in both readers' tests |
+
 **What the plan did not know.** Tracked-only dirtiness has a hole: a commit can import a file its
 author never added, and a checkout still holding it untracked stamps clean — the reason
 `readiness-git.ts`'s `stampTree` counts untracked files. Counting every untracked file in the
@@ -157,7 +168,10 @@ across a restart (`fleet-receipt-restart`, `fleet-direct-steer-restart`), and th
 a stopped heartbeat (`fleet-overseer-status.test.ts`). **No test starts `server.ts` as a process,
 and no test runs the daemon twice with jobs.** The gaps, each a new test on scratch state:
 
-- [ ] **Dashboard, a real process** (`tests/fleet-server-process.test.ts`): spawn `server.ts` on a
+- [x] **Dashboard, a real process** (`tests/fleet-server-process.test.ts`, Opus subagent; 5/5 on three
+  runs; reads `/api/state`'s producer stamp, since `/api/diagnostics` did not exist yet; also found
+  the collector runs `claude agents --json`, so a stub `claude` leads `PATH`, and that a test
+  worker's environment carries `.env.local`, so the child's env is built, not inherited): spawn `server.ts` on a
   free port with every `FLEET_*`/`OVERSEER_*` path pointed at a scratch dir (the env list
   `fleet-decisions-route.test.ts` sets), `TMUX` unset and `TMUX_TMPDIR` a scratch dir (the collector
   has no socket override, so the default socket then names an empty server rather than the live

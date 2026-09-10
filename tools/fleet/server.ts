@@ -79,8 +79,26 @@ import { claimFromSnapshot } from "./overseer-claim.js";
 import { initialFramePayload, statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
-/** Where the built React client lives. */
-const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
+/**
+ * Where the built React client lives: beside this file, unless `FLEET_DIST`
+ * names another directory.
+ *
+ * The override exists so a test can start this server as a real process
+ * against a missing or broken client build without touching the real one
+ * (tests/fleet-server-process.test.ts). It must be absolute, for the store
+ * roots' reason: a relative path resolves against whichever directory the
+ * command was typed in, which is a different client for systemd and for a
+ * person in a worktree. Empty counts as unset, as `FLEET_READINESS_DIR` does.
+ */
+const DIST_OVERRIDE = (process.env.FLEET_DIST ?? "").trim();
+if (DIST_OVERRIDE !== "" && !path.isAbsolute(DIST_OVERRIDE)) {
+  console.error(`✗ FLEET_DIST must be an absolute path; got ${JSON.stringify(DIST_OVERRIDE)}`);
+  process.exit(2);
+}
+const DIST =
+  DIST_OVERRIDE !== ""
+    ? path.resolve(DIST_OVERRIDE)
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
 
