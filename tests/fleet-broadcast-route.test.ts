@@ -45,6 +45,7 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { enqueueSharedMessage } from "../tools/fleet/routes-actions.js";
 import { makeBroadcastRoutes, type BroadcastDeps, type BroadcastRecipient } from "../tools/fleet/routes-broadcast.js";
 import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
@@ -155,11 +156,13 @@ function harness(over: Partial<BroadcastDeps> & { sendMessage?: FakeTransport } 
   };
   const deps: Partial<BroadcastDeps> = {
     send: coordinator(quarantine, transport),
+    // Its own journal, so no test here reaches the process-wide one.
+    receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "test-instance" }),
     now: () => clock,
     log: (line) => log.push(line),
     enqueue: (target, text, speaker) => {
       queued.push({ sessionId: target.sessionId, text, speaker });
-      return { ok: true, position: queued.length };
+      return { ok: true, position: queued.length, durable: true, receiptId: `fake-queued-r${queued.length}` };
     },
     runEnabled: () => true,
     // Synchronous in tests: the point of the seam is that the DEADLINE can be
@@ -470,7 +473,7 @@ describe("who gets it — and the busiest sessions are the point", () => {
       },
       enqueue: (target) => {
         order.push(`queue ${target.sessionId}`);
-        return { ok: true, position: 1 };
+        return { ok: true, position: 1, durable: true, receiptId: "fake-queued-r1" };
       },
     });
     await post(
@@ -620,6 +623,17 @@ describe("a dry run is not a delivery, and cannot be mistaken for one", () => {
 });
 
 describe("what it reports about each recipient", () => {
+  it("does not put broadcast text from a thrown transport into a log or response", async () => {
+    const thrown = harness({
+      sendMessage: (_target, text) => {
+        throw new Error(`transport rejected ${text}`);
+      },
+    });
+    const r = await post(thrown.routes, run({ recipients: [recipient({ id: "$1" })] }));
+    expect(thrown.log.join("\n")).not.toContain(TEXT);
+    expect(JSON.stringify(r.json)).not.toContain(TEXT);
+  });
+
   it("carries the delivery reading out of a refusal, never swallowing it", async () => {
     const partial = harness({
       sendMessage: () => ({
@@ -1034,7 +1048,7 @@ describe("the cooldown", () => {
     const partial = harness({
       enqueue: (target) =>
         target.sessionId === "$2"
-          ? { ok: true, position: 1 }
+          ? { ok: true, position: 1, durable: true, receiptId: "fake-queued-r1" }
           : { ok: false, rule: "session-queue-full", why: "full" },
     });
     await post(partial.routes, run({ recipients: [recipient({ id: "$2", status: WORKING })] }));

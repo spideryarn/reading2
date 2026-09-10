@@ -92,7 +92,21 @@ import {
 } from "./execution-identity.js";
 import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
-import { summarizeReceipt, type ReceiptJournalStatus, type RecoverySummary } from "./receipt-journal.js";
+import {
+  beginRecipientReceipt,
+  broadcastParentOutcome,
+  recordUnreachedRecipient,
+  recordUnattemptedRecipient,
+  sendAttemptOutcome,
+  type RecipientReceipt,
+  summarizeReceipt,
+  type AcceptReceiptInput,
+  type ReceiptActor,
+  type ReceiptJournal,
+  type ReceiptJournalStatus,
+  type ReceiptOutcome,
+  type RecoverySummary,
+} from "./receipt-journal.js";
 import { lookupRequest, readRequestKey, type RequestKey, type RequestLookup } from "./request-key.js";
 import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import {
@@ -530,6 +544,25 @@ export function killReport(pids: readonly number[], run: PlanRun): KillReport {
   return { targeted: [...pids], observed };
 }
 
+/**
+ * The receipt outcome of a plan that returned — plan 260910d Stage 3.
+ * `completed` when every gate passed; `plan-stopped` naming the zero-based step
+ * whose gate refused (`PlanRun.stoppedAt`). `detail` is appended to the `why`,
+ * bounded counts only.
+ */
+function planOutcome(run: PlanRun, detail: string): ReceiptOutcome {
+  if (run.completed) {
+    return { state: "completed", reason: "plan-passed", code: null, why: `every gate passed (${run.steps.length}/${run.planned} steps)${detail}` };
+  }
+  const k = run.stoppedAt ?? run.steps.length - 1;
+  return {
+    state: "plan-stopped",
+    reason: "gate-refused",
+    code: `step-${k}`,
+    why: `step ${k} did not pass its gate (${run.steps.length}/${run.planned} steps ran)${detail}`,
+  };
+}
+
 export type ActionResponse =
   | {
       ok: true;
@@ -556,7 +589,14 @@ export type ActionResponse =
    * body were accepted before; this is that receipt, text-free, and it says
    * whether it is still pending.
    */
-  | { ok: true; op: "receipt"; replay: true; receipt: ReceiptSummary }
+  | {
+      ok: true;
+      op: "receipt";
+      replay: true;
+      receipt: ReceiptSummary;
+      /** A broadcast's replay carries its recipients' receipts too (Stage 3). */
+      children?: ReceiptSummary[];
+    }
   | {
       ok: true;
       op: "receipts";
@@ -623,7 +663,15 @@ export type ActionResponse =
    * `killed: [5001, 5002]` and the page had no way to know better. `KillReport`
    * keeps the intent and the evidence as two fields; see wire.js.
    */
-  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; kill?: KillReport; skipped?: { pid: number; why: string }[] } }
+  /** `receiptId` is present only on a keyed request (plan 260910d Stage 3). */
+  | {
+      ok: true;
+      op: "ran";
+      action: ActionId;
+      dryRun: false;
+      result: { run: PlanRun; kill?: KillReport; skipped?: { pid: number; why: string }[] };
+      receiptId?: string;
+    }
   | {
       ok: true;
       op: "broadcast-preview";
@@ -632,13 +680,22 @@ export type ActionResponse =
       preview: FleetActionPreview;
       result: { total: number; recipients: BroadcastOutcome[]; sample: string | null };
     }
-  | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
+  | {
+      ok: true;
+      op: "broadcast";
+      action: ActionId;
+      dryRun: false;
+      result: { total: number; recipients: BroadcastOutcome[] };
+      receiptId?: string;
+    }
   | {
       ok: false;
       code: ActionErrorCode;
       why: string;
       /** Present when a plan ran and stopped, so the page can show which step said no. */
       run?: PlanRun;
+      /** Present on a keyed request that got as far as its receipt (Stage 3). */
+      receiptId?: string;
     };
 
 /* ------------------------------------------------------------------ *
@@ -1110,7 +1167,19 @@ export function judgeStep(step: Step, r: StepRun): { status: StepStatus; verdict
  * parallel is the whole bug this function exists to prevent, and a runner with
  * two modes would eventually be used in the wrong one.
  */
-export async function runPlan(plan: Plan, io: ActionIo, timeoutMs: number = STEP_TIMEOUT_MS): Promise<PlanRun> {
+export async function runPlan(
+  plan: Plan,
+  io: ActionIo,
+  timeoutMs: number = STEP_TIMEOUT_MS,
+  /**
+   * Told of every step that ran to a judgement, with its zero-based index and
+   * outcome, before the next one starts — the step that fails and stops the
+   * plan included. A step whose run threw is not reported: it never reached a
+   * judgement. The receipt's `progress` records come from here (plan 260910d
+   * Stage 3), which is how a crash mid-plan knows how far it got.
+   */
+  onStepDone?: (index: number, outcome: StepOutcome) => void,
+): Promise<PlanRun> {
   const steps: StepOutcome[] = [];
   for (let i = 0; i < plan.steps.length; i++) {
     const step = plan.steps[i];
@@ -1120,7 +1189,7 @@ export async function runPlan(plan: Plan, io: ActionIo, timeoutMs: number = STEP
     if (step === undefined) break;
     const r = await io.runStep(step, timeoutMs);
     const j = judgeStep(step, r);
-    steps.push({
+    const outcome: StepOutcome = {
       argv: step.argv,
       cwd: step.cwd,
       why: step.why,
@@ -1130,7 +1199,9 @@ export async function runPlan(plan: Plan, io: ActionIo, timeoutMs: number = STEP
       timedOut: r.timedOut,
       spawnError: r.spawnError,
       tail: tailOf(r.stderr) || tailOf(r.stdout),
-    });
+    };
+    steps.push(outcome);
+    onStepDone?.(i, outcome);
     if (j.status === "failed") {
       return { action: plan.action.id, steps, planned: plan.steps.length, completed: false, stoppedAt: i };
     }
@@ -1478,6 +1549,8 @@ export type ActionRoutes = {
     target: { sessionId: string; claudeSessionId: string },
     text: string,
     speaker: Speaker,
+    /** The broadcast this item is one recipient of (plan 260910d Stage 3). */
+    parentReceiptId?: string | null,
   ): EnqueueResult;
 };
 
@@ -1486,8 +1559,15 @@ function respond(res: ServerResponse, status: number, body: ActionResponse, extr
   res.end(JSON.stringify(body));
 }
 
-function refuse(res: ServerResponse, code: ActionErrorCode, why: string, run?: PlanRun, extra: Record<string, string> = {}): void {
-  respond(res, ACTION_ERROR_STATUS[code], run === undefined ? { ok: false, code, why } : { ok: false, code, why, run }, extra);
+function refuse(
+  res: ServerResponse,
+  code: ActionErrorCode,
+  why: string,
+  run?: PlanRun,
+  extra: Record<string, string> = {},
+  tag: { receiptId?: string } = {},
+): void {
+  respond(res, ACTION_ERROR_STATUS[code], { ok: false, code, why, ...(run === undefined ? {} : { run }), ...tag }, extra);
 }
 
 /**
@@ -1529,20 +1609,29 @@ function answerRequestLookup(
   res: ServerResponse,
   found: Exclude<RequestLookup, { kind: "fresh" }>,
   log: (line: string) => void,
+  journal: ReceiptJournal | null = null,
+  label = "action session",
 ): void {
   switch (found.kind) {
     case "replay": {
       const receipt = summarizeReceipt(found.receipt);
-      log(`action session: REPLAY receipt=${receipt.receiptId} state=${receipt.state} — nothing was done on this request`);
-      respond(res, 200, { ok: true, op: "receipt", replay: true, receipt });
+      /* A BROADCAST ANSWERS WITH ITS CHILDREN TOO. The parent says only that
+         the fan-out came to an end; what became of each recipient is on that
+         recipient's own receipt. */
+      const children =
+        journal !== null && found.receipt.accepted.op === "broadcast"
+          ? journal.childrenOf(found.receipt.receiptId).map(summarizeReceipt)
+          : null;
+      log(`${label}: REPLAY receipt=${receipt.receiptId} state=${receipt.state} — nothing was done on this request`);
+      respond(res, 200, { ok: true, op: "receipt", replay: true, receipt, ...(children === null ? {} : { children }) });
       return;
     }
     case "conflict":
-      log("action session: refused code=request-id-conflict");
+      log(`${label}: refused code=request-id-conflict`);
       refuse(res, "request-id-conflict", found.why);
       return;
     case "expired":
-      log("action session: refused code=request-id-expired");
+      log(`${label}: refused code=request-id-expired`);
       refuse(res, "request-id-expired", found.why);
       return;
     default: {
@@ -1568,7 +1657,7 @@ function recoveredUnknownWithoutHold(queue: SteeringQueue): UnknownWithoutHold[]
   const grouped = new Map<string, string[]>();
   for (const receiptId of ids) {
     const receipt = receipts.get(receiptId);
-    if (receipt === null) continue;
+    if (receipt === null || receipt.accepted.target === null) continue;
     const sessionId = receipt.accepted.target.sessionId;
     if (queue.quarantineBook().holding(sessionId) !== null) continue;
     const sessionReceipts = grouped.get(sessionId) ?? [];
@@ -1827,6 +1916,166 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     return { ok: false, code: "wrong-scope", why: `'${action.id}' is not an action one session can be asked for` };
   }
 
+  /* ---------------- receipts for enacted plans and broadcasts ---------------- *
+   *
+   * Plan 260910d Stage 3. The order is the plan's § Write-ahead, and every
+   * helper below is one step of it:
+   *
+   *   accepted (synchronously, before the first await; fail-closed when keyed)
+   *   → attempted (before the first step or send; fail-closed when durable)
+   *   → a `progress` per finished step (fail-open)
+   *   → the outcome (fail-open: a lost line recovers as outcome-unknown).
+   *
+   * A check that can only run AFTER the one-way door and refuses concludes the
+   * receipt `not-sent`/`refused-before-attempt`, so no accepted receipt is left
+   * hanging by a refusal.
+   */
+
+  /** A receipt this request holds, and what its response may say about it. */
+  type Held = {
+    receiptId: string;
+    /** Only a keyed request is told its receipt id: that is the request that can ask again. */
+    tag: { receiptId?: string };
+  };
+  type Keyed = Extract<RequestKey, { kind: "keyed" }>;
+
+  /**
+   * Accept, or answer and return null. A keyed accept that cannot land runs
+   * nothing and is refused 503 — otherwise the effect runs, the response is
+   * lost, and the retry finds no reservation and runs it again (Sol F1). An
+   * unkeyed accept that cannot land durably lives in memory (the journal's
+   * fail-open) and the effect goes ahead, as for every unkeyed action.
+   */
+  function acceptOrAnswer(res: ServerResponse, input: AcceptReceiptInput, keyed: Keyed | null, label: string): Held | null {
+    const journal = deps.queue.receiptJournal();
+    const accepted = journal.accept(input);
+    if (!accepted.ok) {
+      // The lookup and this accept are synchronous with no `await` between, so a
+      // duplicate id cannot be a race — but if it ever is, it is a replay.
+      if (keyed !== null) {
+        const again = lookupRequest(journal, keyed, deps.now());
+        if (again.kind === "replay") {
+          answerRequestLookup(res, again, deps.log, journal, label);
+          return null;
+        }
+      }
+      deps.log(`${label}: refused code=receipt-unavailable why=${accepted.why}`);
+      refuse(res, "receipt-unavailable", `nothing was done: this action could not be given a receipt first (${accepted.why})`);
+      return null;
+    }
+    return { receiptId: accepted.receiptId, tag: keyed === null ? {} : { receiptId: accepted.receiptId } };
+  }
+
+  /** Fail-open, and says so in the log when it did not land. */
+  function settle(held: Held, arm: ReceiptOutcome, label: string): void {
+    if (!deps.queue.receiptJournal().outcome(held.receiptId, arm)) {
+      deps.log(`${label}: receipt=${held.receiptId} outcome ${arm.state}/${arm.reason} was not recorded`);
+    }
+  }
+
+  /** For a throw out of a route: settle only a receipt still mid-attempt. */
+  function settleIfAttempted(held: Held, arm: ReceiptOutcome, label: string): void {
+    if (deps.queue.receiptJournal().get(held.receiptId)?.last.kind === "attempted") settle(held, arm, label);
+  }
+
+  /** A check after the one-way door said no. Nothing was attempted, and the receipt says so. */
+  function refuseAfterDoor(
+    res: ServerResponse,
+    held: Held | null,
+    code: ActionErrorCode,
+    why: string,
+    label: string,
+    extra: Record<string, string> = {},
+  ): void {
+    if (held !== null) settle(held, { state: "not-sent", reason: "refused-before-attempt", code, why }, label);
+    refuse(res, code, why, undefined, extra, held?.tag ?? {});
+  }
+
+  /**
+   * `attempted`, before the first step or send. Fail-closed for a durably
+   * accepted receipt: without it a crash after the effect would read, on
+   * restart, as "accepted and never attempted" — proof that nothing happened,
+   * over something that did. False: answered 503, nothing done.
+   */
+  function attemptOrRefuse(res: ServerResponse, held: Held, label: string): boolean {
+    if (deps.queue.receiptJournal().attempted(held.receiptId).landed) return true;
+    settle(
+      held,
+      { state: "not-sent", reason: "attempt-not-recorded", code: null, why: "the record that this was being attempted could not be written, so nothing was done" },
+      label,
+    );
+    deps.log(`${label}: refused code=receipt-unavailable receipt=${held.receiptId} why=attempt-not-recorded`);
+    refuse(
+      res,
+      "receipt-unavailable",
+      "nothing was done: the record that this was being attempted could not be written, and without it a restart could not tell whether it happened",
+      undefined,
+      {},
+      held.tag,
+    );
+    return false;
+  }
+
+  /**
+   * `runPlan`, with a `progress` record per finished step — fail-open, because a
+   * lost line only makes a crash report fewer completed steps, the conservative
+   * direction — and `outcome-unknown`/`threw` if it throws, after which the
+   * throw goes on to `guard`. The caller settles a run that returned.
+   */
+  async function runRecorded(plan: Plan, held: Held, label: string): Promise<PlanRun> {
+    const journal = deps.queue.receiptJournal();
+    try {
+      return await runPlan(plan, deps.io, STEP_TIMEOUT_MS, (index, step) => {
+        if (!journal.progress(held.receiptId, index, step.status, step.verdict)) {
+          deps.log(`${label}: receipt=${held.receiptId} progress step=${index} was not recorded`);
+        }
+      });
+    } catch (e) {
+      settle(
+        held,
+        { state: "outcome-unknown", reason: "threw", code: null, why: "the plan runner threw, so no step after the recorded progress can be accounted for" },
+        label,
+      );
+      throw e;
+    }
+  }
+
+  /** One recipient's child receipt, as `beginRecipientReceipt` and `recordUnreachedRecipient` take it. */
+  function recipientReceipt(parent: Held, rec: Recipient, who: { actor: ReceiptActor; speaker: Speaker | null }, what: string): RecipientReceipt {
+    return {
+      parentReceiptId: parent.receiptId,
+      actor: who.actor,
+      speaker: who.speaker,
+      what,
+      target: {
+        sessionId: rec.target.sessionId,
+        paneId: rec.target.paneId,
+        claudeSessionId: rec.target.claudeSessionId,
+        tmuxGeneration: deps.send.book().knownGeneration() ?? deps.queue.receiptJournal().lastGeneration(),
+      },
+    };
+  }
+
+  /** Accept and attempt one recipient's child, on the line above its send. `ok: false`: send nothing. */
+  function beginChild(
+    parent: Held,
+    rec: Recipient,
+    who: { actor: ReceiptActor; speaker: Speaker | null },
+    what: string,
+    label: string,
+  ): { ok: true; receiptId: string } | { ok: false; why: string } {
+    const child = beginRecipientReceipt(deps.queue.receiptJournal(), recipientReceipt(parent, rec, who, what));
+    if (!child.ok) deps.log(`${label}: not sent session=${rec.target.sessionId} code=receipt-unavailable`);
+    return child;
+  }
+
+  /** A recipient the deadline cut off: accounted for by a child that was never attempted. */
+  function recordNotReached(parent: Held, rec: Recipient, who: { actor: ReceiptActor; speaker: Speaker | null }, what: string, label: string): void {
+    if (!recordUnreachedRecipient(deps.queue.receiptJournal(), recipientReceipt(parent, rec, who, what))) {
+      deps.log(`${label}: receipt for the unreached ${rec.target.sessionId} was not recorded`);
+    }
+  }
+
   async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
     if (parsed === null) return;
@@ -1905,20 +2154,6 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
 
-    // A KEY THAT NOTHING WOULD HONOUR IS REFUSED, NOT IGNORED. An enacted run
-    // gets its receipt in Stage 3 of plan 260910d; until then nothing records
-    // one, so a retry after a lost response would run the plan again under a
-    // key that promised it would not. Unkeyed runs are unchanged.
-    if (key.kind === "keyed") {
-      deps.log(`action session: refused code=bad-request-id action=${action.id} why=keyed-run-unsupported`);
-      refuse(
-        res,
-        "bad-request-id",
-        "a requestId cannot yet be honoured for running an enacted action — nothing here would record it, so a " +
-          "retry could run it twice. Nothing was run; send it without a requestId.",
-      );
-      return;
-    }
     if (!deps.actEnabled()) {
       deps.log(`action session: refused code=acting-disabled action=${action.id} pane=${target.paneId}`);
       refuse(res, "acting-disabled", ACTING_DISABLED_WHY);
@@ -1946,18 +2181,53 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     deps.limiter.record(target.sessionId, deps.now());
 
-    deps.log(`action session: RUNNING action=${action.id} steps=${built.plan.steps.length} session=${target.sessionId}`);
-    const run = await runPlan(built.plan, deps.io);
+    /* ACCEPTED HERE, SYNCHRONOUSLY, RIGHT AFTER THE LIMITER — plan 260910d
+       Stage 3. The request id was looked up at the top of this function and
+       nothing since has awaited, so no second request can have accepted the
+       same id in between. This is what lets a keyed run be honoured at all:
+       Stage 2 refused one, because nothing recorded an enacted run and a retry
+       after a lost response would have run the plan twice. */
+    const label = "action session";
+    const keyed = key.kind === "keyed" ? key : null;
+    const held = acceptOrAnswer(
+      res,
+      {
+        requestId: keyed?.requestId ?? null,
+        fingerprint: keyed?.fingerprint ?? null,
+        op: "enacted-session",
+        origin: "enacted",
+        actor: { kind: "client-claimed", id: r.speaker },
+        speaker: r.speaker,
+        target: {
+          sessionId: target.sessionId,
+          paneId: target.paneId,
+          claudeSessionId: target.claudeSessionId,
+          tmuxGeneration: deps.send.book().knownGeneration() ?? deps.queue.receiptJournal().lastGeneration(),
+        },
+        what: `action ${action.id} (${built.plan.steps.length} steps)`,
+        queue: null,
+      },
+      keyed,
+      label,
+    );
+    if (held === null) return;
+    if (!attemptOrRefuse(res, held, label)) return;
+
+    deps.log(
+      `action session: RUNNING action=${action.id} steps=${built.plan.steps.length} session=${target.sessionId} receipt=${held.receiptId}`,
+    );
+    const run = await runRecorded(built.plan, held, label);
     deps.log(
       `action session: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} ` +
         `ran=${run.steps.length}/${built.plan.steps.length} stoppedAt=${run.stoppedAt ?? "-"}`,
     );
+    settle(held, planOutcome(run, ""), label);
     if (!run.completed) {
       const stopped = run.stoppedAt === null ? null : run.steps[run.stoppedAt];
-      refuse(res, "plan-failed", `step ${(run.stoppedAt ?? 0) + 1} did not pass its gate: ${stopped?.verdict ?? "unknown"}`, run);
+      refuse(res, "plan-failed", `step ${(run.stoppedAt ?? 0) + 1} did not pass its gate: ${stopped?.verdict ?? "unknown"}`, run, {}, held.tag);
       return;
     }
-    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run } });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run }, ...held.tag });
   }
 
   async function enqueue(
@@ -2469,6 +2739,23 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   async function boxRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const parsed = await parsedBody(req, res, MAX_BOX_BODY_BYTES);
     if (parsed === null) return;
+    // THE KEY IS READ AND LOOKED UP BEFORE THE PARSE, plan 260910d § The
+    // fingerprint (Sol F16). A confirmed kill names a preview this server minted,
+    // and a restart forgets every preview — so a replay has to be answered from
+    // the receipt before anything asks whether that preview still exists.
+    const key = readRequestKey("actions-box", parsed);
+    if (key.kind === "bad") {
+      deps.log("action box: refused code=bad-request-id");
+      refuse(res, "bad-request-id", key.why);
+      return;
+    }
+    if (key.kind === "keyed") {
+      const found = lookupRequest(deps.queue.receiptJournal(), key, deps.now());
+      if (found.kind !== "fresh") {
+        answerRequestLookup(res, found, deps.log, deps.queue.receiptJournal(), "action box");
+        return;
+      }
+    }
     const body = parseBoxBody(parsed);
     if (!body.ok) {
       deps.log(`action box: refused code=bad-request why=${body.why}`);
@@ -2498,9 +2785,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     let confirmed: PreviewEntry | null = null;
+    let held: Held | null = null;
     if (r.mode === "run") {
       confirmed = validatePreview(r, res);
       if (confirmed === null) return;
+      const cooldownWas = lastBroadcastAt;
 
       if (r.action.effect === "broadcast") {
         const at = deps.now();
@@ -2526,6 +2815,36 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         deps.limiter.record("box", deps.now());
       }
 
+      /* THE RECEIPT IS ACCEPTED AT THE ONE-WAY DOOR, SYNCHRONOUSLY — plan
+         260910d Stage 3. The request id was looked up above with no `await`
+         since. A keyed accept that cannot land refuses before the preview is
+         claimed, so nothing happened and the preview can still be confirmed;
+         the ease-off cooldown taken just above is handed back for the same
+         reason. A box run claims nobody (it has no speaker field), so its actor
+         is unattributed; a broadcast's speaker is the one its preview stored. */
+      const keyed = key.kind === "keyed" ? key : null;
+      const material = confirmed.preview.material;
+      held = acceptOrAnswer(
+        res,
+        {
+          requestId: keyed?.requestId ?? null,
+          fingerprint: keyed?.fingerprint ?? null,
+          op: r.action.effect === "broadcast" ? "broadcast" : "enacted-box",
+          origin: r.action.effect === "broadcast" ? "broadcast" : "enacted",
+          target: null,
+          actor: { kind: "unattributed-http", id: null },
+          speaker: material.kind === "broadcast" ? material.speaker : null,
+          what: `action ${r.action.id}`,
+          queue: null,
+        },
+        keyed,
+        "action box",
+      );
+      if (held === null) {
+        if (r.action.effect === "broadcast") lastBroadcastAt = cooldownWas;
+        return;
+      }
+
       // One synchronous assignment is the one-way door. Nothing below this
       // line runs before it and the first await is inside the action route, so
       // a second confirmation observes the tombstone rather than another fresh
@@ -2533,12 +2852,31 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       confirmed.state = "claimed";
     }
 
+    /* A throw out of either route is a bug, answered by `guard` — but the
+       receipt must not be left mid-attempt in this run for it. (A crash would be
+       concluded `interrupted` at the next start; a throw is not a crash.) */
+    const threw: ReceiptOutcome = {
+      state: "outcome-unknown",
+      reason: "threw",
+      code: null,
+      why: "the action route threw after the attempt began, so what took effect cannot be told",
+    };
     switch (r.action.effect) {
       case "enacted":
-        await killRoute(r, r.action, res, confirmed?.preview.material);
+        try {
+          await killRoute(r, r.action, res, confirmed?.preview.material, held);
+        } catch (e) {
+          if (held !== null) settleIfAttempted(held, threw, "action box");
+          throw e;
+        }
         return;
       case "broadcast":
-        await broadcastRoute(r, r.action, res, confirmed?.preview.material);
+        try {
+          await broadcastRoute(r, r.action, res, confirmed?.preview.material, held);
+        } catch (e) {
+          if (held !== null) settleIfAttempted(held, threw, "action box");
+          throw e;
+        }
         return;
       // No `spoken` arm, and that is the type system rather than an omission:
       // every spoken action is `scope: "session"` as a literal, so the check
@@ -2565,19 +2903,22 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     r: BoxActionRequest,
     action: EnactedAction,
     res: ServerResponse,
-    confirmed?: FleetActionMaterial,
+    confirmed: FleetActionMaterial | undefined,
+    /** The receipt a run accepted at the one-way door; null for a dry run. */
+    held: Held | null,
   ): Promise<void> {
+    const label = "action box";
     const policy: KillPolicy | null =
       action.id === "kill-test-suites" ? "test-suites" : action.id === "kill-safe-processes" ? "safe-to-kill" : null;
     if (policy === null) {
-      refuse(res, "wrong-scope", `'${action.id}' is not a box-wide kill`);
+      refuseAfterDoor(res, held, "wrong-scope", `'${action.id}' is not a box-wide kill`, label);
       return;
     }
 
     const scan = await deps.io.listProcesses();
     if (!scan.ok) {
       deps.log(`action box: refused code=box-unreadable action=${action.id} why=${scan.why}`);
-      refuse(res, "box-unreadable", scan.why);
+      refuseAfterDoor(res, held, "box-unreadable", scan.why, label);
       return;
     }
     const candidatesFrom = (procs: readonly ProcRecord[]): KillCandidate[] => {
@@ -2690,7 +3031,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     if (confirmed?.kind !== "kill") {
-      refuse(res, "preview-mismatch", `the stored preview for '${action.id}' was not kill material; preview it again`);
+      refuseAfterDoor(res, held, "preview-mismatch", `the stored preview for '${action.id}' was not kill material; preview it again`, label);
       return;
     }
     const shown = new Map(confirmed.confirmable.map((identity) => [identity.pid, identity]));
@@ -2714,7 +3055,13 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     // without a native dependency or helper binary.
     const boot = deps.io.readBootIdentity();
     if (!boot.read) {
-      refuse(res, "box-unreadable", `the box boot identity could not be re-read, so none of the confirmed processes can be verified: ${boot.why}`);
+      refuseAfterDoor(
+        res,
+        held,
+        "box-unreadable",
+        `the box boot identity could not be re-read, so none of the confirmed processes can be verified: ${boot.why}`,
+        label,
+      );
       return;
     }
     const pids: number[] = [];
@@ -2746,21 +3093,41 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         unreadableIdentity > 0 ? `${unreadableIdentity} could no longer be identified` : null,
       ].filter((part): part is string => part !== null);
       deps.log(`action box: refused code=nothing-to-kill action=${action.id} shown=${shown.size} matched=${candidates.length}`);
-      refuse(
+      refuseAfterDoor(
         res,
+        held,
         "nothing-to-kill",
         `nothing on the list you confirmed can still be signalled${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""} — look again and confirm the new list`,
+        label,
       );
       return;
     }
 
     const built = planKillProcesses(action, { pids, cwd: deps.primaryDir() });
     if (!built.ok) {
-      refuse(res, PLAN_REFUSAL_CODE[built.rule], built.why);
+      refuseAfterDoor(res, held, PLAN_REFUSAL_CODE[built.rule], built.why, label);
       return;
     }
-    deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
-    const run = await runPlan(built.plan, deps.io);
+    // A run always holds a receipt: `boxRoute` accepts one at the door before
+    // calling here. Reaching this without one is a bug, and `guard` answers it.
+    if (held === null) throw new Error("a confirmed kill reached its plan without a receipt");
+    if (!attemptOrRefuse(res, held, label)) return;
+    deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")} receipt=${held.receiptId}`);
+    const run = await runRecorded(built.plan, held, label);
+    /* THE OUTCOME BEFORE `killReport`, which throws on a run short of steps —
+       and its `why` carries the observations as COUNTS, read by the same
+       `killObservation` the report uses. Never an argv. */
+    const observed = new Map<KillObservation, number>();
+    for (const step of run.steps) observed.set(killObservation(step), (observed.get(killObservation(step)) ?? 0) + 1);
+    settle(
+      held,
+      planOutcome(
+        run,
+        ` — signal-accepted ${observed.get("signal-accepted") ?? 0}, signal-refused ${observed.get("signal-refused") ?? 0}, ` +
+          `not-established ${observed.get("not-established") ?? 0} of ${pids.length} targeted; ${skipped.length} skipped`,
+      ),
+      label,
+    );
     /* THE RUN FIRST, BEFORE THE REPORT IS BUILT, because `killReport` throws on
        a run short of steps — and if it ever does, this line is the only record
        left of a kill that has already happened. */
@@ -2772,7 +3139,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     const report = killReport(pids, run);
     const accepted = report.observed.filter((o) => o.observation === "signal-accepted").length;
     deps.log(`action box: action=${action.id} signal-accepted=${accepted}/${report.targeted.length}`);
-    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped } });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped }, ...held.tag });
   }
 
   /**
@@ -2793,8 +3160,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     r: BoxActionRequest,
     action: BroadcastAction,
     res: ServerResponse,
-    confirmed?: FleetActionMaterial,
+    confirmed: FleetActionMaterial | undefined,
+    /** The parent receipt a run accepted at the one-way door; null for a dry run. */
+    held: Held | null,
   ): Promise<void> {
+    const label = "action box";
     let recipients: Recipient[];
     let speaker: Speaker;
     const promisedMinutes = new Map<string, number | null>();
@@ -2803,7 +3173,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       speaker = r.speaker;
     } else {
       if (confirmed?.kind !== "broadcast") {
-        refuse(res, "preview-mismatch", `the stored preview for '${action.id}' was not broadcast material; preview it again`);
+        refuseAfterDoor(res, held, "preview-mismatch", `the stored preview for '${action.id}' was not broadcast material; preview it again`, label);
         return;
       }
       speaker = confirmed.speaker;
@@ -2811,7 +3181,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       for (const claim of confirmed.recipients) {
         const status = parseStatus(claim.status);
         if (claim.claudeSessionId === null || status === null) {
-          refuse(res, "preview-mismatch", `${claim.paneId} in the stored preview is no longer a complete recipient claim; preview again`);
+          refuseAfterDoor(res, held, "preview-mismatch", `${claim.paneId} in the stored preview is no longer a complete recipient claim; preview again`, label);
           return;
         }
         recipients.push({
@@ -2829,7 +3199,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     if (recipients.length === 0) {
-      refuse(res, "bad-request", "a broadcast needs recipients: send the rows the page is showing, with the status each one had");
+      refuseAfterDoor(res, held, "bad-request", "a broadcast needs recipients: send the rows the page is showing, with the status each one had", label);
       return;
     }
 
@@ -2849,7 +3219,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     const total = deliverable.length;
     if (total === 0) {
-      refuse(res, "not-steerable", `none of the ${recipients.length} rows you sent is at a prompt right now, so there is nobody to tell`);
+      refuseAfterDoor(res, held, "not-steerable", `none of the ${recipients.length} rows you sent is at a prompt right now, so there is nobody to tell`, label);
       return;
     }
 
@@ -2915,6 +3285,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
 
+    // A run always holds its parent receipt: `boxRoute` accepts one at the door.
+    if (held === null) throw new Error("a confirmed broadcast reached its fan-out without a receipt");
+    const parent = held;
+    /* THE PARENT'S `attempted` BEFORE THE FIRST RECIPIENT, fail-closed when it
+       was accepted durably: a crash mid fan-out must read, on restart, as an
+       attempt that began — `outcome-unknown`/`interrupted` — never as a
+       broadcast that was proven not to have started. */
+    if (!attemptOrRefuse(res, parent, label)) return;
+    const who = { actor: { kind: "unattributed-http", id: null } satisfies ReceiptActor, speaker };
+    const childWhat = `action ${action.id}, one recipient`;
+
     const at = deps.now();
 
     let index = 0;
@@ -2924,13 +3305,23 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     for (const rec of recipients) {
       const gate = gates.get(rec.target.paneId);
       if (gate?.kind !== "now") {
-        outcomes.push(skippedOutcome(rec, gate));
+        const skipped = skippedOutcome(rec, gate);
+        outcomes.push(skipped);
+        if (!recordUnattemptedRecipient(deps.queue.receiptJournal(), recipientReceipt(parent, rec, who, childWhat), {
+          state: "not-sent",
+          reason: "undeliverable",
+          code: skipped.code,
+          why: "the delivery gate refused this recipient before the transport",
+        })) {
+          deps.log(`${label}: receipt for skipped session=${rec.target.sessionId} was not recorded`);
+        }
         continue;
       }
       if (deps.now() - at > BROADCAST_DEADLINE_MS) {
         // Out of time. NOT an error, and not a silent stop: the rows we never
         // reached are named one by one, so nobody reads "broadcast sent" over
         // the top of sixteen agents who were told nothing.
+        recordNotReached(parent, rec, who, childWhat, label);
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -2973,7 +3364,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       // parse, not in the queue.
       const text = renderBroadcast(action, { index, total }, speaker);
       index += 1;
+      /* THIS RECIPIENT'S OWN RECEIPT, accepted and attempted on the line above
+         its send, and settled on the line below it exactly as a direct steer
+         is. No receipt, no send: the row says so, and `index` has already
+         advanced, so the stagger keeps the gap it keeps for a held session. */
+      const child = beginChild(parent, rec, who, childWhat, label);
+      if (!child.ok) {
+        outcomes.push({ paneId: rec.target.paneId, sessionId: rec.target.sessionId, minutes: null, outcome: "refused-before-effect", code: null, why: child.why });
+        continue;
+      }
       const attempt = deps.send.message(rec.target, text, rec.declaredStatus, purpose);
+      settle({ receiptId: child.receiptId, tag: {} }, sendAttemptOutcome(attempt), label);
       if (attempt.hold !== null) {
         deps.log(
           `action box: HELD session=${rec.target.sessionId} hold=${attempt.hold.id} v${attempt.hold.version} ` +
@@ -3023,9 +3424,10 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           minutes,
           outcome: "outcome-unknown",
           code: null,
-          why:
-            `the delivery module threw while handling this recipient: ${attempt.error.message}. ` +
-            "Nothing here can tell whether any of it reached the pane.",
+          // An arbitrary transport error can quote its argv, including the
+          // rendered broadcast. The child receipt already records the safe
+          // generic reading from `sendAttemptOutcome`.
+          why: "the delivery module threw while handling this recipient. Nothing here can tell whether any of it reached the pane.",
         });
         continue;
       }
@@ -3076,7 +3478,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         (unsure > 0 ? ` (${unsure} may or may not have landed)` : "") +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
-    respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes } });
+    settle(parent, broadcastParentOutcome(deps.queue.receiptJournal(), parent.receiptId, recipients.length), label);
+    respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes }, ...parent.tag });
   }
 
   function skippedOutcome(rec: Recipient, gate: DrainGate | undefined): BroadcastOutcome {
@@ -3142,8 +3545,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
        gets here. What is not skipped is anything the queue itself enforces —
        `checkText`, `renderMessage`'s slash rule, the per-session and fleet
        caps, the double-tap window — because those live in `enqueueMessage`. */
-    enqueueMessage(target, text, speaker) {
-      return deps.queue.enqueueMessage(target, text, speaker, "broadcast");
+    enqueueMessage(target, text, speaker, parentReceiptId = null) {
+      return deps.queue.enqueueMessage(target, text, speaker, "broadcast", null, parentReceiptId);
     },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
@@ -3335,13 +3738,22 @@ export function drainSharedQueues(snapshot: FleetSnapshot): DrainResult {
  * tell them apart cannot render either honestly. Collapsing it is the
  * lossy-join half of docs/postmortems/260908b: the producer said the careful
  * thing and the consumer threw the distinction away.
+ *
+ * **AND SO DOES `durable`** — plan 260910d, the Stage 1b review's F36. This door
+ * used to drop the queue's own `durable` bit, so a broadcast answered *queued*
+ * for a recipient whose receipt lived only in this process's memory and would
+ * not survive a restart. `receiptId` travels for the same reason: the item's
+ * receipt is that recipient's child of the broadcast (`parentReceiptId`).
  */
 export function enqueueSharedMessage(
   target: { sessionId: string; claudeSessionId: string },
   text: string,
   speaker: Speaker,
-): { ok: true; position: number } | { ok: false; rule: EnqueueRefusalRule; why: string } {
+  parentReceiptId: string | null = null,
+): { ok: true; position: number; durable: boolean; receiptId: string } | { ok: false; rule: EnqueueRefusalRule; why: string } {
   shared ??= makeActionRoutes();
-  const result = shared.enqueueMessage(target, text, speaker);
-  return result.ok ? { ok: true, position: result.position } : { ok: false, rule: result.rule, why: result.why };
+  const result = shared.enqueueMessage(target, text, speaker, parentReceiptId);
+  return result.ok
+    ? { ok: true, position: result.position, durable: result.durable, receiptId: result.receiptId }
+    : { ok: false, rule: result.rule, why: result.why };
 }

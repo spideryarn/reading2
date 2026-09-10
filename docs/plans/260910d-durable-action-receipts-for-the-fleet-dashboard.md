@@ -7,6 +7,11 @@ steer and answer, and the catalogue's `holdsDurable` for the restart check. **St
 implemented by an Opus subagent; Stage 4's brief is written and its web files are authorised.** The plan was settled after two rounds of GPT Sol review (both "rework", no P0) and a Fable
 arbitration on the one contested call — F10 withdrawn, so F15 falls with it (§ Plan review).
 
+**Learned on the way, for whoever finishes this:** a stage's gates here have been the fleet suites
+and the typecheck, never the whole `npm test`, and that let two GitHub-style heading anchors in this
+plan turn `tests/doc-links.test.ts` red on `dev` (fixed at `b6aabc08`). **The full suite runs, through
+`scripts/tmux-job.ts`, before the final debrief** — once no subagent is editing the tree.
+
 **Learned in Stage 1, for Stages 2 and 4:** a memory-only or locked-out journal refuses every
 *keyed* accept (Stage 1a review F22 — a keyed accept fails closed when it cannot land), so when the
 stores cannot open, every keyed request answers `503 receipt-unavailable`. That is the design; whether
@@ -417,6 +422,29 @@ from one route to another must mint a new id; that is in the Stage 4 brief.
 twice; a different body is refused before any effect.
 
 ### Stage 3 — enacted plans and the broadcast
+
+**Status, 2026-09-10 12:55: built by an Opus subagent from [the Stage 3 brief](260910d-durable-action-receipts-stage3-task.md)**,
+diff read here, gates re-run; Sol stage review next. Stage 2's refusal of a keyed enacted `run` is
+removed now that one is recorded. Decisions the brief did not settle, checked and kept: a `progress`
+record never becomes a receipt's `last`, so a crash mid-plan recovers like any interrupted attempt;
+step indexes are zero-based (`plan-stopped` carries `step-<k>`); a new `not-sent` reason
+`refused-before-attempt` for a check that can only run after the one-way door; `accepted` lines
+written before Stage 3 read `parentReceiptId` as null, so the receipts file already on the box stays
+readable; a broadcast's parent is attempted before its queued half, not only before the fan-out.
+Open: the web card still shows a non-durable queued recipient as plain *queued* (F36's page half is
+Stage 4); the coordinator-to-outcome mapping now exists twice (shared, and inline in
+`routes-steer.ts`) — a small debt worth folding.
+
+**Stage review, 2026-09-10 13:21** ([answer](260910d-durable-action-receipts-stage3-review-sol.md), write-capable
+GPT Sol): "land with the fixes above", three P1s, each fixed red-first by the reviewer and kept. The
+run then hit its 30-minute cap, but it had written its full answer four minutes before, as the prompt
+asked, and every file it touched was last written before the cap. **F41**: a broadcast parent was
+settled `completed` even when a child was unknown, missing or not durable — the parent's outcome is now
+derived from its children (`broadcastParentOutcome`), and skipped or queue-refused recipients get
+their own linked `not-sent` child so a smaller child count cannot hide one. **F42**: the parser
+accepted a broadcast child with no parent link, or a parent link on an unrelated op — now refused, with
+pre-Stage-3 lines still read as parentless. **F43**: a thrown transport's error could quote the
+broadcast's text into the server log and the response — both are now generic; the receipt already was.
 
 - [ ] Receipts for `remove-worktree`, `kill-session` and the box kills on `/api/actions/session` and
   `/api/actions/box`: `accepted` before the first `await`, `attempted` before `runPlan`, a `progress`
