@@ -64,6 +64,8 @@ import { MessageOverseerCard } from "./MessageOverseerCard";
 import { ReceiptList } from "./ReceiptList";
 import { httpScheduleApi, type ScheduleApi } from "./schedule-client";
 import { SchedulePreview } from "./SchedulePreview";
+import { httpOccurrencesApi, type OccurrencesApi } from "./occurrences-client";
+import { ScheduledOccurrences } from "./ScheduledOccurrences";
 import { Explain } from "./Tooltip";
 import type {
   ClockSkew,
@@ -623,6 +625,7 @@ export function OverseerPanel({
   skew,
   receipts,
   scheduleApi = httpScheduleApi,
+  occurrencesApi = httpOccurrencesApi,
 }: {
   /**
    * The receipts seam — `ReceiptList` reads through it. Optional, and the
@@ -658,6 +661,8 @@ export function OverseerPanel({
   skew: ClockSkew;
   /** The scheduler preview's read. Injectable so a test drives the seam; the default is the real route. */
   scheduleApi?: ScheduleApi;
+  /** What the scheduler has launched. Injectable for the same reason; the default is the real route. */
+  occurrencesApi?: OccurrencesApi;
 }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
@@ -673,6 +678,7 @@ export function OverseerPanel({
           page's account of what is being watched". */}
       <OverseerStatusCard overseer={overseer} now={now} receivedAt={receivedAt} />
       <SchedulePreview api={scheduleApi} now={now} currentInstanceId={currentInstanceId} />
+      <ScheduledOccurrences api={occurrencesApi} now={now} />
 
       {/* SECOND, and beside the status card rather than on a tab of its own:
           *is anything watching* and *can either subscription afford more work*

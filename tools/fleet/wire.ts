@@ -4768,6 +4768,128 @@ export type RecoveryFeed =
   | { schema: 1; kind: "unsupported-schema"; composedAt: string; path: string; saw: string; known: number; why: string }
   | { schema: 1; kind: "oversized"; composedAt: string; path: string; sizeBytes: number; limitBytes: number; why: string };
 
+/* ------------------------------------------------------------------ *
+ * Scheduled occurrences — `~/.overseer/occurrences.json`.
+ * Plan 260910f-scheduled-dispatch § D6, D7.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT THE SCHEDULER HAS LAUNCHED, AND WHAT CAME OF IT**, one checkpoint's
+ * projection, written by the daemon beside `schedule.json`.
+ *
+ * `schedule.json` says what the scheduler WOULD do; this says what it DID. The
+ * one fact both carry is `next`, copied from the same planner pass in the same
+ * checkpoint so the section needs one read — `schedule.json` is its home.
+ *
+ * Session jobs only: a rule runs inside the daemon and its history is the
+ * preview's `lastAttempt`. `tools/fleet/occurrences-parse.ts` is the one
+ * parser; the daemon, the route and the browser all go through it.
+ */
+export type ScheduledOccurrencesFile = {
+  schema: 1;
+  /** When the daemon composed this. Every state below is as of this instant. */
+  writtenAt: string;
+  /** The daemon instance that wrote it. */
+  instanceId: string;
+  /**
+   * Whether the launch journal these occurrences come from could be read whole.
+   * `history-lost` and `not-open` mean the list below may be missing launches,
+   * which a reader must be told rather than shown an empty list as "nothing ran".
+   */
+  journal: ScheduledJournalStanding;
+  jobs: ScheduledOccurrencesJob[];
+};
+
+export type ScheduledJournalStanding = { kind: "whole" } | { kind: "history-lost"; why: string } | { kind: "not-open"; why: string };
+
+/** A scheduled job's run spec: what it may do and for how long. Part of its authorised (hashed) behaviour. */
+export type ScheduledRunSpec = { timeoutMinutes: number; access: "read-only" | "review" | "write" };
+
+export type ScheduledOccurrencesJob = {
+  jobId: string;
+  dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
+  run: ScheduledRunSpec;
+  /** When it could next run — the preview's own answer, copied. */
+  next: SchedulePreviewNext;
+  /** Newest first by `scheduledAt`, at most `OCCURRENCES_PER_JOB`. */
+  occurrences: ScheduledOccurrence[];
+  /** Older occurrences this file left out. Reachable through `overseer-launches list`. */
+  omitted: number;
+};
+
+/** The launch protocol's eight states, restated because this file imports nothing. */
+export type ScheduledLaunchState =
+  | "planned"
+  | "waiting-admission"
+  | "reserved"
+  | "launching"
+  | "observed-running"
+  | "completed"
+  | "failed-before-launch"
+  | "outcome-unknown";
+
+/**
+ * **THE RESULT, OBSERVED — never a spawn read as a completion.**
+ *
+ * `tools/overseer/occurrence-result.ts` derives it from the launch record and
+ * the attempt's `exit.json`; the ladder and its precedence are there. The first
+ * four are not endings; `succeeded` is the only good ending; every other kind is
+ * a failure that names itself.
+ */
+export type ScheduledResultKind =
+  | "pending"
+  | "admission-waiting"
+  | "running"
+  | "unknown"
+  | "launch-failed"
+  | "timed-out"
+  | "quota-refused"
+  | "interrupted"
+  | "permission-denied"
+  | "missing-answer"
+  | "failed"
+  | "succeeded";
+
+export type ScheduledResult = {
+  kind: ScheduledResultKind;
+  /** One sentence saying what the evidence was, in the classifier's words. */
+  why: string;
+  /** When the evidence for this result was recorded, or null for a result with no ending yet. */
+  at: string | null;
+};
+
+/**
+ * The answer file the result was judged on: its attempt, its size, and the
+ * sha256 of its bytes (64 lower-case hex), as they were when it was judged.
+ * Served by `GET /api/overseer/occurrences/<launchOccurrenceId>/answer` only
+ * while the file on disk is still exactly those bytes — never by a path in this
+ * file, and never another attempt's.
+ */
+export type ScheduledAnswer = { kind: "absent" } | { kind: "present"; attempt: number; bytes: number; sha256: string; usable: boolean };
+
+export type ScheduledOccurrence = {
+  /** `lo-<20 hex>`: the launch protocol's id, a hash of the scheduler key. */
+  launchOccurrenceId: string;
+  /** The scheduler's own id for the same key. */
+  schedulerOccurrenceId: string;
+  /** The key: the nominal due instant, and the authorised definition revision it ran under. */
+  scheduledAt: string;
+  behaviourHash: string;
+  plannedAt: string;
+  updatedAt: string;
+  attempts: number;
+  state: ScheduledLaunchState;
+  run: ScheduledRunSpec;
+  result: ScheduledResult;
+  answer: ScheduledAnswer;
+  /** Shown as text only: a transcript holds every file the job read, so it is not served. */
+  transcriptPath: string | null;
+  /** The tmux session a running occurrence lives in, when known. */
+  tmuxSession: string | null;
+  /** The exact commands a person would run, or null when none applies: cancel a running one, dispose of an unknown one. */
+  commands: { cancel: string | null; dispose: string | null };
+};
+
 /* ---------------- Gradual recovery: resume requests, GET/POST /api/recovery/resume (260910f) ---------------- */
 
 /**
