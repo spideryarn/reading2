@@ -511,6 +511,72 @@ Two failures from that fleet are worth carrying, and neither is Codex-specific:
   That is [silent-success.md](silent-success.md) in six lines, and it is why the wrapper above asserts
   a decoded account id rather than the presence of a file.
 
+## Third pass, 2026-09-10, on the Hetzner box — six more measurements
+
+Still 0.153.4, but on Linux rather than the Mac, and taken while designing this repo's Codex account
+registry. Each was produced against a disposable `CODEX_HOME`; `~/.codex` was never written to and
+`codex login` was never run.
+
+**`CODEX_API_KEY` really does outrank a pinned home — and `OPENAI_API_KEY` really does not.** The
+doc above says the first as a mechanism; here is the demonstration, three `codex exec` runs against
+an *empty* alternate home, which is the only setup where the answer is unambiguous:
+
+| environment | result |
+|---|---|
+| nothing set | `401 … Missing bearer or basic authentication in header` — **no fallback to the ambient login** |
+| `OPENAI_API_KEY=<bogus>` | byte-identical `Missing bearer`. Nothing was sent |
+| `CODEX_API_KEY=<bogus>` | `Incorrect API key provided: sk-notar***robe … auth error code: invalid_api_key` |
+
+The third row is the one that matters: the error *changed*, so the key crossed and was preferred
+over the home's (absent) stored login. With a valid key that run succeeds and bills the key while
+every log around it still names the home. **A wrapper that pins a home without withholding
+`CODEX_API_KEY` is a preference, not a pin.**
+
+**A `CODEX_HOME` under `/tmp` is a degraded home that still looks like it works.** From
+`/tmp/…/codexhome-empty`:
+
+```
+WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper
+binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/…"))
+Not logged in
+```
+
+It **proceeds**. The same command under `/home/greg/…` prints no warning. So a routed home belongs
+in the user's home directory, and a test that stands one up in `/tmp` to prove a seeding behaviour
+is measuring the degraded path. This is the fourth spelling of the same lesson as the relative-path
+trap: Codex accepts a bad home and carries on.
+
+**An unknown config key is silently ignored, and that is how you tell a real key from a typo.**
+`codex -c <key>=12345 login status` errors for a real typed key and says nothing at all for one that
+does not exist. Verified real: `sqlite_home`, `model_provider`, `model_providers.<n>.base_url`,
+`chatgpt_base_url`, `forced_login_method`, `forced_chatgpt_workspace_id`,
+`cli_auth_credentials_store`, `profile`, `projects.<path>.trust_level`. Verified **not** a key:
+`preferred_auth_method` — which reads exactly like one. The consequence for anyone seeding a home:
+**a `config.toml` with a misspelled key loads cleanly and does nothing**, so the file existing is
+not evidence that the setting took.
+
+**`codex doctor --json` is the read-back that closes that hole.** Twenty checks, machine-readable.
+`config.load.details` reports the *effective* `CODEX_HOME`, `sqlite home`, `model provider`, `mcp
+servers`, `log dir` and the enabled feature flags; `auth.credentials` reports the auth file path and
+storage mode (`File` here) and fails with `no Codex credentials were found` on an unauthenticated
+home; `state.paths` lists every database with an integrity verdict; `installation` reports where the
+binary actually came from. Verify a seed by reading this, not by reading the file you just wrote.
+
+**A fresh home creates most of itself, so the seed is much smaller than the "what moves" table
+suggests.** That table is about the cost of *copying* a home. Inverted — what a new home does **not**
+need seeded, because four commands were enough to make it appear: `installation_id`, `sessions/`,
+`shell_snapshots/`, `thread-writer-locks/`, `tmp/`, `.tmp/`, `.sandbox_migration`, all six SQLite
+databases, and **`skills/.system/` complete with the same six system skills as the ambient home**.
+Absent from a fresh home and present in `~/.codex`: `auth.json`, `config.toml`, `cache/`,
+`history.jsonl`, `log/`, `models_cache.json`, `packages/`, `plugins/`, `session_index.jsonl`,
+`version.json`. Of those, only `config.toml` has to be written by hand — and mostly for its project
+trust entry.
+
+**The binary does not move with the home**, which is why `codex update` misbehaves under a relocated
+one (the gotcha below). Running under an alternate home, `codex doctor` still reports
+`current executable` and `install context` inside `~/.codex/packages/standalone/releases/0.153.4-…`.
+So a routed home needs no `packages/` — and should never be the home you run `codex update` from.
+
 ## Known gotchas
 
 - **Concurrent first runs against a *fresh* home lose rows, silently.**

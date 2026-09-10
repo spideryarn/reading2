@@ -119,6 +119,48 @@ describe("account registry parsing", () => {
     expect(parseAccountRegistry(registry([main, codex]))).toMatchObject({ kind: "value" });
   });
 
+  it("requires an explicit nullable tenant for Codex and accepts null", () => {
+    const codex = {
+      ...pool,
+      family: "codex",
+      stateDir: "/home/test/.codex-pool-a",
+      providerTenantId: null,
+      familyData: { workspaces: [] },
+    };
+    expect(parseAccountRegistry(registry([codex]))).toMatchObject({
+      kind: "value",
+      accounts: [{ providerTenantId: null }],
+    });
+
+    const missing: Record<string, unknown> = { ...codex };
+    delete missing.providerTenantId;
+    expect(parseAccountRegistry(registry([missing]))).toMatchObject({
+      kind: "error",
+      why: expect.stringContaining("providerTenantId"),
+    });
+  });
+
+  it("still rejects a Claude entry without a non-empty tenant", () => {
+    expect(parseAccountRegistry(registry([{ ...pool, providerTenantId: null }]))).toMatchObject({
+      kind: "error",
+      why: expect.stringContaining("providerTenantId"),
+    });
+  });
+
+  it("filters pool accounts by family while keeping Claude as the default", () => {
+    const codex = {
+      ...pool,
+      name: "codex-pool",
+      family: "codex" as const,
+      stateDir: "/home/test/.codex-pool",
+      providerAccountId: "account-codex-pool",
+      providerTenantId: null,
+    };
+    const parsed = parseAccountRegistry(registry([main, pool, codex]));
+    expect(poolAccounts(parsed)).toEqual([pool]);
+    expect(poolAccounts(parsed, "codex")).toEqual([codex]);
+  });
+
   it.each([
     ["stateDir", { ...pool, name: "pool-b", providerAccountId: "account-b", stateDir: "/home/test/x/../.claude" }],
     ["providerAccountId", { ...pool, name: "pool-b", stateDir: "/home/test/.claude-pool-b", providerAccountId: main.providerAccountId }],
