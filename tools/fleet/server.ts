@@ -55,6 +55,7 @@ import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
+import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
@@ -891,6 +892,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  if (reportsApiRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot

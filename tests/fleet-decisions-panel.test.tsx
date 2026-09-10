@@ -15,7 +15,8 @@ import { Dock } from "../tools/fleet/web/src/Dock";
 import type { DecisionsApi, DecisionsView } from "../tools/fleet/web/src/decisions-client";
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import type { Transport } from "../tools/fleet/web/src/transport";
-import type { DecisionRow } from "../tools/fleet/wire";
+import { artefactHref, describeArtefactCheck, type CheckedArtefact } from "../tools/fleet/artefact-ref";
+import type { DecisionRow, DecisionWireRecord } from "../tools/fleet/wire";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,6 +75,14 @@ const ROW: DecisionRow = {
         what: "recorded the dock decision",
       },
     ],
+    author: { kind: "overseer" },
+    consequence: "medium",
+    reversibility: "easy",
+    domain: "product",
+    recommendation: { kind: "recorded", value: null },
+    evidence: { kind: "recorded", value: [] },
+    gregAsked: "no",
+    confidence: null,
   },
   ageMs: 3_600_000,
   pendingReview: true,
@@ -101,7 +110,7 @@ function decisionsView(
   over: Partial<Extract<DecisionsView, { kind: "decisions" }>> = {},
 ): Extract<DecisionsView, { kind: "decisions" }> {
   return {
-    schema: 1,
+    schema: 2,
     kind: "decisions",
     version: "1.ev-1",
     path: "/tmp/fake/decisions.jsonl",
@@ -166,7 +175,7 @@ describe("the tab is actually registered", () => {
     await mountFull(
       "#decisions",
       {
-        schema: 1,
+        schema: 2,
         kind: "never-written",
         composedAt: "2026-09-09T11:20:00.000Z",
         why: "the decision log has never been written",
@@ -183,7 +192,7 @@ describe("the tab is actually registered", () => {
     await mountFull(
       "#sessions",
       {
-        schema: 1,
+        schema: 2,
         kind: "never-written",
         composedAt: "2026-09-09T11:20:00.000Z",
         why: "the decision log has never been written",
@@ -254,7 +263,7 @@ describe("the record's distinctions are visible", () => {
 
   it("does not draw an unreadable record as an empty one", async () => {
     await renderPanel({
-      schema: 1,
+      schema: 2,
       kind: "unreadable",
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "line four is not valid JSON",
@@ -266,7 +275,7 @@ describe("the record's distinctions are visible", () => {
 
   it("states when mandatory unreviewed rows exceeded the response bound", async () => {
     await renderPanel({
-      schema: 1,
+      schema: 2,
       kind: "oversized-unreviewed",
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "unreviewed rows alone exceed the response bound",
@@ -283,7 +292,7 @@ describe("the record's distinctions are visible", () => {
 
   it("states when the input file exceeds the synchronous-read bound", async () => {
     await renderPanel({
-      schema: 1,
+      schema: 2,
       kind: "oversized-file",
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "the file exceeds the route's bounded synchronous work",
@@ -296,19 +305,19 @@ describe("the record's distinctions are visible", () => {
 
   it.each([
     {
-      schema: 1 as const,
+      schema: 2 as const,
       kind: "never-written" as const,
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "the record has never been written",
     },
     {
-      schema: 1 as const,
+      schema: 2 as const,
       kind: "unreadable" as const,
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "the record cannot be read",
     },
     {
-      schema: 1 as const,
+      schema: 2 as const,
       kind: "oversized-unreviewed" as const,
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "required rows do not fit",
@@ -316,7 +325,7 @@ describe("the record's distinctions are visible", () => {
       limitBytes: 2_097_152,
     },
     {
-      schema: 1 as const,
+      schema: 2 as const,
       kind: "oversized-file" as const,
       composedAt: "2026-09-09T11:20:00.000Z",
       why: "the input is too large",
@@ -407,6 +416,167 @@ describe("the record's distinctions are visible", () => {
       root.render(<DecisionsPanel api={api} nowMs={receivedAt + 3_600_000} />);
     });
     expect(host.textContent).toContain("2h ago");
+  });
+});
+
+function rowWith(id: string, over: Partial<DecisionWireRecord>): DecisionRow {
+  return { ...ROW, sessions: [], record: { ...ROW.record, id, ...over } };
+}
+
+async function openAll(): Promise<void> {
+  for (const opener of [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"]')]) {
+    await act(async () => opener.click());
+  }
+}
+
+function card(id: string): HTMLElement {
+  const found = host.querySelector<HTMLElement>(`#decision-${id}`);
+  if (found === null) throw new Error(`no card #decision-${id}`);
+  return found;
+}
+
+const SESSION_AUTHOR = {
+  kind: "session" as const,
+  name: "work-reports",
+  execution: { kind: "not-found" as const },
+};
+
+describe("schema 2 on the card", () => {
+  it("says who decided, separately from who recorded, and never calls a V1 author the Overseer", async () => {
+    const rows = [
+      rowWith("dec-sess2222", {
+        recordedBy: "daemon",
+        author: SESSION_AUTHOR,
+        touches: [{ kind: "decided", at: "2026-09-09T10:20:00.000Z", by: "daemon", what: "decided" }],
+      }),
+      rowWith("dec-over2222", { author: { kind: "overseer" } }),
+      rowWith("dec-greg2222", { author: { kind: "greg" }, recordedBy: "greg" }),
+      rowWith("dec-lega2222", { author: { kind: "legacy-unrecorded" } }),
+    ];
+    await renderPanel(decisionsView({ rows, aggregates: { kind: "counts", notYetReviewed: 4, trailingSevenDays: { decisions: 4, reviews: 0, reversals: 0 } } }));
+
+    expect(card("dec-sess2222").textContent).toContain("decided by work-reports (session)");
+    expect(card("dec-sess2222").textContent).toContain("recorded by the report drain");
+    expect(card("dec-over2222").textContent).toContain("decided by the Overseer");
+    expect(card("dec-over2222").textContent).not.toContain("report drain");
+    expect(card("dec-greg2222").textContent).toContain("decided by Greg");
+    expect(card("dec-lega2222").textContent).toContain("author not recorded");
+    expect(card("dec-lega2222").textContent).not.toContain("decided by the Overseer");
+  });
+
+  it("shows consequence and reversibility on the closed card, and not recorded for V1", async () => {
+    const rows = [
+      rowWith("dec-high2222", { consequence: "high", reversibility: "one-way" }),
+      rowWith("dec-lega2222", { author: { kind: "legacy-unrecorded" }, consequence: "not-recorded", reversibility: "not-recorded" }),
+    ];
+    await renderPanel(decisionsView({ rows, aggregates: { kind: "counts", notYetReviewed: 2, trailingSevenDays: { decisions: 2, reviews: 0, reversals: 0 } } }));
+    expect(card("dec-high2222").textContent).toContain("high consequence");
+    expect(card("dec-high2222").textContent).toContain("one-way");
+    expect(card("dec-lega2222").textContent).toContain("consequence not recorded");
+    expect(card("dec-lega2222").textContent).toContain("reversibility not recorded");
+  });
+
+  it.each([
+    ["no", "the author says Greg was not asked"],
+    ["asked-answered", "the author says Greg answered"],
+    ["asked-awaiting", "the author says Greg has been asked and has not answered"],
+    ["not-recorded", "whether Greg was asked was not recorded"],
+  ] as const)("renders gregAsked %s as the author's claim, apart from the review state", async (gregAsked, words) => {
+    await renderPanel(decisionsView({ rows: [rowWith("dec-askd2222", { gregAsked })] }));
+    await openAll();
+    const claim = card("dec-askd2222").querySelector<HTMLElement>('[data-testid="greg-asked-claim"]');
+    expect(claim?.textContent).toBe(words);
+    /* The review state is a pill and still says what the fold says; the claim is
+       never one, so "the author says Greg answered" cannot look like review. */
+    expect(claim?.closest(".tw\\:rounded-full")).toBeNull();
+    expect(card("dec-askd2222").textContent).toContain("needs review");
+  });
+
+  it("shows domain, recommendation and confidence, with confidence as a small annotation", async () => {
+    await renderPanel(
+      decisionsView({
+        rows: [rowWith("dec-reco2222", { domain: "technical", recommendation: { kind: "recorded", value: "Try the small shape first." }, confidence: "low" })],
+      }),
+    );
+    await openAll();
+    const text = card("dec-reco2222").textContent ?? "";
+    expect(text).toContain("technical");
+    expect(text).toContain("Try the small shape first.");
+    expect(card("dec-reco2222").querySelector('[data-testid="decision-confidence"]')?.textContent).toBe("author's confidence: low");
+  });
+
+  it("links evidence only through artefactHref, and not at all for a commit found only on the box", async () => {
+    const evidence: CheckedArtefact[] = [
+      { ref: { kind: "commit", sha: "f9970832" }, check: { state: "on-dev" } },
+      { ref: { kind: "commit", sha: "abc1234" }, check: { state: "found-locally" } },
+      { ref: { kind: "path", path: "docs/a+b@c.md" }, check: { state: "on-dev" } },
+      { ref: { kind: "decision", id: "dec-a3k9mq2p" }, check: { state: "found" } },
+      { ref: { kind: "queue-item", id: "qi-evwdxpkf" }, check: { state: "unchecked", why: "the queue was locked" } },
+    ];
+    await renderPanel(decisionsView({ rows: [rowWith("dec-evid2222", { evidence: { kind: "recorded", value: evidence } })] }));
+    await openAll();
+    const list = card("dec-evid2222").querySelector<HTMLElement>('[data-testid="decision-evidence"]');
+    if (list === null) throw new Error("no evidence list");
+
+    const links = [...list.querySelectorAll<HTMLAnchorElement>("a")];
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(
+      evidence.map((item) => artefactHref(item)).filter((href) => href !== null),
+    );
+    for (const link of links) {
+      const external = link.getAttribute("href")?.startsWith("https://") === true;
+      expect(link.getAttribute("rel")).toBe("noreferrer");
+      expect(link.getAttribute("target")).toBe(external ? "_blank" : null);
+    }
+    const local = [...list.querySelectorAll("li")].find((item) => item.textContent?.includes("commit:abc1234"));
+    expect(local).toBeDefined();
+    expect(local?.querySelector("a")).toBeNull();
+    expect(local?.textContent).toContain(describeArtefactCheck({ state: "found-locally" }));
+    expect(list.textContent).toContain("not checked: the queue was locked");
+  });
+
+  it("says evidence was not recorded for V1, and none was given for an empty list", async () => {
+    await renderPanel(
+      decisionsView({
+        rows: [rowWith("dec-none2222", { evidence: { kind: "recorded", value: [] } }), rowWith("dec-lega2222", { evidence: { kind: "not-recorded" } })],
+        aggregates: { kind: "counts", notYetReviewed: 2, trailingSevenDays: { decisions: 2, reviews: 0, reversals: 0 } },
+      }),
+    );
+    await openAll();
+    expect(card("dec-none2222").textContent).toContain("no evidence given");
+    expect(card("dec-lega2222").textContent).toContain("evidence not recorded");
+  });
+
+  it("gives every card an id so #decision-<id> anchors land on it", async () => {
+    await renderPanel(decisionsView());
+    expect(card(ROW.record.id)).toBeDefined();
+  });
+
+  it("filters rows with the search box, case-insensitively, without reordering them", async () => {
+    const rows = [
+      rowWith("dec-aaaa2222", { question: "Zebra first?" }),
+      rowWith("dec-bbbb2222", { question: "Nothing striped?" }),
+      rowWith("dec-cccc2222", { recommendation: { kind: "recorded", value: "A ZEBRA crossing." } }),
+    ];
+    await renderPanel(decisionsView({ rows, aggregates: { kind: "counts", notYetReviewed: 3, trailingSevenDays: { decisions: 3, reviews: 0, reversals: 0 } } }));
+    const drawn = () => [...host.querySelectorAll<HTMLElement>('[id^="decision-"]')].map((element) => element.id);
+    expect(drawn()).toEqual(["decision-dec-aaaa2222", "decision-dec-bbbb2222", "decision-dec-cccc2222"]);
+
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]');
+    if (input === null) throw new Error("no search box");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    const type = async (value: string) =>
+      act(async () => {
+        setValue?.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+
+    await type("zebra");
+    expect(drawn()).toEqual(["decision-dec-aaaa2222", "decision-dec-cccc2222"]);
+    await type("no such thing");
+    expect(drawn()).toEqual([]);
+    expect(host.textContent).toContain("No decision shown here matches");
+    await type("");
+    expect(drawn()).toEqual(["decision-dec-aaaa2222", "decision-dec-bbbb2222", "decision-dec-cccc2222"]);
   });
 });
 

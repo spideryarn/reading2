@@ -251,6 +251,63 @@ export function projectDecisionCheckpoint(
   return { kind: "current", register };
 }
 
+/* **THE ORDER OF WHAT GREG HAS NOT SEEN** (plan 260910e § Ranking, GPT Sol's
+   WR-P8). Pending rows sort by consequence, then reversibility, then newest.
+   A V1 row's `not-recorded` gets its own bucket — after a known high or
+   one-way, before a known medium — so unknown is conservative without being
+   promoted into a fact it is not, and never outranks a decision somebody said
+   was high. Confidence is deliberately absent: it annotates, it never sorts.
+   Only pending rows are ranked; the rest keep newest-first. The server orders
+   and the panel does not, so the CLI and the page cannot disagree. */
+const CONSEQUENCE_RANK: Record<DecisionRecord["consequence"], number> = {
+  high: 0,
+  "not-recorded": 1,
+  medium: 2,
+  low: 3,
+};
+const REVERSIBILITY_RANK: Record<DecisionRecord["reversibility"], number> = {
+  "one-way": 0,
+  "not-recorded": 1,
+  costly: 2,
+  easy: 3,
+};
+
+/**
+ * The fields a search reads — both a folded record and its wire copy have
+ * them. **Kept in step with `decisionMatchesSearch` in
+ * `web/src/decisions-client.ts` by a test, not by an import:** this module
+ * reaches node through `overseer-status.js`, so the browser cannot import it,
+ * and the browser's module cannot be imported under node resolution.
+ * `tests/fleet-decisions-client.test.ts` runs both over the same record.
+ */
+export type SearchableDecision = {
+  readonly question: string;
+  readonly options: readonly { readonly name: string; readonly tradeoffs: string }[];
+  readonly chose: { readonly option: string; readonly note: string | null };
+  readonly why: string;
+  readonly recommendation: { readonly kind: "not-recorded" } | { readonly kind: "recorded"; readonly value: string | null };
+  readonly bearsOn: { readonly sessions: readonly { readonly name: string }[]; readonly plan: string | null };
+  readonly author: { readonly kind: string; readonly name?: string };
+};
+
+/** Case-insensitive, over the prose a person would remember a decision by. A blank query matches everything. */
+export function decisionMatchesSearch(record: SearchableDecision, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return true;
+  const haystack = [
+    record.question,
+    ...record.options.flatMap((option) => [option.name, option.tradeoffs]),
+    record.chose.option,
+    record.chose.note ?? "",
+    record.why,
+    record.recommendation.kind === "recorded" ? (record.recommendation.value ?? "") : "",
+    record.bearsOn.plan ?? "",
+    ...record.bearsOn.sessions.map((session) => session.name),
+    record.author.kind === "session" ? (record.author.name ?? "") : "",
+  ];
+  return haystack.some((text) => text.toLowerCase().includes(needle));
+}
+
 /** Supersession replaces a pending row rather than silently reviewing it. */
 export function isPendingReview(record: DecisionRecord): boolean {
   return !record.reviewed && record.supersededBy === null;
@@ -343,6 +400,12 @@ export function projectDecisions(
     }))
     .sort((a, b) => {
       if (a.pendingReview !== b.pendingReview) return a.pendingReview ? -1 : 1;
+      if (a.pendingReview) {
+        const byConsequence = CONSEQUENCE_RANK[a.record.consequence] - CONSEQUENCE_RANK[b.record.consequence];
+        if (byConsequence !== 0) return byConsequence;
+        const byReversibility = REVERSIBILITY_RANK[a.record.reversibility] - REVERSIBILITY_RANK[b.record.reversibility];
+        if (byReversibility !== 0) return byReversibility;
+      }
       return Date.parse(b.record.decidedAt) - Date.parse(a.record.decidedAt);
     });
 

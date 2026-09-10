@@ -232,16 +232,64 @@ need, `tools/fleet/artefact-ref.ts`, I write first, by hand (it is types, a pars
 
 ### Stage 1 — the reports log, the inbox, the drain, the CLI
 
-- [ ] `tools/fleet/artefact-ref.ts` + its test (orchestrator, by hand, before the stage).
-- [ ] `tools/overseer/reports.ts`: submission and event parsers, `submitReport`, `drainReports` (the
+**Status: built, not yet Sol-reviewed.** Implemented by an Opus subagent from
+[the Stage 1 brief](260910e-work-reports-stage1-task.md); `artefact-ref.ts` by the orchestrator. Its
+own seven test files: 167 passed, exit 0 (orchestrator's run). What it decided that the plan did not
+say, all accepted:
+
+- The three directories are siblings — `report-inbox/`, `report-processing/`, `report-refused/` — not
+  subdirectories of the inbox, which a pass would otherwise count as skipped entries every time.
+- A re-dropped duplicate is recognised by rebuilding the submission from the recorded event, not by
+  comparing stored bytes: the daemon stamps a fresh `receivedAt` on each attempt, so bytes would call
+  every honest re-drop a conflict.
+- `deferred` (a limit reached) is counted apart from `pending` (a transient failure).
+- A report that `corrects` one still waiting in the inbox waits too, rather than being refused.
+- A lost log (`reports.created` present, `reports.jsonl` absent or empty) leaves everything pending and
+  never recreates the file. The cost: a crash between writing the marker and the first append sticks
+  until someone deletes the marker — the same small window the decision record accepts.
+- Unknown fields are refused in submissions and in recorded events; the pass's 5 s budget uses the real
+  clock, not the injected one.
+- Condition `reports` in `notes.ts` (opens on a throwing drain, closes on the next good pass) rather than
+  a new note kind.
+
+**Sol's stage review, first run: timed out.** Killed at its 30-minute limit before writing an answer
+(`run-codex` EXIT=1). It left partial fixes — exact keys in `artefact-ref.ts`, a before/after `stat`
+read around the command line in `report-identity.ts`, hard-link refusal, bounded reads of the
+processing and refused records, stopping a pass on any transient failure so the next pass's repair
+runs before another append, and bounds that hold for the first item — which the orchestrator read,
+tested (170 passed) and committed as unreviewed code; its findings were then recovered from its
+activity log into [the first run's answer](260910e-work-reports-stage1-review-sol.md).
+
+**Second run** ([answer](260910e-work-reports-stage1-review-r2-sol.md)), narrowed at the Overseer's
+direction to 30 minutes, the first run's fixes and what it had not reached, findings written before
+fixing. Three P1s, fixed by the reviewer: stopping a pass on *any* transient failure let one stuck item
+starve every later submission — now only a failed append stops a pass (`AppendMayHaveTornTail`); the
+wall deadline abandoned a report between probes and restarted it every pass — now it finishes, with
+unprobed references `unchecked`; a local path was called `found-locally` when the dev check could not
+answer — now `unchecked`. Orchestrator's run after: 172 passed, exit 0. **Verdict: not approved until
+the inbox enumeration is bounded** — `readdirSync` over a flooded inbox would stall the daemon's whole
+loop. That bound goes into Stage 3b, the next change to `reports.ts`, and Stage 3's review checks it;
+the other three were the whole of what a second round was asked to settle, so there is no third round.
+
+Two lessons, for the debrief. A review asked to do too much dies at its wall, and a killed run leaves no
+answer — the second one wrote findings first and was fine. And `run-codex` overwrites `--output` with the
+run's final message, so a reviewer that writes its findings *into* the answer file loses them; the
+recovered text came from the activity log.
+
+Left for Stage 3: `appendDecision` is in the signature but unreached (decisions are refused before step
+[2]), so "decisions lock held ⇒ pending" is Stage 3's test. The drain re-reads all of `reports.jsonl`
+each pass to index event ids — fine at today's size.
+
+- [x] `tools/fleet/artefact-ref.ts` + its test (orchestrator, by hand, before the stage).
+- [x] `tools/overseer/reports.ts`: submission and event parsers, `submitReport`, `drainReports` (the
   four steps, `processing/`, refusals, bounds), `readReports` (three arms, `reports.created` marker),
   `foldReports`. A `decision` submission is refused in this stage with "decision reports are wired in
   stage 3"; the prepare/replay protocol is built generally so stage 3 only adds step [2].
-- [ ] `tools/overseer/report-artefacts.ts`: the real checker (git via `execFile` argv, timeouts).
-- [ ] `tools/overseer/report-identity.ts`: the submitter's own execution token from `/proc`.
-- [ ] `scripts/overseer.ts`: `report <kind>` and `reports`; `run` composes the drain into the daemon.
-- [ ] `tools/overseer/daemon.ts`: one optional `reports` option on its own interval; errors contained.
-- [ ] Tests red first: duplicates (same bytes ⇒ one row; other bytes ⇒ refused), execution tokens (same /
+- [x] `tools/overseer/report-artefacts.ts`: the real checker (git via `execFile` argv, timeouts).
+- [x] `tools/overseer/report-identity.ts`: the submitter's own execution token from `/proc`.
+- [x] `scripts/overseer.ts`: `report <kind>` and `reports`; `run` composes the drain into the daemon.
+- [x] `tools/overseer/daemon.ts`: one optional `reports` option on its own interval; errors contained.
+- [x] Tests red first: duplicates (same bytes ⇒ one row; other bytes ⇒ refused), execution tokens (same /
   different / unverifiable), untrusted text in every field (control characters, bidi, `..`, oversize),
   unknown kind (CLI and hand-dropped), nonexistent artefact kept `not-found`, explicit correction kept
   and attributed, a later claim not called a contradiction, crash at every step boundary with the
@@ -250,17 +298,101 @@ need, `tools/fleet/artefact-ref.ts`, I write first, by hand (it is types, a pars
 
 ### Stage 2 — decisions schema 2
 
-- [ ] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
-- [ ] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.
-- [ ] `decisions-view.ts`: the ranking above.
-- [ ] `/api/decisions` payload schema 2; `wire.ts` decision types, `routes-decisions.ts`,
+**Status: built, not yet Sol-reviewed.** Implemented by an Opus subagent from
+[the Stage 2 brief](260910e-work-reports-stage2-task.md). What it decided that the plan did not say,
+all accepted:
+
+- `recommendation` and `evidence` are `{kind:"not-recorded"} | {kind:"recorded", value}` — a
+  recommendation could literally read "not-recorded", and an empty evidence list is a recorded fact.
+  The enums are `X | "not-recorded"`; confidence is `Confidence | null | "not-recorded"`.
+- Every new event is schema 2, reviews and reversals included; a review cannot carry `by: "daemon"`
+  at the type level. `seed` still writes schema 1 on purpose — stamping schema 2 on a hand-copied V1
+  decision would invent its author and consequence.
+- Schema-2 bounds on the old text fields too (question 1000, why 4000, option 200/1000, notes 1000–2000,
+  ≤ 20 options and sessions); schema-1 lines keep the rules they were written under.
+- **`appendEvents` now refuses any event its own parser would refuse** — before, a note with a newline
+  was written and read back as an unreadable line. This also protects Stage 3's drain.
+- The CLI's `--evidence` checks decision ids against the record; commits, paths and queue items are
+  stored `unchecked` because the CLI holds no git checker (Stage 1's could be wired in later).
+- Search exists twice — the CLI's in `decisions-view.ts`, the browser's in `decisions-client.ts` — because
+  neither can import the other; one test runs both over the same record.
+- Each card sits in a wrapper with `id="decision-<id>"` (`Card` takes no id, and `ui.tsx` is not ours).
+
+Not seen in a real browser; jsdom only.
+
+**Sol's stage review** ([answer](260910e-work-reports-stage2-review-sol.md), one round, write-capable):
+*ready to land after these fixes*, three fixed in-stage, each red first —
+
+- **WR-S2-1 (P0)**: a hand-written schema-2 line could pair `by: overseer` with `author: greg`, and that
+  false attribution reached the fold, route, CLI and panel. Both parsers now admit only the matrix
+  overseer→overseer, greg→greg, daemon→session.
+- **WR-S2-2 (P1)**: `appendEvents` refused Stage 3's exact replay of a prepared event as a duplicate
+  event id before command-id idempotency ran. An already-persisted, command-keyed event with the same
+  id, timestamp and payload is now dropped before the preflight fold; a changed payload under the same
+  id still fails.
+- **WR-S2-3 (P1)**: the schema-2 bounds missed execution tokens and reasons, `chose.option`, command ids
+  and long fractional timestamps; verified tokens must now be canonical.
+
+It broke the frozen old event parser on purpose and saw it go red for the right reason, which closes
+the never-seen-red gap above. Wider, not fixed and not fixable here: a process running as the same
+Unix user can still write a consistent `by: greg, author: greg` line — the governance-not-OS boundary
+the record already names.
+
+- [x] `decisions.ts`: schema 2 `decided`; `by` gains `daemon`; schema 1 folds as `legacy-unrecorded`.
+- [x] `overseer-decisions.ts`: `template`/`add` at schema 2, `list --search/--domain/--consequence/--author`.
+- [x] `decisions-view.ts`: the ranking above.
+- [x] `/api/decisions` payload schema 2; `wire.ts` decision types, `routes-decisions.ts`,
   `decisions-client.ts`, `DecisionsPanel.tsx` (author, the new fields, evidence links via
   `artefact-ref.ts`, Greg-asked as the author's claim), a client-side search box.
-- [ ] Tests: v1 folds; v2 round-trips; each required field refused when missing; no author changes
+- [x] Tests: v1 folds; v2 round-trips; each required field refused when missing; no author changes
   review; frozen old event parser and frozen old client parser both refuse the new shapes; ranking with
   `not-recorded`; CLI search and filters; panel links built only from validated fields.
 
 ### Stage 3 — decision reports, the dashboard's claims, the convention
+
+**Split in two** so the dashboard work could run beside the second Stage 1 review
+([brief](260910e-work-reports-stage3-task.md)).
+
+**3a — built and committed (`c5242a04`), not yet Sol-reviewed.** Opus subagent. The projection keeps
+the register's availability in the *shape* of `sessions` — joined with the register, or
+register-unavailable with only the sessions that reported — so "everyone is unreported" and "the
+register could not be read" cannot look alike. `never-written` carries the inbox counts ("nothing
+recorded, 3 submitted" is what a daemon without the drain looks like). Latest and later are by log
+position, since the daemon is the only writer. Each claim carries `laterClaim`, the id of the next claim
+by the same reporter, shown with no inference. The Overseer and Greg appear in recent claims, not in the
+sessions list. One `ArtefactList` builds links for decision evidence and claim artefacts alike. The
+search box filters recent claims but never the session rows: hiding an unreported row would hide the one
+thing it says. `AGENTS.md`'s entry-point line gained `work-reports.md` — a signpost, which CLAUDE.md says
+needs no approval, and which `tests/doc-links.test.ts` reads doc ownership from. jsdom only; not seen in
+a real browser.
+
+**3b — built, not yet Sol-reviewed.** Opus subagent. First the inbox-enumeration bound the Stage 1 review
+made its condition for landing: each pass iterates the inbox lazily with `opendirSync` and stops after
+`scanEntries` (default 1 000) entries, noting "order is approximate beyond the first N entries" when the
+cap is hit; anything that can never become a report (a bad name, a directory, a symlink, more than one
+hard link) is *moved* to `report-quarantine/`, newest 200 kept, so a hostile prefix cannot fill every
+pass's window. Names are read as raw bytes — a non-UTF-8 name cannot be reached by a string path, so it
+could otherwise never be moved. Then decision reports: a session's `decision` submission is validated by
+building the real `decided` event (`by: daemon`, session author, command id `report:<eventId>`) through
+`parseEventDetailed`; step [1] freezes it in `report-processing/`, step [2] appends exactly those bytes,
+`locked` stays pending, any other refusal from the record refuses the submission atomically; an
+Overseer or Greg actor is refused. The report's `artefacts` are the decision's evidence — probed once, so
+the two cannot disagree. `report decision --file` accepts `overseer-decisions template` output as printed.
+`makeReportDrain(root, env)` honours `OVERSEER_DECISIONS_DIR`. Seen red first: the flood (5 000 entries,
+recorded within six passes), quarantine bounds, symlink moved and its target untouched, both logs joined,
+a crash at each of four boundaries re-draining to exactly one of each. Accepted cost: an `unreadable` or
+`refused` answer from the decision record — including a filesystem error — refuses the submission rather
+than leaving it pending, as the brief said.
+
+**The seam** (orchestrator, a few lines): `tests/fleet-attention.test.ts` asserts the exact set of
+Overseer modules `tools/fleet/` may reach. 3a's `reports-view.ts` imported `reports.ts`, whose type-only
+import of `store.ts` put nineteen modules over the line. `reports.ts` now declares the two register fields
+it reads as a structural `ReportRegister`, and `reports.ts` joins the allowlist with its closure written
+out. Typecheck exit 0; nine affected test files, 238 passed.
+
+Known and left for the review to weigh: `readInbox` still lists the whole inbox on every `GET /api/reports`
+(the dashboard, not the daemon); pruning a quarantined *directory* is recursive; the daemon logs a pass
+that only quarantined nothing.
 
 - [ ] Step [2] of the drain: a session's decision into `decisions.jsonl`, replay tests at each boundary,
   `OVERSEER_DECISIONS_DIR` honoured, a decisions-lock contention left pending.

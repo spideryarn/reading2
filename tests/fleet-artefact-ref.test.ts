@@ -75,6 +75,13 @@ describe("parsing", () => {
     expect(parseArtefactRef({ kind: "path", path: "../x" })).toBeNull();
   });
 
+  it("refuses unknown fields inside references and checks", () => {
+    const commit = { kind: "commit", sha: "ceb2e9d7" };
+    expect(parseArtefactRef({ ...commit, hidden: "another submission" })).toBeNull();
+    expect(parseArtefactCheck({ state: "on-dev", hidden: "another event" })).toBeNull();
+    expect(parseCheckedArtefacts([{ ref: commit, check: { state: "on-dev" }, hidden: "another event" }])).toBeNull();
+  });
+
   it("refuses a check that does not fit its kind, and too many artefacts", () => {
     const commit = { kind: "commit", sha: "ceb2e9d7" };
     expect(parseCheckedArtefacts([{ ref: commit, check: { state: "found" } }])).toBeNull();
@@ -84,6 +91,12 @@ describe("parsing", () => {
     expect(parseCheckedArtefacts(many)).toBeNull();
     expect(parseArtefactCheck({ state: "unchecked", why: "" })).toBeNull();
     expect(parseArtefactCheck({ state: "unchecked", why: `git${BELL}` })).toBeNull();
+  });
+
+  it("pins the record vocabulary to at most 20 artefacts", () => {
+    const item = { ref: { kind: "commit", sha: "ceb2e9d7" }, check: { state: "not-found" } };
+    expect(parseCheckedArtefacts(Array.from({ length: 20 }, () => item))).toHaveLength(20);
+    expect(parseCheckedArtefacts(Array.from({ length: 21 }, () => item))).toBeNull();
   });
 });
 
