@@ -585,7 +585,9 @@ describe("backpressure, measured against a real Writable that delays its callbac
       const stalledAfter = phone.offered.length;
       // Small frames can accumulate below Node's byte threshold; the bound is
       // the high-water mark plus the crossing write, not literally one frame.
-      expect(stalledAfter).toBeGreaterThan(1);
+      // At 33 bytes each against 64 bytes, exactly two writes are offered; a
+      // third would mean live.ts kept writing after Node returned false.
+      expect(stalledAfter).toBe(2);
 
       phone.release();
       vi.advanceTimersByTime(1);

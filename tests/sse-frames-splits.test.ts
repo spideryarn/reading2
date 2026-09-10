@@ -12,10 +12,9 @@
  * a real socket does no such thing.
  *
  * On 2026-09-10 it was rewritten again, to accept the bare-CR line endings the
- * HTML Standard permits, by normalising line endings on the way in and holding
- * back a trailing `\r` until the next chunk says whether it was a line ending or
- * half a CRLF. That is exactly the kind of change that is right for every input
- * somebody thought of.
+ * HTML Standard permits, by normalising a CR immediately and suppressing an LF
+ * at the start of the next non-empty chunk. That is exactly the kind of change
+ * that is right for every input somebody thought of.
  *
  * So the property, rather than more examples: **how a stream is cut into chunks
  * must not change what comes out of it.** For each stream below, the whole thing
